@@ -41,7 +41,12 @@ const SRC = path.resolve('src');
  */
 const EMITTERS = [
   { component: 'FAQSection', mode: 'default-on', disabledBy: 'showSchema' },
-  { component: 'EnhancedEventSEO', mode: 'always' },
+  // WEB-SEO-022: EnhancedEventSEO WAS here. It built a five-question FAQPage
+  // into the head of every event page while EventDetails rendered no FAQ at
+  // all, which Google's policy forbids -- and the answers asserted the same
+  // driving directions and bus route for every venue in the metro. The block
+  // is deleted, so leaving it modelled here would make assertModelMatchesSource
+  // fail, which is exactly the drift guard doing its job.
   // EnhancedLocalSEO is NOT here. SEO-003 removed its FAQPage block and left
   // faqData as a hint that the page has an FAQ; the prop still exists and
   // feeds nothing. Modelling it as an opt-in emitter made five pages look like
@@ -144,8 +149,374 @@ function emitterState(source, emitter) {
   return { rendered: true, active, count: usages.length };
 }
 
+/**
+ * WEB-SEO-029: exactly one live WebSite node, and its SearchAction must target
+ * a route that reads the parameter.
+ *
+ * WebSite is a claim about the SITE, so a copy on every page is a set of
+ * competing claims rather than a stronger one. Three components emitted it:
+ * Index.tsx (the home page, correct), SEOHead.tsx (30 pages) and
+ * EnhancedLocalSEO.tsx (the event landing pages). The two extras also carried
+ * a SearchAction pointing at /events?search={search_term_string} - a parameter
+ * EventsPage has never read, it reads `q`. A granted sitelinks search box
+ * therefore dropped the visitor on an unfiltered list, which is worse than
+ * having no search box at all.
+ *
+ * Two invariants, both cheap to keep and easy to lose in a review:
+ *   1. Only ALLOWED_WEBSITE_OWNERS may emit a WebSite node.
+ *   2. Any SearchAction target must be a route that honours its own parameter.
+ *      /search?q= is honoured by SearchResults.tsx; /events?search= is not.
+ */
+//
+// The home page's WebSite node moved out of Index.tsx into a plain .ts content
+// module, so this check scans .ts as well as .tsx (walkWebsiteSources below).
+// The owner must actually emit a node: a check whose one allowed owner emits
+// nothing would pass while checking nothing.
+const ALLOWED_WEBSITE_OWNERS = new Set(['src/content/homeContent.ts']);
+
+/**
+ * WEB-SEO-027: one head manager per rendered tree.
+ *
+ * AttractionDetails rendered EnhancedAttractionSEO AND SEOHead, each computing
+ * its own <title> and description; RestaurantDetails emitted BreadcrumbList
+ * twice with different URLs (relative from SEOHead's prop, absolute from
+ * BreadcrumbListSchema); Index rendered SEOEnhancedHead followed by
+ * SEOStructure, whose DEFAULTS silently won because Helmet resolves
+ * last-mount-wins. Each component is correct alone; the defect only exists in
+ * the composition, which is what makes it survive review.
+ *
+ * AND THE PRERENDERER HID IT. dedupeJsonLd keeps the last block of each @type,
+ * so the static HTML a crawler fetches looked settled while the live DOM that
+ * Googlebot renders carried both.
+ *
+ * COUNTED PER `return (`, NOT PER FILE, and that distinction is the whole
+ * accuracy of this rule. A page's loading branch, its error branch and its main
+ * branch are mutually exclusive early returns - EventsPage has three heads in
+ * the source and mounts exactly one. Counting textual occurrences reported
+ * EventDetails, EventsPage and ProfilePage as duplicates when none of them is.
+ * Every emitter is attributed to the nearest preceding `return (`.
+ *
+ * The emitter lists are DERIVED from source, not hand-maintained: any component
+ * importing react-helmet-async and containing <title>, or a BreadcrumbList
+ * @type, is one. A new SEO wrapper is covered the day it is written.
+ */
+
+/** Components under src/components that manage <title> or emit BreadcrumbList. */
+function discoverHeadEmitters(files) {
+  const titles = new Set();
+  /** name -> true when the component only emits BreadcrumbList if given the prop. */
+  const breadcrumbs = new Map();
+  for (const file of files) {
+    if (!/^src[\\/]components[\\/]/.test(path.relative(process.cwd(), file))) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    if (!/from ['"]react-helmet-async['"]/.test(src)) continue;
+    const name = path.basename(file, '.tsx');
+    if (/<title>/.test(src)) titles.add(name);
+    if (/["']@type["']\s*:\s*["']BreadcrumbList["']/.test(src)) {
+      // SEOHead builds its BreadcrumbList only when handed a `breadcrumbs`
+      // prop; BreadcrumbListSchema emits whenever it renders. Reading the
+      // prop declaration keeps that distinction out of a hand-kept table.
+      breadcrumbs.set(name, /breadcrumbs\?:/.test(src));
+    }
+  }
+  return { titles, breadcrumbs };
+}
+
+/**
+ * Splits a component file into the JSX trees it can return, so mutually
+ * exclusive early returns are never counted together.
+ */
+function returnBlocks(source) {
+  const starts = [];
+  const re = /\breturn \(/g;
+  for (let m = re.exec(source); m; m = re.exec(source)) starts.push(m.index);
+  if (starts.length === 0) return [{ start: 0, text: source }];
+  return starts.map((start, i) => ({
+    start,
+    text: source.slice(start, starts[i + 1] ?? source.length),
+  }));
+}
+
+/**
+ * WEB-SEO-026: one Organization node per page, and no LocalBusiness anywhere.
+ *
+ * The site described itself as a local business on nearly every route, and the
+ * facts it used to do it were invented:
+ *   index.html   a SoftwareApplication on ~1,100 routes declaring Alexa, Google
+ *                Assistant, SMS and ChatGPT channels, none of which exist. It
+ *                carried no data-rh attribute, so dedupeJsonLd - which only
+ *                touches Helmet-managed blocks - could never remove it.
+ *   Index.tsx    a LocalBusiness with telephone "", streetAddress "", postcode
+ *                50309 and hours of 00:00-23:59, plus InteractActions for an
+ *                "SMS Concierge" and a "Voice Assistant"
+ *   LocalSEO     telephone "+1-515-DES-MOIN" and an OfferCatalog of services
+ *                nobody sells, on five sitemapped neighbourhood pages
+ *   Enhanced*SEO a site-wide LocalBusiness at @id /#localbusiness on every
+ *                attraction and playground page
+ *
+ * AN AGGREGATOR IS NOT A LOCAL BUSINESS. LocalBusiness implies a premises,
+ * opening hours and a phone number, and every emitter here had to invent all
+ * three. Restaurant, TouristAttraction and Place - which ARE emitted, about
+ * other people's places - are the honest types and are untouched by this rule.
+ *
+ * TOP-LEVEL ONLY. A nested `publisher`, `provider`, `author` or `organizer`
+ * Organization is a reference to an entity, not a second claim about who we
+ * are, and Enhanced*SEO legitimately carry those. The test is whether
+ * "@type" sits directly after a "@context", which is what starts a node.
+ */
+const SCHEMA_NODE = (type) =>
+  new RegExp(`["']@context["']\\s*:\\s*["']https://schema\\.org["'],\\s*\n?\\s*["']@type["']\\s*:\\s*["']${type}["']`);
+
+function checkIdentityNodes(files) {
+  const problems = [];
+
+  // 1. No component may emit a top-level LocalBusiness at all.
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file);
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    if (SCHEMA_NODE('LocalBusiness').test(src)) {
+      problems.push(`${rel} emits a top-level LocalBusiness node`);
+    }
+  }
+
+  // 2. At most one Organization emitter per rendered tree.
+  const orgEmitters = new Set();
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
+    if (!rel.startsWith('src/components/')) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    if (!/from ['"]react-helmet-async['"]/.test(src)) continue;
+    if (SCHEMA_NODE('Organization').test(src)) orgEmitters.add(path.basename(file, '.tsx'));
+  }
+  if (orgEmitters.size === 0) {
+    problems.push('no component emits an Organization node - the site publishes no identity at all');
+  }
+
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
+    if (!/^src\/(pages|pseo)\//.test(rel)) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    for (const block of returnBlocks(src)) {
+      let n = 0;
+      const who = [];
+      for (const name of orgEmitters) {
+        const c = jsxUsages(block.text, name).length;
+        if (c > 0) who.push(name);
+        n += c;
+      }
+      if (SCHEMA_NODE('Organization').test(block.text)) {
+        n += 1;
+        who.push('an inline node in this file');
+      }
+      if (n > 1) {
+        const line = src.slice(0, block.start).split('\n').length;
+        problems.push(`${rel}:${line} mounts ${n} Organization emitters (${who.join(' + ')})`);
+      }
+    }
+  }
+
+  return problems;
+}
+
+function countHeadDuplicates(files, emitters) {
+  const problems = [];
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file);
+    if (!/^src[\\/](pages|pseo)[\\/]/.test(rel)) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+
+    for (const block of returnBlocks(src)) {
+      const line = src.slice(0, block.start).split('\n').length;
+
+      let titles = 0;
+      const titleNames = [];
+      for (const name of emitters.titles) {
+        const n = jsxUsages(block.text, name).length;
+        if (n > 0) titleNames.push(`${name}${n > 1 ? ` x${n}` : ''}`);
+        titles += n;
+      }
+      // A page writing <title> into its own Helmet is a head manager too.
+      if (/<title>/.test(block.text)) {
+        titles += 1;
+        titleNames.push('its own <Helmet><title>');
+      }
+      if (titles > 1) {
+        problems.push({ rel, line, what: '<title>', who: titleNames.join(' + ') });
+      }
+
+      let crumbs = 0;
+      const crumbNames = [];
+      for (const [name, optIn] of emitters.breadcrumbs) {
+        const usages = jsxUsages(block.text, name);
+        const n = optIn
+          ? usages.filter((u) => /breadcrumbs\s*=\s*\{/.test(u)).length
+          : usages.length;
+        if (n > 0) crumbNames.push(`${name}${n > 1 ? ` x${n}` : ''}`);
+        crumbs += n;
+      }
+      if (crumbs > 1) {
+        problems.push({ rel, line, what: 'BreadcrumbList', who: crumbNames.join(' + ') });
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * Emitters that exist but are mounted nowhere. They are allowed to keep their
+ * WebSite node ONLY while they stay unimported; mounting one puts a second
+ * node on a real page, so the check below fails at that point rather than
+ * silently reintroducing the duplication. WEB-SEO-039 tracks deleting them.
+ */
+const UNMOUNTED_WEBSITE_OWNERS = [
+  'src/components/schema/WebSiteSchema.tsx',
+  'src/components/SEOOptimizedHead.tsx',
+];
+
+/** Targets that name a route which does not read the parameter it is given. */
+const DEAD_SEARCH_TARGETS = [/\/events\?search=\{/];
+
+/**
+ * A WebSite TYPE is not always a WebSite NODE. `isPartOf: { "@type": "WebSite" }`
+ * is a reference to the site from a WebPage or Article node - valid, expected,
+ * and emitted by SpeakableSchema and PseoPage across ~950 pSEO pages. Only a
+ * standalone node competes with the canonical one, so the nesting property
+ * immediately before the type is what separates the two.
+ */
+const NESTED_WEBSITE_PROPS = /(isPartOf|mainEntityOfPage|subjectOf|about|publisher|sourceOrganization)\s*:\s*\{\s*$/;
+
+function emitsTopLevelWebsite(source) {
+  const type = /["']?@type["']?\s*:\s*["']WebSite["']/g;
+  let match;
+  while ((match = type.exec(source)) !== null) {
+    const before = source.slice(Math.max(0, match.index - 120), match.index);
+    if (!NESTED_WEBSITE_PROPS.test(before)) return true;
+  }
+  return false;
+}
+
+/** .ts and .tsx under src; the WebSite node can live in a plain data module. */
+function walkWebsiteSources(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== '__tests__') walkWebsiteSources(full, out);
+    } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec|d)\.tsx?$/.test(entry.name)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function checkWebsiteNodes(files) {
+  const emitters = [];
+  const badTargets = [];
+
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file).split(path.sep).join('/');
+    const source = stripComments(fs.readFileSync(file, 'utf8'));
+    if (emitsTopLevelWebsite(source)) emitters.push(rel);
+    for (const pattern of DEAD_SEARCH_TARGETS) {
+      if (pattern.test(source)) badTargets.push(rel);
+    }
+  }
+
+  // An unmounted emitter is only tolerable while it stays unmounted.
+  const allSource = files.map((f) => stripComments(fs.readFileSync(f, 'utf8'))).join('\n');
+  const mountedDeadCode = UNMOUNTED_WEBSITE_OWNERS.filter((rel) => {
+    const name = path.basename(rel, '.tsx');
+    return new RegExp(`import\\s+[^;]*\\b${name}\\b[^;]*from`).test(allSource);
+  });
+
+  const unexpected = emitters.filter(
+    (rel) => !ALLOWED_WEBSITE_OWNERS.has(rel) && !UNMOUNTED_WEBSITE_OWNERS.includes(rel),
+  );
+  const silentOwners = [...ALLOWED_WEBSITE_OWNERS].filter((rel) => !emitters.includes(rel));
+
+  if (unexpected.length || mountedDeadCode.length || badTargets.length || silentOwners.length) {
+    console.error('\n❌ WebSite / SearchAction problem (WEB-SEO-029)\n');
+    for (const rel of silentOwners) {
+      console.error(`  ${rel} is the allowed WebSite owner but emits no WebSite node; update ALLOWED_WEBSITE_OWNERS.`);
+    }
+    for (const rel of unexpected) {
+      console.error(`  ${rel} emits a WebSite node. Only ${[...ALLOWED_WEBSITE_OWNERS].join(', ')} may.`);
+    }
+    for (const rel of mountedDeadCode) {
+      console.error(`  ${rel} is now imported somewhere and still carries a WebSite node.`);
+    }
+    for (const rel of badTargets) {
+      console.error(`  ${rel} targets /events?search=, which EventsPage does not read (it reads q).`);
+    }
+    console.error('\nWebSite describes the site: emit it on / only, and point SearchAction at /search?q=.\n');
+    process.exit(1);
+  }
+
+  console.log(
+    `✅ WebSite schema: 1 live owner (${[...ALLOWED_WEBSITE_OWNERS][0]}), SearchAction target honoured.`,
+  );
+}
+
 function main() {
   const files = walk(SRC);
+
+  // WEB-SEO-025. Runs first: a fabricated review count is a policy breach that
+  // can cost rich results across the whole domain, which is worse than a
+  // duplicate FAQPage on one page.
+  checkRatingCountSources(files);
+
+  // WEB-SEO-029.
+  checkWebsiteNodes(walkWebsiteSources(SRC));
+
+  // WEB-SEO-027.
+  const emitters = discoverHeadEmitters(files);
+  if (emitters.titles.size === 0 || emitters.breadcrumbs.size === 0) {
+    console.error(
+      '\n❌ Found no <title> or BreadcrumbList emitters at all (WEB-SEO-027).\n' +
+        '  The lists are derived from source, so an empty one means the discovery\n' +
+        '  broke - not that the codebase is clean. Refusing to pass on that.\n',
+    );
+    process.exit(1);
+  }
+  // WEB-SEO-026.
+  const identityProblems = checkIdentityNodes(files);
+  if (identityProblems.length) {
+    console.error('\n❌ The site publishes a dishonest or duplicated identity (WEB-SEO-026)\n');
+    for (const p of identityProblems) console.error(`  ${p}`);
+    console.error(
+      '\nAn aggregator is not a LocalBusiness: the type implies a premises, hours\n' +
+        'and a phone, and every emitter that carried it here had to invent all\n' +
+        'three. The site publishes ONE Organization node, from SEOHead, with a\n' +
+        'stable @id; a WebSite node belongs to / alone. Restaurant,\n' +
+        'TouristAttraction and Place - about other people\'s places - are fine.\n',
+    );
+    process.exit(1);
+  }
+  console.log('✅ Identity: one Organization emitter per page, no LocalBusiness claimed by the site.');
+
+  const headProblems = countHeadDuplicates(files, emitters);
+  if (headProblems.length) {
+    console.error('\n❌ More than one head manager on one rendered tree (WEB-SEO-027)\n');
+    for (const p of headProblems) {
+      console.error(`  ${p.rel}:${p.line}  two sources of ${p.what}`);
+      console.error(`    ${p.who}`);
+    }
+    console.error(
+      '\nEach component is correct alone; the duplication only exists in the\n' +
+        'composition, which is why it survives review. Helmet resolves\n' +
+        'last-mount-wins for <title>, so which one ships is decided by render\n' +
+        'order rather than by anyone - and JSON-LD blocks are not deduped at all,\n' +
+        'so two BreadcrumbList emitters put two competing trails in the DOM.\n' +
+        'The prerenderer hides this: dedupeJsonLd keeps the last block of each\n' +
+        '@type, so the static HTML looks right while the live DOM does not.\n' +
+        '\nConverge on SEOHead plus the typed components in src/components/schema.\n',
+    );
+    process.exit(1);
+  }
+  console.log(
+    `✅ Head managers: ${emitters.titles.size} title emitter(s) and ` +
+      `${emitters.breadcrumbs.size} BreadcrumbList emitter(s) known; no page mounts two.`,
+  );
+
   const stale = assertModelMatchesSource(files);
   if (stale.length) {
     console.error('\n❌ The FAQPage emitter model has drifted from the source (WEB-SEO-008 AC5)\n');
@@ -202,6 +573,52 @@ function main() {
   console.log(
     `✅ FAQPage schema: ${scanned} components scanned, ${withFaq} emit FAQPage, 0 duplicates.`,
   );
+}
+
+
+/**
+ * WEB-SEO-025: a ratingCount must come from stored review data, never from a
+ * calculation.
+ *
+ * Restaurants.tsx published aggregateRating with
+ * `ratingCount: Math.round((popularity_score || 50) * 2)` for the first 20
+ * restaurants on the highest-impression page in the app, and RestaurantDetails
+ * had done the same thing on ~480 pages until WEB-SEO-016. Both were invented.
+ * Google's review-snippet policy requires the count to reflect real reviews, so
+ * a derived one is a policy breach that risks every rich result on the domain,
+ * not just the restaurant ones.
+ *
+ * The only sanctioned source is content_rating_aggregates.total_ratings, and
+ * only when it is greater than zero. This fails on anything else.
+ */
+function checkRatingCountSources(files) {
+  const offenders = [];
+  // A count that is computed, rather than read from a field, is the tell.
+  const COMPUTED = /(ratingCount|reviewCount)\s*:\s*(Math\.|[^,\n]*[*+/-][^,\n]*|\d)/;
+
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    src.split('\n').forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, '');
+      if (!/ratingCount|reviewCount/.test(code)) return;
+      if (!COMPUTED.test(code)) return;
+      // total_ratings straight off the aggregate row is the one allowed shape.
+      if (/total_ratings|totalRatings/.test(code)) return;
+      offenders.push({ file: path.relative(process.cwd(), file), line: i + 1, code: code.trim() });
+    });
+  }
+
+  if (offenders.length) {
+    console.error('\n❌ Fabricated review count detected (WEB-SEO-025)\n');
+    for (const o of offenders) console.error(`  ${o.file}:${o.line}  ${o.code}`);
+    console.error(
+      '\nratingCount/reviewCount must come from content_rating_aggregates.total_ratings',
+    );
+    console.error('and only when it is > 0. Inventing one breaches Google review-snippet policy.\n');
+    process.exit(1);
+  }
+
+  console.log(`✅ Review counts: ${files.length} files scanned, 0 fabricated ratingCount values.`);
 }
 
 main();

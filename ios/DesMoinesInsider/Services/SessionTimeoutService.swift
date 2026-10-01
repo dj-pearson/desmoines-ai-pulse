@@ -1,13 +1,22 @@
 import Foundation
 import os
 
-/// Tracks user activity and enforces session timeouts matching backend session_policies.
+/// Tracks activity and enforces session timeouts for ADMIN sessions only.
 ///
-/// - Regular users: 60-min idle timeout, 8-hour absolute timeout
 /// - Admin users: 30-min idle timeout, 4-hour absolute timeout
+/// - Regular users: not tracked (IOS-DD-ACCOUNT-02)
 ///
-/// Resets idle timer on scene phase changes (active → background → active).
-/// Persists last activity timestamp in Keychain for app restart scenarios.
+/// Regular users used to get a 60-min idle / 8-hour absolute sign-out. That
+/// was removed on purpose: this is an app people open to browse what's on this
+/// weekend, it holds no payment method and no admin power, and a surprise
+/// orange banner followed by a forced sign-out was the result. It also never
+/// worked as written: every token refresh restarted the clock, so the absolute
+/// limit could not fire, and the cold-launch check raced the auth listener.
+/// Admins keep the stricter limits because an admin session can edit content.
+///
+/// The absolute clock starts on a real sign-in and is NOT reset by token
+/// refreshes or cold launches. Timestamps persist in the Keychain so a
+/// relaunch sees the same clock.
 @MainActor
 @Observable
 final class SessionTimeoutService {
@@ -16,11 +25,7 @@ final class SessionTimeoutService {
     // MARK: - Configuration
 
     private enum Timeout {
-        // User timeouts
-        static let userIdle: TimeInterval = 60 * 60           // 60 minutes
-        static let userAbsolute: TimeInterval = 8 * 60 * 60   // 8 hours
-
-        // Admin timeouts (stricter)
+        // Admin timeouts. Regular users are not tracked (see type docs).
         static let adminIdle: TimeInterval = 30 * 60           // 30 minutes
         static let adminAbsolute: TimeInterval = 4 * 60 * 60   // 4 hours
 
@@ -56,31 +61,80 @@ final class SessionTimeoutService {
 
     // MARK: - Lifecycle
 
-    /// Start tracking session timeouts. Call after successful authentication.
-    func startTracking(isAdmin: Bool) {
-        self.isAdmin = isAdmin
+    /// Start tracking after authentication.
+    ///
+    /// - `isAdmin == false`: stops tracking and returns. Regular users have no
+    ///   idle or absolute timeout (IOS-DD-ACCOUNT-02).
+    /// - `resetClock == true` (a real sign-in): starts a fresh absolute clock.
+    /// - `resetClock == false` (cold launch): keeps the persisted clock, so a
+    ///   relaunch cannot extend an admin session.
+    func startTracking(isAdmin: Bool, resetClock: Bool) {
+        guard isAdmin else {
+            if isTracking || KeychainService.shared.loadString(key: Keys.sessionStart) != nil {
+                stopTracking()
+            }
+            return
+        }
+        self.isAdmin = true
         self.isTracking = true
 
-        // Persist the admin flag so a cold-launch `isSessionValid()` check
-        // applies the correct (stricter) admin thresholds even before auth has
-        // re-resolved the role for this launch.
-        KeychainService.shared.saveString(key: Keys.isAdmin, value: isAdmin ? "1" : "0")
+        // Persist the admin flag so a cold-launch check applies the admin
+        // thresholds before auth has re-resolved the role for this launch.
+        KeychainService.shared.saveString(key: Keys.isAdmin, value: "1")
 
         let now = Date().timeIntervalSince1970
-        KeychainService.shared.saveString(key: Keys.sessionStart, value: String(now))
-        lastRecordedActivity = 0   // force the first recordActivity to persist
-        recordActivity()
+        if resetClock || KeychainService.shared.loadString(key: Keys.sessionStart) == nil {
+            KeychainService.shared.saveString(key: Keys.sessionStart, value: String(now))
+        }
+        if resetClock || KeychainService.shared.loadString(key: Keys.lastActivity) == nil {
+            KeychainService.shared.saveString(key: Keys.lastActivity, value: String(now))
+            lastRecordedActivity = now
+        }
 
-        // Start periodic check
-        checkTask?.cancel()
+        startCheckLoopIfNeeded()
+        AppLogger.auth.info("Session timeout tracking started (resetClock=\(resetClock))")
+    }
+
+    /// Applies a role change (e.g. on token refresh) WITHOUT touching the
+    /// timestamps. A demoted admin stops being tracked; a promotion is picked
+    /// up by the next sign-in rather than starting a clock mid-session.
+    func updateRole(isAdmin: Bool) {
+        guard isTracking else { return }
+        if !isAdmin {
+            stopTracking()
+            return
+        }
+        self.isAdmin = true
+        startCheckLoopIfNeeded()
+    }
+
+    /// True when a previous run left tracking data and it is already past a
+    /// limit. Called on `.initialSession` BEFORE anything else, so the app
+    /// signs out before authenticated UI renders.
+    func expireIfStaleOnLaunch() -> Bool {
+        guard KeychainService.shared.loadString(key: Keys.sessionStart) != nil else { return false }
+        return !isSessionValid()
+    }
+
+    /// Returning to the foreground: evaluate the limits against the time
+    /// spent in the background first, and only count it as activity if the
+    /// session survived. Recording first would forgive any idle period.
+    func noteForeground() {
+        guard isTracking else { return }
+        checkTimeouts()
+        if sessionState != .expired {
+            recordActivity()
+        }
+    }
+
+    private func startCheckLoopIfNeeded() {
+        guard checkTask == nil else { return }
         checkTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.checkTimeouts()
                 try? await Task.sleep(nanoseconds: UInt64(Timeout.checkInterval * 1_000_000_000))
             }
         }
-
-        AppLogger.auth.info("Session timeout tracking started (admin=\(isAdmin))")
     }
 
     /// Stop tracking session timeouts. Call on sign out.
@@ -104,6 +158,7 @@ final class SessionTimeoutService {
     /// irrelevant. A pending warning is always cleared immediately, though, so
     /// the banner disappears the instant the user interacts.
     func recordActivity() {
+        guard isTracking else { return }
         if case .warning = sessionState {
             sessionState = .active
         }
@@ -123,14 +178,15 @@ final class SessionTimeoutService {
             return true // No tracking data
         }
 
-        // Use the persisted admin flag rather than the in-memory `isAdmin`, which
-        // is still its `false` default this early in cold launch — otherwise an
-        // admin would be granted the looser user thresholds.
-        let wasAdmin = KeychainService.shared.loadString(key: Keys.isAdmin) == "1"
+        // Only admin sessions are tracked. Data left by an older build for a
+        // regular user (flag "0") is not a reason to sign anyone out.
+        guard KeychainService.shared.loadString(key: Keys.isAdmin) == "1" else {
+            return true
+        }
 
         let now = Date().timeIntervalSince1970
-        let idleTimeout = wasAdmin ? Timeout.adminIdle : Timeout.userIdle
-        let absoluteTimeout = wasAdmin ? Timeout.adminAbsolute : Timeout.userAbsolute
+        let idleTimeout = Timeout.adminIdle
+        let absoluteTimeout = Timeout.adminAbsolute
 
         let idleExpired = (now - lastActivity) > idleTimeout
         let absoluteExpired = (now - sessionStart) > absoluteTimeout
@@ -151,8 +207,8 @@ final class SessionTimeoutService {
         }
 
         let now = Date().timeIntervalSince1970
-        let idleTimeout = isAdmin ? Timeout.adminIdle : Timeout.userIdle
-        let absoluteTimeout = isAdmin ? Timeout.adminAbsolute : Timeout.userAbsolute
+        let idleTimeout = Timeout.adminIdle
+        let absoluteTimeout = Timeout.adminAbsolute
 
         let idleElapsed = now - lastActivity
         let absoluteElapsed = now - sessionStart

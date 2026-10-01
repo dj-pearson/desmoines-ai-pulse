@@ -14,6 +14,7 @@ import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import { recentlyMessaged } from "../nurtureCoordination.ts";
 import type { AgentRun } from "./types.ts";
+import { hasMarketingConsent } from "../marketingConsent.ts";
 
 const AGENT_KEY = "milestone-recognition";
 const BATCH = 300;
@@ -113,7 +114,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
     // Decide whether to email (in-app is always recorded).
     let emailedNow = false, sendId: string | null = null;
-    const consent = p.lifecycle_signals?.messagingAllowed !== false;
+    const consent = hasMarketingConsent(p.lifecycle_signals);
     if (consent) {
       const { data: lastEmail, error: lastEmailError } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).like("kind", "milestone_%").order("created_at", { ascending: false }).limit(1);
       // Same shape: a dropped error reads as "not emailed recently" and sends.

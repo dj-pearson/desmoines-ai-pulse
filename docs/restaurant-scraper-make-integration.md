@@ -17,7 +17,7 @@ https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/restaurant-opening-scraper
 ```json
 {
   "Content-Type": "application/json",
-  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE"
+  "Authorization": "Bearer <your Supabase anon key — read it from VITE_SUPABASE_ANON_KEY, never paste it here (WEB-SEC-032)>"
 }
 ```
 
@@ -112,7 +112,7 @@ Add two headers:
 | Key | Value |
 |-----|-------|
 | Content-Type | application/json |
-| Authorization | Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE |
+| Authorization | Bearer <your Supabase anon key — read it from VITE_SUPABASE_ANON_KEY, never paste it here (WEB-SEC-032)> |
 
 **Request content:**
 For default sources (recommended):
@@ -198,7 +198,7 @@ For each restaurant found, the scraper populates:
 curl -X POST \
   https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/restaurant-opening-scraper \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE" \
+  -H "Authorization: Bearer <your Supabase anon key — read it from VITE_SUPABASE_ANON_KEY, never paste it here (WEB-SEC-032)>" \
   -d '{}'
 ```
 

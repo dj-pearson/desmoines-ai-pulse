@@ -10,13 +10,20 @@ import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+// One hue per stage, carried by a dot beside the column label rather than a
+// thick top border: the border fought the card's rounded corners, and the dot
+// has no contrast floor to meet the way tinted label text would.
 const STAGE_TONE: Record<string, string> = {
-  new: "border-slate-300",
-  qualified: "border-blue-400",
-  contacted: "border-cyan-400",
-  proposal: "border-amber-400",
-  won: "border-green-500",
-  lost: "border-red-400",
+  // slate is a MEMBER OF THIS SET, not a stray neutral (WEB-UX-034 AC2).
+  // The six dots identify six stages and slate is the one that means "not
+  // yet anything"; swapping it for a theme token to clear a grep would leave
+  // the other five arbitrary without making the set less of a palette.
+  new: "bg-slate-400",
+  qualified: "bg-blue-500",
+  contacted: "bg-cyan-500",
+  proposal: "bg-amber-500",
+  won: "bg-green-500",
+  lost: "bg-red-500",
 };
 
 function nextStage(stage: string): string | null {
@@ -132,8 +139,9 @@ export default function CrmBoard() {
           ) : (
             <div className="grid gap-3 overflow-x-auto md:grid-cols-3 lg:grid-cols-6">
               {CRM_STAGES.map((stage) => (
-                <div key={stage} className={cn("min-w-[180px] rounded-lg border-t-4 bg-muted/20 p-2", STAGE_TONE[stage])}>
-                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                <div key={stage} className="min-w-[180px] rounded-lg border bg-muted/20 p-2">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+                    <span className={cn("h-2 w-2 shrink-0 rounded-full", STAGE_TONE[stage])} aria-hidden="true" />
                     {stage} <span className="ml-1">{byStage[stage]?.length ?? 0}</span>
                   </p>
                   <div className="space-y-2">

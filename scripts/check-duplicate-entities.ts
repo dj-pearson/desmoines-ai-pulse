@@ -28,12 +28,16 @@
  *
  * Usage:
  *   npx tsx scripts/check-duplicate-entities.ts
+ *   npx tsx scripts/check-duplicate-entities.ts --near   # report-only loose key (WEB-BE-052)
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nearGroups } from './lib/mergeDuplicateEvents.ts';
+
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
 const EVENT_BASELINE = join(ROOT, 'duplicate-events-baseline.json');
 const PLAYGROUND_BASELINE = join(ROOT, 'duplicate-playgrounds-baseline.json');
 
@@ -242,6 +246,38 @@ if (freshEventDupes.length > 0) {
 }
 
 console.log('OK No new event stored more than once.');
+
+// NEAR-DUPLICATES (WEB-BE-052), REPORT-ONLY AND OPT-IN.
+//
+// The key above needs the titles to be character-identical, so the same concert
+// from SeatGeek, the venue and Catch Des Moines stays three groups of one. The
+// loose key is `nearGroups`, shared with merge-duplicate-events.ts and with
+// isDuplicateEvent's tier 4 so the three cannot drift.
+//
+// It never fails the run and it is not baselined. duplicate-events-baseline.json
+// was measured with the exact key; a looser key would report groups that are not
+// in it and turn this permanently red, which is the failure mode the exact pass
+// above was deliberately baselined to avoid.
+if (process.argv.includes('--near')) {
+  const near = nearGroups(eventRows.filter((r) => r.title?.trim() && r.date));
+  const unseen = near.filter((g) => !g.exactAlready);
+  console.log(
+    `\n[duplicate-entities] --near: ${near.length} group(s) under the loose title key, ` +
+      `${unseen.length} that the exact key misses.`,
+  );
+  for (const g of unseen) {
+    console.log(`\n  ${g.refused ? 'SKIP  ' : 'MERGE '} ${g.key}`);
+    for (const row of g.rows) console.log(`    ${row.id}  ${row.title}`);
+    if (g.refused) console.log(`    refused: ${g.refused}`);
+  }
+  if (unseen.length > 0) {
+    console.log(
+      '\n  Review these, then merge with:\n' +
+        '    npx tsx scripts/merge-duplicate-events.ts --near            # dry run\n' +
+        '    npx tsx scripts/merge-duplicate-events.ts --near --apply\n',
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // PLAYGROUNDS.

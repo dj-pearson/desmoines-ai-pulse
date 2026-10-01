@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useLocation as useRouterLocation } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useParams, useLocation as useRouterLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
@@ -10,68 +10,38 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Star } from "lucide-react";
-import { format, parseISO, isAfter } from "date-fns";
+import { Card, CardContent } from "@/components/ui/card";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
+import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
+import { DIRECTORY_PILL } from "@/components/seo/MonthLinks";
+import { notOverFilter } from "@/components/events/eventsHubQuery";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { ErrorState } from "@/components/ui/error-state";
+import { SUBURBS, type SuburbSlug } from "@/lib/suburbs";
+import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
+import { applyEventVisibility } from "@/lib/eventQuery";
+import { eventAreaOrFilter, findEventArea } from "@/lib/eventAreas";
+import { isFreePrice } from "@/lib/eventPrice";
 
-// Suburb mapping for SEO-friendly URLs and proper names
-const SUBURBS = {
-  "west-des-moines": {
-    name: "West Des Moines",
-    searchTerms: ["West Des Moines", "WDM", "Valley Junction"],
-    description:
-      "West Des Moines offers family-friendly events, outdoor activities, and cultural attractions in the heart of Iowa.",
-    neighborhoods: ["Valley Junction", "Jordan Creek", "Clive"],
-  },
-  ankeny: {
-    name: "Ankeny",
-    searchTerms: ["Ankeny"],
-    description:
-      "Ankeny is known for its community events, parks, and family activities just north of Des Moines.",
-    neighborhoods: ["Downtown Ankeny", "Prairie Trail"],
-  },
-  urbandale: {
-    name: "Urbandale",
-    searchTerms: ["Urbandale"],
-    description:
-      "Urbandale hosts seasonal festivals, community gatherings, and outdoor recreation events.",
-    neighborhoods: ["Downtown Urbandale", "Living History Farms"],
-  },
-  johnston: {
-    name: "Johnston",
-    searchTerms: ["Johnston"],
-    description:
-      "Johnston features community events, outdoor activities, and family-friendly attractions.",
-    neighborhoods: ["Downtown Johnston", "Terra Park"],
-  },
-  altoona: {
-    name: "Altoona",
-    searchTerms: ["Altoona", "Adventureland"],
-    description:
-      "Altoona is home to Adventureland and hosts numerous family events and community celebrations.",
-    neighborhoods: ["Downtown Altoona", "Adventureland Area"],
-  },
-  clive: {
-    name: "Clive",
-    searchTerms: ["Clive"],
-    description:
-      "Clive offers upscale events, outdoor activities, and community gatherings in west Des Moines metro.",
-    neighborhoods: ["Clive Village", "Greenbelt Trail"],
-  },
-  "windsor-heights": {
-    name: "Windsor Heights",
-    searchTerms: ["Windsor Heights"],
-    description:
-      "Windsor Heights hosts intimate community events and local gatherings in a charming suburban setting.",
-    neighborhoods: ["Downtown Windsor Heights"],
-  },
-};
+/** Rows fetched for one suburb. The page renders 24; the rest feed the counts. */
+const MAX_EVENTS = 500;
+
+/**
+ * The suburb as a place (events-pass2 WP5 items 5 and 6): eventAreas' group
+ * for the suburb's city area, the same one the hub's `?location=<slug>`
+ * sends. `city` first; a row with no city only through a location that ends
+ * in the suburb's name, so "Urbandale Ave, Des Moines" is not an Urbandale
+ * event. Restaurants have the same two columns and use the same group.
+ */
+function suburbPlaceFilter(slug: string | null): string | null {
+  const area = findEventArea(slug);
+  return area ? eventAreaOrFilter(area) : null;
+}
 
 export default function EventsByLocation() {
   // WEB-SEO-002: this read `useParams().location`, but App.tsx mounts this
@@ -94,12 +64,14 @@ export default function EventsByLocation() {
 
   const suburbInfo = slug ? SUBURBS[slug as keyof typeof SUBURBS] : null;
 
-  useDocumentTitle(suburbInfo?.name ? `Events in ${suburbInfo.name}` : "Events by Location");
 
   interface EventItem {
     id: string;
     title: string;
     date: string;
+    end_date?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
     time?: string;
     location: string;
     venue: string;
@@ -113,82 +85,133 @@ export default function EventsByLocation() {
     city?: string;
   }
 
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const placeFilter = suburbPlaceFilter(slug);
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setIsLoading(true);
-        const today = new Date().toISOString().split("T")[0];
-        
-        const { data, error } = await supabase
+  // Filtered in the query, not in the browser (events plan WP6 item 8). The
+  // floor is the hub's not-over rule, nested with the place group in ONE
+  // `or=` (a second .or() is a second param, and the codebase does not rely
+  // on how PostgREST combines those). It replaced a start-of-today floor plus
+  // a client isAfter(date) that dropped a festival still running and kept an
+  // 8 AM class at 9 PM.
+  const {
+    data: events = [],
+    isLoading,
+    isSuccess: eventsLoaded,
+    error: loadError,
+    refetch: refetchEvents,
+  } = useQuery({
+    queryKey: ["events-by-location", slug],
+    enabled: !!suburbInfo && !!placeFilter,
+    queryFn: async (): Promise<EventItem[]> => {
+      if (!suburbInfo || !placeFilter) return [];
+      const { data, error } = await applyEventVisibility(
+        supabase
           .from("events")
           // NOTE: `time` and `status` are not columns on public.events (see the
           // warning on EVENT_LIST_COLUMNS in src/lib/listColumns.ts). Naming them
           // made PostgREST reject the whole projection with 42703, so this page
           // rendered zero events on every load. Neither field was read downstream.
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, city")
-          .gte("date", today)
-          .order("date", { ascending: true });
-        
-        if (error) {
-          log.error('fetchEvents', 'Error fetching events', { error });
-          setEvents([]);
-        } else {
-          // Filter events that match the suburb
-          const filteredData = (data || []).filter((event) => {
-            const eventLocation = (
-              event.location ||
-              event.venue ||
-              ""
-            ).toLowerCase();
-            return suburbInfo.searchTerms.some((term: string) =>
-              eventLocation.includes(term.toLowerCase())
-            );
-          });
-          setEvents(filteredData);
-        }
-      } catch (error) {
-        log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
+          .select("id, title, date, end_date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, city, latitude, longitude")
+      )
+        .or(`and(or(${placeFilter}),or(${notOverFilter(new Date())}))`)
+        .order("date", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(MAX_EVENTS);
+      if (error) {
+        log.error("fetchEvents", "Error fetching events", { error });
+        throw error;
       }
-    };
+      return (data ?? []) as EventItem[];
+    },
+  });
 
-    if (suburbInfo) {
-      fetchEvents();
-    }
-  }, [suburbInfo]);
+  // A count, not the length of a six-card sample (WP5 item 4): the tile said
+  // "Local Restaurants: 6" for every suburb with six or more.
+  const restaurantQuery = (columns: string, head = false) =>
+    supabase
+      .from("restaurants")
+      .select(columns, head ? { count: "exact", head: true } : undefined)
+      .eq("status", "active")
+      .neq("is_merged", true)
+      .or(placeFilter ?? "id.is.null");
 
   const { data: restaurants } = useQuery({
     queryKey: ["restaurants-by-location", slug],
     queryFn: async () => {
-      if (!suburbInfo) return [];
-
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select(RESTAURANT_LIST_COLUMNS)
-        .eq("status", "active")
-        .limit(5);
-
+      const { data, error } = await restaurantQuery(RESTAURANT_LIST_COLUMNS)
+        .order("name", { ascending: true })
+        .limit(6);
       if (error) throw error;
-
-      // Filter restaurants that match the suburb
-      return (data || []).filter((restaurant) => {
-        const restaurantLocation = (
-          restaurant.location ||
-          restaurant.city ||
-          ""
-        ).toLowerCase();
-        return suburbInfo.searchTerms.some((term) =>
-          restaurantLocation.includes(term.toLowerCase())
-        );
-      });
+      return (data ?? []) as unknown as Array<{
+        id: string;
+        slug: string | null;
+        name: string;
+        cuisine: string | null;
+        location: string | null;
+        city: string | null;
+      }>;
     },
-    enabled: !!suburbInfo,
+    enabled: !!suburbInfo && !!placeFilter,
   });
+
+  const { data: restaurantCount } = useQuery({
+    queryKey: ["restaurants-by-location-count", slug],
+    queryFn: async () => {
+      const { count, error } = await restaurantQuery("id", true);
+      if (error) throw error;
+      return count ?? null;
+    },
+    enabled: !!suburbInfo && !!placeFilter,
+  });
+
+  // Moved above the early return below (WEB-PERF-030): it depends only on
+  // the events query, and the hooks that follow it must run on every render.
+  // Two full rows of the lg:grid-cols-3 grid below. This route prerendered
+  // 4,077 elements inside #root against a median of 496 across all 35 routes,
+  // and Lighthouse flags above ~1,500 - a cost paid in HTML parse, DOM memory
+  // and hydration, all main-thread (WEB-PERF-023).
+  //
+  // ONLY THE RENDERED LIST IS CAPPED. The stat block and the "Showing the
+  // first 24 of N" line read upcomingEvents.length; the JSON-LD ItemList reads
+  // the 24 rendered cards, so it never lists an event the page doesn't show.
+  const VISIBLE_EVENTS = 24;
+
+  // The server applied the not-over rule; nothing is re-filtered here.
+  const upcomingEvents = events;
+  const eventsCapped = events.length >= MAX_EVENTS;
+  const freeCount = upcomingEvents.filter((e) => isFreePrice(e.price) === true).length;
+
+  const visibleEvents = upcomingEvents.slice(0, VISIBLE_EVENTS);
+
+  // null value = not known yet; the tile keeps its place but prints nothing.
+  const statTiles: Array<{ label: string; value: string | null }> = eventsLoaded
+    ? [
+        { label: "Upcoming events", value: `${upcomingEvents.length}${eventsCapped ? "+" : ""}` },
+        { label: "Listed as free", value: String(freeCount) },
+        ...(restaurantCount != null
+          ? [{ label: "Restaurants listed", value: String(restaurantCount) }]
+          : []),
+      ]
+    : [
+        { label: "Upcoming events", value: null },
+        { label: "Listed as free", value: null },
+        { label: "Restaurants listed", value: null },
+      ];
+
+  const nearbySuburbs = (suburbInfo?.nearby ?? [])
+    .filter((near): near is SuburbSlug => near in SUBURBS)
+    .map((near) => ({ slug: near, name: SUBURBS[near].name }));
+  const hiddenEventCount = upcomingEvents.length - visibleEvents.length;
+
+  // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
+  // when no batch data is passed, and that fallback ran three queries and
+  // opened three realtime channels PER CARD. This page renders up to
+  // visibleEvents.length of them, so one anonymous visit could issue hundreds of
+  // requests and sockets for a preview nobody can interact with. One batch
+  // query per table replaces all of it.
+  const batchSocialIds = useMemo(() => (visibleEvents ?? []).map((e) => e.id), [visibleEvents]);
+  const { data: batchSocialData, isPending: batchSocialPending } =
+    useBatchEventSocial(batchSocialIds);
 
   if (!suburbInfo) {
     return (
@@ -200,9 +223,9 @@ export default function EventsByLocation() {
               <h1 className="text-2xl font-bold mb-4">Location Not Found</h1>
               <p className="text-muted-foreground">
                 The location you're looking for doesn't exist.
-                <a href="/events" className="text-primary hover:underline ml-1">
+                <Link to="/events" className="text-primary underline underline-offset-2 ml-1">
                   Browse all events
-                </a>
+                </Link>
               </p>
             </CardContent>
           </Card>
@@ -212,27 +235,6 @@ export default function EventsByLocation() {
     );
   }
 
-  // Two full rows of the lg:grid-cols-3 grid below. This route prerendered
-  // 4,077 elements inside #root against a median of 496 across all 35 routes,
-  // and Lighthouse flags above ~1,500 - a cost paid in HTML parse, DOM memory
-  // and hydration, all main-thread (WEB-PERF-023).
-  //
-  // ONLY THE RENDERED LIST IS CAPPED. Every count on this page - the FAQ answer,
-  // the stat block, the this-week filter - still reads upcomingEvents.length, so
-  // no number a user sees changes.
-  const VISIBLE_EVENTS = 24;
-
-  const upcomingEvents =
-    events?.filter((event) => {
-      try {
-        return isAfter(parseISO(event.date), new Date());
-      } catch {
-        return false;
-      }
-    }) || [];
-
-  const visibleEvents = upcomingEvents.slice(0, VISIBLE_EVENTS);
-  const hiddenEventCount = upcomingEvents.length - visibleEvents.length;
 
   const pageTitle = `${suburbInfo.name} Events - Things To Do | ${BRAND.name}`;
   const pageDescription = `Find events in ${suburbInfo.name}, Iowa. ${suburbInfo.description} See dates, times, locations, and get directions.`;
@@ -295,8 +297,11 @@ export default function EventsByLocation() {
         faqData={faqData}
         suburb={suburbInfo.name}
       />
+      {/* A failed first read would otherwise be captured as an empty page. */}
+      {loadError && !eventsLoaded && <NoIndexMeta />}
       <EventListJsonLd
-        events={upcomingEvents || []}
+        // The rendered cards, not every loaded row (WP5 item 7).
+        events={visibleEvents}
         listName={`Events in ${suburbInfo.name}, Iowa`}
         listDescription={pageDescription}
         listUrl={`${BRAND.baseUrl}/events/${slug}`}
@@ -324,45 +329,50 @@ export default function EventsByLocation() {
             {suburbInfo.description}
           </p>
 
-          {/* Quick Stats */}
-          <Card className="mb-8">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-primary">
-                    {upcomingEvents.length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Upcoming Events
-                  </div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary">
-                    {
-                      upcomingEvents.filter(
-                        (e) => e.price === "Free" || e.price === "0"
-                      ).length
-                    }
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Free Events
-                  </div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary">
-                    {restaurants?.length || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Local Restaurants
-                  </div>
-                </div>
+          {/* Only numbers the page has (WP5 item 4). Until the events read
+              succeeds the tiles hold an invisible placeholder in the same
+              markup, so the block keeps its height and nobody sees a "0"
+              that means "still loading". The restaurant tile is a count
+              query's answer or nothing. */}
+          <dl
+            className={`mb-6 grid grid-cols-1 gap-4 rounded-xl border bg-card p-6 text-center ${
+              !eventsLoaded || restaurantCount != null ? "sm:grid-cols-3" : "sm:grid-cols-2"
+            }`}
+            aria-busy={!eventsLoaded}
+          >
+            {statTiles.map((tile) => (
+              <div key={tile.label} className="flex flex-col-reverse">
+                <dt className="text-sm text-muted-foreground">{tile.label}</dt>
+                <dd className="text-2xl font-bold text-primary">
+                  {tile.value ?? <span className="invisible">0</span>}
+                </dd>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </dl>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <Link to={`/events/near-me?from=${slug}`} className={DIRECTORY_PILL}>
+              Events by distance from {suburbInfo.name}
+            </Link>
+            {nearbySuburbs.length > 0 && (
+              <nav aria-labelledby="nearby-suburbs" className="flex flex-wrap items-center gap-2">
+                <span id="nearby-suburbs" className="text-sm text-muted-foreground">
+                  Events in nearby suburbs:
+                </span>
+                {nearbySuburbs.map((near) => (
+                  <Link key={near.slug} to={`/events/${near.slug}`} className={DIRECTORY_PILL}>
+                    {near.name}
+                  </Link>
+                ))}
+              </nav>
+            )}
+          </div>
         </div>
 
         {/* Events List */}
-        {isLoading ? (
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={() => void refetchEvents()} />
+        ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
@@ -381,8 +391,15 @@ export default function EventsByLocation() {
               Upcoming Events
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {visibleEvents.map((event) => (
-                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
+              {visibleEvents.map((event, index) => (
+                <SocialEventCard
+                  priority={index < 3}
+                  key={event.id}
+                  event={event}
+                  socialData={batchSocialData?.[event.id]}
+                  socialDataPending={batchSocialPending}
+                  onViewDetails={() => {}}
+                />
               ))}
             </div>
             {hiddenEventCount > 0 && (
@@ -405,15 +422,15 @@ export default function EventsByLocation() {
                 back later or browse events in nearby areas.
               </p>
               <div className="flex justify-center gap-4">
-                <a href="/events" className="text-primary hover:underline">
+                <Link to="/events" className="text-primary underline underline-offset-2">
                   All Des Moines Events
-                </a>
-                <a
-                  href="/events/this-weekend"
-                  className="text-primary hover:underline"
+                </Link>
+                <Link
+                  to="/events/this-weekend"
+                  className="text-primary underline underline-offset-2"
                 >
                   This Weekend's Events
-                </a>
+                </Link>
               </div>
             </CardContent>
           </Card>
@@ -440,17 +457,13 @@ export default function EventsByLocation() {
                     <p className="text-sm text-muted-foreground">
                       {restaurant.location || restaurant.city}
                     </p>
-                    <div className="flex justify-between items-center mt-3">
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm">Local Favorite</span>
-                      </div>
-                      <a
-                        href={`/restaurants/${restaurant.id}`}
+                    <div className="mt-3">
+                      <Link
+                        to={`/restaurants/${restaurant.slug ?? restaurant.id}`}
                         className="text-primary hover:underline text-sm"
                       >
                         View Details
-                      </a>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
@@ -463,7 +476,13 @@ export default function EventsByLocation() {
             FAQPage block, so the schema cannot describe content that is not on
             the page. The heading stays "About <suburb>" — it is the visible
             title, and the questions underneath are the same either way. */}
+        <EventsLandingLinks current={`/events/${slug}`} className="mb-10" />
+
         <FAQSection faqs={faqData} title={`About ${suburbInfo.name}`} />
+
+        {/* WEB-SEO-036 AC5. /events/ankeny and /neighborhoods/ankeny are both
+            pages about Ankeny and neither linked to the other. */}
+        <PlaceCrossLinks slug={slug ?? ""} from="events" />
       </div>
 
       <Footer />

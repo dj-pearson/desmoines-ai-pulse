@@ -1,4 +1,3 @@
-import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,16 +8,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Heart, Search, MoreVertical, Trash2, Edit } from "lucide-react";
-import { AdvancedSearchFilters } from "./AdvancedSearchFilters";
+import type { SavedSearch } from "@/hooks/useAdvancedSearch";
 
-export interface SavedSearch {
-  id: string;
-  name: string;
-  filters: AdvancedSearchFilters;
-  createdAt: Date;
-  lastUsed?: Date;
-  useCount: number;
-}
+export type { SavedSearch };
 
 interface SavedSearchesProps {
   savedSearches: SavedSearch[];
@@ -35,26 +27,26 @@ export function SavedSearches({
   onRenameSearch,
   className
 }: SavedSearchesProps) {
-  const getSearchDescription = (filters: AdvancedSearchFilters) => {
-    const parts = [];
-    
-    if (filters.category !== 'All') {
-      parts.push(filters.category);
+  /**
+   * Reads every row defensively: the table also holds /events saves and iOS
+   * saves, whose `filters` have none of this page's keys (search plan WP4
+   * item 1). A row this page can't load says what it will open instead.
+   */
+  const getSearchDescription = (search: SavedSearch) => {
+    if (!search.restorable) {
+      return search.query ? `Opens search for "${search.query}"` : 'Opens search';
     }
-    
-    if (filters.location) {
-      parts.push(filters.location);
-    }
-    
-    if (filters.rating > 0) {
-      parts.push(`${filters.rating}+ stars`);
-    }
-    
-    if (filters.features.length > 0) {
-      parts.push(`${filters.features.length} features`);
-    }
-    
-    return parts.length > 0 ? parts.join(' • ') : 'Custom search';
+    const filters = search.filters;
+    const parts: string[] = [];
+
+    if (filters.query) parts.push(`"${filters.query}"`);
+    if (filters.category && filters.category !== 'All') parts.push(filters.category);
+    if (filters.location) parts.push(filters.location);
+    if (filters.rating > 0) parts.push(`${filters.rating}+ stars`);
+    if (filters.featuredOnly) parts.push('Featured');
+    if (filters.dateRange?.start || filters.dateRange?.end) parts.push('Date range');
+
+    return parts.length > 0 ? parts.join(' \u00b7 ') : 'Everything';
   };
 
   const formatLastUsed = (date?: Date) => {
@@ -75,15 +67,11 @@ export function SavedSearches({
     return (
       <Card className={className}>
         <CardContent className="py-8 text-center">
-          <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No Saved Searches</h3>
-          <p className="text-muted-foreground mb-4">
-            Save your favorite search combinations for quick access
+          <Heart className="h-10 w-10 mx-auto text-muted-foreground mb-4" aria-hidden="true" />
+          <h3 className="text-lg font-semibold mb-2">No saved searches yet</h3>
+          <p className="text-sm text-muted-foreground">
+            Set your filters, then press Save on the filters card.
           </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Heart className="h-4 w-4" />
-            <span>Use the "Save" button when searching to get started</span>
-          </div>
         </CardContent>
       </Card>
     );
@@ -97,42 +85,43 @@ export function SavedSearches({
           Saved Searches ({savedSearches.length})
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent>
+        <ul className="space-y-3" aria-label="Saved searches">
         {savedSearches.map((search) => (
-          <div
+          <li
             key={search.id}
-            className="flex items-center justify-between p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow"
+            className="flex flex-col gap-3 p-3 rounded-lg border bg-card"
           >
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <h4 className="font-medium truncate">{search.name}</h4>
-                <Badge variant="secondary" className="text-xs">
+                <h4 className="font-medium truncate min-w-0">{search.name}</h4>
+                <Badge variant="secondary" className="text-xs shrink-0">
                   {search.useCount} uses
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground truncate">
-                {getSearchDescription(search.filters)}
+                {getSearchDescription(search)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Last used: {formatLastUsed(search.lastUsed)}
               </p>
             </div>
             
-            <div className="flex items-center gap-2 ml-3">
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onLoadSearch(search)}
                 className="flex items-center gap-1"
               >
-                <Search className="h-3 w-3" />
-                Use
+                <Search className="h-3 w-3" aria-hidden="true" />
+                {search.restorable ? 'Use' : 'Open'}
               </Button>
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <MoreVertical className="h-4 w-4" />
+                  <Button variant="ghost" size="sm" aria-label={`More options for ${search.name}`}>
+                    <MoreVertical className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -159,8 +148,9 @@ export function SavedSearches({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          </div>
+          </li>
         ))}
+        </ul>
       </CardContent>
     </Card>
   );

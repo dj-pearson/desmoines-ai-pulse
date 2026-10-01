@@ -310,7 +310,7 @@ const AICrawler: React.FC = () => {
                       <div className="text-xs text-gray-600">Future Events</div>
                     </div>
                     <div className="text-center p-3 bg-white rounded border">
-                      <div className="text-2xl font-bold text-purple-600">
+                      <div className="text-2xl font-bold text-teal-600">
                         {result.inserted}
                       </div>
                       <div className="text-xs text-gray-600">New Inserted</div>

@@ -6,6 +6,7 @@ import type {
   CrmCommunicationInput,
   CrmCommunicationFilters,
 } from '@/types/crm';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const CRM_COMMUNICATIONS_KEY = 'crm-communications';
 
@@ -13,8 +14,7 @@ export function useCrmCommunications(filters?: CrmCommunicationFilters) {
   return useQuery({
     queryKey: [CRM_COMMUNICATIONS_KEY, filters],
     queryFn: async () => {
-      let query = supabase
-        .from('crm_communications')
+      let query = fromUnknownTable('crm_communications')
         .select('*');
 
       if (filters?.contact_id) {
@@ -71,8 +71,7 @@ export function useCrmContactCommunications(contactId: string | undefined) {
     queryFn: async () => {
       if (!contactId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_communications')
+      const { data, error } = await fromUnknownTable('crm_communications')
         .select('*')
         .eq('contact_id', contactId)
         .order('sent_at', { ascending: false });
@@ -90,8 +89,7 @@ export function useCrmCommunication(communicationId: string | undefined) {
     queryFn: async () => {
       if (!communicationId) return null;
 
-      const { data, error } = await supabase
-        .from('crm_communications')
+      const { data, error } = await fromUnknownTable('crm_communications')
         .select('*')
         .eq('id', communicationId)
         .single();
@@ -109,8 +107,7 @@ export function useCrmEmailThread(threadId: string | undefined) {
     queryFn: async () => {
       if (!threadId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_communications')
+      const { data, error } = await fromUnknownTable('crm_communications')
         .select('*')
         .eq('email_thread_id', threadId)
         .order('sent_at', { ascending: true });
@@ -128,8 +125,7 @@ export function useCrmCommunicationMutations() {
 
   const createCommunication = useMutation({
     mutationFn: async (input: CrmCommunicationInput) => {
-      const { data, error } = await supabase
-        .from('crm_communications')
+      const { data, error } = await fromUnknownTable('crm_communications')
         .insert(input)
         .select()
         .single();
@@ -166,8 +162,7 @@ export function useCrmCommunicationMutations() {
 
   const updateCommunication = useMutation({
     mutationFn: async ({ id, ...input }: Partial<CrmCommunicationInput> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('crm_communications')
+      const { data, error } = await fromUnknownTable('crm_communications')
         .update(input)
         .eq('id', id)
         .select()
@@ -195,8 +190,7 @@ export function useCrmCommunicationMutations() {
 
   const deleteCommunication = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('crm_communications')
+      const { error } = await fromUnknownTable('crm_communications')
         .delete()
         .eq('id', id);
 
@@ -230,8 +224,7 @@ export function useCrmCommunicationStats(contactId?: string) {
   return useQuery({
     queryKey: [CRM_COMMUNICATIONS_KEY, 'stats', contactId],
     queryFn: async () => {
-      let query = supabase
-        .from('crm_communications')
+      let query = fromUnknownTable('crm_communications')
         .select('channel, direction, sent_at');
 
       if (contactId) {

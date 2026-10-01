@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo } from "react";
+import { useAuthFlags, useAuthState } from "@/contexts/AuthContext";
+import {
+  hasAdminAccess as roleHasAdminAccess,
+  isRootAdmin as roleIsRootAdmin,
+  type UserRole,
+} from "@/lib/roles";
 import { User } from "@supabase/supabase-js";
-import { createLogger } from '@/lib/logger';
 
-const log = createLogger('useAdminAuth');
-
-export type UserRole = 'user' | 'moderator' | 'admin' | 'root_admin';
+export type { UserRole };
 
 interface AdminAuthState {
   user: User | null;
@@ -15,117 +17,46 @@ interface AdminAuthState {
   isRootAdmin: boolean;
 }
 
-export function useAdminAuth() {
-  const [state, setState] = useState<AdminAuthState>({
-    user: null,
-    userRole: 'user',
-    isLoading: true,
-    hasAdminAccess: false,
-    isRootAdmin: false,
-  });
+/**
+ * The admin nav's view of the current user. DERIVED, not re-queried
+ * (WEB-AUTH-010).
+ *
+ * WHAT THIS USED TO DO AND WHY IT WAS WRONG. It ran its own query against
+ * user_roles with `.order('created_at', { ascending: false }).limit(1)`, which
+ * returns the NEWEST role row rather than the strongest - so an admin later
+ * granted a moderator row resolved as a moderator and lost the nav. Meanwhile
+ * AuthContext resolved the same question with `.maybeSingle()`, which errors
+ * when a user holds two rows, and ProtectedRoute's requireAdmin read THAT. The
+ * two could and did disagree, and the visible symptom was a moderator being
+ * shown admin links that led to an Access Denied page.
+ *
+ * There is one resolver now, in AuthContext, ranked by precedence
+ * (src/lib/roles.ts). This hook reads it. That also removes a duplicate round
+ * of role queries on every sign-in and every tab focus - the thing WEB-UX-008
+ * had to work around here with a ref.
+ *
+ * THE OAUTH SYNC FALLBACK MOVED WITH THE QUERY, it was not dropped. This hook
+ * called `sync_oauth_user_role` when no role row matched and AuthContext never
+ * did - which is a second way the two disagreed, because a Google sign-in
+ * creates a NEW auth user id and the role rows are keyed to the password
+ * account. So an OAuth admin got the nav from here and Access Denied from the
+ * guard. The RPC now runs inside the single resolver, in the same position.
+ */
+export function useAdminAuth(): AdminAuthState {
+  const { userRole, isLoading, isAdminLoading } = useAuthFlags();
+  const { user } = useAuthState();
 
-  // Id of the user we last resolved a role for, so a re-emitted SIGNED_IN for
-  // the same session doesn't trigger another round of role queries. (WEB-UX-008)
-  const resolvedForUserRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const initializeAuth = async () => {
-      try {
-        // Get current session
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user || null;
-
-        if (!user) {
-          resolvedForUserRef.current = null;
-          if (isMounted) {
-            setState({
-              user: null,
-              userRole: 'user',
-              isLoading: false,
-              hasAdminAccess: false,
-              isRootAdmin: false,
-            });
-          }
-          return;
-        }
-
-        // Fetch user role
-        let { data: roleData } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        // OAuth User Handling: If no role found, try to sync with existing account by email
-        // This handles OAuth users whose email matches an existing account with a role
-        if (!roleData?.role && user.email) {
-          const { data: syncedRole, error: syncError } = await supabase.rpc(
-            'sync_oauth_user_role',
-            { p_user_id: user.id }
-          );
-
-          if (!syncError && syncedRole && syncedRole !== 'user') {
-            roleData = { role: syncedRole };
-          }
-        }
-
-        const userRole = roleData?.role as UserRole || 'user';
-        const hasAdminAccess = ['moderator', 'admin', 'root_admin'].includes(userRole);
-        const isRootAdmin = userRole === 'root_admin';
-
-        resolvedForUserRef.current = user.id;
-
-        if (isMounted) {
-          setState({
-            user,
-            userRole,
-            isLoading: false,
-            hasAdminAccess,
-            isRootAdmin,
-          });
-        }
-      } catch (error) {
-        log.error('initializeAuth', 'Admin auth initialization failed', { error });
-        if (isMounted) {
-          setState({
-            user: null,
-            userRole: 'user',
-            isLoading: false,
-            hasAdminAccess: false,
-            isRootAdmin: false,
-          });
-        }
-      }
-    };
-
-    initializeAuth();
-
-    // Listen for auth changes.
-    //
-    // SIGNED_IN is re-emitted for the session we already hold every time the
-    // browser tab regains visibility (GoTrueClient#_recoverAndRefresh), so only
-    // re-resolve the role when the user actually changed — otherwise every tab
-    // switch fires a fresh round of role queries and re-renders the admin nav.
-    // (WEB-UX-008)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        initializeAuth();
-        return;
-      }
-      if (event === 'SIGNED_IN' && session?.user?.id !== resolvedForUserRef.current) {
-        initializeAuth();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  return state;
+  return useMemo(
+    () => ({
+      user,
+      userRole,
+      // Both, because a resolved session with an unresolved role is still a
+      // question the nav must not answer yet - rendering "no access" during
+      // the check is what made the admin nav flicker on every reload.
+      isLoading: isLoading || isAdminLoading,
+      hasAdminAccess: roleHasAdminAccess(userRole),
+      isRootAdmin: roleIsRootAdmin(userRole),
+    }),
+    [user, userRole, isLoading, isAdminLoading],
+  );
 }

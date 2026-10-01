@@ -23,6 +23,9 @@ final class SpeechDictationService {
 
     private(set) var status: Status = .idle
     private(set) var transcript: String = ""
+    /// The transcript of the last session that finished on its own. The
+    /// search screen commits it (IOS-DD-SEARCH-13).
+    private(set) var lastFinalTranscript: String?
 
     /// Convenience for SwiftUI bindings — true when actively recording.
     var statusIsListening: Bool {
@@ -35,7 +38,42 @@ final class SpeechDictationService {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
 
+    /// Bumped by every start(). A recognition callback carries the generation
+    /// it was started under and is dropped once a newer session exists: a
+    /// late isFinal or cancel error from session A used to stop session B
+    /// (IOS-DD-SEARCH-13).
+    private var generation = 0
+    /// The generation the user stopped. Its trailing cancellation error is
+    /// expected and must not show as a failure.
+    private var stoppedGeneration: Int?
+
+    /// Words dictation should prefer: area names, categories and venues
+    /// people search for.
+    static let vocabulary: [String] = LocationArea.allCases.map(\.rawValue)
+        + EventCategory.allCases.map(\.displayName)
+        + ["Hoyt Sherman", "Wells Fargo Arena", "Jordan Creek", "Court Avenue", "Principal Park",
+           "Blank Park Zoo", "Science Center of Iowa", "Des Moines Art Center"]
+
     private init() {}
+
+    static func shouldApply(callbackGeneration: Int, current: Int) -> Bool {
+        callbackGeneration == current
+    }
+
+    /// Both permissions granted, read without prompting.
+    static func permissionsGranted() -> Bool {
+        SFSpeechRecognizer.authorizationStatus() == .authorized
+            && AVAudioApplication.shared.recordPermission == .granted
+    }
+
+    /// Leaves `.denied` once the user has granted access in Settings. It used
+    /// to change only inside start(), which the mic button never called while
+    /// denied, so the button stayed crossed out until relaunch.
+    func refreshPermissionStatus() {
+        if case .denied = status, Self.permissionsGranted() {
+            status = .idle
+        }
+    }
 
     func toggle() async {
         switch status {
@@ -70,6 +108,8 @@ final class SpeechDictationService {
 
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
+            request.taskHint = .search
+            request.contextualStrings = Self.vocabulary
             // Prefer on-device recognition where supported so recorded audio
             // never leaves the device — keeps the privacy posture clean and
             // avoids declaring Audio Data collection (IOS-AUDIT-SEC-009).
@@ -88,20 +128,28 @@ final class SpeechDictationService {
             try audioEngine.start()
 
             transcript = ""
+            lastFinalTranscript = nil
             status = .listening
+            generation += 1
+            let gen = generation
 
             task = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 guard let self else { return }
                 Task { @MainActor in
+                    guard SpeechDictationService.shouldApply(callbackGeneration: gen, current: self.generation) else { return }
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
                         if result.isFinal {
-                            self.stop()
+                            self.lastFinalTranscript = self.transcript
+                            self.stop(userInitiated: false)
                         }
                     }
                     if let error {
+                        // After the user's own stop, the task ends with a
+                        // cancellation error; that is not a failure.
+                        if self.stoppedGeneration == gen { return }
                         self.status = .error(error.localizedDescription)
-                        self.stop()
+                        self.stop(userInitiated: false)
                     }
                 }
             }
@@ -122,7 +170,8 @@ final class SpeechDictationService {
         }
     }
 
-    func stop() {
+    func stop(userInitiated: Bool = true) {
+        if userInitiated { stoppedGeneration = generation }
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         request?.endAudio()

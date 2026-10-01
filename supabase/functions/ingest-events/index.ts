@@ -26,21 +26,17 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import {
-  generateEventFingerprint,
-  type ExistingEvent,
-} from "../_shared/eventDedup.ts";
+import { parseEventDateTime } from "../_shared/eventDateTime.ts";
+import { dedupWindow, loadExistingEvents } from "../_shared/existingEvents.ts";
+import { findKnownVenue, venueCoordinates } from "../_shared/knownVenues.ts";
 import { planIngest, type IncomingItem, type Provenance } from "./plan.ts";
+import { runJob } from "../_shared/jobRunner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-api-key",
 };
-
-/** How far back existing rows are loaded for duplicate detection. Matches what
- *  the cloud path uses, so the two producers see the same window. */
-const DEDUP_WINDOW_DAYS = 60;
 
 /** A single request may not write more than this. Not a rate limit — a blast
  *  radius. The hub sends six sources' worth of events; a payload an order of
@@ -97,37 +93,56 @@ Deno.serve(async (req: Request) => {
   }
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const since = new Date(Date.now() - DEDUP_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const { data: existingRows, error: readError } = await supabase
-    .from("events")
-    .select("id, title, date, venue, source_url")
-    .gte("date", since.toISOString())
-    .order("date", { ascending: false });
-
-  // A FAILED READ REFUSES THE WRITE. Treating an unreadable existing set as an
-  // empty one would make every dedup tier pass and duplicate the whole payload.
-  if (readError) {
-    return json({ error: `could not read existing events for duplicate detection, so nothing was written: ${readError.message}` }, 503);
+  // The existing rows AROUND THE DATES IN THIS PAYLOAD, every one of them.
+  //
+  // This read "the last 60 days" - i.e. rows dated from two months ago up to
+  // whenever - ordered newest first, in one request. PostgREST stops that at
+  // max-rows (1000) without saying so, so once the calendar held more than a
+  // thousand rows from two months back onward, the dedup set was the thousand
+  // furthest-future ones and the near-term events the hub actually sends were
+  // judged against nothing. loadExistingEvents pages through the window the
+  // payload needs, +/- a day, which is all any dedup tier ever compares.
+  const window = dedupWindow(
+    items
+      .map((i) => (i && typeof i.date === "string" ? parseEventDateTime(i.date)?.event_start_utc : null))
+      .filter((d): d is Date => d instanceof Date),
+  );
+  let existing;
+  try {
+    existing = window ? await loadExistingEvents(supabase, window) : [];
+  } catch (readError) {
+    // A FAILED READ REFUSES THE WRITE. Treating an unreadable existing set as an
+    // empty one would make every dedup tier pass and duplicate the whole payload.
+    return json({ error: `could not read existing events for duplicate detection, so nothing was written: ${(readError as Error).message}` }, 503);
   }
-
-  const existing: ExistingEvent[] = (existingRows || []).map((e: ExistingEvent) => ({
-    ...e,
-    fingerprint: generateEventFingerprint({
-      title: e.title,
-      date: new Date(e.date),
-      venue: e.venue,
-      source_url: e.source_url,
-    }),
-  }));
 
   const fallbackUrl = typeof (body as { listingUrl?: string }).listingUrl === "string"
     ? (body as { listingUrl?: string }).listingUrl as string
     : "";
   const plan = planIngest(items, existing, fallbackUrl);
 
+  // COORDINATES AT INGEST (WEB-BE-050). Every hub row reached the table with no
+  // lat/lng, so none of them appeared on the map or in "near me" until one of
+  // the nightly backfills geocoded it. Coordinates only, as knownVenues.ts asks
+  // of a new caller: the venue name the hub sent is kept, and so the dedup
+  // above - which compared that name - still describes what is written.
+  // findKnownVenue caches known_venues per isolate, so this is one query.
+  for (const row of plan.rows) {
+    const venueText = String(row.venue || row.location || "");
+    Object.assign(row, venueCoordinates(await findKnownVenue(supabase, venueText)));
+  }
+
   let inserted = 0;
   let constraintDuplicates = 0;
   const writeErrors: string[] = [];
+
+  // WEB-BE-043. The hub is an external process: when one of its four sources
+  // stops producing, nothing inside Supabase sees a change, because this
+  // function keeps being called and keeps answering 200 with inserted: 0.
+  // Recording the batch here, keyed by the source the hub named, is what makes
+  // that visible - the per-source rule in _shared/ingestionHealth.ts reads
+  // exactly these counts.
+  const job = await runJob("ingest-events", async (ctx) => {
   if (plan.rows.length > 0) {
     const stamped = plan.rows.map((r) => ({
       ...r,
@@ -136,27 +151,34 @@ Deno.serve(async (req: Request) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }));
-    // THE DATABASE HAS A STRICTER RULE THAN THE SHARED DEDUP, AND IT WINS.
+    // THE DATABASE AND THE SHARED DEDUP NOW AGREE (WEB-BE-036).
     //
-    // `events_title_venue_unique` is a UNIQUE INDEX on (title, venue) with no
-    // date in it: this table permits exactly one row per title per venue,
-    // forever. `_shared/eventDedup.ts` is looser — its third tier treats the
-    // same title and venue more than 24 hours apart as a genuinely different
-    // event, which is right for a weekly residency and wrong for this schema.
+    // They did not used to. `events_title_venue_unique` was a UNIQUE INDEX on
+    // (title, venue) with no date in it — one row per title per venue, forever
+    // — while `_shared/eventDedup.ts` tier 3 allowed the same title and venue
+    // on a different day. The first live run found it the expensive way: 88
+    // events extracted, the shared dedup passed 60, and Postgres rejected the
+    // whole statement with "duplicate key value violates unique constraint".
+    // A batch insert is ONE statement, so a single collision lost every row
+    // beside it.
     //
-    // The first live run found this the expensive way: 88 events extracted, the
-    // shared dedup passed 60 of them, and Postgres rejected the whole statement
-    // with "duplicate key value violates unique constraint". A batch insert is
-    // ONE statement, so a single collision loses every row beside it.
+    // Migration 20260902000006 replaced that index with
+    // `events_title_venue_date_unique` on (title, venue, event_local_date) —
+    // the Central-time calendar date, held in a generated column so PostgREST
+    // can name it here. `event_local_date` is never sent in the payload;
+    // Postgres derives it, and this clause only names it to pick the index.
     //
-    // So the constraint does that tier of the deduplication, and the two counts
-    // are reported SEPARATELY rather than summed: `duplicates` is what the
-    // shared module caught before the write, `constraintDuplicates` is what the
-    // database caught during it. Summing them would hide the disagreement, and
-    // the disagreement is the finding — see the note in eventDedup.ts.
+    // The two counts are still reported SEPARATELY rather than summed:
+    // `duplicates` is what the shared module caught before the write,
+    // `constraintDuplicates` is what the database caught during it. They should
+    // now agree, and they are kept apart so that a future divergence is visible
+    // instead of hidden — see the note in eventDedup.ts.
     const { data, error } = await supabase
       .from("events")
-      .upsert(stamped, { onConflict: "title,venue", ignoreDuplicates: true })
+      .upsert(stamped, {
+        onConflict: "title,venue,event_local_date",
+        ignoreDuplicates: true,
+      })
       .select("id");
     if (error) {
       writeErrors.push(error.message);
@@ -166,7 +188,35 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+    ctx.processed(inserted);
+    ctx.failed(plan.rejected.length + writeErrors.length);
+    ctx.meta({
+      producedBy,
+      sources: {
+        [source]: {
+          fetched: items.length,
+          inserted,
+          duplicates: plan.duplicates + constraintDuplicates,
+          errors: plan.rejected.length + writeErrors.length,
+        },
+      },
+    });
+    // A write that failed outright is a failed run, not a quiet one. The HTTP
+    // status below is decided from writeErrors either way, so a ledger write
+    // that itself fails cannot change what the hub is told.
+    if (writeErrors.length > 0) {
+      throw new Error(`the events write failed: ${writeErrors.join('; ')}`);
+    }
+  });
+
   return json({
+    runId: job.runId,
+    // The kill switch (AOS-CORE-009) makes runJob return without running the
+    // body. The hub would otherwise read that as "accepted, quiet batch" and
+    // discard items nothing ever wrote.
+    ...(job.status === "skipped"
+      ? { paused: true, pausedNote: "automation is paused; this batch was NOT written and should be resent" }
+      : {}),
     source,
     inserted,
     // A REAL ZERO. This producer never updates an existing row; enriching

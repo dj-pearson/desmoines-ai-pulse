@@ -19,7 +19,9 @@ final class ForYouService {
         let venue: String?
         let isFeatured: Bool?
         let recommendationScore: Double?
-        let recommendationReason: String?
+        /// `var` so the cold-start rerank can say why a row moved up
+        /// (IOS-DD-ACCOUNT-04).
+        var recommendationReason: String?
 
         enum CodingKeys: String, CodingKey {
             case id, title, date, category, venue
@@ -82,14 +84,17 @@ final class ForYouService {
                 swipeCount = response.count ?? 0
             }
 
-            if swipeCount >= 5 {
-                source = .forYou
+            // Saves are a signal too: three saved events is enough to
+            // personalize without five swipes first (IOS-DD-EVENTS-20).
+            let savedCount = FavoritesService.shared.favoriteEventIds.count
+            var personalized: [Recommendation] = []
+            if swipeCount >= 5 || savedCount >= 3 {
                 struct Params: Encodable {
                     let p_user_lat: Double?
                     let p_user_lon: Double?
                     let p_limit: Int
                 }
-                let rows: [Recommendation] = try await client
+                let rows: [Recommendation]? = try? await client
                     .rpc("get_personalized_recommendations", params: Params(
                         p_user_lat: nil,
                         p_user_lon: nil,
@@ -97,7 +102,14 @@ final class ForYouService {
                     ))
                     .execute()
                     .value
-                recommendations = rows
+                personalized = rows ?? []
+            }
+
+            // An empty personalized answer falls back to trending rather than
+            // leaving the rail blank.
+            if !personalized.isEmpty {
+                source = .forYou
+                recommendations = personalized
             } else {
                 source = .trending
                 struct TrendingParams: Encodable { let p_limit: Int }
@@ -105,7 +117,16 @@ final class ForYouService {
                     .rpc("get_trending_events", params: TrendingParams(p_limit: limit))
                     .execute()
                     .value
-                recommendations = rows
+                // Trending is the same list for everyone. Until the user has
+                // swiped or saved enough to personalize, the interests they
+                // picked in onboarding (or on their profile) float matching
+                // events to the front (IOS-DD-ACCOUNT-04).
+                recommendations = InterestCatalog.rerank(
+                    rows,
+                    interestIds: InterestPreferences.shared.effectiveInterests(
+                        profile: AuthService.shared.currentProfile
+                    )
+                )
             }
         } catch {
             #if DEBUG

@@ -1,10 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
+import { runJob } from '../_shared/jobRunner.ts'
+import { isPlacesMediaUrl, GOOGLE_ATTRIBUTION_TEXT } from '../_shared/placesPhoto.ts'
+import { normalizeBusinessStatus, normalizeOpeningHours } from '../_shared/placeHours.ts'
+import type { BusinessStatus, StoredHours } from '../_shared/placeHours.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -22,9 +27,20 @@ interface GooglePlaceDetails {
     name: string;
     widthPx: number;
     heightPx: number;
+    /** WEB-BE-044. Places requires this to be shown wherever the photo is.
+     *  Requested explicitly in the field mask below - an unrequested field is
+     *  simply absent from the response, which is how it went unnoticed. */
+    authorAttributions?: Array<{ displayName?: string; uri?: string }>;
   }>;
   types: string[];
   businessStatus: string;
+  /** WEB-FEAT-024: real Place fields, per the Places API (New) reference. */
+  reservable?: boolean;
+  googleMapsUri?: string;
+  /** WEB-BE-045. Requested in the field mask; shape validated by
+   *  _shared/placeHours.ts rather than trusted, since this is a network
+   *  response typed by hand. */
+  regularOpeningHours?: unknown;
 }
 
 interface RestaurantUpdate {
@@ -38,6 +54,22 @@ interface RestaurantUpdate {
   website?: string;
   image_url?: string;
   google_place_id?: string;
+  /** WEB-FEAT-024. Added by migration 20260909000001; the write guards against
+   *  that migration not being applied yet. */
+  reservable?: boolean;
+  google_maps_uri?: string;
+  /** WEB-BE-044. Added by migration 20260919000004; guarded the same way.
+   *  The RESOURCE NAME, never a media URL - "places/<id>/photos/<ref>". It is
+   *  a reference, so the 30-day Place content cache limit does not apply to it
+   *  the way it applies to the bytes. */
+  places_photo_name?: string;
+  places_photo_attribution?: string;
+  places_photo_seen_at?: string;
+  /** WEB-BE-045. Added by migration 20260919000009; guarded the same way as
+   *  the two sets above. business_status is one of three literal values or
+   *  absent - never a raw pass-through of whatever Places returned. */
+  business_status?: BusinessStatus;
+  hours_json?: StoredHours;
   enhanced: string;
   updated_at: string;
 }
@@ -50,8 +82,10 @@ serve(async (req) => {
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
-  // Require API key authentication (SEC-013)
-  const authResponse = requireApiKey(req, corsHeaders);
+  // API key or admin auth (SEC-013). This was requireApiKey alone, which only
+  // accepts EDGE_FUNCTION_API_KEY, so the admin bulk updater
+  // (useBulkRestaurantUpdate.ts), which sends the admin's JWT, always got a 401.
+  const authResponse = await requireAdminOrApiKey(req, corsHeaders);
   if (authResponse) return authResponse;
 
   // Rate limiting: 5 requests per 15 minutes (SEC-013)
@@ -75,7 +109,10 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { batchSize = 10, forceUpdate = false, clearEnhanced = false } = await req.json()
+    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false } = await req.json()
+    // Each row is a paid Google Places lookup, and batchSize went straight into
+    // .limit(). 50 is the admin form's own max (RestaurantBulkUpdater.tsx).
+    const batchSize = Math.min(Math.max(Math.floor(Number(rawBatchSize)) || 10, 1), 50)
 
     console.log(`Starting bulk restaurant update with batch size: ${batchSize}, forceUpdate: ${forceUpdate}, clearEnhanced: ${clearEnhanced}`)
 
@@ -112,11 +149,18 @@ serve(async (req) => {
     }
 
     if (!restaurants || restaurants.length === 0) {
+      // WEB-BE-043: a run with nothing to do is still a run. Returning without
+      // recording one is why "this job has been enriching nothing for a month"
+      // and "there was nothing to enrich today" produced identical evidence.
+      const emptyRun = await runJob('bulk-update-restaurants', async (ctx) => {
+        ctx.meta({ sources: { 'google-places': { fetched: 0, inserted: 0, duplicates: 0, errors: 0 } } })
+      })
       return new Response(
         JSON.stringify({ 
           success: true, 
           message: 'No restaurants found that need updating',
-          updated: 0 
+          updated: 0,
+          runId: emptyRun.runId
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -130,6 +174,13 @@ serve(async (req) => {
     const updates: RestaurantUpdate[] = []
     const errors: Array<{ id: string; name: string; error: string }> = []
 
+    // WEB-BE-043. The Google Places call is what goes dark here - a quota
+    // exhaustion or a retired key makes every lookup come back empty and the
+    // function still answers 200 with "Bulk update completed". `updatedCount`
+    // is declared out here so the response below can read it after the wrapper
+    // returns.
+    let updatedCount = 0
+    const job = await runJob('bulk-update-restaurants', async (ctx) => {
     // Process each restaurant
     for (const restaurant of restaurants) {
       try {
@@ -215,7 +266,10 @@ serve(async (req) => {
             method: 'GET',
             headers: {
               'X-Goog-Api-Key': googleApiKey,
-              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,types,businessStatus'
+              // regularOpeningHours is new (WEB-BE-045). businessStatus was already
+              // here and its answer was thrown away - the mask asked for it and
+              // nothing wrote it, which is why no restaurant was ever marked closed.
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,regularOpeningHours,reservable,googleMapsUri'
             }
           })
 
@@ -339,11 +393,62 @@ serve(async (req) => {
             update.google_place_id = placeId
           }
 
-          // Get the main photo URL (proxy through server to avoid leaking API key)
+          // WEB-FEAT-024. Both are real Place fields, checked against the
+          // Places API (New) reference. There is NO booking-provider URL in
+          // that API, so reservation_url stays curated; googleMapsUri is the
+          // automatic fallback, since a Google listing for a reservable place
+          // carries its own reserve button.
+          if (typeof placeDetails.reservable === 'boolean') {
+            update.reservable = placeDetails.reservable
+          }
+          if (placeDetails.googleMapsUri) {
+            update.google_maps_uri = placeDetails.googleMapsUri
+          }
+
+          // WEB-BE-044. THE COMMENT HERE USED TO SAY it stored "the photo
+          // reference name instead of the full URL with API key", and what it
+          // assigned was a full media URL with the key stripped out. That URL
+          // 403s, so every restaurant enriched this way has been rendering a
+          // broken image; and hot-linking Places media out of a content column
+          // is outside the Maps Platform terms even when it works.
+          //
+          // The resource name goes on the row instead. It is a reference, not
+          // Place content, so it can be stored; anything that wants the bytes
+          // builds the media URL at fetch time and does not keep them past the
+          // 30-day window.
           if (placeDetails.photos && placeDetails.photos.length > 0) {
             const photo = placeDetails.photos[0]
-            // Store the photo reference name instead of the full URL with API key
-            update.image_url = `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=1200&maxHeightPx=800`
+            if (photo.name) {
+              update.places_photo_name = photo.name
+              update.places_photo_attribution =
+                photo.authorAttributions?.map((a) => a.displayName).filter(Boolean).join(', ')
+                || GOOGLE_ATTRIBUTION_TEXT
+              update.places_photo_seen_at = new Date().toISOString()
+            }
+          }
+
+          // WEB-BE-045. Both go through the normalizer rather than straight
+          // from the response: an unrecognised status is dropped instead of
+          // stored, because the column is filtered on and a value nobody
+          // anticipated must not be read as a closure OR as an operating
+          // venue; and hours are null rather than an empty periods array,
+          // because `{periods: []}` reads as "closed all week" and means
+          // "Google did not answer".
+          const businessStatus = normalizeBusinessStatus(placeDetails.businessStatus)
+          if (businessStatus) {
+            update.business_status = businessStatus
+          }
+          const hours = normalizeOpeningHours(placeDetails.regularOpeningHours)
+          if (hours) {
+            update.hours_json = hours
+          }
+
+          // A belt-and-braces stop on the defect above: nothing in this
+          // function may put a Places media URL into image_url again, however
+          // it got there.
+          if (isPlacesMediaUrl(update.image_url)) {
+            console.warn(`Refusing to write a Places media URL into image_url for ${restaurant.name}`)
+            delete update.image_url
           }
           
           console.log(`Update object for ${restaurant.name}:`, update)
@@ -368,18 +473,50 @@ serve(async (req) => {
     }
 
     // Batch update the database
-    let updatedCount = 0
     if (updates.length > 0) {
       console.log(`Updating ${updates.length} restaurants in database`)
       
       for (const update of updates) {
         console.log(`Updating restaurant ${update.name} (ID: ${update.id}) with data:`, JSON.stringify(update, null, 2))
         
-        const { error: updateError } = await supabase
+        let { error: updateError } = await supabase
           .from('restaurants')
           .update(update)
           .eq('id', update.id)
           .select()
+
+        // MIGRATION-ORDER GUARD (WEB-FEAT-024). Edge functions deploy
+        // separately from migrations, and this runs on a daily cron. If
+        // 20260909000001 has not been applied yet, PostgREST rejects the whole
+        // UPDATE for one unknown column - which would stop enrichment writing
+        // ANY field, not just the new ones. Retry once without them so the
+        // window between a function deploy and `supabase db push` costs the two
+        // new columns and nothing else.
+        if (updateError && isUnknownColumnError(updateError)) {
+          console.warn(
+            `Reservation, Places-provenance or hours columns not present yet; retrying ${update.name} without them`
+          )
+          const {
+            reservable,
+            google_maps_uri,
+            places_photo_name,
+            places_photo_attribution,
+            places_photo_seen_at,
+            // WEB-BE-045: added by 20260919000009 and stripped here for the
+            // same reason as the rest. Missing them costs hours and a closure
+            // flag; leaving them in when the migration has not landed costs
+            // the whole update.
+            business_status,
+            hours_json,
+            ...legacyUpdate
+          } = update
+          const retry = await supabase
+            .from('restaurants')
+            .update(legacyUpdate)
+            .eq('id', update.id)
+            .select()
+          updateError = retry.error
+        }
 
         if (updateError) {
           console.error(`Failed to update restaurant ${update.name}:`, updateError)
@@ -395,8 +532,34 @@ serve(async (req) => {
       }
     }
 
+      ctx.processed(updatedCount)
+      ctx.failed(errors.length)
+      ctx.meta({
+        sources: {
+          'google-places': {
+            fetched: restaurants.length,
+            // Enrichment writes are updates; this function never inserts, so
+            // `updated` is what the zero-result rule has to read as work done.
+            inserted: updatedCount,
+            duplicates: 0,
+            errors: errors.length,
+          },
+        },
+      })
+    })
+
+    if (!job.ok) {
+      // runJob records the failed run and returns rather than rethrowing, so
+      // the catch below no longer sees it.
+      return new Response(
+        JSON.stringify({ success: false, error: job.error ?? 'Bulk update failed', runId: job.runId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      )
+    }
+
     const response = {
       success: true,
+      runId: job.runId,
       message: `Bulk update completed`,
       processed: restaurants.length,
       updated: updatedCount,

@@ -4,11 +4,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { listUnsubscribeHeaders, renderEmail } from "../_shared/emailLayout.ts";
+import { sendEmail } from "../_shared/email.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SITE_URL = "https://desmoinesinsider.com";
@@ -133,12 +132,37 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
     const bodyText = buildDigestBodyText(recipient, content);
     const subject = `Your Weekly Events: ${totalEvents} Events to Explore 🎉`;
 
-    // Look up unsubscribe token for one-click marketing opt-out.
-    const { data: subscriberRow } = await supabase
+    // Look up the subscriber row: the unsubscribe token for the one-click
+    // marketing opt-out, and the status that says whether we may send at all.
+    const { data: subscriberRow, error: subscriberError } = await supabase
       .from("newsletter_subscribers")
-      .select("unsubscribe_token")
+      .select("status, unsubscribe_token")
       .eq("email", recipient.email.toLowerCase().trim())
       .maybeSingle();
+
+    // WEB-FEAT-019 -- THIS DIGEST USED TO IGNORE THE NEWSLETTER STATUS ENTIRELY.
+    //
+    // Recipients come from user_email_preferences.weekly_digest_enabled, and
+    // this row was read only for its unsubscribe token. So someone who clicked
+    // the one-click unsubscribe in last week's digest -- which sets
+    // newsletter_subscribers.status = 'unsubscribed' and nothing else -- kept
+    // receiving it. The opt-out link worked and changed nothing that mattered,
+    // which is the CAN-SPAM failure the link exists to prevent.
+    //
+    // Anything that is not 'active' is a do-not-send: 'unsubscribed' asked us
+    // to stop, 'bounced' cannot receive, and 'pending' has not yet confirmed
+    // the address is theirs. A recipient with NO row at all still gets the
+    // digest -- weekly_digest_enabled is its own opt-in and predates this
+    // table -- so this narrows nothing for anyone who never signed up here.
+    if (subscriberError) {
+      throw new Error(`newsletter_subscribers read failed: ${subscriberError.message}`);
+    }
+    if (subscriberRow && subscriberRow.status !== "active") {
+      console.log(
+        `Skipping digest for ${recipient.email}: newsletter status is ${subscriberRow.status}`,
+      );
+      return;
+    }
 
     const rendered = renderEmail({
       bodyHtml,
@@ -150,31 +174,23 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
       },
     });
 
-    // Send email via Resend
-    const resendResponse = await fetchWithTimeout("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
+    const sent = await sendEmail(
+      {
+        to: recipient.email,
         from: "Des Moines Insider <events@desmoinesinsider.com>",
-        to: [recipient.email],
-        subject: subject,
+        subject,
         html: rendered.html,
         text: rendered.text,
-        headers: rendered.listUnsubscribe
-          ? {
-              "List-Unsubscribe": rendered.listUnsubscribe,
-              "List-Unsubscribe-Post": rendered.listUnsubscribePost ?? "",
-            }
-          : undefined,
-      }),
-    });
+        category: "marketing",
+        template: "weekly_digest",
+        headers: listUnsubscribeHeaders(rendered),
+        userId: recipient.user_id,
+      },
+      { supabase },
+    );
 
-    if (!resendResponse.ok) {
-      const errorData = await resendResponse.text();
-      throw new Error(`Resend API error: ${errorData}`);
+    if (!sent.ok) {
+      throw new Error(`Digest not sent: ${sent.error}`);
     }
 
     // Log successful send

@@ -6,7 +6,12 @@ import AuthenticationServices
 @MainActor
 @Observable
 final class AuthViewModel {
-    var email = ""
+    var email = "" {
+        didSet {
+            guard email != oldValue else { return }
+            emailFieldHint = nil
+        }
+    }
     var password = "" {
         didSet {
             guard password != oldValue else { return }
@@ -16,7 +21,9 @@ final class AuthViewModel {
     var confirmPassword = ""
     var firstName = ""
     var lastName = ""
-    var selectedInterests: Set<String> = []
+    /// "Email me weekly Des Moines picks" on the sign-up form. Off by default:
+    /// marketing mail is opt-in (IOS-DD-ACCOUNT-01).
+    var emailOptIn = false
 
     var isSigningIn = false
     var isSigningUp = false
@@ -28,6 +35,22 @@ final class AuthViewModel {
     /// (IOS-AUDIT-UX-017).
     var infoMessage: String?
     var showInfo = false
+
+    /// The address waiting on a confirmation link, after a sign-up that
+    /// returned no session or a sign-in refused as "email not confirmed".
+    /// Drives the inline "Check your inbox" panel with Resend
+    /// (IOS-DD-ACCOUNT-06). Survives clearForm on purpose.
+    var pendingVerificationEmail: String?
+    private(set) var isResending = false
+    /// Seconds until Resend is enabled again (0 = enabled).
+    private(set) var resendCooldownRemaining = 0
+    private var resendTimer: Task<Void, Never>?
+    private static let resendCooldown = 60
+
+    /// Inline guidance under the email field, e.g. after Forgot Password with
+    /// no address typed. Not an error alert: nothing failed
+    /// (IOS-DD-ACCOUNT-15). Cleared when the email changes.
+    var emailFieldHint: String?
 
     // MARK: - Rate Limiting
 
@@ -45,9 +68,11 @@ final class AuthViewModel {
     /// round-trip (IOS-AUDIT-TEST-002). Defaults to the shared instance, so the
     /// single production call site, AuthView.swift:6, is unchanged.
     private let auth: AuthProviding
+    private let interestPreferences: InterestPreferences
 
-    init(auth: AuthProviding = AuthService.shared) {
+    init(auth: AuthProviding = AuthService.shared, interestPreferences: InterestPreferences = .shared) {
         self.auth = auth
+        self.interestPreferences = interestPreferences
     }
 
     var isAuthenticated: Bool { auth.isAuthenticated }
@@ -74,7 +99,11 @@ final class AuthViewModel {
     /// `password`, and nothing else can change it.
     private(set) var passwordStrength: PasswordStrength = .none
 
-    private static func strength(of password: String) -> PasswordStrength {
+    /// Internal so SetNewPasswordView can use the same meter. `nonisolated`
+    /// because that view calls it from non-main-actor helpers (a View's
+    /// members other than `body` are not main-actor isolated on the iOS 17
+    /// SDK); it is pure.
+    nonisolated static func strength(of password: String) -> PasswordStrength {
         guard !password.isEmpty else { return .none }
         var score = 0
         if password.count >= 8 { score += 1 }
@@ -108,13 +137,6 @@ final class AuthViewModel {
         }
     }
 
-    // MARK: - Available Interests
-
-    static let availableInterests = [
-        "Food", "Music", "Sports", "Arts",
-        "Nightlife", "Outdoor", "Family", "Business"
-    ]
-
     // MARK: - Sign In
 
     func signIn() async {
@@ -137,10 +159,19 @@ final class AuthViewModel {
         do {
             try await auth.signIn(email: email, password: password)
             failedAttemptTimestamps = []
+            pendingVerificationEmail = nil
             clearForm()
         } catch {
-            recordFailedAttempt()
-            setError(error.localizedDescription)
+            let failure = AuthErrorMapper.classify(error)
+            if failure == .emailNotConfirmed {
+                // Right password, unconfirmed address. Not a guess, so it does
+                // not count toward the lockout, and the answer is a Resend
+                // button rather than an error (IOS-DD-ACCOUNT-06).
+                pendingVerificationEmail = email
+            } else {
+                recordFailedAttempt()
+                setError(AuthErrorMapper.message(for: failure, mode: .signIn))
+            }
         }
 
         isSigningIn = false
@@ -174,17 +205,27 @@ final class AuthViewModel {
         errorMessage = nil
 
         do {
-            try await auth.signUp(
+            // Interests come from onboarding now, not the form (the web
+            // dropped them from sign-up too); the trigger stores them.
+            let outcome = try await auth.signUp(
                 email: email,
                 password: password,
                 firstName: firstName.isEmpty ? nil : firstName,
                 lastName: lastName.isEmpty ? nil : lastName,
-                interests: selectedInterests.isEmpty ? nil : Array(selectedInterests)
+                interests: interestPreferences.local,
+                emailOptIn: emailOptIn
             )
-            showVerificationAlert = true
+            ConsentService.shared.emailConsent = emailOptIn
+            switch outcome {
+            case .checkInbox:
+                pendingVerificationEmail = email
+                showVerificationAlert = true
+            case .signedIn:
+                pendingVerificationEmail = nil
+            }
             clearForm()
         } catch {
-            setError(error.localizedDescription)
+            setError(AuthErrorMapper.message(for: AuthErrorMapper.classify(error), mode: .signUp))
         }
 
         isSigningUp = false
@@ -232,15 +273,53 @@ final class AuthViewModel {
     // MARK: - Reset Password
 
     func resetPassword() async {
-        guard !email.isEmpty else {
-            setError("Please enter your email address.")
+        guard !email.isEmpty, isEmailValid else {
+            emailFieldHint = "Enter your email above, then tap Forgot Password."
             return
         }
         do {
             try await auth.resetPassword(email: email)
-            setInfo("Password reset email sent. Check your inbox.")
+            setInfo("Password reset email sent. Open the link on this iPhone to choose a new password.")
         } catch {
-            setError(error.localizedDescription)
+            setError(AuthErrorMapper.message(for: AuthErrorMapper.classify(error), mode: .reset))
+        }
+    }
+
+    // MARK: - Verification email
+
+    /// Resends the confirmation link to `pendingVerificationEmail`, then
+    /// holds the button for 60 seconds (GoTrue rate-limits resends anyway).
+    func resendVerification() async {
+        guard let address = pendingVerificationEmail,
+              resendCooldownRemaining == 0,
+              !isResending else { return }
+        isResending = true
+        defer { isResending = false }
+        do {
+            try await auth.resend(email: address)
+            setInfo("Sent. Check your inbox.")
+            startResendCooldown()
+        } catch {
+            setError(AuthErrorMapper.message(for: AuthErrorMapper.classify(error), mode: .signUp))
+        }
+    }
+
+    /// "Use a different email" on the Check your inbox panel.
+    func clearPendingVerification() {
+        pendingVerificationEmail = nil
+        resendTimer?.cancel()
+        resendCooldownRemaining = 0
+    }
+
+    private func startResendCooldown() {
+        resendCooldownRemaining = Self.resendCooldown
+        resendTimer?.cancel()
+        resendTimer = Task {
+            while resendCooldownRemaining > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                resendCooldownRemaining -= 1
+            }
         }
     }
 
@@ -252,7 +331,7 @@ final class AuthViewModel {
         confirmPassword = ""
         firstName = ""
         lastName = ""
-        selectedInterests = []
+        emailOptIn = false
     }
 
     private func setError(_ message: String) {

@@ -46,6 +46,12 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts'
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { resolveEntitledTier } from '../_shared/entitlements.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
+import {
+  buildReason,
+  centralToday,
+  isEventStillOn,
+  isRestaurantOpenForBusiness,
+} from '../_shared/sponsoredPickFilters.ts';
 
 type Surface = 'ask_pulse' | 'surprise_me' | 'trip_planner';
 const VALID_SURFACES: Surface[] = ['ask_pulse', 'surprise_me', 'trip_planner'];
@@ -113,8 +119,9 @@ serve(async (req) => {
     }
   }
 
-  // 1. Active campaigns (same predicate as get_active_ads).
-  const today = new Date().toISOString().split('T')[0];
+  // 1. Active campaigns (same predicate as get_active_ads). Central date, as
+  // get_active_ads uses since 20261003000002 (IOS-DD-MONETIZATION-19).
+  const today = centralToday();
   const { data: campaigns, error: campErr } = await supabase
     .from('campaigns')
     .select('id')
@@ -162,40 +169,62 @@ async function resolvePick(
   for (const pool of pools) {
     if (pool.links.length === 0) continue;
     const ids = pool.links.map((l) => l.listing_id);
-    const table = pool.type === 'event' ? 'events' : 'restaurants';
-    const titleCol = pool.type === 'event' ? 'title' : 'name';
-    const catCol = pool.type === 'event' ? 'category' : 'cuisine';
+    const isEvent = pool.type === 'event';
+    const table = isEvent ? 'events' : 'restaurants';
+    const titleCol = isEvent ? 'title' : 'name';
+    const catCol = isEvent ? 'category' : 'cuisine';
+    // Columns the eligibility filters below read (IOS-DD-MONETIZATION-19).
+    const extraCols = isEvent ? 'date, end_date' : 'business_status, status';
+    let columns = `id, ${titleCol}, ${catCol}, image_url, ${extraCols}`;
+    // restaurants.business_status arrives with migration 20260919000009. If
+    // this function is deployed before that migration is applied, selecting
+    // it answers 42703 and every restaurant pick would silently vanish, so
+    // fall back to the columns that already exist.
+    const fallbackColumns = `id, ${titleCol}, ${catCol}, image_url, ${isEvent ? extraCols : 'status'}`;
 
-    let q = supabase
-      .from(table)
-      .select(`id, ${titleCol}, ${catCol}, image_url`)
-      .in('id', ids)
-      .limit(10);
+    // Never send a paid click to a merged duplicate, a hidden or archived
+    // event, a past event or a closed restaurant.
+    // deno-lint-ignore no-explicit-any
+    const baseQuery = (): any => {
+      let q = supabase.from(table).select(columns).in('id', ids).neq('is_merged', true);
+      if (isEvent) q = q.neq('is_hidden', true).is('archived_at', null);
+      return q.limit(10);
+    };
+    // deno-lint-ignore no-explicit-any
+    const eligible = (rows: any[] | null | undefined): any[] =>
+      (rows ?? []).filter((row) => (isEvent ? isEventStillOn(row) : isRestaurantOpenForBusiness(row)));
+    // deno-lint-ignore no-explicit-any
+    const pickOne = (rows: any[]) => (rows.length > 0 ? rows[Math.floor(Math.random() * rows.length)] : null);
 
     // Light relevance: prefer rows whose title/category match the user's intent.
-    if (query) {
-      const pattern = sanitizePostgrestPattern(query);
-      if (pattern) {
-        q = q.or(`${titleCol}.ilike.%${pattern}%,${catCol}.ilike.%${pattern}%`);
+    const relevantQuery = () => {
+      let q = baseQuery();
+      if (query) {
+        const pattern = sanitizePostgrestPattern(query);
+        if (pattern) {
+          q = q.or(`${titleCol}.ilike.%${pattern}%,${catCol}.ilike.%${pattern}%`);
+        }
       }
-    }
+      return q;
+    };
 
-    const { data: rows } = await q;
-    let chosen = rows && rows.length > 0 ? rows[Math.floor(Math.random() * rows.length)] : null;
+    const first = await relevantQuery();
+    let rows = first.data;
+    if (first.error?.code === '42703' && columns !== fallbackColumns) {
+      columns = fallbackColumns;
+      rows = (await relevantQuery()).data;
+    }
+    let chosen = pickOne(eligible(rows));
 
     // Fall back to an unfiltered pick if the relevance filter matched nothing.
     if (!chosen && query) {
-      const { data: anyRows } = await supabase
-        .from(table)
-        .select(`id, ${titleCol}, ${catCol}, image_url`)
-        .in('id', ids)
-        .limit(10);
-      chosen = anyRows && anyRows.length > 0 ? anyRows[Math.floor(Math.random() * anyRows.length)] : null;
+      const { data: anyRows } = await baseQuery();
+      chosen = pickOne(eligible(anyRows));
     }
 
     if (chosen) {
       const link = pool.links.find((l) => l.listing_id === chosen.id) ?? pool.links[0];
-      const title = chosen[titleCol] ?? (pool.type === 'event' ? 'Featured event' : 'Featured spot');
+      const title = chosen[titleCol] ?? (isEvent ? 'Featured event' : 'Featured spot');
       const category = chosen[catCol];
       return {
         itemType: pool.type,
@@ -209,11 +238,4 @@ async function resolvePick(
   }
 
   return null;
-}
-
-function buildReason(type: 'event' | 'restaurant', category: string | null | undefined): string {
-  if (type === 'event') {
-    return category ? `Sponsored ${category.toLowerCase()} event worth a look` : 'A sponsored event worth a look';
-  }
-  return category ? `Sponsored ${category.toLowerCase()} spot locals are loving` : 'A sponsored local favorite';
 }

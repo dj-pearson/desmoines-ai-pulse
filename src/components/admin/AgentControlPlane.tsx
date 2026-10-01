@@ -47,6 +47,7 @@ import { handleError } from "@/lib/errorHandler";
 import { toast } from "sonner";
 import UptimeStatusTile from "@/components/admin/UptimeStatusTile";
 import ProviderCostTile from "@/components/admin/ProviderCostTile";
+import AiSpendTile from "@/components/admin/AiSpendTile";
 
 function statusTone(status: string | null): string {
   if (status === "success") return "text-green-600";
@@ -400,10 +401,13 @@ export default function AgentControlPlane() {
         <ProviderCostTile />
       </div>
 
+      {/* Today's user-facing AI spend against the daily ceiling (NON_CORE_REVIEW_2026-09 WP1). */}
+      <AiSpendTile />
+
       <Card>
         <CardContent className="pt-6">
           {isLoading ? (
-            <div className="space-y-2" aria-busy="true" aria-label="Loading agents">
+            <div className="space-y-2" role="status" aria-busy="true" aria-label="Loading agents">
               {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
             </div>
           ) : isError ? (

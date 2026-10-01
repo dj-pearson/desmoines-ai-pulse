@@ -60,104 +60,52 @@ export default function LocalSEO({
     "family activities Des Moines"
   ].filter(Boolean).join(", ");
 
-  // Generate Local Business Schema
-  const localBusinessSchema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `${BRAND.baseUrl}/#business`,
-    "name": BRAND.name,
-    "description": "Your comprehensive guide to Des Moines events, restaurants, attractions, and local activities",
-    "url": BRAND.baseUrl,
-    "telephone": "+1-515-DES-MOIN",
-    "priceRange": "Free",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "Downtown Des Moines",
-      "addressLocality": "Des Moines", 
-      "addressRegion": "IA",
-      "postalCode": "50309",
-      "addressCountry": "US"
-    },
-    "geo": {
-      "@type": "GeoCoordinates",
-      "latitude": 41.5868,
-      "longitude": -93.6250
-    },
-    "areaServed": [
-      {
-        "@type": "City",
-        "name": "Des Moines",
-        "sameAs": "https://en.wikipedia.org/wiki/Des_Moines,_Iowa"
-      },
-      {
-        "@type": "City", 
-        "name": "West Des Moines",
-        "sameAs": "https://en.wikipedia.org/wiki/West_Des_Moines,_Iowa"
-      },
-      {
-        "@type": "City",
-        "name": "Ankeny", 
-        "sameAs": "https://en.wikipedia.org/wiki/Ankeny,_Iowa"
-      },
-      {
-        "@type": "City",
-        "name": "Urbandale",
-        "sameAs": "https://en.wikipedia.org/wiki/Urbandale,_Iowa"
-      },
-      {
-        "@type": "City",
-        "name": "Johnston",
-        "sameAs": "https://en.wikipedia.org/wiki/Johnston,_Iowa"
-      },
-      {
-        "@type": "City",
-        "name": "Clive",
-        "sameAs": "https://en.wikipedia.org/wiki/Clive,_Iowa"
-      },
-      {
-        "@type": "City",
-        "name": "Waukee",
-        "sameAs": "https://en.wikipedia.org/wiki/Waukee,_Iowa"
+  // WEB-SEO-026 -- THIS WAS A LocalBusiness AND ALMOST NOTHING IN IT WAS TRUE.
+  //
+  // It shipped on five sitemapped neighborhood pages carrying:
+  //   telephone      "+1-515-DES-MOIN"   not a number; a phone cannot dial it
+  //   streetAddress  "Downtown Des Moines" and postalCode 50309, an address
+  //                  that belongs to a part of the city rather than to us
+  //   openingHours   "Mo-Su 00:00-23:59"
+  //   hasOfferCatalog  three Offers for "services" nobody sells
+  //   sameAs         the OLD brand's Facebook, X and Instagram handles, which
+  //                  WEB-SEO-023 removed from every other emitter
+  // An aggregator is not a local business, and a page about a NEIGHBOURHOOD is
+  // not about us at all.
+  //
+  // What these pages are is a view of one place, so that is what they now say.
+  // Place when the page is scoped to a neighbourhood, CollectionPage when it
+  // lists them - no telephone, no address, no hours, no offers.
+  const placeSchema = neighborhood
+    ? {
+        "@context": "https://schema.org",
+        "@type": "Place",
+        "@id": `${BRAND.baseUrl}/neighborhoods/${encodeURIComponent(neighborhood.toLowerCase().replace(/\s+/g, "-"))}#place`,
+        name: `${neighborhood}, ${BRAND.city}`,
+        description: `Events, restaurants and things to do in ${neighborhood}, ${BRAND.city}, ${BRAND.state}.`,
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: BRAND.city,
+          addressRegion: BRAND.stateAbbr,
+          addressCountry: BRAND.country,
+        },
+        containedInPlace: {
+          "@type": "City",
+          name: BRAND.city,
+          sameAs: "https://en.wikipedia.org/wiki/Des_Moines,_Iowa",
+        },
       }
-    ],
-    "serviceType": "Event Information Service",
-    "hasOfferCatalog": {
-      "@type": "OfferCatalog",
-      "name": "Des Moines Local Services",
-      "itemListElement": [
-        {
-          "@type": "Offer",
-          "itemOffered": {
-            "@type": "Service",
-            "name": "Event Listings",
-            "description": "Comprehensive Des Moines area event calendar and recommendations"
-          }
+    : {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        name: pageTitle,
+        description: pageDescription,
+        about: {
+          "@type": "City",
+          name: BRAND.city,
+          sameAs: "https://en.wikipedia.org/wiki/Des_Moines,_Iowa",
         },
-        {
-          "@type": "Offer", 
-          "itemOffered": {
-            "@type": "Service",
-            "name": "Restaurant Guide",
-            "description": "Local Des Moines restaurant directory with new openings and reviews"
-          }
-        },
-        {
-          "@type": "Offer",
-          "itemOffered": {
-            "@type": "Service", 
-            "name": "Family Activity Guide",
-            "description": "Kid-friendly attractions, playgrounds, and family events in Des Moines"
-          }
-        }
-      ]
-    },
-    "openingHours": "Mo-Su 00:00-23:59",
-    "sameAs": [
-      "https://www.facebook.com/desmoinessider",
-      "https://twitter.com/desmoinessider",
-      "https://www.instagram.com/desmoinessider"
-    ]
-  };
+      };
 
   // Generate Event Schema if event data provided
   const eventSchema = eventData ? {
@@ -229,7 +177,7 @@ export default function LocalSEO({
       
       {/* Local Business Schema */}
       <script type="application/ld+json">
-        {JSON.stringify(localBusinessSchema)}
+        {JSON.stringify(placeSchema)}
       </script>
       
       {/* Event Schema if provided */}
@@ -252,9 +200,12 @@ export default function LocalSEO({
           "@context": "https://schema.org",
           "@type": "Service",
           "name": "Des Moines Local Event Guide",
+          // WEB-SEO-026: the provider of this service is us, and we are an
+          // Organization. LocalBusiness implies a premises, hours and a phone.
           "provider": {
-            "@type": "LocalBusiness",
-            "name": "Des Moines Insider"
+            "@type": "Organization",
+            "@id": `${BRAND.baseUrl}/#organization`,
+            "name": BRAND.name
           },
           "areaServed": {
             "@type": "GeoCircle",

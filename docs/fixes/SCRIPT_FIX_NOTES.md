@@ -2,7 +2,7 @@
 
 ## Issue
 
-The original PowerShell scripts (`deploy-chatgpt-plugin.ps1` and `test-chatgpt-integration.ps1`) had Unicode character encoding issues that caused syntax errors in PowerShell.
+The original PowerShell scripts (`.\scripts\windows\deploy-chatgpt-plugin.ps1` and `.\scripts\windows\test-chatgpt-integration.ps1`) had Unicode character encoding issues that caused syntax errors in PowerShell.
 
 ## What Was Fixed
 
@@ -19,7 +19,7 @@ The original PowerShell scripts (`deploy-chatgpt-plugin.ps1` and `test-chatgpt-i
 ### Test Script
 
 ```powershell
-.\test-chatgpt-integration.ps1
+.\scripts\windows\test-chatgpt-integration.ps1
 ```
 
 **What it checks:**
@@ -34,7 +34,7 @@ The original PowerShell scripts (`deploy-chatgpt-plugin.ps1` and `test-chatgpt-i
 ### Deploy Script
 
 ```powershell
-.\deploy-chatgpt-plugin.ps1
+.\scripts\windows\deploy-chatgpt-plugin.ps1
 ```
 
 **What it does:**
@@ -98,13 +98,13 @@ Then run the test script again.
 2. **Run Tests**
 
    ```powershell
-   .\test-chatgpt-integration.ps1
+   .\scripts\windows\test-chatgpt-integration.ps1
    ```
 
 3. **Deploy Functions**
 
    ```powershell
-   .\deploy-chatgpt-plugin.ps1
+   .\scripts\windows\deploy-chatgpt-plugin.ps1
    ```
 
 4. **Deploy Static Files**

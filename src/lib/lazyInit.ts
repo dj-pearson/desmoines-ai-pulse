@@ -35,14 +35,13 @@ export function initializeNonCriticalFeatures() {
     }).catch(() => {});
   }, 2000);
 
-  // Priority 3: Service worker (after 5 seconds)
-  scheduleInit(() => {
-    if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
-      import('./performance').then(({ registerServiceWorker }) => {
-        registerServiceWorker();
-      }).catch(() => {});
-    }
-  }, 5000);
+  // NO SERVICE-WORKER STEP. There was one here, five seconds in, calling
+  // performance.ts's registerServiceWorker() - which unregistered workers and
+  // cleared caches rather than registering anything, so this call site read as
+  // the opposite of what it did (WEB-QUAL-014). index.html's inline script
+  // already runs that teardown on every page load, in the same document, so
+  // this was a dynamic import and a timer for work that was finished before it
+  // fired.
 
   // Priority 4: Error handling (after 500ms)
   scheduleInit(() => {

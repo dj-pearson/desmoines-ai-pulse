@@ -256,4 +256,26 @@ final class ArticlesTests: XCTestCase {
             createdAt: "2026-05-19T10:00:00Z", updatedAt: "2026-05-20T14:00:00Z"
         )
     }
+
+    // MARK: Refresh query key (IOS-DD-GUIDES-15)
+
+    func testQueryKeyChangesWithCategoryAndTrimmedSearch() {
+        let all = ArticlesViewModel.queryKey(category: nil, search: "")
+        XCTAssertEqual(all, ArticlesViewModel.queryKey(category: nil, search: "   "))
+        XCTAssertNotEqual(all, ArticlesViewModel.queryKey(category: "Food", search: ""))
+        XCTAssertEqual(
+            ArticlesViewModel.queryKey(category: "Food", search: " patio "),
+            ArticlesViewModel.queryKey(category: "Food", search: "patio")
+        )
+        XCTAssertNotEqual(
+            ArticlesViewModel.queryKey(category: "Food", search: "patio"),
+            ArticlesViewModel.queryKey(category: "Food", search: "brunch")
+        )
+    }
+
+    // MARK: View counter (IOS-DD-GUIDES-20)
+
+    func testViewCounterUsesServerRPC() {
+        XCTAssertEqual(ArticlesService.viewRPCName, "increment_article_view")
+    }
 }

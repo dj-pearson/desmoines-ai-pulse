@@ -54,6 +54,24 @@ final class SearchHistoryServiceTests: XCTestCase {
         XCTAssertEqual(service.recentSearches.first, "query-15") // most recent first
     }
 
+    // MARK: - Refinement (IOS-DD-SEARCH-04)
+
+    func testPrefixEntryIsReplacedByLongerQuery() {
+        service.record("brunch")
+        service.record("jaz")
+        let before = service.recentSearches.count
+        service.record("jazz")
+        XCTAssertEqual(service.recentSearches.first, "jazz")
+        XCTAssertEqual(service.recentSearches.count, before)
+        XCTAssertFalse(service.recentSearches.contains("jaz"))
+    }
+
+    func testUnrelatedEntryIsKept() {
+        service.record("jazz")
+        service.record("brunch")
+        XCTAssertEqual(service.recentSearches, ["brunch", "jazz"])
+    }
+
     // MARK: - Remove
 
     func testRemoveAtIndex() {

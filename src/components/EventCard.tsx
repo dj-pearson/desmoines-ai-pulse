@@ -21,11 +21,11 @@ import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import EventFeedback from "@/components/EventFeedback";
 import ShareDialog from "@/components/ShareDialog";
 import { FavoriteButton } from "@/components/FavoriteButton";
-import { SocialProofBadge, ViewCountBadge } from "@/components/SocialProofBadge";
+import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
-import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { useViewTracking } from "@/hooks/useViewTracking";
+import { recordView } from "@/lib/recentlyViewed";
 import { Event } from "@/lib/types";
 import {
   createEventSlugWithCentralTime,
@@ -51,13 +51,21 @@ const createSlug = (name: string): string => {
 interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
+  /**
+   * True for the cards above the fold on first paint, which loads the image
+   * eagerly at high fetch priority instead of lazily.
+   *
+   * WEB-PERF-040. OptimizedImage has always supported this and NO caller in
+   * the app passed it, so every image on the site - the LCP element on the
+   * hubs included - was loading="lazy" with no priority hint.
+   */
+  priority?: boolean;
 }
 
-function EventCardComponent({ event, onViewDetails }: EventCardProps) {
+function EventCardComponent({ event, onViewDetails, priority = false }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
-  const { addToRecentlyViewed } = useRecentlyViewed();
-  const { viewData, trackView } = useViewTracking(event.id);
+  const { trackView } = useViewTracking(event.id);
   const [isNew, setIsNew] = useState(false);
   const [imageError, setImageError] = useState(false);
 
@@ -69,9 +77,6 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
       setIsNew(daysSinceCreated <= 7);
     }
   }, [event.created_at]);
-
-  // Determine if trending based on view data
-  const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
   // EXPIRY IS PART OF BEING SPONSORED. This card read `event.is_sponsored`
   // directly in three places, so an event whose sponsored_until had already
@@ -96,14 +101,23 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
       trackInteraction(event.id, "view");
     }
 
-    // Add to recently viewed
-    addToRecentlyViewed(event);
+    // Opening the quick view counts as a view. It goes into the one unified
+    // store the home rail reads (WEB-FEAT-007); this card used to write the
+    // legacy `desmoines_recently_viewed` key, which nothing on Home showed.
+    recordView({
+      id: event.id,
+      type: "event",
+      title: event.title,
+      href: `/events/${createEventSlugWithCentralTime(event.title, event)}`,
+      image_url: event.image_url ?? undefined,
+      subtitle: event.venue || event.location || event.category || undefined,
+    });
 
     // Track view in analytics
     trackView();
 
     onViewDetails(event);
-  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails, sponsoredActive]);
+  }, [isAuthenticated, trackInteraction, event, trackView, onViewDetails, sponsoredActive]);
 
 
 
@@ -121,6 +135,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
             containerClassName="w-full h-48"
             aspectRatio="640/192"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            priority={priority}
             onError={() => setImageError(true)}
           />
         ) : (
@@ -134,8 +149,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-2">
             {sponsoredActive && <SponsoredBadge />}
-            {!sponsoredActive && isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
-            {!sponsoredActive && isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
+            {!sponsoredActive && isNew && <SocialProofBadge type="new" size="sm" />}
           </div>
 
           {/* Distance Badge (only shown in Near Me mode) */}
@@ -188,11 +202,6 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
             </div>
           )}
         </div>
-
-        {/* Social Proof - View Count */}
-        {viewData.recent_views > 20 && (
-          <ViewCountBadge viewCount={viewData.recent_views} timeframe="last hour" />
-        )}
 
         <div className="flex items-center justify-between pt-2">
           <div className="flex gap-2 flex-wrap">

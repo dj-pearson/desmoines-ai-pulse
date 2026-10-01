@@ -215,6 +215,27 @@ const ENTITY_SITEMAPS = [
   'sitemap-attractions.xml',
   'sitemap-playgrounds.xml',
   'sitemap-articles.xml',
+  // WEB-SEO-034. LAST ON PURPOSE. This list is a strict priority order and the
+  // budget shortfall falls entirely on the tail, so adding hotels ahead of an
+  // existing family would take that family's whole allocation rather than
+  // sharing the cost. /stay is roughly 70 rows and had no sitemap at all until
+  // now, so being in one is the change that matters; being prerendered is the
+  // improvement after it.
+  'sitemap-hotels.xml',
+  // WEB-SEO-035, and AFTER hotels for the reason the hotels comment gives: the
+  // list is a strict priority order and the budget shortfall falls on the tail,
+  // so a new family inserted higher takes an existing family's allocation
+  // rather than sharing the cost. These four are small (venues, trails, teams
+  // and published itineraries are tens of rows, not hundreds) and had no
+  // sitemap at all until now, so being submitted is the change that matters.
+  'sitemap-venues.xml',
+  'sitemap-trails.xml',
+  'sitemap-teams.xml',
+  'sitemap-itineraries.xml',
+  // WEB-SEO-035 AC3, added once BestOfCategory.tsx got a canonical and an
+  // ItemList. Behind the other four for the same tail-priority reason, and it
+  // is the smallest family of the lot - one URL per active voting category.
+  'sitemap-best-of.xml',
   'sitemap-guides.xml',
 ];
 
@@ -576,6 +597,15 @@ const duplicateJsonLdRoutes = [];
   async function renderRoute(route, strict = false, browser = browsers[0]) {
     const page = await browser.newPage();
     try {
+      // Tell the app it is being prerendered (src/lib/isPrerender.ts), before
+      // any of its scripts run. LazySection then mounts every section at once:
+      // this page never scrolls, so without the flag Home's snapshot,
+      // neighbourhood links and dashboard shipped as empty placeholders
+      // (home-pass2 WP1 item 1). Not navigator.webdriver, which Playwright also
+      // sets and which would defeat the request-budget spec.
+      await page.evaluateOnNewDocument(() => {
+        window.__DMI_PRERENDER__ = true;
+      });
       await page.goto(`http://127.0.0.1:${PORT}${route}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,

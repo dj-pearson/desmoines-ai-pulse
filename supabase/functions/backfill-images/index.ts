@@ -15,7 +15,7 @@ import {
   getGooglePlacesPhoto,
   getCategoryDefaultImage,
 } from "../_shared/imageFallbacks.ts";
-import { venueImageForSourceUrl } from "../_shared/venueImage.ts";
+import { resolveEventImage } from "../_shared/venueImage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -325,7 +325,8 @@ Deno.serve(async (req) => {
       let rawImageUrl: string | null = null;
       let source: ImageSource = "none";
 
-      // 0) Venue default, for events from a single-venue source.
+      // 0) Venue default, for events from a single-venue source or at a
+      //    venue that has one (a Vibrant show listed by Catch Des Moines).
       //
       // Ahead of the scrape deliberately: this is the only step in the chain
       // that costs nothing. The event goes straight to the venue's image with
@@ -333,8 +334,9 @@ Deno.serve(async (req) => {
       // media_assets row, which is the same saving the ingest paths now take.
       // Events only - a restaurant's website is not a venue source, and gating
       // on the category says so rather than relying on no host ever matching.
-      if (category === "events" && pageUrl) {
-        const venueDefault = await venueImageForSourceUrl(supabase, pageUrl);
+      if (category === "events" && (pageUrl || venueName)) {
+        const resolved = await resolveEventImage(supabase, { sourceUrl: pageUrl ?? "", venueText: venueName });
+        const venueDefault = resolved.skipFetch ? resolved.imageUrl : null;
         if (venueDefault) {
           const { error: setError } = await supabase
             .from(table)

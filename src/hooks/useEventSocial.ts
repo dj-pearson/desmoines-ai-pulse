@@ -43,16 +43,34 @@ export interface EventLiveStats {
   last_activity: string | null;
 }
 
-export interface EventCheckin {
-  id: string;
-  event_id: string;
-  user_id: string;
-  checked_in_at: string;
-  check_in_method: 'manual' | 'qr_code' | 'geofence';
-  location_verified: boolean;
-}
+// The EventCheckin interface that was here described the event_checkins table
+// as it existed on 2025-08-29 - checked_in_at, check_in_method,
+// location_verified - and migration 20251110000010_add_social_features.sql
+// DROPped that table and recreated it with none of those columns. Nothing
+// imported the type; what it did do was make checkInToEvent's insert below
+// read as correct. Deleted rather than corrected, because nothing needs it:
+// the insert is typed by the generated Database.
 
-export function useEventSocial(eventId: string) {
+/**
+ * Social data for one event.
+ *
+ * WEB-PERF-030 — REALTIME IS OFF UNLESS ASKED FOR, AND THAT DEFAULT IS THE FIX.
+ *
+ * This hook opened three postgres_changes channels per event id. SocialEventCard
+ * falls back to it whenever a page does not hand it batch data, and six landing
+ * pages did not, with FreeEvents and KidsEvents fetching up to 100 events each.
+ * One anonymous visitor could therefore open three hundred websocket
+ * subscriptions and issue three hundred queries, for a preview they cannot
+ * interact with: posting requires an account.
+ *
+ * So `realtime` defaults to false. A caller that genuinely renders a live,
+ * interactive surface opts in, and even then the channels only open for a
+ * signed-in user, because nobody else can produce the events they carry.
+ */
+export function useEventSocial(
+  eventId: string,
+  options: { realtime?: boolean } = {},
+) {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -177,9 +195,13 @@ export function useEventSocial(eventId: string) {
     }
   }, [eventId, user]);
 
-  // Set up real-time subscriptions
+  // Set up real-time subscriptions. Opt-in, and signed-in only: see the note on
+  // the hook. An anonymous visitor cannot post an attendance or a comment, so a
+  // socket that streams them changes nothing they can see.
+  const realtimeEnabled = options.realtime === true && !!user;
+
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId || !realtimeEnabled) return;
 
     // Typed explicitly: an empty array literal infers never[]/any[] here, which
     // strict mode reports as an implicit-any escape (TS7034/TS7005).
@@ -265,7 +287,7 @@ export function useEventSocial(eventId: string) {
         supabase.removeChannel(channel);
       });
     };
-  }, [eventId]);
+  }, [eventId, realtimeEnabled]);
 
   // Initial data fetch
   useEffect(() => {
@@ -308,13 +330,21 @@ export function useEventSocial(eventId: string) {
     if (!user || !eventId) return;
 
     try {
+      // THIS INSERT NAMED TWO COLUMNS THAT DO NOT EXIST, so every check-in
+      // came back PGRST204 and the user saw "Failed to check in to the event".
+      // event_checkins was created 2025-08-29 with check_in_method and
+      // location_verified, then DROPped and recreated by migration
+      // 20251110000010_add_social_features.sql (line 75, `DROP TABLE IF EXISTS
+      // ... CASCADE`) with a different shape: checkin_latitude/longitude,
+      // distance_from_venue_meters, is_verified, checkin_message. The caller
+      // was never updated. is_verified defaults to false, which is what
+      // location_verified: false was saying, and the recreated table models no
+      // check-in method at all - so both fields go rather than get renamed.
       const { error } = await supabase
         .from('event_checkins')
         .insert({
           event_id: eventId,
           user_id: user.id,
-          check_in_method: 'manual',
-          location_verified: false,
         });
 
       if (error) throw error;

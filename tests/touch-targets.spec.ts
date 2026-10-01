@@ -1,0 +1,121 @@
+import { test, expect, type Page } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
+
+/**
+ * WEB-UX-036. Footer links have to be tappable on a phone.
+ *
+ * Measured at 375px against a production build: 72 of the ~73 interactive
+ * elements under 44px on every page were footer links, 16-20px tall in lists
+ * with 8px gaps. That is where the legal links live - Privacy, Terms, Cookie
+ * Policy, Accessibility, DMCA - which are exactly the ones someone goes hunting
+ * for deliberately.
+ *
+ * Two thresholds, matching the two-tier fix. The primary nav links carry
+ * .footer-link and get this project's own 44px standard; the SiteDirectory SEO
+ * block carries .footer-link-compact and gets WCAG 2.5.8's 24px AA minimum,
+ * because sizing 60-odd crawler-oriented deep links to 44px added a full screen
+ * of footer scroll for links almost nobody taps.
+ *
+ * A runtime check because the sizing is a coarse-pointer media query over
+ * computed layout - no source-text check can measure a rendered box.
+ */
+
+/**
+ * Phone metrics set directly rather than by spreading devices['iPhone 13'] -
+ * that preset carries defaultBrowserType: 'webkit', which pulls the spec off
+ * this config's chromium project and fails to launch.
+ */
+test.use({
+  viewport: { width: 375, height: 812 },
+  deviceScaleFactor: 3,
+  isMobile: true,
+  hasTouch: true,
+});
+
+/**
+ * WCAG 2.5.8 exempts a target "in a sentence or its size is otherwise
+ * constrained by the line-height of non-target text". Two footer links qualify:
+ * the Privacy Policy link inside the newsletter consent sentence, and the
+ * mailto inside the postal address line.
+ */
+const INLINE_EXEMPT = ['Privacy Policy', 'hello@desmoinesinsider.com'];
+
+type Undersized = { label: string; height: number; min: number };
+
+async function undersizedFooterLinks(page: Page): Promise<Undersized[]> {
+  return page.evaluate((exempt) => {
+    const footer = document.querySelector('footer');
+    if (!footer) return [{ label: 'NO FOOTER', height: 0, min: 0 }];
+    const bad: { label: string; height: number; min: number }[] = [];
+
+    for (const el of footer.querySelectorAll('a[href], button')) {
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) continue;
+      // .tap-area-44 supplies its own 44px hit region via an ::after overlay,
+      // which getBoundingClientRect on the element does not include.
+      if (el.classList.contains('tap-area-44')) continue;
+
+      const label = (el.textContent ?? '').trim().replace(/\s+/g, ' ');
+      if (exempt.some((e) => label.includes(e))) continue;
+
+      const min = el.classList.contains('footer-link-compact') ? 24 : 44;
+      if (box.height < min) bad.push({ label: label.slice(0, 40), height: Math.round(box.height), min });
+    }
+    return bad;
+  }, INLINE_EXEMPT);
+}
+
+async function expectFooterTappable(page: Page, route: string) {
+  await page.goto(route, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('footer')).toBeVisible({ timeout: 30_000 });
+
+  const undersized = await undersizedFooterLinks(page);
+  expect(
+    undersized,
+    `footer links below their minimum: ${undersized.map((u) => `"${u.label}" ${u.height}px < ${u.min}px`).join(', ')}`
+  ).toEqual([]);
+}
+
+for (const route of ['/', '/events', '/contact', '/trip-planner']) {
+  test(`${route} footer links are tappable at 375px`, async ({ page }) => {
+    await expectFooterTappable(page, route);
+  });
+}
+
+/*
+ * Explore pass 2 WP6 item 10, the first pass's dropped WP8.3. The Explore
+ * hubs render their lists from the backend, and the smoke build has
+ * placeholder credentials, so the fixture backend answers and the page is
+ * measured with its content in place above the footer. Only the footer is
+ * measured here; each Explore spec asserts 44px on its own page body.
+ */
+for (const route of ['/things-to-do', '/attractions', '/playgrounds']) {
+  test(`${route} footer links are tappable at 375px`, async ({ page }) => {
+    await installFixtureBackend(page);
+    await expectFooterTappable(page, route);
+  });
+}
+
+/*
+ * Eat & Drink pass 2 WP6 item 4. A restaurant card's Save button sits in the
+ * photo's corner, so it is the one control on the hub a thumb aims at on a
+ * phone. Measured on the element itself, not the tap-area-44 overlay: the card
+ * sizes the button h-11 w-11 (src/components/RestaurantCard.tsx), and an
+ * overlay-only 44px would still leave a 36px visible target. The hub needs
+ * rows to render a card, and the smoke build has placeholder credentials, so
+ * the fixture backend answers.
+ */
+test('a restaurant card Save button is at least 44x44 on /restaurants', async ({ page }) => {
+  await installFixtureBackend(page, { restaurantTotal: 40 });
+  await page.goto('/restaurants', { waitUntil: 'domcontentloaded' });
+
+  const save = page.locator('article').getByRole('button', { name: /^Save / }).first();
+  await expect(save).toBeVisible({ timeout: 30_000 });
+
+  const box = await save.boundingBox();
+  expect(box, 'the Save button has no layout box').not.toBeNull();
+  expect(Math.round(box!.width), 'Save button width').toBeGreaterThanOrEqual(44);
+  expect(Math.round(box!.height), 'Save button height').toBeGreaterThanOrEqual(44);
+});

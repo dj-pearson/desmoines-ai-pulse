@@ -2,11 +2,18 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrending } from '@/hooks/useTrendingContent';
 import { useSimplePersonalization } from '@/hooks/useSimplePersonalization';
+import { contentHref, isTrendingContentType } from '@/lib/trendingContent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Star } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
+
+/** A content field as display text. Rows come from four tables, so fields are unknown. */
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
 
 interface TrendingContentProps {
   contentType?: 'event' | 'restaurant' | 'attraction' | 'playground';
@@ -74,7 +81,7 @@ export default function TrendingContent({
     ...(showPersonalized ? recommendations.map(rec => ({
       id: rec.id,
       contentType: rec.contentType,
-      contentId: rec.content.id,
+      contentId: rec.content.id as string,
       content: rec.content,
       trendingScore: rec.score,
       timeWindow,
@@ -122,11 +129,13 @@ export default function TrendingContent({
       });
     }
     
-    // Navigate to content detail
-    const path = `/${item.contentType === 'event' ? 'events' : 
-                    item.contentType === 'restaurant' ? 'restaurants' :
-                    item.contentType === 'attraction' ? 'attractions' : 'playgrounds'}/${item.contentId}`;
-    navigate(path);
+    // The canonical URL. This was /<type>/<uuid>, a 404 for attractions and
+    // playgrounds (they resolve by slug or name, never by id).
+    navigate(
+      isTrendingContentType(item.contentType)
+        ? contentHref(item.contentType, item.content, item.contentId)
+        : '/',
+    );
   };
 
   return (
@@ -151,14 +160,14 @@ export default function TrendingContent({
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
             onClick={() => handleContentClick(item)}
           >
-            {item.content?.image_url && (
+            {text(item.content?.image_url) && (
               <div className="relative h-40 overflow-hidden rounded-t-lg">
-                <img
-                  src={item.content.image_url}
-                  alt={item.content.name || item.content.title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  decoding="async"
+                <OptimizedImage
+                  src={text(item.content.image_url)!}
+                  alt={text(item.content.name) ?? text(item.content.title) ?? ''}
+                  containerClassName="w-full h-full"
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 33vw"
                 />
                 <div className="absolute top-2 right-2">
                   <Badge 
@@ -183,17 +192,20 @@ export default function TrendingContent({
             
             <CardHeader className="pb-2">
               <CardTitle className="text-base line-clamp-2">
-                {item.content?.name || item.content?.title || 'Untitled'}
+                {text(item.content?.name) ?? text(item.content?.title) ?? 'Untitled'}
               </CardTitle>
               <CardDescription className="flex items-center gap-1">
                 <SpriteIcon name="map-pin" className="h-3 w-3" />
-                {item.content?.location || item.content?.city || 'Des Moines'}
+                {text(item.content?.location) ?? text(item.content?.city) ?? 'Des Moines'}
               </CardDescription>
             </CardHeader>
             
             <CardContent className="pt-0">
               <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                {item.content?.description || 'No description available'}
+                {/* events carry enhanced_description, not description */}
+                {text(item.content?.description) ??
+                  text(item.content?.enhanced_description) ??
+                  'No description available'}
               </p>
               
               <div className="flex items-center justify-between">

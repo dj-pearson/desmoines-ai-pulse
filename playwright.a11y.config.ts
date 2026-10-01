@@ -24,6 +24,17 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Usage: npm run test:a11y:axe
  */
+/**
+ * A locally installed Chromium, when Playwright's own download is absent or at
+ * a different revision (WEB-CI-028). Inert in CI, where the browsers Playwright
+ * expects are installed by the workflow. See TESTING.md for why this is needed
+ * in a container: Playwright looks for chrome-headless-shell at the revision it
+ * shipped with, and a preinstalled full chromium is at a different path.
+ */
+const localChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
+  : {};
+
 export default defineConfig({
   testDir: './tests',
   testMatch: 'accessibility.spec.ts',
@@ -33,7 +44,9 @@ export default defineConfig({
   // Axe is deterministic against a fixed DOM, so a retry only ever papers over
   // a navigation flake. One retry in CI, none locally.
   retries: process.env.CI ? 1 : 0,
-  reporter: 'list',
+  // An HTML report on CI, so a red required lane leaves something to open;
+  // `list` alone wrote nothing and the artifact upload found no files.
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   timeout: 60_000,
 
   use: {
@@ -48,7 +61,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-desktop',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 } },
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 }, ...localChromium }
     },
   ],
 

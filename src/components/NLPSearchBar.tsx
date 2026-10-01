@@ -1,423 +1,346 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useNLPSearch, NLP_SEARCH_EXAMPLES } from "@/hooks/useNLPSearch";
-import { Link } from "react-router-dom";
-import { Search, Utensils, Loader2, X, DollarSign, Star, Lightbulb } from "lucide-react";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useMediaQuery } from "@/hooks/use-media-query";
+import { orderExamplesForHour } from "@/hooks/useNLPSearch";
+import {
+  MIN_CHARS,
+  useEntitySuggestions,
+  type EntitySuggestion,
+  type EntityType,
+} from "@/hooks/useEntitySuggestions";
+import { storage } from "@/lib/safeStorage";
+import { nowInCentralTime } from "@/lib/timezone";
+import { cn } from "@/lib/utils";
+
+/**
+ * Recent searches from the hero box. A new key: the per-type
+ * `recent-searches-<type>` keys belong to the list pages' SearchAutocomplete,
+ * and a Home query is not a restaurants query. Versioned so a shape change can
+ * write to _v2 and migrate on read.
+ */
+export const RECENT_SEARCHES_KEY = "dmi_recent_searches_all_v1";
+const MAX_RECENT = 8;
+const RECENT_SHOWN = 5;
+const EXAMPLES_SHOWN = 6;
+const PER_TYPE_SHOWN = 3;
+
+function readRecent(): string[] {
+  const value = storage.get<unknown>(RECENT_SEARCHES_KEY, []);
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
+}
+
+function rememberSearch(query: string) {
+  const q = query.trim();
+  if (q.length < 2) return;
+  const rest = readRecent().filter((s) => s.toLowerCase() !== q.toLowerCase());
+  storage.set(RECENT_SEARCHES_KEY, [q, ...rest].slice(0, MAX_RECENT));
+}
+
+const searchHref = (q: string) => `/search?q=${encodeURIComponent(q)}`;
+
+const GROUP_LABELS: Record<EntityType, string> = {
+  events: "Events",
+  restaurants: "Restaurants",
+  attractions: "Places",
+};
 
 interface NLPSearchBarProps {
   placeholder?: string;
+  /** Shorter placeholder below the `sm` breakpoint, where the long one is cut off. */
+  mobilePlaceholder?: string;
   showExamples?: boolean;
-  showResults?: boolean;
   className?: string;
-  onResultClick?: (result: any, type: string) => void;
+  /** Classes for the input itself (the hero sizes it up). */
+  inputClassName?: string;
 }
 
 /**
- * NLP-powered search bar component
+ * The home page's one search box (home-pass2 WP1 items 5, 7, 8 and 12).
  *
- * Features natural language search powered by Claude Haiku for fast intent parsing.
+ * Everything in it navigates. Enter, an example chip and "Search everything"
+ * go to /search?q=, the page the WebSite SearchAction names; a suggestion goes
+ * straight to that event, restaurant or place. Nothing here calls the
+ * nlp-search model: the inline results panel that did (once per example chip,
+ * and again on /search) is gone, and with it the tabs, the scroll area and the
+ * result renderer from the hero chunk.
  *
- * @example
- * <NLPSearchBar
- *   placeholder="Try: 'Family dinner under $50 near downtown Saturday'"
- *   showExamples
- *   showResults
- * />
+ * The suggestions region is a disclosure, not a combobox: the input reports
+ * `aria-expanded` and `aria-controls`, and the panel holds ordinary links a
+ * keyboard reaches with Tab. Escape closes it from anywhere inside and returns
+ * focus to the input without reopening it.
  */
 export function NLPSearchBar({
-  placeholder = "Search naturally, like 'Free things to do this weekend with kids'",
+  placeholder = "Search events, restaurants, places...",
+  mobilePlaceholder = "Search Des Moines",
   showExamples = true,
-  showResults = true,
-  className = '',
-  onResultClick,
+  className = "",
+  inputClassName,
 }: NLPSearchBarProps) {
-  const [query, setQuery] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
+  const [query, setQuery] = useState("");
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
+  // Set just before Escape hands focus back to the input, so the onFocus that
+  // follows does not reopen the panel Escape just closed.
+  const suppressReopen = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLFormElement>(null);
+  const navigate = useNavigate();
+  const panelId = useId();
+  const statusId = useId();
+  const isNarrow = useMediaQuery("(max-width: 639px)");
 
-  const {
-    search,
-    clearResults,
-    results,
-    parsedIntent,
-    isSearching,
-    isError,
-    hasResults,
-    totalResults,
-    responseTime,
-    getIntentSummary,
-    examples,
-  } = useNLPSearch();
+  const trimmed = query.trim();
+  const { suggestions, term, isFetching } = useEntitySuggestions(query);
 
-  // Handle search on Enter
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && query.trim().length >= 3) {
-      search(query);
+  // Central hour, computed once per mount: the examples describe Des Moines
+  // time, not the visitor's clock.
+  const orderedExamples = useMemo(
+    () => orderExamplesForHour(nowInCentralTime().getHours()).slice(0, EXAMPLES_SHOWN),
+    [],
+  );
+
+  const open = useCallback(() => {
+    // Read on open rather than on mount: a search from another tab or an
+    // earlier visit shows up without a reload.
+    setRecent(readRecent().slice(0, RECENT_SHOWN));
+    setPanelOpen(true);
+  }, []);
+
+  const close = useCallback(() => setPanelOpen(false), []);
+
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!trimmed) {
+      // Submit stays enabled; on an empty box it offers the suggestions.
+      inputRef.current?.focus();
+      open();
+      return;
     }
+    rememberSearch(trimmed);
+    close();
+    navigate(searchHref(trimmed));
   };
 
-  // Handle example click
-  const handleExampleClick = (example: string) => {
-    setQuery(example);
-    search(example);
+  const handleClear = () => {
+    setQuery("");
     inputRef.current?.focus();
   };
 
-  // Handle clear
-  const handleClear = () => {
-    setQuery('');
-    clearResults();
+  const handleKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== "Escape" || !panelOpen) return;
+    e.stopPropagation();
+    close();
+    if (document.activeElement !== inputRef.current) {
+      suppressReopen.current = true;
+      inputRef.current?.focus();
+    }
   };
 
-  // Close results on outside click
+  const handleFocus = () => {
+    if (suppressReopen.current) {
+      suppressReopen.current = false;
+      return;
+    }
+    open();
+  };
+
+  // Keyboard focus leaving the box closes the panel. A null relatedTarget is a
+  // click on nothing focusable, which the outside-mousedown listener below
+  // decides, so a click on the panel's own padding does not close it.
+  const handleBlur = (e: FocusEvent<HTMLFormElement>) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && !containerRef.current?.contains(next)) close();
+  };
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsFocused(false);
-      }
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) close();
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [close]);
 
-  const getResultLink = (item: any, type: string) => {
-    const name = item.title || item.name;
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    return `/${type}/${item.id}`;
+  const onNavigate = (q?: string) => {
+    if (q) rememberSearch(q);
+    close();
   };
 
-  const intentSummary = getIntentSummary();
+  const groups = (["events", "restaurants", "attractions"] as const)
+    .map((type) => ({ type, items: suggestions[type].slice(0, PER_TYPE_SHOWN) }))
+    .filter((g) => g.items.length > 0);
+  const matchCount = groups.reduce((n, g) => n + g.items.length, 0);
+  const typing = trimmed.length > 0;
+  // Suggestions belong to the debounced term; while the input has moved on,
+  // they are not shown as if they answered it.
+  const suggestionsCurrent = trimmed.length >= MIN_CHARS && term === trimmed;
+  const shownGroups = suggestionsCurrent ? groups : [];
+  const idleList = recent.length > 0 ? recent : showExamples ? orderedExamples : [];
+  const idleLabel = recent.length > 0 ? "Recent searches" : "Try";
+  // Open with nothing to show would be an empty box under the input.
+  const expanded = panelOpen && (typing || idleList.length > 0);
+
+  const status = !expanded
+    ? ""
+    : suggestionsCurrent && !isFetching
+      ? matchCount > 0
+        ? `${matchCount} suggestion${matchCount === 1 ? "" : "s"} for ${trimmed}.`
+        : `No direct matches for ${trimmed}. Search everything instead.`
+      : "";
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
-      {/* Search Input */}
+    <form
+      ref={containerRef}
+      role="search"
+      aria-label="Search Des Moines events, restaurants and places"
+      className={cn("relative", className)}
+      onSubmit={handleSubmit}
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
+    >
       <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-          {isSearching ? (
-            <Loader2 className="h-5 w-5 text-primary animate-spin" />
-          ) : (
-            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
-          )}
-        </div>
+        <Search
+          className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
         <Input
           ref={inputRef}
-          type="text"
-          aria-label="Search naturally for events, restaurants, and things to do"
-          placeholder={placeholder}
+          type="search"
+          enterKeyHint="search"
+          name="q"
+          autoComplete="off"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          aria-describedby={statusId}
+          aria-label="Search events, restaurants and things to do"
+          placeholder={isNarrow ? mobilePlaceholder : placeholder}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          className="pl-11 pr-24 h-12 text-base"
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (!panelOpen) open();
+          }}
+          onFocus={handleFocus}
+          className={cn(
+            "h-12 pl-11 text-base [&::-webkit-search-cancel-button]:appearance-none",
+            // Room for Search alone, or for Clear and Search (item 12).
+            query ? "pr-28" : "pr-14",
+            inputClassName,
+          )}
         />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+        <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1">
           {query && (
             <Button
+              type="button"
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-11 w-11 p-0"
               onClick={handleClear}
               aria-label="Clear search"
             >
-              {/* Icon-only buttons expose no accessible name — the SVG is the
-                  only child and carries no text — so a screen reader announced
-                  these as just "button". WCAG 4.1.2 (axe button-name, critical).
-                  The icons are decorative once the button is labelled. */}
               <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={() => query.length >= 3 && search(query)}
-            disabled={query.length < 3 || isSearching}
-            className="h-8"
-            aria-label="Search"
-          >
+          <Button type="submit" size="sm" className="h-11 w-11 p-0" aria-label="Search">
             <Search className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </div>
 
-      {/* Dropdown */}
-      {isFocused && (
-        <Card className="absolute top-full left-0 right-0 mt-2 z-50 shadow-lg">
-          <CardContent className="p-4">
-            {/* Examples (when no results) */}
-            {showExamples && !hasResults && !isSearching && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Lightbulb className="h-4 w-4" />
-                  <span>Try searching naturally:</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {examples.slice(0, 6).map((example, idx) => (
-                    <Badge
-                      key={idx}
-                      variant="secondary"
-                      className="cursor-pointer hover:bg-secondary/80 transition-colors"
-                      onClick={() => handleExampleClick(example)}
-                    >
-                      {example}
-                    </Badge>
+      <p id={statusId} className="sr-only" aria-live="polite">
+        {status}
+      </p>
+
+      <div
+        id={panelId}
+        role="region"
+        aria-label="Search suggestions"
+        hidden={!expanded}
+        className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border bg-popover p-2 text-left text-popover-foreground shadow-lg"
+      >
+        {expanded && (
+          <>
+            {!typing && idleList.length > 0 && (
+              <div className="p-2">
+                <p className="mb-2 text-sm text-muted-foreground">{idleLabel}</p>
+                <ul className="flex flex-wrap gap-2">
+                  {idleList.map((q) => (
+                    <li key={q}>
+                      <Link
+                        to={searchHref(q)}
+                        onClick={() => onNavigate(q)}
+                        data-search-chip
+                        className="inline-flex min-h-11 items-center rounded-full bg-secondary/10 px-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-secondary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {q}
+                      </Link>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
 
-            {/* Loading */}
-            {isSearching && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  <span className="text-sm">Understanding your search...</span>
-                </div>
-                <div className="space-y-2">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </div>
+            {shownGroups.map((group) => (
+              <div key={group.type} className="py-1">
+                <p className="px-3 pb-1 pt-2 text-sm text-muted-foreground">{GROUP_LABELS[group.type]}</p>
+                <ul>
+                  {group.items.map((item) => (
+                    <SuggestionRow key={`${item.type}-${item.id}`} item={item} onNavigate={() => onNavigate()} />
+                  ))}
+                </ul>
               </div>
-            )}
+            ))}
 
-            {/* Results */}
-            {showResults && hasResults && !isSearching && (
-              <div className="space-y-4">
-                {/* Intent Summary */}
-                {intentSummary && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <SpriteIcon name="sparkles" className="h-4 w-4 text-primary" />
-                    <span className="text-muted-foreground">Understood:</span>
-                    <span className="font-medium">{intentSummary}</span>
-                  </div>
+            {typing && (
+              <Link
+                to={searchHref(trimmed)}
+                onClick={() => onNavigate(trimmed)}
+                data-search-everything
+                className={cn(
+                  "flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  shownGroups.length > 0 && "mt-1 border-t pt-1",
                 )}
-
-                {/* Results Tabs */}
-                <Tabs defaultValue="all" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="all">
-                      All ({totalResults})
-                    </TabsTrigger>
-                    <TabsTrigger value="events" disabled={results.events.length === 0}>
-                      <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
-                      Events ({results.events.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="restaurants" disabled={results.restaurants.length === 0}>
-                      <Utensils className="h-3 w-3 mr-1" />
-                      Food ({results.restaurants.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="attractions" disabled={results.attractions.length === 0}>
-                      <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
-                      Places ({results.attractions.length})
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <ScrollArea className="h-[300px] mt-3">
-                    <TabsContent value="all" className="mt-0 space-y-2">
-                      {/* Events */}
-                      {results.events.slice(0, 3).map((event) => (
-                        <ResultItem
-                          key={`event-${event.id}`}
-                          item={event}
-                          type="events"
-                          icon={<SpriteIcon name="calendar" className="h-4 w-4" />}
-                          onClick={onResultClick}
-                        />
-                      ))}
-                      {/* Restaurants */}
-                      {results.restaurants.slice(0, 3).map((restaurant) => (
-                        <ResultItem
-                          key={`restaurant-${restaurant.id}`}
-                          item={restaurant}
-                          type="restaurants"
-                          icon={<Utensils className="h-4 w-4" />}
-                          onClick={onResultClick}
-                        />
-                      ))}
-                      {/* Attractions */}
-                      {results.attractions.slice(0, 3).map((attraction) => (
-                        <ResultItem
-                          key={`attraction-${attraction.id}`}
-                          item={attraction}
-                          type="attractions"
-                          icon={<SpriteIcon name="map-pin" className="h-4 w-4" />}
-                          onClick={onResultClick}
-                        />
-                      ))}
-                    </TabsContent>
-
-                    <TabsContent value="events" className="mt-0 space-y-2">
-                      {results.events.map((event) => (
-                        <ResultItem
-                          key={`event-${event.id}`}
-                          item={event}
-                          type="events"
-                          icon={<SpriteIcon name="calendar" className="h-4 w-4" />}
-                          onClick={onResultClick}
-                        />
-                      ))}
-                    </TabsContent>
-
-                    <TabsContent value="restaurants" className="mt-0 space-y-2">
-                      {results.restaurants.map((restaurant) => (
-                        <ResultItem
-                          key={`restaurant-${restaurant.id}`}
-                          item={restaurant}
-                          type="restaurants"
-                          icon={<Utensils className="h-4 w-4" />}
-                          onClick={onResultClick}
-                        />
-                      ))}
-                    </TabsContent>
-
-                    <TabsContent value="attractions" className="mt-0 space-y-2">
-                      {results.attractions.map((attraction) => (
-                        <ResultItem
-                          key={`attraction-${attraction.id}`}
-                          item={attraction}
-                          type="attractions"
-                          icon={<SpriteIcon name="map-pin" className="h-4 w-4" />}
-                          onClick={onResultClick}
-                        />
-                      ))}
-                    </TabsContent>
-                  </ScrollArea>
-                </Tabs>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                  <span>
-                    {totalResults} results in {responseTime}ms
-                  </span>
-                  <Link
-                    to={`/search?q=${encodeURIComponent(query)}`}
-                    className="flex items-center gap-1 text-primary hover:underline"
-                  >
-                    View all results
-                    <SpriteIcon name="arrow-right" className="h-3 w-3" />
-                  </Link>
-                </div>
-              </div>
+              >
+                <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 truncate">Search everything for "{trimmed}"</span>
+              </Link>
             )}
-
-            {/* Error → keyword fallback */}
-            {!isSearching && isError && query.length >= 3 && (
-              <div className="space-y-3 py-2 text-center">
-                <p className="text-sm text-muted-foreground">
-                  AI search is temporarily unavailable. You can still search by keyword.
-                </p>
-                <Link
-                  to={`/search?q=${encodeURIComponent(query)}`}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                >
-                  <Search className="h-4 w-4" />
-                  Search "{query}" by keyword
-                  <SpriteIcon name="arrow-right" className="h-3 w-3" />
-                </Link>
-              </div>
-            )}
-
-            {/* No Results */}
-            {!isSearching && !isError && query.length >= 3 && !hasResults && parsedIntent && (
-              <div className="text-center py-6">
-                <Search className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-muted-foreground">
-                  No results found for "{query}"
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Try adjusting your search or browse our categories
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </form>
   );
 }
 
-/**
- * Individual result item component
- */
-function ResultItem({
-  item,
-  type,
-  icon,
-  onClick,
-}: {
-  item: any;
-  type: string;
-  icon: React.ReactNode;
-  onClick?: (item: any, type: string) => void;
-}) {
-  const title = item.title || item.name;
-  const description = item.enhanced_description || item.description || item.original_description || '';
-  const truncatedDesc = description.length > 100 ? description.substring(0, 100) + '...' : description;
+interface SuggestionRowProps {
+  item: EntitySuggestion;
+  onNavigate: () => void;
+}
 
-  const handleClick = () => {
-    if (onClick) {
-      onClick(item, type);
-    }
-  };
-
+function SuggestionRow({ item, onNavigate }: SuggestionRowProps) {
   return (
-    <Link
-      to={`/${type}/${item.id}`}
-      onClick={handleClick}
-      className="flex items-start gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
-    >
-      <div className="p-2 rounded-md bg-primary/10 text-primary">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="font-medium line-clamp-1">{title}</h4>
-          <div className="flex items-center gap-1 shrink-0">
-            {item.rating && (
-              <Badge variant="secondary" className="text-xs">
-                <Star className="h-3 w-3 mr-1 fill-yellow-500 text-yellow-500" />
-                {item.rating}
-              </Badge>
-            )}
-            {(item.price || item.price_range) && (
-              <Badge variant="outline" className="text-xs">
-                {item.price || item.price_range}
-              </Badge>
-            )}
-          </div>
-        </div>
-        {truncatedDesc && (
-          <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
-            {truncatedDesc}
-          </p>
-        )}
-        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-          {item.location && (
-            <span className="flex items-center gap-1">
-              <SpriteIcon name="map-pin" className="h-3 w-3" />
-              {item.location}
-            </span>
-          )}
-          {item.date && (
-            <span className="flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-3 w-3" />
-              {new Date(item.date).toLocaleDateString()}
-            </span>
-          )}
-          {item.cuisine && (
-            <span>{item.cuisine}</span>
-          )}
-        </div>
-      </div>
-      <SpriteIcon name="arrow-right" className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-    </Link>
+    <li>
+      <Link
+        to={item.href}
+        onClick={onNavigate}
+        data-result-type={item.type}
+        className="flex min-h-11 flex-col justify-center rounded-lg px-3 py-1.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="truncate text-sm font-medium">{item.title}</span>
+        {item.subtitle && <span className="truncate text-xs text-muted-foreground">{item.subtitle}</span>}
+      </Link>
+    </li>
   );
 }
 

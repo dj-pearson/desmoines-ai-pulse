@@ -20,6 +20,7 @@
  */
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
 
 const BASE = "https://hyveetix.evenue.net";
 const MAX_PAGES = 25; // safety budget — 8 top groups + ~16 sub-groups
@@ -37,9 +38,11 @@ const TOP_GROUPS: { code: string; category: string }[] = [
   { code: "MA", category: "Entertainment" },
 ];
 
+// WEB-SEC-024: the "User-Agent" line is gone from here. adapterHeaders()
+// supplies it from getScraperConfig(), so SCRAPER_USER_AGENT reaches this
+// adapter; the client hints below stay, because they are what makes the plain
+// fetch look like a real browser to this particular site's bot challenge.
 const BROWSER_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   Accept:
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
   "Accept-Language": "en-US,en;q=0.9",
@@ -275,7 +278,11 @@ async function fetchPlain(
   code: string,
 ): Promise<string | null> {
   try {
-    const response = await globalThis.fetch(url, { headers: BROWSER_HEADERS });
+    const response = await fetchAllowed(url, { headers: BROWSER_HEADERS });
+    if (!response) {
+      console.log(`  ⛔ [hyveetix] ${code}: disallowed by robots.txt`);
+      return null;
+    }
     if (!response.ok) {
       console.log(
         `  ❌ [hyveetix] ${code}: plain fetch HTTP ${response.status}`,

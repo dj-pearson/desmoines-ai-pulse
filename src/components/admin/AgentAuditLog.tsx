@@ -108,7 +108,7 @@ export default function AgentAuditLog() {
 
       <CardContent>
         {isLoading ? (
-          <div className="space-y-2" aria-busy="true" aria-label="Loading audit log">
+          <div className="space-y-2" role="status" aria-busy="true" aria-label="Loading audit log">
             {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
           </div>
         ) : isError ? (

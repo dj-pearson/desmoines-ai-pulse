@@ -6,11 +6,25 @@ import UserNotifications
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
+    /// Read by DesMoinesInsiderApp's ThemeCrossfadeContainer; nothing wrote it
+    /// until this picker (IOS-DD-ACCOUNT-16).
+    @AppStorage("themeMode") private var themeModeRaw = ThemeMode.system.rawValue
 
     @State private var auth = AuthService.shared
     @State private var storeKit = StoreKitService.shared
     @State private var biometric = BiometricAuthService.shared
     @State private var notifications = LocalNotificationService.shared
+    /// Held as @State so `$consent.x` bindings observe the service; the old
+    /// Binding(get:set:) closures read UserDefaults and never redrew
+    /// (IOS-DD-ACCOUNT-11).
+    @State private var consent = ConsentService.shared
+    @State private var emailPreferences = EmailPreferencesService.shared
+    @State private var toast: ToastMessage?
+    /// Set after a deletion that left a store subscription billing; the sheet
+    /// dismisses once it is acknowledged (IOS-DD-ACCOUNT-08).
+    @State private var postDeletionNotice: String?
+    @State private var lastDeletionError: AccountDeletionService.DeletionError?
+    @Environment(\.openURL) private var openURL
     @State private var showSubscription = false
     @State private var showOfferCodeRedeem = false
     @State private var showDeleteConfirmation = false
@@ -66,7 +80,10 @@ struct SettingsView: View {
                         }
                     }
 
-                    if biometric.isAvailable {
+                    // Shown when enabled even if biometrics went away (e.g. Face
+                    // ID was reset), so the user can still turn it off
+                    // (IOS-DD-ACCOUNT-05).
+                    if biometric.isAvailable || biometric.isEnabled {
                         Section("Security") {
                             Toggle(isOn: Binding(
                                 get: { biometric.isEnabled },
@@ -89,6 +106,14 @@ struct SettingsView: View {
                 }
 
                 Section("General") {
+                    Picker(selection: $themeModeRaw) {
+                        ForEach(ThemeMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
+                        }
+                    } label: {
+                        Label("Appearance", systemImage: "circle.lefthalf.filled")
+                    }
+
                     HStack {
                         Text("Version")
                         Spacer()
@@ -184,10 +209,7 @@ struct SettingsView: View {
                 // (IOS-AUDIT-SEC-014). AnalyticsService + AdTrackingService both
                 // gate on this flag.
                 Section {
-                    Toggle(isOn: Binding(
-                        get: { ConsentService.shared.analyticsConsent },
-                        set: { ConsentService.shared.analyticsConsent = $0 }
-                    )) {
+                    Toggle(isOn: $consent.analyticsConsent) {
                         Label("Usage Analytics", systemImage: "chart.bar")
                     }
                 } header: {
@@ -198,44 +220,7 @@ struct SettingsView: View {
 
                 // Data & Privacy section (authenticated users only)
                 if auth.isAuthenticated {
-                    Section("Privacy & Data") {
-                        Toggle(isOn: Binding(
-                            get: { ConsentService.shared.locationConsent },
-                            set: { ConsentService.shared.locationConsent = $0 }
-                        )) {
-                            Label("Location Data", systemImage: "location")
-                        }
-
-                        Toggle(isOn: Binding(
-                            get: { ConsentService.shared.emailConsent },
-                            set: { ConsentService.shared.emailConsent = $0 }
-                        )) {
-                            Label("Email Communications", systemImage: "envelope")
-                        }
-                    }
-
-                    Section("Account") {
-                        Button(role: .destructive) {
-                            showDeleteConfirmation = true
-                        } label: {
-                            Label {
-                                if isDeleting {
-                                    Text("Deleting Account...")
-                                } else {
-                                    Text("Delete Account")
-                                }
-                            } icon: {
-                                if isDeleting {
-                                    ProgressView()
-                                } else {
-                                    Image(systemName: "trash")
-                                }
-                            }
-                            .foregroundStyle(.red)
-                        }
-                        .disabled(isDeleting)
-                        .accessibilityLabel("Delete your account")
-                    }
+                    signedInPrivacySections
                 }
 
                 #if DEBUG
@@ -266,13 +251,37 @@ struct SettingsView: View {
                     AnalyticsService.shared.trackOfferCodeRedeem(action: "failure")
                 }
             }
+            .toastOverlay(message: $toast)
             .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     Task { await deleteAccount() }
                 }
+                if storeKit.hasAppStoreSubscription {
+                    Button("Manage Subscription") {
+                        Task { await storeKit.showManageSubscriptions() }
+                    }
+                }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
+                Text(AccountDeletionService.confirmationMessage(hasAppStoreSubscription: storeKit.hasAppStoreSubscription))
+            }
+            .alert("Account Deleted", isPresented: .init(
+                get: { postDeletionNotice != nil },
+                set: { if !$0 { postDeletionNotice = nil } }
+            )) {
+                Button("Manage Subscription") {
+                    postDeletionNotice = nil
+                    Task {
+                        await storeKit.showManageSubscriptions()
+                        dismiss()
+                    }
+                }
+                Button("OK", role: .cancel) {
+                    postDeletionNotice = nil
+                    dismiss()
+                }
+            } message: {
+                Text(postDeletionNotice ?? "")
             }
             // IOS-AUDIT-BUG-018 AC3. This alert has exactly one setter - the
             // deletion catch below - so the retry is unambiguous here and needs
@@ -281,8 +290,16 @@ struct SettingsView: View {
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
-                Button("Try Again") {
-                    Task { await deleteAccount() }
+                if lastDeletionError?.offersManageSubscription == true {
+                    // Refused because a subscription is still live; a retry
+                    // cannot succeed until that is dealt with.
+                    Button("Manage Subscription") {
+                        openURL(Config.siteURL.appendingPathComponent("subscription"))
+                    }
+                } else {
+                    Button("Try Again") {
+                        Task { await deleteAccount() }
+                    }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
@@ -296,6 +313,73 @@ struct SettingsView: View {
             } message: {
                 Text(restoreResultMessage ?? "")
             }
+        }
+    }
+
+    // MARK: - Signed-in sections
+
+    /// Split out of `body` to keep its type-check time down.
+    @ViewBuilder
+    private var signedInPrivacySections: some View {
+        Section {
+            Toggle(isOn: $consent.locationConsent) {
+                Label("Location Data", systemImage: "location")
+            }
+        } header: {
+            Text("Privacy & Data")
+        } footer: {
+            Text("Controls whether your location is sent to our weather provider. Location access itself is set in iOS Settings.")
+        }
+
+        // The digest preference the server actually reads
+        // (user_email_preferences), replacing a device-only
+        // "Email Communications" switch (IOS-DD-ACCOUNT-10).
+        Section {
+            Toggle(isOn: Binding(
+                get: { emailPreferences.weeklyDigestEnabled ?? false },
+                set: { newValue in
+                    Task {
+                        do {
+                            try await emailPreferences.setWeeklyDigest(newValue)
+                        } catch {
+                            toast = .error("Couldn't update your email preference. Try again.")
+                        }
+                    }
+                }
+            )) {
+                Label("Weekly picks email", systemImage: "envelope")
+            }
+            .disabled(emailPreferences.weeklyDigestEnabled == nil)
+        } footer: {
+            Text("The Sunday email with this week's best events. Also controllable on the website.")
+        }
+        .task { await emailPreferences.load() }
+
+        Section {
+            Button(role: .destructive) {
+                showDeleteConfirmation = true
+            } label: {
+                Label {
+                    if isDeleting {
+                        Text("Deleting Account...")
+                    } else {
+                        Text("Delete Account")
+                    }
+                } icon: {
+                    if isDeleting {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "trash")
+                    }
+                }
+                .foregroundStyle(.red)
+            }
+            .disabled(isDeleting)
+            .accessibilityLabel("Delete your account")
+        } header: {
+            Text("Delete Account")
+        } footer: {
+            Text("Deletes your account, profile, saved items and preferences. It cannot be undone.")
         }
     }
 
@@ -366,8 +450,12 @@ struct SettingsView: View {
     }
 
     private func deleteAccount() async {
+        // Re-authenticate first; a cancel just returns (IOS-DD-ACCOUNT-08).
+        guard await AccountDeletionService.confirmIdentity() else { return }
+
         isDeleting = true
         errorMessage = nil
+        lastDeletionError = nil
 
         do {
             // XPLAT-001 / IOS-AUDIT-BUG-018: shared with ProfileViewModel so the
@@ -375,10 +463,16 @@ struct SettingsView: View {
             // IOS-AUDIT-BUG-018 AC2: sign-out moved into the service and made
             // best effort, so dismiss() now runs whenever the account is actually
             // gone rather than being skipped by a sign-out blip.
-            try await AccountDeletionService.shared.deleteAccountAndSignOut()
-            dismiss()
+            let result = try await AccountDeletionService.shared.deleteAccountAndSignOut()
+            if let notice = AccountDeletionService.notice(for: result.storeSubscriptionsStillActive) {
+                // Dismissed from the alert once read.
+                postDeletionNotice = notice
+            } else {
+                dismiss()
+            }
         } catch {
             errorMessage = error.localizedDescription
+            lastDeletionError = error as? AccountDeletionService.DeletionError
         }
 
         isDeleting = false

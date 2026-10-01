@@ -1,22 +1,17 @@
-import React, { useState, useEffect } from "react";
-import { createLogger } from '@/lib/logger';
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo } from "react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-
-const log = createLogger('EventsToday');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { ListFreshness } from "@/components/ListFreshness";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { format } from "date-fns";
-import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { formatCount } from "@/lib/pluralize";
 import { Event } from "@/lib/types";
@@ -34,57 +29,70 @@ interface EventItem {
   image_url: string | null;
   event_start_utc: string | null;
   /**
-   * Read by ListFreshness, which is what renders the visible "updated" date.
-   * It has to be selected below as well: PostgREST returns exactly the
-   * projection it is given, so a column named here but not there is simply
-   * absent at runtime and newestTimestamp returns null - the component then
-   * renders nothing, silently, which is the state this page shipped in.
+   * WEB-SEO-031: this was a useState/useEffect fetch, and PrerenderSignal
+   * (which counts TanStack queries in flight) could not see it, so the
+   * prerenderer captured six pulsing cards. useEventLanding is a useQuery, so
+   * the capture waits for the rows. It also applies the visibility predicates
+   * this page used to skip, and the window is centralWindow("today"), the same
+   * Central day the hub's Today preset uses.
    */
-  updated_at: string | null;
-}
+  /*
+   * includeOngoing (events-pass2 WP3 item 1): day 3 of a festival, and last
+   * night's show still running after midnight, are part of today. They group
+   * under "Happening now" and drop off once over (groupTodayEvents).
+   */
+  const {
+    data: events = EMPTY,
+    isLoading,
+    error: loadError,
+    refetch,
+    window: todayWindow,
+  } = useEventLanding({
+    key: { landing: "today" },
+    window: "today",
+    limit: FETCH_LIMIT,
+    includeOngoing: true,
+  });
 
-export default function EventsToday() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  useDocumentTitle("Events Today");
+  // A minute clock, so "Happening now" and "Tonight" regroup while the tab is
+  // open instead of keeping the buckets from the moment it loaded.
+  const now = useNow(60 * 1000);
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setIsLoading(true);
-        const tz = "America/Chicago";
-        const now = new Date();
-        const nowLocal = toZonedTime(now, tz);
-        const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
-        const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 23, 59, 59, 999);
-        const startUtc = fromZonedTime(startLocal, tz).toISOString();
-        const endUtc = fromZonedTime(endLocal, tz).toISOString();
-        
-        const { data, error } = await supabase
-          .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, updated_at")
-          .gte("date", startUtc)
-          .lte("date", endUtc)
-          .order("event_start_utc", { ascending: true, nullsFirst: false });
-        
-        if (error) {
-          log.error('fetchEvents', 'Error fetching events', { error });
-          setEvents([]);
-        } else {
-          setEvents(data || []);
-        }
-      } catch (error) {
-        log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const { weather, hasVerdict } = useWeather();
 
-    fetchEvents();
-  }, []);
+  // Fetched by the day's bounds rather than by up to 200 ids in one in()
+  // filter, and separately, so a not-yet-deployed column can never fail the
+  // events query itself - see useWindowIndoorFlags.
+  const indoorFlags = useWindowIndoorFlags(todayWindow, hasVerdict);
 
-  const todaysEvents = events || [];
+  /**
+   * Grouped against the clock (Happening now / This afternoon / Tonight...),
+   * then weather-ordered INSIDE each group, so a wet evening moves indoor
+   * shows up within "Tonight" without moving them out of it. Reordering never
+   * filters. The render cap is then filled group by group in page order.
+   */
+  const grouped = useMemo(
+    () =>
+      groupTodayEvents(events, now).map((group) => ({
+        ...group,
+        events: reorderForWeather(group.events, (event) => indoorFlags[event.id], weather),
+      })),
+    [events, now, indoorFlags, weather]
+  );
+  // What the page lists: carried rows that are already over are not in any
+  // group, so the counts come from the groups, not the raw rows.
+  const listed = useMemo(() => grouped.flatMap((group) => group.events), [grouped]);
+
+  const groups = useMemo(() => {
+    let remaining = VISIBLE_EVENTS;
+    return grouped
+      .map((group) => {
+        const shown = group.events.slice(0, Math.max(remaining, 0));
+        remaining -= shown.length;
+        return { ...group, total: group.events.length, events: shown };
+      })
+      .filter((group) => group.events.length > 0);
+  }, [grouped]);
 
   // The row shape and the shared Event type disagree about absence: PostgREST
   // returns null for an unset column, while Event marks the same fields
@@ -109,42 +117,50 @@ export default function EventsToday() {
     { name: "Today", url: "/events/today" },
   ];
 
+  // Static answers on purpose (WEB-SEO-008): a count interpolated here makes
+  // the loading render and the loaded render emit different FAQPage JSON.
+  // Every sentence describes something a reader can check on this page.
   const faqData = [
     {
       question: `What's happening today in Des Moines?`,
-      answer: `See everything happening today in Des Moines and surrounding areas, with times, locations and details. The list is rebuilt daily.`,
+      answer: `This page lists the events on our calendar for today, Central time, in Des Moines and the surrounding suburbs, plus anything that started earlier and is still running. It is grouped into what is on now, this morning, this afternoon and tonight, which starts at ${hourLabel(EVENING_START_HOUR)}.`,
     },
     {
-      question: "How current is this information?",
-      answer: "Our event information is updated in real-time throughout the day, so you'll always see the most current listings for today's activities.",
+      question: "How often is this list updated?",
+      answer: EVENTS_UPDATE_ANSWER,
     },
     {
       question: "Are there free events today?",
-      answer: "Yes! Use our event cards to see pricing information. Many events in Des Moines are free or low-cost.",
+      answer: "Events whose listed price says free are marked Free on their cards and counted in the Free figure above. An event with no listed price says so; it is not counted as free.",
     },
     {
       question: "Can I get directions to events?",
-      answer: "Each event card includes location information. Click through to get detailed directions and parking information.",
+      answer: "Each card shows the venue and links to the event's own page, which has the address.",
     },
   ];
 
+  // WEB-PERF-030: one batch query per table instead of three queries and
+  // three realtime channels per card.
+  const batchSocialIds = useMemo(() => visibleEvents.map((e) => e.id), [visibleEvents]);
+  const { data: batchSocialData, isPending: batchSocialPending } =
+    useBatchEventSocial(batchSocialIds);
+
+  let cardIndex = 0;
+
   return (
     <div className="min-h-screen bg-background">
+      {/* A failed first query has not answered "what's on today" (WP3 item 12). */}
+      {loadError && events.length === 0 && <NoIndexMeta />}
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
         canonicalUrl={getCanonicalUrl('/events/today')}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         isTimeSensitive={true}
       />
+      {/* The schema describes what the page shows: the capped list. */}
       <EventListJsonLd
         events={eventsAsCards}
         listName={`Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")}`}
@@ -164,28 +180,18 @@ export default function EventsToday() {
           className="mb-4"
         />
 
-        {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">Events Today in Des Moines</h1>
           </div>
+          {dayLabel && <p className="text-lg text-muted-foreground mb-2">{dayLabel}</p>}
 
-          {/* SEO-009: a visible, absolute freshness date. These are the pages
-              somebody checks again next Friday, and the only freshness claim on
-              them lived in the meta description ("Updated daily"), where the
-              reader it is aimed at cannot check it. Absolute rather than
-              relative on purpose - these pages are prerendered, so a relative
-              string is computed once at build time and frozen, and would still
-              read "2 hours ago" days later. Renders nothing when no row carries
-              a usable date. */}
-          <ListFreshness rows={todaysEvents} className="mb-4" />
+          {/* SEO-009: a visible, absolute freshness date from the rows, not
+              from the clock that ran the build. */}
+          <ListFreshness rows={events} className="mb-4" />
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-4 w-4" />
-              <span>{format(new Date(), "EEEE, MMMM d, yyyy")}</span>
-            </div>
             <div className="flex items-center gap-1">
               <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
@@ -193,42 +199,46 @@ export default function EventsToday() {
           </div>
 
           <p className="text-lg text-muted-foreground max-w-3xl">
-            Discover what's happening today in Des Moines and surrounding areas. 
-            From concerts to community events, find activities for every interest.
+            What's on today in Des Moines and the suburbs, from what has already
+            started to what starts tonight. All times are Central.
           </p>
         </div>
 
-        {/* Quick Stats */}
         <Card className="mb-8">
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {todaysEvents.length}
+                  {events.length >= FETCH_LIMIT ? `${listed.length}+` : listed.length}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Events Today
-                </div>
+                <div className="text-sm text-muted-foreground">Events Today</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {todaysEvents.filter(e => e.price === "Free" || e.price === "0").length}
-                </div>
+                <div className="text-2xl font-bold text-primary">{countFree(listed)}</div>
                 <div className="text-sm text-muted-foreground">Free Events</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {new Set(todaysEvents.map(e => e.location?.split(",")[0])).size}
+                  {countStartingAfter5pm(listed)}
                 </div>
-                <div className="text-sm text-muted-foreground">Locations</div>
+                <div className="text-sm text-muted-foreground">Starting after 5 PM</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Events List */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Why the order changed (WEB-FEAT-022). Renders nothing without a verdict. */}
+        <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />
+
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={() => void refetch()} />
+        ) : isLoading ? (
+          /* WEB-SEO-031: SkeletonGroup carries role="status" and aria-busy,
+             which the prerender strict gate reads. */
+          <SkeletonGroup
+            label="Loading today's events..."
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardContent className="p-6">
@@ -244,22 +254,31 @@ export default function EventsToday() {
             {eventsAsCards.map((event) => (
               <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
             ))}
-          </div>
+
+            {hiddenCount > 0 && (
+              <div className="mb-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing {visibleEvents.length} of {formatCount(listed.length, "event")} today.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events?preset=today">See all of today on the events page</Link>
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <Card className="text-center py-12">
             <CardContent>
               <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">
-                No Events Scheduled for Today
-              </h2>
+              <h2 className="text-xl font-semibold mb-2">No Events Scheduled for Today</h2>
               <p className="text-muted-foreground mb-4">
                 Check back tomorrow or browse upcoming events happening this week.
               </p>
               <div className="flex justify-center gap-4">
-                <Link to="/events/this-weekend" className="text-primary hover:underline">
+                <Link to="/events/this-weekend" className="text-primary underline underline-offset-2">
                   This Weekend's Events
                 </Link>
-                <Link to="/events" className="text-primary hover:underline">
+                <Link to="/events" className="text-primary underline underline-offset-2">
                   All Upcoming Events
                 </Link>
               </div>
@@ -267,7 +286,6 @@ export default function EventsToday() {
           </Card>
         )}
 
-        {/* Related Links */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>More Event Ideas</CardTitle>
@@ -280,16 +298,16 @@ export default function EventsToday() {
               >
                 <h3 className="font-semibold mb-2">This Weekend</h3>
                 <p className="text-sm text-muted-foreground">
-                  Weekend events and activities happening in Des Moines
+                  Friday through Sunday in Des Moines
                 </p>
               </Link>
               <Link
-                to="/restaurants"
+                to="/restaurants/open-now"
                 className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
               >
-                <h3 className="font-semibold mb-2">Dining Today</h3>
+                <h3 className="font-semibold mb-2">Restaurants Open Now</h3>
                 <p className="text-sm text-muted-foreground">
-                  Great restaurants and eateries open today
+                  Somewhere to eat before or after
                 </p>
               </Link>
               <Link
@@ -304,13 +322,10 @@ export default function EventsToday() {
             </div>
           </CardContent>
         </Card>
-        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
-            This page used to pass faqData to EnhancedLocalSEO, which emitted a
-            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
-            that no visitor could see, which Google's FAQPage guidance does not
-            allow. FAQSection renders the questions and emits the single block. */}
+        {/* SEO-003: FAQSection renders the questions and emits the single
+            FAQPage block, so the schema never describes an invisible FAQ. */}
+        <EventsLandingLinks current="/events/today" className="mb-8" />
         <FAQSection faqs={faqData} />
-
       </div>
 
       <Footer />

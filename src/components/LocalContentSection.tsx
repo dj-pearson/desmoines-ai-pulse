@@ -14,12 +14,13 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
   const localGuides = [
     {
       title: "This Weekend in Des Moines",
-      description: "The best family-friendly events, farmers markets, and activities happening this weekend in Des Moines metro area.",
+      description: "Family-friendly events and activities happening this weekend across the Des Moines metro area.",
       icon: Calendar,
       color: "text-blue-600",
-      badge: "Updated Daily",
+      badge: "This weekend",
       keywords: "weekend events Des Moines, things to do this weekend Des Moines Iowa",
-      link: "/weekend"
+      // Straight to the page, not /weekend, which is only a 301 kept for old links.
+      link: "/events/this-weekend"
     },
     {
       title: "New Des Moines Restaurant Openings",

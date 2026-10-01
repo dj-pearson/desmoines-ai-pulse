@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from "@/lib/logger";
+import { NEWSLETTER_RETRY_MESSAGE } from "@/content/newsletterCopy";
+
+const log = createLogger("useNewsletterSubscription");
 
 export interface NewsletterPreferences {
   weekly_digest: boolean;
@@ -23,124 +27,101 @@ const defaultPreferences: NewsletterPreferences = {
   promotions: true,
 };
 
+/**
+ * The function's own sentence for a 400 (not an email address) or a 429 (too
+ * many attempts). Both answer `{ error }`, and both are things the person can
+ * act on, which "try again" is not when the address is the problem. Any other
+ * failure gets the generic retry line.
+ */
+async function explainFailure(error: unknown): Promise<string> {
+  const ctx = (error as { context?: unknown } | null)?.context;
+  if (!(ctx instanceof Response) || (ctx.status !== 400 && ctx.status !== 429)) {
+    return NEWSLETTER_RETRY_MESSAGE;
+  }
+  try {
+    const body = (await ctx.clone().json()) as { error?: unknown } | null;
+    if (body && typeof body.error === "string" && body.error) return body.error;
+  } catch {
+    // Not JSON: fall through to the generic line.
+  }
+  return NEWSLETTER_RETRY_MESSAGE;
+}
+
 export function useNewsletterSubscription() {
   const [loading, setLoading] = useState(false);
 
-  // Subscribe to newsletter
+  // Subscribe to newsletter.
+  //
+  // WEB-FEAT-019: this used to insert straight into newsletter_subscribers from
+  // the browser. Two things a client cannot do are now done by the
+  // newsletter-subscribe edge function under the service role:
+  //   - write status 'pending' with a confirm token the browser must never see;
+  //   - upsert on email, so an address that unsubscribed can come back. The
+  //     table has no UPDATE policy for any role, so the old insert could only
+  //     ever hit 23505 and tell the person they were already subscribed.
   const subscribe = async (data: NewsletterSubscribeData): Promise<boolean> => {
     try {
       setLoading(true);
 
-      // Get UTM parameters from URL
       const urlParams = new URLSearchParams(window.location.search);
 
-      const subscriptionData: Record<string, unknown> = {
-        email: data.email.toLowerCase().trim(),
-        first_name: data.firstName || null,
-        source: data.source || 'website',
-        preferences: { ...defaultPreferences, ...data.preferences },
-        ip_address: null, // Would need server-side to capture
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-        utm_source: urlParams.get('utm_source') || null,
-        utm_medium: urlParams.get('utm_medium') || null,
-        utm_campaign: urlParams.get('utm_campaign') || null,
-      };
-
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .insert(subscriptionData as any);
-
-      if (error) {
-        // Handle duplicate email error
-        if (error.code === '23505') {
-          toast.info("You're already subscribed! Check your inbox for our latest updates.");
-          return true;
-        }
-        throw error;
-      }
-
-      toast.success("Welcome aboard! Check your email for a confirmation.");
-      return true;
-    } catch (error) {
-      console.error('Failed to subscribe:', error);
-      toast.error('Failed to subscribe. Please try again.');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Unsubscribe from newsletter (requires email token in production)
-  const unsubscribe = async (email: string): Promise<boolean> => {
-    try {
-      setLoading(true);
-
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .update({
-          status: 'unsubscribed',
-          unsubscribed_at: new Date().toISOString(),
-        } as any)
-        .eq('email', email.toLowerCase().trim());
+      const { data: result, error } = await supabase.functions.invoke(
+        "newsletter-subscribe",
+        {
+          body: {
+            email: data.email.toLowerCase().trim(),
+            firstName: data.firstName || null,
+            source: data.source || "website",
+            preferences: { ...defaultPreferences, ...data.preferences },
+            utm: {
+              utm_source: urlParams.get("utm_source"),
+              utm_medium: urlParams.get("utm_medium"),
+              utm_campaign: urlParams.get("utm_campaign"),
+            },
+          },
+        },
+      );
 
       if (error) throw error;
 
-      toast.success("You've been unsubscribed. We're sorry to see you go!");
+      // The function answers ONE sentence for every outcome - new address,
+      // pending, unsubscribed, already active - because any per-case wording
+      // turns a public endpoint into an "is this person subscribed" oracle.
+      // Showing its message rather than inventing one here is what keeps that
+      // property true on the screen as well as on the wire.
+      toast.success(
+        result?.message ??
+          "Almost there - check your inbox for a confirmation link.",
+      );
       return true;
     } catch (error) {
-      console.error('Failed to unsubscribe:', error);
-      toast.error('Failed to unsubscribe. Please contact support.');
+      log.error("subscribe", "Failed to subscribe", { data: error });
+      toast.error(await explainFailure(error));
       return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // Update preferences (requires email token in production)
-  const updatePreferences = async (
-    email: string,
-    preferences: Partial<NewsletterPreferences>
-  ): Promise<boolean> => {
-    try {
-      setLoading(true);
-
-      // Fetch current preferences first
-      const { data: currentData, error: fetchError } = await supabase
-        .from('newsletter_subscribers')
-        .select('preferences')
-        .eq('email', email.toLowerCase().trim())
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      const updatedPreferences = {
-        ...defaultPreferences,
-        ...(currentData?.preferences || {}),
-        ...preferences,
-      };
-
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .update({ preferences: updatedPreferences } as any)
-        .eq('email', email.toLowerCase().trim());
-
-      if (error) throw error;
-
-      toast.success('Preferences updated successfully!');
-      return true;
-    } catch (error) {
-      console.error('Failed to update preferences:', error);
-      toast.error('Failed to update preferences. Please try again.');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
+  // WEB-FEAT-019: unsubscribe() and updatePreferences() USED TO LIVE HERE and
+  // are deleted rather than fixed, because neither could work from a browser
+  // and one of them lied about it.
+  //
+  // newsletter_subscribers has exactly two policies (migration
+  // 20251126000000): INSERT for anyone, SELECT for admins. There is no UPDATE
+  // policy at all. So unsubscribe()'s UPDATE matched zero rows, PostgREST
+  // returned no error for that, and the hook announced "You've been
+  // unsubscribed. We're sorry to see you go!" - a false success on the one
+  // action a person has a legal right to. updatePreferences() read first, so
+  // it failed loudly instead, which is only better by accident.
+  //
+  // Neither had a caller: NewsletterSignup.tsx uses `subscribe` alone. The
+  // unsubscribe path belongs in an emailed token link handled server-side,
+  // where the service role can actually write. Do not re-add a client-side
+  // version.
 
   return {
     loading,
     subscribe,
-    unsubscribe,
-    updatePreferences,
   };
 }

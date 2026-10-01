@@ -28,6 +28,19 @@ final class RecentlyViewedService {
             default: return "mappin.and.ellipse"
             }
         }
+
+        /// What the card is, shown above its title on the Dashboard rail
+        /// (IOS-DD-SAVED-26).
+        var typeLabel: String {
+            switch type {
+            case "event": return "Event"
+            case "restaurant": return "Restaurant"
+            case "attraction": return "Place"
+            case "article": return "Guide"
+            case "hotel": return "Hotel"
+            default: return "Item"
+            }
+        }
     }
 
     private(set) var recent: [RecentItem] = []

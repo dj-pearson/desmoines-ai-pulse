@@ -140,7 +140,6 @@ private struct CuisinePill: View {
                     } else {
                         viewModel.selectedCuisines.insert(item)
                     }
-                    viewModel.activePreset = nil
                 }
             }
             .presentationCompactAdaptation(.popover)
@@ -181,7 +180,6 @@ private struct PricePill: View {
                             } else {
                                 viewModel.selectedPriceRanges.insert(range.rawValue)
                             }
-                            viewModel.activePreset = nil
                         } label: {
                             HStack {
                                 Text(range.rawValue)
@@ -229,10 +227,13 @@ private struct AreaPill: View {
         }
         .buttonStyle(.plain)
         .popover(isPresented: $showPopover, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-            PopoverList(title: "Neighborhood", hasSelection: !viewModel.selectedLocations.isEmpty) {
+            // Areas, not street addresses (IOS-DD-RESTAURANTS-05): this listed
+            // filter_values('restaurant_location'), 456 addresses matched
+            // exactly. LocationArea is the web's EVENT_AREAS.
+            PopoverList(title: "Area", hasSelection: !viewModel.selectedLocations.isEmpty) {
                 viewModel.selectedLocations = []
             } content: {
-                SearchableChipGrid(items: viewModel.availableLocations) { item in
+                FlowChipGrid(items: LocationArea.allCases.map(\.rawValue)) { item in
                     viewModel.selectedLocations.contains(item)
                 } onTap: { item in
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -241,7 +242,6 @@ private struct AreaPill: View {
                     } else {
                         viewModel.selectedLocations.insert(item)
                     }
-                    viewModel.activePreset = nil
                 }
             }
             .presentationCompactAdaptation(.popover)
@@ -274,13 +274,15 @@ private struct RatingPill: View {
                 viewModel.minRating = 0
             } content: {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
+                    // A grid of 44pt chips: the fixed HStack in a 280pt popover
+                    // gave ~26pt targets that clipped at large text
+                    // (IOS-DD-RESTAURANTS-10).
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 64))], spacing: 8) {
                         ForEach([0.0, 3.0, 3.5, 4.0, 4.5], id: \.self) { r in
                             let selected = viewModel.minRating == r
                             Button {
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 viewModel.minRating = r
-                                viewModel.activePreset = nil
                             } label: {
                                 HStack(spacing: 3) {
                                     Image(systemName: "star.fill").font(.system(size: 10))
@@ -289,6 +291,7 @@ private struct RatingPill: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
+                                .frame(maxWidth: .infinity, minHeight: 44)
                                 .background(selected ? Color.accentColor : Color(.systemGray6))
                                 .foregroundStyle(selected ? .white : .primary)
                                 .clipShape(Capsule())
@@ -372,7 +375,6 @@ private struct DietaryPill: View {
                             } else {
                                 viewModel.selectedDietary.insert(opt.key)
                             }
-                            viewModel.activePreset = nil
                         } label: {
                             HStack {
                                 Text(opt.emoji)
@@ -398,14 +400,17 @@ private struct DietaryPill: View {
     }
 }
 
-// MARK: - More Pill (Open Now + Featured toggles)
+// MARK: - More Pill (Open Now)
 
 private struct MorePill: View {
     @Bindable var viewModel: RestaurantsViewModel
     @State private var showPopover = false
 
+    // "Featured Only - Editor's picks" is gone (IOS-DD-RESTAURANTS-08):
+    // 20260902000004 left is_featured set only on sponsored rows, so the
+    // toggle meant "paid" without saying so.
     private var count: Int {
-        (viewModel.showOpenNowOnly ? 1 : 0) + (viewModel.featuredOnly ? 1 : 0)
+        viewModel.showOpenNowOnly ? 1 : 0
     }
 
     var body: some View {
@@ -424,7 +429,6 @@ private struct MorePill: View {
         .popover(isPresented: $showPopover, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
             PopoverList(title: "More Options", hasSelection: count > 0) {
                 viewModel.showOpenNowOnly = false
-                viewModel.featuredOnly = false
             } content: {
                 VStack(spacing: 10) {
                     Toggle(isOn: $viewModel.showOpenNowOnly) {
@@ -435,20 +439,6 @@ private struct MorePill: View {
                             }
                         } icon: {
                             Image(systemName: "clock.fill").foregroundStyle(.green)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-
-                    Toggle(isOn: $viewModel.featuredOnly) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Featured Only").font(.subheadline.weight(.medium))
-                                Text("Editor's picks").font(.caption2).foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "sparkles").foregroundStyle(.orange)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -469,6 +459,8 @@ private struct PopoverList<Content: View>: View {
     let hasSelection: Bool
     let onClear: () -> Void
     @ViewBuilder let content: () -> Content
+    /// Grows with Dynamic Type so large text is not clipped.
+    @ScaledMetric private var width: CGFloat = 280
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -484,14 +476,14 @@ private struct PopoverList<Content: View>: View {
             content()
         }
         .padding(14)
-        .frame(width: 280)
+        .frame(width: width)
         .frame(maxHeight: 420)
     }
 }
 
 // MARK: - Flow Chip Grid
 
-/// Simple multi-line wrapping chip grid used by Cuisine and Area popovers.
+/// Simple multi-line wrapping chip grid used by the Cuisine and Area popovers.
 private struct FlowChipGrid: View {
     let items: [String]
     let isSelected: (String) -> Bool

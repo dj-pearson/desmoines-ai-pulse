@@ -10,7 +10,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAnthropicApiKey, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { runJob } from "../_shared/jobRunner.ts";
+import { summarizeRun, type SourceOutcome } from "./summary.ts";
 import { sanitizeLikeInput } from '../_shared/validation.ts';
 
 const corsHeaders = {
@@ -38,6 +40,101 @@ interface RestaurantOpening {
   website?: string;
   price_range?: string;
 }
+
+// BEGIN pure: planOpeningUpdate
+// Self-contained on purpose (no imports, no module state):
+// _tests/restaurant-ingest-honesty.test.ts lifts this block out of the file and
+// runs it, because importing index.ts would start the server.
+
+/** Existing row as the lookup selects it (EXISTING_OPENING_COLUMNS). */
+export interface ExistingOpeningRow {
+  id: string;
+  name: string;
+  location: string | null;
+  status: string | null;
+  opening_date: string | null;
+  opening_timeframe: string | null;
+  description: string | null;
+  cuisine: string | null;
+  source_url: string | null;
+  phone: string | null;
+  website: string | null;
+  price_range: string | null;
+}
+
+/** What one scrape extracted for a restaurant. */
+export interface ScrapedOpening {
+  name: string;
+  status: string;
+  opening_date?: string | null;
+  opening_timeframe?: string | null;
+  description?: string | null;
+  cuisine?: string | null;
+  location?: string | null;
+  source_url?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  price_range?: string | null;
+}
+
+export const EXISTING_OPENING_COLUMNS =
+  'id, name, location, status, opening_date, opening_timeframe, description, cuisine, source_url, phone, website, price_range';
+
+// Lower number = earlier in the lifecycle. `closed` is deliberately absent:
+// a scrape never moves a row onto or off it (a closed row is skipped whole).
+const OPENING_STATUS_RANK: Record<string, number> = {
+  announced: 1,
+  opening_soon: 2,
+  newly_opened: 3,
+  open: 4,
+};
+
+const FILLABLE_FIELDS = ['description', 'cuisine', 'source_url', 'phone', 'website', 'price_range'] as const;
+
+function isBlank(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+}
+
+/**
+ * The columns one scrape may change on an existing row, or null for none.
+ * Status only moves forward, and never off `closed` or an unknown status.
+ * Dates follow the newest scrape. Every other field is filled only when the
+ * row has nothing there; `location` is never rewritten, because the row's
+ * location is what matched it.
+ */
+export function planOpeningUpdate(
+  existing: ExistingOpeningRow,
+  scraped: ScrapedOpening,
+): Record<string, string> | null {
+  if (existing.status === 'closed') return null;
+
+  const update: Record<string, string> = {};
+
+  const existingRank = existing.status === null ? 0 : OPENING_STATUS_RANK[existing.status];
+  const scrapedRank = OPENING_STATUS_RANK[scraped.status];
+  if (existingRank !== undefined && scrapedRank !== undefined && scrapedRank > existingRank) {
+    update.status = scraped.status;
+  }
+
+  if (!isBlank(scraped.opening_date) && existing.opening_date !== scraped.opening_date) {
+    update.opening_date = scraped.opening_date as string;
+  }
+  if (!isBlank(scraped.opening_timeframe) && existing.opening_timeframe !== scraped.opening_timeframe) {
+    update.opening_timeframe = scraped.opening_timeframe as string;
+  }
+
+  for (const field of FILLABLE_FIELDS) {
+    if (isBlank(existing[field]) && !isBlank(scraped[field])) {
+      update[field] = scraped[field] as string;
+    }
+  }
+  if (isBlank(existing.location) && !isBlank(scraped.location)) {
+    update.location = scraped.location as string;
+  }
+
+  return Object.keys(update).length > 0 ? update : null;
+}
+// END pure: planOpeningUpdate
 
 interface ScraperSource {
   url: string;
@@ -74,16 +171,28 @@ serve(async (req) => {
 
   try {
     const { sources = DEFAULT_SOURCES } = await req.json().catch(() => ({}));
-    
+
     console.log(`🚀 Starting restaurant opening scraper with ${sources.length} sources`);
 
-    let totalRestaurantsFound = 0;
-    let totalInserted = 0;
-    let totalUpdated = 0;
-    const errors: string[] = [];
+    // WEB-BE-041 AC3. Per-source outcomes replace three running totals and a
+    // flat string array. The totals could not say WHICH source produced them,
+    // and the errors array was written and then thrown away by a response that
+    // always said success.
+    const perSource: SourceOutcome[] = [];
 
+    const job = await runJob("restaurant-opening-scraper", async (ctx) => {
     for (const source of sources) {
       console.log(`🌐 Scraping source: ${source.name} (${source.url})`);
+      const outcome: SourceOutcome = {
+        name: source.name,
+        url: source.url,
+        ok: false,
+        found: 0,
+        inserted: 0,
+        updated: 0,
+      };
+      perSource.push(outcome);
+      const rowErrors: string[] = [];
 
       try {
         // Use universal scraper (Puppeteer/Playwright/Firecrawl)
@@ -94,7 +203,7 @@ serve(async (req) => {
 
         if (!scrapeResult.success) {
           console.error(`❌ Scraping error for ${source.url}: ${scrapeResult.error}`);
-          errors.push(`Failed to scrape ${source.name}: ${scrapeResult.error}`);
+          outcome.error = `scrape failed: ${scrapeResult.error}`;
           continue;
         }
 
@@ -104,7 +213,7 @@ serve(async (req) => {
 
         if (!content || content.length < 100) {
           console.error(`❌ No usable content returned from ${source.url}`);
-          errors.push(`No usable content from ${source.name}`);
+          outcome.error = `no usable content (${content.length} chars)`;
           continue;
         }
 
@@ -201,27 +310,34 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 
         console.log(`🤖 Sending content to Claude AI for extraction...`);
 
+        // WEB-BE-041 AC2. This hardcoded `model: 'claude-3-5-sonnet-20241022'` and
+        // its own headers, bypassing _shared/aiConfig.ts entirely. That model is
+        // retired: the API answers not_found, so EVERY extraction failed - and
+        // the handler below still returned success: true with HTTP 200. The
+        // model now comes from getAIConfig (one place, overridable from the
+        // ai_config row) and the version header from the same config.
+        const [claudeHeaders, claudeBody] = await Promise.all([
+          getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey),
+          buildClaudeRequest(
+            [{ role: 'user', content: claudePrompt }],
+            { supabaseUrl, supabaseKey, customMaxTokens: 4096 },
+          ),
+        ]);
+
         const claudeResponse = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: {
-            'x-api-key': claudeApiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 4096,
-            messages: [{
-              role: 'user',
-              content: claudePrompt
-            }]
-          }),
+          headers: claudeHeaders,
+          body: JSON.stringify(claudeBody),
         }, 60_000);
 
         if (!claudeResponse.ok) {
           const errorText = await claudeResponse.text();
           console.error(`❌ Claude API error: ${claudeResponse.status} - ${errorText}`);
-          errors.push(`Claude AI extraction failed for ${source.name}`);
+          // The status and the model are both in the message: a 404 here means
+          // the configured model is gone, which is the exact failure that went
+          // unreported for months and is indistinguishable from a rate limit
+          // without them.
+          outcome.error = `model call failed (${claudeResponse.status}, model ${claudeBody.model}): ${errorText.slice(0, 200)}`;
           continue;
         }
 
@@ -239,12 +355,15 @@ FORMAT AS JSON ARRAY ONLY - no other text:
           }
         } catch (parseError) {
           console.error(`❌ Failed to parse Claude response as JSON:`, parseError);
-          errors.push(`Failed to parse AI response for ${source.name}`);
+          outcome.error = `model returned unparseable JSON: ${String(parseError).slice(0, 200)}`;
           continue;
         }
 
         console.log(`✨ Extracted ${restaurants.length} restaurant openings from ${source.name}`);
-        totalRestaurantsFound += restaurants.length;
+        // Reaching here means the source scraped AND the model answered with
+        // parseable JSON. Zero rows is a legitimate answer - see summary.ts.
+        outcome.ok = true;
+        outcome.found = restaurants.length;
 
         // Insert or update restaurants in database
         for (const restaurant of restaurants) {
@@ -252,7 +371,7 @@ FORMAT AS JSON ARRAY ONLY - no other text:
             // Check if restaurant already exists (by name AND similar location)
             const { data: existingList } = await supabase
               .from('restaurants')
-              .select('id, name, location, status, opening_date, opening_timeframe')
+              .select(EXISTING_OPENING_COLUMNS)
               // A scraped name is a LIKE pattern here; a percent or underscore in
               // it would widen this existence check and mask a genuinely new
               // restaurant. Escaped, not stripped - sanitizeLikeInput keeps
@@ -285,58 +404,18 @@ FORMAT AS JSON ARRAY ONLY - no other text:
             }
 
             if (existing) {
-              // Define status hierarchy (lower number = earlier in lifecycle)
-              const statusHierarchy: Record<string, number> = {
-                'announced': 1,
-                'opening_soon': 2,
-                'newly_opened': 3,
-                'open': 4,
-              };
+              // planOpeningUpdate decides what changes. It used to be decided
+              // here against a row that never selected description, so every
+              // run rewrote description, cuisine, location, phone, website and
+              // price_range, and a closed row came back to life because
+              // `closed` wasn't in the status ranking.
+              const planned = planOpeningUpdate(existing as ExistingOpeningRow, restaurant);
 
-              const existingStatusLevel = statusHierarchy[existing.status] || 0;
-              const newStatusLevel = statusHierarchy[restaurant.status] || 0;
-
-              // Determine if we should update
-              const shouldUpdate = 
-                // Status is elevated (announced -> opening_soon -> newly_opened -> open)
-                newStatusLevel > existingStatusLevel ||
-                // Opening date changed (only update if new date exists and is different)
-                (restaurant.opening_date && existing.opening_date !== restaurant.opening_date) ||
-                // Opening timeframe changed
-                (restaurant.opening_timeframe && existing.opening_timeframe !== restaurant.opening_timeframe) ||
-                // New information added (description, website, etc.)
-                (restaurant.description && !existing.description) ||
-                (restaurant.website && !existing.website);
-
-              if (shouldUpdate) {
-                // Build update object with smart merging
-                const updateData: any = {
+              if (planned) {
+                const updateData: Record<string, string> = {
+                  ...planned,
                   updated_at: new Date().toISOString(),
                 };
-
-                // Update status if elevated or if current is null
-                if (newStatusLevel > existingStatusLevel || !existing.status) {
-                  updateData.status = restaurant.status;
-                }
-
-                // Update opening date if changed
-                if (restaurant.opening_date && existing.opening_date !== restaurant.opening_date) {
-                  updateData.opening_date = restaurant.opening_date;
-                }
-
-                // Update opening timeframe if changed
-                if (restaurant.opening_timeframe && existing.opening_timeframe !== restaurant.opening_timeframe) {
-                  updateData.opening_timeframe = restaurant.opening_timeframe;
-                }
-
-                // Add new information (don't overwrite existing)
-                if (restaurant.description) updateData.description = restaurant.description;
-                if (restaurant.cuisine) updateData.cuisine = restaurant.cuisine;
-                if (restaurant.location) updateData.location = restaurant.location;
-                if (restaurant.source_url) updateData.source_url = restaurant.source_url;
-                if (restaurant.phone) updateData.phone = restaurant.phone;
-                if (restaurant.website) updateData.website = restaurant.website;
-                if (restaurant.price_range) updateData.price_range = restaurant.price_range;
 
                 const { error: updateError } = await supabase
                   .from('restaurants')
@@ -345,13 +424,13 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 
                 if (updateError) {
                   console.error(`❌ Error updating restaurant ${restaurant.name}:`, updateError);
-                  errors.push(`Failed to update ${restaurant.name}: ${updateError.message}`);
+                  rowErrors.push(`update ${restaurant.name}: ${updateError.message}`);
                 } else {
                   const changes = [];
-                  if (updateData.status) changes.push(`status: ${existing.status} → ${restaurant.status}`);
-                  if (updateData.opening_date) changes.push(`date: ${existing.opening_date || 'none'} → ${restaurant.opening_date}`);
+                  if (planned.status) changes.push(`status: ${existing.status} → ${restaurant.status}`);
+                  if (planned.opening_date) changes.push(`date: ${existing.opening_date || 'none'} → ${restaurant.opening_date}`);
                   console.log(`✅ Updated: ${restaurant.name} (${changes.join(', ')})`);
-                  totalUpdated++;
+                  outcome.updated++;
                 }
               } else {
                 console.log(`⏭️ Skipped: ${restaurant.name} (no significant changes)`);
@@ -378,36 +457,78 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 
               if (insertError) {
                 console.error(`❌ Error inserting restaurant ${restaurant.name}:`, insertError);
-                errors.push(`Failed to insert ${restaurant.name}: ${insertError.message}`);
+                rowErrors.push(`insert ${restaurant.name}: ${insertError.message}`);
               } else {
                 console.log(`✅ Inserted: ${restaurant.name} (${restaurant.status})`);
-                totalInserted++;
+                outcome.inserted++;
               }
             }
           } catch (dbError) {
             console.error(`❌ Database error for ${restaurant.name}:`, dbError);
-            errors.push(`Database error for ${restaurant.name}`);
+            rowErrors.push(`db error for ${restaurant.name}: ${String(dbError).slice(0, 120)}`);
           }
         }
 
       } catch (sourceError) {
         console.error(`❌ Error processing source ${source.name}:`, sourceError);
-        errors.push(`Error processing ${source.name}: ${sourceError.message}`);
+        // Overwrites any row-level note: a thrown source is a worse failure
+        // than a handful of rejected rows, and outcome.ok stays false either way.
+        outcome.error = `unhandled: ${sourceError instanceof Error ? sourceError.message : String(sourceError)}`;
       }
+
+      // Row-level failures do NOT make the source a failure - the model
+      // answered and some rows landed. They ride along so a run that inserted
+      // 2 of 30 is visibly different from one that inserted 30.
+      if (rowErrors.length > 0) {
+        outcome.error = `${outcome.error ? outcome.error + '; ' : ''}${rowErrors.length} row error(s): ${rowErrors.slice(0, 3).join('; ')}`;
+      }
+      ctx.processed(outcome.inserted + outcome.updated);
+      ctx.failed(rowErrors.length + (outcome.ok ? 0 : 1));
     }
 
-    console.log(`✅ Scraping complete: Found ${totalRestaurantsFound}, Inserted ${totalInserted}, Updated ${totalUpdated}`);
+      const summary = summarizeRun(perSource);
+      ctx.meta({
+        sourcesAttempted: summary.body.sourcesAttempted,
+        sourcesSucceeded: summary.body.sourcesSucceeded,
+        totalFound: summary.body.totalFound,
+        inserted: summary.body.inserted,
+        updated: summary.body.updated,
+        perSource,
+        // WEB-BE-043. The same outcomes in the shape the per-source rule reads.
+        // Written alongside `perSource` rather than instead of it: the admin
+        // panel and the response shape both read the itemised array, and
+        // _shared/ingestionHealth.ts can parse either, so neither reader breaks
+        // whichever side is deployed first.
+        sources: Object.fromEntries(perSource.map((o) => [o.name, {
+          fetched: o.found,
+          // An update is a write - a source that only refreshes existing
+          // openings is alive, not dark.
+          inserted: o.inserted + o.updated,
+          duplicates: 0,
+          errors: o.ok ? 0 : 1,
+        }])),
+      });
+      // Throwing marks the ledger row failed and alerts. The HTTP status is
+      // decided below from perSource either way, so a ledger write that fails
+      // cannot change what the caller is told.
+      if (!summary.body.success) {
+        throw new Error(
+          `every source failed (${summary.body.sourcesAttempted} attempted)`,
+        );
+      }
+      return summary;
+    });
+
+    const summary = summarizeRun(perSource);
+    console.log(
+      `✅ Scraping complete: ${summary.body.sourcesSucceeded}/${summary.body.sourcesAttempted} sources, ` +
+      `found ${summary.body.totalFound}, inserted ${summary.body.inserted}, updated ${summary.body.updated}`,
+    );
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        totalFound: totalRestaurantsFound,
-        inserted: totalInserted,
-        updated: totalUpdated,
-        errors: errors.length > 0 ? errors : undefined,
-      }),
+      JSON.stringify({ ...summary.body, runId: job.runId }),
       {
-        status: 200,
+        status: summary.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { useAffiliateAd } from '@/hooks/useAffiliateAd';
 import { isCapacitor, openExternalUrl } from '@/lib/capacitorUtils';
 import type { AffiliatePlacement } from '@/lib/affiliateAds';
@@ -11,7 +12,7 @@ interface AffiliateAdBannerProps {
 }
 
 export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBannerProps) {
-  const { partner, imageUrl, affiliateUrl } = useAffiliateAd(placement);
+  const { partner, imageUrl, affiliateUrl, width, height } = useAffiliateAd(placement);
   const ref = useRef<HTMLDivElement>(null);
 
   // Affiliate-class fill tracking (WEB-FEAT-004): viewability impression.
@@ -41,8 +42,6 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
         return 'max-w-[728px] mx-auto';
       case 'featured_spot':
         return 'max-w-[300px] mx-auto';
-      case 'sidebar':
-        return 'hidden lg:block max-w-[160px]';
       default:
         return '';
     }
@@ -87,12 +86,18 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
         }}
         className="block"
       >
+        {/* WEB-PERF-041: intrinsic size from the placement's own size key
+            ("728x90"), so the browser reserves the right box before the bytes
+            arrive. With `w-full h-auto` the aspect ratio is what does the
+            work - the rendered width still comes from the container. */}
         <img
           src={imageUrl}
           alt={`${partner.name} - Book hotels in Des Moines`}
+          width={width}
+          height={height}
           className="w-full h-auto rounded-lg shadow-sm group-hover:shadow-md transition-shadow"
           loading={isAboveFold ? 'eager' : 'lazy'}
-          fetchPriority={isAboveFold ? 'high' : undefined}
+          {...fetchPriorityAttr(isAboveFold ? 'high' : undefined)}
         />
       </a>
     </div>

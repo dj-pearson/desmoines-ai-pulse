@@ -1,5 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
+import { toJsonLd } from "@/lib/jsonLd";
+import { suburbFromLocation } from "@/hooks/usePlaygrounds";
 
 interface PlaygroundData {
   name: string;
@@ -19,54 +21,58 @@ interface EnhancedPlaygroundSEOProps {
   slug: string;
 }
 
+/**
+ * Head tags and JSON-LD for one playground (explore pass 2 WP4 items 1-3).
+ *
+ * Everything here is read from the row. The locality is the suburb the
+ * `location` string names (suburbFromLocation), or nothing: stamping
+ * BRAND.city on every row told search engines that Ankeny and Clive
+ * playgrounds were in Des Moines. geo.position and ICBM appear only when the
+ * row has its own coordinates; they used to fall back to downtown.
+ */
 export default function EnhancedPlaygroundSEO({
   playground,
   slug,
 }: EnhancedPlaygroundSEOProps) {
   const playgroundUrl = `${BRAND.baseUrl}/playgrounds/${slug}`;
+  const locality = suburbFromLocation(playground.location);
+  const hasCoords = playground.latitude != null && playground.longitude != null;
+  const where = locality ? `${locality}, ${BRAND.state}` : `the ${BRAND.city} metro`;
 
   const getOptimizedTitle = () => {
     const parts = [playground.name];
     if (playground.age_range) parts.push(`Ages ${playground.age_range}`);
-    parts.push(`Playground in ${BRAND.city}, ${BRAND.state}`);
+    parts.push(`Playground in ${where}`);
     return parts.join(" - ");
   };
 
   const getGEODescription = () => {
     const desc = playground.description || "";
-    const location = playground.location || `${BRAND.city}, ${BRAND.state}`;
     const ageText = playground.age_range
-      ? ` Designed for ages ${playground.age_range}.`
-      : "";
-    const ratingText = playground.rating
-      ? ` Rated ${playground.rating.toFixed(1)}/5 by families.`
+      ? ` Listed for ages ${playground.age_range}.`
       : "";
     const amenitiesText =
       playground.amenities && playground.amenities.length > 0
         ? ` Amenities include ${playground.amenities.slice(0, 4).join(", ")}.`
         : "";
+    const locationText = playground.location ? ` Located at ${playground.location}.` : "";
 
     if (desc.length > 50) {
-      return `${playground.name} is a playground in ${BRAND.city}, ${BRAND.state}. ${desc.substring(0, 150).trim()}...${ageText}${ratingText}${amenitiesText} Located at ${location}.`;
+      return `${playground.name} is a playground in ${where}. ${desc.substring(0, 150).trim()}...${ageText}${amenitiesText}${locationText}`;
     }
 
-    return `Visit ${playground.name}, a family-friendly playground in ${BRAND.city}, ${BRAND.state}.${ageText}${ratingText}${amenitiesText} Find directions, amenities, and visitor information.`;
+    return `${playground.name}, a playground in ${where}.${ageText}${amenitiesText} Directions, amenities and parent essentials.`;
   };
 
   const getLocalKeywords = () => {
     return [
       playground.name,
-      `${playground.name} ${BRAND.city}`,
+      locality ? `${playground.name} ${locality}` : "",
+      locality ? `${locality} playgrounds` : "",
       `${BRAND.city} playgrounds`,
       `playgrounds in ${BRAND.city}`,
-      `${BRAND.city} parks`,
       `kids activities ${BRAND.city}`,
-      `family activities ${BRAND.city}`,
       `${BRAND.state} playgrounds`,
-      `${BRAND.region} playgrounds`,
-      `playground near me ${BRAND.city}`,
-      `best playgrounds ${BRAND.city}`,
-      `children parks ${BRAND.city}`,
       playground.age_range
         ? `playground ages ${playground.age_range}`
         : "",
@@ -78,53 +84,47 @@ export default function EnhancedPlaygroundSEO({
 
   const playgroundSchema = {
     "@context": "https://schema.org",
-    "@type": "Park",
-    "@id": playgroundUrl,
+    "@type": "Playground",
+    "@id": `${playgroundUrl}#place`,
     name: playground.name,
     description: getGEODescription(),
+    url: playgroundUrl,
     ...(playground.image_url && { image: [playground.image_url] }),
+    // WEB-SEO-024: public.playgrounds has location, latitude and longitude and
+    // NO city or postal_code. The locality is read out of `location` when it
+    // names one and omitted when it doesn't.
     address: {
       "@type": "PostalAddress",
-      streetAddress: playground.location || "",
-      addressLocality: BRAND.city,
-      addressRegion: BRAND.state,
-      postalCode: "50309",
+      ...(playground.location && { streetAddress: playground.location }),
+      ...(locality && { addressLocality: locality }),
+      addressRegion: BRAND.stateAbbr,
       addressCountry: BRAND.country,
     },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: playground.latitude || 41.5868,
-      longitude: playground.longitude || -93.625,
-    },
-    // WEB-SEO-016: aggregateRating removed. The ratingValue was real but
-    // ratingCount was invented from it (playground.rating >= 4.5 ? ... ), and
-    // Google requires the count to reflect actual reviews. No reviews table
-    // exists, so there is no honest count to emit.
-    isAccessibleForFree: true,
-    publicAccess: true,
+    ...(hasCoords
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: playground.latitude,
+            longitude: playground.longitude,
+          },
+        }
+      : {}),
+    // WEB-SEO-016: no aggregateRating. There is no reviews table, so there is
+    // no honest ratingCount.
+    //
+    // No isAccessibleForFree or publicAccess (explore pass 2 WP4 item 2). The
+    // table has no admission column and holds indoor play spaces as well as
+    // park equipment, so "free" is not something a row can back. Plan D9 adds
+    // the column; emit it from that when it exists.
     amenityFeature: (playground.amenities || []).map((amenity) => ({
       "@type": "LocationFeatureSpecification",
       name: amenity,
       value: true,
     })),
-    areaServed: {
-      "@type": "City",
-      name: BRAND.city,
-      containedInPlace: {
-        "@type": "State",
-        name: BRAND.state,
-      },
-    },
-    publisher: {
-      "@type": "Organization",
-      name: BRAND.name,
-      url: BRAND.baseUrl,
-    },
     mainEntityOfPage: {
       "@type": "WebPage",
       "@id": playgroundUrl,
     },
-    keywords: getLocalKeywords().join(", "),
   };
 
   // FAQ schema is output by FAQSection on PlaygroundDetails - avoid duplicate FAQPage
@@ -136,95 +136,49 @@ export default function EnhancedPlaygroundSEO({
     name: getOptimizedTitle(),
     speakable: {
       "@type": "SpeakableSpecification",
-      cssSelector: [
-        "article h1",
-        "article [itemprop='description']",
-        ".playground-summary",
-      ],
+      cssSelector: ["h1"],
     },
     url: playgroundUrl,
   };
 
-  const localBusinessSchema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `${BRAND.baseUrl}/#localbusiness`,
-    name: BRAND.name,
-    description: BRAND.tagline,
-    url: BRAND.baseUrl,
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: BRAND.city,
-      addressRegion: BRAND.state,
-      addressCountry: BRAND.country,
-    },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: 41.5868,
-      longitude: -93.625,
-    },
-    areaServed: {
-      "@type": "GeoCircle",
-      geoMidpoint: {
-        "@type": "GeoCoordinates",
-        latitude: 41.5868,
-        longitude: -93.625,
-      },
-      geoRadius: "50000",
-    },
-    serviceType: "Local Playground Information",
-    knowsAbout: [
-      `${BRAND.city} playgrounds`,
-      `${BRAND.state} parks`,
-      "children recreation",
-      "family activities",
-      "parks and playgrounds",
-    ],
-  };
+  // WEB-SEO-026: no site-wide LocalBusiness here. SEOHead's Organization node
+  // is the one identity this site publishes.
+
+  const description = getGEODescription();
+  const title = getOptimizedTitle();
+  const image = playground.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
 
   return (
     <Helmet>
-      <title>{getOptimizedTitle()}</title>
-      <meta name="description" content={getGEODescription()} />
+      <title>{title}</title>
+      <meta name="description" content={description} />
       <meta name="keywords" content={getLocalKeywords().join(", ")} />
       <link rel="canonical" href={playgroundUrl} />
 
-      {/* Geographic Meta for Local SEO */}
       <meta name="geo.region" content={`US-${BRAND.stateAbbr}`} />
-      <meta
-        name="geo.placename"
-        content={`${BRAND.city}, ${BRAND.state}`}
-      />
-      <meta name="geo.position" content="41.5868;-93.6250" />
-      <meta name="ICBM" content="41.5868, -93.6250" />
-      <meta name="DC.title" content={getOptimizedTitle()} />
+      {locality && <meta name="geo.placename" content={`${locality}, ${BRAND.state}`} />}
+      {hasCoords && (
+        <meta name="geo.position" content={`${playground.latitude};${playground.longitude}`} />
+      )}
+      {hasCoords && <meta name="ICBM" content={`${playground.latitude}, ${playground.longitude}`} />}
+      <meta name="DC.title" content={title} />
 
-      {/* Place-Specific Meta for AI Parsers */}
       <meta name="place:name" content={playground.name} />
       <meta name="place:type" content="Playground" />
-      <meta
-        name="place:location"
-        content={
-          playground.location || `${BRAND.city}, ${BRAND.state}`
-        }
-      />
-      <meta name="place:city" content={BRAND.city} />
+      {playground.location && <meta name="place:location" content={playground.location} />}
+      {locality && <meta name="place:city" content={locality} />}
       <meta name="place:state" content={BRAND.state} />
       <meta name="place:country" content="United States" />
       {playground.image_url && (
         <meta name="place:image" content={playground.image_url} />
       )}
-      {playground.rating && (
-        <meta
-          name="place:rating"
-          content={playground.rating.toFixed(1)}
-        />
+      {playground.rating != null && (
+        <meta name="place:rating" content={playground.rating.toFixed(1)} />
       )}
       {playground.age_range && (
         <meta name="place:age_range" content={playground.age_range} />
       )}
 
-      {/* AI Search Engine Optimization Meta */}
       <meta
         name="robots"
         content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
@@ -232,40 +186,29 @@ export default function EnhancedPlaygroundSEO({
       <meta name="googlebot" content="index, follow" />
       <meta name="bingbot" content="index, follow" />
 
-      {/* Open Graph */}
       <meta property="og:type" content="place" />
-      <meta property="og:title" content={getOptimizedTitle()} />
-      <meta property="og:description" content={getGEODescription()} />
-      <meta property="og:locality" content={BRAND.city} />
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={description} />
+      {locality && <meta property="og:locality" content={locality} />}
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
-      <meta property="og:image" content={playground.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta property="og:image" content={image} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta
-        property="og:image:alt"
-        content={`${playground.name} - Playground in ${BRAND.city}`}
-      />
+      <meta property="og:image:alt" content={`${playground.name}, playground in ${where}`} />
       <meta property="og:url" content={playgroundUrl} />
       <meta property="og:site_name" content={BRAND.name} />
 
-      {/* Twitter Cards */}
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={getOptimizedTitle()} />
-      <meta name="twitter:description" content={getGEODescription()} />
-      <meta name="twitter:image" content={playground.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta name="twitter:title" content={title} />
+      <meta name="twitter:description" content={description} />
+      <meta name="twitter:image" content={image} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
-      {/* Structured Data */}
-      <script type="application/ld+json">
-        {JSON.stringify(playgroundSchema)}
-      </script>
-      <script type="application/ld+json">
-        {JSON.stringify(speakableSchema)}
-      </script>
-      <script type="application/ld+json">
-        {JSON.stringify(localBusinessSchema)}
-      </script>
+      {/* toJsonLd escapes the block: names and descriptions come from a
+          Places import, and a "</script" in one would end the block. */}
+      <script type="application/ld+json">{toJsonLd(playgroundSchema)}</script>
+      <script type="application/ld+json">{toJsonLd(speakableSchema)}</script>
     </Helmet>
   );
 }

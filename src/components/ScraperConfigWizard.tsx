@@ -26,6 +26,7 @@ import {
 import { Globe, Code, Target, AlertCircle, CheckCircle, Copy, Play, Settings, BookOpen, Zap, DollarSign, Hash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { Spinner } from "@/components/ui/loading-skeleton";
 
 interface ScraperTemplate {
   id: string;
@@ -505,7 +506,7 @@ export default function ScraperConfigWizard({
                     <Button onClick={analyzeUrl} disabled={isAnalyzing}>
                       {isAnalyzing ? (
                         <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                          <Spinner size="sm" tone="current" className="mr-2" />
                           Analyzing...
                         </>
                       ) : (

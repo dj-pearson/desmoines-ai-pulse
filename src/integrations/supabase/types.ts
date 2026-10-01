@@ -4671,6 +4671,7 @@ export type Database = {
       }
       events: {
         Row: {
+          affiliate_url: string | null
           ai_writeup: string | null
           archived_at: string | null
           category: string
@@ -4731,6 +4732,7 @@ export type Database = {
           writeup_prompt_used: string | null
         }
         Insert: {
+          affiliate_url?: string | null
           ai_writeup?: string | null
           archived_at?: string | null
           category?: string
@@ -4791,6 +4793,7 @@ export type Database = {
           writeup_prompt_used?: string | null
         }
         Update: {
+          affiliate_url?: string | null
           ai_writeup?: string | null
           archived_at?: string | null
           category?: string
@@ -6329,6 +6332,9 @@ export type Database = {
       }
       newsletter_subscribers: {
         Row: {
+          confirm_sent_at: string | null
+          confirm_token: string | null
+          confirmed_at: string | null
           created_at: string | null
           email: string
           first_name: string | null
@@ -6347,6 +6353,9 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          confirm_sent_at?: string | null
+          confirm_token?: string | null
+          confirmed_at?: string | null
           created_at?: string | null
           email: string
           first_name?: string | null
@@ -6365,6 +6374,9 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          confirm_sent_at?: string | null
+          confirm_token?: string | null
+          confirmed_at?: string | null
           created_at?: string | null
           email?: string
           first_name?: string | null
@@ -8191,6 +8203,36 @@ export type Database = {
           source_url?: string | null
           title?: string
           update_type?: string
+        }
+        Relationships: []
+      }
+      scrape_page_fingerprints: {
+        Row: {
+          consecutive_skips: number
+          content_changed_at: string
+          content_hash: string
+          items_found: number
+          last_extracted_at: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          consecutive_skips?: number
+          content_changed_at?: string
+          content_hash: string
+          items_found?: number
+          last_extracted_at?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          consecutive_skips?: number
+          content_changed_at?: string
+          content_hash?: string
+          items_found?: number
+          last_extracted_at?: string
+          updated_at?: string
+          url?: string
         }
         Relationships: []
       }
@@ -12926,6 +12968,14 @@ export type Database = {
       }
     }
     Functions: {
+      activate_campaign: {
+        Args: { p_campaign_id: string }
+        Returns: Json
+      }
+      approve_campaign_creative: {
+        Args: { p_creative_id: string; p_image_url?: string }
+        Returns: Json
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
@@ -13066,6 +13116,7 @@ export type Database = {
         Args: { delete_after_days?: number }
         Returns: Json
       }
+      attribute_referral: { Args: { p_code: string }; Returns: string }
       attractions_within_radius: {
         Args: {
           center_lat: number
@@ -13830,6 +13881,14 @@ export type Database = {
         }[]
       }
       get_level_from_xp: { Args: { xp: number }; Returns: number }
+      get_my_referral_stats: {
+        Args: never
+        Returns: {
+          referral_code: string
+          signed_up: number
+          subscribed: number
+        }[]
+      }
       get_next_optimal_posting_time: {
         Args: { base_time?: string }
         Returns: string
@@ -14195,6 +14254,13 @@ export type Database = {
         Returns: string
       }
       meters_to_miles: { Args: { meters: number }; Returns: number }
+      newsletter_confirm_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          success: boolean
+          already_confirmed: boolean
+        }[]
+      }
       newsletter_unsubscribe_by_token: {
         Args: { p_token: string }
         Returns: {
@@ -15101,11 +15167,13 @@ export type Database = {
         | "draft"
         | "pending_payment"
         | "pending_creative"
+        | "pending_review"
         | "active"
         | "completed"
         | "cancelled"
         | "rejected"
         | "refunded"
+        | "suspended"
       content_type: "event" | "attraction" | "restaurant" | "playground"
       crm_opp_stage:
         | "new"
@@ -15314,11 +15382,13 @@ export const Constants = {
         "draft",
         "pending_payment",
         "pending_creative",
+        "pending_review",
         "active",
         "completed",
         "cancelled",
         "rejected",
         "refunded",
+        "suspended",
       ],
       content_type: ["event", "attraction", "restaurant", "playground"],
       crm_opp_stage: [

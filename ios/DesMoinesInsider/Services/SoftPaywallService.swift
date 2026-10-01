@@ -12,6 +12,13 @@ import Foundation
 // When it decides to present, it posts `.softPaywallTriggered` (with a `source`
 // + the PaywallContext id) so the single MainTabView presenter shows it —
 // matching the favorites-cap pattern, one presenter, no per-call-site sheets.
+//
+// IOS-DD-MONETIZATION-13: the cap used to be recorded when the request was
+// POSTED. A request made from inside a sheet (Trip Planner is presented as
+// one from Home and Dashboard) never reached the root presenter, yet burned
+// the cap, and the Trip Planner then treated the paywall as shown and did
+// nothing. The cap is now recorded by `recordPresentation` from the sheet's
+// onAppear, and the Trip Planner shows its own paywall.
 @MainActor
 final class SoftPaywallService {
     static let shared = SoftPaywallService()
@@ -22,21 +29,31 @@ final class SoftPaywallService {
     private let cooldownDays = 7
     private let maxPresentations = 3
 
-    private let lastShownKey = "softPaywall.lastShownAt"
-    private let countKey = "softPaywall.presentCount"
+    private static let lastShownKey = "softPaywall.lastShownAt"
+    private static let countKey = "softPaywall.presentCount"
+    private var lastShownKey: String { Self.lastShownKey }
+    private var countKey: String { Self.countKey }
 
-    /// Call after a free user successfully saves a favorite.
+    /// Call after a free user successfully saves a favorite. Presents the
+    /// progress nudge ("2 of 3 free saves"), which is true below the cap.
     func considerAfterFavorite(totalFavorites: Int) {
         guard totalFavorites >= favoritesThreshold else { return }
-        present(source: "favorites", context: .unlimitedFavorites)
+        present(source: "favorites", contextId: "favorites_soft", extra: ["used": totalFavorites])
     }
 
-    /// Seam for IOS-PARITY-001: call on a free user's AI Trip Planner attempt.
-    /// Returns whether a soft paywall was presented (frequency-capped), so the
-    /// caller can fall back to its hard gate when it wasn't (IOS-AUDIT-FEAT-032).
-    @discardableResult
-    func considerAfterTripPlannerAttempt() -> Bool {
-        present(source: "trip_planner", context: .tripPlanner)
+    /// Analytics only: a free user tried the AI Trip Planner. The planner
+    /// presents its own paywall, from inside its own sheet.
+    func noteTripPlannerAttempt() {
+        AnalyticsService.shared.trackSoftPaywall(source: "trip_planner")
+    }
+
+    /// Called when a soft paywall is actually on screen. This is what starts
+    /// the cooldown and counts toward the lifetime cap.
+    func recordPresentation(source: String) {
+        let defaults = UserDefaults.standard
+        defaults.set(Date(), forKey: lastShownKey)
+        defaults.set(defaults.integer(forKey: countKey) + 1, forKey: countKey)
+        AnalyticsService.shared.trackSoftPaywall(source: source)
     }
 
     /// Records that the onboarding trial moment was shown, so the post-onboarding
@@ -48,29 +65,29 @@ final class SoftPaywallService {
 
     // MARK: - Internals
 
-    @discardableResult
-    private func present(source: String, context: PaywallContext) -> Bool {
-        guard isEligible() else { return false }
-        let defaults = UserDefaults.standard
-        defaults.set(Date(), forKey: lastShownKey)
-        defaults.set(defaults.integer(forKey: countKey) + 1, forKey: countKey)
-        AnalyticsService.shared.trackSoftPaywall(source: source)
+    /// Checks eligibility and posts. Records nothing: see recordPresentation.
+    private func present(source: String, contextId: String, extra: [String: Any] = [:]) {
+        guard isEligible() else { return }
+        var info: [String: Any] = ["context": contextId, "source": source]
+        info.merge(extra) { _, new in new }
         NotificationCenter.default.post(
             name: .softPaywallTriggered,
             object: nil,
-            userInfo: ["context": context.id]
+            userInfo: info
         )
-        return true
     }
 
     /// Gates: onboarding done, still free, under the lifetime cap, past cooldown.
-    private func isEligible() -> Bool {
-        let defaults = UserDefaults.standard
+    func isEligible(
+        defaults: UserDefaults = .standard,
+        isFree: Bool? = nil,
+        now: Date = Date()
+    ) -> Bool {
         guard defaults.bool(forKey: "hasCompletedOnboarding") else { return false }
-        guard StoreKitService.shared.currentTier == .free else { return false }
-        guard defaults.integer(forKey: countKey) < maxPresentations else { return false }
-        if let last = defaults.object(forKey: lastShownKey) as? Date,
-           Date().timeIntervalSince(last) < Double(cooldownDays) * 86_400 {
+        guard isFree ?? (StoreKitService.shared.currentTier == .free) else { return false }
+        guard defaults.integer(forKey: Self.countKey) < maxPresentations else { return false }
+        if let last = defaults.object(forKey: Self.lastShownKey) as? Date,
+           now.timeIntervalSince(last) < Double(cooldownDays) * 86_400 {
             return false
         }
         return true

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart } from "@/lib/timezone";
 import { Music, Theater, PartyPopper } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -126,7 +126,7 @@ export function InternalLinking({
                       {event.title}
                     </h4>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(event.date).toLocaleDateString()}
+                      {formatEventPart(event, 'MMM d, yyyy')}
                     </p>
                   </div>
                   <Badge variant="outline" className="text-xs">
@@ -221,7 +221,7 @@ export function InternalLinking({
                       {event.title}
                     </h4>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(event.date).toLocaleDateString()}
+                      {formatEventPart(event, 'MMM d, yyyy')}
                     </p>
                   </div>
                   <Badge variant="outline" className="text-xs">

@@ -8,11 +8,12 @@
  * rows, call planIngest, write, report.
  */
 import {
+  createDedupIndex,
   generateEventFingerprint,
-  isDuplicateEvent,
   type ExistingEvent,
 } from '../_shared/eventDedup.ts';
 import { parseEventDateTime } from '../_shared/eventDateTime.ts';
+import { normalizeCategory } from '../_shared/eventCategories.ts';
 export interface IncomingItem {
   title?: string;
   date?: string;
@@ -80,7 +81,10 @@ export function validateItem(item: IncomingItem, fallbackUrl: string): { ok: tru
       event_start_utc: parsed.event_start_utc,
       location: (item.location || "Des Moines, IA").substring(0, 200),
       venue: (item.venue || "").substring(0, 200),
-      category: (item.category || "General").substring(0, 50),
+      // WEB-BE-049: normalized, not truncated. "General" was this file's
+      // default and two adapters' default, and none of them is a category
+      // anyone can filter by - it means nobody decided.
+      category: normalizeCategory(item.category),
       price: (item.price || "See website").substring(0, 50),
       source_url: sourceUrl.substring(0, 500),
       is_enhanced: false,
@@ -102,7 +106,7 @@ export function planIngest(
   // Rows accepted DURING this request count as existing for the rest of it, or
   // a payload containing the same event twice writes it twice — the dedup would
   // be checking against the database and not against its own batch.
-  const seen: ExistingEvent[] = [...existing];
+  const seen = createDedupIndex<ExistingEvent>(existing);
 
   for (const item of items) {
     const v = validateItem(item, fallbackUrl);
@@ -115,11 +119,11 @@ export function planIngest(
       source_url: String(v.row.source_url),
     };
     const fingerprint = generateEventFingerprint(candidate);
-    const verdict = isDuplicateEvent({ ...candidate, fingerprint }, seen);
+    const verdict = seen.find({ ...candidate, fingerprint });
     if (verdict.isDuplicate) { duplicates++; continue; }
 
     rows.push(v.row);
-    seen.push({
+    seen.add({
       id: `pending-${rows.length}`,
       title: candidate.title,
       date: candidate.date.toISOString(),

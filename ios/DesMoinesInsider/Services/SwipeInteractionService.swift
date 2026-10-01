@@ -68,14 +68,32 @@ final class SwipeInteractionService {
         case event, restaurant, attraction
     }
 
+    /// Cap on the unsent queue (IOS-DD-DISCOVER-09). A signed-in user who swipes
+    /// offline for weeks would otherwise re-encode an ever-growing blob into
+    /// UserDefaults on every swipe. The oldest rows go first, as with the
+    /// dedupe history.
+    nonisolated static let maxPending = 500
+
+    /// Most rows sent in one upsert, so a long backlog goes up in pieces.
+    nonisolated static let flushBatchSize = 100
+
     /// Records a swipe action. Always succeeds; network errors are queued
     /// and retried on the next call.
+    ///
+    /// Returns the row's idempotency key, which is what `unrecord` needs to
+    /// take the swipe back, or nil when nothing was queued (IOS-DD-DISCOVER-07).
+    ///
+    /// Guests update the local "already seen" keys only. Their rows used to be
+    /// queued with no owner, never sent (flush needs a user), never capped, and
+    /// then uploaded under whichever account signed in next on the device
+    /// (IOS-DD-DISCOVER-09).
+    @discardableResult
     func record(
         action: Action,
         itemType: ItemType,
         itemId: String,
         sourceContext: [String: [String]]? = nil
-    ) async {
+    ) async -> String? {
         let key = Self.key(itemType: itemType, itemId: itemId)
         if !swipedItemKeys.contains(key) {
             swipedOrder = Self.trimmed(swipedOrder + [key], cap: Self.maxSwipedKeys)
@@ -89,6 +107,9 @@ final class SwipeInteractionService {
             Self.saveLocal(localKey, order: swipedOrder)
         }
 
+        guard let userId = AuthService.shared.currentUser?.id.uuidString else { return nil }
+
+        let clientEventId = UUID().uuidString
         let row = PendingSwipe(
             itemType: itemType.rawValue,
             itemId: itemId,
@@ -98,14 +119,41 @@ final class SwipeInteractionService {
             // Minted HERE, when the row is queued, not at send time. A key
             // generated per attempt is a different key on the retry and
             // dedupes nothing (IOS-AUDIT-BUG-017).
-            clientEventId: UUID().uuidString
+            clientEventId: clientEventId,
+            userId: userId
         )
 
         // Try to flush this swipe + any queued ones.
-        var queue = Self.loadPending(pendingKey)
-        queue.append(row)
-        Self.savePending(pendingKey, queue: queue)
+        let queue = Self.loadPending(pendingKey)
+        Self.savePending(pendingKey, queue: Self.trimmedQueue(queue + [row], cap: Self.maxPending))
         await flushPending()
+        return clientEventId
+    }
+
+    /// Takes a swipe back (IOS-DD-DISCOVER-07): forgets the "already seen" key,
+    /// drops the row if it is still queued, and otherwise deletes the sent row
+    /// by its idempotency key. The delete is best effort; the "Users can delete
+    /// own swipes" policy (20260506000002) allows it.
+    func unrecord(itemType: ItemType, itemId: String, clientEventId: String?) async {
+        let key = Self.key(itemType: itemType, itemId: itemId)
+        if swipedItemKeys.contains(key) {
+            swipedOrder.removeAll { $0 == key }
+            swipedItemKeys = Set(swipedOrder)
+            Self.saveLocal(localKey, order: swipedOrder)
+        }
+
+        guard let clientEventId else { return }
+        let queue = Self.loadPending(pendingKey)
+        if queue.contains(where: { $0.clientEventId == clientEventId }) {
+            Self.savePending(pendingKey, queue: queue.filter { $0.clientEventId != clientEventId })
+            return
+        }
+        guard let client = supabase, AuthService.shared.currentUser != nil else { return }
+        _ = try? await client
+            .from("swipe_interactions")
+            .delete()
+            .eq("client_event_id", value: clientEventId)
+            .execute()
     }
 
     /// Whether the given item has been swiped on at least once.
@@ -113,12 +161,49 @@ final class SwipeInteractionService {
         swipedItemKeys.contains(Self.key(itemType: itemType, itemId: itemId))
     }
 
-    /// Clears local swipe history. Sign-out hook + privacy controls call this.
+    /// Forgets the "already seen" history for the given lanes so the deck can
+    /// deal those cards again (IOS-DD-DISCOVER-03, "Start over"). The unsent
+    /// queue is left alone: those swipes happened and still count.
+    func forgetSeen(itemTypes: Set<ItemType>) {
+        let prefixes = itemTypes.map { "\($0.rawValue):" }
+        swipedOrder.removeAll { key in prefixes.contains { key.hasPrefix($0) } }
+        swipedItemKeys = Set(swipedOrder)
+        Self.saveLocal(localKey, order: swipedOrder)
+    }
+
+    /// Clears local swipe history and the unsent queue. Called from
+    /// AuthService.purgeLocalUserState on sign-out (IOS-DD-DISCOVER-09) and by
+    /// privacy controls.
     func reset() {
         swipedItemKeys = []
         swipedOrder = []
         UserDefaults.standard.removeObject(forKey: localKey)
         UserDefaults.standard.removeObject(forKey: pendingKey)
+    }
+
+    /// Keep at most `cap` queued rows, dropping the OLDEST first.
+    nonisolated static func trimmedQueue(_ queue: [PendingSwipe], cap: Int) -> [PendingSwipe] {
+        queue.count <= cap ? queue : Array(queue.suffix(cap))
+    }
+
+    /// Splits the queue into rows this user may send and rows that belong to
+    /// someone else (IOS-DD-DISCOVER-09). Rows with no owner predate the stamp:
+    /// before it, only signed-in swipes could be flushed, so they are sent as
+    /// they always were.
+    nonisolated static func partitionForFlush(
+        _ queue: [PendingSwipe],
+        currentUserId: String
+    ) -> (send: [PendingSwipe], drop: [PendingSwipe]) {
+        var send: [PendingSwipe] = []
+        var drop: [PendingSwipe] = []
+        for row in queue {
+            if row.userId == nil || row.userId == currentUserId {
+                send.append(row)
+            } else {
+                drop.append(row)
+            }
+        }
+        return (send, drop)
     }
 
     // MARK: - Network sync
@@ -157,7 +242,14 @@ final class SwipeInteractionService {
         // Drain in a loop so rows appended while an insert was in flight still
         // get sent by this same flush.
         while true {
-            let batch = Self.loadPending(pendingKey)
+            // Rows another account queued on this device are dropped, not
+            // sent under this user's id (IOS-DD-DISCOVER-09).
+            let pending = Self.loadPending(pendingKey)
+            let sendable = Self.partitionForFlush(pending, currentUserId: userId).send
+            if sendable.count != pending.count {
+                Self.savePending(pendingKey, queue: sendable)
+            }
+            let batch = Array(sendable.prefix(Self.flushBatchSize))
             guard !batch.isEmpty else { return }
 
             let rows = batch.map {
@@ -192,11 +284,20 @@ final class SwipeInteractionService {
                 return
             }
 
-            // Remove ONLY the rows we actually sent (the leading `batch.count`).
-            // New rows are appended at the end, so anything queued during the
-            // insert survives instead of being blanked.
+            // Remove ONLY the rows we actually sent, by key where they have
+            // one. New rows are appended at the end, so anything queued during
+            // the insert survives instead of being blanked, and a row an undo
+            // removed mid-flight does not shift the count.
+            let sentKeys = Set(batch.compactMap(\.clientEventId))
             var remaining = Self.loadPending(pendingKey)
-            remaining.removeFirst(min(batch.count, remaining.count))
+            if sentKeys.count == batch.count {
+                remaining.removeAll { row in
+                    guard let id = row.clientEventId else { return false }
+                    return sentKeys.contains(id)
+                }
+            } else {
+                remaining.removeFirst(min(batch.count, remaining.count))
+            }
             Self.savePending(pendingKey, queue: remaining)
         }
     }
@@ -215,7 +316,8 @@ final class SwipeInteractionService {
         UserDefaults.standard.set(order, forKey: key)
     }
 
-    private struct PendingSwipe: Codable {
+    /// A queued row. Internal so the queue-hygiene tests can build one.
+    struct PendingSwipe: Codable, Equatable {
         let itemType: String
         let itemId: String
         let action: String
@@ -228,6 +330,9 @@ final class SwipeInteractionService {
         /// would make every one of them fail to decode and vanish. Those rows
         /// send a null key and behave exactly as they did before.
         var clientEventId: String?
+        /// Who queued the row (IOS-DD-DISCOVER-09). Optional for the same
+        /// reason as clientEventId: older queues have no owner.
+        var userId: String? = nil
     }
 
     /// Assign an idempotency key to any queued row that lacks one, and save.

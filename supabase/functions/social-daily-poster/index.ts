@@ -94,6 +94,9 @@ async function pickEvent(supabase: Supa): Promise<string | null> {
     .select("id, title, date, is_featured")
     .gte("date", new Date().toISOString())
     .neq("is_hidden", true)
+    // WEB-BE-034: the other unpublish switch, or the daily post promotes an
+    // event that has been archived.
+    .is("archived_at", null)
     .order("is_featured", { ascending: false, nullsFirst: false })
     .order("date", { ascending: true })
     .limit(50);

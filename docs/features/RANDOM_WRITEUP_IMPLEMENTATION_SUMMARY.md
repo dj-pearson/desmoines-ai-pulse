@@ -89,14 +89,14 @@ interface WriteupRequest {
 - Finding credentials guide
 
 ### 4. PowerShell Script - Single Writeup
-**File**: `generate-random-writeup.ps1`
+**File**: `.\scripts\windows\generate-random-writeup.ps1`
 - Interactive script with prompts
 - User-friendly output
 - Displays full results
 - Error handling included
 
 ### 5. PowerShell Script - Batch Processing
-**File**: `batch-generate-writeups.ps1`
+**File**: `.\scripts\windows\batch-generate-writeups.ps1`
 - Generate multiple writeups at once
 - Configurable count and delay
 - Progress tracking
@@ -140,12 +140,12 @@ interface WriteupRequest {
 ### Quick Test (PowerShell)
 ```powershell
 cd c:\Users\dpearson\Documents\Des-Moines-Insider\Des-Moines-Insider\desmoines-ai-pulse
-.\generate-random-writeup.ps1
+.\scripts\windows\generate-random-writeup.ps1
 ```
 
 ### Batch Test (Generate 5 writeups)
 ```powershell
-.\batch-generate-writeups.ps1 -Count 5
+.\scripts\windows\batch-generate-writeups.ps1 -Count 5
 ```
 
 ### Direct API Test (cURL)
@@ -178,7 +178,7 @@ SELECT cron.schedule(
 ### 2. Bulk Processing
 Generate writeups for all restaurants:
 ```powershell
-.\batch-generate-writeups.ps1 -Count 50 -DelaySeconds 3
+.\scripts\windows\batch-generate-writeups.ps1 -Count 50 -DelaySeconds 3
 ```
 
 ### 3. Fill Missing Writeups
@@ -286,8 +286,8 @@ Before deploying to production:
 - ✅ `GENERATE_WRITEUP_USAGE_GUIDE.md` - Complete usage documentation
 - ✅ `QUICK_START_RANDOM_WRITEUPS.md` - Quick start guide
 - ✅ `TEST_INVOCATION_EXAMPLES.md` - Test examples for all platforms
-- ✅ `generate-random-writeup.ps1` - Interactive single writeup script
-- ✅ `batch-generate-writeups.ps1` - Batch processing script
+- ✅ `.\scripts\windows\generate-random-writeup.ps1` - Interactive single writeup script
+- ✅ `.\scripts\windows\batch-generate-writeups.ps1` - Batch processing script
 - ✅ `RANDOM_WRITEUP_IMPLEMENTATION_SUMMARY.md` - This file
 
 ---
@@ -302,7 +302,7 @@ supabase functions deploy generate-writeup
 
 ### 2. Test It
 ```powershell
-.\generate-random-writeup.ps1
+.\scripts\windows\generate-random-writeup.ps1
 ```
 
 ### 3. Set Up Automation (Optional)
@@ -310,7 +310,7 @@ Run SQL in Supabase dashboard to schedule daily writeups.
 
 ### 4. Batch Process (Optional)
 ```powershell
-.\batch-generate-writeups.ps1 -Count 20
+.\scripts\windows\batch-generate-writeups.ps1 -Count 20
 ```
 
 ---
@@ -330,7 +330,7 @@ If you encounter issues:
 ## 🎓 Next Steps
 
 1. **Deploy**: `supabase functions deploy generate-writeup`
-2. **Test**: Run `.\generate-random-writeup.ps1`
+2. **Test**: Run `.\scripts\windows\generate-random-writeup.ps1`
 3. **Automate**: Set up daily cron job
 4. **Process**: Run batch script to catch up on backlog
 5. **Monitor**: Check writeup quality in admin panel

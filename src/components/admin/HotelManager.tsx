@@ -258,6 +258,9 @@ export default function HotelManager() {
 
   const filterOptions = useHotelFilterOptions();
   const hotelsState = useHotels({
+    // Admin paginates on totalCount, so it pays for an exact count
+    // (WEB-PERF-033).
+    countMode: "exact",
     search: search || undefined,
     hotelType: hotelType === "all" ? undefined : [hotelType],
     hasAffiliate:

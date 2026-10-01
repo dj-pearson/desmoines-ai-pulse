@@ -2,7 +2,16 @@
  * Register Device Token Edge Function
  *
  * Stores an iOS/Android/Web push notification device token for the authenticated user.
- * Upserts into `device_tokens` table keyed by (user_id, device_token).
+ * Upserts into `device_tokens` keyed by device_token alone, so a token belongs
+ * to the account that registered it most recently: a phone shared by two
+ * accounts used to deliver both users' alerts (IOS-DD-PLATFORM-19).
+ *
+ *   POST { deviceToken, platform }                     register (default)
+ *   POST { action: "unregister", deviceToken }         delete this device's row
+ *                                                      for the calling user
+ *
+ * `action` is optional and additive: a body without it registers, as it
+ * always did. The table is created by migration 20261015000005.
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -46,6 +55,7 @@ serve(async (req) => {
 
     const body = await req.json();
     const { deviceToken, platform } = body;
+    const isUnregister = body.action === "unregister";
 
     // Input validation (SEC-026)
     if (!deviceToken || typeof deviceToken !== 'string' || deviceToken.trim().length === 0) {
@@ -59,6 +69,25 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: `deviceToken must be ${MAX_TOKEN_LENGTH} characters or less` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (isUnregister) {
+      const { error: deleteError } = await supabase
+        .from("device_tokens")
+        .delete()
+        .eq("device_token", deviceToken)
+        .eq("user_id", user.id);
+      if (deleteError) {
+        console.error("Error deleting device token:", deleteError.message);
+        return new Response(
+          JSON.stringify({ error: "Failed to unregister device token" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -79,7 +108,7 @@ serve(async (req) => {
           platform,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,device_token" }
+        { onConflict: "device_token" }
       );
 
     if (upsertError) {
