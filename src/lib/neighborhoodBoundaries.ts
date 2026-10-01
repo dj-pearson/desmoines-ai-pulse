@@ -27,13 +27,24 @@
  *   sherman-hill     Wikipedia "Sherman Hill Historic District" (NRHP):
  *                    "Roughly bounded by Woodland Ave., 19th, School, and 15th
  *                    Sts."
- *   valley-junction  NO STREET-BOUNDARY SOURCE COULD BE FETCHED (web search
- *                    quota exhausted; the Historic Valley Junction Foundation
- *                    site says only that the original district lies east of
- *                    8th Street, with its office at 137 5th Street). The box
- *                    is the 5th Street business district as commonly
- *                    described: Grand Ave north, Railroad Ave south, 1st St
- *                    east, 8th St west. Treat it as provisional.
+ *   valley-junction  NO NEIGHBOURHOOD BOUNDARY IS PUBLISHED. SEO-061 fetched
+ *                    valleyjunction.com (home, "Valley Junction History",
+ *                    "Getting Around", 2026-10-01): the Foundation states no
+ *                    boundary, only that the original 40 acres lay "east of
+ *                    8th Street", that 5th Street "runs up the middle of the
+ *                    commercial district", and the arch at Fifth and
+ *                    Railroad; its neighbourhood map is an image. The one
+ *                    stated boundary is the NRHP Valley Junction Commercial
+ *                    Historic District (Wikipedia, listed 2017-10-11):
+ *                    "100-318 5th St. (even side 300 only) & cross streets",
+ *                    "most of three blocks of Fifth Street and parts of two
+ *                    cross streets". That is a historic district, not the
+ *                    shopping district the pages mean, and its cross-street
+ *                    extent is not stated, so it is not used: it would drop
+ *                    St. Kilda (333 5th St) and cannot be drawn without
+ *                    guessing. The NRHP strip lies wholly inside this box.
+ *                    The box stays: Grand Ave north, Railroad Ave south,
+ *                    1st St east, 8th St west. Treat it as provisional.
  *
  * Drake, Beaverdale and Ingersoll are taxonomy locations without a polygon
  * here: no published cuisine page uses them, and no boundary was verified.
@@ -122,7 +133,7 @@ export const NEIGHBORHOOD_BOUNDARIES: readonly NeighborhoodBoundary[] = [
     cities: ['west des moines', 'valley junction'],
     cityLabel: 'West Des Moines',
     boundaryText: 'between Grand Avenue, Railroad Avenue, 1st Street and 8th Street',
-    source: 'Provisional: 5th Street business district, Grand Ave / Railroad Ave / 1st St / 8th St (no fetched source)',
+    source: 'Provisional: 5th Street business district, Grand Ave / Railroad Ave / 1st St / 8th St (no published neighbourhood boundary; NRHP commercial district 100-318 5th St lies inside)',
     polygon: [
       [41.578, -93.7135], // Grand Ave x 8th St
       [41.578, -93.702], // Grand Ave x 1st St

@@ -14,9 +14,14 @@
  * FALLBACK COORDINATES ARE NOT PLACED. Some rows were geocoded to a city
  * centroid rather than their address: nine rows share 41.5869,-93.6249 in
  * downtown, among them an Ankeny address and several whose location is just
- * "Des Moines, IA". A coordinate shared by 3+ rows with 2+ different
- * locations is treated as a fallback and those rows get NULL until they are
- * geocoded properly.
+ * "Des Moines, IA". A coordinate shared by 3+ rows with 2+ different street
+ * addresses, or with a row that has no street address, is treated as a
+ * fallback and those rows get NULL until they are geocoded properly.
+ *
+ * SEO-061 re-geocoded the 18 such rows that have a street address (US Census
+ * geocoder, scripts/content-backups/seo-061/). Suites in one building
+ * (9250 University Ave, 5500 Merle Hay Rd) now share the building's point and
+ * are no longer read as a fallback; the five "Des Moines, IA" rows still are.
  *
  * Reads production with the anon key from .env (VITE_SUPABASE_URL,
  * VITE_SUPABASE_ANON_KEY).
@@ -51,18 +56,44 @@ function env(): Record<string, string | undefined> {
   return out;
 }
 
-/** Coordinates (4 dp) shared by 3+ rows with 2+ distinct locations: a geocoder fallback, not an address. */
+/**
+ * The street part of an address, without suite or unit: "9250 University Ave
+ * Unit 107, West Des Moines, ..." and "9250 University Ave Suite 101, ..." are
+ * one building, and a geocoder rightly gives them one point (SEO-061).
+ */
+export function streetAddress(location: string | null): string {
+  const first = (location ?? '').split(',')[0].trim().toLowerCase();
+  return first
+    .replace(/\s+(suite|ste\.?|unit|#)\s*[\w-]+$/, '')
+    .replace(/\bdrive\b/g, 'dr')
+    .replace(/\bstreet\b/g, 'st')
+    .replace(/\bavenue\b/g, 'ave')
+    .replace(/\s+/g, ' ');
+}
+
+/** True when the location carries no street number ("Des Moines, IA"): nothing a geocoder could place. */
+export function lacksStreetNumber(location: string | null): boolean {
+  return !/^\s*\d/.test(location ?? '');
+}
+
+/**
+ * Coordinates (4 dp) shared by 3+ rows that are a geocoder fallback, not an
+ * address: the rows name 2+ different street addresses, or one of them has no
+ * street address at all. Several suites in one building share a point
+ * legitimately and are not a fallback.
+ */
 export function fallbackCoordinates(rows: readonly Row[]): Set<string> {
-  const groups = new Map<string, { n: number; locations: Set<string> }>();
+  const groups = new Map<string, { n: number; streets: Set<string>; noStreet: boolean }>();
   for (const r of rows) {
     if (r.latitude === null || r.longitude === null) continue;
     const k = `${r.latitude.toFixed(4)},${r.longitude.toFixed(4)}`;
-    const g = groups.get(k) ?? { n: 0, locations: new Set<string>() };
+    const g = groups.get(k) ?? { n: 0, streets: new Set<string>(), noStreet: false };
     g.n++;
-    g.locations.add((r.location ?? '').trim().toLowerCase());
+    g.streets.add(streetAddress(r.location));
+    if (lacksStreetNumber(r.location)) g.noStreet = true;
     groups.set(k, g);
   }
-  return new Set([...groups].filter(([, g]) => g.n >= 3 && g.locations.size >= 2).map(([k]) => k));
+  return new Set([...groups].filter(([, g]) => g.n >= 3 && (g.streets.size >= 2 || g.noStreet)).map(([k]) => k));
 }
 
 export function assign(rows: readonly Row[]): Map<string, string | null> {
