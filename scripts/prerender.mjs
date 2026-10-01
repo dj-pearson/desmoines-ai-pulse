@@ -66,7 +66,7 @@ import {
 } from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import { prerenderOutputPath } from './prerender-output.mjs';
-import { orderEntityRoutes } from './prerender-order.mjs';
+import { orderEntityRoutes, pinFirst, MONTH_PAGE_ROUTE } from './prerender-order.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
@@ -338,7 +338,11 @@ function collectEntityRoutes() {
 
   const present = ENTITY_SITEMAPS.filter((f) => (buckets.get(f) || []).length > 0);
   const bySitemap = present.map((f) => [f.replace(/^sitemap-|\.xml$/g, ''), buckets.get(f)]);
-  const ordered = orderEntityRoutes(bySitemap, IMPRESSION_PRIORITY, FAIRNESS_EVERY);
+  // SEO-033: month index pages first, then the measured order. See pinFirst.
+  const ordered = pinFirst(
+    orderEntityRoutes(bySitemap, IMPRESSION_PRIORITY, FAIRNESS_EVERY),
+    (route) => MONTH_PAGE_ROUTE.test(route),
+  );
 
   // Print the shape of the order the budget will be spent in. When a pass comes
   // back short, this line is what says which categories were ever going to be

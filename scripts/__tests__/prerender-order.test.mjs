@@ -29,7 +29,7 @@
  * cheated in the obvious direction - a test that only proves ranking happens
  * would still pass if fairness were deleted, and vice versa.
  */
-import { orderEntityRoutes } from '../prerender-order.mjs';
+import { orderEntityRoutes, pinFirst, MONTH_PAGE_ROUTE } from '../prerender-order.mjs';
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -153,6 +153,35 @@ console.log('orderEntityRoutes');
     'impressions for paths that are not in any sitemap are ignored',
     orderEntityRoutes(bySitemap, { '/not/a/route': 99999 }, 4).length === 20,
   );
+}
+
+// --- SEO-033: month pages are pinned ahead of the measured order -------------
+console.log('pinFirst');
+{
+  const bySitemap = [
+    ['restaurants', range('restaurants', 20)],
+    // Month URLs are appended after every event, as the generator writes them.
+    ['events', [...range('events', 20), '/events/december-2026', '/events/january-2027']],
+  ];
+  const impressions = { '/restaurants/3': 9000, '/events/october-2026': 0 };
+  const ordered = orderEntityRoutes(bySitemap, impressions, 4);
+  check(
+    'without pinning, a month page with no history is not in the first 10',
+    !ordered.slice(0, 10).some((r) => MONTH_PAGE_ROUTE.test(r)),
+  );
+  const pinned = pinFirst(ordered, (r) => MONTH_PAGE_ROUTE.test(r));
+  check(
+    'pinned month pages come first, in their original relative order',
+    pinned[0] === '/events/december-2026' && pinned[1] === '/events/january-2027',
+    pinned.slice(0, 3).join(' '),
+  );
+  check('pinning emits every route exactly once', pinned.length === ordered.length && new Set(pinned).size === pinned.length);
+  check(
+    'pinning keeps the measured order behind the pinned routes',
+    pinned.slice(2).join() === ordered.filter((r) => !MONTH_PAGE_ROUTE.test(r)).join(),
+  );
+  check('the month pattern does not match an event detail slug', !MONTH_PAGE_ROUTE.test('/events/october-fest-2026-10-03'));
+  check('the month pattern does not match a nested path', !MONTH_PAGE_ROUTE.test('/events/october-2026/extra'));
 }
 
 console.log(failures === 0 ? '\nOK prerender-order' : `\n${failures} FAILED`);
