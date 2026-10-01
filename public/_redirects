@@ -137,3 +137,68 @@
 # Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
 /restaurants/taste-of-new-york-pleasant-hill  /restaurants/taste-of-new-york-waukee  301
 /restaurants/empire  /playgrounds/kids-empire-merle-hay  301
+
+# SEO-064: pSEO pages whose extra dimension changes nothing in their listing.
+# /things-to-do/<audience>/<time> lists exactly /things-to-do/<time> (the
+# calendar records no audience) and /<cuisine>/<time> lists the same
+# restaurants all year (restaurants carry no date): 100% overlap with the
+# parent, measured 2026-10-01 in docs/seo/pseo-time-duplicates-2026-10-01.csv.
+# These had 0 impressions in the 2026-09-30 Search Console export, so they
+# were unpublished and 301 to the parent page (src/pseo/duplicateRule.ts;
+# check-pseo-coverage fails if one points anywhere else). The ones with
+# impressions stay published as noindex with a canonical to the parent.
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/asian/august  /restaurants  301
+/asian/summer  /restaurants  301
+/asian/today  /restaurants  301
+/brunch/august  /restaurants  301
+/brunch/fall  /restaurants  301
+/brunch/spring  /restaurants  301
+/brunch/summer  /restaurants  301
+/brunch/winter  /restaurants  301
+/italian/august  /restaurants  301
+/italian/december  /restaurants  301
+/italian/fall  /restaurants  301
+/italian/spring  /restaurants  301
+/italian/summer  /restaurants  301
+/italian/winter  /restaurants  301
+/things-to-do/budget/august  /things-to-do/august  301
+/things-to-do/budget/december  /things-to-do/december  301
+/things-to-do/budget/fall  /things-to-do/fall  301
+/things-to-do/budget/spring  /things-to-do  301
+/things-to-do/budget/summer  /things-to-do/summer  301
+/things-to-do/budget/this-weekend  /events/this-weekend  301
+/things-to-do/budget/today  /events/today  301
+/things-to-do/budget/winter  /things-to-do/winter  301
+/things-to-do/date-night/august  /things-to-do/august  301
+/things-to-do/date-night/december  /things-to-do/december  301
+/things-to-do/date-night/fall  /things-to-do/fall  301
+/things-to-do/date-night/spring  /things-to-do  301
+/things-to-do/date-night/summer  /things-to-do/summer  301
+/things-to-do/date-night/this-weekend  /events/this-weekend  301
+/things-to-do/date-night/today  /events/today  301
+/things-to-do/date-night/winter  /things-to-do/winter  301
+/things-to-do/families/august  /things-to-do/august  301
+/things-to-do/families/december  /things-to-do/december  301
+/things-to-do/families/fall  /things-to-do/fall  301
+/things-to-do/families/spring  /things-to-do  301
+/things-to-do/families/summer  /things-to-do/summer  301
+/things-to-do/families/this-weekend  /events/this-weekend  301
+/things-to-do/families/today  /events/today  301
+/things-to-do/families/winter  /things-to-do/winter  301
+/things-to-do/foodies/august  /things-to-do/august  301
+/things-to-do/foodies/december  /things-to-do/december  301
+/things-to-do/foodies/fall  /things-to-do/fall  301
+/things-to-do/foodies/spring  /things-to-do  301
+/things-to-do/foodies/summer  /things-to-do/summer  301
+/things-to-do/foodies/this-weekend  /events/this-weekend  301
+/things-to-do/foodies/today  /events/today  301
+/things-to-do/foodies/winter  /things-to-do/winter  301
+/things-to-do/tourists/august  /things-to-do/august  301
+/things-to-do/tourists/december  /things-to-do/december  301
+/things-to-do/tourists/fall  /things-to-do/fall  301
+/things-to-do/tourists/spring  /things-to-do  301
+/things-to-do/tourists/summer  /things-to-do/summer  301
+/things-to-do/tourists/this-weekend  /events/this-weekend  301
+/things-to-do/tourists/today  /events/today  301
+/things-to-do/tourists/winter  /things-to-do/winter  301
