@@ -218,7 +218,7 @@ const rich = await rewrite(SHELL, {
 const rn = injectedNode(rich);
 // No menu_url and no hours on this row, so the title promises neither
 // (restaurantPageTitle, eat-drink pass 2 WP3.5).
-ck('the title names the suburb and only what the page has', rich.includes('<title>Bonchon West Des Moines - Reviews | Des Moines Insider</title>'), /<title>[^<]*/.exec(rich)?.[0]);
+ck('the title names the suburb and only what the page has', rich.includes('<title>Bonchon West Des Moines: Reviews | Des Moines Insider</title>'), /<title>[^<]*/.exec(rich)?.[0]);
 ck('the stale "opening soon" description is not served', !rich.includes('opening soon') && !rich.includes('Coming soon'));
 ck('the H1 is the restaurant', rich.includes('<h1>Bonchon</h1>'));
 ck('addressLocality is the suburb, not the city column', rn?.address?.addressLocality === 'West Des Moines', JSON.stringify(rn?.address));

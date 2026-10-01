@@ -131,7 +131,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // types.ts is not proof a column exists - so a failed select falls back to the
 // minimal one below instead of turning a real page into a 404.
 const RESTAURANT_SHELL_COLUMNS =
-  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,latitude,longitude,opening,seo_description,description,status,is_merged,merged_into";
+  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,is_merged,merged_into";
 const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
 const EVENT_SHELL_COLUMNS =
   "id,title,date,event_start_utc,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
@@ -264,10 +264,13 @@ export async function resolveEntity(
       const start = new Date(`${day}T00:00:00Z`);
       const from = new Date(start.getTime() - 36 * 60 * 60 * 1000).toISOString();
       const to = new Date(start.getTime() + 60 * 60 * 60 * 1000).toISOString();
+      // A row a moderator hid is not a page (SEO-031): RLS still serves it to
+      // anon, and the app answers it with "gone", so the shell must not 200 it.
+      const visible = "is_hidden=not.is.true";
       const inWindow = async (sel: string) => {
         const [a, b] = await Promise.all([
-          sbGet(base, anon, `events?event_start_utc=gte.${from}&event_start_utc=lt.${to}&select=${sel}&limit=200`),
-          sbGet(base, anon, `events?date=gte.${from}&date=lt.${to}&select=${sel}&limit=200`),
+          sbGet(base, anon, `events?event_start_utc=gte.${from}&event_start_utc=lt.${to}&${visible}&select=${sel}&limit=200`),
+          sbGet(base, anon, `events?date=gte.${from}&date=lt.${to}&${visible}&select=${sel}&limit=200`),
         ]);
         return a && b ? [...a, ...b] : null;
       };
