@@ -10,6 +10,9 @@
  *        >= 80 + safe  -> publish (status=published, published_at, is_auto_published),
  *        50-79         -> keep as draft in the review queue (review_status=pending_review),
  *        < 50 / unsafe -> discard (delete the draft) with the attempt logged.
+ *      A publish the articles_publishable_body_guard trigger refuses stays a
+ *      draft with the guard's reason in pipeline_reasons, decision 'blocked',
+ *      and counts as a failed item on the run (SEO-059).
  *
  * Cap: 1 auto-published article/day. Pause: feature_flags.ai_article_pipeline_enabled.
  * Runs + score distribution recorded through the WEB-AUTO-001 jobRunner.
@@ -22,6 +25,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { publishBlockedReason, publishGuardProblem } from '../_shared/articlePublishGuard.ts';
 
 const PAUSE_FLAG = 'ai_article_pipeline_enabled';
 const DAILY_CAP = 1;
@@ -260,15 +264,24 @@ Deno.serve(async (req) => {
 
     // --- 4) route -----------------------------------------------------------
     const hardFail = words < MIN_WORDS || maxSim >= SIMILARITY_DISCARD || !safe;
-    let decision: 'published' | 'draft' | 'discarded';
+    // 'blocked': the score said publish, the articles_publishable_body_guard
+    // trigger refused the body (SEO-059). The row stays a draft with the
+    // reason on it, and the run counts it as failed.
+    let decision: 'published' | 'draft' | 'discarded' | 'blocked';
 
     if (hardFail || score < DRAFT_THRESHOLD) {
       decision = 'discarded';
-      await supabase.from('articles').delete().eq('id', article.id);
+      const { error: deleteError } = await supabase.from('articles').delete().eq('id', article.id);
+      if (deleteError) {
+        throw new Error(`ai-article-pipeline: could not discard draft ${article.id}: ${deleteError.message}`);
+      }
       ctx.failed(1);
     } else if (score >= PUBLISH_THRESHOLD && safe && (safetyChecked || dmHits >= 2)) {
       decision = 'published';
-      await supabase
+      // Every write below is checked (SEO-059). supabase-js returns the
+      // error instead of throwing, and this one used to be dropped, so a
+      // publish the body guard refused was reported as published.
+      const { error: publishError } = await supabase
         .from('articles')
         // `review_status` IS NOT A COLUMN ON articles - not here, not anywhere
         // in the generated types - and PostgREST rejects the WHOLE update with
@@ -285,10 +298,39 @@ Deno.serve(async (req) => {
           pipeline_reasons: reasons.length ? reasons : null,
         })
         .eq('id', article.id);
-      ctx.processed(1);
+      const guardProblem = publishGuardProblem(publishError);
+      if (guardProblem) {
+        decision = 'blocked';
+        reasons.push(publishBlockedReason(guardProblem));
+        console.error('[ai-article-pipeline] publish blocked by body guard', {
+          articleId: article.id,
+          problem: guardProblem,
+        });
+        // Status stays draft, so the guard lets this write through. It puts
+        // the reason where the review queue shows it.
+        const { error: markError } = await supabase
+          .from('articles')
+          .update({
+            status: 'draft',
+            is_auto_published: false,
+            quality_score: score,
+            pipeline_reasons: reasons,
+          })
+          .eq('id', article.id);
+        if (markError) {
+          throw new Error(
+            `ai-article-pipeline: publish of ${article.id} blocked (${guardProblem}) and the draft could not be marked: ${markError.message}`,
+          );
+        }
+        ctx.failed(1);
+      } else if (publishError) {
+        throw new Error(`ai-article-pipeline: could not publish ${article.id}: ${publishError.message}`);
+      } else {
+        ctx.processed(1);
+      }
     } else {
       decision = 'draft';
-      await supabase
+      const { error: draftError } = await supabase
         .from('articles')
         // Same dead column as the published branch above; same consequence.
         .update({
@@ -298,6 +340,9 @@ Deno.serve(async (req) => {
           pipeline_reasons: reasons.length ? reasons : null,
         })
         .eq('id', article.id);
+      if (draftError) {
+        throw new Error(`ai-article-pipeline: could not record draft ${article.id}: ${draftError.message}`);
+      }
       ctx.processed(1);
     }
 
