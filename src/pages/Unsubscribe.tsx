@@ -23,7 +23,6 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { logConsent } from "@/lib/consentLog";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   CheckCircle2,
   AlertCircle,
@@ -34,7 +33,6 @@ import {
 type Status = "loading" | "success" | "already" | "invalid" | "error";
 
 export default function Unsubscribe() {
-  useDocumentTitle("Unsubscribe");
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [status, setStatus] = useState<Status>("loading");
@@ -181,11 +179,15 @@ export default function Unsubscribe() {
               </Alert>
             )}
 
+            {/* WP5 item 6. This offered "receipts, security, product updates"
+                categories that don't exist. The settings page has three real
+                switches: the weekly digest, account and activity emails, and
+                saved-search alerts. Security emails have no switch. */}
             <div className="pt-2 text-center text-sm text-muted-foreground">
-              Want to manage individual categories (receipts, security, product
-              updates) instead?{" "}
-              <Link to="/profile?tab=settings" className="underline">
-                Open your notification settings
+              Have an account? The weekly digest and account emails have their
+              own switches.{" "}
+              <Link to="/profile?tab=settings#emails" className="underline">
+                Open your email settings
               </Link>
               .
             </div>

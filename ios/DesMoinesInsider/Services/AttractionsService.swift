@@ -25,12 +25,18 @@ actor AttractionsService {
     /// the best-rated attraction on page 3 stayed below page 1 until page 3
     /// happened to load.
     enum Sort {
+        /// Featured first, then rating, then name (IOS-DD-BROWSE-16). The
+        /// default: newest-first was the least useful order for a couple of
+        /// dozen curated places. Ordered by several keys, so `_fetchAttractions`
+        /// builds it as its own branch; `column`/`ascending` give its first key.
+        case featured
         case newest
         case rating
         case name
 
         var column: String {
             switch self {
+            case .featured: return "is_featured"
             case .newest: return "created_at"
             case .rating: return "rating"
             case .name: return "name"
@@ -39,7 +45,7 @@ actor AttractionsService {
 
         var ascending: Bool {
             switch self {
-            case .newest, .rating: return false
+            case .featured, .newest, .rating: return false
             case .name: return true
             }
         }
@@ -58,7 +64,16 @@ actor AttractionsService {
         var types: [String]?
         var minRating: Double?
         var isFeatured: Bool?
-        var sortBy: Sort = .newest
+        /// Only rows the table marks true; null (unknown) never matches
+        /// (IOS-DD-BROWSE-16).
+        var isFree: Bool?
+        var isKidFriendly: Bool?
+        /// "Rainy day": indoor places.
+        var isIndoor: Bool?
+        /// A neighborhood or city (IOS-DD-BROWSE-17), matched server-side by
+        /// `attractionAreaFilter`.
+        var area: LocationArea?
+        var sortBy: Sort = .featured
         var limit: Int = Config.defaultPageSize
         var offset: Int = 0
     }
@@ -73,15 +88,74 @@ actor AttractionsService {
         try await withRetry { [self] in try await _fetchAttractions(query: query) }
     }
 
+    /// The `or=` value for a text search over name, type, location and
+    /// description, or nil when there is nothing to search for. Trimmed and
+    /// capped at 100 characters; each branch goes through
+    /// `EventsService.ilikeContains` (IOS-DD-SEARCH-01).
+    ///
+    /// It used to interpolate the raw text: "Blank Park Zoo, Des Moines" split
+    /// the clause at the comma and PostgREST answered 400, which Search showed
+    /// as no attractions; "_" matched every row; "x%,rating.gte.0" added a
+    /// branch of its own.
+    static func searchOrFilter(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let pattern = EventsService.ilikeContains(String(trimmed.prefix(100)))
+        return ["name", "type", "location", "description"]
+            .map { "\($0).ilike.\(pattern)" }
+            .joined(separator: ",")
+    }
+
+    /// The boolean column filters a query applies, in a fixed order. Only a
+    /// `true` is sent: "free: no" is not a filter anyone asked for, and a
+    /// null column must not be read as false.
+    static func booleanFilters(_ q: AttractionsQuery) -> [(String, Bool)] {
+        var out: [(String, Bool)] = []
+        if q.isFree == true { out.append(("is_free", true)) }
+        if q.isKidFriendly == true { out.append(("is_kid_friendly", true)) }
+        if q.isIndoor == true { out.append(("is_indoor", true)) }
+        return out
+    }
+
+    /// One or-group matching an area (IOS-DD-BROWSE-17).
+    ///
+    /// The attractions table has no `city` column, so `LocationArea.filterClause`
+    /// (which leads with `city.ilike`) would answer 400 here. A district uses
+    /// the same bounding box as events. A city matches `location` or
+    /// `address` ending in ", City", or carrying ", City, IA" / ", City, Iowa":
+    /// anchored on the comma, so "3500 Urbandale Ave, Des Moines" is not
+    /// Urbandale and ", West Des Moines" is not Des Moines.
+    static func attractionAreaFilter(_ area: LocationArea) -> String {
+        if area.bbox != nil { return area.filterClause }
+        let city = area.rawValue
+        let patterns = ["%, \(city)", "%, \(city), IA%", "%, \(city), Iowa%"]
+        return ["location", "address"]
+            .flatMap { column in patterns.map { "\(column).ilike.\(EventsService.postgrestQuoted($0))" } }
+            .joined(separator: ",")
+    }
+
     private func _fetchAttractions(query: AttractionsQuery) async throws -> AttractionsResponse {
         let client = try db()
+        // is_active is the admin soft-delete (20260520000004); the web list
+        // filters it too (useAttractions.ts). IOS-DD-SEARCH-01.
         var request = client
             .from("attractions")
             .select("*", head: false, count: .exact)
+            .eq("is_active", value: true)
 
-        // Search (multi-field ILIKE — matches web pattern)
-        if let search = query.searchText, !search.isEmpty {
-            request = request.or("name.ilike.%\(search)%,type.ilike.%\(search)%,location.ilike.%\(search)%")
+        // Search (multi-field ILIKE). The text is quoted and LIKE-escaped, so a
+        // comma, paren, '%' or '_' in it is matched literally rather than
+        // ending the or= clause or matching everything (IOS-DD-SEARCH-01).
+        // The area is a second or-group; both go out as ONE `or=` param.
+        var orGroups: [String] = []
+        if let search = query.searchText, let filter = Self.searchOrFilter(search) {
+            orGroups.append(filter)
+        }
+        if let area = query.area {
+            orGroups.append(Self.attractionAreaFilter(area))
+        }
+        if let combined = EventsService.combineOrGroups(orGroups) {
+            request = request.or(combined)
         }
 
         // Type filter. `types` wins when both are supplied.
@@ -101,19 +175,38 @@ actor AttractionsService {
             request = request.eq("is_featured", value: true)
         }
 
+        for (column, value) in Self.booleanFilters(query) {
+            request = request.eq(column, value: value)
+        }
+
         // Order and pagination (transforms must come after all filters)
         // Ordering is server-side so an offset window means the same thing on
         // every page. A secondary key on id keeps the order total: rows sharing a
         // rating (or a null one) would otherwise be free to swap between pages and
-        // appear twice or not at all.
-        let finalRequest = request
-            .order(query.sortBy.column, ascending: query.sortBy.ascending, nullsFirst: false)
-            .order("id", ascending: true)
-            .range(from: query.offset, to: query.offset + query.limit - 1)
-
-        let response = try await finalRequest.execute()
-        let attractions = try JSONDecoder().decode([Attraction].self, from: response.data)
-        let total = response.count ?? attractions.count
+        // appear twice or not at all. One fully typed chain per branch, as in
+        // EventsService, since the transform builder has no stable type name.
+        let data: Data
+        let count: Int?
+        switch query.sortBy {
+        case .featured:
+            let r = try await request
+                .order("is_featured", ascending: false, nullsFirst: false)
+                .order("rating", ascending: false, nullsFirst: false)
+                .order("name", ascending: true)
+                .order("id", ascending: true)
+                .range(from: query.offset, to: query.offset + query.limit - 1)
+                .execute()
+            data = r.data; count = r.count
+        case .newest, .rating, .name:
+            let r = try await request
+                .order(query.sortBy.column, ascending: query.sortBy.ascending, nullsFirst: false)
+                .order("id", ascending: true)
+                .range(from: query.offset, to: query.offset + query.limit - 1)
+                .execute()
+            data = r.data; count = r.count
+        }
+        let attractions = try JSONDecoder().decode([Attraction].self, from: data)
+        let total = count ?? attractions.count
 
         return AttractionsResponse(
             attractions: attractions,
@@ -134,9 +227,11 @@ actor AttractionsService {
     /// It has not misbehaved yet only because the table is small: 22 attractions,
     /// 17 geocoded, against a limit of 50, so the client-side filter has been
     /// seeing everything. The 23rd row past the limit is when it starts lying.
-    func fetchNearbyAttractions(latitude: Double, longitude: Double, limit: Int = 50) async throws -> [Attraction] {
+    ///
+    /// `radiusMiles` lets the map's "Search this area" ask for the visible
+    /// region (IOS-DD-MAP-05); the RPC clamps it to 50.
+    func fetchNearbyAttractions(latitude: Double, longitude: Double, radiusMiles: Double = Config.defaultSearchRadiusMiles, limit: Int = 50) async throws -> [Attraction] {
         let client = try db()
-        let radiusMiles = Config.defaultSearchRadiusMiles
 
         struct RadiusParams: Encodable {
             let center_lat: Double
@@ -166,6 +261,7 @@ actor AttractionsService {
         let attractions: [Attraction] = try await client
             .from("attractions")
             .select()
+            .eq("is_active", value: true)
             .gte("latitude", value: box.minLat)
             .lte("latitude", value: box.maxLat)
             .gte("longitude", value: box.minLng)
@@ -189,16 +285,24 @@ actor AttractionsService {
             .map(\.0)
     }
 
+    /// One active attraction by id or slug (IOS-DD-BROWSE-12). A universal
+    /// link carries the web's slug; a soft-deleted (`is_active = false`) or
+    /// unknown row answers PGRST116, which the callers show as unavailable
+    /// instead of opening a place the admin has taken down.
     func fetchAttraction(id: String) async throws -> Attraction {
-        let client = try db()
-        let attraction: Attraction = try await client
-            .from("attractions")
-            .select()
-            .eq("id", value: id)
-            .single()
-            .execute()
-            .value
-        return attraction
+        try await withRetry { [self] in
+            let client = try db()
+            let column = UUID(uuidString: id) == nil ? "slug" : "id"
+            let attraction: Attraction = try await client
+                .from("attractions")
+                .select()
+                .eq(column, value: id)
+                .eq("is_active", value: true)
+                .single()
+                .execute()
+                .value
+            return attraction
+        }
     }
 
     // MARK: - Fetch by Types (IOS-PARITY-006 content hubs)
@@ -212,6 +316,7 @@ actor AttractionsService {
             let attractions: [Attraction] = try await client
                 .from("attractions")
                 .select()
+                .eq("is_active", value: true)
                 .in("type", values: types)
                 .order("is_featured", ascending: false)
                 .order("rating", ascending: false, nullsFirst: false)
@@ -225,9 +330,10 @@ actor AttractionsService {
 
 /// What SearchViewModel needs from AttractionsService (IOS-AUDIT-TEST-006).
 ///
-/// One method. There is no fuzzy fallback for attractions, which is itself worth
-/// noticing: an attractions search that returns nothing returns nothing, while
-/// events and restaurants get a second, looser attempt.
+/// One method. There is no fuzzy fallback for attractions: an attractions search
+/// that returns nothing returns nothing, while events and restaurants get a
+/// second, looser attempt. The search text is escaped by `searchOrFilter` and
+/// soft-deleted (`is_active = false`) rows are excluded (IOS-DD-SEARCH-01).
 protocol AttractionSearchProviding: Sendable {
     func fetchAttractions(query: AttractionsService.AttractionsQuery) async throws -> AttractionsService.AttractionsResponse
 }

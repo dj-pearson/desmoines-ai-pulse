@@ -1,4 +1,6 @@
 import XCTest
+import CoreLocation
+import MapKit
 @testable import DesMoinesInsider
 
 /// IOS-AUDIT-PERF-027: the bounding box that lets a nearby query narrow BEFORE
@@ -67,5 +69,43 @@ final class GeoBoundingBoxTests: XCTestCase {
         let box = GeoBoundingBox(centerLat: lat, centerLng: lng, radiusMiles: 5)
         // Ames is roughly 30 miles north of downtown Des Moines.
         XCTAssertFalse(box.contains(latitude: 42.0308, longitude: -93.6319))
+    }
+}
+
+/// IOS-DD-MAP-11: the map's own bound on where a pin may be.
+final class MapPlausibleCoordinateTests: XCTestCase {
+
+    private func plausible(_ lat: Double, _ lng: Double) -> Bool {
+        GeoBoundingBox.isPlausibleMapCoordinate(CLLocationCoordinate2D(latitude: lat, longitude: lng))
+    }
+
+    func testNullIslandIsNotPlausible() {
+        XCTAssertFalse(plausible(0, 0))
+    }
+
+    func testSeattleIsNotPlausible() {
+        XCTAssertFalse(plausible(47.4, -122.3))
+    }
+
+    func testDowntownIsPlausible() {
+        XCTAssertTrue(plausible(41.5868, -93.6250))
+    }
+
+    func testLeMarsInTheFarNorthwestIsPlausible() {
+        XCTAssertTrue(plausible(42.79, -96.17))
+    }
+
+    func testANullIslandOutlierNoLongerStretchesTheSearchFit() async throws {
+        let coords = [
+            CLLocationCoordinate2D(latitude: 41.5868, longitude: -93.6250),
+            CLLocationCoordinate2D(latitude: 41.6005, longitude: -93.6091),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+        ]
+        let (inArea, outside) = MapViewModel.partitionForFit(coords)
+        XCTAssertEqual(outside, 1)
+        let fitted = await MapViewModel.regionFitting(coordinates: inArea)
+        let region = try XCTUnwrap(fitted)
+        XCTAssertLessThan(region.span.latitudeDelta, 1)
+        XCTAssertLessThan(region.span.longitudeDelta, 1)
     }
 }

@@ -16,11 +16,12 @@ This guide provides complete implementation details for the Admin SEO Management
 1. [What's Been Completed](#whats-been-completed)
 2. [Database Schema (28 Tables)](#database-schema-28-tables)
 3. [Edge Functions Specifications (45+)](#edge-functions-specifications-45)
-4. [Frontend Components](#frontend-components)
-5. [Environment Configuration](#environment-configuration)
-6. [Deployment Steps](#deployment-steps)
-7. [Testing Procedures](#testing-procedures)
-8. [Next Steps](#next-steps)
+4. [Head and Schema Components](#head-and-schema-components)
+5. [Frontend Components](#frontend-components)
+6. [Environment Configuration](#environment-configuration)
+7. [Deployment Steps](#deployment-steps)
+8. [Testing Procedures](#testing-procedures)
+9. [Next Steps](#next-steps)
 
 ---
 
@@ -415,6 +416,95 @@ serve(async (req) => {
   }
 });
 ```
+
+---
+
+## Head and Schema Components
+
+Two families render into `<head>`: head managers, which own title/description/
+canonical/OG for a page, and schema emitters, which add one JSON-LD node each.
+WEB-SEO-039 deleted thirteen components that sat beside them with zero
+importers. The table below is what survives, so the surface stays auditable.
+
+Recount before trusting a name here, and recount the right way.
+`grep -rl RestaurantSchema src/` used to return hits for a component nothing
+rendered, because every hit came from `src/components/schema/index.ts`, a barrel
+no file imported. That barrel is gone and must not come back: import the
+component file directly. Plain grep also counts prose, which is why
+`SEOEnhancedHead` and `SEOStructure` still appear in `EventsPage.tsx` and
+`Index.tsx` (WEB-SEO-027 deleted both components and left comments explaining
+why). The command that answers the question:
+
+```bash
+grep -rlE "\bComponentName\b" src/ --include=*.tsx --include=*.ts \
+  | grep -v "/ComponentName\."
+```
+
+### Head managers
+
+`react-helmet-async` resolves duplicate tags last-one-wins, so a page mounts
+exactly one of these. Two on a page is the WEB-SEO-027 bug: the second one's
+defaults silently overwrite the first one's real values.
+
+| Component | Renders on | Owns |
+|---|---|---|
+| `SEOHead` | 39 pages - the default | title, description, canonical, OG/Twitter, optional `structuredData` passthrough, optional `location` for a Place node |
+| `EnhancedLocalSEO` | 13 pages | SEOHead's job plus Des Moines local-business/breadcrumb/event JSON-LD |
+| `LocalSEO` | `NeighborhoodsPage`, `NeighborhoodPage` | neighborhood-scoped titles and LocalBusiness JSON-LD |
+| `EnhancedEventSEO` | `EventDetails` | the head plus Event JSON-LD via `buildEventJsonLd`, offers via `buildEventOffers`, robots directive derived from the event's own start date. `EventDetails` deliberately mounts no `SEOHead` (WEB-SEO-040) |
+| `EnhancedPlaygroundSEO` | `PlaygroundDetails` | the head plus the Playground/TouristAttraction node (age range, amenities) |
+
+`EnhancedAttractionSEO` is the exception and reads like a seventh head manager
+without being one. WEB-SEO-027 stripped its title, description, canonical,
+robots, OG and Twitter tags, because `AttractionDetails` mounts `SEOHead` after
+it and was already winning every one of them. What is left is the `place:*` meta
+for AI parsers and three JSON-LD blocks, TouristAttraction among them (with
+`isAccessibleForFree` read from the column rather than assumed true, WEB-SEO-024).
+So `AttractionDetails` mounting both components is correct, and putting a
+`<title>` back into `EnhancedAttractionSEO` would reintroduce the collision.
+
+### Schema emitters (`src/components/schema/`)
+
+Each renders one JSON-LD `<script>` and nothing else, so a page may mount
+several alongside its head manager.
+
+| Component | Node | Used by |
+|---|---|---|
+| `BreadcrumbListSchema` | BreadcrumbList | `Index`, `EventsPage`, and the four detail pages |
+| `EventListJsonLd` | ItemList of Events | every event listing page (11) plus `seo/MonthLinks` |
+| `FAQSchema` | FAQPage | `ArticleDetails` |
+| `HotelSchema` | Hotel | `HotelDetails` |
+| `ItemListSchema` | ItemList | hub and roundup pages (7) |
+| `MenuSchema` | Menu | `RestaurantDetails`, `RestaurantMenuSection` |
+| `NoIndexMeta` | robots noindex | `EventsPage`, `Articles`, `SearchResults` |
+| `SpeakableSchema` | speakable | `Index`, `ArticleDetails`, `RestaurantDetails` |
+| `TouristTripSchema` | TouristTrip | `ItineraryDetail` |
+
+### What was deleted, and why not to re-add it
+
+`src/components/EventSchema.tsx`, `SEOOptimizedHead.tsx`, `seo/Breadcrumbs.tsx`,
+`seo/index.ts`, and in `schema/`: `ArticleSchema`, `BreadcrumbSchema`,
+`EventSchema`, `HowToSchema`, `OrganizationSchema`, `ProductSchema`,
+`RestaurantSchema`, `TouristAttractionSchema`, `WebSiteSchema`, `index.ts`.
+
+Two are worth knowing about before someone writes them again:
+
+- `RestaurantSchema` carried an `aggregateRating` path. There is no review
+  corpus behind it - `reviews` and `ratings` are both missing from the database
+  (see CLAUDE.md, Database). A rating node with no ratings is a structured-data
+  penalty waiting to happen.
+- `TouristAttractionSchema` is the one SEO-011 AC2 asked about. It was deleted
+  rather than wired in: `AttractionDetails` already emits a TouristAttraction
+  node through `EnhancedAttractionSEO`, so mounting the component would have
+  published a second, independently computed one. The AC offered replacing an
+  inline node, and there is no inline node on that page to replace.
+
+`src/components/seo/InternalLinks.tsx` is also imported by nothing, and is
+deliberately left in place - `Footer.tsx:397` and `seo/SiteDirectory.tsx:26`
+both cite it as the predecessor they replaced. Delete it and those comments
+become dangling references.
+
+`src/lib/__tests__/seoSurfaceInventory.test.ts` pins all of the above.
 
 ---
 

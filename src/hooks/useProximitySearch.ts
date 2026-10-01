@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
+import { fetchVisibleEventsByIds } from '@/lib/eventQuery';
+import { handleError } from '@/lib/errorHandler';
+import { nearMeBox, roundCoordinate } from '@/lib/nearMeOrigins';
+import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import type { CentralWindow } from '@/lib/timezone';
+import { applyHubFilters, isNotOver, type HubEvent } from '@/components/events/eventsHubQuery';
 
 type Event = Database['public']['Tables']['events']['Row'];
 type Restaurant = Database['public']['Tables']['restaurants']['Row'];
@@ -37,88 +44,199 @@ export interface ProximitySearchResult<T> {
   searchCenter: { latitude: number; longitude: number } | null;
 }
 
+export interface EventsNearbyOptions {
+  latitude: number;
+  longitude: number;
+  radiusMiles?: number;
+  /** Canonical category (EVENT_CATEGORIES), or undefined/'all' for any. */
+  category?: string;
+  /** Central-time bounds from nearMeWindowBounds(); null means any date. */
+  window?: CentralWindow | null;
+  enabled?: boolean;
+}
+
+/** A near-me row: the list projection plus its distance from the origin. */
+export type NearbyEvent = HubEvent & {
+  distance_miles: number;
+  distance_meters: number;
+};
+
+export interface NearbyEventsResult {
+  items: NearbyEvent[];
+  /** The source stopped at its cap, so there may be more than `items`. */
+  limitHit: boolean;
+  /** Which query answered: the windowed table read, or the Anytime RPC. */
+  source: "window" | "rpc";
+}
+
 /**
- * Hook for searching events by proximity to a location
- * Uses PostGIS geospatial functions for accurate distance calculations
+ * Rows the RPC may return ("Anytime" only). The v1 RPC orders featured rows
+ * first and applies its LIMIT before anything else, so a full answer is not
+ * the nearest 200; the page says so (events-pass2 WP5 item 2).
  */
-export function useEventsNearby(options: ProximitySearchOptions) {
-  const [state, setState] = useState<ProximitySearchResult<EventWithDistance>>({
-    items: [],
-    isLoading: false,
-    error: null,
-    totalCount: 0,
-    searchCenter: null,
+export const NEARBY_EVENTS_LIMIT = 200;
+
+/**
+ * Rows the windowed read may return. A 50-mile box over a week is a few
+ * hundred rows on a busy week; at the cap the page says the list may be
+ * incomplete rather than presenting it as all of them.
+ */
+export const NEARBY_WINDOW_CAP = 1000;
+
+const METERS_PER_MILE = 1609.34;
+
+type Center = { latitude: number; longitude: number };
+
+function withDistance(event: HubEvent, center: Center): NearbyEvent | null {
+  if (typeof event.latitude !== "number" || typeof event.longitude !== "number") return null;
+  const miles = calculateDistance(center.latitude, center.longitude, event.latitude, event.longitude);
+  return { ...event, distance_miles: miles, distance_meters: Math.round(miles * METERS_PER_MILE) };
+}
+
+function startMs(event: HubEvent): number {
+  const raw = event.event_start_utc || event.date;
+  const t = raw instanceof Date ? raw.getTime() : Date.parse(String(raw ?? ""));
+  return Number.isNaN(t) ? Infinity : t;
+}
+
+function byDistanceThenStart(a: NearbyEvent, b: NearbyEvent): number {
+  if (a.distance_miles !== b.distance_miles) return a.distance_miles - b.distance_miles;
+  return startMs(a) - startMs(b);
+}
+
+/**
+ * A window is set: read `events` directly (events-pass2 WP5 item 1). The
+ * hub's own predicates (visibility, the Central window with running
+ * festivals, the not-over rule when the window holds now, category) plus a
+ * lat/lng box around the rounded origin, THEN the cap, so a busy later date
+ * can never push a nearer in-window row out of the answer the way the RPC's
+ * LIMIT did. The box's corners are dropped by haversine distance here.
+ */
+export async function fetchNearbyInWindow(
+  center: Center,
+  radiusMiles: number,
+  category: string | null,
+  window: CentralWindow,
+  now: Date = new Date()
+): Promise<NearbyEventsResult> {
+  const box = nearMeBox(center, radiusMiles);
+  const { data, error } = await applyHubFilters(
+    supabase.from("events").select(EVENT_LIST_COLUMNS),
+    { search: "", category: category ?? "all", window, area: undefined, freeOnly: false, sort: "date_asc" },
+    now
+  )
+    .not("latitude", "is", null)
+    .gte("latitude", box.south)
+    .lte("latitude", box.north)
+    .gte("longitude", box.west)
+    .lte("longitude", box.east)
+    .order("date", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(NEARBY_WINDOW_CAP);
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as HubEvent[];
+  const items = rows
+    .map((row) => withDistance(row, center))
+    .filter((row): row is NearbyEvent => row !== null && row.distance_miles <= radiusMiles)
+    .sort(byDistanceThenStart);
+  return { items, limitHit: rows.length >= NEARBY_WINDOW_CAP, source: "window" };
+}
+
+interface NearbyRpcRow {
+  id: string;
+  distance_meters: number | null;
+}
+
+/**
+ * "Anytime": the PostGIS RPC for ids and distances, then one read of the list
+ * projection under the visibility rules (the v1 RPC applies none, D1), the
+ * hub's not-over rule, and the category. Interim until D1's v2.
+ */
+export async function fetchNearbyAnytime(
+  center: Center,
+  radiusMiles: number,
+  category: string | null,
+  now: Date = new Date()
+): Promise<NearbyEventsResult> {
+  const { data, error } = await supabase.rpc("search_events_near_location", {
+    user_lat: center.latitude,
+    user_lon: center.longitude,
+    radius_meters: Math.round(radiusMiles * METERS_PER_MILE),
+    search_limit: NEARBY_EVENTS_LIMIT,
+  });
+  if (error) throw error;
+
+  const raw = (data ?? []) as unknown as NearbyRpcRow[];
+  const distance = new Map<string, number>();
+  for (const row of raw) {
+    if (row?.id && row.distance_meters != null) distance.set(row.id, row.distance_meters);
+  }
+  const rows =
+    distance.size > 0
+      ? await fetchVisibleEventsByIds<HubEvent>([...distance.keys()], EVENT_LIST_COLUMNS)
+      : [];
+
+  const items = rows
+    .filter((event) => isNotOver(event, now))
+    .filter((event) => !category || event.category === category)
+    .map((event): NearbyEvent => {
+      const meters = distance.get(event.id) ?? 0;
+      return {
+        ...event,
+        distance_meters: meters,
+        distance_miles: Number((meters / METERS_PER_MILE).toFixed(1)),
+      };
+    })
+    .sort(byDistanceThenStart);
+  return { items, limitHit: raw.length >= NEARBY_EVENTS_LIMIT, source: "rpc" };
+}
+
+/**
+ * Events within a radius, on TanStack Query.
+ *
+ * The query key carries the coordinates ROUNDED to 2 decimals, and the
+ * queries receive the same rounded pair, so the visitor's precise position is
+ * never sent or cached. With a window the answer is exact (fetchNearbyInWindow);
+ * "Anytime" goes through the RPC and says when it hit its cap.
+ */
+export function useEventsNearby(options: EventsNearbyOptions) {
+  const latitude = roundCoordinate(options.latitude);
+  const longitude = roundCoordinate(options.longitude);
+  const radiusMiles = options.radiusMiles ?? 25;
+  const category = options.category && options.category !== "all" ? options.category : null;
+  const timeWindow = options.window ?? null;
+
+  const query = useQuery({
+    queryKey: [
+      "events-nearby",
+      latitude,
+      longitude,
+      radiusMiles,
+      category,
+      timeWindow?.start ?? null,
+      timeWindow?.end ?? null,
+    ],
+    enabled: options.enabled !== false && Number.isFinite(latitude) && Number.isFinite(longitude),
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      timeWindow
+        ? fetchNearbyInWindow({ latitude, longitude }, radiusMiles, category, timeWindow)
+        : fetchNearbyAnytime({ latitude, longitude }, radiusMiles, category),
   });
 
-  const search = useCallback(async () => {
-    if (!options.latitude || !options.longitude) {
-      setState(prev => ({
-        ...prev,
-        error: 'Latitude and longitude are required',
-        isLoading: false,
-      }));
-      return;
-    }
-
-    try {
-      setState(prev => ({ ...prev, isLoading: true, error: null }));
-
-      const radiusMeters = (options.radiusMiles || 25) * 1609.34; // Convert miles to meters
-
-      // Use the RPC function for geospatial search
-      const { data, error } = await supabase.rpc('search_events_near_location', {
-        user_lat: options.latitude,
-        user_lon: options.longitude,
-        radius_meters: Math.round(radiusMeters),
-        search_limit: options.limit || 50,
-      });
-
-      if (error) throw error;
-
-      let results = (data || []) as EventWithDistance[];
-
-      // Apply category filter if specified
-      if (options.category && options.category !== 'all') {
-        results = results.filter(event => event.category === options.category);
-      }
-
-      // Add distance in miles for display
-      results = results.map(event => ({
-        ...event,
-        distance_miles: event.distance_meters
-          ? Number((event.distance_meters * 0.000621371).toFixed(1))
-          : undefined,
-      }));
-
-      // Apply sorting
-      if (options.sortBy) {
-        results = sortResults(results, options.sortBy);
-      }
-
-      setState({
-        items: results,
-        isLoading: false,
-        error: null,
-        totalCount: results.length,
-        searchCenter: { latitude: options.latitude, longitude: options.longitude },
-      });
-    } catch (error) {
-      console.error('Error searching nearby events:', error);
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to search nearby events',
-      }));
-    }
-  }, [options.latitude, options.longitude, options.radiusMiles, options.limit, options.category, options.sortBy]);
-
-  useEffect(() => {
-    search();
-  }, [search]);
-
   return {
-    ...state,
-    refetch: search,
+    items: query.data?.items ?? [],
+    limitHit: query.data?.limitHit ?? false,
+    source: query.data?.source ?? (timeWindow ? "window" : "rpc"),
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isFetched: query.isFetched,
+    isSuccess: query.isSuccess,
+    error: query.error,
+    refetch: query.refetch,
+    searchCenter: { latitude, longitude },
   };
 }
 
@@ -171,7 +289,7 @@ export function useRestaurantsNearby(options: ProximitySearchOptions) {
         searchCenter: { latitude: options.latitude, longitude: options.longitude },
       });
     } catch (error) {
-      console.error('Error searching nearby restaurants:', error);
+      handleError(error, { component: 'useRestaurantsNearby', action: 'search' });
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -238,7 +356,9 @@ export function useGeolocation() {
         setIsLoading(false);
       },
       {
-        enableHighAccuracy: true,
+        // A city-scale radius search needs no GPS fix; the coarse position is
+        // faster, cheaper on battery and reveals less (events plan WP6 item 7).
+        enableHighAccuracy: false,
         timeout: 10000,
         maximumAge: 300000, // Cache location for 5 minutes
       }
@@ -264,7 +384,7 @@ function sortResults<T extends { distance_miles?: number; date?: string; rating?
 
   switch (sortBy) {
     case 'distance':
-      sorted.sort((a, b) => (a.distance_miles || Infinity) - (b.distance_miles || Infinity));
+      sorted.sort((a, b) => (a.distance_miles ?? Infinity) - (b.distance_miles ?? Infinity));
       break;
     case 'date':
       sorted.sort((a, b) => {
@@ -321,7 +441,7 @@ export function formatDistance(miles: number): string {
  * Get distance display text with appropriate units
  */
 export function getDistanceDisplay(distanceMiles?: number): string {
-  if (!distanceMiles) return '';
+  if (distanceMiles == null || !Number.isFinite(distanceMiles)) return '';
   if (distanceMiles < 0.1) return 'Nearby';
   if (distanceMiles < 1) return `${(distanceMiles * 5280).toFixed(0)} ft`;
   return `${distanceMiles.toFixed(1)} mi away`;

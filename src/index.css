@@ -173,14 +173,6 @@
   .glass-card {
     @apply bg-white/80 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm hover:shadow-md transition-all duration-300;
   }
-
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary;
-  }
-
-  .text-gradient-blue {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#071e62] to-[#0a2a8a] dark:from-[#4d7cfe] dark:to-[#071e62];
-  }
 }
 
 /* Mobile-First Design System - Optimized for GEO and Performance
@@ -277,6 +269,61 @@ All colors MUST be HSL. Touch targets minimum 44px.
   @media (pointer: fine) {
     .tap-area-44::after {
       display: none;
+    }
+  }
+
+  /**
+   * Footer link rows sized for a thumb.
+   *
+   * WEB-UX-036. Measured at 375px against a production build: 72 of the ~73
+   * interactive elements under 44px on EVERY page were footer links, at 16-20px
+   * tall in lists with 8px gaps. That fails this project's own 44px standard and
+   * WCAG 2.5.8's 24px AA minimum, and it is where the legal links live - Privacy,
+   * Terms, Cookie Policy, Accessibility, DMCA - which are exactly the links
+   * someone goes hunting for deliberately.
+   *
+   * Coarse pointers only, like .tap-area-44 above. A mouse does not need it and
+   * the desktop footer keeps its compact rhythm. Real padding rather than that
+   * utility's ::after overlay, because these links are stacked a few pixels
+   * apart and overlapping hit regions would steal each other's taps - which is
+   * the collision its own docblock warns about.
+   *
+   * The list gap goes to zero on coarse because the row padding now provides
+   * the separation; without that the footer would grow by ~8px per link.
+   *
+   * TWO SIZES, and the reason is scroll cost. The mobile footer was already
+   * 2871px tall at 375px, most of it SiteDirectory - 60-odd deep links whose
+   * job is internal linking and crawlability, not thumb navigation. Sizing
+   * those to 44px measured 3935px, another full screen of footer for links
+   * almost nobody taps. So .footer-link (the ~27 links people actually use -
+   * Explore, Company, Legal) gets the project's 44px, and .footer-link-compact
+   * (the SEO directory) gets 24px, which is the WCAG 2.5.8 AA minimum and what
+   * those 20px rows were failing. Measured at 375px: 2871px before, 3431px
+   * after, rather than the 3935px a uniform 44px produced.
+   */
+  .footer-link {
+    @apply text-neutral-400 hover:text-white transition-colors text-sm;
+  }
+
+  .footer-link-compact {
+    @apply text-neutral-400 hover:text-white transition-colors text-sm;
+  }
+
+  @media (pointer: coarse) {
+    .footer-link {
+      display: flex;
+      align-items: center;
+      min-height: 44px;
+    }
+
+    .footer-link-compact {
+      display: flex;
+      align-items: center;
+      min-height: 24px;
+    }
+
+    .footer-link-list > * + * {
+      margin-top: 0;
     }
   }
 
@@ -449,8 +496,10 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 
   /* Safe area support - use CSS properties directly */
+  /* No 1rem floor: on a phone without a notch the inset is 0, and the floor
+     put 16px of empty space above every header. */
   .safe-area-top {
-    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
   }
 
   .safe-area-bottom {
@@ -458,8 +507,16 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 
   /* Bottom navigation spacing - prevents content from being hidden behind bottom nav on mobile */
+  /* BottomNav is h-16 plus its .safe-area-bottom padding, max(1rem, inset).
+     A flat pb-20 (5rem) left the footer's last line under the bar on any
+     phone whose inset is over 1rem (every notched iPhone). */
   .pb-bottom-nav {
-    @apply pb-20 lg:pb-0;
+    padding-bottom: calc(4rem + max(1rem, env(safe-area-inset-bottom)));
+  }
+  @media (min-width: 1024px) {
+    .pb-bottom-nav {
+      padding-bottom: 0;
+    }
   }
 
   /* Content-visibility for below-the-fold sections */
@@ -829,7 +886,18 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 }
 
-/* Reduced motion support */
+/* Reduced motion: respect the OS preference, for users with vestibular
+   disorders among others (WEB-QUAL-013 AC3).
+
+   THIS BLOCK WAS HERE TWICE, character for character, ~470 lines apart. Two
+   identical copies are not a bug in the rendered CSS - the second is simply
+   redundant - but they are a maintenance trap: editing one leaves the other
+   asserting the old rule, and the file gives no hint the other exists. The
+   duplicate at the end of the file is deleted.
+
+   There was a THIRD implementation of the same idea in src/hooks/useReducedMotion.ts,
+   imported by nothing. It is deleted too; useAccessibility.ts is the hook that
+   actually runs when a component needs to branch on this in JS. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1295,14 +1363,3 @@ html.capacitor-app,
   height: env(safe-area-inset-top, 0px);
 }
 
-/* --- Reduced motion: respect OS preference for users with vestibular disorders --- */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}

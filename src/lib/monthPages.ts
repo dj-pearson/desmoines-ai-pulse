@@ -1,93 +1,109 @@
 /**
- * SEO-033. Rules for the /events/<month>-<year> index pages, in one pure module
- * so the page, the sitemap generator and the tests cannot disagree about them.
+ * Which /events/<month>-<year> pages exist, which are indexable, and what the
+ * page says about its month. One pure module so the page, the sitemap
+ * generator and the tests cannot disagree.
  *
- * No React, no date-fns and no "@/" imports: scripts/generate-dynamic-sitemaps.ts
- * imports this file by relative path under tsx.
+ * Two stories set these rules and they were merged here:
  *
- * WHY THE PAGES HAVE TO EXIST EARLY. /events/october-2026 converts at 30.4% CTR
- * from position 3.1 and /events/november-2026 at 7.8%, the best-converting pages
- * on the site, and a page earns nothing until Google has crawled and indexed it.
- * The old sitemap rule (>= 3 events in the month) kept a month out until venues
- * had announced enough dates, which for December and January is late November.
- * On 2026-09-30 production had 12 December events and 1 January event inside
- * the sitemap window, so January was absent and would have stayed absent well
- * into the period people are already searching it.
+ * docs/page-plans/events-pass2.md WP3 item 6 (range). The month route used to
+ * answer any month in any year with a full page and rel=prev/next links, so a
+ * crawler could walk from march-1998 to 2140 one empty page at a time:
+ *
+ *   - a month from last month to twelve months ahead is in range;
+ *   - a month whose year is outside the range's years renders the not-found
+ *     state; an out-of-range month in a range year renders noindex.
+ *
+ * SEO-033 (lead window). /events/october-2026 converts at 30.4% CTR from
+ * position 3.1 and /events/november-2026 at 7.8%, the best-converting pages on
+ * the site, and a page earns nothing until Google has crawled it. A floor of
+ * MIN_EVENTS_PER_MONTH kept a month out until venues had announced enough
+ * dates, which for December and January is late November. So:
+ *
+ *   - a month is indexable when it is in range AND either lists at least
+ *     MIN_EVENTS_PER_MONTH events or starts within LEAD_WINDOW_DAYS;
+ *   - the sitemap lists exactly the indexable months (selectSitemapMonths), so
+ *     no sitemap entry points at a page that renders noindex.
+ *
+ * "Now" is read in Central. No imports on purpose: the sitemap script loads
+ * this file under tsx, where the `@/` alias is not guaranteed.
  */
 
-export const MONTH_NAMES = [
+/** Fewer events than this and the month page is noindex and out of the sitemap, unless it is in the lead window. */
+export const MIN_EVENTS_PER_MONTH = 3;
+
+/** How far back and ahead a month page is in range, in months from the current one. */
+export const MONTHS_BACK = 1;
+export const MONTHS_AHEAD = 12;
+
+export interface MonthRef {
+  year: number;
+  /** 1-12 */
+  month: number;
+}
+
+export const MONTH_SLUGS = [
   "january", "february", "march", "april", "may", "june",
   "july", "august", "september", "october", "november", "december",
 ] as const;
 
-const MONTH_LABELS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-const MONTH_SLUG = /^(january|february|march|april|may|june|july|august|september|october|november|december)-(\d{4})$/i;
-
-export interface MonthRef {
-  year: number;
-  /** 0-11, as Date uses it. */
-  monthIndex: number;
+/** "august-2026" or "August-2026" -> { year: 2026, month: 8 }; null when unparseable. */
+export function parseMonthSlug(slug: string | null | undefined): MonthRef | null {
+  if (!slug) return null;
+  const match = /^([a-z]+)-(\d{4})$/i.exec(slug);
+  if (!match) return null;
+  const index = (MONTH_SLUGS as readonly string[]).indexOf(match[1].toLowerCase());
+  if (index < 0) return null;
+  return { year: Number(match[2]), month: index + 1 };
 }
 
-export function parseMonthSlug(slug: string | undefined | null): MonthRef | null {
-  const m = MONTH_SLUG.exec(slug ?? "");
-  if (!m) return null;
-  return { year: Number(m[2]), monthIndex: MONTH_NAMES.indexOf(m[1].toLowerCase() as (typeof MONTH_NAMES)[number]) };
+export function monthSlug({ year, month }: MonthRef): string {
+  return `${MONTH_SLUGS[month - 1]}-${year}`;
 }
 
-export function monthSlugOf(ref: MonthRef): string {
-  return `${MONTH_NAMES[ref.monthIndex]}-${ref.year}`;
+/** "September 2026" */
+export function monthName({ year, month }: MonthRef): string {
+  const name = MONTH_SLUGS[month - 1];
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
 }
 
-export function monthLabelOf(ref: MonthRef): string {
-  return `${MONTH_LABELS[ref.monthIndex]} ${ref.year}`;
+export function shiftMonth({ year, month }: MonthRef, delta: number): MonthRef {
+  const zeroBased = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(zeroBased / 12), month: (((zeroBased % 12) + 12) % 12) + 1 };
 }
 
-/** The month `delta` months away from `ref`, rolling over years. */
-export function shiftMonth(ref: MonthRef, delta: number): MonthRef {
-  const total = ref.year * 12 + ref.monthIndex + delta;
-  return { year: Math.floor(total / 12), monthIndex: ((total % 12) + 12) % 12 };
+function monthIndex({ year, month }: MonthRef): number {
+  return year * 12 + (month - 1);
 }
 
-/** Whole calendar months from `ref` to the month containing `now`; positive = past. */
-export function monthsAgo(ref: MonthRef, now: Date): number {
-  return now.getFullYear() * 12 + now.getMonth() - (ref.year * 12 + ref.monthIndex);
+const CENTRAL_MONTH = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Chicago",
+  year: "numeric",
+  month: "numeric",
+});
+
+/** The Central calendar month `now` falls in. */
+export function centralMonthOf(now: Date = new Date()): MonthRef {
+  const parts = CENTRAL_MONTH.formatToParts(now);
+  const year = Number(parts.find((p) => p.type === "year")?.value);
+  const month = Number(parts.find((p) => p.type === "month")?.value);
+  return { year, month };
 }
 
-/**
- * Months more than this many calendar months behind the current one are
- * noindexed. As of September, July (2 back) stays indexed and June (3 back)
- * does not.
- */
-export const ARCHIVE_AFTER_MONTHS = 2;
+/** Last month through twelve months ahead, Central. */
+export function isMonthInRange(target: MonthRef, now: Date = new Date()): boolean {
+  const current = monthIndex(centralMonthOf(now));
+  const index = monthIndex(target);
+  return index >= current - MONTHS_BACK && index <= current + MONTHS_AHEAD;
+}
 
-/**
- * NOINDEX, NOT 301, for old months. Decided for SEO-033:
- *
- *  - The URL keeps working. A 301 from /events/june-2026 to the current month
- *    sends someone who followed an old link to a page about a different month,
- *    and Google treats a redirect to unrelated content as a soft 404 anyway, so
- *    the redirect would not even carry the equity it is meant to keep.
- *  - CLAUDE.md treats public routes as a persistent schema: a removed route
- *    needs a 301 kept for a release cycle. A rolling redirect whose target
- *    changes every month is not that, and it would have to live in the
- *    middleware, which runs on every production request.
- *  - noindex,follow is reversible and local to the page. It is the same rule
- *    EnhancedEventSEO already applies to long-past event detail pages.
- *
- * The sitemap never lists an archived month (selectSitemapMonths filters them),
- * so the prerender pass never renders one either.
- */
-export function isArchivedMonth(ref: MonthRef, now: Date = new Date()): boolean {
-  return monthsAgo(ref, now) > ARCHIVE_AFTER_MONTHS;
+/** Calendar months from `target` back to the current Central month; positive = past. */
+export function monthsAgo(target: MonthRef, now: Date = new Date()): number {
+  return monthIndex(centralMonthOf(now)) - monthIndex(target);
 }
 
 /**
- * How far ahead a month is published regardless of how many events it has.
+ * How far ahead a month is published regardless of how many events it has
+ * (SEO-033).
  *
  * The story asked for months "within 10 weeks", and also for December 2026 AND
  * January 2027 to be in the sitemap on 2026-09-30. Those two cannot both hold if
@@ -98,19 +114,53 @@ export function isArchivedMonth(ref: MonthRef, now: Date = new Date()): boolean 
  */
 export const LEAD_WINDOW_DAYS = 98;
 
+/** Roughly Central midnight on the 1st: 06:00Z is 00:00 CST and 01:00 CDT. */
+function firstDayInstant({ year, month }: MonthRef): number {
+  return Date.UTC(year, month - 1, 1, 6);
+}
+
 /**
- * Every month from the current one through the last month whose first day is
- * within LEAD_WINDOW_DAYS of `now`. These go in the sitemap with no event floor.
+ * Every month from the current Central one through the last month whose first
+ * day is within `leadDays` of `now`, as slugs.
  */
 export function leadWindowMonths(now: Date = new Date(), leadDays = LEAD_WINDOW_DAYS): string[] {
-  const horizon = new Date(now.getTime() + leadDays * 24 * 60 * 60 * 1000);
+  const horizon = now.getTime() + leadDays * 24 * 60 * 60 * 1000;
   const out: string[] = [];
-  let ref: MonthRef = { year: now.getFullYear(), monthIndex: now.getMonth() };
-  while (new Date(ref.year, ref.monthIndex, 1).getTime() <= horizon.getTime()) {
-    out.push(monthSlugOf(ref));
+  let ref = centralMonthOf(now);
+  while (firstDayInstant(ref) <= horizon) {
+    out.push(monthSlug(ref));
     ref = shiftMonth(ref, 1);
   }
   return out;
+}
+
+export function isInLeadWindow(target: MonthRef, now: Date = new Date(), leadDays = LEAD_WINDOW_DAYS): boolean {
+  return leadWindowMonths(now, leadDays).includes(monthSlug(target));
+}
+
+/**
+ * In range, and either at least MIN_EVENTS_PER_MONTH events or inside the lead
+ * window. A month published ahead of its events carries the seasonal block and
+ * month links, so it is not a bare heading over an empty grid.
+ */
+export function isIndexableMonth(target: MonthRef, count: number, now: Date = new Date()): boolean {
+  if (!isMonthInRange(target, now)) return false;
+  return count >= MIN_EVENTS_PER_MONTH || isInLeadWindow(target, now);
+}
+
+/**
+ * Is the month's year one the range touches? A month in such a year renders
+ * (noindex when outside the range); any other year is the not-found state.
+ */
+export function isYearInRange(year: number, now: Date = new Date()): boolean {
+  const current = centralMonthOf(now);
+  const first = shiftMonth(current, -MONTHS_BACK).year;
+  const last = shiftMonth(current, MONTHS_AHEAD).year;
+  return year >= first && year <= last;
+}
+
+export function isCurrentMonth(target: MonthRef, now: Date = new Date()): boolean {
+  return monthIndex(target) === monthIndex(centralMonthOf(now));
 }
 
 export interface MonthTally {
@@ -119,29 +169,25 @@ export interface MonthTally {
 }
 
 /**
- * Which month pages go in sitemap-events.xml.
+ * Which month pages go in sitemap-events.xml: exactly the indexable ones.
  *
- * A month qualifies if it is inside the lead window (any count, including zero),
- * or if it has at least `minEvents` events. Archived months never qualify, even
- * with events, because the page itself says noindex and a sitemap entry for a
- * noindexed URL is a contradiction Search Console reports.
- *
+ * Lead-window months are added even with no events at all (they are absent
+ * from `perMonth` then), stamped with `today` as lastmod and `forced: true`.
  * Returned sorted by slug so two runs over the same data write the same file.
  */
 export function selectSitemapMonths(
   perMonth: Map<string, MonthTally>,
   now: Date,
-  options: { minEvents: number; leadDays?: number; today: string },
+  options: { today: string; leadDays?: number },
 ): Array<{ slug: string; lastmod: string; forced: boolean }> {
   const lead = new Set(leadWindowMonths(now, options.leadDays ?? LEAD_WINDOW_DAYS));
   const slugs = new Set([...perMonth.keys(), ...lead]);
   const out: Array<{ slug: string; lastmod: string; forced: boolean }> = [];
   for (const slug of slugs) {
     const ref = parseMonthSlug(slug);
-    if (!ref || isArchivedMonth(ref, now)) continue;
+    if (!ref || !isMonthInRange(ref, now)) continue;
     const tally = perMonth.get(slug);
-    const count = tally?.count ?? 0;
-    const meetsFloor = count >= options.minEvents;
+    const meetsFloor = (tally?.count ?? 0) >= MIN_EVENTS_PER_MONTH;
     if (!meetsFloor && !lead.has(slug)) continue;
     out.push({ slug, lastmod: tally?.lastmod ?? options.today, forced: !meetsFloor });
   }
@@ -156,24 +202,24 @@ export interface SeasonalTheme {
 }
 
 /**
- * Seasonal intros by month index. Only months with a theme the story names get
+ * Seasonal intros by month (1-12). Only months with a theme SEO-033 names get
  * one; every other month gets the data-driven line alone. Nothing here may name
  * a venue, a date or a price: those come from the events table or not at all.
  */
 export const SEASONAL_THEMES: Partial<Record<number, SeasonalTheme>> = {
-  9: {
+  10: {
     intro:
       "October in Des Moines is Halloween season: haunted houses, pumpkin patches, corn mazes and neighborhood trick-or-treating.",
     // Checked against October 2026 titles: "monster" caught Big Head Todd and
     // the Monsters and "witch" caught the band All Them Witches, so neither is here.
     titlePattern: /halloween|haunt|pumpkin|trick.or.|costume|spooky|zombie|fright/i,
   },
-  10: {
+  11: {
     intro:
       "November brings Thanksgiving and the start of the holiday season, when the first holiday markets open and the light displays switch on.",
     titlePattern: /thanksgiving|turkey trot|holiday|christmas|santa|nutcracker|tree lighting/i,
   },
-  11: {
+  12: {
     intro:
       "December in Des Moines means holiday lights, holiday markets and concerts, and New Year's Eve to close out the year.",
     // \bcarol(s|ing)?\b rather than "carol": game titles say "North Carolina".
@@ -214,9 +260,9 @@ export interface TitledEvent {
   category?: string | null;
 }
 
-/** Events in the month whose title matches the month's theme, in input order. */
-export function seasonalPicks<T extends TitledEvent>(events: T[], monthIndex: number, limit = 6): T[] {
-  const theme = SEASONAL_THEMES[monthIndex];
+/** Events in the month whose title matches the month's theme, in input order. `month` is 1-12. */
+export function seasonalPicks<T extends TitledEvent>(events: T[], month: number, limit = 6): T[] {
+  const theme = SEASONAL_THEMES[month];
   if (!theme) return [];
   return events.filter((e) => theme.titlePattern.test(e.title || "")).slice(0, limit);
 }

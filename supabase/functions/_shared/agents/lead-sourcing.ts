@@ -93,6 +93,8 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .gte("date", new Date().toISOString())
     .not("venue", "is", null)
     .is("archived_at", null)
+    // WEB-BE-034: is_hidden is the other unpublish switch.
+    .neq("is_hidden", true)
     .limit(PER_SOURCE);
   if (evsError) {
     unreadableSources.push(`events: ${evsError.message}`);

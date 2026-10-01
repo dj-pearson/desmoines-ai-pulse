@@ -20,6 +20,9 @@ struct SwipeCardStack: View {
     var onSkip: (SwipeItem) -> Void
     var onBoost: (SwipeItem) -> Void
     var onTap: (SwipeItem) -> Void
+    /// Rewinds the last swipe (IOS-DD-DISCOVER-07). Exposed as a VoiceOver
+    /// action on the top card; nil hides nothing, the action just does nothing.
+    var onUndo: (() -> Void)? = nil
     /// Set by the parent's action-bar buttons to drive the same animated fly-off
     /// as a gesture swipe (IOS-AUDIT-UX-018). Reset to nil once consumed.
     @Binding var command: Command?
@@ -49,6 +52,13 @@ struct SwipeCardStack: View {
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDismissing = false
+    /// The direction a release would commit to right now. Crossing into one
+    /// fires a selection tick, so the user feels the threshold before letting
+    /// go (IOS-DD-DISCOVER-11).
+    @State private var armedDirection: CommitDirection?
+    /// Moves VoiceOver to the new top card after a commit, instead of leaving
+    /// focus on a card that has flown off.
+    @AccessibilityFocusState private var focusedCardId: String?
 
     // Reduce Motion (IOS-COMPLY-003): drop the card rotation and the springy
     // overshoot for users who opt out of motion. The drag itself is direct
@@ -90,39 +100,7 @@ struct SwipeCardStack: View {
     var body: some View {
         ZStack {
             ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                SwipeCard(
-                    item: item,
-                    dragOffset: index == 0 ? dragOffset : .zero,
-                    isTopCard: index == 0
-                )
-                .frame(width: cardWidth, height: cardHeight)
-                .scaleEffect(scale(for: index))
-                .offset(y: stackYOffset(for: index))
-                .offset(index == 0 ? dragOffset : .zero)
-                .rotationEffect(index == 0 && !reduceMotion ? .degrees(rotationDegrees) : .zero)
-                .zIndex(Double(visibleItems.count - index))
-                .animation(
-                    reduceMotion
-                        ? .linear(duration: 0)
-                        : .interactiveSpring(response: 0.32, dampingFraction: 0.78),
-                    value: dragOffset
-                )
-                .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
-                .onTapGesture { if index == 0 { onTap(item) } }
-                .allowsHitTesting(index == 0 && !isDismissing)
-                // VoiceOver can't perform the raw drag gesture or the bare
-                // onTapGesture, so expose the top card as an activatable button
-                // (double-tap opens detail) with named rotor actions mirroring
-                // the swipe commits. Back cards are hidden (IOS-AUDIT-UX-037).
-                .accessibilityHidden(index != 0)
-                .accessibilityAddTraits(index == 0 ? .isButton : [])
-                .accessibilityHint(index == 0
-                    ? "Double tap to open details. Use the rotor for Save, Skip, and More like this."
-                    : "")
-                .accessibilityAction { if index == 0 { onTap(item) } }
-                .accessibilityAction(named: Text("Save")) { if index == 0 { programmaticLike() } }
-                .accessibilityAction(named: Text("Skip")) { if index == 0 { programmaticSkip() } }
-                .accessibilityAction(named: Text("More like this")) { if index == 0 { programmaticBoost() } }
+                accessibleCard(positionedCard(item, index: index), item: item, index: index)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -136,6 +114,55 @@ struct SwipeCardStack: View {
             }
             command = nil
         }
+    }
+
+    // MARK: - Card
+
+    /// The card, sized, stacked and draggable. Split from the accessibility
+    /// modifiers below to keep each expression small for the type checker.
+    private func positionedCard(_ item: SwipeItem, index: Int) -> some View {
+        SwipeCard(
+            item: item,
+            dragOffset: index == 0 ? dragOffset : .zero,
+            isTopCard: index == 0
+        )
+        .frame(width: cardWidth, height: cardHeight)
+        .scaleEffect(scale(for: index))
+        .offset(y: stackYOffset(for: index))
+        .offset(index == 0 ? dragOffset : .zero)
+        .rotationEffect(index == 0 && !reduceMotion ? .degrees(rotationDegrees) : .zero)
+        .zIndex(Double(visibleItems.count - index))
+        .animation(
+            reduceMotion
+                ? .linear(duration: 0)
+                : .interactiveSpring(response: 0.32, dampingFraction: 0.78),
+            value: dragOffset
+        )
+        .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
+        .onTapGesture { if index == 0 { onTap(item) } }
+        .allowsHitTesting(index == 0 && !isDismissing)
+    }
+
+    /// VoiceOver can't perform the raw drag gesture or the bare onTapGesture,
+    /// so the top card is an activatable button (double-tap opens detail) with
+    /// named actions mirroring the swipe commits. Back cards are hidden
+    /// (IOS-AUDIT-UX-037).
+    private func accessibleCard(_ card: some View, item: SwipeItem, index: Int) -> some View {
+        card
+            .accessibilityHidden(index != 0)
+            .accessibilityAddTraits(index == 0 ? .isButton : [])
+            // The only hint on the card. SwipeCard carried a second one
+            // telling VoiceOver users to swipe, which they cannot do
+            // (IOS-DD-DISCOVER-11).
+            .accessibilityHint(index == 0
+                ? "Double tap to open details. Actions: Save, Skip, More like this, Undo."
+                : "")
+            .accessibilityAction { if index == 0 { onTap(item) } }
+            .accessibilityAction(named: Text("Save")) { if index == 0 { programmaticLike() } }
+            .accessibilityAction(named: Text("Skip")) { if index == 0 { programmaticSkip() } }
+            .accessibilityAction(named: Text("More like this")) { if index == 0 { programmaticBoost() } }
+            .accessibilityAction(named: Text("Undo")) { if index == 0 { onUndo?() } }
+            .accessibilityFocused($focusedCardId, equals: item.id)
     }
 
     // MARK: - Stack geometry
@@ -163,30 +190,34 @@ struct SwipeCardStack: View {
             .onChanged { value in
                 guard !isDismissing else { return }
                 dragOffset = value.translation
+                // Armed on distance alone, not predicted velocity, so the tick
+                // means "letting go here commits".
+                let armed = Self.commitDirection(
+                    translation: value.translation,
+                    predicted: value.translation,
+                    threshold: SwipeCard.commitThreshold
+                )
+                if armed != armedDirection {
+                    armedDirection = armed
+                    if armed != nil { HapticFeedback.shared.selection() }
+                }
             }
             .onEnded { value in
+                armedDirection = nil
                 guard !isDismissing else { return }
-                let h = value.translation.width
-                let v = value.translation.height
-                let velocity = value.predictedEndTranslation
-
-                // Up-swipe wins over horizontal when it's clearly upward
-                // and the vertical magnitude beats the horizontal one.
-                let isVertical = abs(v) > abs(h) && v < 0
-                let upCommitted = isVertical &&
-                    (-v > SwipeCard.commitThreshold || -velocity.height > 320)
-                let rightCommitted = !isVertical &&
-                    (h > SwipeCard.commitThreshold || velocity.width > 320)
-                let leftCommitted = !isVertical &&
-                    (-h > SwipeCard.commitThreshold || -velocity.width > 320)
-
-                if upCommitted {
+                let direction = Self.commitDirection(
+                    translation: value.translation,
+                    predicted: value.predictedEndTranslation,
+                    threshold: SwipeCard.commitThreshold
+                )
+                switch direction {
+                case .up:
                     commit(item: item, direction: .up, action: onBoost)
-                } else if rightCommitted {
+                case .right:
                     commit(item: item, direction: .right, action: onLike)
-                } else if leftCommitted {
+                case .left:
                     commit(item: item, direction: .left, action: onSkip)
-                } else {
+                case nil:
                     // Spring back (linear snap under Reduce Motion).
                     withAnimation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.4, dampingFraction: 0.7)) {
                         dragOffset = .zero
@@ -195,7 +226,29 @@ struct SwipeCardStack: View {
             }
     }
 
-    private enum CommitDirection { case left, right, up }
+    enum CommitDirection: Equatable { case left, right, up }
+
+    /// Which way a drag commits, or nil to spring back. Pure so the thresholds
+    /// can be tested (IOS-DD-DISCOVER-11).
+    ///
+    /// Up wins over horizontal when the drag is clearly upward and its vertical
+    /// magnitude beats the horizontal one. A fling commits on predicted travel
+    /// past 320pt even when the finger moved less than the threshold.
+    nonisolated static func commitDirection(
+        translation: CGSize,
+        predicted: CGSize,
+        threshold: CGFloat
+    ) -> CommitDirection? {
+        let h = translation.width
+        let v = translation.height
+        let isVertical = abs(v) > abs(h) && v < 0
+        if isVertical {
+            return (-v > threshold || -predicted.height > 320) ? .up : nil
+        }
+        if h > threshold || predicted.width > 320 { return .right }
+        if -h > threshold || -predicted.width > 320 { return .left }
+        return nil
+    }
 
     private func commit(item: SwipeItem, direction: CommitDirection, action: @escaping (SwipeItem) -> Void) {
         isDismissing = true
@@ -206,10 +259,17 @@ struct SwipeCardStack: View {
         case .up: target = CGSize(width: dragOffset.width, height: -900)
         }
 
+        // Save and skip used to feel identical (medium for both). A save is
+        // the good outcome and gets the success pattern; a skip is a light tap.
         switch direction {
-        case .left, .right: HapticFeedback.shared.medium()
+        case .right: HapticFeedback.shared.success()
+        case .left: HapticFeedback.shared.light()
         case .up: HapticFeedback.shared.premiumUnlock()
         }
+
+        // The card after this one, as it stands now. A boost resets the deck,
+        // so there is no "next" to name for it.
+        let next = direction == .up ? nil : items.dropFirst().first
 
         // Reduce Motion: minimize the fly-off travel time (the card must still
         // leave, but we don't draw out the long kinetic sweep).
@@ -220,6 +280,29 @@ struct SwipeCardStack: View {
             action(item)
             dragOffset = .zero
             isDismissing = false
+            announceCommit(of: item, direction: direction, next: next)
+        }
+    }
+
+    /// Tells VoiceOver what happened and what is on top now. A commit used to
+    /// be silent, with focus left on a card that had flown away.
+    private func announceCommit(of item: SwipeItem, direction: CommitDirection, next: SwipeItem?) {
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        let verb: String
+        switch direction {
+        case .right: verb = "Saved"
+        case .left: verb = "Skipped"
+        case .up: verb = "Showing more like"
+        }
+        let tail: String
+        if direction == .up {
+            tail = ""
+        } else {
+            tail = next.map { " Next: \($0.title)" } ?? " No more cards"
+        }
+        UIAccessibility.post(notification: .announcement, argument: "\(verb) \(item.title).\(tail)")
+        if let next {
+            focusedCardId = next.id
         }
     }
 

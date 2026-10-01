@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 /// A lat/lng square around a point, for narrowing a query BEFORE its row limit
 /// (IOS-AUDIT-PERF-027).
@@ -22,6 +23,13 @@ struct GeoBoundingBox {
     /// Miles per degree of latitude. Constant everywhere.
     private static let milesPerLatDegree = 69.0
 
+    init(minLat: Double, maxLat: Double, minLng: Double, maxLng: Double) {
+        self.minLat = minLat
+        self.maxLat = maxLat
+        self.minLng = minLng
+        self.maxLng = maxLng
+    }
+
     init(centerLat: Double, centerLng: Double, radiusMiles: Double) {
         let latDelta = radiusMiles / Self.milesPerLatDegree
 
@@ -41,5 +49,19 @@ struct GeoBoundingBox {
     /// radius test is a distance comparison, which the callers still do.
     func contains(latitude: Double, longitude: Double) -> Bool {
         latitude >= minLat && latitude <= maxLat && longitude >= minLng && longitude <= maxLng
+    }
+
+    // MARK: - Map plausibility (IOS-DD-MAP-11)
+
+    /// Iowa plus a small margin. Every listing is in or near Des Moines, so a
+    /// row outside this box is a bad geocode: (0,0) "Null Island", a
+    /// same-named town in another state, swapped lat/lng.
+    static let iowaServiceArea = GeoBoundingBox(minLat: 40.37, maxLat: 43.51, minLng: -96.64, maxLng: -90.14)
+
+    /// Whether a coordinate belongs on the map. The models keep 0.0 as a
+    /// valid value (IOS-AUDIT-BUG-016); the map applies its own bound so one
+    /// bad row cannot pin the Atlantic or fit a search camera to it.
+    static func isPlausibleMapCoordinate(_ c: CLLocationCoordinate2D) -> Bool {
+        iowaServiceArea.contains(latitude: c.latitude, longitude: c.longitude)
     }
 }

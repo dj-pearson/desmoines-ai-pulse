@@ -26,9 +26,12 @@ import {
 import { Search, Download, Filter, User, FileText } from "lucide-react";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
 import { format } from 'date-fns';
 import { useDataExport } from '@/hooks/useDataExport';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+const log = createLogger('ActivityLogViewer');
 
 interface AdminActionLog {
   id: string;
@@ -57,24 +60,47 @@ export function ActivityLogViewer() {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
+      // NO EMBED. `profiles:admin_user_id(email)` reads like a join to profiles
+      // and is not one: PostgREST takes `admin_user_id` as the relation to
+      // embed, and it is an ordinary column with no foreign key, so the answer
+      // was PGRST200 and the WHOLE query failed. The admin activity log has
+      // always rendered its error state (WEB-QA-034). Three call sites shared
+      // this exact idiom; all three are fixed the same way.
       const { data, error } = await supabase
         .from('admin_action_logs')
-        .select(`
-          *,
-          profiles:admin_user_id (
-            email
-          )
-        `)
+        .select('*')
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: false })
         .limit(500);
 
       if (error) throw error;
 
-      return (data || []).map(log => ({
+      const rows = data || [];
+
+      // One extra request, keyed on profiles.USER_ID - profiles.id is the
+      // profile row's own PK and matching an auth id against it returns zero
+      // rows silently (WEB-SEC-023).
+      const adminIds = [...new Set(rows.map((r) => r.admin_user_id).filter(Boolean))] as string[];
+      const emails = new Map<string, string>();
+      if (adminIds.length > 0) {
+        // Best-effort by design: a failure costs the admin's email and the
+        // rows still render with 'Unknown', so it is logged rather than thrown.
+        const { data: profiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('user_id, email')
+          .in('user_id', adminIds);
+        if (profileError) {
+          log.warn('activityLog', 'Admin lookup failed', { error: profileError.message });
+        }
+        for (const p of profiles ?? []) {
+          if (p.user_id && p.email) emails.set(p.user_id, p.email);
+        }
+      }
+
+      return rows.map(log => ({
         ...log,
-        admin_email: (log as any).profiles?.email || 'Unknown'
-      })) as AdminActionLog[];
+        admin_email: (log.admin_user_id && emails.get(log.admin_user_id)) || 'Unknown'
+      })) as unknown as AdminActionLog[];
     },
     staleTime: 1000 * 60 // 1 minute
   });

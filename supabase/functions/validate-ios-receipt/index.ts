@@ -12,7 +12,10 @@
  *   SUPABASE_URL         - Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY - Supabase service role key
  *
- * Accepts POST: { transactionId, originalTransactionId, productId, userId }
+ * Accepts POST: { transactionId, originalTransactionId, productId, userId, transfer? }
+ *   transfer (optional, default false): sent by the iOS Restore button only. It
+ *   lets this account take over an Apple subscription another account holds
+ *   when the purchase carried no appAccountToken (IOS-DD-MONETIZATION-02).
  * Returns: { valid: true, entitlement: { tier, expiresAt } } on success
  *          { valid: false, reason: string } on failure
  */
@@ -21,6 +24,7 @@ import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
+import { decideAppleOwnership } from '../_shared/appleOwnership.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -165,6 +169,8 @@ interface AppleTransactionInfo {
   revocationDate?: number;
   type: string;
   inAppOwnershipType: string;
+  /** The UUID the app passed as Product.PurchaseOption.appAccountToken (IOS-DD-MONETIZATION-02). */
+  appAccountToken?: string;
 }
 
 /**
@@ -304,6 +310,8 @@ serve(async (req) => {
     // -----------------------------------------------------------------------
     const body = await req.json();
     const { transactionId, originalTransactionId, productId, userId } = body;
+    // Additive, optional: older binaries never send it and get the default.
+    const transferRequested = body?.transfer === true;
 
     if (!transactionId || typeof transactionId !== 'string') {
       return new Response(
@@ -426,6 +434,65 @@ serve(async (req) => {
       );
     }
 
+    // -----------------------------------------------------------------------
+    // 5b. One Apple subscription, one account (IOS-DD-MONETIZATION-02)
+    // -----------------------------------------------------------------------
+    // Apple's value, not the client's: the client-sent originalTransactionId
+    // was stored verbatim before, so a caller could attach any id to its row.
+    const appleOriginalId = txInfo.originalTransactionId;
+
+    const { data: otherHolders, error: holdersError } = await supabase
+      .from('user_subscriptions')
+      .select('id, user_id')
+      .eq('platform', 'ios')
+      .eq('apple_original_transaction_id', appleOriginalId)
+      .neq('user_id', user.id)
+      .in('status', ['active', 'trialing', 'past_due']);
+
+    // Fail closed: a dropped error reads as "nobody else holds it" and would
+    // bind a second account to the same subscription.
+    if (holdersError) {
+      throw new Error(`user_subscriptions ownership lookup failed: ${holdersError.message}`);
+    }
+
+    const ownership = decideAppleOwnership({
+      callerId: user.id,
+      appAccountToken: txInfo.appAccountToken ?? null,
+      otherActiveOwnerIds: (otherHolders ?? []).map((r: { user_id: string }) => r.user_id),
+      transferRequested,
+    });
+
+    if (ownership.action === 'refuse') {
+      console.warn(
+        `Apple subscription ownership refused: original=${appleOriginalId}, caller=${user.id}, ` +
+        `token=${txInfo.appAccountToken ? 'present' : 'absent'}, holders=${(otherHolders ?? []).length}`
+      );
+      return new Response(
+        JSON.stringify({ valid: false, reason: ownership.reason ?? 'owned_by_another_account' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (ownership.action === 'transfer' && otherHolders && otherHolders.length > 0) {
+      const { error: transferError } = await supabase
+        .from('user_subscriptions')
+        .update({
+          status: 'canceled',
+          cancel_at_period_end: true,
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', otherHolders.map((r: { id: string }) => r.id));
+
+      if (transferError) {
+        throw new Error(`user_subscriptions transfer failed: ${transferError.message}`);
+      }
+      console.log(
+        `Apple subscription moved: original=${appleOriginalId}, to=${user.id}, ` +
+        `from=${otherHolders.map((r: { user_id: string }) => r.user_id).join(',')}, ` +
+        `via=${txInfo.appAccountToken ? 'appAccountToken' : 'restore'}`
+      );
+    }
+
     // Determine tier
     const tier = resolveProductTier(txInfo.productId);
     if (!tier) {
@@ -473,7 +540,7 @@ serve(async (req) => {
       user_id: user.id,
       status,
       apple_transaction_id: transactionId,
-      apple_original_transaction_id: originalTransactionId,
+      apple_original_transaction_id: appleOriginalId,
       apple_product_id: txInfo.productId,
       platform: 'ios',
       current_period_end: expiresAt,
@@ -546,18 +613,17 @@ serve(async (req) => {
 
     return addRateLimitHeaders(response, rateLimit);
   } catch (error) {
+    // IOS-DD-MONETIZATION-17: the detail stays in the log. It used to be echoed
+    // to the caller under a wildcard CORS header that bypassed corsHeaders.
     console.error('validate-ios-receipt error:', error);
     return new Response(
       JSON.stringify({
         valid: false,
-        reason: error.message || 'Internal server error',
+        reason: 'Internal server error',
       }),
       {
         status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json',
-        },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }

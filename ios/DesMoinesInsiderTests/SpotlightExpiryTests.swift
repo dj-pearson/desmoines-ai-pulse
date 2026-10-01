@@ -12,9 +12,10 @@ final class SpotlightExpiryTests: XCTestCase {
 
     /// Decoded rather than memberwise-initialised: Event has thirty-odd stored
     /// properties and only id, title and date are required.
-    private func event(id: String, date: String?) -> Event {
+    private func event(id: String, date: String?, endDate: String? = nil) -> Event {
         var fields = ["\"id\":\"\(id)\"", "\"title\":\"Test \(id)\""]
         fields.append("\"date\":\"\(date ?? "")\"")
+        if let endDate { fields.append("\"end_date\":\"\(endDate)\"") }
         let json = "{\(fields.joined(separator: ","))}"
         // swiftlint:disable:next force_try
         return try! JSONDecoder().decode(Event.self, from: Data(json.utf8))
@@ -29,13 +30,46 @@ final class SpotlightExpiryTests: XCTestCase {
 
     // MARK: - Expiration
 
-    func testExpirationIsTheAssumedEndPlusGrace() {
-        let start = Date(timeIntervalSince1970: 1_000_000)
+    func testExpirationIsTheEffectiveEndPlusGrace() throws {
+        // A timed event with no end_date runs three hours (Event.isOver).
+        let e = event(id: "timed", date: "2026-08-08T15:00:00Z")
+        let start = try XCTUnwrap(e.parsedDate)
         XCTAssertEqual(
-            SpotlightService.expiration(for: start),
-            start.addingTimeInterval(SpotlightService.assumedDurationSeconds
-                + SpotlightService.expiryGraceSeconds)
+            SpotlightService.expiration(for: e),
+            start.addingTimeInterval(3 * 3600 + SpotlightService.expiryGraceSeconds)
         )
+    }
+
+    func testAnUndatedEventHasNoExpiration() {
+        XCTAssertNil(SpotlightService.expiration(for: event(id: "undated", date: nil)))
+    }
+
+    // MARK: - Multi-day events (IOS-DD-PLATFORM-08)
+
+    /// Aug 8 10:00 CDT to Aug 10 22:00 CDT.
+    private var festival: Event {
+        event(id: "fest", date: "2026-08-08T15:00:00Z", endDate: "2026-08-11T03:00:00Z")
+    }
+
+    func testAFestivalIsFreshOnItsSecondDay() throws {
+        // Aug 9, noon CDT.
+        let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-08-09T17:00:00Z"))
+        let (fresh, expired) = SpotlightService.partition([festival], now: now)
+        XCTAssertEqual(fresh.map(\.id), ["fest"])
+        XCTAssertTrue(expired.isEmpty)
+    }
+
+    func testAFestivalExpiresAfterItsEnd() throws {
+        let end = try XCTUnwrap(festival.parsedEndDate)
+        let expiry = try XCTUnwrap(SpotlightService.expiration(for: festival))
+        XCTAssertGreaterThan(expiry, end)
+    }
+
+    func testATimedEventWithNoEndIsExpiredFourHoursIn() {
+        let now = Date()
+        let (fresh, expired) = SpotlightService.partition([event(id: "show", date: iso(-4, from: now))], now: now)
+        XCTAssertTrue(fresh.isEmpty)
+        XCTAssertEqual(expired, ["event-show"])
     }
 
     func testGraceIsNotZero() {
@@ -72,12 +106,12 @@ final class SpotlightExpiryTests: XCTestCase {
         XCTAssertEqual(expired, ["event-abc-123"])
     }
 
-    func testAnEventStillInsideItsGraceIsKept() {
-        // Started three hours ago: past its assumed two-hour end, inside the
-        // six-hour grace.
+    func testAnEventStillRunningIsKept() {
+        // Started two hours ago: inside the three hours a timed event with no
+        // end_date is assumed to run (Event.isOver, IOS-DD-PLATFORM-08).
         let now = Date()
         let (fresh, expired) = SpotlightService.partition(
-            [event(id: "tonight", date: iso(-3, from: now))],
+            [event(id: "tonight", date: iso(-2, from: now))],
             now: now
         )
         XCTAssertEqual(fresh.map(\.id), ["tonight"])

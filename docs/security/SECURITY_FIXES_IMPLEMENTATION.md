@@ -66,49 +66,38 @@ const MAX_SESSION_DURATION_SECONDS = 28800; // 8 hours
 
 ---
 
-### ✅ 3. CSRF Protection (HIGH)
+### ❌ 3. CSRF Protection (HIGH) - WITHDRAWN, not shipped
 
-**Issue:** No CSRF protection for forms/API requests
-**File:** `src/lib/csrf.ts` (NEW)
+**Original issue as filed:** No CSRF protection for forms/API requests.
+**File that was written:** `src/lib/csrf.tsx` - deleted 2026-09-09.
 
-**Fix Applied:**
-- Double Submit Cookie pattern implementation
-- CSRF tokens stored in sessionStorage
-- Constant-time comparison to prevent timing attacks
-- Helper functions for fetch requests
-- React hook for easy integration
+**What actually happened.** The module was written, marked done here, and
+imported by nothing. `scripts/check-dead-lib-modules.mjs` had it baselined as
+unimported. The three "Required Action" items below it - wire it into the edge
+functions, the forms, and the API calls - were never done, so the tick above
+described a file, not a behaviour.
 
-**Usage:**
+**Why it is not being wired up instead.** Classic CSRF needs the browser to
+attach credentials to a cross-site request on its own, which means a cookie.
+This app has no auth cookie. `src/integrations/supabase/client.ts` stores the
+Supabase session in localStorage through its `auth.storage` adapter, and
+supabase-js sends it as an `Authorization: Bearer` header that another origin's
+page cannot cause to be sent. The deleted module also stored its token in
+sessionStorage rather than in a cookie, so it was not a double-submit cookie in
+the first place - both halves of the "double submit" came from the same
+JavaScript-readable store, which is not a check.
 
-```typescript
-// In components
-import { useCSRF } from '@/lib/csrf';
+The only first-party cookie this app writes is the shadcn sidebar state
+(`src/components/ui/sidebar.tsx`), an admin layout preference.
 
-function MyComponent() {
-  const { token, addToHeaders } = useCSRF();
+**What was corrected alongside the deletion.** `src/pages/CookiePolicy.tsx` and
+`src/components/CookieConsentBanner.tsx` both told visitors that essential
+cookies included CSRF tokens, and the policy also named "Supabase auth session
+cookies". Neither is a cookie this site sets. Both now describe localStorage
+and Cloudflare's bot-management cookie.
 
-  // For fetch requests
-  const headers = addToHeaders();
-
-  // For forms
-  return <input type="hidden" name="csrf_token" value={token} />;
-}
-
-// For API calls
-import { withCSRF } from '@/lib/csrf';
-
-const [url, options] = withCSRF('/api/endpoint', {
-  method: 'POST',
-  body: JSON.stringify(data)
-});
-
-fetch(url, options);
-```
-
-**Required Action:**
-1. Add CSRF validation to all edge functions
-2. Update all form submissions to include token
-3. Update all API calls to include token in headers
+**If a cookie-based session is ever introduced, this becomes real again** and
+needs a server-side check in the edge functions, not a client-side token pair.
 
 ---
 

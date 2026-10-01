@@ -6,6 +6,10 @@ import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useGamification');
 
+/** How many rows the activity feed and leaderboard render. */
+const ACTIVITY_FEED_LIMIT = 25;
+const LEADERBOARD_LIMIT = 25;
+
 export interface UserReputation {
   user_id: string;
   experience_points: number;
@@ -56,6 +60,15 @@ export interface Activity {
   metadata: any;
   created_at: string;
 }
+
+/**
+ * An RPC argument the SQL declares `DEFAULT NULL` but the generated Args type
+ * reports as `?: string`. See the call site in awardPoints for why null is sent
+ * rather than the key omitted; this exists so the cast is in one place with the
+ * reason attached, instead of spread across the call.
+ */
+const nullableRpcArg = (value: string | undefined): string | undefined =>
+  (value ?? null) as unknown as string | undefined;
 
 export function useGamification() {
   const [reputation, setReputation] = useState<UserReputation | null>(null);
@@ -109,57 +122,138 @@ export function useGamification() {
     }
   };
 
+  /**
+   * WEB-FEAT-028. Every fetcher below used to set an empty array behind a
+   * comment claiming its table "doesn't exist yet". All of them exist in
+   * production, verified against scripts/db-snapshot.json: badges, user_badges,
+   * community_challenges, user_activities and user_reputation, plus the
+   * award_user_xp RPC. The proof the comments were stale rather than accurate
+   * is in this same file - fetchUserReputation queries user_reputation for
+   * real, while fetchLeaderboard claimed that table did not exist.
+   *
+   * Every read below keeps the defensive shape the reputation fetch already
+   * used: an RLS denial or a missing row leaves the section empty rather than
+   * throwing, because these are decorative surfaces and must never break a page.
+   */
   const fetchUserBadges = async () => {
-    if (!user) return;
+    if (!user) {
+      setBadges([]);
+      return;
+    }
 
     try {
-      // Mock badges since user_badges table doesn't exist yet
-      const mockBadges = [] as Badge[];
-      setBadges(mockBadges);
+      const { data, error } = await supabase
+        .from("user_badges")
+        .select("earned_at, badges(*)")
+        .eq("user_id", user.id)
+        .order("earned_at", { ascending: false });
+
+      if (error) {
+        logger.error('fetchUserBadges', 'Error fetching badges', { error });
+        setBadges([]);
+        return;
+      }
+
+      // The join returns { earned_at, badges: {...} }; flatten it to the Badge
+      // shape the components render, keeping when it was earned.
+      const earned = (data ?? [])
+        .map((row: any) => (row.badges ? { ...row.badges, earned_at: row.earned_at } : null))
+        .filter(Boolean) as Badge[];
+      setBadges(earned);
     } catch (error) {
       logger.error('fetchUserBadges', 'Error fetching badges', { error });
+      setBadges([]);
     }
   };
 
   const fetchAvailableBadges = async () => {
     try {
-      // Mock available badges since badges table doesn't exist yet
-      const mockAvailableBadges = [] as Badge[];
-      setAvailableBadges(mockAvailableBadges);
+      const { data, error } = await supabase
+        .from("badges")
+        .select("*")
+        .eq("is_active", true)
+        .order("points_value", { ascending: true });
+
+      if (error) {
+        logger.error('fetchAvailableBadges', 'Error fetching available badges', { error });
+        setAvailableBadges([]);
+        return;
+      }
+      setAvailableBadges((data ?? []) as Badge[]);
     } catch (error) {
       logger.error('fetchAvailableBadges', 'Error fetching available badges', { error });
+      setAvailableBadges([]);
     }
   };
 
   const fetchChallenges = async () => {
     try {
-      // Mock challenges since community_challenges table doesn't exist yet
-      const mockChallenges = [] as CommunityChallenge[];
-      setChallenges(mockChallenges);
+      // Only challenges that are still open. A finished challenge on the page
+      // is the same class of bug as a finished State Fair (WEB-FEAT-029).
+      const { data, error } = await supabase
+        .from("community_challenges")
+        .select("*")
+        .eq("is_active", true)
+        .gte("end_date", new Date().toISOString())
+        .order("end_date", { ascending: true });
+
+      if (error) {
+        logger.error('fetchChallenges', 'Error fetching challenges', { error });
+        setChallenges([]);
+        return;
+      }
+      setChallenges((data ?? []) as CommunityChallenge[]);
     } catch (error) {
       logger.error('fetchChallenges', 'Error fetching challenges', { error });
+      setChallenges([]);
     }
   };
 
   const fetchActivities = async () => {
-    if (!user) return;
+    if (!user) {
+      setActivities([]);
+      return;
+    }
 
     try {
-      // Mock activities since user_activities table doesn't exist yet
-      const mockActivities = [] as Activity[];
-      setActivities(mockActivities);
+      const { data, error } = await supabase
+        .from("user_activities")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(ACTIVITY_FEED_LIMIT);
+
+      if (error) {
+        logger.error('fetchActivities', 'Error fetching activities', { error });
+        setActivities([]);
+        return;
+      }
+      setActivities((data ?? []) as Activity[]);
     } catch (error) {
       logger.error('fetchActivities', 'Error fetching activities', { error });
+      setActivities([]);
     }
   };
 
   const fetchLeaderboard = async () => {
     try {
-      // Mock leaderboard since user_reputation table doesn't exist yet or has schema issues
-      const mockLeaderboard: any[] = [];
-      setLeaderboard(mockLeaderboard);
+      const { data, error } = await supabase
+        .from("user_reputation")
+        .select("*")
+        .order("experience_points", { ascending: false })
+        .limit(LEADERBOARD_LIMIT);
+
+      if (error) {
+        // Reading other users' reputation is exactly the kind of thing an RLS
+        // policy may forbid. An empty leaderboard is the right outcome then.
+        logger.error('fetchLeaderboard', 'Error fetching leaderboard', { error });
+        setLeaderboard([]);
+        return;
+      }
+      setLeaderboard((data ?? []) as UserReputation[]);
     } catch (error) {
       logger.error('fetchLeaderboard', 'Error fetching leaderboard', { error });
+      setLeaderboard([]);
     }
   };
 
@@ -173,15 +267,34 @@ export function useGamification() {
     if (!user) return;
 
     try {
-      // Mock awarding points since function doesn't exist
-      logger.debug('awardPoints', 'Points would be awarded', {
+      // WEB-FEAT-028: this used to LOG the call and then congratulate the user
+      // for XP that was never written. The RPC it was logging - matching these
+      // exact parameter names - has existed since migration 20250805010931.
+      const { error } = await supabase.rpc("award_user_xp", {
         p_user_id: user.id,
         p_activity_type: activityType,
         p_points: points,
-        p_content_type: contentType,
-        p_content_id: contentId,
-        p_metadata: metadata
+        // WEB-CI-030 AC5. These read `contentType ?? null` and were briefly
+        // changed to pass `contentType` instead, which type-checked and broke
+        // the test that pins the null. Sending an explicit null is the correct
+        // behaviour and the generated type is the inaccurate side: the SQL
+        // declares `p_content_type text DEFAULT NULL`, and Supabase's generator
+        // emits every defaulted argument as `?: T`, dropping the nullability.
+        // Omitting a key is also not equivalent to sending null - PostgREST
+        // resolves a function by the SET OF ARGUMENT NAMES supplied, which is
+        // how a call starts picking a different overload or 404ing PGRST202.
+        p_content_type: nullableRpcArg(contentType),
+        p_content_id: nullableRpcArg(contentId),
+        p_metadata: metadata,
       });
+
+      if (error) {
+        // No toast on failure. awardPoints is called from side effects like
+        // favouriting, where the user did not ask for XP and an error about it
+        // would be noise about something they did not do.
+        logger.error('awardPoints', 'Failed to award XP', { error, activityType });
+        return;
+      }
 
       // Refresh user data
       await fetchUserReputation();
@@ -206,20 +319,23 @@ export function useGamification() {
     if (!user) return;
 
     try {
-      // Mock joining challenge since table doesn't exist
-      logger.debug('joinChallenge', 'Challenge join would be recorded', {
-        user_id: user.id,
-        challenge_id: challengeId,
-        progress: {},
-        joined_at: new Date().toISOString()
+      // WEB-FEAT-028: NOT wired, deliberately, and this is the honest version.
+      // community_challenges exists, but no participants table does - there is
+      // no challenge_participants, user_challenges or equivalent in production
+      // (checked against scripts/db-snapshot.json). There is nowhere to record
+      // a join, so this used to congratulate the user for something that never
+      // happened and would be gone on reload.
+      //
+      // Building the table is a product decision, not a guess to make here
+      // (see WEB-QA-018). Until it exists, say so.
+      logger.warn('joinChallenge', 'No participants table; join cannot be persisted', {
+        challengeId,
       });
 
       toast({
-        title: "Challenge Joined!",
-        description: "You've successfully joined the challenge. Good luck!",
+        title: "Not available yet",
+        description: "Joining challenges is coming soon. You can still earn badges and XP.",
       });
-
-      await fetchChallenges();
     } catch (error) {
       logger.error('joinChallenge', 'Error joining challenge', { error });
       toast({

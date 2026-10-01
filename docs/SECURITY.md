@@ -87,7 +87,7 @@ SecurityUtils.validateURL('http://10.0.0.1'); // Invalid
 
 #### 5. Signup/Login Security (Fixed: Dec 2025)
 - **Issue**: Auth flow had potential security gaps
-- **Fix**: Added CSRF protection, improved session handling, added rate limiting
+- **Fix**: Improved session handling, added rate limiting. (The CSRF module listed here originally was never wired up and was deleted 2026-09-09; the app has no auth cookie to forge against. See docs/security/SECURITY_FIXES_IMPLEMENTATION.md.)
 
 ---
 

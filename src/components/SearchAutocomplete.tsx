@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
-import { Search, X } from "lucide-react";
+import { ChefHat, MapPin, Search, X } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
+import { applyEventVisibility } from '@/lib/eventQuery';
+import { escapeLikePattern } from '@/lib/postgrestPattern';
+import { createEventSlugWithCentralTime, upcomingFloorUtc } from '@/lib/timezone';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { restaurantFilterOptionsQuery } from '@/hooks/useRestaurants';
+import { matchCuisines } from '@/lib/restaurantPresets';
 
 const log = createLogger('SearchAutocomplete');
 
@@ -17,12 +23,41 @@ interface SearchAutocompleteProps {
   onSelect: (value: string) => void;
   inputRef?: React.RefObject<HTMLInputElement>;
   className?: string;
+  /**
+   * Restaurants only: apply a cuisine filter picked from the Cuisines group.
+   * Without it, picking a cuisine opens /restaurants?cuisine=<name>, which
+   * replaces every other filter.
+   */
+  onSelectCuisine?: (cuisine: string) => void;
 }
 
 interface Suggestion {
   id: string;
   title: string;
   subtitle?: string;
+  /** When set, choosing the suggestion opens this page instead of searching. */
+  href?: string;
+}
+
+/** Venues offered in the events dropdown (docs/page-plans/events.md WP2 item 7). */
+const MAX_VENUES = 3;
+/** Rows scanned to find distinct venues; one venue can hold many events. */
+const VENUE_SCAN_ROWS = 30;
+
+/** Distinct, case-insensitive, first spelling wins. */
+function distinctVenues(rows: ReadonlyArray<{ venue: string | null }>, limit = MAX_VENUES): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const row of rows) {
+    const venue = row.venue?.trim();
+    if (!venue) continue;
+    const key = venue.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(venue);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 const STORAGE_KEY_PREFIX = 'recent-searches-';
@@ -53,57 +88,103 @@ export function SearchAutocomplete({
   onSelect,
   inputRef,
   className,
+  onSelectCuisine,
 }: SearchAutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debouncedValue = useDebouncedValue(value, 300);
+  const navigate = useNavigate();
 
   const listboxId = `search-listbox-${contentType}`;
   const optionId = (idx: number) => `${listboxId}-option-${idx}`;
 
   const recentSearches = getRecentSearches(contentType);
 
+  const { data: venueSuggestions = [] } = useQuery({
+    queryKey: ['search-venue-suggestions', contentType, debouncedValue],
+    queryFn: async (): Promise<string[]> => {
+      const term = escapeLikePattern(debouncedValue);
+      if (term.length < 3) return [];
+      // No DISTINCT over PostgREST, so scan a few upcoming rows and dedupe.
+      const { data, error } = await applyEventVisibility(
+        supabase.from('events').select('venue')
+      )
+        .ilike('venue', `%${term}%`)
+        .gte('date', upcomingFloorUtc())
+        .order('date', { ascending: true })
+        .limit(VENUE_SCAN_ROWS);
+      if (error) log.error('suggestions', 'Venue suggestion query failed', { contentType, error });
+      return distinctVenues(data || []);
+    },
+    enabled: contentType === 'events' && debouncedValue.length >= 3,
+    staleTime: 30 * 1000,
+  });
+
+  // Shares the hub's cached facet query; disabled off the restaurants page so
+  // events and attractions never pay for it.
+  const { data: facet } = useQuery({
+    ...restaurantFilterOptionsQuery,
+    enabled: contentType === 'restaurants',
+  });
+
   const { data: suggestions = [] } = useQuery({
     queryKey: ['search-suggestions', contentType, debouncedValue],
     queryFn: async (): Promise<Suggestion[]> => {
       if (debouncedValue.length < 3) return [];
 
-      const searchTerm = `%${debouncedValue}%`;
+      // `%` and `_` typed by the user are literal, not wildcards.
+      const escaped = escapeLikePattern(debouncedValue);
+      if (!escaped) return [];
+      const searchTerm = `%${escaped}%`;
 
       if (contentType === 'events') {
-        const { data, error } = await supabase
-          .from('events')
-          .select('id, title, venue')
+        // Same visibility rule as every list (is_merged / is_hidden /
+        // archived_at), and the upcoming floor is the start of today in
+        // Central, so a show that began at 7pm is still offered at 9pm.
+        const { data, error } = await applyEventVisibility(
+          supabase
+            .from('events')
+            .select('id, title, venue, date, event_start_utc, event_start_local')
+        )
           .ilike('title', searchTerm)
-          .gte('date', new Date().toISOString())
-          .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+          .gte('date', upcomingFloorUtc())
+          .order('date', { ascending: true })
           .limit(5);
         // A search that FAILED and a search with no matches both render as
         // "no suggestions", so a user typing a restaurant that exists is told it
         // is not listed. The empty result is still the right UI; the silence was not.
         if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
+        // An event suggestion is a specific event, so it opens that event
+        // rather than running a text search for its title.
         return (data || []).map((e) => ({
           id: e.id,
           title: e.title,
           subtitle: e.venue || undefined,
+          href: `/events/${createEventSlugWithCentralTime(e.title, e)}`,
         }));
       }
 
       if (contentType === 'restaurants') {
         const { data, error } = await supabase
           .from('restaurants')
-          .select('id, name, cuisine')
+          .select('id, name, cuisine, slug')
           .ilike('name', searchTerm)
+          // Same rule as every restaurant list (WEB-AUTO-005): a row merged
+          // into its duplicate is not a place to send anyone.
+          .neq('is_merged', true)
           .limit(5);
         // A search that FAILED and a search with no matches both render as
         // "no suggestions", so a user typing a restaurant that exists is told it
         // is not listed. The empty result is still the right UI; the silence was not.
         if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
+        // A restaurant suggestion is a specific place, so it opens that
+        // restaurant rather than running a text search for its name.
         return (data || []).map((r) => ({
           id: r.id,
           title: r.name,
           subtitle: r.cuisine || undefined,
+          href: `/restaurants/${r.slug || r.id}`,
         }));
       }
 
@@ -136,12 +217,30 @@ export function SearchAutocomplete({
       )
     : recentSearches;
 
+  const venues = contentType === 'events' && debouncedValue.length >= 3 ? venueSuggestions : [];
+  const cuisineMatches =
+    contentType === 'restaurants' ? matchCuisines(facet?.cuisines ?? [], value) : [];
+
+  // The last row hands the words to /search, which looks across events,
+  // restaurants, attractions and hotels (search.md hand-off, events-pass2 WP2
+  // item 10). Offered once there are two characters, whatever else matched,
+  // so a hub search that finds nothing here still has somewhere to go.
+  const everythingQuery = value.trim();
+  const showEverything = everythingQuery.length >= 2;
+  const everythingHref = `/search?q=${encodeURIComponent(everythingQuery)}`;
+
   const showRecent = filteredRecent.length > 0;
   const showSuggestions = suggestions.length > 0;
-  const hasContent = showRecent || showSuggestions;
+  const showVenues = venues.length > 0;
+  const showCuisines = cuisineMatches.length > 0;
+  const hasContent = showRecent || showSuggestions || showVenues || showCuisines || showEverything;
 
-  // Build flat list of all selectable items for keyboard nav
-  const allItems: { type: 'recent' | 'suggestion'; value: string }[] = [];
+  // Build flat list of all selectable items for keyboard nav, in render order.
+  const allItems: {
+    type: 'recent' | 'suggestion' | 'venue' | 'cuisine' | 'everything';
+    value: string;
+    href?: string;
+  }[] = [];
   if (showRecent) {
     filteredRecent.slice(0, 5).forEach((s) =>
       allItems.push({ type: 'recent', value: s })
@@ -149,16 +248,31 @@ export function SearchAutocomplete({
   }
   if (showSuggestions) {
     suggestions.forEach((s) =>
-      allItems.push({ type: 'suggestion', value: s.title })
+      allItems.push({ type: 'suggestion', value: s.title, href: s.href })
     );
   }
+  if (showVenues) {
+    venues.forEach((v) => allItems.push({ type: 'venue', value: v }));
+  }
+  if (showCuisines) {
+    cuisineMatches.forEach((c) => allItems.push({ type: 'cuisine', value: c }));
+  }
+  if (showEverything) {
+    allItems.push({ type: 'everything', value: everythingQuery, href: everythingHref });
+  }
 
-  // Show dropdown when input is focused and there's content
+  // Open on focus or typing only. This used to open whenever there was
+  // anything to show, so a visitor with saved recent searches got the dropdown
+  // over the page on load, before touching the search box.
+  const lastValueRef = useRef(value);
   useEffect(() => {
-    if (hasContent) {
+    if (lastValueRef.current === value) return;
+    lastValueRef.current = value;
+    const input = inputRef?.current;
+    if (input && typeof document !== 'undefined' && document.activeElement === input) {
       setIsOpen(true);
     }
-  }, [hasContent]);
+  }, [value, inputRef]);
 
   // Reset active index when items change
   useEffect(() => {
@@ -182,12 +296,34 @@ export function SearchAutocomplete({
   }, [inputRef]);
 
   const handleSelect = useCallback(
-    (selectedValue: string) => {
-      addRecentSearch(contentType, selectedValue);
-      onSelect(selectedValue);
+    (selectedValue: string, href?: string) => {
       setIsOpen(false);
+      if (href) {
+        navigate(href);
+        return;
+      }
+      addRecentSearch(contentType, selectedValue);
+      // The value change this causes is not typing; keep the list closed.
+      lastValueRef.current = selectedValue;
+      onSelect(selectedValue);
     },
-    [contentType, onSelect]
+    [contentType, onSelect, navigate]
+  );
+
+  const handleSelectCuisine = useCallback(
+    (cuisine: string) => {
+      setIsOpen(false);
+      if (onSelectCuisine) {
+        // The caller clears the search box when it applies the cuisine. That
+        // value change is not typing, so it must not reopen the list (the
+        // input still has focus after a keyboard pick).
+        lastValueRef.current = '';
+        onSelectCuisine(cuisine);
+        return;
+      }
+      navigate(`/restaurants?cuisine=${encodeURIComponent(cuisine)}`);
+    },
+    [onSelectCuisine, navigate]
   );
 
   const handleKeyDown = useCallback(
@@ -206,12 +342,17 @@ export function SearchAutocomplete({
         );
       } else if (e.key === 'Enter' && activeIndex >= 0) {
         e.preventDefault();
-        handleSelect(allItems[activeIndex].value);
+        const item = allItems[activeIndex];
+        if (item.type === 'cuisine') handleSelectCuisine(item.value);
+        else handleSelect(item.value, item.href);
       } else if (e.key === 'Escape') {
+        // Claim this Esc so the page's shortcut (useFilterKeyboardShortcuts)
+        // does not also clear the search text: one Esc closes the list.
+        e.preventDefault();
         setIsOpen(false);
       }
     },
-    [isOpen, allItems, activeIndex, handleSelect]
+    [isOpen, allItems, activeIndex, handleSelect, handleSelectCuisine]
   );
 
   // Attach keyboard handler to input
@@ -226,12 +367,11 @@ export function SearchAutocomplete({
   useEffect(() => {
     const input = inputRef?.current;
     if (!input) return;
-    const handleFocus = () => {
-      if (hasContent) setIsOpen(true);
-    };
+    // Rendering is still gated on hasContent, so an empty list shows nothing.
+    const handleFocus = () => setIsOpen(true);
     input.addEventListener('focus', handleFocus);
     return () => input.removeEventListener('focus', handleFocus);
-  }, [inputRef, hasContent]);
+  }, [inputRef]);
 
   // Wire ARIA combobox semantics onto the parent-owned input so screen readers
   // announce the active suggestion as the user arrows through them.
@@ -269,104 +409,194 @@ export function SearchAutocomplete({
   if (!isOpen || !hasContent) return null;
 
   let itemIndex = -1;
+  // Always the last entry in allItems, so its index is known up front.
+  const everythingIdx = allItems.length - 1;
 
+  // Theme tokens throughout (events-pass2 WP2 item 10): the list was
+  // bg-white with gray-* text, so it was a white slab in dark mode.
+  const optionClass = (idx: number) =>
+    cn(
+      'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
+      activeIndex === idx
+        ? 'bg-accent text-accent-foreground'
+        : 'text-popover-foreground hover:bg-accent/60'
+    );
+  const groupLabelClass = 'px-2 py-1 text-xs font-medium text-muted-foreground flex items-center gap-1';
+  const divider = <div aria-hidden="true" className="border-t border-border" />;
+
+  // Options are tabIndex -1: focus stays in the input and the arrow keys move
+  // aria-activedescendant, which is the combobox pattern. Tab leaves the list.
   return (
     <div
       ref={dropdownRef}
-      id={listboxId}
       className={cn(
-        'absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 max-h-80 overflow-y-auto',
+        'absolute left-0 right-0 top-full mt-1 bg-popover text-popover-foreground rounded-xl shadow-xl border border-border overflow-hidden z-50 max-h-80 overflow-y-auto',
         className
       )}
-      role="listbox"
-      aria-label="Search suggestions"
     >
+      {/* Clear sits outside the listbox: a listbox may only own options. */}
       {showRecent && (
-        <div className="p-2">
-          <div className="flex items-center justify-between px-2 py-1">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-3 w-3" />
-              Recent Searches
-            </span>
-            <button
-              onClick={handleClearRecent}
-              className="text-xs text-gray-500 hover:text-gray-600 flex items-center gap-0.5"
-              aria-label="Clear recent searches"
-            >
-              <X className="h-3 w-3" />
-              Clear
-            </button>
-          </div>
-          {filteredRecent.slice(0, 5).map((search) => {
-            itemIndex++;
-            const idx = itemIndex;
-            return (
-              <button
-                key={`recent-${search}`}
-                id={optionId(idx)}
-                role="option"
-                aria-selected={activeIndex === idx}
-                className={cn(
-                  'w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors',
-                  activeIndex === idx
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
-                )}
-                onClick={() => handleSelect(search)}
-                onMouseEnter={() => setActiveIndex(idx)}
-              >
-                <SpriteIcon name="clock" className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
-                {search}
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between px-4 pt-2">
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1" aria-hidden="true">
+            <SpriteIcon name="clock" className="h-3 w-3" />
+            Recent searches
+          </span>
+          <button
+            type="button"
+            onClick={handleClearRecent}
+            className="min-h-[44px] px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+            aria-label="Clear recent searches"
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+            Clear
+          </button>
         </div>
       )}
 
-      {showRecent && showSuggestions && (
-        <div className="border-t border-gray-100" />
-      )}
+      <div id={listboxId} role="listbox" aria-label="Search suggestions">
+        {showRecent && (
+          <div className="px-2 pb-2" role="group" aria-label="Recent searches">
+            {filteredRecent.slice(0, 5).map((search) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`recent-${search}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelect(search)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <SpriteIcon name="clock" className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  {search}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-      {showSuggestions && (
-        <div className="p-2">
-          <div className="px-2 py-1">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
+        {showRecent && showSuggestions && divider}
+
+        {showSuggestions && (
+          <div className="p-2" role="group" aria-label="Suggestions">
+            <div className={groupLabelClass} aria-hidden="true">
               <SpriteIcon name="trending-up" className="h-3 w-3" />
               Suggestions
-            </span>
+            </div>
+            {suggestions.map((suggestion) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`suggestion-${suggestion.id}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelect(suggestion.title, suggestion.href)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="truncate">{suggestion.title}</div>
+                    {suggestion.subtitle && (
+                      <div className="text-xs text-muted-foreground truncate">{suggestion.subtitle}</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-          {suggestions.map((suggestion) => {
-            itemIndex++;
-            const idx = itemIndex;
-            return (
-              <button
-                key={`suggestion-${suggestion.id}`}
-                id={optionId(idx)}
-                role="option"
-                aria-selected={activeIndex === idx}
-                className={cn(
-                  'w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors',
-                  activeIndex === idx
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
-                )}
-                onClick={() => handleSelect(suggestion.title)}
-                onMouseEnter={() => setActiveIndex(idx)}
-              >
-                <Search className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
-                <div className="min-w-0">
-                  <div className="truncate">{suggestion.title}</div>
-                  {suggestion.subtitle && (
-                    <div className="text-xs text-gray-500 truncate">
-                      {suggestion.subtitle}
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+        )}
+
+        {showVenues && (showRecent || showSuggestions) && divider}
+
+        {showVenues && (
+          <div className="p-2" role="group" aria-label="Venues">
+            <div className={groupLabelClass} aria-hidden="true">
+              <MapPin className="h-3 w-3" />
+              Venues
+            </div>
+            {venues.map((venue) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`venue-${venue}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelect(venue)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                  <span className="truncate">{venue}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {showCuisines && (showRecent || showSuggestions || showVenues) && divider}
+
+        {showCuisines && (
+          <div className="p-2" role="group" aria-label="Cuisines">
+            <div className={groupLabelClass} aria-hidden="true">
+              <ChefHat className="h-3 w-3" />
+              Cuisines
+            </div>
+            {cuisineMatches.map((cuisine) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`cuisine-${cuisine}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelectCuisine(cuisine)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <ChefHat className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                  <span className="truncate">{cuisine} restaurants</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {showEverything && (showRecent || showSuggestions || showVenues || showCuisines) && divider}
+
+        {showEverything && (
+          <div className="p-2" role="group" aria-label="Everywhere">
+            <button
+              id={optionId(everythingIdx)}
+              role="option"
+              type="button"
+              tabIndex={-1}
+              aria-selected={activeIndex === everythingIdx}
+              className={optionClass(everythingIdx)}
+              onClick={() => handleSelect(everythingQuery, everythingHref)}
+              onMouseEnter={() => setActiveIndex(everythingIdx)}
+            >
+              <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+              <span className="truncate">Search everything for &lsquo;{everythingQuery}&rsquo;</span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -72,7 +72,10 @@
   margin-bottom: 0.25rem;
 }
 
-/* Blockquote */
+/* Blockquote. The 4px left rule is blockquote typography, not a card side-tab,
+   and it matches what Tailwind Typography renders in the published article. The
+   detector counts it; silencing the rule would need a file-wide ignore, which
+   would also hide a real side-tab if one ever lands in this stylesheet. */
 .tiptap blockquote {
   border-left: 4px solid hsl(var(--primary));
   padding-left: 1rem;

@@ -43,6 +43,28 @@ interface HotelEditDialogProps {
 
 const PRICE_RANGES = ["$", "$$", "$$$", "$$$$"] as const;
 
+/**
+ * An absolute http(s) URL, or empty. z.string().url() alone accepts
+ * `javascript:alert(1)`, which then renders as a Book link on every hotel
+ * surface (plan-stay WP2 item 3). The render side refuses it too, through
+ * safeWebUrl; this stops it being saved in the first place.
+ */
+const httpUrl = z
+  .string()
+  .trim()
+  .url()
+  .refine(
+    (v) => {
+      try {
+        const { protocol } = new URL(v);
+        return protocol === "http:" || protocol === "https:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "Must start with http:// or https://" },
+  );
+
 const formSchema = z.object({
   name: z.string().min(1, "Name is required").max(120),
   slug: z
@@ -75,8 +97,8 @@ const formSchema = z.object({
     .optional(),
   phone: z.string().optional(),
   email: z.string().email().or(z.literal("")).optional(),
-  website: z.string().url().or(z.literal("")).optional(),
-  affiliate_url: z.string().url().or(z.literal("")).optional(),
+  website: httpUrl.or(z.literal("")).optional(),
+  affiliate_url: httpUrl.or(z.literal("")).optional(),
   affiliate_provider: z.string().optional(),
   // Amenities
   amenities_csv: z.string().optional(),

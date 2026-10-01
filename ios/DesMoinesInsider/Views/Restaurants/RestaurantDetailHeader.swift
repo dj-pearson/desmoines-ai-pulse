@@ -17,6 +17,13 @@ struct RestaurantDetailHeader: View {
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 300, maxHeight: 300)
+            // The tap opened the viewer with no button trait, so VoiceOver
+            // users could not find it (IOS-DD-RESTAURANTS-10).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("View photo of \(restaurant.name)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { showImageViewer = true }
+            .accessibilityHidden(restaurant.imageUrl == nil)
 
             // Layered scrim + top-left highlight (mirrors hero header pattern)
             PremiumTokens.imageScrim
@@ -45,6 +52,7 @@ struct RestaurantDetailHeader: View {
                     .font(.title2.bold())
                     .foregroundStyle(.white)
                     .lineLimit(3)
+                    .accessibilityAddTraits(.isHeader)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)

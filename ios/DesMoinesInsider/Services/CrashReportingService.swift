@@ -182,6 +182,9 @@ private final class CrashStore: @unchecked Sendable {
                     summary: "\(name): \(reason)",
                     frames: frames
                 )
+                // The runtime aborts next, and that SIGABRT must not add a
+                // second record for the same crash (IOS-DD-PLATFORM-17).
+                CrashStore.exceptionRecorded = true
             }
 
             // POSIX signals. Handlers must be async-signal-safe-ish: we only
@@ -379,6 +382,12 @@ private final class CrashStore: @unchecked Sendable {
     /// signal handler; written once in `prepare()` before any handler can fire.
     nonisolated(unsafe) private static var crashLogPathCString: UnsafeMutablePointer<CChar>?
 
+    /// Set by the uncaught-exception handler once its marker is written, so the
+    /// abort() that follows is not recorded again as "Received signal 6". A
+    /// plain Bool read from the signal handler: set before the abort, on the
+    /// crashing thread. Not unit-testable (it needs a real crash).
+    nonisolated(unsafe) private static var exceptionRecorded = false
+
     /// Marketing version, resolved defensively (Bundle access is fine on the
     /// non-fatal path; not called from inside a signal handler).
     private static var appVersionSafe: String {
@@ -391,7 +400,7 @@ private final class CrashStore: @unchecked Sendable {
     /// stack symbols here (that allocates) — `backtrace_symbols` is not
     /// signal-safe, so we record only the signal number.
     private static let signalHandler: @convention(c) (Int32) -> Void = { sig in
-        if let path = crashLogPathCString {
+        if !exceptionRecorded, let path = crashLogPathCString {
             // O_WRONLY | O_CREAT | O_APPEND, 0644
             let fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
             if fd >= 0 {

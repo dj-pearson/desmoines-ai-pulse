@@ -13,6 +13,7 @@
  *     churn            churn-winback
  *     milestone        milestone-recognition
  *     outreach         outreach-sequencer
+ *     billing win-back subscription-lifecycle (pricing plan WP5 item 7)
  * The first four gate on profiles.lifecycle_signals.messagingAllowed. The fifth
  * does not and should not: it mails business contacts from crm_leads, not users,
  * so its opt-out is the outreach_suppression list. Testing it against
@@ -38,9 +39,9 @@
 import { strict as assert } from "node:assert";
 import type { AgentRunContext } from "../_shared/agentRun.ts";
 
-// Before importing anything that reads them. sendNurtureEmail POSTs to Resend
-// when RESEND_API_KEY is set, and scoreOutput POSTs to Anthropic.
-for (const k of ["RESEND_API_KEY", "CLAUDE_API", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]) {
+// Before importing anything that reads them. sendNurtureEmail POSTs to SES or
+// Resend when their keys are set, and scoreOutput POSTs to Anthropic.
+for (const k of ["RESEND_API_KEY", "AWS_SES_ACCESS_KEY_ID", "AWS_SES_SECRET_ACCESS_KEY", "CLAUDE_API", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]) {
   try { Deno.env.delete(k); } catch { /* --allow-env not granted for this name */ }
 }
 
@@ -49,6 +50,7 @@ const { run: dormantReengagement } = await import("../_shared/agents/dormant-ree
 const { run: churnWinback } = await import("../_shared/agents/churn-winback.ts");
 const { run: milestoneRecognition } = await import("../_shared/agents/milestone-recognition.ts");
 const { run: outreachSequencer } = await import("../_shared/agents/outreach-sequencer.ts");
+const { lifecycleActions, marketingAllowedFrom } = await import("../subscription-lifecycle/policy.ts");
 
 // ─── A PostgREST-shaped mock ─────────────────────────────────────────────────
 
@@ -283,6 +285,56 @@ Deno.test("milestone: milestone-recognition DOES reach the send path for an opte
   assert.equal(out.gated, 1, "should have reached the quality gate");
 });
 
+// ─── never classified: no recorded consent ───────────────────────────────────
+//
+// lifecycle_signals is written by the lifecycle classifier, a cron job. A user
+// it has not reached (or every user, while that job is failing) has no
+// messagingAllowed at all. The gates used to test `=== false`, so a missing
+// value read as consent. It is not. `{}` is a profile the classifier never
+// scored; `null` is one with no signals column value.
+
+const NEVER_CLASSIFIED: Row[] = [{}, null as unknown as Row];
+
+Deno.test("never classified: onboarding-drip does not mail", async () => {
+  for (const signals of NEVER_CLASSIFIED) {
+    const { client, rec } = makeClient(onboardingFixtures(signals));
+    const { ctx } = makeCtx();
+    const out = await onboardingDrip(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+    assert.equal(out.skipped, 1, `signals=${JSON.stringify(signals)} must be skipped for consent`);
+    assert.deepEqual(sendLedgerInserts(rec), []);
+  }
+});
+
+Deno.test("never classified: dormant-reengagement does not mail", async () => {
+  for (const signals of NEVER_CLASSIFIED) {
+    const { client, rec } = makeClient(dormantFixtures(signals));
+    const { ctx, read } = makeCtx();
+    await dormantReengagement(ctx, { supabase: client, req: new Request("http://x"), body: {} });
+    assert.equal(read().meta.noConsent, 1, `signals=${JSON.stringify(signals)}`);
+    assert.deepEqual(sendLedgerInserts(rec), []);
+  }
+});
+
+Deno.test("never classified: churn-winback does not mail", async () => {
+  // Activity signals present, consent absent: scored, but never asked.
+  const { client, rec } = makeClient(churnFixtures({}));
+  const { ctx, read } = makeCtx();
+  await churnWinback(ctx, { supabase: client, req: new Request("http://x"), body: {} });
+  assert.equal(read().meta.skipped, 1);
+  assert.deepEqual(sendLedgerInserts(rec), []);
+});
+
+Deno.test("never classified: milestone-recognition records the milestone but does not email", async () => {
+  for (const signals of NEVER_CLASSIFIED) {
+    const { client, rec } = makeClient(milestoneFixtures(signals));
+    const { ctx } = makeCtx();
+    const out = await milestoneRecognition(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+    assert.equal(out.recognized, 1);
+    assert.equal(out.gated, 0, `signals=${JSON.stringify(signals)} reached the quality gate`);
+    assert.deepEqual(sendLedgerInserts(rec), []);
+  }
+});
+
 // ─── outreach: outreach-sequencer ────────────────────────────────────────────
 //
 // Different population, different control. This one mails a business contact
@@ -314,4 +366,54 @@ Deno.test("outreach: outreach-sequencer DOES reach the send path for an unsuppre
 
   assert.equal(out.skipped, 0, "an unsuppressed lead must not be skipped");
   assert.equal(out.gated, 1, "should have reached the quality gate");
+});
+
+// --- billing win-back: subscription-lifecycle ---------------------------------
+//
+// Not an agent and not a sendNurtureEmail caller, which is how it went
+// unchecked: it mails through its own Resend call. Its one marketing email is
+// the win-back after a cancellation, and the decision to send it lives in
+// subscription-lifecycle/policy.ts, so that is what runs here. Paired like the
+// rest: opted out yields no win-back, opted in does.
+
+function canceledRow() {
+  const canceledAt = Date.now() - 2 * 86_400_000;
+  return {
+    row: {
+      id: "sub-row-1",
+      user_id: "u1",
+      status: "canceled",
+      platform: "web",
+      current_period_end: new Date(canceledAt).toISOString(),
+      canceled_at: new Date(canceledAt).toISOString(),
+      cancel_at_period_end: false,
+      stripe_subscription_id: "sub_1",
+    },
+    now: Date.now(),
+  };
+}
+
+Deno.test("billing win-back: subscription-lifecycle does not mail an opted-out user", () => {
+  const { row, now } = canceledRow();
+  const marketingAllowed = marketingAllowedFrom(OPTED_OUT, true);
+  assert.equal(marketingAllowed, false);
+  assert.deepEqual(lifecycleActions(row, now, { marketingAllowed }), []);
+});
+
+Deno.test("billing win-back: subscription-lifecycle DOES reach the win-back for an opted-in user", () => {
+  const { row, now } = canceledRow();
+  const marketingAllowed = marketingAllowedFrom(OPTED_IN, true);
+  assert.deepEqual(lifecycleActions(row, now, { marketingAllowed }).map((a) => a.kind), ["winback"]);
+});
+
+Deno.test("billing win-back: an unreadable profile is treated as opted out", () => {
+  const { row, now } = canceledRow();
+  assert.deepEqual(lifecycleActions(row, now, { marketingAllowed: marketingAllowedFrom(OPTED_IN, false) }), []);
+});
+
+Deno.test("billing win-back: the job reads consent from lifecycle_signals and passes it to the policy", async () => {
+  const src = await Deno.readTextFile(new URL("../subscription-lifecycle/index.ts", import.meta.url));
+  assert.ok(/\.select\('user_id, email, lifecycle_signals'\)/.test(src), "profiles must be read with lifecycle_signals");
+  assert.ok(/marketingAllowedFrom\(profile\?\.lifecycle_signals/.test(src));
+  assert.ok(/lifecycleActions\(sub, now, \{ marketingAllowed \}\)/.test(src));
 });

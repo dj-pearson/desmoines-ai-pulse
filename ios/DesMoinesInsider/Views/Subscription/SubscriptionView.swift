@@ -13,6 +13,10 @@ struct SubscriptionView: View {
     @State private var storeKit = StoreKitService.shared
 
     var body: some View {
+        // Bound on the main actor here, then handed to the async provider
+        // below, so the store view binds purchases to this account the same
+        // way PaywallView does (IOS-DD-MONETIZATION-05 / -02).
+        let purchaseOptions = StoreKitService.purchaseOptions(for: AuthService.shared.currentUser?.id)
         NavigationStack {
             SubscriptionStoreView(groupID: StoreKitService.subscriptionGroupID) {
                 marketingContent
@@ -28,8 +32,12 @@ struct SubscriptionView: View {
                 url: Config.siteURL.appendingPathComponent("privacy-policy"),
                 for: .privacyPolicy
             )
+            .inAppPurchaseOptions { _ in purchaseOptions }
+            // The completion used to only dismiss, so a purchase here was not
+            // finished, synced to the server or reflected in the tier until
+            // StoreKit happened to re-emit it (IOS-DD-MONETIZATION-05).
             .onInAppPurchaseCompletion { _, result in
-                if case .success(.success) = result {
+                if await storeKit.handleCompletedPurchase(result) {
                     dismiss()
                 }
             }
@@ -135,15 +143,26 @@ struct SubscriptionView: View {
         }
     }
 
+    /// The server refused the subscription because another account holds it
+    /// (IOS-DD-MONETIZATION-03). Restore passes `transfer: true`, which is the
+    /// one way to move it here.
+    private var isAccountMismatch: Bool {
+        storeKit.serverRejectionReason == .accountMismatch
+    }
+
     private var revokedEntitlementNotice: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text("We couldn't verify your subscription")
+                Text(isAccountMismatch
+                     ? "This subscription belongs to another account"
+                     : "We couldn't verify your subscription")
                     .font(.subheadline.weight(.semibold))
-                Text("Your purchase could not be confirmed with the App Store, so premium features are paused. Restoring purchases usually fixes it.")
+                Text(isAccountMismatch
+                     ? "The App Store subscription on this device is linked to a different Des Moines Insider account. Sign in to that account, or tap Restore to move it here."
+                     : "Your purchase could not be confirmed with the App Store, so premium features are paused. Restoring purchases usually fixes it.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button("Restore Purchases") {
@@ -206,13 +225,13 @@ struct SubscriptionView: View {
             Text(tierHeading("Insider", tier: .insider))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.orange)
-            featureRow(icon: "map.fill", color: .orange, text: "AI Trip Planner (5 trips/month)")
+            // Only what iOS delivers (IOS-DD-MONETIZATION-11). Advanced
+            // filters are free on iOS and early access has no consumer.
+            featureRow(icon: "map.fill", color: .orange, text: "AI Trip Planner (5 itineraries/month)")
             featureRow(icon: "heart.fill", color: .orange, text: "Unlimited favorites")
-            featureRow(icon: "slider.horizontal.3", color: .orange, text: "Advanced filters (distance, price, rating)")
             featureRow(icon: "pencil.line", color: .orange, text: "Write reviews & ratings")
-            featureRow(icon: "bell.badge.fill", color: .orange, text: "Saved searches & event alerts")
+            featureRow(icon: "bell.badge.fill", color: .orange, text: "Saved searches & event alerts (up to 10)")
             featureRow(icon: "eye.slash.fill", color: .orange, text: "Ad-free experience")
-            featureRow(icon: "bolt.fill", color: .orange, text: "Early access to events")
 
             Divider()
                 .padding(.vertical, 4)
@@ -220,12 +239,13 @@ struct SubscriptionView: View {
             Text(tierHeading("VIP", tier: .vip))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.purple)
+            // The two differences that are real on iOS: TripPlannerView's
+            // monthly quota and entitled_plan_limit's saved-search cap. The
+            // five VIP lines that were here had no implementation
+            // (WEB-FEAT-016 removed the same lines on web).
+            featureRow(icon: "checkmark.circle.fill", color: .purple, text: "Everything in Insider, plus:")
             featureRow(icon: "map.fill", color: .purple, text: "Unlimited AI Trip Planner")
-            featureRow(icon: "crown.fill", color: .purple, text: "VIP-exclusive events")
-            featureRow(icon: "fork.knife", color: .purple, text: "Restaurant reservation help")
-            featureRow(icon: "message.fill", color: .purple, text: "SMS alerts for your interests")
-            featureRow(icon: "gift.fill", color: .purple, text: "Monthly local business perks")
-            featureRow(icon: "star.fill", color: .purple, text: "Concierge support")
+            featureRow(icon: "bell.badge.fill", color: .purple, text: "Unlimited saved searches & alerts")
         }
         .padding(.horizontal)
     }

@@ -70,7 +70,7 @@ extension UserProfile {
         email: "jordan@example.com",
         phone: "(515) 555-0100",
         location: "Des Moines",
-        interests: ["Food", "Music", "Outdoor"],
+        interests: ["food", "music", "outdoor"],
         userRole: "user",
         createdAt: ISO8601DateFormatter().string(from: Date()),
         updatedAt: ISO8601DateFormatter().string(from: Date())

@@ -34,4 +34,31 @@ final class SwipeCommandTests: XCTestCase {
         XCTAssertEqual(SwipeCardStack.Command.like().action, .like)
         XCTAssertEqual(SwipeCardStack.Command.boost().action, .boost)
     }
+
+    // MARK: - Commit direction (IOS-DD-DISCOVER-11)
+
+    private func direction(_ t: (CGFloat, CGFloat), _ p: (CGFloat, CGFloat)) -> SwipeCardStack.CommitDirection? {
+        SwipeCardStack.commitDirection(
+            translation: CGSize(width: t.0, height: t.1),
+            predicted: CGSize(width: p.0, height: p.1),
+            threshold: 120
+        )
+    }
+
+    func testADragPastTheThresholdCommitsRight() {
+        XCTAssertEqual(direction((130, 10), (130, 10)), .right)
+    }
+
+    func testAClearlyUpwardDragCommitsUp() {
+        XCTAssertEqual(direction((-10, -150), (-10, -150)), .up)
+    }
+
+    func testAFlingCommitsOnPredictedTravel() {
+        XCTAssertEqual(direction((40, 0), (400, 0)), .right)
+        XCTAssertEqual(direction((-40, 0), (-400, 0)), .left)
+    }
+
+    func testAShortDragSpringsBack() {
+        XCTAssertNil(direction((30, 20), (30, 20)))
+    }
 }

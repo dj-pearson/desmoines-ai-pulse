@@ -1,16 +1,12 @@
 import { LucideSprite } from "@/components/ui/icon-sprite.generated";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { useKeyboardAware } from "@/hooks/useKeyboardAware";
 import { usePageTransition } from "@/hooks/usePageTransition";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { useDeepLinks } from "@/hooks/useDeepLinks";
-import { useSwipeBack } from "@/hooks/useSwipeBack";
-import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
+import { isCapacitor } from "@/lib/capacitorUtils";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation, useNavigationType } from "react-router-dom";
@@ -21,12 +17,15 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
+import { ReferralCapture } from "@/components/ReferralCapture";
 import { PrerenderSignal } from "@/components/PrerenderSignal";
 import { GlobalUpgradeModal } from "@/components/GlobalUpgradeModal";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
 import { OfflineBanner } from "@/components/OfflineBanner";
+
+const CHUNK_RELOAD_COOLDOWN_MS = 60_000;
 
 /**
  * Wrapper around React.lazy that retries once on chunk load failure,
@@ -38,13 +37,19 @@ function lazyWithRetry(
 ) {
   return lazy(() =>
     importFn().catch((error) => {
-      const hasReloaded = sessionStore.getString("chunk_reload");
-      if (!hasReloaded) {
-        sessionStore.setString("chunk_reload", "1");
+      // The flag holds when we last reloaded for a stale chunk. It used to be
+      // a bare "1" that was removed only by a second failure, so after one
+      // successful recovery the next stale chunk in the same tab skipped the
+      // reload and went straight to the error card. A timestamp allows one
+      // reload per minute: enough to recover after every deploy, never a loop
+      // (clearing it on any successful import would be one, since chunks that
+      // did load would keep resetting it while the broken one kept failing).
+      const lastReload = Number(sessionStore.getString("chunk_reload")) || 0;
+      if (Date.now() - lastReload > CHUNK_RELOAD_COOLDOWN_MS) {
+        sessionStore.setString("chunk_reload", String(Date.now()));
         window.location.reload();
         return new Promise(() => {}); // never resolves; reload will take over
       }
-      sessionStore.remove("chunk_reload");
       throw error; // let the error boundary handle it
     })
   );
@@ -58,10 +63,16 @@ const Sonner = lazyWithRetry(() =>
   import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
 );
 
+// Capacitor-only effects. Mounted behind isCapacitor(), so a web visitor never
+// requests the chunk. See the component for why the condition lives here and
+// not inside each hook.
+const CapacitorRuntime = lazyWithRetry(() => import("@/components/CapacitorRuntime"));
+
 const Index = lazyWithRetry(() => import("./pages/Index"));
 const Auth = lazyWithRetry(() => import("./pages/Auth"));
 const AuthCallback = lazyWithRetry(() => import("./pages/AuthCallback"));
 const AuthVerified = lazyWithRetry(() => import("./pages/AuthVerified"));
+const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const Profile = lazyWithRetry(() => import("./pages/Profile"));
 const ProfilePage = lazyWithRetry(() => import("./pages/ProfilePage"));
 const UserDashboard = lazyWithRetry(() => import("./pages/UserDashboard"));
@@ -71,6 +82,7 @@ const Restaurants = lazyWithRetry(() => import("./pages/Restaurants"));
 const Attractions = lazyWithRetry(() => import("./pages/Attractions"));
 const Playgrounds = lazyWithRetry(() => import("./pages/Playgrounds"));
 const EventDetails = lazyWithRetry(() => import("./pages/EventDetails"));
+const NewRestaurants = lazyWithRetry(() => import("./pages/NewRestaurants"));
 const RestaurantDetails = lazyWithRetry(() => import("./pages/RestaurantDetails"));
 const AttractionDetails = lazyWithRetry(() => import("./pages/AttractionDetails"));
 const PlaygroundDetails = lazyWithRetry(() => import("./pages/PlaygroundDetails"));
@@ -94,9 +106,6 @@ const AdminCampaignDetail = lazyWithRetry(() => import("./pages/AdminCampaignDet
 const CampaignAnalytics = lazyWithRetry(() => import("./pages/CampaignAnalytics"));
 const TeamManagement = lazyWithRetry(() => import("./pages/TeamManagement"));
 const Social = lazyWithRetry(() => import("./pages/Social"));
-const SmartCalendarIntegration = lazyWithRetry(
-  () => import("./components/SmartCalendarIntegration")
-);
 const Gamification = lazyWithRetry(() => import("./pages/Gamification"));
 const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
 const SubscriptionSuccess = lazyWithRetry(() => import("./pages/SubscriptionSuccess"));
@@ -109,7 +118,6 @@ const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"
 const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
 const AdvancedSearchPage = lazyWithRetry(() => import("./components/AdvancedSearchPage"));
 const SearchResults = lazyWithRetry(() => import("./pages/SearchResults"));
-const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 
 // SEO-focused time-sensitive pages
 const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
@@ -187,6 +195,7 @@ const AccessibilityStatement = lazyWithRetry(() => import("./pages/Accessibility
 const CookiePolicy = lazyWithRetry(() => import("./pages/CookiePolicy"));
 const DMCAPolicy = lazyWithRetry(() => import("./pages/DMCAPolicy"));
 const AcceptableUsePolicy = lazyWithRetry(() => import("./pages/AcceptableUsePolicy"));
+const AdvertisingPolicies = lazyWithRetry(() => import("./pages/AdvertisingPolicies"));
 const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
@@ -199,6 +208,8 @@ const Csat = lazyWithRetry(() => import("./pages/Csat"));
 
 // Public CAN-SPAM one-click unsubscribe
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
+// Newsletter double opt-in landing (WEB-FEAT-019)
+const NewsletterConfirm = lazyWithRetry(() => import("./pages/NewsletterConfirm"));
 
 // Admin sub-pages
 const AdminContent = lazyWithRetry(() => import("./pages/AdminContent"));
@@ -236,6 +247,9 @@ const AdminFeedback = lazyWithRetry(() => import("./pages/AdminFeedback"));
 const AdminTrending = lazyWithRetry(() => import("./pages/AdminTrending"));
 const AdminEventSubmissions = lazyWithRetry(
   () => import("./pages/AdminEventSubmissions"),
+);
+const AdminBusinessClaims = lazyWithRetry(
+  () => import("./pages/AdminBusinessClaims"),
 );
 const BestOf = lazyWithRetry(() => import("./pages/BestOf"));
 const BestOfCategory = lazyWithRetry(() => import("./pages/BestOfCategory"));
@@ -351,26 +365,21 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
     onShowHelp: () => setShowShortcutsModal(true),
   });
 
-  // Ensure iOS keyboard doesn't obscure focused inputs
-  useKeyboardAware();
-
-  // Register for push notifications on Capacitor (auto-registers if previously enabled)
-  usePushNotifications();
-
-  // Handle incoming deep links (Universal Links / App Links)
-  useDeepLinks();
-
-  // Enable swipe-from-left-edge to go back on iOS
-  useSwipeBack();
-
-  // Switch status bar text color based on page (light on dark heroes, dark elsewhere)
-  useStatusBarStyle();
-
-  // Subtle page transition animation for Capacitor (no-op on web)
+  // Subtle page transition animation for Capacitor (no-op on web). Stays here
+  // rather than moving into CapacitorRuntime because it returns the ref the
+  // wrapper below needs.
   const pageTransitionRef = usePageTransition<HTMLDivElement>();
 
   return (
     <div ref={pageTransitionRef}>
+      {/* Push registration, deep links, swipe-back, status bar and keyboard
+          avoidance. Every one of them opens with `if (!isCapacitor()) return`,
+          so on the web this chunk is never requested. WEB-PERF-020 AC4. */}
+      {isCapacitor() && (
+        <Suspense fallback={null}>
+          <CapacitorRuntime />
+        </Suspense>
+      )}
       {children}
       {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
           first time someone presses "?" rather than by every visitor. */}
@@ -399,6 +408,7 @@ const App = () => (
       <AuthProvider>
         <SessionManager />
         <GuestFavoriteMigrator />
+        <ReferralCapture />
         {/* Publishes data-queries-settled on <html> for scripts/prerender.mjs.
             Renders nothing and does no work in a browser beyond one attribute. */}
         <PrerenderSignal />
@@ -445,6 +455,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth/verified" element={<AuthVerified />} />
+            <Route path="/auth/reset-password" element={<ResetPassword />} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/my-events" element={<ProfilePage />} />
             <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
@@ -480,10 +491,14 @@ const App = () => (
             <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
             <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />
             <Route path="/admin/event-submissions" element={<ProtectedRoute requireAdmin><AdminEventSubmissions /></ProtectedRoute>} />
+            <Route path="/admin/business-claims" element={<ProtectedRoute requireAdmin><AdminBusinessClaims /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
             {/* Restaurant SEO hub pages */}
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
+            <Route path="/restaurants/new" element={<NewRestaurants />} />
             <Route path="/restaurants/dietary" element={<DietaryRestaurants />} />
+            {/* Eat & Drink pass 2 WP4.13: one self-canonical path per diet. */}
+            <Route path="/restaurants/dietary/:diet" element={<DietaryRestaurants />} />
             <Route path="/attractions" element={<Attractions />} />
             <Route path="/playgrounds" element={<Playgrounds />} />
             <Route path="/events" element={<EventsPage />} />
@@ -513,6 +528,7 @@ const App = () => (
               path="/events/windsor-heights"
               element={<EventsByLocation />}
             />
+            <Route path="/events/waukee" element={<EventsByLocation />} />
             <Route path="/events/:slug" element={<EventsSegmentHandler />} />
             <Route path="/articles" element={<Articles />} />
             <Route path="/articles/:slug" element={<ArticleDetails />} />
@@ -552,7 +568,6 @@ const App = () => (
             />
             <Route path="/iowa-state-fair" element={<IowaStateFairPage />} />
             <Route path="/social" element={<Social />} />
-            <Route path="/calendar" element={<SmartCalendarIntegration />} />
             <Route path="/gamification" element={<Gamification />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/subscription/success" element={<SubscriptionSuccess />} />
@@ -566,7 +581,10 @@ const App = () => (
             <Route path="/search" element={<SearchResults />} />
             <Route path="/search/advanced" element={<AdvancedSearchPage />} />
             <Route path="/guides" element={<GuidesPage />} />
-            <Route path="/real-time" element={<RealTimePage />} />
+            {/* Eat & Drink pass 2 WP4.7: /real-time was a second "what's open"
+                page with no status filter and two dead buttons. It goes to
+                open-now; public/_redirects 301s it too. Keep for >= 1 release. */}
+            <Route path="/real-time" element={<Navigate to="/restaurants/open-now" replace />} />
             {/* Lead magnet tools */}
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* AI-powered features */}
@@ -589,9 +607,13 @@ const App = () => (
             <Route path="/cookie-policy" element={<CookiePolicy />} />
             <Route path="/dmca" element={<DMCAPolicy />} />
             <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+            {/* WEB-ADS-014: three advertiser surfaces linked here and it was not a route. */}
+            <Route path="/advertising-policies" element={<AdvertisingPolicies />} />
             <Route path="/dpa" element={<DataProcessingAgreement />} />
             {/* One-click newsletter unsubscribe (CAN-SPAM §5(a)(5)) */}
             <Route path="/unsubscribe" element={<Unsubscribe />} />
+            {/* Newsletter double opt-in confirmation (WEB-FEAT-019) */}
+            <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
             <Route path="/support" element={<Support />} />

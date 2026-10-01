@@ -13,6 +13,12 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { classifyCaller, expectedSecrets, isMachineCaller, presentedCredentials } from "./callerKind.ts";
+import { getClientIp } from "./clientIp.ts";
+
+// getClientIp lives in clientIp.ts (no imports) so offline-tested modules can
+// share it. Re-exported for callers that already import this file.
+export { getClientIp };
 
 // In-memory fallback store (used when DB is unavailable)
 interface RateLimitStore {
@@ -37,6 +43,25 @@ export interface RateLimitOptions {
    * rotating IPs. Only pass this once the JWT has actually been verified.
    */
   userId?: string;
+  /**
+   * Skip the limit for a caller presenting EDGE_FUNCTION_API_KEY or
+   * SUPABASE_SERVICE_ROLE_KEY (WEB-BE-047).
+   *
+   * THE CASE FOR IT. firecrawl-scraper allows 10 requests per 15 minutes keyed
+   * by client IP; scrape-events invokes it once per scraping job from ONE
+   * egress address, and there are 15 seeded jobs. The limit was throttling the
+   * site's own ingestion, which is the opposite of what it is for.
+   *
+   * WHY IT COSTS NOTHING. Both credentials already authorise this function's
+   * entire surface, and the service-role key authorises the whole database.
+   * Throttling a caller that holds one protects nothing - it can do the damage
+   * directly. The limit stays for anonymous and user-authenticated callers,
+   * which is who it was written for.
+   *
+   * OPT-IN per endpoint, never a default: an endpoint that costs money per
+   * call may want a ceiling even on internal traffic.
+   */
+  exemptInternal?: boolean;
 }
 
 export interface RateLimitResult {
@@ -45,32 +70,6 @@ export interface RateLimitResult {
   remaining: number;
   resetTime: number;
   response?: Response;
-}
-
-/**
- * Resolve the trusted client IP.
- *
- * SECURITY: `X-Forwarded-For` is a client-controllable header — the LEFTMOST
- * entry is whatever the caller wrote, so keying on it lets an attacker forge a
- * fresh identity per request and evade the limit entirely. We therefore prefer
- * Cloudflare's `CF-Connecting-IP` (set by the trusted edge in front of
- * Supabase), then `X-Real-IP`, and only fall back to the RIGHTMOST XFF entry
- * (the hop appended by the trusted proxy, not the spoofable client value).
- */
-function getClientIp(req: Request): string {
-  const cf = req.headers.get('cf-connecting-ip');
-  if (cf) return cf.trim();
-
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
-
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const parts = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
-    if (parts.length) return parts[parts.length - 1]; // rightmost = trusted hop
-  }
-
-  return 'unknown';
 }
 
 /**
@@ -92,6 +91,7 @@ async function checkRateLimitDB(
   endpoint: string,
   windowMs: number,
   max: number,
+  message: string,
 ): Promise<RateLimitResult | null> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -121,10 +121,10 @@ async function checkRateLimitDB(
         remaining: 0,
         resetTime,
         response: new Response(
-          JSON.stringify({
-            error: 'Too many requests, please try again later.',
-            retryAfter,
-          }),
+          // The caller's message, as the in-memory path already sends. This
+          // used to be a fixed string, so moving an endpoint to the persistent
+          // limiter silently changed what its 429 said.
+          JSON.stringify({ error: message, retryAfter }),
           {
             status: 429,
             headers: {
@@ -244,10 +244,17 @@ export async function checkRateLimitPersistent(
   const message = options.message || 'Too many requests, please try again later.';
   const endpoint = options.endpoint || 'default';
 
+  if (options.exemptInternal && isMachineCaller(classifyCaller(presentedCredentials(req), expectedSecrets()))) {
+    // Logged, not silent: "the limit did not apply" and "the limit was not
+    // reached" produce the same 200, and only one of them is a decision.
+    console.log(`[rateLimit] endpoint="${endpoint}" exempt: internal caller`);
+    return { success: true, limit: max, remaining: max, resetTime: Date.now() + windowMs };
+  }
+
   const clientId = getClientIdentifier(req, options.userId);
 
   // Try database-backed rate limiting first
-  const dbResult = await checkRateLimitDB(clientId, endpoint, windowMs, max);
+  const dbResult = await checkRateLimitDB(clientId, endpoint, windowMs, max, message);
   if (dbResult) return dbResult;
 
   // FAIL OPEN: a DB-lookup miss/outage must never break the product. The

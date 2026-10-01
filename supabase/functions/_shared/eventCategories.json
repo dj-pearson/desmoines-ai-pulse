@@ -1,0 +1,199 @@
+{
+  "$comment": "The canonical event category vocabulary (WEB-BE-049). Data, not code, because four runtimes have to agree on it: Deno edge functions, the Vite browser bundle, the Python crawler in crawlers/, and the backfill migration. `keywords` is ORDERED and the first group with a matching word-prefix wins, so the specific groups come before the general ones - moving a group changes what every writer stores. Mirrored byte-for-byte at src/lib/eventCategories.json; scripts/check-event-categories.mjs fails when the two disagree.",
+  "version": 1,
+  "fallback": "Other",
+  "categories": [
+    "Music",
+    "Sports",
+    "Arts",
+    "Comedy",
+    "Entertainment",
+    "Family",
+    "Food",
+    "Markets",
+    "Festival",
+    "Outdoor",
+    "Health",
+    "Community",
+    "Business",
+    "Education",
+    "Other"
+  ],
+  "keywords": [
+    {
+      "category": "Music",
+      "match": [
+        "music",
+        "concert",
+        "symphony",
+        "orchestra",
+        "choir"
+      ]
+    },
+    {
+      "category": "Comedy",
+      "match": [
+        "comedy",
+        "stand-up",
+        "standup",
+        "improv"
+      ]
+    },
+    {
+      "category": "Sports",
+      "match": [
+        "sport",
+        "athletic",
+        "baseball",
+        "basketball",
+        "football",
+        "hockey",
+        "soccer",
+        "wrestling",
+        "marathon",
+        "rodeo"
+      ]
+    },
+    {
+      "category": "Arts",
+      "match": [
+        "art",
+        "culture",
+        "theater",
+        "theatre",
+        "museum",
+        "gallery",
+        "dance",
+        "ballet",
+        "opera",
+        "exhibit",
+        "craft"
+      ]
+    },
+    {
+      "category": "Family",
+      "match": [
+        "famil",
+        "kid",
+        "child",
+        "youth",
+        "toddler"
+      ]
+    },
+    {
+      "category": "Food",
+      "match": [
+        "food",
+        "drink",
+        "dining",
+        "restaurant",
+        "culinary",
+        "brew",
+        "wine",
+        "beer",
+        "tasting"
+      ]
+    },
+    {
+      "category": "Business",
+      "match": [
+        "business",
+        "network",
+        "career",
+        "profession",
+        "conference",
+        "trade show",
+        "job fair",
+        "expo"
+      ]
+    },
+    {
+      "category": "Markets",
+      "match": [
+        "farmer",
+        "flea market",
+        "farmers market",
+        "market"
+      ]
+    },
+    {
+      "category": "Festival",
+      "match": [
+        "festival",
+        "fair",
+        "parade",
+        "carnival"
+      ]
+    },
+    {
+      "category": "Outdoor",
+      "match": [
+        "outdoor",
+        "recreation",
+        "hike",
+        "hiking",
+        "trail",
+        "nature",
+        "garden",
+        "cycling",
+        "camping"
+      ]
+    },
+    {
+      "category": "Health",
+      "match": [
+        "health",
+        "wellness",
+        "fitness",
+        "yoga",
+        "medical",
+        "mental"
+      ]
+    },
+    {
+      "category": "Community",
+      "match": [
+        "communit",
+        "civic",
+        "volunteer",
+        "charity",
+        "benefit",
+        "fundrais",
+        "church",
+        "faith",
+        "worship",
+        "neighborhood"
+      ]
+    },
+    {
+      "category": "Education",
+      "match": [
+        "educat",
+        "learn",
+        "class",
+        "workshop",
+        "seminar",
+        "lecture",
+        "library",
+        "author",
+        "book"
+      ]
+    },
+    {
+      "category": "Entertainment",
+      "match": [
+        "entertain",
+        "nightlife",
+        "night life",
+        "film",
+        "movie",
+        "cinema",
+        "trivia",
+        "karaoke",
+        "circus",
+        "magic",
+        "show"
+      ]
+    }
+  ]
+}

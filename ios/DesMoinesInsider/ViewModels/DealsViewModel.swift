@@ -10,6 +10,10 @@ final class DealsViewModel {
     }
     private(set) var isLoading = true
     private(set) var errorMessage: String?
+    /// The last refresh failed (or ran offline) and the list is what was
+    /// loaded or cached before. Drives the "Couldn't update" banner
+    /// (IOS-DD-GUIDES-15).
+    private(set) var showingStaleResults = false
 
     var selectedCategory: String? {
         didSet {
@@ -100,7 +104,11 @@ final class DealsViewModel {
         await refresh()
     }
 
-    func refresh() async {
+    /// Returns whether fresh deals arrived, so pull-to-refresh reports a
+    /// failed update as one even when older rows are still on screen
+    /// (IOS-DD-GUIDES-15).
+    @discardableResult
+    func refresh() async -> Bool {
         isLoading = true
         errorMessage = nil
 
@@ -114,19 +122,26 @@ final class DealsViewModel {
         }
         if isOffline && !allDeals.isEmpty {
             isLoading = false
-            return
+            showingStaleResults = true
+            return false
         }
 
         do {
             allDeals = try await service.fetchDeals()
             await cache.set(Self.cacheKey, value: allDeals)
+            showingStaleResults = false
+            isLoading = false
+            return true
         } catch {
             // Keep cached deals on failure; only surface an error on a true blank.
             if allDeals.isEmpty {
                 errorMessage = error.localizedDescription
+            } else {
+                showingStaleResults = true
             }
+            isLoading = false
+            return false
         }
-        isLoading = false
     }
 
     func clearFilters() {

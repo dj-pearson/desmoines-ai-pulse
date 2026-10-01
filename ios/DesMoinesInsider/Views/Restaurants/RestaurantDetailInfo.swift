@@ -1,9 +1,18 @@
 import SwiftUI
 
-/// Info section: rating, price, location, distance, phone, website, status, and description.
+/// Info section: rating, open status, price, address, distance, and description.
+///
+/// Phone, website and directions moved to RestaurantDetailActions; they were
+/// shown twice (IOS-DD-RESTAURANTS-10). The Status row that printed
+/// "Opening_Soon" with a green check is replaced by the banner in
+/// RestaurantDetailView (IOS-DD-RESTAURANTS-06).
 struct RestaurantDetailInfo: View {
     let restaurant: Restaurant
-    let onDirections: () -> Void
+
+    @State private var aboutExpanded = false
+
+    /// Above this the About text is clamped with a More button.
+    private static let aboutClampLength = 240
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -15,26 +24,49 @@ struct RestaurantDetailInfo: View {
                             ForEach(1...5, id: \.self) { star in
                                 Image(systemName: Double(star) <= rating ? "star.fill" : (Double(star) - 0.5 <= rating ? "star.leadinghalf.filled" : "star"))
                                     .font(.system(size: 14))
-                                    .foregroundStyle(Double(star) <= rating ? .yellow : .gray.opacity(0.3))
+                                    // The half star is yellow too; it was grey.
+                                    .foregroundStyle(Double(star) - 0.5 <= rating ? .yellow : .gray.opacity(0.3))
                             }
                         }
+                        .accessibilityHidden(true)
                         Text(String(format: "%.1f", rating))
                             .font(.subheadline.weight(.semibold))
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Rated \(String(format: "%.1f", rating)) out of 5")
                 }
 
-                if let price = restaurant.priceRange {
+                if let price = restaurant.priceRange, !price.isEmpty {
                     Text(price)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(Restaurant.spokenPrice(price) ?? price)
                 }
 
                 Spacer()
 
-                if restaurant.isFeatured == true {
-                    Label("Featured", systemImage: "star.fill")
+                // Only sponsored rows carry is_featured since 20260902000004;
+                // "Featured" called a paid placement an editorial pick
+                // (IOS-DD-RESTAURANTS-08).
+                if restaurant.isActivelySponsored {
+                    Label("Sponsored", systemImage: "megaphone")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Open status from hours_json, when known and the place is open
+            // for business (the banner covers the rest).
+            if restaurant.lifecycle == .open || restaurant.lifecycle == .newlyOpened,
+               let line = restaurant.openStatus().line {
+                HStack(spacing: 10) {
+                    Image(systemName: restaurant.openStatus().isOpen ? "clock.badge.checkmark" : "clock.badge.xmark")
+                        .font(.title3)
+                        .foregroundStyle(restaurant.openStatus().isOpen ? .green : .red)
+                        .frame(width: 28)
+                        .accessibilityHidden(true)
+                    Text(line)
+                        .font(.subheadline.weight(.medium))
                 }
             }
 
@@ -47,24 +79,12 @@ struct RestaurantDetailInfo: View {
                         .font(.title3)
                         .foregroundStyle(.red)
                         .frame(width: 28)
+                        .accessibilityHidden(true)
 
                     Text(restaurant.displayLocation)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    if restaurant.coordinate != nil {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            onDirections()
-                        } label: {
-                            Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.blue)
-                        }
-                        .accessibilityLabel("Get directions")
-                    }
+                        .textSelection(.enabled)
                 }
             }
 
@@ -76,57 +96,26 @@ struct RestaurantDetailInfo: View {
                         .font(.title3)
                         .foregroundStyle(.blue)
                         .frame(width: 28)
+                        .accessibilityHidden(true)
                     Text(distance)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            // Phone
-            if let phone = restaurant.phone, !phone.isEmpty {
-                Divider()
+            // A number that cannot be dialled (see Restaurant.dialURL) is
+            // still worth reading, so it shows here as plain text.
+            if let phone = restaurant.phone, !phone.isEmpty, restaurant.callURL == nil {
                 HStack(spacing: 10) {
                     Image(systemName: "phone.fill")
                         .font(.title3)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.secondary)
                         .frame(width: 28)
-
-                    if let url = restaurant.callURL {
-                        Link(phone, destination: url)
-                            .font(.subheadline)
-                    } else {
-                        Text(phone)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            // Website
-            if let url = restaurant.websiteURL {
-                HStack(spacing: 10) {
-                    Image(systemName: "safari")
-                        .font(.title3)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 28)
-
-                    Link("Visit Website", destination: url)
-                        .font(.subheadline)
-                }
-            }
-
-            // Status
-            if let status = restaurant.status, !status.isEmpty {
-                Divider()
-                HStack(spacing: 10) {
-                    Image(systemName: status.lowercased().contains("open") ? "checkmark.circle.fill" : "info.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(status.lowercased().contains("open") ? .green : .secondary)
-                        .frame(width: 28)
-
-                    Text(status.capitalized)
+                        .accessibilityHidden(true)
+                    Text(phone)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                 }
             }
         }
@@ -134,14 +123,25 @@ struct RestaurantDetailInfo: View {
 
         // Description
         if !restaurant.displayDescription.isEmpty {
+            let isLong = restaurant.displayDescription.count > Self.aboutClampLength
             VStack(alignment: .leading, spacing: 10) {
                 Text("About")
                     .font(.title3.bold())
+                    .accessibilityAddTraits(.isHeader)
 
                 Text(restaurant.displayDescription)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .lineSpacing(4)
+                    .lineLimit(isLong && !aboutExpanded ? 4 : nil)
+
+                if isLong {
+                    Button(aboutExpanded ? "Less" : "More") {
+                        withAnimation(.easeInOut(duration: 0.2)) { aboutExpanded.toggle() }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityLabel(aboutExpanded ? "Show less" : "Read more about \(restaurant.name)")
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
@@ -150,5 +150,5 @@ struct RestaurantDetailInfo: View {
 }
 
 #Preview {
-    RestaurantDetailInfo(restaurant: .preview, onDirections: {})
+    RestaurantDetailInfo(restaurant: .preview)
 }

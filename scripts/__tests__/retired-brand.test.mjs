@@ -62,20 +62,34 @@ check(
 );
 
 console.log('\npublic files a machine reads');
-for (const f of ['public/manifest.json', 'public/robots.txt', 'public/.well-known/security.txt']) {
+// public/manifest.json is GONE, and its absence had been failing this suite -
+// a required CI step - since commit 050b82d consolidated the two PWA manifests.
+// index.html links /site.webmanifest, so manifest.json was the orphan and
+// deleting it was right; this file was simply not repointed, and the suite has
+// crashed on ENOENT rather than reporting a brand problem ever since.
+for (const f of ['public/site.webmanifest', 'public/robots.txt', 'public/.well-known/security.txt']) {
   check(`${f} does not carry the retired name`, !fs.readFileSync(f, 'utf8').includes(RETIRED));
 }
 
 console.log('\nthe PWA identity matches the single brand declaration');
 // brandConfig.ts is the one declaration; the manifest is hand-maintained JSON
 // and drifted from it. name/short_name are what a phone home screen shows.
-const manifest = JSON.parse(fs.readFileSync('public/manifest.json', 'utf8'));
+// site.webmanifest is THE manifest now - it is the one index.html links.
+const manifest = JSON.parse(fs.readFileSync('public/site.webmanifest', 'utf8'));
 const brand = fs.readFileSync('src/lib/brandConfig.ts', 'utf8');
 const declaredName = /name:\s*'([^']+)'/.exec(brand)?.[1];
 const declaredShort = /shortName:\s*'([^']+)'/.exec(brand)?.[1];
 check('brandConfig declares a name', !!declaredName, String(declaredName));
 check(`manifest name === brandConfig name (${declaredName})`, manifest.name === declaredName, manifest.name);
 check(`manifest short_name === brandConfig shortName (${declaredShort})`, manifest.short_name === declaredShort, manifest.short_name);
+
+// The manifest index.html actually links, asserted rather than assumed: this
+// suite spent weeks reading a file the app had stopped referencing.
+const shell = fs.readFileSync('index.html', 'utf8');
+check(
+  'index.html links the manifest this suite checks',
+  /<link[^>]+rel="manifest"[^>]+href="\/site\.webmanifest"/.test(shell),
+);
 
 console.log('\nthe scan is not vacuous');
 // Without these, every check above would pass if the detector had silently

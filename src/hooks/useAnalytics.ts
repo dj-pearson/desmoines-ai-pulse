@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('useAnalytics');
@@ -35,20 +36,34 @@ interface SessionData {
   pageViews: number;
   interactions: number;
   lastActivity: Date;
+  /** Where the visit started. user_journeys.entry_page is NOT NULL. */
+  entryPage: string;
+  /** What sent them, or 'direct'. user_journeys.entry_point is NOT NULL. */
+  entryPoint: string;
 }
+
+/** Rows queued for user_interactions_enhanced, typed as that table's Insert. */
+type InteractionInsert = Database['public']['Tables']['user_interactions_enhanced']['Insert'];
 
 export function useAnalytics() {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [userId, setUserId] = useState<string | null>(null);
-  const [sessionData, setSessionData] = useState<SessionData>({
+  const [sessionData, setSessionData] = useState<SessionData>(() => ({
     startTime: new Date(),
     pageViews: 0,
     interactions: 0,
-    lastActivity: new Date()
-  });
+    lastActivity: new Date(),
+    entryPage: typeof window === 'undefined' ? '/' : window.location.pathname,
+    entryPoint:
+      typeof document === 'undefined' || !document.referrer ? 'direct' : document.referrer,
+  }));
   
   // Queue for batching analytics events
-  const eventQueue = useRef<Record<string, unknown>[]>([]);
+  // Typed as the destination table's Insert, not Record<string, unknown>. An
+  // index-signature type says "this may carry any key", which supabase-js 2.85+
+  // rejects on insert - correctly, since an unknown key comes back PGRST204 and
+  // the whole batch is lost.
+  const eventQueue = useRef<InteractionInsert[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -91,7 +106,7 @@ export function useAnalytics() {
       }));
 
       // Create enhanced interaction record
-      const enhancedEvent = {
+      const enhancedEvent: InteractionInsert = {
         session_id: sessionId,
         user_id: userId,
         interaction_type: event.eventType,
@@ -277,7 +292,17 @@ export function useAnalytics() {
   };
 
   // Track user preferences based on behavior
-  const trackPreference = async (category: string, value: string, confidence: number = 0.5) => {
+  // CATEGORY IS A CLOSED SET, because the line below builds a COLUMN NAME from
+  // it (`preferred_${category}s`). user_preference_profiles has exactly five
+  // such columns; any other category named a column that does not exist and the
+  // upsert came back PGRST204 with the preference silently lost. `string` let
+  // every caller pick one - there are none today, which is the only reason this
+  // has not bitten anyone.
+  const trackPreference = async (
+    category: 'cuisine' | 'event_type' | 'location' | 'price_range' | 'time',
+    value: string,
+    confidence: number = 0.5,
+  ) => {
     try {
       // Try to use enhanced preference profiles table
       try {
@@ -311,9 +336,18 @@ export function useAnalytics() {
     try {
       // Try to update user journey with conversion
       try {
+        // entry_page AND entry_point ARE NOT NULL AND WERE NOT BEING SENT.
+        // This hook is the only writer of user_journeys in the repo, so no row
+        // ever existed for the upsert to update: every conversion insert
+        // violated both NOT NULLs and the table has never received a row. The
+        // values come from where the session actually started, captured at
+        // mount. supabase-js 2.85+ is what surfaced it - the old types let a
+        // missing required column through.
         await supabase.from('user_journeys').upsert({
           session_id: sessionId,
           user_id: userId,
+          entry_page: sessionData.entryPage,
+          entry_point: sessionData.entryPoint,
           converted: true,
           conversion_type: conversionType,
           conversion_content_type: contentType,

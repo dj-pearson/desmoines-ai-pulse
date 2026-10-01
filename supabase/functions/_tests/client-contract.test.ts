@@ -83,6 +83,9 @@ const MULTI_CLIENT = [
   {
     fn: 'register-device-token/index.ts',
     documentedActions: [],
+    // IOS-DD-PLATFORM-19: sent by iOS on sign-out only. Documented and
+    // implemented like any action, but not every client has to send it.
+    optionalActions: ['unregister'],
     requestFields: ['deviceToken', 'platform'],
     clients: [
       'ios/DesMoinesInsider/Services/PushNotificationService.swift',
@@ -106,6 +109,17 @@ const MULTI_CLIENT = [
     ],
   },
   {
+    // IOS-DD-MONETIZATION-07: iOS moved off direct, RLS-refused inserts into
+    // ad_impressions / ad_clicks and onto the endpoint the web uses.
+    fn: 'track-ad-event/index.ts',
+    documentedActions: [],
+    requestFields: ['kind', 'campaign_id', 'creative_id', 'session_id', 'client_event_id'],
+    clients: [
+      'ios/DesMoinesInsider/Services/AdTrackingService.swift',
+      'src/lib/tracking.ts',
+    ],
+  },
+  {
     fn: 'version-check/index.ts',
     documentedActions: [],
     requestFields: ['platform', 'version'],
@@ -117,9 +131,9 @@ const MULTI_CLIENT = [
 ];
 
 Deno.test('documented actions each have an implemented branch', async () => {
-  for (const { fn, documentedActions } of MULTI_CLIENT) {
+  for (const { fn, documentedActions, optionalActions } of MULTI_CLIENT) {
     const src = await read(new URL(fn, FUNCTIONS));
-    for (const action of documentedActions) {
+    for (const action of [...documentedActions, ...(optionalActions ?? [])]) {
       // The docstring has to actually say it...
       assert(
         new RegExp(`POST \\{ action: "${action}"`).test(src),
@@ -139,10 +153,11 @@ Deno.test('documented actions each have an implemented branch', async () => {
 Deno.test('every implemented action branch is documented', async () => {
   // The reverse direction. An undocumented branch is how a client ends up
   // guessing, which is the other half of how XPLAT-001 happened.
-  for (const { fn, documentedActions } of MULTI_CLIENT) {
+  for (const { fn, documentedActions, optionalActions } of MULTI_CLIENT) {
     const src = await read(new URL(fn, FUNCTIONS));
     const implemented = [...src.matchAll(/action === ["']([a-z_]+)["']/g)].map((m) => m[1]);
-    const undocumented = [...new Set(implemented)].filter((a) => !documentedActions.includes(a));
+    const known = [...documentedActions, ...(optionalActions ?? [])];
+    const undocumented = [...new Set(implemented)].filter((a) => !known.includes(a));
     assertEquals(undocumented, [], `${fn}: branches on undocumented actions: ${undocumented.join(', ')}`);
   }
 });

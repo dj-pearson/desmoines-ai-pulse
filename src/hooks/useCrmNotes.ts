@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CrmNote, CrmNoteInput } from '@/types/crm';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const CRM_NOTES_KEY = 'crm-notes';
 
@@ -12,8 +13,7 @@ export function useCrmContactNotes(contactId: string | undefined) {
     queryFn: async () => {
       if (!contactId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_notes')
+      const { data, error } = await fromUnknownTable('crm_notes')
         .select('*')
         .eq('contact_id', contactId)
         .order('is_pinned', { ascending: false })
@@ -32,8 +32,7 @@ export function useCrmDealNotes(dealId: string | undefined) {
     queryFn: async () => {
       if (!dealId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_notes')
+      const { data, error } = await fromUnknownTable('crm_notes')
         .select('*')
         .eq('deal_id', dealId)
         .order('is_pinned', { ascending: false })
@@ -53,8 +52,7 @@ export function useCrmNoteMutations() {
 
   const createNote = useMutation({
     mutationFn: async (input: CrmNoteInput) => {
-      const { data, error } = await supabase
-        .from('crm_notes')
+      const { data, error } = await fromUnknownTable('crm_notes')
         .insert({
           ...input,
           created_by: user?.id,
@@ -96,8 +94,7 @@ export function useCrmNoteMutations() {
 
   const updateNote = useMutation({
     mutationFn: async ({ id, ...input }: Partial<CrmNoteInput> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('crm_notes')
+      const { data, error } = await fromUnknownTable('crm_notes')
         .update(input)
         .eq('id', id)
         .select()
@@ -127,8 +124,7 @@ export function useCrmNoteMutations() {
 
   const togglePinNote = useMutation({
     mutationFn: async ({ id, isPinned }: { id: string; isPinned: boolean }) => {
-      const { data, error } = await supabase
-        .from('crm_notes')
+      const { data, error } = await fromUnknownTable('crm_notes')
         .update({ is_pinned: !isPinned })
         .eq('id', id)
         .select()
@@ -161,14 +157,12 @@ export function useCrmNoteMutations() {
   const deleteNote = useMutation({
     mutationFn: async (id: string) => {
       // Get the note first to know which queries to invalidate
-      const { data: note } = await supabase
-        .from('crm_notes')
+      const { data: note } = await fromUnknownTable('crm_notes')
         .select('contact_id, deal_id')
         .eq('id', id)
         .single();
 
-      const { error } = await supabase
-        .from('crm_notes')
+      const { error } = await fromUnknownTable('crm_notes')
         .delete()
         .eq('id', id);
 

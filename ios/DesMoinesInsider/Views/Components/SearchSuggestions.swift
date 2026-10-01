@@ -33,59 +33,9 @@ struct TrendingChipsRow: View {
     }
 }
 
-/// Recent searches list with a Clear All action.
-struct RecentSearchesList: View {
-    let items: [String]
-    let onSelect: (String) -> Void
-    let onClearAll: () -> Void
-
-    var body: some View {
-        if items.isEmpty {
-            EmptyView()
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("Recent")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    Spacer()
-                    Button("Clear all", action: onClearAll)
-                        .font(.subheadline)
-                        .minHitTarget()
-                        .accessibilityHint("Clears your recent search history")
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-
-                ForEach(items.prefix(5), id: \.self) { item in
-                    Button {
-                        onSelect(item)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                            Text(item)
-                                .font(.body)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Recent search: \(item)")
-                }
-            }
-        }
-    }
-}
-
-private struct SuggestionChip: View {
+/// A capsule chip. Internal so the Search screen's quick filters use the same
+/// look as the trending row (IOS-DD-SEARCH-08).
+struct SuggestionChip: View {
     let text: String
     let action: () -> Void
 
@@ -125,15 +75,8 @@ enum SearchDebounce {
 }
 
 #Preview {
-    VStack(alignment: .leading, spacing: 20) {
-        TrendingChipsRow(
-            items: ["Live music", "Kid-friendly", "Brunch", "Free", "This weekend"],
-            onSelect: { _ in }
-        )
-        RecentSearchesList(
-            items: ["jazz in july", "ramen"],
-            onSelect: { _ in },
-            onClearAll: {}
-        )
-    }
+    TrendingChipsRow(
+        items: ["Live music", "Kid-friendly", "Brunch", "Free", "This weekend"],
+        onSelect: { _ in }
+    )
 }

@@ -105,29 +105,25 @@ export const loadResourceAsync = (src: string, type: 'script' | 'style'): Promis
   });
 };
 
-// Service Worker cleanup - unregister all SWs and clear caches to prevent
-// stale cached HTML from referencing old hashed asset filenames.
-// The SW was causing "Unexpected token '<'" errors after deploys because
-// cacheFirst strategy served old index.html with outdated asset hashes.
-export const registerServiceWorker = async () => {
-  if (!('serviceWorker' in navigator)) {
-    return;
-  }
-
-  try {
-    const regs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(regs.map((r) => r.unregister()));
-
-    if ('caches' in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => caches.delete(k)));
-    }
-
-    logger.debug('registerServiceWorker', 'All service workers unregistered and caches cleared');
-  } catch (err) {
-    logger.warn('registerServiceWorker', 'Failed to clear service workers/caches', { error: String(err) });
-  }
-};
+// registerServiceWorker() USED TO LIVE HERE AND IT REGISTERED NOTHING
+// (WEB-QUAL-014). Its body unregistered every worker and deleted every cache -
+// the teardown for the old cacheFirst SW that served stale index.html with
+// outdated asset hashes and produced "Unexpected token '<'" after deploys. The
+// name said the opposite of the body, and lazyInit called it under the comment
+// "Priority 3: Service worker (after 5 seconds)", so every reader of the call
+// site concluded this site registers a service worker.
+//
+// It is deleted rather than renamed, because it was also REDUNDANT. The inline
+// script in index.html runs the same teardown - same document, same APIs - on
+// every page load, about five seconds earlier. There is no client the 5-second
+// copy caught that the inline one missed; they run in the same page.
+//
+// TWO LAYERS REMAIN, and they are not redundant with each other:
+//   index.html's inline script, for any client that still arrives with a
+//     registered worker.
+//   public/sw.js, which self-destructs on activate - that one is reached by
+//     the browser's own update check for sw.js, not by loading the page.
+// Retiring those is a date decision and is left to the owner (AC4).
 
 // Critical resource hints
 export const addResourceHints = () => {

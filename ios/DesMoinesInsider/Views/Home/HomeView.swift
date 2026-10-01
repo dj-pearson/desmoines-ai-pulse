@@ -18,8 +18,18 @@ struct HomeView: View {
     @State private var restaurantsVM = RestaurantsViewModel()
     @State private var attractionsVM = AttractionsViewModel()
     /// Dedicated VM for the "This Weekend" rail so its date-scoped query is
-    /// independent of the user's filtering on the main events feed.
-    @State private var weekendVM = EventsViewModel()
+    /// independent of the user's filtering on the main events feed. Starts on
+    /// its window, so its first load is the weekend rather than the whole feed
+    /// (IOS-DD-EVENTS-12).
+    @State private var weekendVM = EventsViewModel(initialDatePreset: .thisWeekend, loadsFeatured: false)
+    /// The Tonight rail (IOS-DD-EVENTS-18), built the same way.
+    @State private var tonightVM = EventsViewModel(initialDatePreset: .tonight, loadsFeatured: false)
+    /// Rail order, recomputed on appear and on return to the foreground only.
+    /// It used to be computed in `body` from observable favorites and recents,
+    /// so saving an event reordered the rails under the user's thumb
+    /// (IOS-DD-EVENTS-11).
+    @State private var railOrder: [HomeRail] = HomeRail.allCases
+    @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
@@ -40,33 +50,46 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 0).id("top")
-                    headerSection
 
-                    // Right Now ribbon — weather-aware contextual entry
-                    RightNowRibbon { ctx, mode in
-                        ribbonDiscoverContext = (ctx, mode)
-                        showDiscover = true
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 10)
+                    // While searching, results come straight under the search
+                    // field instead of below five screens of discovery chrome,
+                    // most of it behind the keyboard (IOS-DD-EVENTS-11).
+                    if !isSearching {
+                        headerSection
 
-                    // Consolidated discovery entry points — one compact row
-                    // instead of four stacked full-width cards.
-                    WaysToExploreRow(
-                        onAskPulse: { showAskPulse = true },
-                        onSwipe: { showDiscover = true },
-                        onSurprise: { showSurpriseMe = true }
-                    )
-                    .padding(.top, 12)
-
-                    // Trip Planner Home entry point (IOS-PARITY-001).
-                    TripPlannerHomeCard { showTripPlanner = true }
+                        // Right Now ribbon — weather-aware contextual entry
+                        RightNowRibbon { ctx, mode in
+                            ribbonDiscoverContext = (ctx, mode)
+                            showDiscover = true
+                        }
                         .padding(.horizontal)
                         .padding(.top, 10)
 
-                    // Smart Presets — one-tap event scenarios
-                    EventSmartPresets(viewModel: viewModel)
-                        .padding(.top, 10)
+                        // Consolidated discovery entry points — one compact row
+                        // instead of four stacked full-width cards.
+                        WaysToExploreRow(
+                            onAskPulse: { showAskPulse = true },
+                            onSwipe: { showDiscover = true },
+                            onSurprise: { showSurpriseMe = true }
+                        )
+                        .padding(.top, 12)
+
+                        // Trip Planner Home entry point (IOS-PARITY-001). Hidden
+                        // while trip storage is missing on the server, so Home
+                        // does not promote a feature that can only fail
+                        // (IOS-DD-TRIP-PLANNER-01).
+                        if TripPlannerService.shared.availability != .paused {
+                            TripPlannerHomeCard(isFreeTier: StoreKitService.shared.currentTier == .free) {
+                                showTripPlanner = true
+                            }
+                            .padding(.horizontal)
+                            .padding(.top, 10)
+                        }
+
+                        // Smart Presets — one-tap event scenarios
+                        EventSmartPresets(viewModel: viewModel)
+                            .padding(.top, 10)
+                    }
 
                     // Inline filter pills — always visible, no hidden sheet
                     EventInlineFilters(viewModel: viewModel)
@@ -87,9 +110,22 @@ struct HomeView: View {
                             restaurantsVM: restaurantsVM,
                             attractionsVM: attractionsVM,
                             weekendVM: weekendVM,
+                            tonightVM: tonightVM,
                             onSeeAll: handleSeeAll,
-                            order: HomeRailOrdering.current()
+                            order: railOrder
                         )
+                    }
+
+                    // The main list had no heading, so it read as one more
+                    // rail's overflow.
+                    if !isSearching && viewModel.activeFilterCount == 0 && !viewModel.events.isEmpty {
+                        Text("All upcoming events")
+                            .font(.headline)
+                            .accessibilityAddTraits(.isHeader)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                            .padding(.top, 12)
+                            .padding(.bottom, 4)
                     }
 
                     eventsList
@@ -115,15 +151,29 @@ struct HomeView: View {
             } // ScrollViewReader
             .refreshable {
                 async let eventsRefresh: () = viewModel.refresh()
-                async let restaurantsRefresh: () = restaurantsVM.refresh()
+                async let restaurantsRefresh: Bool = restaurantsVM.refresh()
                 async let attractionsRefresh: () = attractionsVM.refresh()
                 async let weekendRefresh: () = weekendVM.refresh()
-                _ = await (eventsRefresh, restaurantsRefresh, attractionsRefresh, weekendRefresh)
+                async let tonightRefresh: () = tonightVM.refresh()
+                _ = await (eventsRefresh, restaurantsRefresh, attractionsRefresh, weekendRefresh, tonightRefresh)
+                // errorMessage is now set on every failure, not only when the
+                // list was empty, so this haptic tells the truth
+                // (IOS-DD-EVENTS-09).
                 if viewModel.errorMessage == nil {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 } else {
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
+            }
+            // Also after an offline launch served stale cache: those rows were
+            // never replaced (IOS-DD-EVENTS-08).
+            .reloadOnReconnect(if: viewModel.events.isEmpty || viewModel.servedFromStaleCache) {
+                async let eventsRefresh: () = viewModel.refresh()
+                async let restaurantsRefresh: Bool = restaurantsVM.refresh()
+                async let attractionsRefresh: () = attractionsVM.refresh()
+                async let weekendRefresh: () = weekendVM.refresh()
+                async let tonightRefresh: () = tonightVM.refresh()
+                _ = await (eventsRefresh, restaurantsRefresh, attractionsRefresh, weekendRefresh, tonightRefresh)
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
@@ -133,11 +183,9 @@ struct HomeView: View {
                 prompt: "Search events"
             )
             .toolbar {
-                if viewModel.activeFilterCount > 0 {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        filterToolbarButton
-                    }
-                }
+                // The filter glyph that sat here cleared every filter while its
+                // label promised a filter screen; the sticky bar's "Clear all"
+                // does that honestly (IOS-DD-EVENTS-11).
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu
                 }
@@ -156,7 +204,9 @@ struct HomeView: View {
                 let override = ribbonDiscoverContext
                 DiscoverView(
                     initialFilter: override?.0 ?? discoverFilterFromEvents(),
-                    initialMode: override?.1 ?? .events,
+                    // Events only when a Home filter narrowed it; otherwise the
+                    // full mix, as the hub's Swipe tile opens (IOS-DD-DISCOVER-05).
+                    initialMode: override?.1 ?? (viewModel.activeFilterCount > 0 ? .events : .mixed),
                     lockMode: override == nil && viewModel.activeFilterCount > 0,
                     onClose: { showDiscover = false }
                 )
@@ -181,7 +231,7 @@ struct HomeView: View {
             }
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
-                case .attractions: AttractionsView()
+                case .attractions: AttractionsView(ownsNavigationStack: false)
                 case .discoverHub:
                     // Pushed within Home's NavigationStack, so the hub borrows
                     // this ambient stack rather than nesting its own.
@@ -192,21 +242,29 @@ struct HomeView: View {
                 }
             }
             .task {
+                railOrder = HomeRailOrdering.current()
+                // The rail VMs start on their own windows (init), so they load
+                // alongside the feed instead of after it.
                 async let eventsLoad: () = viewModel.loadInitialData()
                 async let restaurantsLoad: () = restaurantsVM.loadInitialData()
                 async let attractionsLoad: () = attractionsVM.loadInitialData()
-                _ = await (eventsLoad, restaurantsLoad, attractionsLoad)
-                // "This Weekend" rail — scope a separate VM to the weekend.
-                if weekendVM.events.isEmpty {
-                    weekendVM.selectedDatePreset = .thisWeekend
-                }
+                async let weekendLoad: () = weekendVM.loadInitialData()
+                async let tonightLoad: () = tonightVM.loadInitialData()
+                async let tripAvailability: () = TripPlannerService.shared.refreshAvailability()
+                _ = await (eventsLoad, restaurantsLoad, attractionsLoad, weekendLoad, tonightLoad, tripAvailability)
                 // IOS-PARITY-005 — warm the Best-Of winners cache so award
                 // badges surface on cards across the app (fail-soft).
                 await BestOfViewModel.refreshWinners()
             }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { railOrder = HomeRailOrdering.current() }
+            }
             .toastOverlay(message: $toast)
         }
     }
+
+    /// A search is typed. Home collapses to results (IOS-DD-EVENTS-11).
+    private var isSearching: Bool { !viewModel.searchText.isEmpty }
 
     // MARK: - See All routing
 
@@ -223,29 +281,17 @@ struct HomeView: View {
             // IOS-PARITY-004 — deep-link into the dedicated weekend guide
             // instead of just filtering the events list.
             navigationPath.append(HomeDestination.weekend)
-        case .popularRestaurants, .trendingAttractions:
+        case .popularRestaurants:
+            // Restaurants live on the Dining tab; this pushed the attractions
+            // list (IOS-DD-EVENTS-11).
+            DeepLinkHandler.shared.open(.tab(.restaurants))
+        case .trendingAttractions:
             navigationPath.append(HomeDestination.attractions)
+        case .tonight:
+            viewModel.applyPreset(.tonight)
         case .forYou:
             break
         }
-    }
-
-    // MARK: - Filter Entry Point (IOS-AUDIT-UX-007)
-
-    /// Filter glyph in the toolbar with a count badge so the number of active
-    /// filters is visible at a glance. Tapping clears all filters (mirrors the
-    /// "Clear all" affordance in the active-filter chip bar).
-    private var filterToolbarButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation { viewModel.clearFilters() }
-        } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .overlay(alignment: .topTrailing) {
-                    FilterCountBadge(count: viewModel.activeFilterCount)
-                }
-        }
-        .accessibilityLabel("Filters, \(viewModel.activeFilterCount) active")
     }
 
     // MARK: - Sort Menu (IOS-DISCOVER-2026-003)
@@ -342,9 +388,21 @@ struct HomeView: View {
         if viewModel.activeFilterCount > 0 {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    Text("\(viewModel.events.count) results")
+                    // The server's total, not the rows loaded so far; and
+                    // "Updating..." while a refilter is in flight
+                    // (IOS-DD-EVENTS-09).
+                    if viewModel.isRefiltering {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(resultCountText)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
+
+                    if isSearching {
+                        FilterChipView(text: "\"\(viewModel.searchText)\"", icon: "magnifyingglass") {
+                            viewModel.searchText = ""
+                        }
+                    }
 
                     if let category = viewModel.selectedCategory {
                         FilterChipView(
@@ -388,6 +446,11 @@ struct HomeView: View {
         }
     }
 
+    private var resultCountText: String {
+        if viewModel.isRefiltering { return "Updating..." }
+        return viewModel.totalCount == 1 ? "1 result" : "\(viewModel.totalCount) results"
+    }
+
     // MARK: - Events List
 
     private var eventsList: some View {
@@ -417,14 +480,25 @@ struct HomeView: View {
             } else if viewModel.events.isEmpty {
                 EmptyStateView(
                     icon: "calendar.badge.exclamationmark",
-                    title: "No Events Found",
-                    message: "Try adjusting your filters or check back later.",
+                    title: isSearching ? "No matches for \"\(viewModel.searchText)\"" : "No Events Found",
+                    message: isSearching
+                        ? "Try a shorter word, or clear the search to browse everything."
+                        : "Try adjusting your filters or check back later.",
                     actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
                     action: { viewModel.clearFilters() }
                 )
                 .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 12) {
+                    // Nothing matched exactly; these are the fuzzy matches
+                    // (IOS-DD-EVENTS-19).
+                    if viewModel.isFuzzyFallback {
+                        Text("No exact matches. Did you mean...")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     ForEach(Array(viewModel.arrangedEvents.enumerated()), id: \.element.id) { index, event in
                         Button {
                             if event.isActivelySponsored {
@@ -440,9 +514,9 @@ struct HomeView: View {
                             if event.isActivelySponsored {
                                 AdTrackingService.shared.logSponsoredImpression(listingType: "event", listingId: event.id)
                             }
-                        }
-                        .task {
-                            await viewModel.loadMoreIfNeeded(currentItem: event)
+                            // The VM owns the load-more task so a filter change
+                            // can cancel it (IOS-DD-EVENTS-03).
+                            viewModel.loadMoreIfNeeded(currentItem: event)
                         }
 
                         // Native in-feed ad card at deterministic indices
@@ -459,6 +533,10 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal)
+                // Old rows dim while a filter change loads, so they are not
+                // read as the answer to the new chips (IOS-DD-EVENTS-09).
+                .opacity(viewModel.isRefiltering ? 0.5 : 1)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.isRefiltering)
             }
         }
         .padding(.bottom, 20)

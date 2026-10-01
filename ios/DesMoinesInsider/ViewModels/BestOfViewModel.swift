@@ -9,6 +9,8 @@ final class BestOfViewModel {
     private(set) var categories: [VotingCategory] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    /// Categories the signed-in user has voted in (IOS-DD-GUIDES-10).
+    private(set) var votedCategoryIds: Set<String> = []
 
     private let service = VotingService.shared
     private let cache = QueryCache.shared
@@ -47,8 +49,33 @@ final class BestOfViewModel {
             }
         }
         isLoading = false
+        await refreshVoted()
         // Keep the award-badge cache fresh (fail-soft inside the service).
         await Self.refreshWinners()
+    }
+
+    /// Re-reads which categories the user has voted in. Cheap; called on
+    /// appear so a vote cast inside a category shows on return.
+    func refreshVoted() async {
+        guard let userId = AuthService.shared.currentUser?.id.uuidString else {
+            votedCategoryIds = []
+            return
+        }
+        votedCategoryIds = await service.fetchVotedCategoryIds(userId: userId)
+    }
+
+    var isSignedIn: Bool { AuthService.shared.currentUser != nil }
+
+    /// Ballot progress over the rounds that are open right now.
+    var ballotProgress: (voted: Int, total: Int) {
+        Self.progress(categories: categories, voted: votedCategoryIds, now: Date())
+    }
+
+    nonisolated static func progress(
+        categories: [VotingCategory], voted: Set<String>, now: Date
+    ) -> (voted: Int, total: Int) {
+        let open = categories.filter { $0.isVotingOpen(at: now) }
+        return (open.filter { voted.contains($0.id) }.count, open.count)
     }
 
     /// Loads the winner→category map into the shared cache. Safe to call from

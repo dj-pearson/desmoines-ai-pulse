@@ -71,6 +71,15 @@ export const supabase = createClient<Database>(
         'X-Client-Info': 'desmoines-ai-pulse',
       },
     },
+    // postgrest-js 2.116 retries a GET up to 3 times (1s/2s/4s backoff) on a
+    // network error or a 503/520, and TanStack Query then retries the whole
+    // call twice more per queryConfig.ts, so one failed list query became up
+    // to 12 requests and ErrorState took far longer to show with the backend
+    // down. queryConfig.ts owns the retry policy; the client makes one
+    // attempt per call.
+    db: {
+      retry: false,
+    },
   }
 );
 

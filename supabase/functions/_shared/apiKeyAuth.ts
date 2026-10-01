@@ -13,6 +13,13 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { classifyCaller, expectedSecrets, isMachineCaller, presentedCredentials, timingSafeEqual } from "./callerKind.ts";
+import { highestRole, isFullAdmin } from './roles.ts';
+import { runtimeEnvironment } from './runtimeEnvironment.ts';
+
+// Re-exported: several functions import it from here and the implementation
+// moved to a module with no remote imports so it could be tested (WEB-BE-047).
+export { timingSafeEqual };
 
 export interface ApiKeyAuthResult {
   success: boolean;
@@ -35,7 +42,8 @@ export function validateApiKey(req: Request): ApiKeyAuthResult {
   // Fail closed in production: reject all requests when API key is not configured.
   // In development, allow with a warning for ease of testing.
   if (!expectedKey) {
-    const env = Deno.env.get('ENVIRONMENT') || 'development';
+    // Unset ENVIRONMENT now reads as production (see runtimeEnvironment.ts).
+    const env = runtimeEnvironment();
     if (env === 'production') {
       console.error('EDGE_FUNCTION_API_KEY is not configured in production — rejecting request');
       return { success: false, error: 'API key authentication is not configured' };
@@ -108,13 +116,16 @@ export async function isAdminUserId(
   userId: string,
   label = 'isAdminUserId',
 ): Promise<boolean> {
-  const { data: roleRow, error: roleErr } = await supabase
+  // Every row, not .maybeSingle(): user_roles is unique on (user_id, role),
+  // so a user can hold two grants, and maybeSingle errored (PGRST116) on
+  // exactly those users - an admin who also had a 'user' row was denied.
+  const { data: roleRows, error: roleErr } = await supabase
     .from('user_roles')
     .select('role')
-    .eq('user_id', userId)
-    .maybeSingle();
+    .eq('user_id', userId);
 
-  if (roleRow?.role && ADMIN_ROLE_VALUES.has(roleRow.role)) return true;
+  const strongest = highestRole(roleRows);
+  if (isFullAdmin(strongest)) return true;
 
   const { data: profile, error: profileErr } = await supabase
     .from('profiles')
@@ -127,7 +138,7 @@ export async function isAdminUserId(
   // Surface exactly why the check rejected so the data can be fixed.
   console.error(`[${label}] admin check failed`, {
     userId,
-    user_roles_role: roleRow?.role ?? null,
+    user_roles_roles: (roleRows ?? []).map((r: { role?: unknown }) => r?.role ?? null),
     user_roles_error: roleErr?.message ?? null,
     profiles_user_role: profile?.user_role ?? null,
     profiles_error: profileErr?.message ?? null,
@@ -199,29 +210,18 @@ export async function requireAdminOrApiKey(
   corsHeaders: Record<string, string>,
   caller?: AdminCaller,
 ): Promise<Response | null> {
-  // 1) Try API key first — both X-API-Key and Authorization: Bearer <key>
-  const expectedKey = Deno.env.get('EDGE_FUNCTION_API_KEY');
-  const apiKeyHeader = req.headers.get('X-API-Key') || req.headers.get('x-api-key');
-  if (expectedKey && apiKeyHeader && timingSafeEqual(apiKeyHeader, expectedKey)) {
-    return null;
-  }
-
-  const authHeader = req.headers.get('Authorization') || '';
-  const [scheme, token] = authHeader.split(' ');
-  const bearer = scheme?.toLowerCase() === 'bearer' ? token : '';
-
-  if (expectedKey && bearer && timingSafeEqual(bearer, expectedKey)) {
-    return null;
-  }
-
-  // 1b) Accept the Supabase service-role key as a trusted internal caller.
-  // pg_cron jobs (and other server-to-server callers) authenticate with
-  // `Authorization: Bearer <service_role_key>`. The service-role key is a
-  // secret with full DB access, so accepting it grants no extra privilege —
-  // it keeps scheduled automation working without shipping the shared
-  // EDGE_FUNCTION_API_KEY into every cron migration.
-  const serviceRoleKeyEarly = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (serviceRoleKeyEarly && bearer && timingSafeEqual(bearer, serviceRoleKeyEarly)) {
+  // 1) Machine callers first: EDGE_FUNCTION_API_KEY (cron, CI, the hub) or
+  // SUPABASE_SERVICE_ROLE_KEY (pg_cron and other server-to-server callers).
+  //
+  // WEB-BE-047 moved the three timing-safe comparisons that used to sit here
+  // into _shared/callerKind.ts, because nothing outside this file could ask the
+  // question - and firecrawl-scraper needed to, to stop rate-limiting its own
+  // orchestrator. Accepting the service-role key grants no extra privilege: it
+  // is a secret with full database access, and this keeps scheduled automation
+  // working without shipping EDGE_FUNCTION_API_KEY into every cron migration.
+  const presented = presentedCredentials(req);
+  const bearer = presented.bearer ?? '';
+  if (isMachineCaller(classifyCaller(presented, expectedSecrets()))) {
     return null;
   }
 
@@ -265,20 +265,3 @@ export async function requireAdminOrApiKey(
   );
 }
 
-/**
- * Timing-safe string comparison to prevent timing attacks.
- */
-export function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-
-  const encoder = new TextEncoder();
-  const bufA = encoder.encode(a);
-  const bufB = encoder.encode(b);
-
-  let result = 0;
-  for (let i = 0; i < bufA.length; i++) {
-    result |= bufA[i] ^ bufB[i];
-  }
-
-  return result === 0;
-}

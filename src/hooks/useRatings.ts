@@ -7,6 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const logger = createLogger("useRatings");
 
+/** Every column user_ratings has. */
+const USER_RATINGS_COLUMNS =
+  "id, content_type, content_id, user_id, rating, review_text, photo_urls, is_verified, moderation_status, created_at, updated_at";
+
 type Rating = Database["public"]["Tables"]["user_ratings"]["Row"];
 type RatingInsert = Database["public"]["Tables"]["user_ratings"]["Insert"];
 type RatingUpdate = Database["public"]["Tables"]["user_ratings"]["Update"];
@@ -45,21 +49,44 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
       // Fetch all ratings for this content
-      const { data: ratings, error: ratingsError } = await supabase
+      // NO EMBED. `profiles:user_id(...)` reads like a join to profiles and is
+      // not one: PostgREST takes `user_id` as the relation to embed, and it is
+      // an ordinary column with no foreign key, so the answer was PGRST200 and
+      // the WHOLE query failed - ratings have never loaded for any content
+      // (WEB-QA-034). The reviewer names come from a keyed lookup below.
+      const { data: ratingRows, error: ratingsError } = await supabase
         .from("user_ratings")
-        .select(`
-          *,
-          profiles:user_id (
-            first_name,
-            last_name,
-            user_role
-          )
-        `)
+        .select(USER_RATINGS_COLUMNS)
         .eq("content_type", contentType)
         .eq("content_id", contentId)
         .order("created_at", { ascending: false });
 
       if (ratingsError) throw ratingsError;
+
+      // Keyed on profiles.USER_ID; profiles.id is the profile row's own PK and
+      // matching an auth id against it returns zero rows silently
+      // (WEB-SEC-023).
+      const raterIds = [...new Set((ratingRows ?? []).map((r) => r.user_id).filter(Boolean))] as string[];
+      const raters = new Map<string, { first_name: string | null; last_name: string | null; user_role: string | null }>();
+      if (raterIds.length > 0) {
+        // Best-effort by design: a failure costs the reviewer names and the
+        // ratings themselves still render, so it is logged rather than thrown.
+        const { data: profiles, error: profileError } = await supabase
+          .from("profiles")
+          .select("user_id, first_name, last_name, user_role")
+          .in("user_id", raterIds);
+        if (profileError) {
+          logger.warn("fetchRatings", "Rater lookup failed", { error: profileError.message });
+        }
+        for (const p of profiles ?? []) {
+          if (p.user_id) raters.set(p.user_id, { first_name: p.first_name, last_name: p.last_name, user_role: p.user_role });
+        }
+      }
+
+      const ratings = (ratingRows ?? []).map((r) => ({
+        ...r,
+        profiles: (r.user_id && raters.get(r.user_id)) || null,
+      }));
 
       // Fetch user's rating if authenticated
       let userRating = null;

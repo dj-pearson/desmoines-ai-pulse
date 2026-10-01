@@ -1,7 +1,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { getRestaurantOpenStatus } from '@/lib/restaurantHours';
+import { getRestaurantOpenStatus, formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface OpenStatusChipProps {
@@ -12,6 +12,13 @@ interface OpenStatusChipProps {
   /** Fallback copy shown when no structured hours are available. */
   fallbackLabel?: string;
   className?: string;
+  /**
+   * A status the caller already computed, e.g. from attractions.hours JSONB
+   * (src/lib/attractionHours.ts). When given, `hours` is not parsed and the
+   * chip reads the full line ("Open until 5 PM", "Closed, opens 9 AM").
+   * Optional, so existing callers are unchanged.
+   */
+  status?: RestaurantOpenResult | null;
 }
 
 const STATUS_STYLES = {
@@ -37,14 +44,16 @@ export function OpenStatusChip({
   website,
   fallbackLabel = 'Check official site for hours',
   className,
+  status: precomputed,
 }: OpenStatusChipProps) {
-  const { status } = getRestaurantOpenStatus(hours);
+  const result = precomputed ?? getRestaurantOpenStatus(hours);
+  const { status } = result;
 
   if (status !== 'unknown') {
     return (
       <Badge variant="outline" className={cn('gap-1', STATUS_STYLES[status], className)}>
         <SpriteIcon name="clock" className="h-3.5 w-3.5" aria-hidden="true" />
-        {STATUS_LABELS[status]}
+        {precomputed ? formatOpenStatusLine(result) ?? STATUS_LABELS[status] : STATUS_LABELS[status]}
       </Badge>
     );
   }

@@ -22,7 +22,8 @@ actor HotelsService {
         case featured = "Featured"
         case priceLow = "Price: Low"
         case priceHigh = "Price: High"
-        case rating = "Top rated"
+        /// star_rating is a hotel class, not a guest rating (IOS-DD-GUIDES-17).
+        case rating = "Hotel class"
         case name = "Name"
         var id: String { rawValue }
     }
@@ -57,8 +58,13 @@ actor HotelsService {
             .select("*", head: false, count: .exact)
             .eq("is_active", value: true)
 
-        if let search = query.searchText, !search.isEmpty {
-            request = request.or("name.ilike.%\(search)%,description.ilike.%\(search)%,area.ilike.%\(search)%,chain_name.ilike.%\(search)%")
+        // Quoted and escaped (IOS-DD-GUIDES-16): raw text broke the or() tree
+        // on a comma or parenthesis and let % and _ act as wildcards.
+        if let search = query.searchText,
+           let filter = PostgrestSearch.searchOrFilter(
+               columns: ["name", "description", "area", "chain_name"], query: search
+           ) {
+            request = request.or(filter)
         }
         if !query.areas.isEmpty {
             request = request.in("area", values: query.areas)
@@ -120,6 +126,21 @@ actor HotelsService {
                 .from("hotels")
                 .select()
                 .eq("id", value: id)
+                .single()
+                .execute()
+                .value
+            return hotel
+        }
+    }
+
+    /// By slug, for /stay/<slug> links (IOS-DD-GUIDES-22).
+    func fetchHotel(slug: String) async throws -> Hotel {
+        try await withRetry { [self] in
+            let client = try db()
+            let hotel: Hotel = try await client
+                .from("hotels")
+                .select()
+                .eq("slug", value: slug)
                 .single()
                 .execute()
                 .value

@@ -19,6 +19,7 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
+import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 const AGENT_KEY = "onboarding-drip";
 const BATCH = 200;
@@ -103,8 +104,8 @@ Deno.serve(async (req) => {
 
     for (const p of rows) {
       // Consent gate — the lifecycle classifier already computed messagingAllowed.
-      const allowed = (p.lifecycle_signals as { messagingAllowed?: boolean } | null)?.messagingAllowed;
-      if (allowed === false) { skipped++; continue; }
+      // Fails closed: a user the classifier has not reached has no recorded consent.
+      if (!hasMarketingConsent(p.lifecycle_signals)) { skipped++; continue; }
 
       // Prior onboarding sends for this user.
       const { data: priorSends, error: priorSendsError } = await supabase

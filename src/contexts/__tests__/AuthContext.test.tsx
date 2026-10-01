@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, act } from "@testing-library/react";
 
 /**
@@ -27,12 +28,27 @@ let pendingRoleQueries: Array<() => void> = [];
 const fromChain: Record<string, unknown> = {};
 fromChain.select = () => fromChain;
 fromChain.eq = () => fromChain;
-fromChain.maybeSingle = () => {
-  if (!deferRoleQueries) return Promise.resolve({ data: null, error: null });
+
+function answer<T>(value: T): Promise<T> {
+  if (!deferRoleQueries) return Promise.resolve(value);
   return new Promise((resolve) => {
-    pendingRoleQueries.push(() => resolve({ data: null, error: null }));
+    pendingRoleQueries.push(() => resolve(value));
   });
-};
+}
+
+// WEB-AUTH-010: the user_roles read is no longer .maybeSingle(). It selects ALL
+// rows and ranks them by precedence, because .maybeSingle() resolves with
+// PGRST116 when a user holds two role rows - which the handler logged and
+// returned false for, so an extra row silently revoked admin. A builder that is
+// awaited directly needs a `then`; without one, `await` yields the chain object
+// itself and `rolesData.length` is undefined.
+fromChain.then = (
+  onFulfilled: (v: { data: unknown[]; error: null }) => unknown,
+  onRejected?: (e: unknown) => unknown,
+) => answer({ data: [] as unknown[], error: null }).then(onFulfilled, onRejected);
+
+// Still used by the profiles fallback.
+fromChain.maybeSingle = () => answer({ data: null, error: null });
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -47,6 +63,10 @@ vi.mock("@/integrations/supabase/client", () => ({
       }),
     },
     from: () => fromChain,
+    // The OAuth role link moved into the single resolver (WEB-AUTH-010), so it
+    // runs on the no-role path these tests exercise. Deferred with the rest, or
+    // the "while a check is in flight" assertions would race it.
+    rpc: vi.fn(() => answer({ data: null, error: null })),
     functions: { invoke: vi.fn(async () => ({ data: null, error: null })) },
   },
 }));
@@ -89,10 +109,12 @@ describe("AuthContext split (WEB-PERF-005)", () => {
   it("status consumers skip token-refresh re-renders; state consumers re-render", async () => {
     await act(async () => {
       render(
+        <QueryClientProvider client={new QueryClient()}>
         <AuthProvider>
           <StatusConsumer />
           <StateConsumer />
-        </AuthProvider>,
+        </AuthProvider>
+        </QueryClientProvider>,
       );
     });
     await flush();
@@ -142,9 +164,11 @@ describe("AuthContext tab-focus re-emitted SIGNED_IN (WEB-UX-008)", () => {
     }
     await act(async () => {
       render(
+        <QueryClientProvider client={new QueryClient()}>
         <AuthProvider>
           <AdminLoadingProbe />
-        </AuthProvider>,
+        </AuthProvider>
+        </QueryClientProvider>,
       );
     });
     await flush();
@@ -177,9 +201,11 @@ describe("AuthContext tab-focus re-emitted SIGNED_IN (WEB-UX-008)", () => {
     }
     await act(async () => {
       render(
+        <QueryClientProvider client={new QueryClient()}>
         <AuthProvider>
           <CountingConsumer />
-        </AuthProvider>,
+        </AuthProvider>
+        </QueryClientProvider>,
       );
     });
     await flush();

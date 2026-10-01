@@ -4,7 +4,6 @@ import {
   logClick,
   getOrCreateSessionId,
   createViewabilityObserver,
-  shouldShowAd,
 } from '@/lib/tracking';
 import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
@@ -52,15 +51,10 @@ export function useAdTracking(options: AdTrackingOptions): AdTrackingReturn {
     if (impressionLogged) return;
 
     try {
-      // Check frequency cap before logging
-      const sessionId = getOrCreateSessionId();
-      const canShow = await shouldShowAd(campaignId, sessionId, user?.id);
-
-      if (!canShow) {
-        log.debug('trackImpression', 'Ad frequency cap reached for campaign', { campaignId });
-        return;
-      }
-
+      // WEB-ADS-002: the client-side frequency check is gone. It counted rows
+      // RLS never let it see, so it returned "show it" every time while looking
+      // like a control. The cap that works is inside get_active_ads, which only
+      // ever runs when useActiveAds passes a session id -- and it now does.
       // Log the impression
       const result = await logImpression(campaignId, creativeId, placementType);
 
@@ -128,47 +122,5 @@ export function useAdTracking(options: AdTrackingOptions): AdTrackingReturn {
     impressionId,
     trackClick,
     adRef,
-  };
-}
-
-/**
- * Hook for tracking multiple ads on the same page
- * Useful for pages with multiple ad placements
- */
-export function useMultipleAdTracking(
-  ads: Array<{
-    campaignId: string;
-    creativeId: string;
-    placementType: string;
-  }>
-) {
-  const [trackedAds, setTrackedAds] = useState<Set<string>>(new Set());
-
-  const trackImpression = useCallback(
-    async (ad: { campaignId: string; creativeId: string; placementType: string }) => {
-      const adKey = `${ad.campaignId}-${ad.creativeId}`;
-
-      if (trackedAds.has(adKey)) return;
-
-      const result = await logImpression(ad.campaignId, ad.creativeId, ad.placementType);
-
-      if (result.success) {
-        setTrackedAds((prev) => new Set(prev).add(adKey));
-      }
-    },
-    [trackedAds]
-  );
-
-  const trackClick = useCallback(
-    async (ad: { campaignId: string; creativeId: string }) => {
-      await logClick(ad.campaignId, ad.creativeId);
-    },
-    []
-  );
-
-  return {
-    trackImpression,
-    trackClick,
-    trackedAds,
   };
 }

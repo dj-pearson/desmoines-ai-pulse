@@ -35,6 +35,9 @@ struct TripPlan: Identifiable, Decodable, Hashable {
         case totalEstimatedCost = "total_estimated_cost"
         case createdAt = "created_at"
         case packingList
+        /// The stored column on a trip_plans row (IOS-DD-TRIP-PLANNER-17);
+        /// the generate response uses `packingList`.
+        case packingListSnake = "packing_list"
     }
 
     /// Tolerant decode: `title`/`startDate`/`endDate` come from the
@@ -55,8 +58,11 @@ struct TripPlan: Identifiable, Decodable, Hashable {
         totalEstimatedCost = try c.decodeIfPresent(String.self, forKey: .totalEstimatedCost)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
         items = try c.decodeIfPresent([TripPlanItem].self, forKey: .items)
-        tips = try c.decodeIfPresent([String].self, forKey: .tips)
-        packingList = try c.decodeIfPresent([String].self, forKey: .packingList)
+        // jsonb columns: a non-array value (object, string) must not fail the
+        // whole saved list, so these are `try?` (IOS-DD-TRIP-PLANNER-17).
+        tips = try? c.decodeIfPresent([String].self, forKey: .tips)
+        packingList = (try? c.decodeIfPresent([String].self, forKey: .packingList))
+            ?? (try? c.decodeIfPresent([String].self, forKey: .packingListSnake))
     }
 
     // Cached formatters — `dateRangeDisplay` is read on every list/detail render.
@@ -145,28 +151,13 @@ struct TripPlanItem: Identifiable, Decodable, Hashable {
         contentDetails = try c.decodeIfPresent(TripContentDetails.self, forKey: .contentDetails)
     }
 
-    // Cached formatters — `startTimeDisplay` is read per itinerary row.
-    private static func posixFormatter(_ format: String) -> DateFormatter {
-        let f = DateFormatter()
-        f.dateFormat = format
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }
-    private static let timeInputFormatter = posixFormatter("HH:mm:ss")
-    private static let timeInputAltFormatter = posixFormatter("HH:mm")
-    private static let timeOutputFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        return f
-    }()
-
-    /// "2:30 PM" from a Postgres TIME ("14:30:00"), or nil.
+    /// "2:30 PM" (or "14:30" where the user's clock is 24-hour) from a
+    /// Postgres TIME ("14:30:00"), or nil. Formatted by TripSchedule so the
+    /// row, the share text and the calendar agree (IOS-DD-TRIP-PLANNER-13).
+    /// An unparseable value is shown as it came.
     var startTimeDisplay: String? {
         guard let startTime else { return nil }
-        let date = Self.timeInputFormatter.date(from: startTime)
-            ?? Self.timeInputAltFormatter.date(from: startTime)
-        guard let date else { return startTime }
-        return Self.timeOutputFormatter.string(from: date)
+        return TripSchedule.timeDisplay(startTime) ?? startTime
     }
 
     var systemImage: String {
@@ -186,9 +177,16 @@ struct TripContentDetails: Decodable, Hashable {
     let type: String?
     let id: String?
     let imageUrl: String?
+    /// Added by get_trip_itinerary in 20261014000001 (IOS-DD-TRIP-PLANNER-11).
+    /// Optional, so an older RPC body still decodes.
+    let latitude: Double?
+    let longitude: Double?
+    let name: String?
+    let title: String?
+    let slug: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, id
+        case type, id, latitude, longitude, name, title, slug
         case imageUrl = "image_url"
     }
 }
@@ -201,9 +199,12 @@ struct TripPreferences: Encodable {
     var pace: String?
     var groupSize: Int?
     var hasChildren: Bool?
-    /// Neighborhood focus is folded into `mustSee` (a key the backend reads) so
-    /// it actually influences generation without a backend change.
     var mustSee: [String]?
+    /// Area focus. Sent as its own key; generate-itinerary reads it and adds
+    /// "Prefer stops in or near <neighborhood>" to the prompt. It used to be
+    /// smuggled through mustSee (IOS-DD-TRIP-PLANNER-08). A deployed function
+    /// that predates the key ignores it.
+    var neighborhood: String?
 }
 
 // MARK: - Form option catalogs (mirror web TRIP_INTERESTS / BUDGET / PACE)

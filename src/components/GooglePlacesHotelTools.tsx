@@ -35,6 +35,30 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('GooglePlacesHotelTools');
 
+const PRICE_LEVEL_TIERS: Record<string, number> = {
+  PRICE_LEVEL_INEXPENSIVE: 1,
+  PRICE_LEVEL_MODERATE: 2,
+  PRICE_LEVEL_EXPENSIVE: 3,
+  PRICE_LEVEL_VERY_EXPENSIVE: 4,
+};
+
+/**
+ * "$" to "$$$$" from a Places price level, or null when Places gave none
+ * (plan-stay-pass2 WP2 item 3). This used to be
+ * `"$".repeat(Math.min(Math.max(price_level, 1), 4))`, which on the New API's
+ * enum string is NaN and stored "", and defaulted every hotel without one to
+ * "$$". PRICE_LEVEL_FREE and PRICE_LEVEL_UNSPECIFIED are not a tier.
+ */
+function priceRangeFromPlacesLevel(level: number | string | null | undefined): string | null {
+  const tier =
+    typeof level === "number"
+      ? level
+      : typeof level === "string"
+        ? PRICE_LEVEL_TIERS[level.trim().toUpperCase()] ?? (/^[1-4]$/.test(level.trim()) ? Number(level.trim()) : NaN)
+        : NaN;
+  return Number.isInteger(tier) && tier >= 1 && tier <= 4 ? "$".repeat(tier) : null;
+}
+
 interface GooglePlacesHotelResult {
   place_id: string;
   name: string;
@@ -42,7 +66,11 @@ interface GooglePlacesHotelResult {
   business_status: string;
   rating?: number;
   user_ratings_total?: number;
-  price_level?: number;
+  /**
+   * Places API (New) returns an enum string ("PRICE_LEVEL_MODERATE"); the
+   * legacy API returned 0-4. search-new-hotels passes whichever it got.
+   */
+  price_level?: number | string;
   types: string[];
   opening_hours?: { open_now: boolean };
   formatted_phone_number?: string;
@@ -302,9 +330,7 @@ export default function GooglePlacesHotelTools() {
 
   const addHotel = async (hotel: GooglePlacesHotelResult) => {
     try {
-      const priceRange = hotel.price_level
-        ? "$".repeat(Math.min(Math.max(hotel.price_level, 1), 4))
-        : "$$";
+      const priceRange = priceRangeFromPlacesLevel(hotel.price_level);
 
       const area = detectArea(hotel.formatted_address);
       const city = extractCity(hotel.formatted_address);
@@ -319,18 +345,26 @@ export default function GooglePlacesHotelTools() {
         area: area,
         phone: hotel.formatted_phone_number || null,
         website: hotel.website || null,
-        star_rating: hotel.star_rating || hotel.rating || null,
+        // Not hotel.rating, and not the function's star_rating either: both
+        // are Google's review average, which the detail page printed as
+        // "4.5 stars" and emitted as schema.org starRating. A hotel class is
+        // set by hand in HotelManager or left empty (plan-stay-pass2 WP2
+        // item 3; the rows already imported are D15).
+        star_rating: null,
         price_range: priceRange,
         hotel_type: hotel.hotel_type || "Hotel",
         chain_name: hotel.chain_name || null,
-        brand_parent: hotel.brand_parent || "Independent",
+        // Null, not "Independent": an unknown brand is not a known independent.
+        brand_parent: hotel.brand_parent || null,
         google_place_id: hotel.place_id,
         short_description: `Discovered via Google Places. ${hotel.user_ratings_total ? `${hotel.user_ratings_total} reviews.` : ""}`,
         description: null,
         is_featured: false,
         is_active: true,
-        check_in_time: "3:00 PM",
-        check_out_time: "11:00 AM",
+        // Places has no check-in or check-out time. These were hardcoded to
+        // "3:00 PM" and "11:00 AM" and shown to visitors as the hotel's own.
+        check_in_time: null,
+        check_out_time: null,
       });
 
       if (error) throw error;

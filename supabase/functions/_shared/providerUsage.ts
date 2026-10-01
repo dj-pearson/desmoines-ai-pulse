@@ -132,6 +132,44 @@ export function anthropicCostUsd(model: string, usage: AnthropicUsage): number {
   );
 }
 
+/** Token counts as the OpenAI Chat Completions API reports them. */
+export interface OpenAiUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+}
+
+/**
+ * OpenAI list prices, USD per 1M tokens, checked 2026-09-26. Longest prefix
+ * first: "gpt-4o-mini" has to be tested before "gpt-4o".
+ */
+const OPENAI_PRICES: Array<[prefix: string, price: ModelPrice]> = [
+  ["gpt-4o-mini", { inPerM: 0.15, outPerM: 0.6 }],
+  ["gpt-4.1-nano", { inPerM: 0.1, outPerM: 0.4 }],
+  ["gpt-4.1-mini", { inPerM: 0.4, outPerM: 1.6 }],
+  ["gpt-4.1", { inPerM: 2, outPerM: 8 }],
+  ["gpt-4o", { inPerM: 2.5, outPerM: 10 }],
+];
+
+/** Unknown OpenAI model: priced high, for the same reason as UNKNOWN_PRICE. */
+const OPENAI_UNKNOWN_PRICE: ModelPrice = { inPerM: 10, outPerM: 30 };
+
+export function priceForOpenAiModel(model: string): ModelPrice {
+  const m = (model ?? "").toLowerCase();
+  for (const [prefix, price] of OPENAI_PRICES) {
+    if (m.startsWith(prefix)) return price;
+  }
+  return OPENAI_UNKNOWN_PRICE;
+}
+
+/** What one OpenAI chat completion cost, in USD. */
+export function openAiCostUsd(model: string, usage: OpenAiUsage): number {
+  const p = priceForOpenAiModel(model);
+  return (
+    ((usage.prompt_tokens ?? 0) / 1_000_000) * p.inPerM +
+    ((usage.completion_tokens ?? 0) / 1_000_000) * p.outPerM
+  );
+}
+
 export interface RecordUsageArgs {
   /** Must match a provider_budgets.provider row or the spend joins to nothing. */
   provider: string;

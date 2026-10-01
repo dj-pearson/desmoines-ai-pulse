@@ -335,7 +335,7 @@ export default function AgentInbox() {
 
       <CardContent>
         {isLoading ? (
-          <div className="space-y-2" aria-busy="true" aria-label="Loading tasks">
+          <div className="space-y-2" role="status" aria-busy="true" aria-label="Loading tasks">
             {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
           </div>
         ) : isError ? (

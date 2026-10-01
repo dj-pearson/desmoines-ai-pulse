@@ -36,7 +36,9 @@ actor DealsService {
         }
     }
 
-    /// Best-effort redemption increment (parity with the web useClaimDeal RPC).
+    /// Best-effort redemption record (parity with the web useClaimDeal RPC).
+    /// Only a signed-in call counts since 20261015000004; DealDetailSheet calls
+    /// this only when signed in (IOS-DD-GUIDES-14).
     func claimDeal(id: String) async {
         guard let client = try? db() else { return }
         struct Params: Encodable { let deal_id: String }

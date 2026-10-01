@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { formatEventPart } from "@/lib/timezone";
 
 interface EnhancedGroupPlannerProps {
   groupId: string;
@@ -107,7 +108,7 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
     }
 
     const eventList = selectedEvents.map(event => 
-      `• ${event.title} - ${new Date(event.date).toLocaleDateString()}`
+      `\u2022 ${event.title} - ${formatEventPart(event, 'MMM d, yyyy') ?? 'Date TBA'}`
     ).join('\n');
     
     const shareText = `Check out our group event plan for ${groupName}:\n\n${eventList}\n\nNotes: ${notes || 'None'}`;

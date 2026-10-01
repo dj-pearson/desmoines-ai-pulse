@@ -47,8 +47,11 @@ actor ArticlesService {
             // contract is obvious and the query is correct even with a wider key.
             .eq("status", value: "published")
 
-        if let search = query.searchText, !search.isEmpty {
-            request = request.or("title.ilike.%\(search)%,excerpt.ilike.%\(search)%,category.ilike.%\(search)%")
+        // Quoted and escaped (IOS-DD-GUIDES-16): raw text broke the or() tree
+        // on a comma or parenthesis and let % and _ act as wildcards.
+        if let search = query.searchText,
+           let filter = PostgrestSearch.searchOrFilter(columns: ["title", "excerpt", "category"], query: search) {
+            request = request.or(filter)
         }
 
         if let category = query.category, !category.isEmpty {
@@ -131,30 +134,15 @@ actor ArticlesService {
 
     // MARK: - View count
 
-    /// Best-effort view-count increment (parity with the web reader). Reads the
-    /// current count then writes +1; never throws into the UI.
-    func incrementViewCount(id: String, current: Int?) async {
-        guard let client = try? db() else { return }
-        struct CountRow: Decodable { let view_count: Int? }
-        struct UpdateRow: Encodable { let view_count: Int }
-        do {
-            let count: Int
-            if let current {
-                count = current
-            } else {
-                let row: CountRow = try await client
-                    .from("articles").select("view_count").eq("id", value: id)
-                    .single().execute().value
-                count = row.view_count ?? 0
-            }
-            try await client
-                .from("articles")
-                .update(UpdateRow(view_count: count + 1))
-                .eq("id", value: id)
-                .execute()
-        } catch {
-            // View counting is non-critical; ignore failures (RLS on anon, etc.).
-        }
+    /// The server-side counter (20260919000010). The old client
+    /// read-modify-write UPDATE was refused by RLS for anon and authenticated,
+    /// so iOS views were never counted (IOS-DD-GUIDES-20).
+    static let viewRPCName = "increment_article_view"
+
+    /// Best-effort; never throws into the UI.
+    func recordView(slug: String) async {
+        guard !slug.isEmpty, let client = try? db() else { return }
+        _ = try? await client.rpc(Self.viewRPCName, params: ["p_slug": slug]).execute()
     }
 
     // MARK: - Categories

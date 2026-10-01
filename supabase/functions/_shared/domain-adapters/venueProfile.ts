@@ -47,6 +47,7 @@ import {
   isUsableLocation,
 } from "../eventPageDiscovery.ts";
 import { extractEventsFromJsonLd } from "../jsonLdEvents.ts";
+import { normalizeCategory, FALLBACK_CATEGORY } from "../eventCategories.ts";
 
 /**
  * Below this, a listing page's ld+json is assumed to describe the page/venue
@@ -216,9 +217,15 @@ function withDefaults(
     location: isUsableLocation(ev.location, venue)
       ? ev.location
       : defaults.location ?? ev.location ?? "Des Moines, IA",
-    category: !ev.category || ev.category === "General"
-      ? defaults.category ?? "General"
-      : ev.category,
+    // WEB-BE-049. "General" was the sentinel for "the source said nothing",
+    // and it was also a value that got stored, so a real filter chip existed
+    // for it. FALLBACK_CATEGORY is the canonical stand-in; the profile's own
+    // default still wins when the source was silent.
+    category: normalizeCategory(
+      !ev.category || ev.category === "General" || ev.category === FALLBACK_CATEGORY
+        ? defaults.category ?? ev.category
+        : ev.category,
+    ),
     source_url: ev.source_url ?? defaults.ticketsUrl,
   };
 }

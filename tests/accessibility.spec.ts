@@ -26,6 +26,11 @@ const pages = [
   { path: '/restaurants', name: 'restaurants' },
   { path: '/restaurants/open-now', name: 'open-now-restaurants' },
   { path: '/restaurants/dietary', name: 'dietary-restaurants' },
+  // Map view is lazy and mounts only on ?view=map, so /restaurants alone never
+  // scans the map controls, legend or list alternative (eat-drink plan, WP4).
+  { path: '/restaurants?view=map', name: 'restaurants-map-view' },
+  // Signed out: the passport and check-in dialog need a session (WP7).
+  { path: '/breweries', name: 'brewery-trail' },
   { path: '/attractions', name: 'attractions' },
   { path: '/playgrounds', name: 'playgrounds' },
   { path: '/articles', name: 'articles' },

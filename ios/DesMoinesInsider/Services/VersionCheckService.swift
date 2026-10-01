@@ -21,8 +21,11 @@ final class VersionCheckService {
     /// floor and the app must block until the user updates.
     private(set) var forceUpgrade = false
 
-    /// App Store URL to send the user to when an upgrade is required.
-    private(set) var storeURL: URL?
+    /// App Store URL to send the user to when an upgrade is required. Starts
+    /// at the App Store page (the website while Config.appStoreId is the
+    /// sentinel) so the blocking screen always has a way out, even when the
+    /// server sends no storeUrl (IOS-DD-PLATFORM-09).
+    private(set) var storeURL: URL? = Config.appStoreURL
 
     /// Copy for the blocking screen, supplied by the server.
     private(set) var message = "Please update to the latest version to continue."
@@ -32,7 +35,32 @@ final class VersionCheckService {
 
     private let supabase = SupabaseService.shared.client
 
+    /// When the last check ran, for the foreground re-check.
+    private var lastCheckedAt: Date?
+
     private init() {}
+
+    /// The server's storeUrl, only when it is https on Apple's store or our
+    /// own site. It is opened from a screen the user cannot leave, so an
+    /// itms-services:// or look-alike host is dropped (IOS-DD-PLATFORM-09).
+    nonisolated static func acceptedStoreURL(_ string: String?) -> URL? {
+        guard let string, let url = URL(string: string),
+              url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(),
+              ["apps.apple.com", "itunes.apple.com", "desmoinesinsider.com", "www.desmoinesinsider.com"].contains(host),
+              // The unassigned-id sentinel is a dead App Store page; keep the
+              // website instead (Config.appStoreId, IOS-DD-PLATFORM-21).
+              !url.path.hasSuffix("id" + Config.appStoreIdPlaceholder)
+        else { return nil }
+        return url
+    }
+
+    /// Re-runs the check when the last one is older than `interval`, so a
+    /// process that lives for days still meets a newly raised floor.
+    func checkIfStale(interval: TimeInterval = 6 * 3600) async {
+        if let lastCheckedAt, Date().timeIntervalSince(lastCheckedAt) < interval { return }
+        await checkOnLaunch()
+    }
 
     /// Only `forceUpgrade` is required — it is the load-bearing field that gates
     /// the blocking screen. Every other field is optional with a sensible
@@ -60,6 +88,7 @@ final class VersionCheckService {
     /// tests so screenshots/automation never hit the gate.
     func checkOnLaunch() async {
         guard !Config.isUITesting, let client = supabase else { return }
+        lastCheckedAt = Date()
 
         do {
             let response: Response = try await client.functions.invoke(
@@ -70,7 +99,7 @@ final class VersionCheckService {
             // Only overwrite the App Store URL when the server actually supplied a
             // valid one, so a null/blank `storeUrl` never nils out the only escape
             // route on the blocking screen. ForceUpdateView also guards nil.
-            if let urlString = response.storeUrl, let url = URL(string: urlString) {
+            if let url = Self.acceptedStoreURL(response.storeUrl) {
                 storeURL = url
             }
             if let serverMessage = response.message, !serverMessage.isEmpty {

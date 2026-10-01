@@ -1,15 +1,48 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "./use-toast";
 import { Campaign, CampaignCreative } from "./useCampaigns";
 import { createLogger } from '@/lib/logger';
 import { notifyAdvertiser } from "./useCampaignNotifications";
 import { publishCreative, discardReviewCopy } from "@/lib/adCreativeStorage";
 
+/** Shape returned by the approve_campaign_creative RPC (WEB-ADS-004). */
+interface ApproveCreativeResult {
+  creative_id?: string;
+  campaign_id?: string;
+  user_id?: string;
+  name?: string;
+  all_approved?: boolean;
+  activated?: boolean;
+  status?: string;
+}
+
+
 const log = createLogger('useAdminCampaigns');
 
+/** process-stripe-refund's ALLOWED_REASONS (ADMIN-REFUND-001). */
+export const REFUND_REASON_CATEGORIES = [
+  "duplicate_charge",
+  "user_request",
+  "campaign_cancelled",
+  "fraud",
+  "technical_issue",
+  "content_takedown",
+  "accidental_purchase",
+  "other",
+] as const;
+export type RefundReasonCategory = (typeof REFUND_REASON_CATEGORIES)[number];
+
+/** The statuses admin_set_campaign_status accepts: pause, resume, cancel. */
+export type AdminCampaignAction = "paused" | "active" | "cancelled";
+
+/** The values `campaigns.status` can actually hold, from the generated enum. */
+export type CampaignStatus = Database["public"]["Enums"]["campaign_status"];
+
 export interface AdminCampaignFilters {
-  status?: string;
+  /** "all" is the unfiltered sentinel the admin UI uses; anything else is a real status. */
+  status?: CampaignStatus | "all";
   dateFrom?: string;
   dateTo?: string;
   searchQuery?: string;
@@ -167,10 +200,10 @@ export function useAdminCampaigns() {
     campaignId: string
   ): Promise<boolean> => {
     try {
-      // reviewed_by / admin_user_id below is the audit trail for an admin
-      // action on someone's paid campaign. A discarded getUser() failure wrote
-      // NULL there and the action still succeeded, so the record said the
-      // approval happened and not who made it.
+      // reviewed_by below is the audit trail for an admin action on someone's
+      // paid campaign. The RPC refuses a caller who is not a signed-in admin,
+      // so the record can never say an approval happened without saying who
+      // made it.
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       if (!user) throw new Error("Not signed in - an admin action must be attributable");
@@ -179,7 +212,7 @@ export function useAdminCampaigns() {
       // bucket until this moment, with image_url null. Approving it publishes
       // the object into the public bucket and sets image_url.
       //
-      // Publish BEFORE the update, and let a failure abort the whole approval.
+      // Publish BEFORE the approval, and let a failure abort the whole thing.
       // An approved row with a null image_url renders as a blank ad slot for
       // the entire campaign, and get_active_ads would happily serve it --
       // strictly worse than a failed approval the admin can retry.
@@ -196,18 +229,26 @@ export function useAdminCampaigns() {
         publishedUrl = await publishCreative(creative.review_path);
       }
 
-      const { error } = await supabase
-        .from("campaign_creatives")
-        .update({
-          is_approved: true,
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          rejection_reason: null,
-          image_url: publishedUrl,
-        })
-        .eq("id", creativeId);
+      // WEB-ADS-004: approving the creative and moving the campaign are ONE
+      // server transaction (approve_campaign_creative). This used to be three
+      // client writes: is_approved = true, then read the campaign, then write
+      // its status. The status write threw 22P02 (pending_review was not an
+      // enum label) after the first write had committed, so the campaign sat
+      // with every creative approved and a stale status. Now either all of it
+      // lands or none of it does.
+      //
+      // When the start date has been reached the RPC activates through
+      // activate_campaign (WEB-ADS-001), which also flags sponsored listings;
+      // when it is ahead, the campaign parks in pending_review and the daily
+      // lifecycle job activates it on the day.
+      const { data: rpcResult, error: approveError } = await supabase.rpc(
+        "approve_campaign_creative",
+        { p_creative_id: creativeId, p_image_url: publishedUrl ?? undefined }
+      );
 
-      if (error) throw error;
+      if (approveError) throw approveError;
+
+      const outcome = (rpcResult ?? {}) as unknown as ApproveCreativeResult;
 
       // Only now that the row points at the public copy. Best effort: a leftover
       // private duplicate is untidy, not a leak, and must not fail an approval
@@ -216,79 +257,20 @@ export function useAdminCampaigns() {
         await discardReviewCopy(creative.review_path);
       }
 
-      // Fetch the campaign to get owner info and dates. THROWS rather than
-      // skipping: everything below - the advertiser notification and the
-      // activation itself - is gated on `campaign`, so a discarded failure here
-      // meant the creative was approved, the campaign never went live, and the
-      // toast said it had.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("user_id, name, start_date, status")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError) throw campaignError;
-
-      // Notify the advertiser their creative was approved
-      if (campaign) {
-        notifyAdvertiser(campaignId, campaign.name, campaign.user_id, 'creative_approved');
-      }
-
-      // Check if all creatives for this campaign are approved.
-      //
-      // THE EMPTY CASE IS THE DANGEROUS ONE. [].every() is true, so a query
-      // that succeeded and matched nothing - an RLS change, a wrong id - read
-      // as "every creative is approved" and activated the campaign with no
-      // approved creative in it. The length check is the guard; the error check
-      // is separate, because a failed read returns null and would have silently
-      // taken the other branch instead.
-      const { data: allCreatives, error: creativesError } = await supabase
-        .from("campaign_creatives")
-        .select("is_approved")
-        .eq("campaign_id", campaignId);
-
-      if (creativesError) throw creativesError;
-
-      const allApproved = (allCreatives?.length ?? 0) > 0 && allCreatives.every((c) => c.is_approved);
-
-      // If all creatives are approved, determine the next status
-      if (allApproved && campaign) {
-        const startDate = campaign.start_date ? new Date(campaign.start_date) : null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        // Both updates throw. This is the transition that puts a paid
-        // campaign on the site; discarding its result meant a failure showed
-        // the advertiser-facing success toast and left the campaign stuck in
-        // pending_creative with every creative approved.
-        if (startDate && startDate <= today) {
-          // Start date is today or in the past → activate immediately
-          const { error: activateError } = await supabase
-            .from("campaigns")
-            .update({ status: "active" })
-            .eq("id", campaignId)
-            .in("status", ["pending_creative", "pending_review"]);
-
-          if (activateError) throw activateError;
-
-          notifyAdvertiser(campaignId, campaign.name, campaign.user_id, 'campaign_activated');
-        } else {
-          // Start date is in the future → mark as pending_review (approved, waiting for start date)
-          const { error: scheduleError } = await supabase
-            .from("campaigns")
-            .update({ status: "pending_review" })
-            .eq("id", campaignId)
-            .in("status", ["pending_creative", "pending_review"]);
-
-          if (scheduleError) throw scheduleError;
+      if (outcome.user_id && outcome.name) {
+        notifyAdvertiser(campaignId, outcome.name, outcome.user_id, 'creative_approved');
+        if (outcome.activated) {
+          notifyAdvertiser(campaignId, outcome.name, outcome.user_id, 'campaign_activated');
         }
       }
 
       toast({
         title: "Creative approved",
-        description: allApproved
-          ? "All creatives approved. Campaign will go live on the scheduled start date."
-          : "Creative approved. Remaining creatives still need review.",
+        description: !outcome.all_approved
+          ? "Creative approved. Remaining creatives still need review."
+          : outcome.activated
+            ? "All creatives approved. Campaign is live."
+            : "All creatives approved. Campaign will go live on the scheduled start date.",
       });
 
       await fetchCampaigns();
@@ -386,13 +368,62 @@ export function useAdminCampaigns() {
     }
   };
 
+  /**
+   * Pause, resume or cancel through admin_set_campaign_status
+   * (20261003000005): one transaction that checks is_admin(), allows only
+   * active->paused, paused->active and pre-completion->cancelled, writes an
+   * admin_action_logs row and tells the advertiser. The reason is required
+   * and ends up in their notice. Cancelling does not refund.
+   */
+  const setCampaignStatus = async (
+    campaignId: string,
+    status: AdminCampaignAction,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      const { error } = await supabase.rpc(
+        "admin_set_campaign_status" as never,
+        { p_campaign_id: campaignId, p_status: status, p_reason: reason } as never
+      );
+      if (error) {
+        if (error.code === "PGRST202") {
+          throw new Error("Status changes are not switched on yet (migration 20261003000005 is not applied).");
+        }
+        // "admin_set_campaign_status: only an active campaign can be paused (...)"
+        throw new Error(error.message.replace(/^admin_set_campaign_status:\s*/, ""));
+      }
+      toast({
+        title: "Campaign updated",
+        description:
+          status === "paused" ? "Paused. The advertiser has been told."
+          : status === "active" ? "Resumed. The advertiser has been told."
+          : "Cancelled. The advertiser has been told; refund it separately if they paid.",
+      });
+      await fetchCampaigns();
+      return true;
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Status not changed",
+        description: err instanceof Error ? err.message : "Failed to change the campaign status",
+      });
+      return false;
+    }
+  };
+
   const updateCampaignStatus = async (
     campaignId: string,
-    status: string,
+    status: CampaignStatus,
     notes?: string
   ): Promise<boolean> => {
     try {
-      const updates: Record<string, string> = { status };
+      // Typed as the table's own Update row rather than Record<string, string>.
+      // An index-signature type says "this object may carry any key", which
+      // supabase-js 2.85+ rejects on an update - correctly, because a key the
+      // table does not have comes back PGRST204 and the write is lost. It also
+      // means `status` is now checked against the campaign_status enum here
+      // and at the .eq() filter above, instead of being any string at all.
+      const updates: Database["public"]["Tables"]["campaigns"]["Update"] = { status };
 
       if (notes) {
         updates.approval_notes = notes;
@@ -427,82 +458,21 @@ export function useAdminCampaigns() {
     }
   };
 
-  const createPricingOverride = async (
-    campaignId: string,
-    overridePrice: number,
-    reason: string,
-    notes?: string,
-    expiresAt?: string
-  ): Promise<boolean> => {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      if (!user) throw new Error("Not signed in - an admin action must be attributable");
-
-      // Get original campaign price. The error is surfaced rather than
-      // collapsed into "Campaign not found" - a permissions failure and a
-      // missing row need different responses from the admin reading the toast.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("total_cost")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError && campaignError.code !== 'PGRST116') throw campaignError;
-      if (!campaign) throw new Error("Campaign not found");
-
-      const { error } = await supabase
-        .from("pricing_overrides")
-        .insert({
-          campaign_id: campaignId,
-          admin_user_id: user.id,
-          original_price: campaign.total_cost,
-          override_price: overridePrice,
-          reason,
-          notes,
-          expires_at: expiresAt || null,
-        });
-
-      if (error) throw error;
-
-      // Update campaign total cost. THROWS: the pricing_overrides row is
-      // already written, so discarding a failure here left the override
-      // recorded and the campaign still billing at the old price, under a toast
-      // reading "Campaign price updated to $X".
-      const { error: costError } = await supabase
-        .from("campaigns")
-        .update({ total_cost: overridePrice })
-        .eq("id", campaignId);
-
-      if (costError) throw costError;
-
-      toast({
-        title: "Pricing override applied",
-        description: `Campaign price updated to $${overridePrice.toFixed(2)}.`,
-      });
-
-      await fetchCampaigns();
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to apply pricing override";
-      toast({
-        variant: "destructive",
-        title: "Override failed",
-        description: message,
-      });
-      return false;
-    }
-  };
-
+  /**
+   * Refund through process-stripe-refund, which caps the amount at what Stripe
+   * says was paid minus earlier refunds, ends the campaign only on a full
+   * refund, and notifies the advertiser itself. `amount` omitted means "the
+   * rest". `refundReason` is the ADMIN-REFUND-001 category the function
+   * requires; without it every call was a 400.
+   */
   const processRefund = async (
     campaignId: string,
-    amount: number,
+    amount: number | null,
     reason: string,
+    refundReason: RefundReasonCategory,
     policyViolation?: string
   ): Promise<boolean> => {
     try {
-      // Call the process-stripe-refund edge function which handles
-      // Stripe refund creation, DB record, and campaign status update
       const { data, error: refundError } = await supabase.functions.invoke(
         "process-stripe-refund",
         {
@@ -510,6 +480,8 @@ export function useAdminCampaigns() {
             campaignId,
             amount,
             reason,
+            refundReason,
+            refundReasonNotes: reason,
             policyViolation: policyViolation || null,
           },
         }
@@ -521,35 +493,12 @@ export function useAdminCampaigns() {
         throw new Error(data?.error || "Refund processing failed");
       }
 
-      // Notification lookup only, and deliberately NOT thrown: Stripe has
-      // already refunded by this point. Turning a lookup failure into "Refund
-      // failed" would tell an admin to retry a refund that succeeded.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("user_id, name")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError) {
-        log.error('processRefund', 'Refund succeeded but the advertiser could not be notified', {
-          campaignId,
-          error: campaignError,
-        });
-      }
-
-      if (campaign) {
-        notifyAdvertiser(
-          campaignId,
-          campaign.name,
-          campaign.user_id,
-          'campaign_refunded',
-          { amount, reason }
-        );
-      }
-
+      const refunded = Number(data.amount ?? amount ?? 0);
       toast({
-        title: "Refund processed",
-        description: `Refund of $${amount.toFixed(2)} has been processed through Stripe. ID: ${data.refundId}`,
+        title: data.duplicate ? "Refund already issued" : "Refund processed",
+        description: data.duplicate
+          ? `Stripe already has this refund (${data.refundId}); nothing new was sent.`
+          : `Refunded $${refunded.toFixed(2)} through Stripe${data.full ? "; the campaign has ended" : ""}. ID: ${data.refundId}`,
       });
 
       await fetchCampaigns();
@@ -578,7 +527,7 @@ export function useAdminCampaigns() {
     approveCreative,
     rejectCreative,
     updateCampaignStatus,
-    createPricingOverride,
+    setCampaignStatus,
     processRefund,
   };
 }
