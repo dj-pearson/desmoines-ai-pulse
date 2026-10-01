@@ -24,6 +24,7 @@ import { Link } from "react-router-dom";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLatestWeekendArticle } from "@/hooks/useLatestWeekendArticle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
@@ -51,6 +52,7 @@ export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
   useDocumentTitle("Events This Weekend");
+  const { data: weekendArticle } = useLatestWeekendArticle();
 
   const { data: events, isLoading } = useQuery({
     queryKey: ["events-weekend"],
@@ -74,6 +76,10 @@ export default function EventsThisWeekend() {
         .select(EVENT_LIST_COLUMNS)
         .gte("date", startUtc)
         .lte("date", endUtc)
+        // Same visibility predicates as useEvents/useEventBySlug: a merged or
+        // hidden row 404s on its own detail page, so it must not be listed here.
+        .neq("is_merged", true)
+        .neq("is_hidden", true)
         .order("event_start_utc", { ascending: true, nullsFirst: false })
         .order("date", { ascending: true });
 
@@ -234,6 +240,20 @@ export default function EventsThisWeekend() {
             See events in Des Moines and suburbs for this weekend. Dates, times,
             maps, and quick tips all in one place.
           </p>
+
+          {/* SEO-035: the hub links to the newest weekly roundup article and
+              the article links back here. Renders nothing until one exists. */}
+          {weekendArticle && (
+            <p className="mt-3 text-base">
+              Our picks for the weekend:{" "}
+              <Link
+                to={`/articles/${weekendArticle.slug}`}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {weekendArticle.title}
+              </Link>
+            </p>
+          )}
         </div>
 
         {/* Quick Stats */}

@@ -126,7 +126,7 @@ jobs:
   # alone — the edge function refreshes sitemap XML but cannot touch the
   # prerendered HTML.
   publish-freshness:
-    name: Publish Freshness (sitemaps + prerender)
+    name: Publish Freshness (sitemaps)
     runs-on: ubuntu-latest
     needs: crawl-events
     # Never publish off a dry run — there is nothing new to publish.
@@ -169,32 +169,16 @@ jobs:
           head -c 500 /tmp/regen.json 2>/dev/null || true
           [ "${code}" = "200" ] || echo "::warning::regenerate-sitemaps returned ${code}"
 
-      # The step that actually makes new events visible to crawlers.
-      - name: Trigger Cloudflare Pages rebuild
-        id: deploy
-        env:
-          DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -z "${DEPLOY_HOOK}" ]; then
-            echo "::warning::CLOUDFLARE_DEPLOY_HOOK_URL is not set — sitemaps and prerendered HTML will stay stale until the next push to main. Create a deploy hook in the Cloudflare Pages project and add it as a repository secret (WEB-SEO-011)."
-            echo "triggered=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          code=$(curl -sS -o /tmp/deploy.json -w '%{http_code}' -X POST "${DEPLOY_HOOK}" --max-time 60) || true
-          echo "deploy hook HTTP ${code}"
-          if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
-            echo "::error::Deploy hook returned ${code} — today's events will not reach crawlers."
-            exit 1
-          fi
-          echo "triggered=true" >> "$GITHUB_OUTPUT"
-
+      # The deploy hook used to be called here. It moved to
+      # .github/workflows/prerender-rebuild.yml (SEO-035), which runs at 13:00
+      # UTC every day whether or not this crawl succeeded, so the prerender
+      # reruns at least daily and there is one build a day rather than two.
       - name: Post Summary
         if: always()
         run: |
           echo "## Freshness Publish" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Rebuild triggered**: ${{ steps.deploy.outputs.triggered || 'false' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Why it matters**: the rebuild regenerates \`sitemap-*.xml\` and re-runs the prerenderer, so today's events become visible to crawlers that do not execute JavaScript." >> $GITHUB_STEP_SUMMARY
+          echo "- **Prerender rebuild**: runs from Daily Prerender Rebuild (prerender-rebuild.yml) at 13:00 UTC." >> $GITHUB_STEP_SUMMARY
 
   # Optional: Update AI Configuration in Supabase
   update-ai-config:

@@ -1,0 +1,100 @@
+# Weekly "This Weekend in Des Moines" article (SEO-035)
+#
+# Every Thursday at 11:00 UTC (6 am CDT / 5 am CST) this builds
+# "This Weekend in Des Moines: {Fri-Sun dates}" from the events table and
+# publishes it to public.articles. All text is templated from row fields; see
+# src/lib/weekendArticle.ts for the window, the visibility filter and the
+# top-picks rule, and scripts/publish-weekend-article.ts for the write path.
+#
+# The Daily Prerender Rebuild runs at 13:00 UTC, after this, so the new article
+# is in prerendered HTML and the sitemap the same morning.
+#
+# SECRETS (repository):
+#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  already set; the event read is
+#                                              the public anon path.
+#   SUPABASE_DB_URL                            NOT set yet. The write goes
+#       through psql so it can disable the AI social-post webhook trigger for
+#       the insert (session_replication_role = replica, as SEO-032 did). Without
+#       it the job fails red and says so; a dry run still works.
+
+name: Weekend Article
+
+on:
+  schedule:
+    - cron: '0 11 * * 4'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Central date (YYYY-MM-DD) inside the week to publish for; blank = today'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run: build and print the article, write nothing'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekend-article
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish the weekend article
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Make sure psql is available
+        run: command -v psql || (sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client)
+
+      - name: Build and publish
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          INPUT_DATE: ${{ github.event.inputs.date }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          ARGS=""
+          if [ -n "${INPUT_DATE}" ]; then
+            if ! echo "${INPUT_DATE}" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+              echo "::error::date must be YYYY-MM-DD"; exit 1
+            fi
+            ARGS="--date ${INPUT_DATE}"
+          fi
+          if [ "${DRY_RUN}" = "true" ]; then
+            npx tsx scripts/publish-weekend-article.ts ${ARGS}
+            exit 0
+          fi
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "::error::SUPABASE_DB_URL is not set. Add the production Postgres connection string as a repository secret with that name (SEO-035). Nothing was published."
+            exit 1
+          fi
+          npx tsx scripts/publish-weekend-article.ts ${ARGS} --apply | tee /tmp/publish.log
+          grep '^Published ' /tmp/publish.log >> "$GITHUB_STEP_SUMMARY" || true
+
+      # A rerun saves the row it is about to overwrite. The runner is thrown
+      # away, so keep the backup and the exact SQL that ran as an artifact.
+      - name: Keep the backup and SQL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekend-article-${{ github.run_id }}
+          path: scripts/content-backups/seo-035/
+          if-no-files-found: ignore
+          retention-days: 90
