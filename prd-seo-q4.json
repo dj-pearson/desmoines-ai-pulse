@@ -168,7 +168,7 @@
         "Daily rebuild: wire a Cloudflare Pages deploy hook so the prerender reruns at least daily. If the secret must be created in Cloudflare, create it via API if credentials exist; otherwise record the exact step for the owner.",
         "The weekend article links to the hub and the hub links to the latest article."
       ],
-      "notes": "",
+      "notes": "CODE + OCT 2-4 ARTICLE DONE 2026-10-01, merged to claude/seo-q4-loop (225b7028, 65e8619b); passes stays FALSE: daily rebuild and Thursday automation need two owner secrets. Live: /articles/this-weekend-in-des-moines-october-2-4-2026 (74 rows -> 37 events: 34 by day Fri 19/Sat 10/Sun 5, 8 top picks, 2 weekly regulars; 0 free because 1,035 of 1,059 upcoming rows have price 'See website'; article says so and links /events/free). src/lib/weekendArticle.ts (window :86, visibility :123, pick rule :195,:276, builder :405; never reads description columns); scripts/publish-weekend-article.ts (writes with session_replication_role=replica :122 so the social webhook does not fire; sets slug/word_count/updated_at and sitemap queue by hand; backs up on rerun); .github/workflows/weekend-article.yml (Thu 11:00 UTC); .github/workflows/prerender-rebuild.yml (daily 13:00 UTC; hook call removed from event-crawler.yml so one build/day); EventsThisWeekend.tsx:246 links latest article via useLatestWeekendArticle and now hides merged/hidden events. 20/20 tests, validate exit 0, all 34 event links match visible slugs. OWNER STEPS: (1) Cloudflare Pages > Settings > Builds & deployments > Deploy hooks: create one for main, save as repo secret CLOUDFLARE_DEPLOY_HOOK_URL (local wrangler login expired Dec 2025); (2) add repo secret SUPABASE_DB_URL or Thursday's run fails. OPEN: midnight-UTC rows fall on the previous Central day, so Ringling Bros., the Slaughterhouse (opens Oct 2) and Pumpkin Fest were excluded and print no time -> SEO-055 raised to priority 1.",
       "supersedes": [
         "WEB-SEO-011",
         "WEB-SEO-017"
@@ -494,15 +494,17 @@
     {
       "id": "SEO-055",
       "title": "Event slugs land a day early because dates are stored at midnight UTC",
-      "priority": 3,
+      "priority": 1,
       "phase": 1,
       "branch": "claude/seo-q4-loop",
       "passes": false,
-      "description": "Found by SEO-032: the Slaughterhouse opens Oct 2 but its event slug ends -2026-10-01. Wrong dates in URLs are visible in search results.",
+      "description": "Found by SEO-032: the Slaughterhouse opens Oct 2 but its event slug ends -2026-10-01. Wrong dates in URLs are visible in search results. SEO-035 shows the damage is wider than URLs: date-only events stored at 00:00 UTC are filed on the previous Central day site-wide, so the Oct 2-4 weekend article and /events/this-weekend dropped the Slaughterhouse, Ringling Bros. and Pumpkin Fest, and those rows print no start time.",
       "acceptanceCriteria": [
         "Reproduce with a few rows; find where the slug date is derived.",
+        "Decide how a date-only event is represented (all-day on its Central date) and apply it everywhere events are bucketed by day: centralWindow, month pages, today/this-weekend, weekendArticle, sitemaps. Count how many upcoming rows are date-only before and after.",
         "Derive the slug date in America/Chicago. Existing slugs are public URLs: do not rename them without a 301 kept for 1+ release; new rows get the correct date.",
-        "Add a test."
+        "Add a test.",
+        "Re-run scripts/publish-weekend-article.ts for Oct 2-4 after the fix so the article includes the dropped events."
       ],
       "notes": ""
     },
