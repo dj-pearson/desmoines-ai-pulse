@@ -13,7 +13,23 @@
 export const MIN_PLACES_TO_PUBLISH = 3;
 export const MIN_PLACES_TO_INDEX = 5;
 
+/**
+ * SEO-060: neighbourhoods are matched on restaurants.neighborhood (assigned
+ * from lat/lng against src/lib/neighborhoodBoundaries.ts), not on the name.
+ * Must equal NEIGHBORHOOD_SLUGS there; the check script compares them.
+ */
+export const NEIGHBORHOOD_LOCATIONS: readonly string[] = [
+  'downtown',
+  'east-village',
+  'sherman-hill',
+  'valley-junction',
+];
+
 export const COVERAGE_LOCATIONS: readonly string[] = [
+  'downtown',
+  'east-village',
+  'sherman-hill',
+  'valley-junction',
   'west-des-moines',
   'ankeny',
   'urbandale',
@@ -74,6 +90,7 @@ export function coverageScope(pageTypeId: string, dimensions: readonly Dim[]): {
 }
 
 export interface CoverageRestaurantRow {
+  neighborhood?: string | null;
   city: string | null;
   location: string | null;
   cuisine: string | null;
@@ -82,15 +99,18 @@ export interface CoverageRestaurantRow {
 }
 
 /** Same predicate as src/pseo/coverageRule.ts placeMatches. */
-export function countPlaces(rows: readonly CoverageRestaurantRow[], locationName: string, categorySlug: string): number {
+export function countPlaces(rows: readonly CoverageRestaurantRow[], location: Dim, categorySlug: string): number {
   const pattern = CUISINE_PATTERNS[categorySlug];
   if (!pattern) return 0;
   const re = new RegExp(pattern, 'i');
-  const needle = locationName.toLowerCase();
+  const byNeighborhood = NEIGHBORHOOD_LOCATIONS.includes(location.slug);
+  const needle = location.name.toLowerCase();
   return rows.filter((r) => {
     if (r.is_merged !== false) return false;
     if (r.status && NOT_VISITABLE_STATUSES.has(r.status.trim().toLowerCase())) return false;
-    const inArea = (r.city ?? '').toLowerCase().includes(needle) || (r.location ?? '').toLowerCase().includes(needle);
+    const inArea = byNeighborhood
+      ? r.neighborhood === location.slug
+      : (r.city ?? '').toLowerCase().includes(needle) || (r.location ?? '').toLowerCase().includes(needle);
     return inArea && re.test(r.cuisine ?? '');
   }).length;
 }

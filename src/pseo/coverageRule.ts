@@ -16,16 +16,17 @@
  * The later one in slug order is held to noindex. /pizza/ankeny and
  * /italian/ankeny list the same three places today, which is the case.
  *
- * SCOPE IS SUBURBS. restaurants.city carries the suburb name, so a count for
- * Ankeny or Waukee is a real count. Neighbourhoods (downtown, east-village,
- * valley-junction) are not in scope: no restaurant row names its
- * neighbourhood, the listing query matches none of them, and a zero there is
- * the filter's blind spot rather than a measurement. Those pages are reported,
- * not acted on.
+ * SCOPE: SUBURBS AND MAPPED NEIGHBOURHOODS. restaurants.city carries the
+ * suburb name, so a count for Ankeny or Waukee is a text match. A
+ * neighbourhood (downtown, east-village, valley-junction, sherman-hill) is
+ * counted on restaurants.neighborhood, assigned from lat/lng (SEO-060; see
+ * src/lib/neighborhoodBoundaries.ts). Before that column existed no row named
+ * its neighbourhood and those pages were reported, not acted on.
  *
  * WHAT COUNTS AS A PLACE mirrors PseoLiveListings.fetchListings exactly:
  * not merged, a visitable status (closed, opening_soon and announced rows are
- * dropped by isVisitableStatus), city or location containing the area name,
+ * dropped by isVisitableStatus), in the area (restaurantLocationMatch: the
+ * neighbourhood column, or city/location containing the suburb name),
  * cuisine matching the category pattern. The patterns come from
  * listingFilters.ts, the same module the component reads.
  *
@@ -34,14 +35,19 @@
  * thresholds and scope. scripts/check-pseo-coverage.ts fails when the two
  * disagree.
  */
-import { CATEGORY_FILTERS } from './listingFilters';
+import { CATEGORY_FILTERS, restaurantLocationMatch } from './listingFilters';
+import { NEIGHBORHOOD_SLUGS } from '../lib/neighborhoodBoundaries';
 import { isVisitableStatus } from '../lib/restaurantHours';
 
 export const MIN_PLACES_TO_PUBLISH = 3;
 export const MIN_PLACES_TO_INDEX = 5;
 
-/** Taxonomy location slugs the rule governs: the suburbs, whose name is in restaurants.city. */
+/**
+ * Taxonomy location slugs the rule governs: the mapped neighbourhoods
+ * (restaurants.neighborhood) and the suburbs, whose name is in restaurants.city.
+ */
 export const COVERAGE_LOCATIONS: readonly string[] = [
+  ...NEIGHBORHOOD_SLUGS,
   'west-des-moines',
   'ankeny',
   'urbandale',
@@ -91,28 +97,44 @@ export interface CoverageRestaurantRow {
   cuisine: string | null;
   status: string | null;
   is_merged: boolean | null;
+  /** SEO-060. Optional so a row read without it simply matches no neighbourhood. */
+  neighborhood?: string | null;
 }
 
-/** Does this restaurant appear in the live listing for (area name, category)? */
-export function placeMatches(row: CoverageRestaurantRow, locationName: string, categorySlug: string): boolean {
+/** An area as a page names it: the taxonomy slug and the display name stored on the row. */
+export interface CoverageArea {
+  slug: string;
+  name: string;
+}
+
+/**
+ * Does this restaurant appear in the live listing for (area, category)? A bare
+ * string is a suburb name, matched as text.
+ */
+export function placeMatches(row: CoverageRestaurantRow, area: CoverageArea | string, categorySlug: string): boolean {
   const filter = CATEGORY_FILTERS[categorySlug];
   if (!filter || filter.entity !== 'restaurants') return false;
   // PostgREST .neq('is_merged', true) drops NULL as well as true.
   if (row.is_merged !== false) return false;
   if (!isVisitableStatus(row.status)) return false;
-  const needle = locationName.toLowerCase();
-  const inArea =
-    (row.city ?? '').toLowerCase().includes(needle) || (row.location ?? '').toLowerCase().includes(needle);
-  if (!inArea) return false;
+  const match = restaurantLocationMatch(typeof area === 'string' ? { slug: '', name: area } : area);
+  if (match.kind === 'neighborhood') {
+    if (row.neighborhood !== match.slug) return false;
+  } else {
+    const needle = match.name.toLowerCase();
+    const inArea =
+      (row.city ?? '').toLowerCase().includes(needle) || (row.location ?? '').toLowerCase().includes(needle);
+    if (!inArea) return false;
+  }
   return new RegExp(filter.pattern, 'i').test(row.cuisine ?? '');
 }
 
 export function matchingPlaces<T extends CoverageRestaurantRow>(
   rows: readonly T[],
-  locationName: string,
+  area: CoverageArea | string,
   categorySlug: string,
 ): T[] {
-  return rows.filter((r) => placeMatches(r, locationName, categorySlug));
+  return rows.filter((r) => placeMatches(r, area, categorySlug));
 }
 
 /** The listing's identity, independent of order: sorted ids. */

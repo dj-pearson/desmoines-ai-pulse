@@ -7888,6 +7888,7 @@ export type Database = {
           menu_url: string | null
           merged_at: string | null
           merged_into: string | null
+          neighborhood: string | null
           name: string
           needs_manual_verification: boolean
           opening: string | null
@@ -7941,6 +7942,7 @@ export type Database = {
           menu_url?: string | null
           merged_at?: string | null
           merged_into?: string | null
+          neighborhood?: string | null
           name: string
           needs_manual_verification?: boolean
           opening?: string | null
@@ -7994,6 +7996,7 @@ export type Database = {
           menu_url?: string | null
           merged_at?: string | null
           merged_into?: string | null
+          neighborhood?: string | null
           name?: string
           needs_manual_verification?: boolean
           opening?: string | null

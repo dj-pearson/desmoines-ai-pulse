@@ -129,11 +129,11 @@ serve(async (req) => {
     if (scope) {
       const { data: places, error: placesError } = await supabase
         .from('restaurants')
-        .select('city, location, cuisine, status, is_merged');
+        .select('city, location, cuisine, status, is_merged, neighborhood');
       if (placesError) {
         return jsonResponse({ success: false, error: `Could not count places for the coverage rule: ${placesError.message}` }, 500);
       }
-      const count = countPlaces(places ?? [], scope.location.name, scope.category.slug);
+      const count = countPlaces(places ?? [], scope.location, scope.category.slug);
       const verdict = coverageVerdict(count);
       if (verdict === 'not-generated') {
         return jsonResponse({

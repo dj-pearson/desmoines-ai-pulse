@@ -37,7 +37,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORY_FILTERS, resolveEntityType, temporalRange } from '../../src/pseo/listingFilters';
+import { CATEGORY_FILTERS, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../src/pseo/listingFilters';
 import { classifySlugs } from './pseoRouteClaims.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -89,7 +89,12 @@ export function renderedQuery(entityType, dims, nowIso) {
 
   if (entityType === 'restaurants') {
     p.set('order', 'rating.desc');
-    if (location) p.set('or', `(city.ilike.*${location.name}*,location.ilike.*${location.name}*)`);
+    if (location) {
+      // SEO-060: neighbourhoods match restaurants.neighborhood, as the component does.
+      const match = restaurantLocationMatch(location);
+      if (match.kind === 'neighborhood') p.append('neighborhood', `eq.${match.slug}`);
+      else p.set('or', `(city.ilike.*${match.name}*,location.ilike.*${match.name}*)`);
+    }
     if (cat?.entity === 'restaurants') p.append(cat.column, `imatch.${cat.pattern}`);
     return ['restaurants', p];
   }

@@ -27,6 +27,11 @@
  * The noindex band (3-4 places) is not generated here: the rule allows those
  * pages, it does not ask for them.
  *
+ * --rewrite-llm (SEO-060) also rewrites every published, governed page whose
+ * copy came from the LLM pipeline, so no page the rule keeps carries prose
+ * naming a restaurant the table does not hold (/mexican/ankeny recommended
+ * "Tacos La Familia").
+ *
  * --only limits INSERTS to the named categories (SEO-041 published only the
  * cuisines with measured demand). Updates to existing rows are never limited:
  * the rule applies to every published page in scope.
@@ -41,6 +46,7 @@ import process from 'node:process';
 import { categoryDimension, locationDimension } from '../src/pseo/taxonomy';
 import { matchingPlaces, type CoverageRestaurantRow } from '../src/pseo/coverageRule';
 import { evaluateCoverage, DATA_TEMPLATE_GENERATOR, type PublishedPseoRow, type CoverageRow } from './lib/pseoCoverage';
+import { NEIGHBORHOOD_BOUNDARIES } from '../src/lib/neighborhoodBoundaries';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -125,14 +131,23 @@ export function buildPage(row: CoverageRow, places: Restaurant[], today: string)
   const withPrice = ordered.map((p) => (p.price_range ? `${p.name} (${p.price_range})` : p.name));
   const lower = noun.inline;
 
-  const title = `${noun.plural} in ${loc.name}, Iowa`;
+  // SEO-060: a neighbourhood is named with its city ("East Village, Des
+  // Moines"), a suburb with the state, and the "which places count" answer
+  // says which test placed them: the mapped boundary or the city/address.
+  const nb = NEIGHBORHOOD_BOUNDARIES.find((n) => n.slug === loc.slug);
+  const areaFull = nb ? (loc.name.includes(nb.cityLabel) ? loc.name : `${loc.name}, ${nb.cityLabel}`) : `${loc.name}, Iowa`;
+  const inAreaTest = nb
+    ? `whose map location falls inside the ${loc.name} boundary this site uses (${nb.boundaryText})`
+    : `whose city or address is ${loc.name}`;
+
+  const title = `${noun.plural} in ${areaFull}`;
   const h1 = `${noun.plural} in ${loc.name}`;
   const lead = joinNames(names.slice(0, 2));
   // Names the top two when they fit, because a description that names real
   // places is the one thing a template can say that is specific to the page.
-  let description = `${places.length} ${lower} in ${loc.name}, Iowa, including ${lead}, listed from the Des Moines Insider restaurant directory.`;
+  let description = `${places.length} ${lower} in ${areaFull}, including ${lead}, listed from the Des Moines Insider restaurant directory.`;
   if (description.length > 160) {
-    description = `${places.length} ${lower} in ${loc.name}, Iowa, listed from the Des Moines Insider restaurant directory with a link to each one.`;
+    description = `${places.length} ${lower} in ${areaFull}, listed from the Des Moines Insider restaurant directory with a link to each one.`;
   }
 
   const faqs = [
@@ -143,7 +158,7 @@ export function buildPage(row: CoverageRow, places: Restaurant[], today: string)
     {
       question: `Why is a ${noun.singular} in ${loc.name} missing from this list?`,
       answer:
-        `This page lists restaurants in the Des Moines Insider directory whose city or address is ${loc.name} and whose cuisine ` +
+        `This page lists restaurants in the Des Moines Insider directory ${inAreaTest} and whose cuisine ` +
         `is recorded as ${noun.matches}. Restaurants marked closed, or announced but not yet open, are left out. ` +
         'A place that is not listed is not in the directory yet.',
     },
@@ -223,7 +238,7 @@ async function main() {
 
   const [pages, restaurants] = await Promise.all([
     fetchAll<PublishedPseoRow>(base, key, 'pseo_pages', 'id,slug,page_type_id,dimensions,seo,is_published,generation_meta,sections'),
-    fetchAll<Restaurant>(base, key, 'restaurants', 'id,name,city,location,cuisine,status,is_merged,price_range,rating'),
+    fetchAll<Restaurant>(base, key, 'restaurants', 'id,name,city,location,cuisine,status,is_merged,neighborhood,price_range,rating'),
   ]);
   const report = evaluateCoverage(pages, restaurants);
   const today = new Date().toISOString().slice(0, 10);
@@ -231,9 +246,10 @@ async function main() {
 
   const onlyIdx = process.argv.indexOf('--only');
   const only = onlyIdx > 0 ? new Set((process.argv[onlyIdx + 1] ?? '').split(',').filter(Boolean)) : null;
+  const rewriteLlm = process.argv.includes('--rewrite-llm');
 
   for (const row of report.rows) {
-    const places = matchingPlaces(restaurants, row.locationName, row.category);
+    const places = matchingPlaces(restaurants, { slug: row.location, name: row.locationName }, row.category);
     const stale = row.published && row.templateFingerprint !== null && row.templateFingerprint !== row.fingerprint;
 
     if (row.verdict === 'indexable' && row.published === null) {
@@ -247,7 +263,11 @@ async function main() {
           `${str(p.id)}, ${str(p.slug)}, ${str(p.page_type_id)}, ${lit(p.dimensions)}, ${lit(p.seo)}, ${lit(p.sections)}, ` +
           `${lit(p.related_pages)}, ${lit(p.structured_data)}, ${lit(p.generation_meta)}, true, ${p.quality_score}, now()) on conflict (id) do nothing;`,
       );
-    } else if (stale && row.verdict !== 'not-generated') {
+    } else if ((stale || (rewriteLlm && row.published && row.templateFingerprint === null)) && row.verdict !== 'not-generated') {
+      // A stale data-built page, or (--rewrite-llm, SEO-060) a page whose copy
+      // came from the LLM pipeline and may name places the table does not
+      // hold. Both are rewritten from the current rows; seo.robots follows the
+      // verdict, so a 3-4 place page comes out noindex.
       const p = buildPage(row, places, today);
       out.push(
         `update pseo_pages set seo = ${lit(p.seo)}, sections = ${lit(p.sections)}, structured_data = ${lit(p.structured_data)}, ` +
