@@ -270,3 +270,7 @@
 # check-pseo-coverage fails if one points anywhere else). The ones with
 # impressions stay published as noindex with a canonical to the parent.
 # Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+
+# SEO-067: /restaurants/valley-junction unpublished (zero measured demand;
+# Valley Junction is part of West Des Moines). Keep for at least one release.
+/restaurants/valley-junction  /restaurants/west-des-moines  301
