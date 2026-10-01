@@ -130,3 +130,6 @@ IMG_*.jpg
 *.report.html
 supabase_logs.json
 test-failures.csv
+
+# IndexNow sitemap snapshot written by scripts/indexnow-ping.ts --state (SEO-047)
+.indexnow/
