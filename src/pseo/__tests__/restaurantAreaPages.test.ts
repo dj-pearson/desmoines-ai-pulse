@@ -3,6 +3,7 @@ import {
   areaPageCandidates,
   areaPageLabel,
   coverageLocationName,
+  hubAreaPages,
   isIndexablePseoPage,
 } from '@/pseo/restaurantAreaPages';
 import { COVERAGE_LOCATIONS } from '@/pseo/coverageRule';
@@ -78,5 +79,34 @@ describe('areaPageLabel', () => {
 
   it('falls back to the slug without dimensions', () => {
     expect(areaPageLabel({ slug: '/mexican/waukee' })).toBe('/mexican/waukee');
+  });
+});
+
+describe('hubAreaPages (SEO-038)', () => {
+  const dims = (category: string, location: string) => [
+    { dimension: 'category', slug: category, name: category.charAt(0).toUpperCase() + category.slice(1) },
+    { dimension: 'location', slug: location, name: coverageLocationName(location) },
+  ];
+
+  it('keeps published, indexable restaurant cuisine x area pages only', () => {
+    const pages = hubAreaPages([
+      { slug: '/pizza/west-des-moines', page_type_id: 'category-location', is_published: true, seo: {}, dimensions: dims('pizza', 'west-des-moines') },
+      { slug: '/brunch/ankeny', page_type_id: 'category-location', is_published: true, seo: { robots: 'noindex, follow' }, dimensions: dims('brunch', 'ankeny') },
+      { slug: '/bbq/ankeny', page_type_id: 'category-location', is_published: false, seo: {}, dimensions: dims('bbq', 'ankeny') },
+      { slug: '/live-music/ankeny', page_type_id: 'category-location', is_published: true, seo: {}, dimensions: dims('live-music', 'ankeny') },
+      { slug: '/mexican/waukee', page_type_id: 'category-location', is_published: true, seo: null, dimensions: dims('mexican', 'waukee') },
+    ]);
+    expect(pages).toEqual([
+      { href: '/mexican/waukee', label: 'Mexican restaurants in Waukee', categorySlug: 'mexican', locationSlug: 'waukee' },
+      { href: '/pizza/west-des-moines', label: 'Pizza restaurants in West Des Moines', categorySlug: 'pizza', locationSlug: 'west-des-moines' },
+    ]);
+  });
+
+  it('ignores a row whose dimensions carry no slugs', () => {
+    expect(
+      hubAreaPages([
+        { slug: '/pizza/west-des-moines', page_type_id: 'category-location', is_published: true, dimensions: [{ dimension: 'category', name: 'Pizza' }] },
+      ]),
+    ).toEqual([]);
   });
 });

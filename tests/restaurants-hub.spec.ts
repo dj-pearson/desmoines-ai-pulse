@@ -87,9 +87,11 @@ test.describe('Restaurants hub: pagination reaches every row', () => {
 test.describe('Restaurants hub: mobile', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('a card title is in the first viewport, above the bottom nav', async ({ page }) => {
+  // SEO-038: the ranked list leads the unfiltered hub, so the first restaurant
+  // a phone sees is its first entry rather than the first grid card.
+  test('a restaurant link is in the first viewport, above the bottom nav', async ({ page }) => {
     await gotoHub(page);
-    const firstTitle = page.locator('article h3 a').first();
+    const firstTitle = page.locator('[data-top-rated] ol a').first();
     await expect(firstTitle).toBeVisible();
     const box = await firstTitle.boundingBox();
     expect(box, 'first card title has a box').not.toBeNull();
@@ -176,6 +178,8 @@ test.describe('Restaurants hub: copy, links and schema', () => {
 
   test('ItemList points at our restaurant pages, and there is one BreadcrumbList', async ({ page }) => {
     await gotoHub(page);
+    // The ItemList is the ranked list (SEO-038), which has its own query.
+    await expect(page.locator('[data-top-rated] ol li').first()).toBeVisible();
     const blocks = await page
       .locator('script[type="application/ld+json"]')
       .evaluateAll((els) => els.map((el) => el.textContent || ''));
