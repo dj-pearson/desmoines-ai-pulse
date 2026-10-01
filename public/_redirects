@@ -106,3 +106,7 @@
 # question from listed hours. App.tsx carries the same redirect for in-app
 # navigation. Keep for at least one release cycle.
 /real-time  /restaurants/open-now  301
+# SEO-055: the Slaughterhouse row said Thu Oct 1; it opens Fri Oct 2 (HauntPay,
+# fetched 2026-10-01). Moving the row moved its date-suffixed URL. Keep this
+# for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/events/the-slaughterhouse-haunted-house-2026-10-01  /events/the-slaughterhouse-haunted-house-2026-10-02  301

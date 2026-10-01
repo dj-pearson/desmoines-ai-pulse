@@ -19,20 +19,31 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 function createSlug(title: string, event?: any): string {
-  let slug = title
+  const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  // Add date to event slugs
+  // Event slugs are the app's: title slug + the CENTRAL date of
+  // event_start_utc (createEventSlugWithCentralTime). This used the UTC date of
+  // `date`, so every evening event was listed under the next day's URL, which
+  // the detail page does not resolve (SEO-055).
   if (event) {
-    const eventDate = new Date(event.date || event.event_start_utc || event.created_at);
-    if (!isNaN(eventDate.getTime())) {
-      const dateStr = eventDate.toISOString().split('T')[0];
-      slug = `${slug}-${dateStr}`;
-    }
+    const appTitleSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+    const eventDate = new Date(event.event_start_utc || event.date);
+    if (isNaN(eventDate.getTime())) return appTitleSlug;
+    const ymd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(eventDate);
+    return `${appTitleSlug}-${ymd}`;
   }
 
   return slug;

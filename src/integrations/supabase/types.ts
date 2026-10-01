@@ -4723,6 +4723,7 @@ export type Database = {
           source_url_broken: boolean
           source_url_checked_at: string | null
           sponsored_until: string | null
+          time_tbd: boolean
           title: string
           trending_score: number
           updated_at: string | null
@@ -4784,6 +4785,7 @@ export type Database = {
           source_url_broken?: boolean
           source_url_checked_at?: string | null
           sponsored_until?: string | null
+          time_tbd?: boolean
           title: string
           trending_score?: number
           updated_at?: string | null
@@ -4845,6 +4847,7 @@ export type Database = {
           source_url_broken?: boolean
           source_url_checked_at?: string | null
           sponsored_until?: string | null
+          time_tbd?: boolean
           title?: string
           trending_score?: number
           updated_at?: string | null

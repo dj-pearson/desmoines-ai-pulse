@@ -1,14 +1,15 @@
 import { addDays, parseISO } from "date-fns";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { createLogger } from '@/lib/logger';
+import { hasStatedStartTime, NO_TIME_MARKER } from './eventTime';
 
 const logger = createLogger('timezone');
 
 // Des Moines, Iowa timezone (Central Time)
 export const CENTRAL_TIMEZONE = "America/Chicago";
 
-// Marker time indicating no specific time was found (7:31:58 PM)
-export const NO_TIME_MARKER = "19:31:58";
+// Marker time indicating no specific time was found (7:31:58 PM). Defined in eventTime.ts.
+export { NO_TIME_MARKER };
 
 /**
  * Convert a date string or Date object to Central Time (Des Moines timezone)
@@ -139,7 +140,9 @@ function isSeatGeekPlaceholder(event: {
 }
 
 /**
- * Check if an event has a specific time or uses the "no time" marker
+ * Check if an event has a start time we would print. SEO-055: delegates to
+ * hasStatedStartTime so time_tbd and the 19:31:58 marker mean the same thing
+ * here as on the weekend article and the hubs.
  */
 export function hasSpecificTime(event: any): boolean {
   try {
@@ -155,26 +158,17 @@ export function hasSpecificTime(event: any): boolean {
     // EventDetails already branch on this function.
     if (event?.time_tbd) return false;
 
-    // Interim for plan D5 (events-pass2 WP2 item 2). time_tbd is not in
-    // EVENT_LIST_COLUMNS yet, so a list row never carries it and SeatGeek's
-    // 03:30 placeholder printed as a showtime on every card. Same three-way
+    // Interim for plan D5 (events-pass2 WP2 item 2). Projections that do not
+    // select time_tbd (TONIGHT_EVENT_COLUMNS, EVENT_SLUG_COLUMNS, hand-written
+    // selects) still need SeatGeek's 03:30 placeholder caught. Same three-way
     // match as the 20260902000016 backfill: SeatGeek source, a local time of
-    // exactly 03:30:00. Delete once D5 puts time_tbd in the projection.
+    // exactly 03:30:00. SEO-055 added time_tbd to EVENT_LIST_COLUMNS; delete
+    // this once every events projection carries it.
     if (isSeatGeekPlaceholder(event)) return false;
 
-    // Check event_start_local first (new timezone field)
-    if (event.event_start_local) {
-      const time = event.event_start_local.split('T')[1]?.substring(0, 8);
-      return time !== NO_TIME_MARKER;
-    }
-    
-    // Fallback to legacy date field
-    if (event.date) {
-      const time = event.date.split('T')[1]?.substring(0, 8);
-      return time !== NO_TIME_MARKER;
-    }
-    
-    return false;
+    // SEO-055: otherwise the shared rule in eventTime.ts, which reads the
+    // Central wall-clock time of the start instant against NO_TIME_MARKER.
+    return hasStatedStartTime(event ?? {});
   } catch {
     return false;
   }

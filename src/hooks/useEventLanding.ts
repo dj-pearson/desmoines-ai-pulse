@@ -81,7 +81,7 @@ const DEFAULT_LIMIT = 100;
  * EVENT_LIST_COLUMNS, so nothing here can 42703 that the card query wouldn't.
  */
 export const LANDING_LIGHT_COLUMNS =
-  "id, title, date, event_start_utc, event_start_local, end_date, category, city, price, venue, location, source_url, is_featured, writeup_generated_at, updated_at";
+  "id, title, date, event_start_utc, event_start_local, end_date, time_tbd, category, city, price, venue, location, source_url, is_featured, writeup_generated_at, updated_at";
 
 /**
  * Fetch the rows for a landing page. Returns the TanStack query plus the

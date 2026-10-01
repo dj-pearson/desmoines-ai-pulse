@@ -80,7 +80,7 @@ const weekend = weekendWindow(now);
 const publishedOn = formatInTimeZone(now, WEEKEND_TIMEZONE, "yyyy-MM-dd");
 
 const COLUMNS =
-  "id, title, date, event_start_utc, event_start_local, time_tbd, venue, location, city, category, price, is_featured, is_hidden, is_merged, archived_at, popularity_score";
+  "id, title, date, event_start_utc, event_start_local, time_tbd, end_date, venue, location, city, category, price, is_featured, is_hidden, is_merged, archived_at, popularity_score";
 
 async function fetchRows(): Promise<WeekendEventRow[]> {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -102,7 +102,22 @@ async function fetchRows(): Promise<WeekendEventRow[]> {
     .order("date", { ascending: true })
     .limit(2000);
   if (error) throw new Error(`events query failed: ${error.code} ${error.message}`);
-  return (data ?? []) as WeekendEventRow[];
+
+  // SEO-055: multi-day runs that started earlier and are still on this weekend
+  // (Pumpkin Fest, Oct 1 - Nov 6). Without this they are invisible to a query
+  // on the start date alone.
+  const { data: runs, error: runsError } = await supabase
+    .from("events")
+    .select(COLUMNS)
+    .lt("date", from)
+    .gte("end_date", weekend.startUtc)
+    .neq("is_merged", true)
+    .neq("is_hidden", true)
+    .is("archived_at", null)
+    .order("date", { ascending: true })
+    .limit(500);
+  if (runsError) throw new Error(`events (runs) query failed: ${runsError.code} ${runsError.message}`);
+  return [...(data ?? []), ...(runs ?? [])] as WeekendEventRow[];
 }
 
 /** A dollar-quote tag that does not occur in the text. */
