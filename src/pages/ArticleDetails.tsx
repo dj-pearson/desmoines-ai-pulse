@@ -51,6 +51,15 @@ const ArticleDetails: React.FC = () => {
     });
   };
 
+  // The visible "Updated" line only appears when the row was edited at least a
+  // day after it was published, so a same-day typo fix doesn't read as a refresh.
+  const updatedAfterPublish = (a: Article): string | null => {
+    const published = new Date(a.published_at || a.created_at).getTime();
+    const updated = new Date(a.updated_at).getTime();
+    if (!a.updated_at || Number.isNaN(updated)) return null;
+    return updated - published > 24 * 60 * 60 * 1000 ? a.updated_at : null;
+  };
+
   const formatReadTime = (content: string) => {
     const wordsPerMinute = 200;
     const wordCount = content.split(/\s+/).length;
@@ -101,6 +110,8 @@ const ArticleDetails: React.FC = () => {
       </>
     );
   }
+
+  const updatedAt = updatedAfterPublish(article);
 
   // Article Schema for SEO
   const articleSchema = {
@@ -230,6 +241,11 @@ const ArticleDetails: React.FC = () => {
                       <SpriteIcon name="calendar" className="h-4 w-4" />
                       {formatDate(article.published_at || article.created_at)}
                     </span>
+                    {updatedAt && (
+                      <span>
+                        Updated <time dateTime={updatedAt}>{formatDate(updatedAt)}</time>
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <SpriteIcon name="clock" className="h-4 w-4" />
                       {formatReadTime(article.content)}
@@ -353,6 +369,7 @@ const ArticleDetails: React.FC = () => {
                     <div className="text-right">
                       <p className="text-sm text-muted-foreground mb-2">
                         Published {formatDate(article.published_at || article.created_at)}
+                        {updatedAt && <> &middot; Updated {formatDate(updatedAt)}</>}
                       </p>
                       <ShareDialog 
                         title={article.title}

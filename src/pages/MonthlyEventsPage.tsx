@@ -41,6 +41,27 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
  */
 const VISIBLE_EVENTS = 36;
 
+interface SeasonalGuideLink {
+  href: string;
+  label: string;
+}
+
+/**
+ * SEO-032. Seasonal articles a month page links to, keyed by the month slug.
+ * Each href is a published row in public.articles; keep this list to rows
+ * that exist, because a dead link here is a dead link on a landing page.
+ */
+const SEASONAL_GUIDES: Record<string, SeasonalGuideLink[]> = {
+  "october-2026": [
+    { href: "/articles/haunted-houses-near-des-moines", label: "Haunted houses near Des Moines" },
+    {
+      href: "/articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide",
+      label: "Pumpkin patches and apple orchards",
+    },
+    { href: "/articles/corn-mazes-near-des-moines", label: "Corn mazes near Des Moines" },
+  ],
+};
+
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
   const monthYear = slug;
@@ -225,6 +246,21 @@ export default function MonthlyEventsPage() {
           Complete calendar of events happening in {monthDisplayName} throughout Des Moines and suburbs. 
           Find concerts, festivals, community gatherings, and entertainment activities with all the details you need.
         </p>
+
+        {monthYear && SEASONAL_GUIDES[monthYear] && (
+          <nav aria-label={`${monthDisplayName} guides`} className="mb-8 text-center">
+            <h2 className="text-lg font-semibold mb-2">{monthDisplayName} guides</h2>
+            <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+              {SEASONAL_GUIDES[monthYear].map((guide) => (
+                <li key={guide.href}>
+                  <Link to={guide.href} className="text-primary underline-offset-4 hover:underline">
+                    {guide.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
         {/* Quick Stats */}
         <Card className="mb-8">
