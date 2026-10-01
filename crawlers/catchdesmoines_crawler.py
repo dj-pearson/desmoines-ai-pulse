@@ -700,7 +700,10 @@ Return ONLY the JSON array. No other text."""
                 dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
             elif re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
                 # Day only: stamp the no-time sentinel, never a plausible time.
-                dt = datetime.strptime(f"{date_str} {NO_TIME_MARKER}", "%Y-%m-%d %H:%M:%S")
+                # Spelled out rather than built from NO_TIME_MARKER because
+                # supabase/functions/_tests/no-time-marker.test.ts reads this
+                # literal to keep the crawler and eventDateTime.ts in step.
+                dt = datetime.strptime(date_str, "%Y-%m-%d").replace(hour=19, minute=31, second=58)
             else:
                 dt = date_parser.parse(date_str)
 
