@@ -8,7 +8,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/asian/west-des-moines</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -20,7 +20,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/brunch/west-des-moines</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -38,7 +38,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/italian/west-des-moines</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -62,7 +62,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/mexican/west-des-moines</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/steakhouse/west-des-moines</loc>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -103,14 +109,8 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/asian/downtown</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/asian/east-village</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -127,20 +127,8 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/asian/valley-junction</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/asian/winter</loc>
     <lastmod>2026-03-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/bbq/ankeny</loc>
-    <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -153,12 +141,6 @@
   <url>
     <loc>https://desmoinesinsider.com/bbq/december</loc>
     <lastmod>2026-03-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/bbq/downtown</loc>
-    <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -193,18 +175,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/bbq/valley-junction</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/bbq/west-des-moines</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/bbq/winter</loc>
     <lastmod>2026-03-18</lastmod>
     <changefreq>weekly</changefreq>
@@ -212,25 +182,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/brunch/ankeny</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/brunch/december</loc>
     <lastmod>2026-03-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/brunch/downtown</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/brunch/east-village</loc>
-    <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -243,12 +201,6 @@
   <url>
     <loc>https://desmoinesinsider.com/brunch/today</loc>
     <lastmod>2026-03-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/brunch/valley-junction</loc>
-    <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -325,18 +277,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/italian/downtown</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/italian/east-village</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/italian/this-weekend</loc>
     <lastmod>2026-03-17</lastmod>
     <changefreq>weekly</changefreq>
@@ -380,7 +320,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/mexican/ankeny</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -393,18 +333,6 @@
   <url>
     <loc>https://desmoinesinsider.com/mexican/december</loc>
     <lastmod>2026-03-17</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/mexican/downtown</loc>
-    <lastmod>2026-03-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/mexican/east-village</loc>
-    <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -429,12 +357,6 @@
   <url>
     <loc>https://desmoinesinsider.com/mexican/today</loc>
     <lastmod>2026-10-01</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/mexican/valley-junction</loc>
-    <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -469,12 +391,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/things-to-do/date-night</loc>
-    <lastmod>2026-03-13</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/things-to-do/downtown</loc>
     <lastmod>2026-03-12</lastmod>
     <changefreq>weekly</changefreq>
@@ -482,7 +398,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/things-to-do/east-village</loc>
-    <lastmod>2026-03-12</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>

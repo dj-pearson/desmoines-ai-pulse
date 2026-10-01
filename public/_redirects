@@ -59,7 +59,7 @@
 /restaurants/cozy-caf-johnston             /restaurants/cozy-cafe-johnston  301
 /restaurants/crme                          /restaurants/creme  301
 /restaurants/el-fogn                       /restaurants/el-fogon  301
-/restaurants/ritual-caf                    /restaurants/ritual-cafe  301
+/restaurants/ritual-caf                    /restaurants  301
 /restaurants/trellis-caf                   /restaurants/trellis-cafe  301
 
 # WEB-FEAT-027: /calendar rendered a permanently empty calendar. Its hook,
@@ -85,3 +85,37 @@
 # question from listed hours. App.tsx carries the same redirect for in-app
 # navigation. Keep for at least one release cycle.
 /real-time  /restaurants/open-now  301
+
+# Shipped early with the hotfix (2026-10-01): these URLs' rows were unpublished,
+# archived or renamed in production by SEO-040/041/053/055/058/060 on
+# claude/seo-q4-loop, so without the rule they 404 until that branch is
+# released. Same rules as on that branch; keep for at least one release cycle.
+/bbq/ankeny  /guide/ankeny  301
+/bbq/west-des-moines  /guide/west-des-moines  301
+/asian/downtown  /things-to-do/downtown  301
+/bbq/downtown  /things-to-do/downtown  301
+/brunch/downtown  /things-to-do/downtown  301
+/italian/downtown  /things-to-do/downtown  301
+/mexican/downtown  /things-to-do/downtown  301
+/bbq/east-village  /things-to-do/east-village  301
+/brunch/east-village  /things-to-do/east-village  301
+/italian/east-village  /things-to-do/east-village  301
+/mexican/east-village  /things-to-do/east-village  301
+/asian/valley-junction  /neighborhoods/west-des-moines  301
+/bbq/valley-junction  /neighborhoods/west-des-moines  301
+/brunch/valley-junction  /neighborhoods/west-des-moines  301
+/italian/valley-junction  /neighborhoods/west-des-moines  301
+/mexican/valley-junction  /neighborhoods/west-des-moines  301
+/guide/east-village  /things-to-do/east-village  301
+/things-to-do/date-night  /events/date-night  301
+/restaurants/toasted-cone        /restaurants/the-toasted-cone      301
+/articles/halloweekend-in-des-moines-your-ultimate-guide-to-spooky-events-family-fun-2023  /articles/haunted-houses-near-des-moines  301
+/articles/fall-colors-cider-the-ultimate-guide-to-des-moines-apple-orchards-pumpkin-patches-des-moines-guide  /articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide  301
+/articles/beaverdales-best-a-locals-guide-to-des-moines-most-charming-brick-streets-des-moines-guide  /things-to-do  301
+/articles/7-unexpected-date-night-ideas-in-des-moines-under-50-des-moines-guide  /events/date-night  301
+/articles/des-moines-indoor-farmers-markets-2023-24-complete-winter-shopping-guide-des-moines-guide  /things-to-do/winter  301
+/articles/des-moines-best-air-conditioned-adventures-indoor-activities-for-scorching-days-des-moines-guide  /things-to-do  301
+/articles/oktoberfest-in-des-moines-complete-guide-to-2023-beer-gardens-german-events-des-moines-guide  /guides/fall-festivals  301
+/articles/last-call-for-farmers-market-your-september-shopping-cooking-guide-des-moines-guide  /things-to-do/downtown  301
+/articles/morning-to-midnight-the-perfect-summer-saturday-in-downtown-des-moines-des-moines-guide  /things-to-do/downtown  301
+/events/the-slaughterhouse-haunted-house-2026-10-01  /events/the-slaughterhouse-haunted-house-2026-10-02  301
