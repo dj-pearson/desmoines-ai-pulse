@@ -16,6 +16,7 @@ import {
   restaurantSeoDescriptionProblems,
   readGeoFaq,
   currentDescription,
+  acceptsReservationsOf,
   buildRestaurantSchema,
   priceTier,
   RESTAURANT_TITLE_BUDGET,
@@ -328,8 +329,41 @@ describe('buildRestaurantSchema', () => {
     expect(buildRestaurantSchema(row, { ...ctx, openForBusiness: false })).not.toHaveProperty('openingHoursSpecification');
   });
 
-  it('leaves hasMenu to MenuSchema when a menu is captured', () => {
-    expect(buildRestaurantSchema(row, { ...ctx, hasCapturedMenu: true })).not.toHaveProperty('hasMenu');
+  it('points hasMenu at the on-page Menu node when a menu is captured', () => {
+    // MenuSchema's @id is "<page url>#menu" (SEO-034).
+    expect(buildRestaurantSchema(row, { ...ctx, hasCapturedMenu: true }).hasMenu).toBe(
+      'https://example.com/restaurants/fixture#menu',
+    );
+  });
+
+  it('has no hasMenu with neither a captured menu nor a menu URL', () => {
+    expect(buildRestaurantSchema(row, { ...ctx, menuUrl: null })).not.toHaveProperty('hasMenu');
+  });
+
+  it('puts their site and the Google listing in sameAs, in that order', () => {
+    const maps = 'https://maps.google.com/?cid=1';
+    expect(buildRestaurantSchema(row, { ...ctx, mapsUrl: maps }).sameAs).toEqual(['https://example.com/', maps]);
+    expect(buildRestaurantSchema(row, { ...ctx, website: null, mapsUrl: maps }).sameAs).toEqual([maps]);
+    expect(buildRestaurantSchema(row, { ...ctx, website: null })).not.toHaveProperty('sameAs');
+  });
+
+  it('publishes acceptsReservations only when the row says', () => {
+    expect(buildRestaurantSchema(row, ctx)).not.toHaveProperty('acceptsReservations');
+    expect(buildRestaurantSchema(row, { ...ctx, acceptsReservations: false }).acceptsReservations).toBe(false);
+    expect(buildRestaurantSchema(row, { ...ctx, acceptsReservations: 'https://resy.com/x' }).acceptsReservations).toBe(
+      'https://resy.com/x',
+    );
+  });
+
+  it('never carries an aggregateRating: the only rating held is Google\'s', () => {
+    expect(buildRestaurantSchema({ ...row, rating: 4.7 } as typeof row, ctx)).not.toHaveProperty('aggregateRating');
+  });
+
+  it('acceptsReservationsOf: booking URL, then the yes/no, else unknown', () => {
+    const safe = (u: unknown) => (typeof u === 'string' && /^https:\/\//.test(u) ? u : null);
+    expect(acceptsReservationsOf({ reservable: true, reservation_url: 'https://resy.com/x' }, safe)).toBe('https://resy.com/x');
+    expect(acceptsReservationsOf({ reservable: false, reservation_url: 'javascript:alert(1)' }, safe)).toBe(false);
+    expect(acceptsReservationsOf({ reservable: null }, safe)).toBeUndefined();
   });
 
   it('puts only a tier in priceRange, and no geo without coordinates', () => {

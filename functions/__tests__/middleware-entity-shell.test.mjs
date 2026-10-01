@@ -330,6 +330,44 @@ for (const status of ['opening_soon', 'announced']) {
   ck(`${status}: still indexable and not called closed`, soon.includes('name="robots" content="index, follow"') && !soon.includes('Permanently closed'));
 }
 
+console.log('\nthe answer next to the name (SEO-034)');
+// 2026-10-02 is a Friday; 17:00Z is noon in Des Moines.
+const FRIDAY = new Date('2026-10-02T17:00:00Z');
+const answerRow = {
+  ...bonchonRow,
+  status: 'open',
+  description: 'Korean fried chicken.',
+  hours_json: {
+    periods: [1, 2, 3, 4, 5].map((day) => ({ open: { day, hour: 11, minute: 0 }, close: { day, hour: 21, minute: 0 } })),
+    weekdayDescriptions: ['Friday: 11:00 AM - 9:00 PM'],
+  },
+  updated_at: '2026-10-01T15:00:00Z',
+  google_maps_uri: 'https://maps.google.com/?cid=42',
+  reservable: false,
+  rating: 4.7,
+};
+const answer = await rewrite(SHELL, {
+  pageUrl: 'https://desmoinesinsider.com/restaurants/bonchon',
+  sbBase: SB,
+  type: 'restaurant',
+  entity: { id: 'a1', title: 'x', row: answerRow },
+  now: FRIDAY,
+});
+const an = injectedNode(answer);
+ck("the day's hours are phrased by schedule", answer.includes('<li>Open 11 AM to 9 PM on Fridays</li>'), answer.match(/<ul>.*?<\/ul>/)?.[0]);
+ck('and come before the address', answer.indexOf('on Fridays') < answer.indexOf('Address:'));
+ck('the listing says when it last changed', answer.includes('Listing last updated October 1, 2026'));
+ck('the suburb page is linked', answer.includes('href="/neighborhoods/west-des-moines"'));
+ck('sameAs carries the site and the Google listing', JSON.stringify(an?.sameAs) === JSON.stringify([bonchonRow.website, 'https://maps.google.com/?cid=42']), JSON.stringify(an?.sameAs));
+ck('acceptsReservations says what the row says', an?.acceptsReservations === false);
+ck('dateModified rides on mainEntityOfPage', an?.mainEntityOfPage?.['@type'] === 'WebPage' && an.mainEntityOfPage.dateModified === '2026-10-01T15:00:00Z', JSON.stringify(an?.mainEntityOfPage));
+ck('no aggregateRating, even with a Google rating on the row', an && !('aggregateRating' in an));
+ck('still one ld+json block', [...answer.matchAll(/application\/ld\+json/g)].length === 1);
+const noReservable = injectedNode(await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'a2', title: 'x', row: { ...answerRow, reservable: null } } }));
+ck('unknown reservations are left out, not published as false', noReservable && !('acceptsReservations' in noReservable));
+const closedAnswer = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'a3', title: 'x', row: { ...answerRow, status: 'closed' } } });
+ck('a closed place gets no hours sentence and no phone', !closedAnswer.includes('on Fridays') && !closedAnswer.includes('Phone:'));
+
 console.log('\nabsences the shell really has');
 // A title-less entity must not blank the shell's own title.
 const untitled = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'r2', title: '' } });
