@@ -77,7 +77,7 @@
         "robots.txt still has 'Allow: /weekend' for a route that 301s. Remove it.",
         "Restaurants hub meta description says '200+ restaurants'; the sitemap has 477. Derive the number from data."
       ],
-      "notes": ""
+      "notes": "CODE COMPLETE 2026-10-01, merged to hotfix/pseo-homepage-shell (b01ca50a, 06826e16, 7a71aa05); passes stays FALSE until robots.txt, rss.xml and the hidden event are checked on the live site after deploy. (1) Restaurant @id: ALREADY FIXED by 83cac1f5 (WEB-SEO-023); no desmoinespulse in source or live HTML. (2) /events/schedule-2026-09-26 was a phantom: MiLB stats API shows the Iowa Cubs season ended 2026-09-20 at Omaha; the AI scraper wrote it (and a bare 'Iowa Cubs' row) from the team schedule page in July 2025. Hidden, not retitled: events 57564c69-... and 4e190bd2-... is_hidden=true, backup docs/fixes/SEO-031-phantom-iowa-cubs-rows.backup.json. Scraper guard supabase/functions/_shared/scheduleTitleGuard.ts (6 Deno tests, in CI) called from firecrawl-scraper/index.ts:494 drops page-label titles and opponent-less games; ingest-events deliberately NOT guarded (would tighten a public endpoint). Middleware now 404s hidden events (functions/_middleware.ts:266) since RLS exposes hidden rows to anon. (3) RSS generated at build by scripts/generate-rss.ts (30 articles + next 30 days of events, cap 50, RFC-822), linked at index.html:310, served as application/rss+xml via _headers; committed file regenerated from production (70 items). 7 offline tests. (4) robots.txt Allow: /weekend removed (/weekend confirmed 301). (5) '200+ restaurants' ALREADY FIXED (restaurantsHubCopy.ts derives 470+). OPEN: AI-enhanced event meta descriptions contain raw markdown ('**Enhanced Event Description:**') -> SEO-057."
     },
     {
       "id": "SEO-051",
@@ -518,6 +518,22 @@
         "List every published pseo_pages row whose slug is time-relative (today, this-weekend, tonight, month or season names) and grep its body for month/holiday words that no longer apply.",
         "Make time-relative pages render their list from live data with only evergreen intro copy, or regenerate the copy and schedule regeneration; back up rows first.",
         "Add a check script that flags past-month or past-holiday words in time-relative pSEO bodies."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-057",
+      "title": "AI-enhanced event descriptions leak raw markdown into meta descriptions and page text",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-031: the schedule event's meta description began '**Enhanced Event Description:**'. Search snippets showing markdown and a model's heading label look machine-made and lower CTR across the ~500 event pages.",
+      "acceptanceCriteria": [
+        "Count events (and restaurants/attractions with enhanced_description) whose stored text contains markdown markers or labels like 'Enhanced Event Description'. Record the count.",
+        "Strip labels and markdown when building meta descriptions and plain-text snippets (shared helper, tested); render markdown properly or as plain text on the page.",
+        "Clean the stored rows in production with a backup, and fix the enhancement prompt/code so new rows don't carry the label.",
+        "Verify on 5 prerendered event pages."
       ],
       "notes": ""
     }
