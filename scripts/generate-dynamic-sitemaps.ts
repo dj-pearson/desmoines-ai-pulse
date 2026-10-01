@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
-import { computePseoCoverage, PSEO_NOINDEX_ROUTES_FILE } from './lib/pseoCoverage';
+import { computePseoCoverage, PSEO_CANONICAL_ELSEWHERE_FILE, PSEO_NOINDEX_ROUTES_FILE } from './lib/pseoCoverage';
 import { childLastmod } from './lib/sitemapLastmod';
 import { isInMetro } from '../src/lib/geo';
 // The month floor, the range and the Central-month rule are the month page's
@@ -793,6 +793,23 @@ function writePseoNoindexRoutes(routes: string[]): void {
 }
 
 /**
+ * SEO-064: published pSEO pages that canonical another page (the duplicates
+ * src/pseo/duplicateRule.ts holds at noindex), for check-prerender-head.mjs.
+ */
+function writePseoCanonicalElsewhere(routes: Record<string, string>): void {
+  const file = join(process.cwd(), PSEO_CANONICAL_ELSEWHERE_FILE);
+  try {
+    mkdirSync(join(file, '..'), { recursive: true });
+    const sorted = Object.fromEntries(Object.entries(routes).sort(([a], [b]) => a.localeCompare(b)));
+    writeFileSync(file, `${JSON.stringify({ generatedAt: new Date().toISOString(), routes: sorted }, null, 2)}
+`);
+  } catch (error) {
+    rmSync(file, { force: true });
+    console.warn(`could not write ${PSEO_CANONICAL_ELSEWHERE_FILE}: ${(error as Error).message}`);
+  }
+}
+
+/**
  * pSEO pages (WEB-SEO-013).
  *
  * src/pseo/ contains a complete programmatic-SEO system — taxonomy, ten page
@@ -811,6 +828,7 @@ async function generatePseoSitemap(): Promise<number | null> {
   // SEO-041: last run's noindex list must not outlive a run that could not
   // measure this one. Rewritten below only when the coverage rule was measured.
   rmSync(join(process.cwd(), PSEO_NOINDEX_ROUTES_FILE), { force: true });
+  rmSync(join(process.cwd(), PSEO_CANONICAL_ELSEWHERE_FILE), { force: true });
 
   // IT SOURCES THE SHIPPABLE SET, NOT is_published.
   //
@@ -950,6 +968,7 @@ async function generatePseoSitemap(): Promise<number | null> {
   // Cloudflare would otherwise serve (SEO-029). scripts/prerender.mjs reads
   // this file; it is written fresh on every run and is not committed.
   writePseoNoindexRoutes(coverage.noindexPublished);
+  writePseoCanonicalElsewhere(coverage.canonicalElsewhere);
 
   console.log(
     `🧩 pSEO sitemap: ${shippable.canonical.length} shippable + ${demandAdded.length} published with measured impressions ` +

@@ -45,7 +45,7 @@ export function PseoPage({ page: storedPage }: PseoPageProps) {
         description={seo.description}
         url={seo.canonicalUrl}
         keywords={seo.keywords}
-        canonicalUrl={getCanonicalUrl(page.slug)}
+        canonicalUrl={getCanonicalUrl(canonicalPath(page))}
         robots={seo.robots === 'noindex, follow' ? 'noindex, follow' : undefined}
         breadcrumbs={structuredData.breadcrumb}
         structuredData={schemaData}
@@ -82,6 +82,17 @@ export function PseoPage({ page: storedPage }: PseoPageProps) {
       <Footer />
     </>
   );
+}
+
+/**
+ * SEO-064. The page's own slug, unless the row names another site path as its
+ * canonical: the duplicates src/pseo/duplicateRule.ts holds at noindex point
+ * at their parent page. Only a root-relative path is honoured, so a stray
+ * absolute or malformed value falls back to the self-canonical.
+ */
+function canonicalPath(page: PseoPageContent): string {
+  const stored = page.seo.canonicalUrl;
+  return stored && /^\/[a-z0-9/-]*$/.test(stored) ? stored : page.slug;
 }
 
 /**
