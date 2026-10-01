@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
 import {
+  buildHoursOnlyUpdate,
   BUSINESS_STATUSES,
+  HOURS_ONLY_FIELD_MASK,
   HOURS_JSON_VERSION,
   HOURS_TIME_ZONE,
   isPermanentlyClosed,
@@ -122,4 +124,43 @@ Deno.test("a missing minute defaults to the top of the hour", () => {
   const stored = normalizeOpeningHours({ periods: [{ open: { day: 5, hour: 17 } }] });
   assert.ok(stored);
   assert.equal(stored!.periods[0].open.minute, 0);
+});
+
+// SEO-054: the hours-only refresh writes two columns and reads two fields.
+Deno.test("buildHoursOnlyUpdate writes only hours_json and business_status", () => {
+  const update = buildHoursOnlyUpdate(
+    {
+      businessStatus: "OPERATIONAL",
+      regularOpeningHours: {
+        periods: [{ open: { day: 1, hour: 11, minute: 0 }, close: { day: 1, hour: 21, minute: 0 } }],
+        weekdayDescriptions: ["Monday: 11:00 AM - 9:00 PM"],
+      },
+      // Fields the full enrichment writes. The hours-only mode must ignore them.
+      editorialSummary: { text: "Should never reach the description column" },
+      nationalPhoneNumber: "(515) 555-0100",
+      rating: 4.6,
+    },
+    "2026-10-01T00:00:00.000Z",
+  );
+  assert.ok(update);
+  assert.deepEqual(Object.keys(update!).sort(), ["business_status", "hours_json"]);
+  assert.equal(update!.business_status, "OPERATIONAL");
+  assert.equal(update!.hours_json!.fetchedAt, "2026-10-01T00:00:00.000Z");
+  assert.equal(update!.hours_json!.periods.length, 1);
+});
+
+Deno.test("buildHoursOnlyUpdate is null when Places has neither hours nor a status", () => {
+  assert.equal(buildHoursOnlyUpdate({}), null);
+  assert.equal(buildHoursOnlyUpdate({ regularOpeningHours: { periods: [] }, businessStatus: "OPEN" }), null);
+  assert.equal(buildHoursOnlyUpdate(null), null);
+});
+
+Deno.test("a closed place with no hours still records its status", () => {
+  assert.deepEqual(buildHoursOnlyUpdate({ businessStatus: "CLOSED_PERMANENTLY" }), {
+    business_status: "CLOSED_PERMANENTLY",
+  });
+});
+
+Deno.test("the hours-only mask asks for exactly the two fields it writes", () => {
+  assert.equal(HOURS_ONLY_FIELD_MASK, "regularOpeningHours,businessStatus");
 });

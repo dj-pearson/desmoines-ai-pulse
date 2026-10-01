@@ -1,0 +1,25 @@
+{
+  "story": "SEO-054",
+  "table": "restaurants",
+  "measured": "production, psql count(*) over every row",
+  "before": {
+    "at": "2026-10-01T05:25:00Z",
+    "total": 478,
+    "with_google_place_id": 441,
+    "with_hours_json": 0,
+    "with_business_status": 0,
+    "with_opening": 0,
+    "seo_titles_saying_hours": 0
+  },
+  "after": {
+    "at": "2026-10-01T06:10:00Z",
+    "total": 478,
+    "with_google_place_id": 451,
+    "with_hours_json": 8,
+    "with_business_status": 10,
+    "with_opening": 0,
+    "seo_titles_saying_hours": 8,
+    "still_to_fill": 443
+  },
+  "how": "The 8 rows came from one bulk-update-restaurants call (full enrichment, 10 rows, 2026-10-01 05:33Z, run id f4097e19-5b2b-40b6-8461-cadba01abde7). The other 443 wait on deploying the hoursOnly mode, then npm run backfill-restaurant-hours -- --apply."
+}

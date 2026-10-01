@@ -31,6 +31,7 @@
     "db:backup": "tsx scripts/supabase-backup.ts",
     "check-restaurant-seo": "tsx scripts/check-restaurant-seo-titles.ts",
     "backfill-restaurant-seo": "tsx scripts/backfill-restaurant-seo.ts",
+    "backfill-restaurant-hours": "tsx scripts/backfill-restaurant-hours.ts",
     "crawl-events": "tsx scripts/event-datetime-crawler.ts",
     "crawl-events:apply": "tsx scripts/event-datetime-crawler.ts --apply",
     "convert-timezones": "tsx scripts/convert-timezones.ts --dry-run",

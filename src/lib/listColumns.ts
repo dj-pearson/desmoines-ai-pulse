@@ -105,9 +105,12 @@ export const PLAYGROUND_LIST_COLUMNS =
 export const TONIGHT_EVENT_COLUMNS =
   "id, title, date, event_start_utc, event_start_local, end_date, venue, location, city, category, price, latitude, longitude, is_sponsored, sponsored_until";
 
-/** Every column pickDinner and the Tonight card read, and nothing else. */
+/**
+ * Every column pickDinner and the Tonight card read, and nothing else.
+ * hours_json (SEO-054): the only hours production carries; `opening` is a date.
+ */
 export const TONIGHT_RESTAURANT_COLUMNS =
-  "id, name, slug, cuisine, latitude, longitude, opening, opening_date, status";
+  "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status";
 
 /**
  * The four columns needed to DERIVE an event slug, and nothing else

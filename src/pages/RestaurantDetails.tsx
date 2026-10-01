@@ -38,6 +38,7 @@ import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import {
   formatOpenStatusLine,
+  hoursTextOf,
   resolveOpenStatus,
   resolveOpeningHoursSpecification,
   type RestaurantOpenResult,
@@ -406,7 +407,8 @@ export default function RestaurantDetails() {
   const metaInput = {
     ...restaurant,
     hasMenu: hasCapturedMenu || !!safeMenuUrl,
-    hasHours: lifecycle !== "closed" && (!!hoursSpec || !!restaurant.opening?.trim()),
+    // SEO-054: `opening` is a date column; only hours text counts.
+    hasHours: lifecycle !== "closed" && (!!hoursSpec || hoursTextOf(restaurant.opening) !== null),
     hasPhone: !isShut && !!phoneHref,
     hasPhotos: !!restaurant.image_url,
   };

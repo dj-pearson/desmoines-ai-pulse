@@ -27,6 +27,9 @@
  * when there is exactly one sensible reading.
  */
 import { toZonedTime } from 'date-fns-tz';
+import { hoursTextOf } from './hoursText';
+
+export { hoursTextOf };
 
 export type OpenStatus = 'open' | 'closed' | 'closing-soon' | 'unknown';
 
@@ -394,9 +397,11 @@ export interface OpeningHoursSpecification {
  * then omit the spec rather than fabricate hours.
  */
 export function getOpeningHoursSpecification(
-  opening: string | null | undefined
+  rawOpening: string | null | undefined
 ): OpeningHoursSpecification[] | null {
-  if (!opening || !opening.trim()) return null;
+  // SEO-054: `opening` is a date column in production; a date is not hours.
+  const opening = hoursTextOf(rawOpening);
+  if (!opening) return null;
   const parsed = parseOpeningText(opening);
   // A dropped segment means part of the week is unread. Publishing the rest
   // would tell a crawler those days are closed (WP2.2).
@@ -659,11 +664,14 @@ function evaluateIntervals(intervals: readonly WeekInterval[], t: number): Resta
  * @returns `unknown` for empty or unreadable text, so no badge is shown.
  */
 export function getRestaurantOpenStatus(
-  opening: string | null | undefined,
+  rawOpening: string | null | undefined,
   now?: Date,
   options?: OpenStatusOptions,
 ): RestaurantOpenResult {
-  if (typeof opening !== 'string' || !opening.trim()) return { ...UNKNOWN };
+  // SEO-054: a date ("2026-03-15", what the `opening` date column returns)
+  // read as "03-15", 3 AM to 3 PM daily. It is not hours, so it is unknown.
+  const opening = hoursTextOf(rawOpening);
+  if (!opening) return { ...UNKNOWN };
   if (isPermanentlyClosedText(opening.trim().toLowerCase())) return { ...CLOSED_FOR_GOOD };
 
   const t = weekMinute(now, options);
@@ -715,8 +723,9 @@ export interface OpeningCoverage {
  * otherwise it is "not listed". Null for empty text or text with nothing
  * readable at all.
  */
-export function getOpeningCoverage(opening: string | null | undefined): OpeningCoverage | null {
-  if (typeof opening !== 'string' || !opening.trim()) return null;
+export function getOpeningCoverage(rawOpening: string | null | undefined): OpeningCoverage | null {
+  const opening = hoursTextOf(rawOpening);
+  if (!opening) return null;
   const lower = opening.trim().toLowerCase();
   if (isPermanentlyClosedText(lower)) {
     return {
@@ -923,4 +932,18 @@ export function resolveOpenStatus(
     return evaluateIntervals(intervals, weekMinute(now, options));
   }
   return getRestaurantOpenStatus(opening, now, options);
+}
+
+/**
+ * One line of hours for plain text (the edge shell, SEO-054): Google's own
+ * weekday lines from hours_json joined with "; ", else hours text from
+ * `opening` (never a date), else null.
+ */
+export function hoursDisplayLine(hoursJson: unknown, opening: unknown): string | null {
+  const lines = (hoursJson as StoredOpeningHours | null | undefined)?.weekdayDescriptions;
+  if (Array.isArray(lines)) {
+    const text = lines.filter((l): l is string => typeof l === 'string' && l.trim() !== '').join('; ');
+    if (text) return text;
+  }
+  return hoursTextOf(opening);
 }

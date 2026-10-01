@@ -10,7 +10,7 @@ import {
   isStaleOpeningCopy,
   type RestaurantMetaInput,
 } from "../src/lib/restaurantMeta";
-import { resolveOpeningHoursSpecification } from "../src/lib/restaurantHours";
+import { hoursDisplayLine, resolveOpeningHoursSpecification } from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
 
 /**
@@ -612,7 +612,9 @@ function showsHours(row: Record<string, any>): boolean {
 
 export function restaurantShellNode(row: Record<string, any>, pageUrl: string): Record<string, unknown> {
   const addr = parseIowaAddress(row.location);
-  const hours = showsHours(row) ? resolveOpeningHoursSpecification(null, row.opening) : null;
+  // SEO-054: Google's hours_json first. `opening` is a date column in
+  // production, and resolveOpeningHoursSpecification never reads a date as hours.
+  const hours = showsHours(row) ? resolveOpeningHoursSpecification(row.hours_json, row.opening) : null;
   // Scraped text, not links we built: only http(s) reaches the node.
   const website = safeHttpUrl(row.website);
   const menu = safeHttpUrl(row.menu_url);
@@ -655,7 +657,10 @@ export function restaurantShellBody(row: Record<string, any>): string {
   if (row.location) facts.push(`<li>Address: ${escapeHtml(row.location)}</li>`);
   if (row.phone) facts.push(`<li>Phone: <a href="tel:${escapeHtml(String(row.phone).replace(/[^\d+]/g, ""))}">${escapeHtml(row.phone)}</a></li>`);
   if (row.price_range) facts.push(`<li>Price: ${escapeHtml(row.price_range)}</li>`);
-  if (row.opening && showsHours(row)) facts.push(`<li>Hours: ${escapeHtml(row.opening)}</li>`);
+  // SEO-054: this printed `opening` raw, which is a date in production. Google's
+  // own weekday lines come first; hours text only when it is not a date.
+  const hoursLine = hoursDisplayLine(row.hours_json, row.opening);
+  if (hoursLine && showsHours(row)) facts.push(`<li>Hours: ${escapeHtml(hoursLine)}</li>`);
   if (menu) facts.push(`<li><a href="${escapeHtml(menu)}" rel="nofollow noopener">Menu</a></li>`);
   if (website) facts.push(`<li><a href="${escapeHtml(website)}" rel="nofollow noopener">Website</a></li>`);
   // Pre-opening copy is left out rather than repeated to a crawler as current.

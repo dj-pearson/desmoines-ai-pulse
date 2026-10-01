@@ -7869,6 +7869,8 @@ export type Database = {
           geo_summary: string | null
           geom: unknown
           google_place_id: string | null
+          business_status: string | null
+          hours_json: Json | null
           heal_attempts: number
           id: string
           image_checked_at: string | null
@@ -7920,6 +7922,8 @@ export type Database = {
           geo_summary?: string | null
           geom?: unknown
           google_place_id?: string | null
+          business_status?: string | null
+          hours_json?: Json | null
           heal_attempts?: number
           id?: string
           image_checked_at?: string | null
@@ -7971,6 +7975,8 @@ export type Database = {
           geo_summary?: string | null
           geom?: unknown
           google_place_id?: string | null
+          business_status?: string | null
+          hours_json?: Json | null
           heal_attempts?: number
           id?: string
           image_checked_at?: string | null

@@ -6,9 +6,11 @@ import { eventInArea, type EventArea } from "@/lib/eventAreas";
 import { haversineDistance } from "@/lib/geo";
 import {
   DES_MOINES_TIME_ZONE,
-  getRestaurantOpenStatus,
+  hoursTextOf,
   isVisitableStatus,
+  resolveOpenStatus,
   type RestaurantOpenResult,
+  type StoredOpeningHours,
 } from "@/lib/restaurantHours";
 
 /**
@@ -22,10 +24,13 @@ import {
  * deriveOpenNow(). The fetch does not depend on the clock, so a place drops
  * off the list at close without a refetch.
  *
- * No hours_json or business_status in the select: neither is confirmed in
- * production (plan D6), and a select naming a missing column fails the whole
- * query with 42703. latitude and longitude are in scripts/db-snapshot.json
- * (pass 2 WP4.4, for the area filter and "near me").
+ * SEO-054: the rows are the ones with hours_json, Google's structured hours.
+ * The query used to filter `.not("opening", "is", null).neq("opening", "")`,
+ * but `opening` is a date column in production, so `neq ""` made PostgREST
+ * answer 400 (22007, invalid input syntax for type date) and the page listed
+ * nothing at all. hours_json exists in production (WEB-BE-045, confirmed
+ * 2026-10-01). latitude and longitude are in scripts/db-snapshot.json (pass 2
+ * WP4.4, for the area filter and "near me").
  */
 
 /** Upper bound on rows read. There are about 480 restaurants in total. */
@@ -33,7 +38,7 @@ export const OPEN_NOW_ROW_LIMIT = 600;
 
 /** Only what RestaurantCard renders plus what the filters below read. */
 export const OPEN_NOW_COLUMNS =
-  "id, slug, name, description, cuisine, rating, price_range, location, city, status, opening, is_featured, is_sponsored, sponsored_until, image_url, phone, website, popularity_score, created_at, is_merged, latitude, longitude";
+  "id, slug, name, description, cuisine, rating, price_range, location, city, status, opening, hours_json, is_featured, is_sponsored, sponsored_until, image_url, phone, website, popularity_score, created_at, is_merged, latitude, longitude";
 
 export interface OpenNowRestaurantRow {
   id: string;
@@ -47,6 +52,7 @@ export interface OpenNowRestaurantRow {
   city?: string | null;
   status?: string | null;
   opening?: string | null;
+  hours_json?: StoredOpeningHours | null;
   is_featured?: boolean | null;
   is_sponsored?: boolean | null;
   sponsored_until?: string | null;
@@ -60,19 +66,33 @@ export interface OpenNowRestaurantRow {
   longitude?: number | null;
 }
 
-/** A row that is visitable and carries hours text. The query filters the same way; this is the belt to its braces. */
+/** True when hours_json has at least one period to evaluate. */
+function hasStructuredHours(row: OpenNowRestaurantRow): boolean {
+  const periods = row.hours_json?.periods;
+  return Array.isArray(periods) && periods.length > 0;
+}
+
+/**
+ * A row that is visitable and carries hours: structured hours_json, or hours
+ * text (never a date, SEO-054). The query filters the same way; this is the
+ * belt to its braces.
+ */
 export function isListableRow(row: OpenNowRestaurantRow): boolean {
   if (row.is_merged === true) return false;
   if (!isVisitableStatus(row.status)) return false;
-  return typeof row.opening === "string" && row.opening.trim().length > 0;
+  return hasStructuredHours(row) || hoursTextOf(row.opening) !== null;
+}
+
+/** The one evaluation every open-now surface uses: hours_json first, then text. */
+export function openStatusOf(row: OpenNowRestaurantRow, at: Date): RestaurantOpenResult {
+  return resolveOpenStatus(row.hours_json, row.opening, at);
 }
 
 async function fetchRestaurantsWithHours(): Promise<OpenNowRestaurantRow[]> {
   const { data, error } = await supabase
     .from("restaurants")
     .select(OPEN_NOW_COLUMNS)
-    .not("opening", "is", null)
-    .neq("opening", "")
+    .not("hours_json", "is", null)
     .not("is_merged", "is", true)
     .or("status.is.null,status.not.in.(closed,opening_soon,announced)")
     .order("name")
@@ -173,8 +193,7 @@ export function deriveOpenNow(
   let readable = 0;
 
   for (const restaurant of listable) {
-    const opening = restaurant.opening ?? "";
-    const status = getRestaurantOpenStatus(opening, now);
+    const status = openStatusOf(restaurant, now);
     if (status.status !== "unknown") readable += 1;
     else unreadable.push(restaurant);
     if (status.isOpen) {
@@ -184,7 +203,7 @@ export function deriveOpenNow(
       closedRows.push({ restaurant, status });
     }
     if (midnightAhead) {
-      const late = getRestaurantOpenStatus(opening, midnight);
+      const late = openStatusOf(restaurant, midnight);
       if (late.isOpen) pastMidnight.push({ restaurant, status: late });
     }
   }

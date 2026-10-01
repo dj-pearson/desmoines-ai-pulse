@@ -21,6 +21,7 @@
  */
 
 import { titleNamesCity } from "./seoTitleLocation";
+import { hoursTextOf } from "./hoursText";
 
 export interface RestaurantMetaInput {
   name: string;
@@ -145,7 +146,8 @@ function facetsOf(r: RestaurantMetaInput): Facets {
   const hoursJson = r.hours_json != null && typeof r.hours_json === "object";
   return {
     menu: r.hasMenu ?? usableLink(r.menu_url),
-    hours: r.hasHours ?? (hasText(r.opening) || hoursJson),
+    // SEO-054: `opening` is a date column in production, and a date is not hours.
+    hours: r.hasHours ?? (hoursTextOf(r.opening) !== null || hoursJson),
     phone: r.hasPhone ?? hasText(r.phone),
     photos: r.hasPhotos ?? usableLink(r.image_url),
   };

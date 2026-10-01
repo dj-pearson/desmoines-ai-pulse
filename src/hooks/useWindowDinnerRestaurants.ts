@@ -94,7 +94,7 @@ export function useWindowDinnerRestaurants(
         .from("restaurants")
         .select(TONIGHT_RESTAURANT_COLUMNS)
         .neq("is_merged", true)
-        .not("opening", "is", null)
+        .not("hours_json", "is", null)
         .or(logic)
         .order("id", { ascending: true })
         .limit(WINDOW_DINNER_ROW_LIMIT);
