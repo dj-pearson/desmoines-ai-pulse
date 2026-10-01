@@ -9,7 +9,7 @@
  * condition, what counts as a place, and which published pages the rule
  * flags or keeps out of the sitemap.
  */
-import { coverageVerdict, finalVerdicts, placeMatches } from '../../src/pseo/coverageRule.ts';
+import { coverageVerdict, finalVerdicts, isCoverageScoped, placeMatches } from '../../src/pseo/coverageRule.ts';
 import { evaluateCoverage, DATA_TEMPLATE_GENERATOR } from '../lib/pseoCoverage.ts';
 import { neighborhoodFor } from '../../src/lib/neighborhoodBoundaries.ts';
 
@@ -62,6 +62,24 @@ console.log('placeMatches: neighbourhoods match restaurants.neighborhood (SEO-06
   check('the name alone does not: a row naming "East Village" with no column value is out', !placeMatches({ ...row, neighborhood: null, location: 'East Village' }, ev, 'mexican'));
   check('another neighbourhood does not', !placeMatches({ ...row, neighborhood: 'downtown' }, ev, 'mexican'));
   check('a suburb given as an area still matches as text', placeMatches(base, { slug: 'waukee', name: 'Waukee' }, 'mexican'));
+}
+
+console.log('placeMatches + isCoverageScoped: the /restaurants/<area> page (SEO-065)');
+{
+  check('any cuisine counts on the area page', placeMatches({ ...base, cuisine: 'Ice Cream' }, 'Waukee', 'restaurants'));
+  check('no cuisine at all still counts', placeMatches({ ...base, cuisine: null }, 'Waukee', 'restaurants'));
+  check('a closed row does not', !placeMatches({ ...base, status: 'closed' }, 'Waukee', 'restaurants'));
+  check('another city does not', !placeMatches({ ...base, city: 'Clive' }, 'Waukee', 'restaurants'));
+  const dims = (content, slug) => [
+    { dimension: 'content_type', slug: content, name: content },
+    { dimension: 'location', slug, name: slug },
+  ];
+  check('content-location restaurants x suburb is governed', isCoverageScoped('content-location', dims('restaurants', 'ankeny')));
+  check('things-to-do x suburb is not', !isCoverageScoped('content-location', dims('things-to-do', 'ankeny')));
+  check('restaurants x an unmapped area is not', !isCoverageScoped('content-location', dims('restaurants', 'drake')));
+  const report = evaluateCoverage([], [base, { ...base, id: '2' }, { ...base, id: '3' }, { ...base, id: '4' }, { ...base, id: '5', cuisine: 'Pizza' }]);
+  const waukee = report.rows.find((r) => r.slug === '/restaurants/waukee');
+  check('the area page is measured with every cuisine: 5 places, indexable', waukee?.places === 5 && waukee?.verdict === 'indexable', JSON.stringify(waukee));
 }
 
 console.log('neighborhoodFor: the polygons, on real addresses');

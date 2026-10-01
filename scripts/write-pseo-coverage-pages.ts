@@ -32,6 +32,11 @@
  * naming a restaurant the table does not hold (/mexican/ankeny recommended
  * "Tacos La Familia").
  *
+ * SEO-065: the all-restaurants area pages (/restaurants/ankeny) are governed
+ * too and written by buildAreaPage: a count, the five highest rated, the most
+ * common first-recorded cuisines, and links to the area's indexable cuisine
+ * pages. --rewrite-llm replaced the LLM copy on the five that existed.
+ *
  * --only limits INSERTS to the named categories (SEO-041 published only the
  * cuisines with measured demand). Updates to existing rows are never limited:
  * the rule applies to every published page in scope.
@@ -43,8 +48,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { categoryDimension, locationDimension } from '../src/pseo/taxonomy';
-import { matchingPlaces, type CoverageRestaurantRow } from '../src/pseo/coverageRule';
+import { categoryDimension, contentTypeDimension, locationDimension } from '../src/pseo/taxonomy';
+import { AREA_PAGE_CATEGORY, matchingPlaces, type CoverageRestaurantRow } from '../src/pseo/coverageRule';
 import { evaluateCoverage, DATA_TEMPLATE_GENERATOR, type PublishedPseoRow, type CoverageRow } from './lib/pseoCoverage';
 import { NEIGHBORHOOD_BOUNDARIES } from '../src/lib/neighborhoodBoundaries';
 
@@ -227,6 +232,167 @@ export function buildPage(row: CoverageRow, places: Restaurant[], today: string)
   };
 }
 
+/** A published, indexable cuisine page for the same area, linked from the area page. */
+export interface AreaCuisineLink {
+  slug: string;
+  title: string;
+}
+
+/** "American, Brunch" -> "American". The first cuisine a row records, as stored. */
+function primaryCuisine(cuisine: string | null): string | null {
+  const first = (cuisine ?? '').split(',')[0]?.trim();
+  return first ? first : null;
+}
+
+/**
+ * SEO-065: the all-restaurants area page, /restaurants/<area>, written from
+ * the rows the same way buildPage writes a cuisine page. Every sentence is a
+ * count or a name from the listed rows, or a description of what the page
+ * does; nothing is said about a place the directory does not record.
+ */
+export function buildAreaPage(row: CoverageRow, places: Restaurant[], today: string, cuisinePages: AreaCuisineLink[]) {
+  const content = contentTypeDimension.values.find((v) => v.slug === AREA_PAGE_CATEGORY);
+  const loc = locationDimension.values.find((v) => v.slug === row.location);
+  if (!content || !loc) throw new Error(`${row.slug}: not in taxonomy`);
+
+  const nb = NEIGHBORHOOD_BOUNDARIES.find((n) => n.slug === loc.slug);
+  const areaFull = nb ? (loc.name.includes(nb.cityLabel) ? loc.name : `${loc.name}, ${nb.cityLabel}`) : `${loc.name}, Iowa`;
+  const inAreaTest = nb
+    ? `whose map location falls inside the ${loc.name} boundary this site uses (${nb.boundaryText})`
+    : `whose city or address is ${loc.name}`;
+
+  const n = places.length;
+  const ordered = [...places].sort(byRating);
+  // The FAQ names the top rated among rows that HAVE a rating; the live list
+  // puts unrated rows first (Postgres sorts nulls first on a descending order),
+  // so "highest rated" is only ever said of rated rows.
+  const rated = places
+    .filter((p) => p.rating !== null)
+    .sort((a, b) => (b.rating as number) - (a.rating as number) || a.name.localeCompare(b.name));
+  const topRated = rated.slice(0, 5);
+
+  const cuisineCounts = new Map<string, number>();
+  for (const p of places) {
+    const c = primaryCuisine(p.cuisine);
+    if (c) cuisineCounts.set(c, (cuisineCounts.get(c) ?? 0) + 1);
+  }
+  const commonCuisines = [...cuisineCounts]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 6);
+
+  const title = `Restaurants in ${areaFull}`;
+  const h1 = `Restaurants in ${loc.name}`;
+  // The description names the two highest rated, not the first two in list
+  // order, which are unrated rows whenever any exist.
+  const lead = joinNames((topRated.length >= 2 ? topRated : ordered).slice(0, 2).map((p) => p.name));
+  let description = `${n} restaurants in ${areaFull}, including ${lead}, listed from the Des Moines Insider restaurant directory.`;
+  if (description.length > 160) {
+    description = `${n} restaurants in ${areaFull}, listed from the Des Moines Insider restaurant directory with a link to each one.`;
+  }
+
+  const shown = Math.min(n, 12);
+  const listSentence =
+    n > shown
+      ? `The list below shows ${shown} of them, read from the directory live and ordered by rating`
+      : 'The list below is read from it live and ordered by rating';
+
+  const faqs = [
+    {
+      question: `How many restaurants in ${loc.name} does Des Moines Insider list?`,
+      answer:
+        `As of ${today}, ${n}.` +
+        (topRated.length
+          ? ` By Google star rating, the highest rated are ${joinNames(
+              topRated.map((p) => `${p.name} (${(p.rating as number).toFixed(1)})`),
+            )}.`
+          : ''),
+    },
+    ...(commonCuisines.length
+      ? [
+          {
+            question: `What kinds of food do ${loc.name} restaurants serve?`,
+            answer:
+              `By the first cuisine each listing records, the most common are ` +
+              `${joinNames(commonCuisines.map(([c, count]) => `${c} (${count})`))}. ` +
+              'A place can record more than one cuisine; only the first is counted here.',
+          },
+        ]
+      : []),
+    {
+      question: `Why is a restaurant in ${loc.name} missing from this list?`,
+      answer:
+        `This page lists restaurants in the Des Moines Insider directory ${inAreaTest}. ` +
+        'Restaurants marked closed, or announced but not yet open, are left out. ' +
+        'A place that is not listed is not in the directory yet.',
+    },
+  ];
+
+  const sections = [
+    {
+      id: 'hero_intro',
+      type: 'hero_intro',
+      content:
+        `The Des Moines Insider restaurant directory lists ${n} restaurants in ${loc.name} right now. ` +
+        `${listSentence}, and each name opens that restaurant's own page with the address, hours, price range ` +
+        'and links the directory holds for it. Closed restaurants and ones that are announced but not yet open ' +
+        'are left out.',
+    },
+    { id: 'live_listings', type: 'live_listings', heading: `Restaurants in ${loc.name}` },
+    { id: 'faq', type: 'faq', heading: 'About this list', faqs },
+  ];
+
+  const related_pages = cuisinePages.map((p) => ({ slug: p.slug, title: p.title, relationship: 'child' as const }));
+
+  return {
+    id: `content-location__${[AREA_PAGE_CATEGORY, row.location].sort().join('_')}`,
+    slug: row.slug,
+    page_type_id: 'content-location',
+    dimensions: [
+      { name: content.name, slug: content.slug, tier: content.tier, dimension: 'content_type' },
+      { name: loc.name, slug: loc.slug, tier: loc.tier, dimension: 'location' },
+    ],
+    seo: {
+      title,
+      h1,
+      description,
+      keywords: [
+        `restaurants in ${loc.name.toLowerCase()}`,
+        `${loc.name.toLowerCase()} restaurants`,
+        `where to eat in ${loc.name.toLowerCase()}`,
+        `restaurants in ${loc.name.toLowerCase()} iowa`,
+      ],
+      canonicalUrl: row.slug,
+      ogType: 'website',
+      ...(row.verdict === 'noindex' ? { robots: 'noindex, follow' } : {}),
+    },
+    sections,
+    related_pages,
+    structured_data: {
+      '@type': 'WebPage',
+      breadcrumb: [
+        { name: 'Home', url: '/' },
+        { name: 'Restaurants', url: '/restaurants' },
+        { name: h1, url: row.slug },
+      ],
+      faqItems: faqs,
+    },
+    generation_meta: {
+      generatedAt: new Date().toISOString(),
+      generatedBy: DATA_TEMPLATE_GENERATOR,
+      promptVersion: 'none',
+      modelUsed: 'none',
+      wordCount: JSON.stringify(sections).split(/\s+/).length,
+      refreshSchedule: 'monthly',
+      placeFingerprint: row.fingerprint,
+      placeCount: n,
+      sourceTable: 'restaurants',
+    },
+    is_published: true,
+    quality_score: 0.8,
+  };
+}
+
 const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
 const str = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
@@ -248,6 +414,22 @@ async function main() {
   const only = onlyIdx > 0 ? new Set((process.argv[onlyIdx + 1] ?? '').split(',').filter(Boolean)) : null;
   const rewriteLlm = process.argv.includes('--rewrite-llm');
 
+  // SEO-065: an area page links to the published, indexable cuisine pages for
+  // its own area, by the heading those pages carry.
+  const pageBySlug = new Map(pages.map((p) => [p.slug, p]));
+  const cuisinePagesFor = (location: string): AreaCuisineLink[] =>
+    report.rows
+      .filter((r) => r.location === location && r.category !== AREA_PAGE_CATEGORY)
+      .filter((r) => r.published && r.verdict === 'indexable' && !r.noindexed)
+      .map((r) => {
+        const seo = pageBySlug.get(r.slug)?.seo as { h1?: string; title?: string } | null | undefined;
+        return { slug: r.slug, title: seo?.h1 ?? seo?.title ?? r.slug };
+      });
+  const build = (row: CoverageRow, places: Restaurant[]) =>
+    row.category === AREA_PAGE_CATEGORY
+      ? buildAreaPage(row, places, today, cuisinePagesFor(row.location))
+      : buildPage(row, places, today);
+
   for (const row of report.rows) {
     const places = matchingPlaces(restaurants, { slug: row.location, name: row.locationName }, row.category);
     const stale = row.published && row.templateFingerprint !== null && row.templateFingerprint !== row.fingerprint;
@@ -257,7 +439,7 @@ async function main() {
         out.push(`-- skipped ${row.slug} (${row.places} places, indexable): not in --only`);
         continue;
       }
-      const p = buildPage(row, places, today);
+      const p = build(row, places);
       out.push(
         `insert into pseo_pages (id, slug, page_type_id, dimensions, seo, sections, related_pages, structured_data, generation_meta, is_published, quality_score, published_at) values (` +
           `${str(p.id)}, ${str(p.slug)}, ${str(p.page_type_id)}, ${lit(p.dimensions)}, ${lit(p.seo)}, ${lit(p.sections)}, ` +
@@ -268,10 +450,13 @@ async function main() {
       // came from the LLM pipeline and may name places the table does not
       // hold. Both are rewritten from the current rows; seo.robots follows the
       // verdict, so a 3-4 place page comes out noindex.
-      const p = buildPage(row, places, today);
+      const p = build(row, places);
+      // Only the area page (SEO-065) writes related_pages; a cuisine page's
+      // stored links are left as they are.
+      const related = row.category === AREA_PAGE_CATEGORY ? `related_pages = ${lit(p.related_pages)}, ` : '';
       out.push(
         `update pseo_pages set seo = ${lit(p.seo)}, sections = ${lit(p.sections)}, structured_data = ${lit(p.structured_data)}, ` +
-          `generation_meta = ${lit(p.generation_meta)}, updated_at = now() where slug = ${str(row.slug)};`,
+          `${related}generation_meta = ${lit(p.generation_meta)}, updated_at = now() where slug = ${str(row.slug)};`,
       );
     } else if (row.published && row.verdict === 'noindex' && !row.noindexed) {
       out.push(`update pseo_pages set seo = seo || '{"robots":"noindex, follow"}'::jsonb, updated_at = now() where slug = ${str(row.slug)}; -- ${row.places} place(s)`);

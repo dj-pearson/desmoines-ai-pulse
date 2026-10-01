@@ -16,6 +16,9 @@
  * The later one in slug order is held to noindex. /pizza/ankeny and
  * /italian/ankeny list the same three places today, which is the case.
  *
+ * SEO-065 puts the all-restaurants area page (/restaurants/ankeny) under the
+ * same rule; see AREA_PAGE_CATEGORY.
+ *
  * SCOPE: SUBURBS AND MAPPED NEIGHBOURHOODS. restaurants.city carries the
  * suburb name, so a count for Ankeny or Waukee is a text match. A
  * neighbourhood (downtown, east-village, valley-junction, sherman-hill) is
@@ -65,6 +68,19 @@ export const COVERAGE_CATEGORIES: readonly string[] = Object.entries(CATEGORY_FI
   .map(([slug]) => slug)
   .sort();
 
+/**
+ * SEO-065: the all-restaurants area page, /restaurants/<area>. It sits in the
+ * category slot of a coverage row so the slug template (`/${category}/${area}`)
+ * and the thresholds apply unchanged, and it is counted with no cuisine
+ * filter, which is what its live listing shows (a content-location page has
+ * no category dimension). It is a content type, not a cuisine: it is never in
+ * COVERAGE_CATEGORIES, and the edge function's copy does not govern it.
+ */
+export const AREA_PAGE_CATEGORY = 'restaurants';
+
+/** Every category slot the rule measures: the area page, then each cuisine. */
+export const COVERAGE_PAGE_CATEGORIES: readonly string[] = [AREA_PAGE_CATEGORY, ...COVERAGE_CATEGORIES];
+
 export type CoverageVerdict = 'not-generated' | 'noindex' | 'indexable';
 
 export function coverageVerdict(placeCount: number): CoverageVerdict {
@@ -79,8 +95,17 @@ export interface CoverageDimension {
   name: string;
 }
 
-/** True for a category-location page whose category lists restaurants and whose location is a suburb. */
+/**
+ * True for a category-location page whose category lists restaurants and whose
+ * location is a coverage area, and (SEO-065) for the content-location page
+ * /restaurants/<area> over a coverage area.
+ */
 export function isCoverageScoped(pageTypeId: string, dimensions: readonly CoverageDimension[]): boolean {
+  if (pageTypeId === 'content-location') {
+    const content = dimensions.find((d) => d.dimension === 'content_type');
+    const area = dimensions.find((d) => d.dimension === 'location');
+    return Boolean(content?.slug === AREA_PAGE_CATEGORY && area && COVERAGE_LOCATIONS.includes(area.slug));
+  }
   if (pageTypeId !== 'category-location') return false;
   const category = dimensions.find((d) => d.dimension === 'category');
   const location = dimensions.find((d) => d.dimension === 'location');
@@ -112,8 +137,9 @@ export interface CoverageArea {
  * string is a suburb name, matched as text.
  */
 export function placeMatches(row: CoverageRestaurantRow, area: CoverageArea | string, categorySlug: string): boolean {
+  const isAreaPage = categorySlug === AREA_PAGE_CATEGORY;
   const filter = CATEGORY_FILTERS[categorySlug];
-  if (!filter || filter.entity !== 'restaurants') return false;
+  if (!isAreaPage && (!filter || filter.entity !== 'restaurants')) return false;
   // PostgREST .neq('is_merged', true) drops NULL as well as true.
   if (row.is_merged !== false) return false;
   if (!isVisitableStatus(row.status)) return false;
@@ -126,6 +152,7 @@ export function placeMatches(row: CoverageRestaurantRow, area: CoverageArea | st
       (row.city ?? '').toLowerCase().includes(needle) || (row.location ?? '').toLowerCase().includes(needle);
     if (!inArea) return false;
   }
+  if (isAreaPage) return true;
   return new RegExp(filter.pattern, 'i').test(row.cuisine ?? '');
 }
 

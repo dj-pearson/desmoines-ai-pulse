@@ -6,6 +6,9 @@
  *   scripts/generate-dynamic-sitemaps.ts submits the indexable ones and leaves
  *                                        the noindex ones out
  *
+ * SEO-065: each area's all-restaurants page (/restaurants/<area>) is measured
+ * as one more combination, with AREA_PAGE_CATEGORY in the category slot.
+ *
  * It covers every combination the rule governs, not only the published rows,
  * so the report shows what is missing as well as what is wrong.
  *
@@ -14,7 +17,8 @@
  */
 import { locationDimension, categoryDimension } from '../../src/pseo/taxonomy';
 import {
-  COVERAGE_CATEGORIES,
+  AREA_PAGE_CATEGORY,
+  COVERAGE_PAGE_CATEGORIES,
   COVERAGE_LOCATIONS,
   finalVerdicts,
   isCoverageScoped,
@@ -130,8 +134,9 @@ export function evaluateCoverage(pages: readonly PublishedPseoRow[], restaurants
   for (const locSlug of COVERAGE_LOCATIONS) {
     const loc = locationDimension.values.find((v) => v.slug === locSlug);
     if (!loc) throw new Error(`coverage location ${locSlug} is not in taxonomy.ts`);
-    for (const catSlug of COVERAGE_CATEGORIES) {
-      if (!categoryDimension.values.some((v) => v.slug === catSlug)) {
+    for (const catSlug of COVERAGE_PAGE_CATEGORIES) {
+      // SEO-065: the area page's slot holds a content type, not a category.
+      if (catSlug !== AREA_PAGE_CATEGORY && !categoryDimension.values.some((v) => v.slug === catSlug)) {
         throw new Error(`coverage category ${catSlug} is not in taxonomy.ts`);
       }
       const slug = `/${catSlug}/${locSlug}`;

@@ -19,6 +19,7 @@ import {
   resolveOpeningHoursSpecification,
 } from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
+import { isRestaurantAreaSlug } from "../src/pseo/restaurantAreaSlugs";
 import { markdownToPlainText } from "../src/lib/aiText";
 import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
 
@@ -923,12 +924,9 @@ export function entityShellRewrites(opts: {
  * generic website with no structured data. Here the og:type follows the segment
  * and a real Event or Restaurant node is injected.
  */
-function entityShell(
-  shell: Response,
-  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
-): Response {
+function rewriterFor(rules: EntityShellRewrite[]): HTMLRewriter {
   let rewriter = new HTMLRewriter();
-  for (const rule of entityShellRewrites(opts)) {
+  for (const rule of rules) {
     if ("appendHtml" in rule) {
       rewriter = rewriter.on(rule.selector, new HtmlAppender(rule.appendHtml));
     } else if ("setInnerHtml" in rule) {
@@ -941,6 +939,88 @@ function entityShell(
       rewriter = rewriter.on(rule.selector, new AttrSetter(rule.setAttribute, rule.to));
     }
   }
+  return rewriter;
+}
+
+/** The stored seo of a published /restaurants/<area> pSEO row (SEO-065). */
+export interface RestaurantAreaSeo {
+  title?: string;
+  h1?: string;
+  description?: string;
+  robots?: string;
+}
+
+/**
+ * The published pSEO row for /restaurants/<area>: its seo, null when there is
+ * none, "error" when the read failed. Asked only after the restaurant lookup
+ * missed and only for a taxonomy location slug, so a dead restaurant slug
+ * costs no extra read.
+ */
+async function publishedRestaurantAreaPage(
+  base: string,
+  anon: string,
+  slug: string,
+): Promise<RestaurantAreaSeo | null | "error"> {
+  const rows = await sbGet(
+    base,
+    anon,
+    `pseo_pages?slug=eq.${encodeURIComponent(`/restaurants/${slug}`)}&is_published=eq.true&select=seo&limit=1`,
+  );
+  if (!rows) return "error";
+  if (!rows[0]) return null;
+  return (rows[0].seo ?? {}) as RestaurantAreaSeo;
+}
+
+/**
+ * SEO-065: the shell for /restaurants/<area> when it missed the prerender. It
+ * was answered as a missing restaurant (404, noindex) because the detail
+ * route's lookup found no restaurant called "ankeny". It now carries the pSEO
+ * page's own title, description, canonical and robots, and a body naming the
+ * page, in place of the homepage's. The client renders the full page.
+ */
+export function restaurantAreaShellRewrites(pageUrl: string, seo: RestaurantAreaSeo): EntityShellRewrite[] {
+  const title = seo.title ? `${seo.title} | Des Moines Insider` : "";
+  const heading = seo.h1 || seo.title || "";
+  const rules: EntityShellRewrite[] = [
+    { selector: 'script[type="application/ld+json"]', remove: true },
+    { selector: 'link[rel="canonical"]', setAttribute: "href", to: pageUrl },
+    { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
+    { selector: 'meta[property="og:type"]', setAttribute: "content", to: "website" },
+  ];
+  if (heading) {
+    const body =
+      `<h1>${escapeHtml(heading)}</h1>` +
+      (seo.description ? `<p>${escapeHtml(seo.description)}</p>` : "") +
+      linkList([["/restaurants", "All Des Moines restaurants"]]);
+    rules.push({ selector: "main#main-content", setInnerHtml: body });
+  }
+  if (title) {
+    rules.push(
+      // RAW for the text sink, escaped for the attribute sinks (see EntityShellRewrite).
+      { selector: "title", setText: title },
+      { selector: 'meta[property="og:title"]', setAttribute: "content", to: escapeHtml(title) },
+      { selector: 'meta[name="twitter:title"]', setAttribute: "content", to: escapeHtml(title) },
+    );
+  }
+  if (seo.description) {
+    const desc = escapeHtml(seo.description);
+    rules.push(
+      { selector: 'meta[name="description"]', setAttribute: "content", to: desc },
+      { selector: 'meta[property="og:description"]', setAttribute: "content", to: desc },
+      { selector: 'meta[name="twitter:description"]', setAttribute: "content", to: desc },
+    );
+  }
+  if (seo.robots === "noindex, follow") {
+    rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
+  }
+  return rules;
+}
+
+function entityShell(
+  shell: Response,
+  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
+): Response {
+  const rewriter = rewriterFor(entityShellRewrites(opts));
 
   const headers: Record<string, string> = {
     "Content-Type": "text/html; charset=utf-8",
@@ -1187,6 +1267,31 @@ export async function onRequest(context: EventContext) {
 
         if (sbBase && sbAnon) {
           const outcome = await resolveEntityCached(context, sbBase, sbAnon, type!, slug);
+
+          // SEO-065: no restaurant has this slug, and it is a taxonomy
+          // location, so it may be the published /restaurants/<area> page that
+          // missed the prerender. That is a 200 page, not a missing restaurant.
+          if (type === "restaurant" && outcome.kind === "not-found" && isRestaurantAreaSlug(slug)) {
+            const area = await publishedRestaurantAreaPage(sbBase, sbAnon, slug);
+            if (area === "error") {
+              const rewritten = withSelfCanonical(passthrough(), pageUrl);
+              const headers = new Headers(rewritten.headers);
+              headers.set("Cache-Control", "no-store");
+              return new Response(rewritten.body, { status: 200, headers });
+            }
+            if (area) {
+              const headers: Record<string, string> = {
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "public, max-age=600",
+              };
+              if (area.robots === "noindex, follow") headers["X-Robots-Tag"] = "noindex";
+              return new Response(rewriterFor(restaurantAreaShellRewrites(pageUrl, area)).transform(passthrough()).body, {
+                status: 200,
+                headers,
+              });
+            }
+          }
+
           const plan = detailResponsePlan(outcome, type!, slug, url.origin);
 
           // A merged duplicate goes to its survivor, and a restaurant asked
