@@ -17,7 +17,9 @@ export function useRestaurantHubAreaPages() {
       const { data, error } = await supabase
         .from("pseo_pages")
         .select("slug, page_type_id, is_published, seo, dimensions")
-        .eq("page_type_id", "category-location")
+        // content-location carries the /restaurants/<area> pages (SEO-065);
+        // hubAreaPages drops the /things-to-do/<area> ones it also returns.
+        .in("page_type_id", ["category-location", "content-location"])
         .eq("is_published", true)
         .order("slug");
       if (error) throw error;

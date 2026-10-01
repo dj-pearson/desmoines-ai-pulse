@@ -202,7 +202,7 @@ if (problems.length) {
 const counts = { indexable: 0, noindex: 0, 'not-generated': 0 };
 for (const r of report.rows) counts[r.verdict]++;
 console.log(
-  `[pseo-coverage] OK ${report.rows.length} cuisine x suburb combinations: ${counts.indexable} indexable, ` +
+  `[pseo-coverage] OK ${report.rows.length} area x (cuisine or all-restaurants) combinations: ${counts.indexable} indexable, ` +
     `${counts.noindex} noindex, ${counts['not-generated']} under the floor. Published: ${report.indexable.length} indexable, ` +
     `${report.noindexPublished.length} noindex. Duplicate rule (SEO-064): ${duplicates.length} published page(s) measured, ` +
     `${duplicates.filter((d) => d.passes).length} list enough of their own to be indexable.` +

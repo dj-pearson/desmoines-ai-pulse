@@ -11,11 +11,15 @@
  * caller asks pseo_pages for these slugs (useRestaurantAreaPages) and keeps
  * the published ones without a noindex.
  *
+ * SEO-065 adds each area's all-restaurants page (/restaurants/waukee), which
+ * every place in the area belongs on.
+ *
  * Same scope as the rule: the suburbs (matched on city/address text) and the
  * mapped neighbourhoods (matched on restaurants.neighborhood, SEO-060).
  */
 import {
-  COVERAGE_CATEGORIES,
+  AREA_PAGE_CATEGORY,
+  COVERAGE_PAGE_CATEGORIES,
   COVERAGE_LOCATIONS,
   isCoverageScoped,
   placeMatches,
@@ -33,12 +37,16 @@ export function coverageLocationName(slug: string): string {
     .join(' ');
 }
 
-/** Candidate pSEO slugs ("/mexican/waukee") whose listing this restaurant would appear in. */
+/**
+ * Candidate pSEO slugs whose listing this restaurant would appear in: the
+ * area's all-restaurants page first (/restaurants/waukee, SEO-065), then its
+ * cuisine pages (/mexican/waukee).
+ */
 export function areaPageCandidates(row: CoverageRestaurantRow): string[] {
   const out: string[] = [];
   for (const loc of COVERAGE_LOCATIONS) {
     const name = coverageLocationName(loc);
-    for (const cat of COVERAGE_CATEGORIES) {
+    for (const cat of COVERAGE_PAGE_CATEGORIES) {
       if (placeMatches(row, { slug: loc, name }, cat)) out.push(`/${cat}/${loc}`);
     }
   }
@@ -67,6 +75,9 @@ export function areaPageLabel(page: PseoPageState): string {
   const dims = page.dimensions ?? [];
   const category = dims.find((d) => d.dimension === 'category')?.name;
   const location = dims.find((d) => d.dimension === 'location')?.name;
+  // SEO-065: /restaurants/<area> has a content type where a cuisine page has a category.
+  const content = dims.find((d) => d.dimension === 'content_type')?.name;
+  if (!category && content && location) return `${content} in ${location}`;
   if (!category || !location) return page.slug;
   const noun = /(s|cafes)$/i.test(category) ? category : `${category} restaurants`;
   return `${noun} in ${location}`;
@@ -101,10 +112,13 @@ export function hubAreaPages(rows: readonly HubPseoPageRow[]): HubAreaPage[] {
       d && d.slug ? [{ dimension: d.dimension, slug: d.slug, name: d.name }] : [],
     );
     if (!isCoverageScoped(row.page_type_id ?? '', dims)) continue;
-    const category = dims.find((d) => d.dimension === 'category');
+    // An area page (content-location, SEO-065) has no category dimension.
+    const categorySlug = dims.find((d) => d.dimension === 'category')?.slug ?? AREA_PAGE_CATEGORY;
     const location = dims.find((d) => d.dimension === 'location');
-    if (!category || !location) continue;
-    out.push({ href: row.slug, label: areaPageLabel(row), categorySlug: category.slug, locationSlug: location.slug });
+    if (!location) continue;
+    out.push({ href: row.slug, label: areaPageLabel(row), categorySlug, locationSlug: location.slug });
   }
-  return out.sort((a, b) => a.href.localeCompare(b.href));
+  // Each area's all-restaurants page leads its cuisine pages.
+  const isArea = (p: HubAreaPage) => (p.categorySlug === AREA_PAGE_CATEGORY ? 0 : 1);
+  return out.sort((a, b) => isArea(a) - isArea(b) || a.href.localeCompare(b.href));
 }

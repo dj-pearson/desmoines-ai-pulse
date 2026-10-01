@@ -35,7 +35,7 @@ import {
 } from "@/lib/restaurantMeta";
 import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
 import { Phone, Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import {
@@ -66,6 +66,10 @@ import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { isRestaurantAreaSlug } from "@/pseo/restaurantAreaSlugs";
+
+// SEO-065: the pSEO renderer, loaded only for an area slug no restaurant owns.
+const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPseoPage"));
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -347,7 +351,7 @@ export default function RestaurantDetails() {
   }
 
   if (!restaurant) {
-    return (
+    const notFound = (
       <>
         <Helmet>
           <meta name="robots" content="noindex, follow" />
@@ -375,6 +379,17 @@ export default function RestaurantDetails() {
         <Footer preferredSource={false} />
       </>
     );
+    // SEO-065: no restaurant has this slug, and it is a taxonomy location, so
+    // it may be the published area page (/restaurants/ankeny). React Router
+    // sends it here before the generic pSEO route can see it.
+    if (slug && isRestaurantAreaSlug(slug)) {
+      return (
+        <Suspense fallback={null}>
+          <RestaurantAreaPseoPage slug={slug} notFound={notFound} />
+        </Suspense>
+      );
+    }
+    return notFound;
   }
 
   // WP8 items 1 and 2. Every scraped URL goes through safeWebUrl before it

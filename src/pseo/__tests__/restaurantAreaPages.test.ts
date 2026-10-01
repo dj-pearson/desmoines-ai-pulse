@@ -19,12 +19,20 @@ const row = {
 };
 
 describe('areaPageCandidates', () => {
-  it("is the coverage rule's own membership: a Mexican place in Waukee belongs on /mexican/waukee", () => {
-    expect(areaPageCandidates(row)).toEqual(['/mexican/waukee']);
+  it("is the coverage rule's own membership: a Mexican place in Waukee belongs on the area page, then /mexican/waukee", () => {
+    expect(areaPageCandidates(row)).toEqual(['/restaurants/waukee', '/mexican/waukee']);
   });
 
   it('an Italian/pizza place belongs on both pages its cuisine matches', () => {
-    expect(areaPageCandidates({ ...row, cuisine: 'Italian/Pizza' })).toEqual(['/italian/waukee', '/pizza/waukee']);
+    expect(areaPageCandidates({ ...row, cuisine: 'Italian/Pizza' })).toEqual([
+      '/restaurants/waukee',
+      '/italian/waukee',
+      '/pizza/waukee',
+    ]);
+  });
+
+  it('a place with no recorded cuisine still belongs on its area page (SEO-065)', () => {
+    expect(areaPageCandidates({ ...row, cuisine: null })).toEqual(['/restaurants/waukee']);
   });
 
   it('a place the listing would drop belongs on none', () => {
@@ -39,7 +47,7 @@ describe('areaPageCandidates', () => {
 
   it('a mapped neighbourhood matches on the column (SEO-060), not the address text', () => {
     const eastVillage = { ...row, city: 'Des Moines', location: '400 E Locust St, Des Moines, IA 50309', neighborhood: 'east-village' };
-    expect(areaPageCandidates(eastVillage)).toEqual(['/mexican/east-village']);
+    expect(areaPageCandidates(eastVillage)).toEqual(['/restaurants/east-village', '/mexican/east-village']);
   });
 });
 
@@ -77,6 +85,18 @@ describe('areaPageLabel', () => {
     expect(areaPageLabel(page('Coffee & Cafes', 'Ankeny'))).toBe('Coffee & Cafes in Ankeny');
   });
 
+  it('names an area page from its content type (SEO-065)', () => {
+    expect(
+      areaPageLabel({
+        slug: '/restaurants/ankeny',
+        dimensions: [
+          { dimension: 'content_type', name: 'Restaurants' },
+          { dimension: 'location', name: 'Ankeny' },
+        ],
+      }),
+    ).toBe('Restaurants in Ankeny');
+  });
+
   it('falls back to the slug without dimensions', () => {
     expect(areaPageLabel({ slug: '/mexican/waukee' })).toBe('/mexican/waukee');
   });
@@ -99,6 +119,22 @@ describe('hubAreaPages (SEO-038)', () => {
     expect(pages).toEqual([
       { href: '/mexican/waukee', label: 'Mexican restaurants in Waukee', categorySlug: 'mexican', locationSlug: 'waukee' },
       { href: '/pizza/west-des-moines', label: 'Pizza restaurants in West Des Moines', categorySlug: 'pizza', locationSlug: 'west-des-moines' },
+    ]);
+  });
+
+  it('keeps the /restaurants/<area> page and puts it first; drops /things-to-do/<area> (SEO-065)', () => {
+    const area = (content: string, location: string) => [
+      { dimension: 'content_type', slug: content, name: content === 'restaurants' ? 'Restaurants' : 'Things to Do' },
+      { dimension: 'location', slug: location, name: coverageLocationName(location) },
+    ];
+    const pages = hubAreaPages([
+      { slug: '/mexican/ankeny', page_type_id: 'category-location', is_published: true, seo: {}, dimensions: dims('mexican', 'ankeny') },
+      { slug: '/restaurants/ankeny', page_type_id: 'content-location', is_published: true, seo: {}, dimensions: area('restaurants', 'ankeny') },
+      { slug: '/things-to-do/ankeny', page_type_id: 'content-location', is_published: true, seo: {}, dimensions: area('things-to-do', 'ankeny') },
+    ]);
+    expect(pages).toEqual([
+      { href: '/restaurants/ankeny', label: 'Restaurants in Ankeny', categorySlug: 'restaurants', locationSlug: 'ankeny' },
+      { href: '/mexican/ankeny', label: 'Mexican restaurants in Ankeny', categorySlug: 'mexican', locationSlug: 'ankeny' },
     ]);
   });
 

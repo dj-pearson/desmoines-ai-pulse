@@ -18,6 +18,8 @@ import { coverageLocationName, type HubAreaPage } from "@/pseo/restaurantAreaPag
  * cuisines people search by name. Both come from `areaPages`, which the hub
  * reads from pseo_pages and filters to published, indexable pages, so neither
  * group can link to a page the SEO-041 coverage rule has noindexed or pulled.
+ * SEO-065: an area's all-restaurants page (/restaurants/ankeny) is one of
+ * those pages and leads its row, since hubAreaPages sorts it first.
  */
 
 interface DirectoryLink {
