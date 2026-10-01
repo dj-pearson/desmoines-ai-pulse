@@ -396,16 +396,19 @@ export default function RestaurantDetails() {
   const neighborhoodText = restaurant.location || cityName;
 
   // One builder for this page and the edge shell (functions/_middleware.ts), so
-  // a crawler that misses the prerender sees the same title. The template
-  // replaces seo_title: those were AI-written, never said "menu" or "hours",
-  // and the 33 listings ranking inside the top 12 at under 1% CTR all used
-  // them. See src/lib/restaurantMeta.ts for the GSC numbers.
-  // "Menu" and "Hours" only when this page shows them (WP3.5).
+  // a crawler that misses the prerender sees the same title. seo_title and
+  // seo_description are used only when they name the suburb and an intent word
+  // (and, for descriptions, the cuisine); anything else gets the template.
+  // The AI-written ones never said "menu" or "hours", and the 33 listings
+  // ranking inside the top 12 at under 1% CTR all used them (SEO-030; GSC
+  // numbers in src/lib/restaurantMeta.ts).
+  // "Menu", "Hours" and "Photos" only when this page shows them (WP3.5).
   const metaInput = {
     ...restaurant,
     hasMenu: hasCapturedMenu || !!safeMenuUrl,
     hasHours: lifecycle !== "closed" && (!!hoursSpec || !!restaurant.opening?.trim()),
     hasPhone: !isShut && !!phoneHref,
+    hasPhotos: !!restaurant.image_url,
   };
   const seoTitle = restaurantPageTitle(metaInput);
   const seoDescription = restaurantMetaDescription(metaInput);

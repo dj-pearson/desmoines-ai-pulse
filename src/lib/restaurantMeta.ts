@@ -34,6 +34,15 @@ export interface RestaurantMetaInput {
   opening?: string | null;
   phone?: string | null;
   menu_url?: string | null;
+  /** The hero photo. Decides "Photos" unless hasPhotos says otherwise. */
+  image_url?: string | null;
+  /** Structured hours from Google (_shared/placeHours.ts). Counts toward "Hours" with `opening`. */
+  hours_json?: unknown;
+  /**
+   * The row's own title. Used only when restaurantSeoTitleProblems finds
+   * nothing wrong with it; otherwise the template wins (SEO-030).
+   */
+  seo_title?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   /**
@@ -45,6 +54,7 @@ export interface RestaurantMetaInput {
   hasMenu?: boolean;
   hasHours?: boolean;
   hasPhone?: boolean;
+  hasPhotos?: boolean;
 }
 
 export interface ParsedAddress {
@@ -86,7 +96,18 @@ export function parseIowaAddress(location: string | null | undefined): ParsedAdd
 
 /** The suburb a searcher would type: the address's city first, the `city` column second. */
 export function restaurantLocality(r: Pick<RestaurantMetaInput, "city" | "location">): string | null {
-  return parseIowaAddress(r.location)?.addressLocality || (r.city ?? "").trim() || null;
+  return parseIowaAddress(r.location)?.addressLocality || (r.city ?? "").trim() || bareIowaCity(r.location);
+}
+
+/**
+ * "Des Moines, IA" -> "Des Moines". A location that is only a city carries no
+ * street, so parseIowaAddress refuses it, but it still says where the place
+ * is. The Contrary's row is exactly this with no `city`, and its title named
+ * no city at all (SEO-030).
+ */
+function bareIowaCity(location: string | null | undefined): string | null {
+  const m = (location ?? "").trim().match(/^([A-Za-z .'-]+),\s*(?:IA|Iowa)(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*USA)?$/i);
+  return m ? m[1].trim() : null;
 }
 
 /**
@@ -96,7 +117,9 @@ export function restaurantLocality(r: Pick<RestaurantMetaInput, "city" | "locati
  * need to be approved" - all three have been open for months.
  */
 export function isStaleOpeningCopy(text: string | null | undefined): boolean {
-  return /\b(coming soon|opening soon|will (soon )?open|set to open|plans to open|opens? (this|next|in|on)\b|still need to be approved|grand opening (is )?(set|planned|scheduled))/i.test(
+  // "is coming to Des Moines" (Dutch Bros) and "opens May 2026" (Jungle Tea)
+  // were still live in seo_description on 2026-09-30 (SEO-030).
+  return /\b(coming soon|coming to|opening soon|will (soon )?open|set to open|plans to open|opens? (this|next|in|on|(january|february|march|april|may|june|july|august|september|october|november|december) \d{4})\b|still need to be approved|grand opening (is )?(set|planned|scheduled))/i.test(
     text ?? "",
   );
 }
@@ -115,13 +138,16 @@ interface Facets {
   menu: boolean;
   hours: boolean;
   phone: boolean;
+  photos: boolean;
 }
 
 function facetsOf(r: RestaurantMetaInput): Facets {
+  const hoursJson = r.hours_json != null && typeof r.hours_json === "object";
   return {
     menu: r.hasMenu ?? usableLink(r.menu_url),
-    hours: r.hasHours ?? hasText(r.opening),
+    hours: r.hasHours ?? (hasText(r.opening) || hoursJson),
     phone: r.hasPhone ?? hasText(r.phone),
+    photos: r.hasPhotos ?? usableLink(r.image_url),
   };
 }
 
@@ -132,30 +158,88 @@ function joinWords(words: string[]): string {
 }
 
 /**
- * "{Name} {Suburb} - Menu, Hours & Reviews", shortened until it fits 60
- * characters. "Menu" and "Hours" appear only when the page has them (WP3.5,
- * eat-drink pass 2): a title that promises a menu the page doesn't carry is
- * the click that bounces. "Reviews" stays, because every detail page carries
- * the ratings block. The brand suffix is appended later by SEOHead and may be
- * cut off in a result; the name, the suburb and "menu" are what must survive.
+ * "{Name} {Suburb}: Menu, Hours, Photos & Reviews", shortened until it fits 60
+ * characters. "Menu", "Hours" and "Photos" appear only when the page has them
+ * (WP3.5, eat-drink pass 2): a title that promises a menu the page doesn't
+ * carry is the click that bounces. "Reviews" stays, because every detail page
+ * carries the ratings block. The brand suffix is appended later by SEOHead and
+ * may be cut off in a result; the name, the suburb and "menu" are what must
+ * survive, so "Photos" is the first word dropped for length.
  */
-export function restaurantPageTitle(r: RestaurantMetaInput): string {
+export function restaurantTemplateTitle(r: RestaurantMetaInput): string {
   const name = r.name.trim();
   const loc = restaurantLocality(r);
   const where = loc && !titleNamesCity(name, loc) ? `${name} ${loc}` : name;
   const f = facetsOf(r);
-  const facts = [f.menu ? "Menu" : null, f.hours ? "Hours" : null].filter((w): w is string => !!w);
-  const withReviews = joinWords([...facts, "Reviews"]);
-  const short = facts.length > 0 ? joinWords(facts) : null;
+  const core = [f.menu ? "Menu" : null, f.hours ? "Hours" : null].filter((w): w is string => !!w);
+  const full = joinWords([...core, ...(f.photos ? ["Photos"] : []), "Reviews"]);
+  const withReviews = joinWords([...core, "Reviews"]);
+  const short = core.length > 0 ? joinWords(core) : null;
   const candidates = [
-    `${where} - ${withReviews}`,
-    short ? `${where} - ${short}` : null,
+    `${where}: ${full}`,
+    `${where}: ${withReviews}`,
+    short ? `${where}: ${short}` : null,
     f.menu ? `${where} Menu` : null,
-    `${name} - ${withReviews}`,
-    short ? `${name} - ${short}` : null,
+    `${name}: ${full}`,
+    `${name}: ${withReviews}`,
+    short ? `${name}: ${short}` : null,
     where,
   ].filter((c): c is string => !!c);
   return candidates.find((c) => c.length <= RESTAURANT_TITLE_BUDGET) ?? name;
+}
+
+export type RestaurantSeoTitleProblem =
+  | "empty"
+  | "too-long"
+  | "no-name"
+  | "no-city"
+  | "no-intent"
+  | "claims-menu"
+  | "claims-hours"
+  | "claims-photos"
+  | "stale";
+
+/**
+ * What is wrong with a stored seo_title, or [] when it can be used as is.
+ *
+ * SEO-030: the AI-written seo_title values ("Texas Roadhouse: Best Steakhouse
+ * in Des Moines, Iowa", "Bonchon Korean Fried Chicken | West Des Moines, IA")
+ * named the wrong suburb or no intent word, while the queries these pages rank
+ * for are "bonchon des moines menu" and "dutch bros hours". A title has to name
+ * the restaurant and its suburb, carry one of menu/hours/photos/reviews, fit
+ * the budget, and promise nothing the page lacks. Shared by the page (which
+ * falls back to the template on any problem) and
+ * scripts/check-restaurant-seo-titles.mjs.
+ */
+export function restaurantSeoTitleProblems(
+  title: string | null | undefined,
+  r: RestaurantMetaInput,
+): RestaurantSeoTitleProblem[] {
+  const t = (title ?? "").trim();
+  if (!t) return ["empty"];
+  const problems: RestaurantSeoTitleProblem[] = [];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (t.length > RESTAURANT_TITLE_BUDGET) problems.push("too-long");
+  if (!` ${norm(t)} `.includes(` ${norm(r.name)} `)) problems.push("no-name");
+  const loc = restaurantLocality(r);
+  if (loc && !titleNamesCity(t, loc)) problems.push("no-city");
+  if (!/\b(menu|hours|photos|reviews)\b/i.test(t)) problems.push("no-intent");
+  const f = facetsOf(r);
+  if (/\bmenus?\b/i.test(t) && !f.menu) problems.push("claims-menu");
+  if (/\bhours\b/i.test(t) && !f.hours) problems.push("claims-hours");
+  if (/\bphotos\b/i.test(t) && !f.photos) problems.push("claims-photos");
+  if (isStaleOpeningCopy(t)) problems.push("stale");
+  return problems;
+}
+
+/**
+ * The <title> for a restaurant page (before SEOHead's brand suffix): the row's
+ * seo_title when it passes restaurantSeoTitleProblems, the template otherwise.
+ */
+export function restaurantPageTitle(r: RestaurantMetaInput): string {
+  const own = (r.seo_title ?? "").trim();
+  if (own && restaurantSeoTitleProblems(own, r).length === 0) return own;
+  return restaurantTemplateTitle(r);
 }
 
 /**
@@ -214,20 +298,69 @@ function hasCoordinates(r: RestaurantMetaInput): boolean {
   return Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
 }
 
+export type RestaurantSeoDescriptionProblem = "empty" | "too-long" | "stale" | "no-city" | "no-cuisine" | "no-fact";
+
+function foldAccents(s: string): string {
+  return s.normalize("NFD").replace(/\p{M}/gu, "");
+}
+
 /**
- * The meta description. A hand-written seo_description wins unless it is stale
- * pre-opening copy; otherwise it is built from facts on the row, leading with
- * what the searcher asked (where, what kind, what it costs). The price is the
- * tier as Google lists it, not a dollar band we made up (WP3.5), and the
- * closing list names only what the page has.
+ * What is wrong with a stored seo_description, or [] when it can be shown.
+ * It has to name the suburb and the cuisine the row says, which is how the
+ * AI-written ones that called a Mexican place "American cuisine" or put a West
+ * Des Moines pizza bar in Pleasant Hill get caught (SEO-030). The cuisine test
+ * is the first word of `cuisine`, accent-folded ("Cafe (Boba Tea/Desserts)" ->
+ * "cafe").
+ */
+export function restaurantSeoDescriptionProblems(
+  description: string | null | undefined,
+  r: RestaurantMetaInput,
+): RestaurantSeoDescriptionProblem[] {
+  const d = (description ?? "").trim();
+  if (!d) return ["empty"];
+  const problems: RestaurantSeoDescriptionProblem[] = [];
+  if (d.length > RESTAURANT_DESCRIPTION_BUDGET) problems.push("too-long");
+  // "Open now!" is wrong half the day in a snippet Google caches for weeks.
+  if (isStaleOpeningCopy(d) || /\b(open now|now open)\b/i.test(d)) problems.push("stale");
+  const loc = restaurantLocality(r);
+  if (loc && !titleNamesCity(d, loc)) problems.push("no-city");
+  const cuisineWord = foldAccents(r.cuisine ?? "").toLowerCase().match(/[a-z]{3,}/)?.[0];
+  if (cuisineWord && !foldAccents(d).toLowerCase().includes(cuisineWord)) problems.push("no-cuisine");
+  // One fact a reader can check against the row: the street number or the
+  // price tier. Without it the copy is "local favorite" filler, and the
+  // AI-written ones also carried claims no column backs ("Open now!").
+  const houseNumber = parseIowaAddress(r.location)?.streetAddress.match(/\b\d+[A-Za-z]?\b/)?.[0];
+  const tier = priceTier(r.price_range);
+  const hasFact =
+    (!!houseNumber && new RegExp(`(^|[^0-9])${houseNumber}([^0-9]|$)`).test(d)) || (!!tier && d.includes(tier));
+  if ((houseNumber || tier) && !hasFact) problems.push("no-fact");
+  return problems;
+}
+
+/** Venue words that already say what the place is: "a Coffee spot", not "a Coffee restaurant". */
+const VENUE_CUISINE = /\b(cafe|coffee|tea|bar|pub|bakery|brewery|taproom|lounge|diner|dessert|desserts|ice cream)\b/i;
+
+/**
+ * The meta description. A stored seo_description wins when
+ * restaurantSeoDescriptionProblems finds nothing wrong with it; otherwise it is
+ * built from facts on the row, leading with what the searcher asked (where,
+ * what kind, what it costs). The price is the tier as Google lists it, not a
+ * dollar band we made up (WP3.5), and the closing list names only what the
+ * page has.
  */
 export function restaurantMetaDescription(r: RestaurantMetaInput): string {
   const own = (r.seo_description ?? "").trim();
-  if (own && !isStaleOpeningCopy(own)) return clip(own, RESTAURANT_DESCRIPTION_BUDGET);
+  if (own && restaurantSeoDescriptionProblems(own, r).length === 0) return own;
+  return restaurantTemplateDescription(r);
+}
 
+/** The fact-built description, ignoring seo_description. */
+export function restaurantTemplateDescription(r: RestaurantMetaInput): string {
   const addr = parseIowaAddress(r.location);
   const loc = restaurantLocality(r) || "Des Moines";
-  const kind = r.cuisine ? `${r.cuisine} restaurant` : "restaurant";
+  const cuisine = (r.cuisine ?? "").trim();
+  const noun = cuisine ? `${cuisine} ${VENUE_CUISINE.test(foldAccents(cuisine)) ? "spot" : "restaurant"}` : "restaurant";
+  const kind = `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
   const at = addr?.streetAddress ? ` at ${addr.streetAddress}` : "";
   const tier = priceTier(r.price_range);
   const price = tier ? ` ${tier} on Google.` : "";
@@ -241,7 +374,7 @@ export function restaurantMetaDescription(r: RestaurantMetaInput): string {
   ].filter((w): w is string => !!w);
   const list = has.length > 1 ? `${has.slice(0, -1).join(", ")} and ${has[has.length - 1]}` : has.join("");
   const tail = list ? ` ${list.charAt(0).toUpperCase()}${list.slice(1)}.` : "";
-  return clip(`${r.name} is a ${kind}${at} in ${loc}, Iowa.${price}${tail}`, RESTAURANT_DESCRIPTION_BUDGET);
+  return clip(`${r.name} is ${kind}${at} in ${loc}, Iowa.${price}${tail}`, RESTAURANT_DESCRIPTION_BUDGET);
 }
 
 /** What buildRestaurantSchema needs besides the row, resolved by the caller. */
