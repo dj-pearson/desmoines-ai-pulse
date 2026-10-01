@@ -60,7 +60,7 @@
         "Change the code so a future seo_title that drops the city or the intent words falls back to the template (or add a check script that flags them).",
         "Verify on live HTML for the 18 pages listed after the prerender rebuild. Record before/after titles in notes."
       ],
-      "notes": ""
+      "notes": "CODE AND PRODUCTION BACKFILL DONE 2026-10-01 (seo/SEO-030 -> hotfix/pseo-homepage-shell, 35d00132); passes stays FALSE until live HTML is verified after deploy. Premise correction: on main the title already came from src/lib/restaurantMeta.ts, not seo_title; weak titles came from thin data (hours_json null on all 478 rows, photo not counted, 'Des Moines, IA' locations gave no city), while seo_description always won and carried wrong facts. New template '{Name} {Suburb}: Menu, Hours, Photos & Reviews' with each word only when the row backs it (restaurantMeta.ts:169); stored seo_title/seo_description used only if they pass a validator, else template (:214,:239,:315,:351). scripts/backfill-restaurant-seo.ts (dry-run default, --apply, --restore) and npm run check-restaurant-seo. Production: 478 titles and 427 descriptions rewritten; backup scripts/backups/restaurants-seo-2026-10-01.json; re-run dry-run 0 changes, check 0 findings. restaurantMeta.test.ts 45/45. OPEN: (1) 'Hours' cannot appear until hours_json is populated (440 rows have a Google place id) - new story candidate; (2) restaurants.opening is a date column the code treats as hours text; (3) re-curl the 18 target pages as Googlebot after the next successful deploy; main currently fails to build (EventsToday.tsx:44 bad merge), fix travelling with SEO-029."
     },
     {
       "id": "SEO-031",
