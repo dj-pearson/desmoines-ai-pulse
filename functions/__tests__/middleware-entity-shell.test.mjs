@@ -373,5 +373,14 @@ console.log('\nabsences the shell really has');
 const untitled = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'r2', title: '' } });
 ck("an empty title leaves the shell's title alone", untitled.includes('<title>Des Moines Insider'), /<title>[^<]*/.exec(untitled)?.[0]);
 
+console.log('\nannual event series (SEO-043)');
+{
+  const { eventShellBody } = await import('../_middleware.ts');
+  const annual = eventShellBody({ title: '11th Annual Cloris Awards', date: '2026-08-30T23:00:00Z', venue: 'Sheslow Auditorium' });
+  ck('an annual event links its series page', annual.includes('href="/events/series/cloris-awards"'), annual.slice(0, 400));
+  const oneOff = eventShellBody({ title: 'Gary Clark Jr.', date: '2026-09-30T23:00:00Z', venue: 'Hoyt Sherman Place' });
+  ck('a one-off event links no series', !oneOff.includes('/events/series/'));
+}
+
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);

@@ -392,7 +392,10 @@ function collectEntityRoutes() {
  * before the entity pass. A URL in one of these that does not render as itself
  * fails the build. scripts/check-sitemap-registration.mjs reads this list.
  */
-const UNBUDGETED_SITEMAPS = ['sitemap-pseo.xml'];
+// SEO-043: the annual event series pages, 20 URLs. They exist to keep a URL's
+// search history across years, which a page served as the homepage shell to a
+// JS-less crawler does not do, so they get the same fatal, unbudgeted render.
+const UNBUDGETED_SITEMAPS = ['sitemap-pseo.xml', 'sitemap-event-series.xml'];
 
 /**
  * SEO-029: the URLs for the unbudgeted pass, read from the sitemaps in dist/

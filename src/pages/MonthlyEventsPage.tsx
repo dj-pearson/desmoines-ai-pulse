@@ -12,6 +12,7 @@ import { ListFreshness } from "@/components/ListFreshness";
 import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
 import { MonthCalendarGrid } from "@/components/events/MonthCalendarGrid";
 import { MonthSeasonalBlock } from "@/components/seo/MonthSeasonalBlock";
+import { AnnualEventLinks } from "@/components/seo/AnnualEventLinks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -548,6 +549,15 @@ export default function MonthlyEventsPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* SEO-043: the annual events this month lists, each to its series page. */}
+        {loaded && (
+          <AnnualEventLinks
+            events={allEvents}
+            title={`Annual events in ${monthDisplayName}`}
+            className="mb-8"
+          />
         )}
 
         <EventsLandingLinks current={`/events/${canonicalSlug}`} className="mb-8" />

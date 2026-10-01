@@ -29,6 +29,8 @@ import {
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+// SEO-043. No `@/` imports in eventSeries.ts, for the same reason as monthPages.
+import { EVENT_SERIES, allSeriesTitlePatterns, seriesForEvent, seriesPath } from '../src/lib/eventSeries';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -1048,6 +1050,71 @@ async function generateVotingCategoriesSitemap(): Promise<number | null> {
   return written;
 }
 
+/**
+ * SEO-043: /events/series/<slug>, one per annual event in EVENT_SERIES.
+ *
+ * A series is submitted only when at least one row belongs to it, because the
+ * page noindexes itself with nothing on file. Hidden and archived rows count:
+ * a past edition is what the page lists. Merged duplicates do not, and nor
+ * does a row a moderator hid (hidden on or before its own date; the stale
+ * sweep only hides rows already past - see src/lib/eventSeriesView.ts).
+ * lastmod is the newest member row's updated_at.
+ *
+ * Every URL here is prerendered in prerender.mjs's unbudgeted pass, so a
+ * series page that does not render as itself fails the build.
+ */
+async function generateEventSeriesSitemap(): Promise<number | null> {
+  console.log('Generating event series sitemap...');
+
+  const { data: rows, error } = await supabase
+    .from('events')
+    .select('title, venue, location, date, updated_at, is_hidden, hidden_at, archived_at')
+    .neq('is_merged', true)
+    .or(allSeriesTitlePatterns().join(','))
+    .order('id')
+    .limit(2000);
+
+  if (error) {
+    console.error('Error fetching event series rows:', error);
+    return null;
+  }
+
+  const lastmodBySlug = new Map<string, string>();
+  for (const row of rows ?? []) {
+    const def = seriesForEvent(row);
+    if (!def) continue;
+    // Within a day of the start counts as the event's own day; the sweep's
+    // cutoff is days later, so this cannot mistake it for a moderator.
+    if (row.is_hidden && (!row.hidden_at || Date.parse(row.hidden_at) < Date.parse(row.date) + 86_400_000)) continue;
+    const stamp = row.updated_at ? row.updated_at.split('T')[0] : currentDate;
+    const held = lastmodBySlug.get(def.slug);
+    if (!held || stamp > held) lastmodBySlug.set(def.slug, stamp);
+  }
+
+  const urls = EVENT_SERIES.filter((def) => lastmodBySlug.has(def.slug)).map((def) => ({
+    loc: `${baseUrl}${seriesPath(def)}`,
+    lastmod: lastmodBySlug.get(def.slug),
+    changefreq: 'weekly',
+    priority: '0.7',
+  }));
+
+  const missing = EVENT_SERIES.filter((def) => !lastmodBySlug.has(def.slug)).map((def) => def.slug);
+  if (missing.length) {
+    console.warn(`Event series with no rows, left out of the sitemap: ${missing.join(', ')}`);
+  }
+
+  // /events is already in sitemap-static.xml, so it cannot stand in here (a URL
+  // in two sitemaps fails check-sitemap-duplicates). Keep the committed file.
+  if (urls.length === 0) {
+    console.error('No event series has a row; keeping the existing sitemap-event-series.xml.');
+    return null;
+  }
+
+  const written = writeSitemap('sitemap-event-series.xml', urls, 'event series');
+  console.log(`Event series sitemap generated: ${written} URLs`);
+  return written;
+}
+
 async function generateGuidesSitemap(): Promise<number | null> {
   console.log('📖 Generating guides sitemap...');
 
@@ -1124,6 +1191,7 @@ async function main(): Promise<void> {
       generateItinerariesSitemap(),
       generateVotingCategoriesSitemap(),
       generateGuidesSitemap(),
+      generateEventSeriesSitemap(),
       generatePseoSitemap()
     ]);
 
@@ -1159,6 +1227,7 @@ async function main(): Promise<void> {
       'sitemap-best-of.xml',
       'sitemap-itineraries.xml',
       'sitemap-guides.xml',
+      'sitemap-event-series.xml',
       'sitemap-pseo.xml',
     ];
 
