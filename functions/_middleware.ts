@@ -131,7 +131,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // types.ts is not proof a column exists - so a failed select falls back to the
 // minimal one below instead of turning a real page into a 404.
 const RESTAURANT_SHELL_COLUMNS =
-  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,latitude,longitude,opening,seo_description,description,status,is_merged,merged_into";
+  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,is_merged,merged_into";
 const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
 const EVENT_SHELL_COLUMNS =
   "id,title,date,event_start_utc,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
