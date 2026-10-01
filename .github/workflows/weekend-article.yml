@@ -7,7 +7,8 @@
 # top-picks rule, and scripts/publish-weekend-article.ts for the write path.
 #
 # The Daily Prerender Rebuild runs at 13:00 UTC, after this, so the new article
-# is in prerendered HTML and the sitemap the same morning.
+# is in prerendered HTML and the sitemap the same morning. The new article's
+# URL is also submitted to IndexNow straight after publishing (SEO-047).
 #
 # SECRETS (repository):
 #   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  already set; the event read is
@@ -87,6 +88,20 @@ jobs:
           fi
           npx tsx scripts/publish-weekend-article.ts ${ARGS} --apply | tee /tmp/publish.log
           grep '^Published ' /tmp/publish.log >> "$GITHUB_STEP_SUMMARY" || true
+
+      # SEO-047. Tell IndexNow (Bing) about the new article as soon as it is
+      # in the database; the 13:00 UTC rebuild's sitemap diff submits it again
+      # once it is prerendered, which is harmless. A failed ping is a warning,
+      # not a failed publish: the article is already live.
+      - name: Submit the article to IndexNow
+        if: success() && github.event.inputs.dry_run != 'true'
+        run: |
+          URL=$(awk '/^Published https:\/\//{u=$2} END{print u}' /tmp/publish.log)
+          if [ -z "${URL}" ]; then
+            echo "indexnow: no 'Published <url>' line in the publish log; nothing submitted"
+            exit 0
+          fi
+          npx tsx scripts/indexnow-ping.ts "${URL}" || echo "::warning::IndexNow did not accept ${URL}; the daily rebuild's sitemap diff will submit it again."
 
       # A rerun saves the row it is about to overwrite. The runner is thrown
       # away, so keep the backup and the exact SQL that ran as an artifact.

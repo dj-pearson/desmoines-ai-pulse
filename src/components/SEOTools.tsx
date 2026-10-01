@@ -258,10 +258,10 @@ Crawl-delay: 1`;
   // would have silently reverted that fix.
   //
   // Measured against the production database 2026-08-22: 341 upcoming events,
-  // 480 restaurants, 22 attractions, 69 playgrounds. Figures are rounded DOWN
-  // and kept identical to public/llms.txt so this generator reproduces the
-  // corrected file rather than a third set of numbers. Re-measure before editing;
-  // generating both from the database alongside the sitemaps would end the drift.
+  // 480 restaurants, 22 attractions, 69 playgrounds. Figures are rounded DOWN.
+  // Re-measure before editing. The published public/llms.txt no longer comes
+  // from here: scripts/generate-llms-txt.ts writes it from live counts on every
+  // build (SEO-047), so this admin preview is not what crawlers see.
   const generateLLMsTxt = () => {
     return `# Des Moines Insider - AI Crawler Instructions
 # This file provides guidance for AI crawlers like Perplexity, OpenAI, Claude, etc.
