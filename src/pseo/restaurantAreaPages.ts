@@ -14,7 +14,13 @@
  * Same scope as the rule: the suburbs (matched on city/address text) and the
  * mapped neighbourhoods (matched on restaurants.neighborhood, SEO-060).
  */
-import { COVERAGE_CATEGORIES, COVERAGE_LOCATIONS, placeMatches, type CoverageRestaurantRow } from './coverageRule';
+import {
+  COVERAGE_CATEGORIES,
+  COVERAGE_LOCATIONS,
+  isCoverageScoped,
+  placeMatches,
+  type CoverageRestaurantRow,
+} from './coverageRule';
 
 /**
  * "west-des-moines" -> "West Des Moines". The suburbs all title-case cleanly;
@@ -64,4 +70,41 @@ export function areaPageLabel(page: PseoPageState): string {
   if (!category || !location) return page.slug;
   const noun = /(s|cafes)$/i.test(category) ? category : `${category} restaurants`;
   return `${noun} in ${location}`;
+}
+
+/** A pseo_pages row as the /restaurants hub reads it (SEO-038). */
+export interface HubPseoPageRow extends PseoPageState {
+  page_type_id?: string | null;
+  dimensions?: Array<{ dimension: string; name: string; slug?: string | null }> | null;
+}
+
+/** One indexable cuisine x area page, ready to link from the hub. */
+export interface HubAreaPage {
+  href: string;
+  label: string;
+  categorySlug: string;
+  locationSlug: string;
+}
+
+/**
+ * The cuisine x area pages the /restaurants hub may link to (SEO-038):
+ * published, no noindex, and inside the SEO-041 coverage scope (a restaurant
+ * category over a suburb or mapped neighbourhood). The hub reads pseo_pages
+ * when it renders, so the prerender links whatever the coverage rule has
+ * published on the day it runs, and never a page it has noindexed or pulled.
+ */
+export function hubAreaPages(rows: readonly HubPseoPageRow[]): HubAreaPage[] {
+  const out: HubAreaPage[] = [];
+  for (const row of rows) {
+    if (!isIndexablePseoPage(row)) continue;
+    const dims = (row.dimensions ?? []).flatMap((d) =>
+      d && d.slug ? [{ dimension: d.dimension, slug: d.slug, name: d.name }] : [],
+    );
+    if (!isCoverageScoped(row.page_type_id ?? '', dims)) continue;
+    const category = dims.find((d) => d.dimension === 'category');
+    const location = dims.find((d) => d.dimension === 'location');
+    if (!category || !location) continue;
+    out.push({ href: row.slug, label: areaPageLabel(row), categorySlug: category.slug, locationSlug: location.slug });
+  }
+  return out.sort((a, b) => a.href.localeCompare(b.href));
 }

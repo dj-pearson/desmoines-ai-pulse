@@ -35,7 +35,10 @@ export function buildRestaurantsHubFaqs({ restaurantCount, cuisineCount }: Resta
   return [
     {
       question: "What are the best restaurants in Des Moines?",
-      answer: `${listed}Well-known names include Harbinger for Asian-inspired small plates, Alba for modern American, Centro for Italian and Bubba for Southern cooking. The East Village and Ingersoll Avenue hold many of the independents. Use the filters on this page to narrow by cuisine, price and rating.`,
+      // SEO-038: the ranked list at the top of the page is the data answer,
+      // so this points at it and says what it ranks on, rather than naming
+      // a second, unranked set of "best" places beside it.
+      answer: `${listed}The list at the top of this page ranks open restaurants in the metro by their Google star rating, and says how. Well-known names include Harbinger for Asian-inspired small plates, Alba for modern American, Centro for Italian and Bubba for Southern cooking. The East Village and Ingersoll Avenue hold many of the independents. Use the filters on this page to narrow by cuisine, price and rating.`,
       links: [
         { label: "Harbinger", to: "/restaurants/harbinger" },
         { label: "Alba", to: "/restaurants/alba" },

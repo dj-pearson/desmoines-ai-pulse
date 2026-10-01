@@ -182,9 +182,13 @@ test.describe('Hub pass 2: phone first screen (item 3)', () => {
     await expect(page.locator('[data-results-count]')).toContainText(`of ${TOTAL}`);
     await expect(page.locator('[data-tonight-row]').first()).toBeVisible();
 
-    const firstTitle = page.locator('article h3 a').first();
+    // SEO-038: the ranked list leads the hub, so the first restaurant on a
+    // phone's first screen is its first entry; the grid order below is
+    // unchanged.
+    const firstTitle = page.locator('[data-top-rated] ol a').first();
+    await expect(firstTitle).toBeVisible();
     const box = await firstTitle.boundingBox();
-    expect(box, 'first card title has a box').not.toBeNull();
+    expect(box, 'first ranked entry has a box').not.toBeNull();
     const bottomNav = page.getByRole('navigation', { name: 'Bottom navigation' });
     const navBox = (await bottomNav.count()) > 0 ? await bottomNav.first().boundingBox() : null;
     expect(box!.y + box!.height).toBeLessThanOrEqual(navBox ? navBox.y : 844);
