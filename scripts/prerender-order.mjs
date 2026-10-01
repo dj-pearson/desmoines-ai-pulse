@@ -118,3 +118,38 @@ export function orderEntityRoutes(bySitemap, impressions = {}, fairnessEvery = 4
 
   return out;
 }
+
+/**
+ * SEO-033. Month index pages (/events/october-2026) render before everything
+ * else in the entity pass.
+ *
+ * They have to be pinned rather than ranked. On production 2026-09-30,
+ * /events/december-2026 was in sitemap-events.xml and still served the homepage
+ * shell to Googlebot: a new month has no impression history, so the ranked
+ * axis puts it at the back, and the fairness round-robin reaches it only when
+ * it happens to sit early in its sitemap, which a month URL never does because
+ * it is appended after every event. Yet these are the best-converting pages on
+ * the site (october-2026: 30.4% CTR at position 3.1), and a page published
+ * weeks ahead of demand is worthless if the crawler reads it as the homepage.
+ *
+ * The set is small by construction - the sitemap lists the current month, the
+ * lead window and any later month with enough events - so pinning costs a
+ * handful of renders out of a budget of hundreds.
+ */
+export const MONTH_PAGE_ROUTE =
+  /^\/events\/(january|february|march|april|may|june|july|august|september|october|november|december)-\d{4}$/i;
+
+/**
+ * Moves every route matching `isPinned` to the front, keeping relative order
+ * within both groups. Pure; emits every input route exactly once.
+ *
+ * @param {string[]} ordered
+ * @param {(route: string) => boolean} isPinned
+ * @returns {string[]}
+ */
+export function pinFirst(ordered, isPinned) {
+  const pinned = [];
+  const rest = [];
+  for (const route of ordered) (isPinned(route) ? pinned : rest).push(route);
+  return [...pinned, ...rest];
+}

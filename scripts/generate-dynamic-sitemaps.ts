@@ -13,6 +13,12 @@ import { computePseoShippable } from './lib/pseoShippable';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+import {
+  LEAD_WINDOW_DAYS,
+  MONTH_NAMES,
+  selectSitemapMonths,
+  type MonthTally,
+} from '../src/lib/monthPages';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -266,13 +272,20 @@ async function generateEventsSitemap(): Promise<number | null> {
   // MIN_EVENTS_PER_MONTH is a floor on top of that. One event in a month is not
   // a listing page, it is a detail page with a heading, and it would compete
   // with the event's own URL.
+  //
+  // SEO-033 RELAXES THE FLOOR FOR THE NEXT FEW MONTHS, and only for them. The
+  // floor kept a month out of the sitemap until venues had announced enough
+  // dates, so a month page was submitted at roughly the moment people started
+  // searching it rather than weeks before. /events/october-2026 converts at
+  // 30.4% CTR from position 3.1; it can only do that once indexed. Months whose
+  // first day is within LEAD_WINDOW_DAYS are published at any count, because
+  // the page now carries a seasonal intro and prev/next links and is not a bare
+  // heading over an empty grid. Months beyond the window still need the floor,
+  // and archived months are never listed. The rule lives in
+  // src/lib/monthPages.ts so it can be tested without a database.
   const MIN_EVENTS_PER_MONTH = 3;
-  const MONTH_NAMES = [
-    'january', 'february', 'march', 'april', 'may', 'june',
-    'july', 'august', 'september', 'october', 'november', 'december',
-  ];
 
-  const perMonth = new Map<string, { count: number; lastmod: string }>();
+  const perMonth = new Map<string, MonthTally>();
   for (const event of eventList) {
     // Prefer the UTC start, matching what the page itself queries on.
     const raw = event.event_start_utc || event.date;
@@ -290,20 +303,23 @@ async function generateEventsSitemap(): Promise<number | null> {
     }
   }
 
-  const monthUrls = [...perMonth.entries()]
-    .filter(([, v]) => v.count >= MIN_EVENTS_PER_MONTH)
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([slug, v]) => ({
-      loc: `${baseUrl}/events/${slug}`,
-      lastmod: v.lastmod,
-      changefreq: 'daily',
-      priority: '0.8',
-    }));
+  const selectedMonths = selectSitemapMonths(perMonth, new Date(), {
+    minEvents: MIN_EVENTS_PER_MONTH,
+    today: currentDate,
+  });
+  const monthUrls = selectedMonths.map(({ slug, lastmod }) => ({
+    loc: `${baseUrl}/events/${slug}`,
+    lastmod,
+    changefreq: 'daily',
+    priority: '0.8',
+  }));
 
-  const skipped = perMonth.size - monthUrls.length;
+  const forced = selectedMonths.filter((m) => m.forced).map((m) => m.slug);
+  const skipped = [...perMonth.keys()].filter((slug) => !selectedMonths.some((m) => m.slug === slug));
   console.log(
-    `   ${monthUrls.length} month page(s) with >= ${MIN_EVENTS_PER_MONTH} events` +
-      (skipped > 0 ? `; ${skipped} month(s) skipped as too thin` : ''),
+    `   ${monthUrls.length} month page(s): >= ${MIN_EVENTS_PER_MONTH} events, or within ${LEAD_WINDOW_DAYS}d` +
+      (forced.length > 0 ? `; under the floor but published ahead: ${forced.join(', ')}` : '') +
+      (skipped.length > 0 ? `; ${skipped.length} month(s) skipped as too thin` : ''),
   );
   urls.push(...monthUrls);
 

@@ -12,13 +12,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
-import { useState, useEffect, useMemo } from "react";
+import { format, startOfMonth, addMonths, isValid } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
+import { useState, useMemo } from "react";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { MonthSeasonalBlock } from "@/components/seo/MonthSeasonalBlock";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
+import { isArchivedMonth, monthLabelOf, monthSlugOf, shiftMonth } from "@/lib/monthPages";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the month, which measured
@@ -41,26 +45,8 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
  */
 const VISIBLE_EVENTS = 36;
 
-interface SeasonalGuideLink {
-  href: string;
-  label: string;
-}
-
-/**
- * SEO-032. Seasonal articles a month page links to, keyed by the month slug.
- * Each href is a published row in public.articles; keep this list to rows
- * that exist, because a dead link here is a dead link on a landing page.
- */
-const SEASONAL_GUIDES: Record<string, SeasonalGuideLink[]> = {
-  "october-2026": [
-    { href: "/articles/haunted-houses-near-des-moines", label: "Haunted houses near Des Moines" },
-    {
-      href: "/articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide",
-      label: "Pumpkin patches and apple orchards",
-    },
-    { href: "/articles/corn-mazes-near-des-moines", label: "Corn mazes near Des Moines" },
-  ],
-};
+/** Event dates on this site are Des Moines dates. */
+const EVENT_TZ = "America/Chicago";
 
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -80,7 +66,6 @@ export default function MonthlyEventsPage() {
   const isValidDate = isValid(targetDate);
   
   const monthStart = startOfMonth(targetDate);
-  const monthEnd = endOfMonth(targetDate);
   
   // Fetch the full month once; category filtering + category list are derived
   // in memory to avoid a second full-range query (WEB-PERF-011).
@@ -90,8 +75,14 @@ export default function MonthlyEventsPage() {
       const { data, error } = await supabase
         .from("events")
         .select(EVENT_LIST_COLUMNS)
-        .gte("date", format(monthStart, "yyyy-MM-dd"))
-        .lte("date", format(monthEnd, "yyyy-MM-dd"))
+        // SEO-033: bound the month in Central time. `date` is timestamptz, and
+        // the old .lte("date", "yyyy-MM-31") meant "<= 00:00 UTC on the 31st",
+        // which dropped every event on the last evening of the month and pulled
+        // in the previous month's last evening instead. Measured 2026-09-30:
+        // October showed 216 rows against 199 Central-time October events, and
+        // the five it lost were all on Halloween, two of them Halloween events.
+        .gte("date", fromZonedTime(monthStart, EVENT_TZ).toISOString())
+        .lt("date", fromZonedTime(addMonths(monthStart, 1), EVENT_TZ).toISOString())
         .order("date", { ascending: true })
         // `time` is not a column on public.events; ordering by it made PostgREST
         // reject the query with 42703 and the month grid rendered empty.
@@ -127,18 +118,15 @@ export default function MonthlyEventsPage() {
     return <div>Invalid date format</div>;
   }
 
-  // Navigation helpers
-  const getNextMonth = () => {
-    const next = new Date(targetDate);
-    next.setMonth(next.getMonth() + 1);
-    return format(next, "MMMM-yyyy").toLowerCase();
-  };
-
-  const getPrevMonth = () => {
-    const prev = new Date(targetDate);
-    prev.setMonth(prev.getMonth() - 1);
-    return format(prev, "MMMM-yyyy").toLowerCase();
-  };
+  // Prev/next are real links (SEO-033): they were buttons calling navigate(),
+  // which a crawler cannot follow, so no month page linked to its neighbours.
+  const monthRef = { year: targetDate.getFullYear(), monthIndex: targetDate.getMonth() };
+  const prevRef = shiftMonth(monthRef, -1);
+  const nextRef = shiftMonth(monthRef, 1);
+  const prevHref = `/events/${monthSlugOf(prevRef)}`;
+  const nextHref = `/events/${monthSlugOf(nextRef)}`;
+  const archived = isArchivedMonth(monthRef);
+  const shortMonth = format(targetDate, "MMMM");
 
   const monthDisplayName = format(targetDate, "MMMM yyyy");
   const pageTitle = `${monthDisplayName} Events in Des Moines - Complete Calendar`;
@@ -178,6 +166,9 @@ export default function MonthlyEventsPage() {
         breadcrumbs={breadcrumbs}
         isTimeSensitive={true}
       />
+      {/* SEO-033: months more than ARCHIVE_AFTER_MONTHS back stay reachable but
+          leave the index. See isArchivedMonth for why this is not a 301. */}
+      {archived && <NoIndexMeta />}
       {/* The schema must describe what the page SHOWS. The grid is capped at
           VISIBLE_EVENTS, and EventListJsonLd defaults maxItems to 50, so
           passing the full month here would advertise events a reader cannot
@@ -205,13 +196,11 @@ export default function MonthlyEventsPage() {
         {/* Header with Navigation */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/events/${getPrevMonth()}`)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous Month
+            <Button asChild variant="outline" size="sm">
+              <Link to={prevHref} rel="prev">
+                <ChevronLeft className="h-4 w-4" />
+                Previous Month
+              </Link>
             </Button>
             
             <div className="text-center">
@@ -231,13 +220,11 @@ export default function MonthlyEventsPage() {
               </div>
             </div>
             
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/events/${getNextMonth()}`)}
-            >
-              Next Month
-              <ChevronRight className="h-4 w-4" />
+            <Button asChild variant="outline" size="sm">
+              <Link to={nextHref} rel="next">
+                Next Month
+                <ChevronRight className="h-4 w-4" />
+              </Link>
             </Button>
           </div>
         </div>
@@ -247,20 +234,7 @@ export default function MonthlyEventsPage() {
           Find concerts, festivals, community gatherings, and entertainment activities with all the details you need.
         </p>
 
-        {monthYear && SEASONAL_GUIDES[monthYear] && (
-          <nav aria-label={`${monthDisplayName} guides`} className="mb-8 text-center">
-            <h2 className="text-lg font-semibold mb-2">{monthDisplayName} guides</h2>
-            <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-              {SEASONAL_GUIDES[monthYear].map((guide) => (
-                <li key={guide.href}>
-                  <Link to={guide.href} className="text-primary underline-offset-4 hover:underline">
-                    {guide.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
+        <MonthSeasonalBlock month={monthRef} events={allEvents} />
 
         {/* Quick Stats */}
         <Card className="mb-8">
@@ -328,7 +302,10 @@ export default function MonthlyEventsPage() {
           </Card>
         )}
 
-        {/* Events Grid */}
+        {/* Events Grid. The H2 is the phrasing people search (SEO-033). */}
+        <h2 className="text-2xl font-semibold mb-4">
+          {shortMonth} events in Des Moines
+        </h2>
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(6)].map((_, i) => (
@@ -369,35 +346,6 @@ export default function MonthlyEventsPage() {
               </div>
             )}
 
-            {/* Monthly Navigation */}
-            <Card className="mb-8">
-              <CardContent className="pt-6">
-                <div className="flex justify-between items-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate(`/events/${getPrevMonth()}`)}
-                    className="flex items-center gap-2"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    {format(new Date(targetDate.getFullYear(), targetDate.getMonth() - 1), "MMMM yyyy")}
-                  </Button>
-                  
-                  <div className="text-center">
-                    <div className="text-lg font-semibold">{monthDisplayName}</div>
-                    <div className="text-sm text-muted-foreground">{formatCount(events.length, 'event')}</div>
-                  </div>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate(`/events/${getNextMonth()}`)}
-                    className="flex items-center gap-2"
-                  >
-                    {format(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1), "MMMM yyyy")}
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </>
         ) : (
           <Card className="text-center py-12">
@@ -427,6 +375,36 @@ export default function MonthlyEventsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Monthly Navigation. Outside the results branch so an empty month,
+            which is exactly what a page published ahead of its events looks
+            like, still links to its neighbours. */}
+        <nav aria-label="Adjacent months" className="mb-8">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex justify-between items-center gap-2">
+                <Button asChild variant="outline">
+                  <Link to={prevHref} rel="prev" className="flex items-center gap-2">
+                    <ChevronLeft className="h-4 w-4" />
+                    {monthLabelOf(prevRef)}
+                  </Link>
+                </Button>
+
+                <div className="text-center">
+                  <div className="text-lg font-semibold">{monthDisplayName}</div>
+                  <div className="text-sm text-muted-foreground">{formatCount(events?.length || 0, 'event')}</div>
+                </div>
+
+                <Button asChild variant="outline">
+                  <Link to={nextHref} rel="next" className="flex items-center gap-2">
+                    {monthLabelOf(nextRef)}
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </nav>
 
         {/* FAQ Section */}
         <FAQSection 
