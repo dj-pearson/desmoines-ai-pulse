@@ -246,10 +246,27 @@
 # for at least one release cycle (CLAUDE.md, Backward Compatibility).
 /events/the-slaughterhouse-haunted-house-2026-10-01  /events/the-slaughterhouse-haunted-house-2026-10-02  301
 
+# SEO-056 (shipped early with the hotfix, 2026-10-01): the pSEO "things to do
+# this weekend / today" pages duplicated the events hubs and carried copy
+# generated in March 2026. Both rows were unpublished in production; same
+# rules as on claude/seo-q4-loop. Keep for at least one release cycle.
+
 # SEO-063: taste-of-new-york-pleasant-hill was the Waukee store (769 SE Alices
 # Rd, tasteofnypizza.com); renamed. "empire" was Kids Empire, an indoor
 # playground: the restaurant row is hidden and the playgrounds row is the page.
-# Rows changed in production 2026-10-01 (scripts/content-backups/seo-063/).
+# Rows changed in production 2026-10-01 (backups and evidence in
+# scripts/content-backups/seo-063/ on claude/seo-q4-loop, branch seo/SEO-063).
 # Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
 /restaurants/taste-of-new-york-pleasant-hill  /restaurants/taste-of-new-york-waukee  301
 /restaurants/empire  /playgrounds/kids-empire-merle-hay  301
+
+# SEO-064: pSEO pages whose extra dimension changes nothing in their listing.
+# /things-to-do/<audience>/<time> lists exactly /things-to-do/<time> (the
+# calendar records no audience) and /<cuisine>/<time> lists the same
+# restaurants all year (restaurants carry no date): 100% overlap with the
+# parent, measured 2026-10-01 in docs/seo/pseo-time-duplicates-2026-10-01.csv.
+# These had 0 impressions in the 2026-09-30 Search Console export, so they
+# were unpublished and 301 to the parent page (src/pseo/duplicateRule.ts;
+# check-pseo-coverage fails if one points anywhere else). The ones with
+# impressions stay published as noindex with a canonical to the parent.
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
