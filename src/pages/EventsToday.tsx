@@ -62,9 +62,9 @@ export default function EventsToday() {
         
         const { data, error } = await supabase
           .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, updated_at")
-          .gte("date", startUtc)
-          .lte("date", endUtc)
+          .select("id, title, date, end_date, time_tbd, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, event_start_local, updated_at")
+          // Starts today, or is a multi-day run (end_date) still on today (SEO-055).
+          .or(`and(date.gte.${startUtc},date.lte.${endUtc}),and(date.lt.${startUtc},end_date.gte.${startUtc})`)
           .order("event_start_utc", { ascending: true, nullsFirst: false });
         
         if (error) {

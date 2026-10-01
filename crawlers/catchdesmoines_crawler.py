@@ -66,6 +66,13 @@ CATCHDESMOINES_BASE_URL = "https://www.catchdesmoines.com"
 EVENTS_LIST_URL = f"{CATCHDESMOINES_BASE_URL}/events/"
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
+# SEO-055: the Central wall-clock time stamped on an event whose listing gave a
+# day but no time. The same sentinel as supabase/functions/_shared/eventDateTime.ts
+# and src/lib/eventTime.ts. It used to be 19:00:00, which made "no time given"
+# indistinguishable from a real 7 pm show; 206 of 319 upcoming rows sat at
+# 19:00 Central on 2026-10-01 and the site printed "7:00 PM" on every one.
+NO_TIME_MARKER = "19:31:58"
+
 # Claude 4.5 Sonnet model
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 
@@ -424,8 +431,8 @@ CRITICAL EXTRACTION RULES:
    - Links to event detail pages (format: /event/event-name/12345/)
 
 2. DATE FORMAT - All dates must be in Central Time:
-   - Format: YYYY-MM-DD HH:MM:SS
-   - Default to 19:00:00 (7 PM) if no time specified
+   - Format: YYYY-MM-DD HH:MM:SS when the listing states a start time
+   - Format: YYYY-MM-DD (date only) when it does not. Never invent a time.
    - Only include FUTURE events (on or after {today})
 
 3. EXTRACT the event detail URL path (e.g., /event/chef-georges-steak-bar/53924/)
@@ -434,7 +441,7 @@ CRITICAL EXTRACTION RULES:
 For EACH event, extract:
 - title: Event name
 - description: Brief description
-- date: YYYY-MM-DD HH:MM:SS (Central Time)
+- date: YYYY-MM-DD HH:MM:SS (Central Time), or YYYY-MM-DD if no time is listed
 - location: City/venue (default: "Des Moines, IA")
 - venue: Specific venue name
 - category: Music/Sports/Arts/Community/Entertainment/Festival/Food
@@ -502,8 +509,8 @@ Return ONLY the JSON array. No other text."""
             if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', date_str):
                 dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
             elif re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
-                dt = datetime.strptime(date_str, "%Y-%m-%d")
-                dt = dt.replace(hour=19, minute=0, second=0)  # Default 7 PM
+                # Day only: stamp the no-time sentinel, never a plausible time.
+                dt = datetime.strptime(f"{date_str} {NO_TIME_MARKER}", "%Y-%m-%d %H:%M:%S")
             else:
                 dt = date_parser.parse(date_str)
 
@@ -516,6 +523,17 @@ Return ONLY the JSON array. No other text."""
         except Exception as e:
             logger.warning(f"Could not parse date '{date_str}': {e}")
             return None
+
+    @staticmethod
+    def _is_date_only(date_str: str) -> bool:
+        """True when the extraction carried a day but no stated start time."""
+        s = (date_str or "").strip()
+        return bool(re.match(r'^\d{4}-\d{2}-\d{2}$', s)) or s.endswith(f" {NO_TIME_MARKER}")
+
+    @staticmethod
+    def _central_local(parsed_dt: datetime) -> str:
+        """The Central wall clock written to event_start_local."""
+        return parsed_dt.astimezone(CENTRAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
     @staticmethod
     def _record_title(event: dict) -> str:
@@ -541,7 +559,9 @@ Return ONLY the JSON array. No other text."""
             return None
         return (
             self._record_title(event).strip().lower(),
-            parsed_dt.date().isoformat(),
+            # The CENTRAL calendar date (SEO-055). parsed_dt is UTC, and its
+            # UTC date is the next day for every evening event.
+            parsed_dt.astimezone(CENTRAL_TZ).date().isoformat(),
             self._record_venue(event).strip().lower(),
         )
 
@@ -564,9 +584,13 @@ Return ONLY the JSON array. No other text."""
             return False
 
         try:
-            # Same calendar day in UTC, matching how `date` is stored.
-            day_start = parsed_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
+            # The event's Central calendar day, as UTC bounds (SEO-055). The UTC
+            # day put a 7 pm show and a same-day 11 am show on different days.
+            local = parsed_dt.astimezone(CENTRAL_TZ)
+            day_start = local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC"))
+            day_end = (local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).astimezone(
+                ZoneInfo("UTC")
+            )
 
             result = self.supabase.table("events").select("id").ilike(
                 "title", self._record_title(event).strip()
@@ -618,7 +642,8 @@ Return ONLY the JSON array. No other text."""
                 "original_description": event.get("description", "")[:500],
                 "enhanced_description": event.get("description", "")[:500],
                 "date": parsed_dt.isoformat(),
-                "event_start_local": event.get("date", ""),
+                "event_start_local": self._central_local(parsed_dt),
+                "time_tbd": self._is_date_only(event.get("date", "")),
                 "event_timezone": "America/Chicago",
                 "event_start_utc": parsed_dt.isoformat(),
                 "location": event.get("location", "Des Moines, IA")[:100],

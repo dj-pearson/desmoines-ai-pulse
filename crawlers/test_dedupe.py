@@ -174,7 +174,21 @@ def main():
     check("two venues on one night stay two events",
           (inserted, skipped) == (2, 0), f"got {inserted} inserted / {skipped} skipped")
 
-    # The date-only branch defaults to 7 PM; it must still key by day.
+    print("\nSEO-055: a day with no time is not a 7 pm show")
+    d_only = c._parse_event_datetime("2026-10-02")
+    check("a date-only extraction gets the 19:31:58 Central sentinel, not 19:00",
+          d_only is not None and c._central_local(d_only) == "2026-10-02 19:31:58",
+          f"got {d_only!r}")
+    check("and is flagged time_tbd", Crawler._is_date_only("2026-10-02")
+          and Crawler._is_date_only("2026-10-02 19:31:58"))
+    check("a stated 7 pm is not flagged", not Crawler._is_date_only("2026-10-02 19:00:00"))
+    seven = c._parse_event_datetime("2026-10-01 19:00:00")
+    check("the key uses the Central date, not the UTC one (00:00 UTC Oct 2)",
+          c._dedupe_key(event("Ringling", "2026-10-01 19:00:00", "Casey's Center"), seven)[1] == "2026-10-01")
+    check("event_start_local is the Central wall clock",
+          c._central_local(seven) == "2026-10-01 19:00:00")
+
+    # The date-only branch stamps the sentinel; it must still key by day.
     dateonly = [event("Fair", "2026-09-01"), event("Fair", "2026-09-01 19:00:00")]
     inserted, skipped = asyncio.run(batch(dateonly))
     check("the date-only and datetime forms of one event agree",

@@ -19,6 +19,7 @@ import {
   selectSitemapMonths,
   type MonthTally,
 } from '../src/lib/monthPages';
+import { eventCentralDate } from '../src/lib/eventTime';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -287,12 +288,13 @@ async function generateEventsSitemap(): Promise<number | null> {
 
   const perMonth = new Map<string, MonthTally>();
   for (const event of eventList) {
-    // Prefer the UTC start, matching what the page itself queries on.
-    const raw = event.event_start_utc || event.date;
-    if (!raw) continue;
-    const d = new Date(raw);
-    if (!Number.isFinite(d.getTime())) continue;
-    const slug = `${MONTH_NAMES[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+    // SEO-055: the Central month, matching the page, which bounds its query in
+    // Central time (SEO-033). The UTC month filed every Halloween-evening event
+    // under November.
+    const local = eventCentralDate(event);
+    if (!local) continue;
+    const [y, m] = local.split('-').map(Number);
+    const slug = `${MONTH_NAMES[m - 1]}-${y}`;
     const lastmod = event.updated_at ? event.updated_at.split('T')[0] : currentDate;
     const seen = perMonth.get(slug);
     if (!seen) perMonth.set(slug, { count: 1, lastmod });

@@ -1,14 +1,15 @@
 import { parseISO } from "date-fns";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { createLogger } from '@/lib/logger';
+import { hasStatedStartTime, NO_TIME_MARKER } from './eventTime';
 
 const logger = createLogger('timezone');
 
 // Des Moines, Iowa timezone (Central Time)
 export const CENTRAL_TIMEZONE = "America/Chicago";
 
-// Marker time indicating no specific time was found (7:31:58 PM)
-export const NO_TIME_MARKER = "19:31:58";
+// Marker time indicating no specific time was found (7:31:58 PM). Defined in eventTime.ts.
+export { NO_TIME_MARKER };
 
 /**
  * Convert a date string or Date object to Central Time (Des Moines timezone)
@@ -103,23 +104,13 @@ export function isEventInFuture(eventDate: string | Date): boolean {
 }
 
 /**
- * Check if an event has a specific time or uses the "no time" marker
+ * Check if an event has a start time we would print. SEO-055: delegates to
+ * hasStatedStartTime so time_tbd and the 19:31:58 marker mean the same thing
+ * here as on the weekend article and the hubs.
  */
 export function hasSpecificTime(event: any): boolean {
   try {
-    // Check event_start_local first (new timezone field)
-    if (event.event_start_local) {
-      const time = event.event_start_local.split('T')[1]?.substring(0, 8);
-      return time !== NO_TIME_MARKER;
-    }
-    
-    // Fallback to legacy date field
-    if (event.date) {
-      const time = event.date.split('T')[1]?.substring(0, 8);
-      return time !== NO_TIME_MARKER;
-    }
-    
-    return false;
+    return hasStatedStartTime(event ?? {});
   } catch {
     return false;
   }

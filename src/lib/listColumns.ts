@@ -20,7 +20,7 @@ export const RESTAURANT_LIST_COLUMNS =
 // blank events surface site-wide (see WEB-QA-003 — `archived_at` lives on
 // `archived_events`/`event_archive`, never on `events`, and took out the homepage).
 export const EVENT_LIST_COLUMNS =
-  "ai_writeup, category, city, created_at, date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, price, source_url, title, updated_at, venue, writeup_generated_at";
+  "ai_writeup, category, city, created_at, date, end_date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, price, source_url, time_tbd, title, updated_at, venue, writeup_generated_at";
 
 export const ATTRACTION_LIST_COLUMNS =
   "created_at, description, id, image_url, is_featured, latitude, location, longitude, name, rating, type, updated_at, website, address, hours_summary, hours, is_indoor, is_kid_friendly, is_free, is_active, accessibility_notes";

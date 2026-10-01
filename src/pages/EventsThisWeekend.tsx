@@ -74,12 +74,17 @@ export default function EventsThisWeekend() {
       const { data, error } = await supabase
         .from("events")
         .select(EVENT_LIST_COLUMNS)
-        .gte("date", startUtc)
-        .lte("date", endUtc)
+        // Starts this weekend, or is a multi-day run (end_date) that started
+        // earlier and is still on - Pumpkin Fest, Oct 1 - Nov 6 (SEO-055).
+        .or(
+          `and(date.gte.${startUtc},date.lte.${endUtc}),and(date.lt.${startUtc},end_date.gte.${startUtc})`,
+        )
         // Same visibility predicates as useEvents/useEventBySlug: a merged or
         // hidden row 404s on its own detail page, so it must not be listed here.
         .neq("is_merged", true)
         .neq("is_hidden", true)
+        // ...and archived_at, the agent sweep's switch, as the weekend article does.
+        .is("archived_at", null)
         .order("event_start_utc", { ascending: true, nullsFirst: false })
         .order("date", { ascending: true });
 
