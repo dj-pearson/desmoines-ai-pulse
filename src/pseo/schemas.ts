@@ -81,7 +81,9 @@ export type PseoSectionType =
   | 'related_pages'
   | 'neighborhood_profile'
   | 'audience_callout'
-  | 'map_embed';
+  | 'map_embed'
+  /** SEO-040: restaurants, bars, events, parking and a map from rows (PseoAreaGuide). */
+  | 'area_guide';
 
 export interface PseoCuratedItem {
   name: string;

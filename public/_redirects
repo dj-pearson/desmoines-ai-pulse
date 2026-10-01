@@ -38,6 +38,24 @@
 /italian/valley-junction  /neighborhoods/west-des-moines  301
 /mexican/valley-junction  /neighborhoods/west-des-moines  301
 
+# SEO-040: one URL per intent. Numbers are clicks / impressions / position from
+# the 2026-09-30 Search Console export (Pages.csv). Keep for at least one
+# release cycle (CLAUDE.md, Backward Compatibility).
+#  - East Village: /things-to-do/east-village 14 / 1,208 / 11.8 beat
+#    /neighborhoods/east-village 2 / 124 / 17.0 (plus 0 / 14 / 17.5 slashed).
+#    /guide/east-village had no impressions and no sitemap entry; it was a third
+#    page for the same query. Its pSEO row was unpublished on 2026-10-01.
+#  - Date night: /events/date-night 15 / 495 (13 / 390 slashed at 23.0 plus
+#    2 / 105 at 21.4) beat /things-to-do/date-night 1 / 215 / 24.6. pSEO row
+#    unpublished on 2026-10-01.
+#  - /neighborhoods/downtown (0 / 45 / 24.7, plus 0 / 4 slashed) has no guide
+#    entry, so it served a noindex "we don't have a guide" page. The footer
+#    linked it. /things-to-do/downtown (1 / 172 / 33.3) is the area page.
+/neighborhoods/east-village  /things-to-do/east-village  301
+/guide/east-village  /things-to-do/east-village  301
+/things-to-do/date-night  /events/date-night  301
+/neighborhoods/downtown  /things-to-do/downtown  301
+
 # WEB-SEO-007: /weekend and /events/this-weekend targeted the same query.
 # /events/this-weekend is the canonical one — it declares its own canonical URL,
 # emits EventListJsonLd and carries FAQ content, none of which /weekend did.

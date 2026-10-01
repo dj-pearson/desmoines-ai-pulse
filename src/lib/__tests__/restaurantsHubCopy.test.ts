@@ -51,7 +51,7 @@ describe("buildRestaurantsHubFaqs", () => {
         "/restaurants/alba",
         "/restaurants/centro",
         "/restaurants/bubba",
-        "/neighborhoods/east-village",
+        "/things-to-do/east-village",
       ])
     );
     for (const href of hrefs) expect(href.startsWith("/")).toBe(true);

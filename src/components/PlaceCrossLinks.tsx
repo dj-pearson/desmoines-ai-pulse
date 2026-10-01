@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { NEIGHBORHOODS, findNeighborhood } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, findNeighborhood, neighborhoodHref } from "@/lib/neighborhoods";
 import { findSuburb } from "@/lib/suburbs";
 
 /**
@@ -40,7 +40,7 @@ export function PlaceCrossLinks({ slug, from }: PlaceCrossLinksProps) {
     from === "neighborhood" && suburb
       ? { to: `/events/${slug}`, label: `Upcoming events in ${suburb.name}` }
       : from === "events" && guide
-        ? { to: `/neighborhoods/${slug}`, label: `${guide.name} neighborhood guide` }
+        ? { to: neighborhoodHref(guide), label: `${guide.name} neighborhood guide` }
         : null;
 
   return (
@@ -66,7 +66,7 @@ export function PlaceCrossLinks({ slug, from }: PlaceCrossLinksProps) {
         {siblings.map((n) => (
           <li key={n.slug}>
             <Link
-              to={`/neighborhoods/${n.slug}`}
+              to={neighborhoodHref(n)}
               className="text-sm text-foreground/80 underline underline-offset-4 hover:text-primary hover:no-underline"
             >
               {n.name}

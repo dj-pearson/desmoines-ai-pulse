@@ -20,7 +20,9 @@ import { PseoNeighborhoodProfile } from './sections/PseoNeighborhoodProfile';
 import { PseoAudienceCallout } from './sections/PseoAudienceCallout';
 import { PseoRelatedPages } from './sections/PseoRelatedPages';
 import { PseoLiveListings } from './sections/PseoLiveListings';
+import { PseoAreaGuide } from './sections/PseoAreaGuide';
 import { PseoBreadcrumbs } from './PseoBreadcrumbs';
+import { AREA_GUIDE_SLUGS, areaGuideDescription, areaGuideIntro, boundaryForLocation } from '../areaGuide';
 
 const PseoMapEmbed = lazy(() => import('./sections/PseoMapEmbed'));
 
@@ -28,7 +30,8 @@ interface PseoPageProps {
   page: PseoPageContent;
 }
 
-export function PseoPage({ page }: PseoPageProps) {
+export function PseoPage({ page: storedPage }: PseoPageProps) {
+  const page = asAreaGuide(storedPage);
   const { seo, sections, relatedPages, structuredData } = page;
 
   // Build structured data for Schema.org
@@ -78,6 +81,27 @@ export function PseoPage({ page }: PseoPageProps) {
       <Footer />
     </>
   );
+}
+
+/**
+ * SEO-040. A page in AREA_GUIDE_SLUGS renders a two-sentence intro and the
+ * data-built area guide in place of its stored LLM sections, and describes
+ * itself accordingly. Any other page, or one whose location has no polygon,
+ * is returned unchanged.
+ */
+function asAreaGuide(page: PseoPageContent): PseoPageContent {
+  if (!AREA_GUIDE_SLUGS.has(page.slug)) return page;
+  const location = page.dimensions.find((d) => d.dimension === 'location');
+  const boundary = boundaryForLocation(location?.slug);
+  if (!boundary) return page;
+  return {
+    ...page,
+    seo: { ...page.seo, description: areaGuideDescription(boundary) },
+    sections: [
+      { id: 'hero_intro', type: 'hero_intro', content: areaGuideIntro(boundary) },
+      { id: 'area_guide', type: 'area_guide' },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +166,9 @@ function SectionRenderer({
           <PseoMapEmbed dimensions={page.dimensions} />
         </Suspense>
       );
+
+    case 'area_guide':
+      return <PseoAreaGuide dimensions={page.dimensions} />;
 
     case 'related_pages':
       return null; // Handled separately above

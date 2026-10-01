@@ -47,7 +47,21 @@ const SITEMAP = join(ROOT, 'public', 'sitemap-static.xml');
 function inventorySlugs() {
   const src = readFileSync(INVENTORY, 'utf8');
   const body = src.slice(src.indexOf('export const NEIGHBORHOODS'));
-  const slugs = [...body.matchAll(/^\s{4}slug: '([a-z0-9-]+)',$/gm)].map((m) => m[1]);
+  // Only entries with prerender: true. SEO-040 moved the East Village guide to
+  // /things-to-do/east-village; its entry stays (other surfaces read its
+  // matchTerms) with prerender: false, and its old URL 301s, so it must NOT be
+  // in the prerender list or the sitemap. Same matcher as
+  // check-prerender-content.mjs.
+  const entries = [...body.matchAll(/^\s{4}slug: '([a-z0-9-]+)',[\s\S]*?^\s{4}prerender: (true|false),/gm)];
+  const all = [...body.matchAll(/^\s{4}slug: '([a-z0-9-]+)',$/gm)];
+  if (entries.length !== all.length) {
+    console.error(
+      `[neighborhoods] read ${all.length} slugs but ${entries.length} prerender flags from src/lib/neighborhoods.ts;\n` +
+        'every entry needs prerender: true or false. Update the matcher if the shape changed.'
+    );
+    process.exit(1);
+  }
+  const slugs = entries.filter((m) => m[2] === 'true').map((m) => m[1]);
   if (slugs.length === 0) {
     console.error(
       '[neighborhoods] read 0 slugs from src/lib/neighborhoods.ts. The file changed shape;\n' +
