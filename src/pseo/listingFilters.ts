@@ -100,6 +100,16 @@ function ymd(d: Date): string {
 }
 
 /**
+ * The calendar day after a YYYY-MM-DD key, for an exclusive upper bound.
+ * temporalRange's `to` is the last day INCLUDED; events.date is timestamptz,
+ * so a query must stop before the next day starts, not at midnight of `to`.
+ */
+export function dayAfter(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return ymd(new Date(y, m - 1, d + 1));
+}
+
+/**
  * Temporal dimension -> a date window, clamped so it never starts in the past.
  *
  * THIS DIMENSION WAS READ AND THEN NEVER USED. `temporal` was destructured at

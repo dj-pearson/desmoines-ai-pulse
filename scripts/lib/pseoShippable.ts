@@ -37,7 +37,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORY_FILTERS, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../src/pseo/listingFilters';
+import { CATEGORY_FILTERS, dayAfter, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../src/pseo/listingFilters';
 import { classifySlugs } from './pseoRouteClaims.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -81,7 +81,7 @@ export function renderedQuery(entityType, dims, nowIso) {
       const range = temporalRange(temporal.slug);
       if (range) {
         p.append('date', `gte.${range.from}`);
-        p.append('date', `lte.${range.to}`);
+        p.append('date', `lt.${dayAfter(range.to)}`);
       }
     }
     return ['events', p];

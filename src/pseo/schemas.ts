@@ -69,6 +69,9 @@ export interface PseoSection {
   items?: PseoCuratedItem[];
   faqs?: PseoFaqItem[];
   tips?: string[];
+  /** SEO-056, live_listings only: where an empty listing sends the visitor. */
+  emptyHref?: string;
+  emptyLabel?: string;
 }
 
 export type PseoSectionType =
