@@ -271,6 +271,7 @@ async function buildSitemaps(supabase: Supa) {
   <sitemap><loc>${BASE_URL}/sitemap-articles.xml</loc><lastmod>${now}</lastmod></sitemap>
   <sitemap><loc>${BASE_URL}/sitemap-hotels.xml</loc><lastmod>${now}</lastmod></sitemap>
   <sitemap><loc>${BASE_URL}/sitemap-guides.xml</loc><lastmod>${now}</lastmod></sitemap>
+  <sitemap><loc>${BASE_URL}/sitemap-event-series.xml</loc><lastmod>${now}</lastmod></sitemap>
   <sitemap><loc>${BASE_URL}/sitemap-pseo.xml</loc><lastmod>${now}</lastmod></sitemap>
 </sitemapindex>`;
 

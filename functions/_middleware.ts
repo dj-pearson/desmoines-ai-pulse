@@ -20,6 +20,7 @@ import {
 } from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
 import { markdownToPlainText } from "../src/lib/aiText";
+import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -761,6 +762,9 @@ export function eventShellBody(row: Record<string, any>, now: Date = new Date())
     ["/events", "All Des Moines events"],
   ];
   if (EVENT_SUBURB_HUBS.has(suburbSlug)) links.unshift([`/events/${suburbSlug}`, `Events in ${locality}`]);
+  // SEO-043: an annual event's dated page links its series page first.
+  const series = seriesForEvent({ title: row.title, venue: row.venue, location: row.location });
+  if (series) links.unshift([seriesPath(series), `${series.name}: every year's dates`]);
 
   return [
     "<article>",

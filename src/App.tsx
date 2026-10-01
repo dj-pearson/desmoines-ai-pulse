@@ -123,6 +123,8 @@ const SearchResults = lazyWithRetry(() => import("./pages/SearchResults"));
 const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
 const EventsThisWeekend = lazyWithRetry(() => import("./pages/EventsThisWeekend"));
 const EventsByLocation = lazyWithRetry(() => import("./pages/EventsByLocation"));
+// SEO-043: one URL per annual event, outliving each year's dated URL.
+const EventSeriesPage = lazyWithRetry(() => import("./pages/EventSeriesPage"));
 const EventsNearMe = lazyWithRetry(() => import("./pages/EventsNearMe"));
 
 // SEO hub pages - new category pages
@@ -531,6 +533,7 @@ const App = () => (
               element={<EventsByLocation />}
             />
             <Route path="/events/waukee" element={<EventsByLocation />} />
+            <Route path="/events/series/:slug" element={<EventSeriesPage />} />
             <Route path="/events/:slug" element={<EventsSegmentHandler />} />
             <Route path="/articles" element={<Articles />} />
             <Route path="/articles/:slug" element={<ArticleDetails />} />
