@@ -95,4 +95,33 @@ final class LocationWeatherTests: XCTestCase {
         let farLatSameLon = CLLocationCoordinate2D(latitude: 45.0, longitude: -93.6250)
         XCTAssertFalse(snapshot(lat: 41.5868, lon: -93.6250).isNear(farLatSameLon))
     }
+
+    // MARK: - Ribbon copy (IOS-DD-EVENTS-24)
+
+    func testNoSunnyPatioCopyAtNight() {
+        let warmClearNight = WeatherService.Snapshot(
+            temperatureF: 75, conditionsRaw: "clear", fetchedAt: Date(), latitude: 41.5868, longitude: -93.6250
+        )
+        let template = RightNowRibbon.Template.choose(snapshot: warmClearNight, hour: 23, weekday: 4)
+        XCTAssertNotEqual(template.id, "patios")
+        XCTAssertEqual(template.id, "live_music")
+    }
+
+    func testSunnyPatioCopyInTheAfternoon() {
+        let warmClear = WeatherService.Snapshot(
+            temperatureF: 75, conditionsRaw: "clear", fetchedAt: Date(), latitude: 41.5868, longitude: -93.6250
+        )
+        XCTAssertEqual(RightNowRibbon.Template.choose(snapshot: warmClear, hour: 14, weekday: 4).id, "patios")
+    }
+
+    func testLiveMusicOpensMusicTonight() {
+        let t = RightNowRibbon.Template.choose(
+            snapshot: WeatherService.Snapshot(
+                temperatureF: 60, conditionsRaw: "cloudy", fetchedAt: Date(), latitude: 41.5868, longitude: -93.6250
+            ),
+            hour: 20, weekday: 6
+        )
+        XCTAssertEqual(t.filter.eventCategory, .music)
+        XCTAssertEqual(t.filter.datePreset, .tonight)
+    }
 }

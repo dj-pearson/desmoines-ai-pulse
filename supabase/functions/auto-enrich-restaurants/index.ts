@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { runJob } from "../_shared/jobRunner.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,11 +71,18 @@ serve(async (req) => {
 
     if (!incompleteRestaurants || incompleteRestaurants.length === 0) {
       console.log('✅ All restaurants have complete data!');
+      // WEB-BE-043: recorded, not just returned. "Nothing to enrich" and "this
+      // function has not run in a week" are different facts and used to produce
+      // the same evidence - none.
+      const emptyRun = await runJob('auto-enrich-restaurants', async (ctx) => {
+        ctx.meta({ sources: { restaurants: { fetched: 0, inserted: 0, duplicates: 0, errors: 0 } } });
+      });
       return new Response(JSON.stringify({
         success: true,
         message: 'No restaurants need enrichment',
         processed: 0,
-        enriched: 0
+        enriched: 0,
+        runId: emptyRun.runId
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
@@ -104,26 +112,68 @@ serve(async (req) => {
     // Call the existing bulk-update-restaurants function
     console.log(`🚀 Calling bulk-update-restaurants for ${restaurantIds.length} restaurants...`);
 
-    const { data: updateResult, error: updateError } = await supabase.functions.invoke(
-      'bulk-update-restaurants',
-      {
-        body: {
-          restaurantIds,
-          forceUpdate: true,  // Force update even if recently updated
-          batchSize: restaurantIds.length
+    // WEB-BE-043. `updated` here is the enrichment count, and it is the number
+    // that goes dark first: Google Places stops answering, every restaurant
+    // comes back unenriched, and the function keeps returning 200 with
+    // "Auto-enrichment completed: 0 restaurants updated".
+    let successCount = 0;
+    let errorCount = 0;
+    let updateResult: { updated?: number; errors?: number } | null = null;
+    const job = await runJob('auto-enrich-restaurants', async (ctx) => {
+      const { data, error: updateError } = await supabase.functions.invoke(
+        'bulk-update-restaurants',
+        {
+          body: {
+            restaurantIds,
+            forceUpdate: true,  // Force update even if recently updated
+            batchSize: restaurantIds.length
+          }
         }
+      );
+
+      if (updateError) {
+        throw new Error(`Bulk update failed: ${updateError.message}`);
       }
-    );
 
-    if (updateError) {
-      throw new Error(`Bulk update failed: ${updateError.message}`);
+      updateResult = data;
+      console.log('✅ Enrichment complete:', updateResult);
+
+      successCount = updateResult?.updated || 0;
+      errorCount = updateResult?.errors || 0;
+      ctx.processed(successCount);
+      ctx.failed(errorCount);
+      ctx.meta({
+        sources: {
+          restaurants: {
+            fetched: incompleteRestaurants.length,
+            // An enrichment IS the write this job exists to make; there is no
+            // insert path here, so counting `updated` as inserted is what makes
+            // the zero-result rule mean anything for this job.
+            inserted: successCount,
+            duplicates: 0,
+            errors: errorCount,
+          },
+        },
+      });
+    });
+
+    // runJob SWALLOWS THE THROW - it records the failed run and returns
+    // { ok: false } rather than propagating, so the catch below no longer sees
+    // a bulk-update failure. Without this the function would answer 200
+    // "Auto-enrichment completed: 0 restaurants updated" for a total failure,
+    // which is the exact shape of the bug WEB-BE-043 exists to remove.
+    if (!job.ok) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: job.error ?? 'enrichment failed',
+        processed: incompleteRestaurants.length,
+        enriched: 0,
+        runId: job.runId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
     }
-
-    console.log('✅ Enrichment complete:', updateResult);
-
-    // Calculate improvement stats
-    const successCount = updateResult?.updated || 0;
-    const errorCount = updateResult?.errors || 0;
 
     // Log detailed results
     const response = {
@@ -133,7 +183,9 @@ serve(async (req) => {
       enriched: successCount,
       errors: errorCount,
       missingDataBefore: missingDataSummary,
-      bulkUpdateResult: updateResult
+      bulkUpdateResult: updateResult,
+      runId: job.runId,
+      ...(job.status === 'skipped' ? { paused: true } : {})
     };
 
     console.log('📊 Final results:', JSON.stringify(response, null, 2));

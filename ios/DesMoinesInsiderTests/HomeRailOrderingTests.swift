@@ -34,29 +34,42 @@ final class HomeRailOrderingTests: XCTestCase {
 
     func testEngagedRestaurantAffinityLeadsWithForYouThenRestaurants() {
         let order = HomeRailOrdering.order(for: signals(engaged: true, favRestaurants: 4))
-        XCTAssertEqual(order, [.forYou, .popularRestaurants, .featured, .thisWeekend, .trendingAttractions])
+        XCTAssertEqual(order, [.tonight, .forYou, .popularRestaurants, .featured, .thisWeekend, .trendingAttractions])
     }
 
     func testNotEngagedRestaurantAffinityLeadsWithRestaurantsThenForYou() {
         let order = HomeRailOrdering.order(for: signals(engaged: false, favRestaurants: 4))
-        XCTAssertEqual(order, [.popularRestaurants, .forYou, .featured, .thisWeekend, .trendingAttractions])
+        XCTAssertEqual(order, [.tonight, .popularRestaurants, .forYou, .featured, .thisWeekend, .trendingAttractions])
     }
 
     func testAttractionAffinityBubblesAttractionsUp() {
         let order = HomeRailOrdering.order(for: signals(engaged: true, recentAttractions: 6))
-        // Attractions become the top content type, after the For-You lead.
-        XCTAssertEqual(order.first, .forYou)
-        XCTAssertEqual(order[1], .trendingAttractions)
+        // Attractions become the top content type, after Tonight and the
+        // For-You lead.
+        XCTAssertEqual(order.first, .tonight)
+        XCTAssertEqual(order[1], .forYou)
+        XCTAssertEqual(order[2], .trendingAttractions)
     }
 
     func testFavoritesOutweighRecentViews() {
         // 2 restaurant favorites (score 4) beat 3 attraction views (score 3).
         let order = HomeRailOrdering.order(for: signals(engaged: true, favRestaurants: 2, recentAttractions: 3))
-        XCTAssertEqual(order[1], .popularRestaurants)
+        XCTAssertEqual(order[2], .popularRestaurants)
     }
 
     func testDeterministic() {
         let s = signals(engaged: true, favEvents: 1, favRestaurants: 2, recentAttractions: 1)
         XCTAssertEqual(HomeRailOrdering.order(for: s), HomeRailOrdering.order(for: s))
+    }
+
+    // MARK: - Tonight leads (IOS-DD-EVENTS-18)
+
+    func testTonightIsFirstInTheCanonicalOrder() {
+        XCTAssertEqual(canonical.first, .tonight)
+    }
+
+    func testTonightLeadsEvenWithStrongAffinityElsewhere() {
+        let order = HomeRailOrdering.order(for: signals(engaged: true, favRestaurants: 9, recentAttractions: 9))
+        XCTAssertEqual(order.first, .tonight)
     }
 }

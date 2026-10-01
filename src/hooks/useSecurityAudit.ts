@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { recordAdminAudit } from '@/lib/adminAudit';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useSecurityAudit');
@@ -36,33 +37,26 @@ export function useSecurityAudit() {
   const { isAuthenticated, isAdmin } = useAuth();
 
   /**
-   * Log security event to database
+   * Log a security event. Admin only: rows go through record_admin_audit,
+   * which records the signed-in admin as the actor, so the caller-supplied
+   * identifier, endpoint and user_id land in details rather than in the
+   * columns that say who did it.
    */
   const logSecurityEvent = async (event: Omit<SecurityEvent, 'id' | 'timestamp'>) => {
-    try {
-      if (!isAuthenticated) return;
-
-      const { error } = await supabase
-        .from('security_audit_logs')
-        .insert({
-          event_type: event.event_type,
-          identifier: event.identifier,
-          endpoint: event.endpoint,
-          details: event.details,
-          severity: event.severity,
-          user_id: event.user_id,
-          action: event.action,
-          resource: event.resource,
-          ip_address: event.ip_address,
-          user_agent: event.user_agent,
-        });
-
-      if (error) {
-        logger.error('logSecurityEvent', 'Error logging security event', { error });
-      }
-    } catch (err) {
-      logger.error('logSecurityEvent', 'Error logging security event', { error: err });
-    }
+    if (!isAuthenticated || !isAdmin) return;
+    const written = await recordAdminAudit({
+      eventType: event.event_type,
+      action: event.action ?? event.event_type,
+      resource: event.resource ?? event.endpoint ?? 'security',
+      severity: event.severity,
+      details: {
+        ...(event.details ?? {}),
+        identifier: event.identifier,
+        endpoint: event.endpoint ?? null,
+        subject_user_id: event.user_id ?? null,
+      },
+    });
+    if (!written) logger.warn('logSecurityEvent', 'Security event was not recorded');
   };
 
   /**

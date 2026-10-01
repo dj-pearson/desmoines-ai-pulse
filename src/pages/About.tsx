@@ -58,7 +58,7 @@ export default function About() {
     <>
       <SEOHead
         title={`About ${BRAND.name} and how listings are chosen`}
-        description={`${BRAND.name} is a local guide to events, restaurants and attractions across the Greater Des Moines metro. How events, restaurants and articles get on the site.`}
+        description={`Who runs ${BRAND.name}, what it covers across the Des Moines metro, and how events, restaurants and articles get on the site.`}
         canonicalUrl={ABOUT_URL}
         keywords={["about Des Moines Insider", "Des Moines events guide", "how listings are chosen"]}
       />

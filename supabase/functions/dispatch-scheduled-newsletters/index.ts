@@ -4,8 +4,9 @@
  * Cron-driven worker. Reads up to 5 newsletter_campaigns rows where
  * status = 'scheduled' AND scheduled_for <= now(), atomically flips
  * each to 'sending' (so a duplicate cron run doesn't double-send),
- * then dispatches via Resend the same way send-newsletter-campaign's
- * send_now path does.
+ * then dispatches through _shared/email.ts the same way
+ * send-newsletter-campaign's send_now path does: one copy per subscriber, in
+ * the CAN-SPAM layout, with that subscriber's own unsubscribe token.
  *
  * Cron schedule lives in migration 20260520000012_schedule_newsletter_dispatch.sql
  *
@@ -21,10 +22,10 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { runJob } from "../_shared/jobRunner.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { sendEmail } from "../_shared/email.ts";
+import { newsletterEmail } from "../_shared/emailTemplates.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS =
   Deno.env.get("NEWSLETTER_FROM")
     ?? "Des Moines Insider <events@desmoinesinsider.com>";
@@ -54,15 +55,15 @@ interface CampaignRow {
 async function resolveSegment(
   supabase: ReturnType<typeof createClient>,
   segment: Segment | null,
-): Promise<{ email: string }[]> {
+): Promise<{ email: string; unsubscribe_token: string | null }[]> {
   // Paginate so a large segment can't blow the function's memory by loading the
   // whole subscriber list in a single unbounded query. Ordered by email for a
   // stable window across pages.
-  const out: { email: string }[] = [];
+  const out: { email: string; unsubscribe_token: string | null }[] = [];
   for (let from = 0; ; from += DB_PAGE_SIZE) {
     let q = supabase
       .from("newsletter_subscribers")
-      .select("email")
+      .select("email, unsubscribe_token")
       .eq("status", "active");
     if (segment?.sources && segment.sources.length > 0) {
       q = q.in("source", segment.sources);
@@ -71,7 +72,7 @@ async function resolveSegment(
       .order("email", { ascending: true })
       .range(from, from + DB_PAGE_SIZE - 1);
     if (error) throw error;
-    const rows = (data ?? []) as { email: string }[];
+    const rows = (data ?? []) as { email: string; unsubscribe_token: string | null }[];
     out.push(...rows);
     if (rows.length < DB_PAGE_SIZE) break;
   }
@@ -108,32 +109,24 @@ async function loadAttemptedRecipients(
 }
 
 async function sendOne(
-  to: string,
-  subject: string,
-  bodyHtml: string,
+  supabase: ReturnType<typeof createClient>,
+  to: { email: string; unsubscribe_token: string | null },
+  campaign: CampaignRow,
 ): Promise<{ message_id: string | null }> {
-  if (!RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not configured");
-  }
-  const r = await fetchWithTimeout("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-    },
-    body: JSON.stringify({
+  const res = await sendEmail(
+    newsletterEmail({
+      recipient: { email: to.email, unsubscribeToken: to.unsubscribe_token },
+      subject: campaign.subject,
+      bodyHtml: campaign.body_html,
+      preheader: campaign.preheader,
       from: FROM_ADDRESS,
-      to: [to],
-      subject,
-      html: bodyHtml,
+      template: "newsletter_campaign",
+      ref: { type: "newsletter_campaign", id: campaign.id },
     }),
-  });
-  if (!r.ok) {
-    const text = await r.text();
-    throw new Error(`Resend ${r.status}: ${text.slice(0, 200)}`);
-  }
-  const body = await r.json().catch(() => ({} as { id?: string }));
-  return { message_id: typeof body.id === "string" ? body.id : null };
+    { supabase },
+  );
+  if (!res.ok) throw new Error(res.error ?? "send failed");
+  return { message_id: res.messageId ?? null };
 }
 
 async function dispatchCampaign(
@@ -167,7 +160,7 @@ async function dispatchCampaign(
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     const batch = recipients.slice(i, i + BATCH_SIZE);
     const settled = await Promise.allSettled(
-      batch.map((r) => sendOne(r.email, campaign.subject, campaign.body_html)),
+      batch.map((r) => sendOne(supabase, r, campaign)),
     );
     settled.forEach((s, idx) => {
       const recipient = batch[idx];
@@ -233,7 +226,7 @@ serve(async (req) => {
   // through and nothing here looked at the role. Verified against production:
   // no Authorization header -> 401 at the gateway; anon bearer -> 200 and the
   // job ran. This function then does privileged writes with the service-role
-  // client below and dispatches mail through Resend.
+  // client below and dispatches mail.
   //
   // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role key
   // (which is what the pg_cron job sends - see

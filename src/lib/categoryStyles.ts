@@ -107,7 +107,7 @@ export function getEventCategoryBadgeClass(category?: string | null): string {
   return `${getEventCategoryStyle(category).bg} text-white`;
 }
 
-/** Cuisine -> decorative image-fallback gradient (used by RestaurantCard). */
+/** Decorative image-fallback gradients. Only `default` is still read (by getHotelTypeGradient). */
 export const CUISINE_GRADIENTS: Record<string, string> = {
   Italian: "from-red-600 to-orange-500",
   Mexican: "from-green-600 to-yellow-500",
@@ -127,17 +127,13 @@ export const CUISINE_GRADIENTS: Record<string, string> = {
   default: "from-[#2D1B69] to-[#DC143C]",
 };
 
-export function getCuisineGradient(cuisine?: string | null): string {
-  if (!cuisine) return CUISINE_GRADIENTS.default;
-  const c = cuisine.toLowerCase();
-  for (const [key, value] of Object.entries(CUISINE_GRADIENTS)) {
-    if (key === "default") continue;
-    if (c.includes(key.toLowerCase())) return value;
-  }
-  return CUISINE_GRADIENTS.default;
-}
-
-/** Lodging type -> decorative image-fallback gradient (used by HotelCard). */
+/**
+ * Lodging type -> decorative image-fallback gradient (used by HotelCard).
+ * Six types, six hue pairs, no text on top. `impeccable detect` counts the
+ * Boutique Hotel purple as an ai-color-palette finding; it stays for the same
+ * reason the category hues above do - it is a member of a distinguishing set,
+ * and recolouring one member to clear a rule leaves the set arbitrary.
+ */
 const HOTEL_TYPE_GRADIENTS: Record<string, string> = {
   "Hotel": "from-blue-600 to-indigo-500",
   "Boutique Hotel": "from-purple-600 to-pink-500",

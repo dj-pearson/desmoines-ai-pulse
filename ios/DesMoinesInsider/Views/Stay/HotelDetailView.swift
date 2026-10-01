@@ -11,6 +11,7 @@ struct HotelDetailView: View {
     @State private var showShareSheet = false
     @State private var showImageViewer = false
     @State private var selectedImageURL: String?
+    @Environment(\.openURL) private var openURL
 
     private var gallery: [String] { hotel.galleryImageURLs }
 
@@ -21,6 +22,7 @@ struct HotelDetailView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     titleBlock
                     bookButton
+                    contactSection
                     if !hotel.amenitiesList.isEmpty { amenitiesSection }
                     if hotel.coordinate != nil { mapSection }
                     if let description = hotel.description, !description.isEmpty {
@@ -177,6 +179,42 @@ struct HotelDetailView: View {
         }
     }
 
+    // MARK: - Call + directions
+
+    /// Call and Directions through the shared Restaurant helpers
+    /// (IOS-DD-GUIDES-19). Directions no longer need coordinates: the seeded
+    /// hotels have none, so the only directions button (inside the map) never
+    /// showed.
+    @ViewBuilder
+    private var contactSection: some View {
+        if hotel.dialURL != nil || hotel.directionsURL != nil {
+            VStack(alignment: .leading, spacing: 4) {
+                if let dial = hotel.dialURL, let phone = hotel.phone {
+                    contactRow(phone, systemImage: "phone.fill", url: dial)
+                        .accessibilityLabel("Call \(hotel.name)")
+                }
+                if let directions = hotel.directionsURL {
+                    contactRow(hotel.fullAddress.isEmpty ? "Get directions" : hotel.fullAddress,
+                               systemImage: "arrow.triangle.turn.up.right.circle.fill",
+                               url: directions)
+                        .accessibilityLabel("Get directions to \(hotel.name)")
+                }
+            }
+        }
+    }
+
+    private func contactRow(_ title: String, systemImage: String, url: URL) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            openURL(url)
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+        }
+    }
+
     // MARK: - Amenities
 
     private var amenitiesSection: some View {
@@ -211,17 +249,6 @@ struct HotelDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .allowsHitTesting(false)
                 .accessibilityLabel("Map showing \(hotel.name) in \(hotel.displayArea)")
-
-                if !hotel.fullAddress.isEmpty {
-                    Button {
-                        openInMaps(coordinate)
-                    } label: {
-                        Label(hotel.fullAddress, systemImage: "arrow.triangle.turn.up.right.circle.fill")
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .accessibilityLabel("Get directions to \(hotel.name)")
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -243,6 +270,9 @@ struct HotelDetailView: View {
     // MARK: - Actions
 
     private func book(url: URL) {
+        // Defense in depth: SFSafariViewController raises on anything but an
+        // http(s) URL with a host (IOS-DD-GUIDES-18).
+        guard url.isSafeWebLink, url.host != nil else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         // Affiliate clickout tracking (IOS-PARITY-003 / IOS-ADS-014). Sponsored/
         // affiliate revenue happens on the partner, outside Apple IAP.
@@ -255,19 +285,6 @@ struct HotelDetailView: View {
             "has_affiliate": hotel.hasAffiliate,
         ])
         bookTarget = AdTarget(url: url)
-    }
-
-    private func openInMaps(_ coordinate: CLLocationCoordinate2D) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        let name = hotel.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let query = "daddr=\(coordinate.latitude),\(coordinate.longitude)&q=\(name)"
-        // Prefer the Apple Maps app, but fall back to the universal https link so
-        // tapping Directions still works when Apple Maps is unavailable.
-        if let appURL = URL(string: "maps://?\(query)"), UIApplication.shared.canOpenURL(appURL) {
-            UIApplication.shared.open(appURL)
-        } else if let webURL = URL(string: "https://maps.apple.com/?\(query)") {
-            UIApplication.shared.open(webURL)
-        }
     }
 
     private var shareText: String {

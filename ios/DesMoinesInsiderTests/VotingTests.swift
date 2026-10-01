@@ -97,4 +97,98 @@ final class VotingTests: XCTestCase {
         XCTAssertNil(BestOfWinners.shared.winnerLabel(forEntityId: "nope"))
         BestOfWinners.shared.update([:]) // reset for other tests
     }
+
+    // MARK: Voting window (IOS-DD-GUIDES-07)
+
+    private func category(
+        id: String = "c1", start: String? = nil, end: String? = nil, active: Bool? = true
+    ) -> VotingCategory {
+        VotingCategory(
+            id: id, name: "Best Pizza", slug: "best-pizza", description: nil, icon: "pizza",
+            isActive: active, votingStart: start, votingEnd: end, createdAt: nil
+        )
+    }
+
+    private let now = ISO8601DateFormatter().date(from: "2026-06-15T12:00:00Z")!
+
+    func testVotingNotOpenBeforeStart() {
+        let c = category(start: "2026-07-01T00:00:00Z")
+        XCTAssertFalse(c.isVotingOpen(at: now))
+    }
+
+    func testVotingOpenWithinWindow() {
+        let c = category(start: "2026-06-01T00:00:00Z", end: "2026-06-30T00:00:00Z")
+        XCTAssertTrue(c.isVotingOpen(at: now))
+        XCTAssertNotNil(c.closesAt)
+        XCTAssertFalse(category(end: "2026-06-01T00:00:00Z").isVotingOpen(at: now))
+        XCTAssertFalse(category(active: false).isVotingOpen(at: now))
+    }
+
+    // MARK: Vote failures (IOS-DD-GUIDES-06/07)
+
+    func testFailureMessage42501WithEarlierVote() {
+        XCTAssertEqual(
+            BestOfCategoryViewModel.failureMessage(for: "new row violates row-level security policy", code: "42501", hadEarlierVote: true),
+            "We couldn't change your vote. Your earlier vote still counts."
+        )
+    }
+
+    func testFailureMessage42501WithoutEarlierVote() {
+        XCTAssertEqual(
+            BestOfCategoryViewModel.failureMessage(for: nil, code: "42501", hadEarlierVote: false),
+            "We couldn't save your vote. Please try again later."
+        )
+    }
+
+    func testFailureMessageMapsGuardErrors() {
+        XCTAssertEqual(
+            BestOfCategoryViewModel.failureMessage(for: "voting_closed", code: "P0001", hadEarlierVote: false),
+            "Voting in this category has closed."
+        )
+        XCTAssertEqual(
+            BestOfCategoryViewModel.failureMessage(for: "invalid_write_in", code: "P0001", hadEarlierVote: false),
+            "That write-in can't be used. Try searching for the place instead."
+        )
+        XCTAssertEqual(
+            BestOfCategoryViewModel.failureMessage(for: "unknown_entity", code: "P0001", hadEarlierVote: true),
+            "That place is no longer listed."
+        )
+        XCTAssertEqual(
+            BestOfCategoryViewModel.failureMessage(for: "timeout", code: nil, hadEarlierVote: false),
+            "Couldn't record your vote. Please try again."
+        )
+    }
+
+    // MARK: Leaderboard cap (IOS-DD-GUIDES-09)
+
+    private func results(_ n: Int) -> [VoteResult] {
+        (0..<n).map { VoteResult(entityType: "custom", entityId: nil, customEntry: "Place \($0)", voteCount: n - $0) }
+    }
+
+    func testVisibleResultsCapAtTen() {
+        XCTAssertEqual(VoteResult.visible(results(14), showAll: false).count, 10)
+        XCTAssertEqual(VoteResult.visible(results(4), showAll: false).count, 4)
+    }
+
+    func testVisibleResultsShowAll() {
+        XCTAssertEqual(VoteResult.visible(results(14), showAll: true).count, 14)
+    }
+
+    func testCategorySubjectName() {
+        XCTAssertEqual(category().subjectName, "pizza")
+    }
+
+    // MARK: Ballot progress (IOS-DD-GUIDES-10)
+
+    func testBallotProgressCountsOnlyOpenCategories() {
+        let cats = [
+            category(id: "a"),
+            category(id: "b"),
+            category(id: "closed", end: "2026-01-01T00:00:00Z"),
+            category(id: "later", start: "2026-12-01T00:00:00Z"),
+        ]
+        let progress = BestOfViewModel.progress(categories: cats, voted: ["a", "closed"], now: now)
+        XCTAssertEqual(progress.voted, 1)
+        XCTAssertEqual(progress.total, 2)
+    }
 }

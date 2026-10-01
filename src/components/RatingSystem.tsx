@@ -552,7 +552,17 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, onReport
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
         <DialogContent className="max-w-3xl p-2">
-          {lightbox && <img src={lightbox} alt="Review photo" className="w-full rounded-md" />}
+          {/* WEB-PERF-041: `w-full` alone left the height unbounded, so the
+              dialog resized under the reader's cursor when the photo arrived.
+              A viewport-relative cap plus object-contain bounds the box before
+              the bytes do. */}
+          {lightbox && (
+            <img
+              src={lightbox}
+              alt="Review photo"
+              className="max-h-[80vh] w-full rounded-md object-contain"
+            />
+          )}
         </DialogContent>
       </Dialog>
 

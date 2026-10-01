@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 /// One neighborhood's curated guide (IOS-PARITY-006): dining, attractions, and
 /// upcoming events in the area, with an opt-in "nearby" location sort.
@@ -17,54 +18,89 @@ struct NeighborhoodDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-
-                if viewModel.isLoading && viewModel.isEmpty {
-                    loadingState
-                } else if viewModel.isEmpty {
-                    EmptyStateView(
-                        icon: "building.2",
-                        title: "Still mapping this area",
-                        message: "We don't have listings tagged to \(neighborhood.name) yet — explore the full guides in the meantime."
-                    )
-                    .padding(.top, 16)
-                } else {
-                    if !viewModel.restaurants.isEmpty {
-                        rail(title: "Where to eat", systemImage: "fork.knife") {
-                            ForEach(viewModel.restaurants) { restaurant in
-                                NavigationLink(value: restaurant) {
-                                    ContentCard(restaurant.cardData, variant: .compact, decorative: true)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    AdSlot(.feed)
-
-                    if !viewModel.attractions.isEmpty {
-                        rail(title: "Things to do", systemImage: "mappin.and.ellipse") {
-                            ForEach(viewModel.attractions) { attraction in
-                                NavigationLink(value: attraction) {
-                                    ContentCard(attraction.cardData, variant: .compact, decorative: true)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    if !viewModel.events.isEmpty { eventsSection }
-                }
+                sections
             }
             .padding(.vertical, 8)
         }
         .navigationTitle(neighborhood.name)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await viewModel.refresh() }
+        .reloadOnReconnect(if: viewModel.isEmpty) { await viewModel.refresh() }
         .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
         .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
         .navigationDestination(for: Attraction.self) { AttractionDetailView(attraction: $0) }
         .toastOverlay(message: $toast)
         .task { await viewModel.loadInitialData() }
+    }
+
+    @ViewBuilder
+    private var sections: some View {
+        if viewModel.isLoading && viewModel.isEmpty {
+            loadingState
+        } else if let error = viewModel.loadError, viewModel.isEmpty {
+            // A failed load is not an empty area (IOS-DD-BROWSE-18).
+            ErrorStateView(message: error) {
+                Task { await viewModel.refresh() }
+            }
+            .padding(.top, 16)
+        } else if viewModel.isEmpty {
+            EmptyStateView(
+                icon: "building.2",
+                title: "Still mapping this area",
+                message: "We don't have listings tagged to \(neighborhood.name) yet. Search the whole metro in the meantime.",
+                actionTitle: "Search the metro",
+                action: { DeepLinkHandler.shared.open(.tab(.search)) }
+            )
+            .padding(.top, 16)
+        } else {
+            restaurantsRail
+            AdSlot(.feed)
+            attractionsRail
+            if !viewModel.events.isEmpty { eventsSection }
+        }
+    }
+
+    // MARK: - Rails
+
+    @ViewBuilder
+    private var restaurantsRail: some View {
+        if !viewModel.restaurants.isEmpty {
+            rail(title: "Where to eat", systemImage: "fork.knife") {
+                ForEach(viewModel.restaurants) { restaurant in
+                    NavigationLink(value: restaurant) {
+                        ContentCard(cardData(restaurant.cardData, coordinate: restaurant.coordinate), variant: .compact, decorative: true)
+                    }
+                    .buttonStyle(.plain)
+                    // The card is hidden from VoiceOver (IOS-DD-BROWSE-07).
+                    .accessibilityLabel(restaurant.railAccessibilityLabel)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var attractionsRail: some View {
+        if !viewModel.attractions.isEmpty {
+            rail(title: "Things to do", systemImage: "mappin.and.ellipse") {
+                ForEach(viewModel.attractions) { attraction in
+                    NavigationLink(value: attraction) {
+                        ContentCard(cardData(attraction.cardData, coordinate: attraction.coordinate), variant: .compact, decorative: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(attraction.railAccessibilityLabel)
+                }
+            }
+        }
+    }
+
+    /// With the nearby sort on, the second meta line is the distance, so the
+    /// new order can be checked by eye (IOS-DD-BROWSE-19).
+    private func cardData(_ base: ContentCardData, coordinate: CLLocationCoordinate2D?) -> ContentCardData {
+        guard viewModel.usingLocation, let coordinate,
+              let distance = LocationService.shared.formattedDistance(from: coordinate) else { return base }
+        var data = base
+        data.metaSecondary = CardMetaLine(icon: "location", text: distance)
+        return data
     }
 
     // MARK: - Header (blurb + highlights + nearby toggle)
@@ -75,19 +111,12 @@ struct NeighborhoodDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
+            // Plain text: the orange capsules looked like the tappable
+            // chips elsewhere and did nothing (IOS-DD-BROWSE-19).
             if !neighborhood.highlights.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(neighborhood.highlights, id: \.self) { highlight in
-                            Label(highlight, systemImage: "star.fill")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.orange)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color.orange.opacity(0.1), in: Capsule())
-                        }
-                    }
-                }
+                Text("Known for: " + neighborhood.highlights.joined(separator: " \u{00B7} "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             // Location integration (IOS-PARITY-006): nearest-first when enabled.
@@ -96,13 +125,7 @@ struct NeighborhoodDetailView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Color.accentColor)
             } else {
-                Button {
-                    Task { await viewModel.enableNearby() }
-                } label: {
-                    Label("Sort by what's nearby", systemImage: "location")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
+                nearbyButton
 
                 if viewModel.nearbyUnavailable {
                     // The button used to reload in the same order and say
@@ -127,6 +150,29 @@ struct NeighborhoodDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
+    }
+
+    private var nearbyButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Task { await viewModel.enableNearby() }
+        } label: {
+            if viewModel.isLocating {
+                // Up to 18s of permission prompt and cold GPS used to change
+                // nothing on screen (IOS-DD-BROWSE-19).
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Finding you...")
+                }
+                .font(.caption.weight(.semibold))
+            } else {
+                Label("Sort by what's nearby", systemImage: "location")
+                    .font(.caption.weight(.semibold))
+            }
+        }
+        .buttonStyle(.bordered)
+        .disabled(viewModel.isLocating)
+        .minHitTarget()
     }
 
     /// Denied is fixable from Settings; a missing fix is not, and telling

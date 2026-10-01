@@ -12,7 +12,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
@@ -61,8 +61,10 @@ serve(async (req) => {
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
-  // Require API key authentication (SEC-020)
-  const authResponse = requireApiKey(req, corsHeaders);
+  // API key or admin auth (SEC-020). This was requireApiKey alone, which only
+  // accepts EDGE_FUNCTION_API_KEY, so the admin "resend" button
+  // (ArticlesManager.tsx), which sends the admin's JWT, always got a 401.
+  const authResponse = await requireAdminOrApiKey(req, corsHeaders);
   if (authResponse) return authResponse;
 
   // Rate limiting: 10 requests per 15 minutes (SEC-020)

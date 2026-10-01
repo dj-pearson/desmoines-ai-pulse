@@ -1,80 +1,110 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useArticles } from '@/hooks/useArticles';
-import { Article } from '@/hooks/useArticles';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
+import { formatInTimeZone } from 'date-fns-tz';
+import { Eye, ArrowLeft, Tag, BookOpen } from "lucide-react";
+import { RelatedLinks } from "@/components/seo/InternalLinks";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Badge } from '@/components/ui/badge';
 import { AIDisclosureBadge, AIDisclosureNotice } from '@/components/AIDisclosureBadge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Eye, ArrowLeft, User, Tag, BookOpen, ThumbsUp, MessageCircle, Bookmark } from "lucide-react";
 import { LoadingSpinner } from '@/components/ui/loading-skeleton';
+import { ErrorState } from '@/components/ui/error-state';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
-import { ogImageUrl } from '@/lib/ogImage';
+import { RouteCanonical } from '@/components/RouteCanonical';
 import ShareDialog from '@/components/ShareDialog';
-import { Helmet } from 'react-helmet-async';
-import { BRAND } from '@/lib/brandConfig';
 import SpeakableSchema from '@/components/schema/SpeakableSchema';
-import FAQSchema from '@/components/schema/FAQSchema';
+import NoIndexMeta from '@/components/schema/NoIndexMeta';
+import { NewsletterSignup } from '@/components/NewsletterSignup';
+import { RelatedArticles } from '@/components/articles/RelatedArticles';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { PreferredSourceButton } from '@/components/seo/PreferredSourceButton';
 import { buildArticleJsonLd, ABOUT_PATH } from '@/lib/articleSchema';
+import { VIEW_COUNTS_LIVE, useArticleBySlug } from '@/hooks/useArticles';
+import {
+  ARTICLE_HUBS,
+  aiBadgeLabel,
+  aiDisclosureText,
+  classifyArticleHref,
+  hubsForArticle,
+  isAiArticle,
+  isStaleArticle,
+  primaryHubForArticle,
+  readTimeLabel,
+  wasMeaningfullyUpdated,
+} from "@/lib/articleHubs";
+import { ogImageUrl } from '@/lib/ogImage';
+import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
+import { handleError } from '@/lib/errorHandler';
+import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
+
+/**
+ * Dates in Central time (pass 2 WP4 item 11). toLocaleDateString used the
+ * reader's zone, so an article published at 8 PM Central read as the next day
+ * on the East Coast and in the UTC prerender.
+ */
+function formatCentral(dateString: string, pattern: string): string {
+  const t = Date.parse(dateString);
+  return Number.isFinite(t) ? formatInTimeZone(t, DES_MOINES_TIME_ZONE, pattern) : '';
+}
+
+const formatDate = (dateString: string) => formatCentral(dateString, 'MMMM d, yyyy');
+
+const formatMonthYear = (dateString: string) => formatCentral(dateString, 'MMMM yyyy');
+
+/**
+ * Links inside the article body (pass 2 WP4 item 12). A site path is an
+ * in-app route; another host opens in a new tab with rel="nofollow noopener",
+ * because the article pipeline writes these and nobody vouches for them.
+ */
+const markdownComponents: Components = {
+  a: ({ href, children }) => {
+    const target = classifyArticleHref(href, BRAND.baseUrl);
+    if (target.kind === 'internal') return <Link to={target.path}>{children}</Link>;
+    if (target.kind === 'external') {
+      return (
+        <a href={target.href} target="_blank" rel="nofollow noopener">
+          {children}
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      );
+    }
+    return <a href={target.href}>{children}</a>;
+  },
+};
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
-  const { getArticleBySlug } = useArticles({ autoLoad: false });
-  const [article, setArticle] = useState<Article | null>(null);
-  const [loading, setLoading] = useState(true);
+  // The canonical URL, not the browser's current address (WEB-BE-056 AC4).
+  // scripts/prerender.mjs captures these pages from a headless browser pointed
+  // at http://127.0.0.1:<port>, so every share link in the prerendered markup
+  // carried a localhost address - a share target nobody can open.
+  const canonicalUrl = getCanonicalUrl(`/articles/${slug ?? ''}`);
+  // Three states, not two (Plan & Stay WP4 item 4): a missing row is "not
+  // found" and noindex; a failed request is an error with Retry, and is NOT
+  // told to crawlers as a missing page.
+  const { data: article, isLoading, error, refetch } = useArticleBySlug(slug);
 
   useEffect(() => {
-    const loadArticle = async () => {
-      if (!slug) return;
-      
-      setLoading(true);
-      const fetchedArticle = await getArticleBySlug(slug);
-      setArticle(fetchedArticle);
-      setLoading(false);
-    };
+    if (error) handleError(error, { component: 'ArticleDetails', action: 'load', metadata: { slug } });
+  }, [error, slug]);
 
-    loadArticle();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  // The visible "Updated" line only appears when the row was edited at least a
-  // day after it was published, so a same-day typo fix doesn't read as a refresh.
-  const updatedAfterPublish = (a: Article): string | null => {
-    const published = new Date(a.published_at || a.created_at).getTime();
-    const updated = new Date(a.updated_at).getTime();
-    if (!a.updated_at || Number.isNaN(updated)) return null;
-    return updated - published > 24 * 60 * 60 * 1000 ? a.updated_at : null;
-  };
-
-  const formatReadTime = (content: string) => {
-    const wordsPerMinute = 200;
-    const wordCount = content.split(/\s+/).length;
-    const readTime = Math.max(1, Math.ceil(wordCount / wordsPerMinute));
-    return `${readTime} min read`;
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <>
+        {/* SEO-028: the canonical comes from the route, so a prerender capture
+            that lands mid-fetch still has one (pass 2 WP4 item 1). */}
+        <RouteCanonical path={`/articles/${slug ?? ''}`} />
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
+            <h1 className="sr-only">Loading article</h1>
             <div className="flex items-center justify-center min-h-[400px]">
               <LoadingSpinner />
             </div>
@@ -85,13 +115,30 @@ const ArticleDetails: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <>
+        <NoIndexMeta />
+        <Header />
+        <div className="min-h-screen bg-background">
+          <div className="container mx-auto px-4 py-16">
+            <h1 className="sr-only">Article unavailable</h1>
+            <ErrorState
+              error={error}
+              onRetry={() => { void refetch(); }}
+              title="We couldn't load this article"
+            />
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
+  }
+
   if (!article) {
     return (
       <>
-        <Helmet>
-          <meta name="robots" content="noindex, follow" />
-          <meta name="googlebot" content="noindex, follow" />
-        </Helmet>
+        <NoIndexMeta />
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-16 text-center">
@@ -113,10 +160,21 @@ const ArticleDetails: React.FC = () => {
     );
   }
 
-  const updatedAt = updatedAfterPublish(article);
+  const publishedAt = article.published_at || article.created_at;
+  const updated = wasMeaningfullyUpdated(publishedAt, article.updated_at);
+  const disclosure = aiDisclosureText(article);
+  const primaryHub = primaryHubForArticle(article);
+  const currentHub = primaryHub
+    ? ARTICLE_HUBS[primaryHub]
+    : { href: '/things-to-do', title: 'Things to do in Des Moines' };
+  const ogImage = ogImageUrl("article", article.id);
 
   // BlogPosting or NewsArticle by slug rule; see src/lib/articleSchema.ts.
-  const articleSchema = buildArticleJsonLd(article);
+  // Image keeps the og:image fallback so the two never disagree.
+  const articleSchema = {
+    ...buildArticleJsonLd(article),
+    image: article.featured_image_url || ogImage,
+  };
 
   return (
     <>
@@ -125,19 +183,24 @@ const ArticleDetails: React.FC = () => {
         description={article.seo_description || article.excerpt || `Read ${article.title} on ${BRAND.name}`}
         keywords={article.seo_keywords || article.tags || []}
         type="article"
-        imageUrl={ogImageUrl("article", article.id)}
+        imageUrl={ogImage}
         canonicalUrl={`${BRAND.baseUrl}/articles/${article.slug}`}
+        publishedTime={publishedAt}
+        modifiedTime={article.updated_at || publishedAt}
+        breadcrumbs={[
+          { name: "Home", url: "/" },
+          { name: "Articles", url: "/articles" },
+          { name: article.title, url: `/articles/${article.slug}` },
+        ]}
+        // Serialized by toJsonLd, which escapes "</script>" in a title or
+        // body the pipeline wrote (pass 2 WP4 item 2).
+        structuredData={articleSchema}
       />
-      <Helmet>
-        <script type="application/ld+json">
-          {JSON.stringify(articleSchema)}
-        </script>
-      </Helmet>
       <SpeakableSchema
         name={article.title}
         description={article.excerpt || article.seo_description || `Read ${article.title} on ${BRAND.name}`}
         url={`${BRAND.baseUrl}/articles/${article.slug}`}
-        datePublished={article.published_at || article.created_at}
+        datePublished={publishedAt}
         dateModified={article.updated_at}
         speakableCssSelectors={["[data-speakable]", "h1", "article > p:first-of-type", ".article-content > p:first-of-type"]}
       />
@@ -149,10 +212,13 @@ const ArticleDetails: React.FC = () => {
           {/* Featured Image */}
           {article.featured_image_url && (
             <div className="relative h-64 md:h-96 lg:h-[500px] overflow-hidden">
-              <img
+              <OptimizedImage
                 src={article.featured_image_url}
                 alt={article.title}
-                className="w-full h-full object-cover"
+                className="object-cover"
+                containerClassName="absolute inset-0"
+                priority
+                sizes="(max-width: 768px) 100vw, 1024px"
               />
               <div className="absolute inset-0 bg-black/30" />
               
@@ -196,16 +262,18 @@ const ArticleDetails: React.FC = () => {
                   <Badge variant="secondary" className="text-sm">
                     {article.category}
                   </Badge>
-                  {/* AI transparency disclosure — show whenever the article was
-                      produced from an AI suggestion pipeline (EU AI Act Art. 50,
-                      CA AB 2013, Colorado AI Act). */}
-                  {article.generated_from_suggestion_id && (
+                  {/* AI transparency disclosure (EU AI Act Art. 50, CA AB 2013,
+                      Colorado AI Act). It keyed on generated_from_suggestion_id
+                      alone, which no writer sets, so the auto-published
+                      pipeline articles - the ones with no human step - never
+                      showed it (Plan & Stay WP4 item 1). */}
+                  {isAiArticle(article) && disclosure && (
                     <AIDisclosureBadge
-                      label="AI-assisted"
-                      tooltip="This article was drafted with AI assistance and edited by our team before publishing. Details and quotes may still contain errors — please verify anything important."
+                      label={aiBadgeLabel(article)}
+                      tooltip={disclosure}
                     />
                   )}
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span>
                       By{' '}
                       <Link to={ABOUT_PATH} rel="author" className="font-medium text-foreground hover:underline">
@@ -214,21 +282,26 @@ const ArticleDetails: React.FC = () => {
                     </span>
                     <span className="flex items-center gap-1">
                       <SpriteIcon name="calendar" className="h-4 w-4" />
-                      {formatDate(article.published_at || article.created_at)}
-                    </span>
-                    {updatedAt && (
                       <span>
-                        Updated <time dateTime={updatedAt}>{formatDate(updatedAt)}</time>
+                        Published <time dateTime={publishedAt}>{formatDate(publishedAt)}</time>
+                        {updated && article.updated_at && (
+                          <>
+                            {' '}/ Updated <time dateTime={article.updated_at}>{formatDate(article.updated_at)}</time>
+                          </>
+                        )}
                       </span>
-                    )}
+                    </span>
                     <span className="flex items-center gap-1">
                       <SpriteIcon name="clock" className="h-4 w-4" />
-                      {formatReadTime(article.content)}
+                      {readTimeLabel(article.content)}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Eye className="h-4 w-4" />
-                      {article.view_count || 0} views
-                    </span>
+                    {/* Hidden until counts are real (pass 2 WP4 item 3, D13). */}
+                    {VIEW_COUNTS_LIVE && (
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        {article.view_count || 0} views
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -244,28 +317,35 @@ const ArticleDetails: React.FC = () => {
                   </p>
                 )}
 
-                {article.generated_from_suggestion_id && (
+                {disclosure && (
                   <AIDisclosureNotice
                     className="mb-8"
                     title="About this article"
                   >
-                    <p className="text-muted-foreground leading-snug">
-                      This article was drafted with the help of an AI model
-                      trained on public data and reviewed by a human editor
-                      before publishing. Treat factual claims as a starting
-                      point, not a final source — if you&apos;re making a
-                      decision (reservations, travel, purchases) please verify
-                      with the venue or original source first.
-                    </p>
+                    <p className="text-muted-foreground leading-snug">{disclosure}</p>
                   </AIDisclosureNotice>
+                )}
+
+                {isStaleArticle(publishedAt) && (
+                  <p className="mb-8 text-sm text-muted-foreground">
+                    This piece is from {formatMonthYear(publishedAt)}, so details may have
+                    changed. For what&apos;s on now, see{' '}
+                    <Link to={currentHub.href} className="text-primary underline-offset-4 hover:underline">
+                      {currentHub.title}
+                    </Link>
+                    .
+                  </p>
                 )}
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center gap-3 mb-8">
-                  <ShareDialog 
+                  {/* Save and Like were buttons with no handler and no table
+                      behind them (WP4 item 5); Share is the one real action. */}
+                  <ShareDialog
+                    kind="article"
                     title={article.title}
                     description={article.excerpt || article.title}
-                    url={window.location.href}
+                    url={canonicalUrl}
                     trigger={
                       <Button variant="outline" size="sm" className="gap-2">
                         <SpriteIcon name="share-2" className="h-4 w-4" />
@@ -273,14 +353,6 @@ const ArticleDetails: React.FC = () => {
                       </Button>
                     }
                   />
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Bookmark className="h-4 w-4" />
-                    Save
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <ThumbsUp className="h-4 w-4" />
-                    Like
-                  </Button>
                 </div>
 
                 {/* Tags */}
@@ -306,7 +378,19 @@ const ArticleDetails: React.FC = () => {
               {/* Main Content */}
               <article className="lg:col-span-8">
                 <Card className="p-6 md:p-8">
-                  <div className="prose prose-lg max-w-none dark:prose-invert 
+                  {/* The blockquote side rule below is the one side-tab
+                      finding in this file that impeccable counts and that
+                      stays. CLAUDE.md's rule names cards, list items, callouts
+                      and alerts; a rule down the side of a quotation is
+                      typography, and it is what Tailwind Typography ships. It
+                      is left in the ratchet's count rather than ignored,
+                      because the only ignore the detector offers would silence
+                      side-tab for this WHOLE file - and an article page is
+                      where a real one is most likely to appear
+                      (WEB-UX-034 AC2). */}
+                  {/* article-content is what SpeakableSchema's
+                      ".article-content > p:first-of-type" selector names. */}
+                  <div className="article-content prose prose-lg max-w-none dark:prose-invert
                                prose-headings:font-bold prose-headings:text-foreground
                                prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
                                prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3
@@ -319,46 +403,35 @@ const ArticleDetails: React.FC = () => {
                                prose-img:rounded-lg prose-img:shadow-md
                                prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic
                                prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                       {article.content}
                     </ReactMarkdown>
                   </div>
                 </Card>
 
-                {/* Article Footer */}
-                <div className="mt-8 p-6 bg-muted/30 rounded-lg border">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <h3 className="font-semibold mb-2">Found this helpful?</h3>
-                      <div className="flex items-center gap-3">
-                        <Button variant="outline" size="sm" className="gap-2">
-                          <ThumbsUp className="h-4 w-4" />
-                          Yes
-                        </Button>
-                        <Button variant="outline" size="sm" className="gap-2">
-                          <MessageCircle className="h-4 w-4" />
-                          Feedback
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Published {formatDate(article.published_at || article.created_at)}
-                        {updatedAt && <> &middot; Updated {formatDate(updatedAt)}</>}
-                      </p>
-                      <ShareDialog 
-                        title={article.title}
-                        description={article.excerpt || article.title}
-                        url={window.location.href}
-                        trigger={
-                          <Button variant="default" size="sm" className="gap-2">
-                            <SpriteIcon name="share-2" className="h-4 w-4" />
-                            Share Article
-                          </Button>
-                        }
-                      />
-                    </div>
-                  </div>
+                {/* Article Footer. "Found this helpful?" with Yes and Feedback
+                    buttons sat here, wired to nothing (WP4 item 5). */}
+                <div className="mt-8 flex flex-col gap-4 rounded-lg border bg-muted/30 p-6 md:flex-row md:items-center md:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Published <time dateTime={publishedAt}>{formatDate(publishedAt)}</time>
+                    {updated && article.updated_at && (
+                      <>
+                        {' '}/ Updated <time dateTime={article.updated_at}>{formatDate(article.updated_at)}</time>
+                      </>
+                    )}
+                  </p>
+                  <ShareDialog
+                    kind="article"
+                    title={article.title}
+                    description={article.excerpt || article.title}
+                    url={canonicalUrl}
+                    trigger={
+                      <Button variant="default" size="sm" className="gap-2">
+                        <SpriteIcon name="share-2" className="h-4 w-4" />
+                        Share Article
+                      </Button>
+                    }
+                  />
                 </div>
 
                 {/* SEO-037: Google preferred source, at the end of every article. */}
@@ -371,36 +444,25 @@ const ArticleDetails: React.FC = () => {
               {/* Sidebar */}
               <aside className="lg:col-span-4">
                 <div className="sticky top-8 space-y-6">
-                  {/* Table of Contents (placeholder) */}
+                  {/* SEO-015 / SEO-019. Two placeholder cards used to sit here,
+                      reading "Table of contents will be generated based on
+                      article headings" and "Related articles will be shown
+                      here", on every article and in every crawl. This is the
+                      article half of "every article links into its hub". */}
                   <Card className="p-6">
-                    <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <BookOpen className="h-4 w-4" />
-                      In This Article
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="text-muted-foreground">
-                        Table of contents will be generated based on article headings
-                      </div>
-                    </div>
+                    <RelatedLinks title="Keep exploring" variant="list" links={hubsForArticle(article)} />
                   </Card>
 
-                  {/* Related Articles */}
-                  <Card className="p-6">
-                    <h3 className="font-semibold mb-4">Related Articles</h3>
-                    <div className="text-muted-foreground text-sm">
-                      Related articles will be shown here
-                    </div>
-                  </Card>
+                  <RelatedArticles article={article} />
 
-                  {/* Newsletter Signup */}
-                  <Card className="p-6 bg-primary/5 border-primary/20">
-                    <h3 className="font-semibold mb-2">Stay Updated</h3>
+                  {/* The Subscribe button here had no handler. NewsletterSignup
+                      is the real one, with its rate limit and double opt-in. */}
+                  <Card className="p-6">
+                    <h2 className="font-semibold mb-2">Get the weekly email</h2>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Get the latest Des Moines insights delivered to your inbox
+                      Weekly updates on Des Moines events, restaurants and more.
                     </p>
-                    <Button className="w-full" size="sm">
-                      Subscribe to Newsletter
-                    </Button>
+                    <NewsletterSignup variant="compact" source="website" />
                   </Card>
                 </div>
               </aside>
@@ -410,13 +472,6 @@ const ArticleDetails: React.FC = () => {
       </div>
 
       <Footer preferredSource={false} />
-
-      {/* Share Dialog */}
-      <ShareDialog 
-        title={article.title}
-        description={article.excerpt || article.title}
-        url={window.location.href}
-      />
     </>
   );
 };

@@ -15,6 +15,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { scrubPii, errorSignature } from "../_shared/scrubPii.ts";
+import { classifyCaller, expectedSecrets, isMachineCaller, presentedCredentials } from "../_shared/callerKind.ts";
+import { resolveSource } from "../_shared/errorPolicy.ts";
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
@@ -39,11 +41,16 @@ Deno.serve(async (req) => {
   const message = String(body.message ?? "").slice(0, 2000);
   if (!message) return json({ ok: true, skipped: "no message" }, 200, corsHeaders);
 
-  const component = String(body.component ?? "").slice(0, 80);
-  const action = String(body.action ?? "").slice(0, 80);
-  const route = String(body.route ?? "").slice(0, 200);
+  // Every stored text field is scrubbed, not only the message: a route can
+  // carry an email or a token in its query string (IOS-DD-PLATFORM-18).
+  const component = scrubPii(String(body.component ?? "")).slice(0, 80);
+  const action = scrubPii(String(body.action ?? "")).slice(0, 80);
+  const route = scrubPii(String(body.route ?? "")).slice(0, 200);
   const severity = ["info", "warning", "error", "critical"].includes(body.severity) ? body.severity : "error";
-  const source = body.source === "edge" ? "edge" : "client";
+  // "edge" only from a caller holding the service role or the edge API key;
+  // triage reads "edge" as not user-facing.
+  const internal = isMachineCaller(classifyCaller(presentedCredentials(req), expectedSecrets()));
+  const source = resolveSource(body.source, internal);
   const userId = typeof body.userId === "string" && /^[0-9a-f-]{36}$/i.test(body.userId) ? body.userId : null;
 
   const messageRedacted = scrubPii(message);

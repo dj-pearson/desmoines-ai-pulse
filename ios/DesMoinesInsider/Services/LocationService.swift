@@ -10,6 +10,10 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     private(set) var userLocation: CLLocation?
     private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    /// Precise or approximate ("Precise Location" off). Stored so SwiftUI
+    /// observes changes; the map hides its walking-distance filter under
+    /// reduced accuracy (IOS-DD-MAP-13).
+    private(set) var accuracyAuthorization: CLAccuracyAuthorization = .fullAccuracy
     private(set) var locationError: String?
 
     /// Derived from the request actually in flight, not from a per-call flag
@@ -52,12 +56,32 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         authorizationStatus = locationManager.authorizationStatus
+        accuracyAuthorization = locationManager.accuracyAuthorization
     }
 
     // MARK: - Request Permission
 
     func requestPermission() {
         locationManager.requestWhenInUseAuthorization()
+    }
+
+    /// Asks for permission when it has never been asked, then waits (bounded)
+    /// for the answer (IOS-DD-MAP-06).
+    ///
+    /// getCurrentLocation() throws permissionDenied straight away while the
+    /// status is .notDetermined, so the first map load after "Allow" used to
+    /// fall back to downtown before the user had finished reading the prompt.
+    /// Same bounded poll as NeighborhoodViewModel.enableNearby.
+    func awaitAuthorizationDecision(timeout: Duration = .seconds(8)) async -> CLAuthorizationStatus {
+        if authorizationStatus == .notDetermined {
+            requestPermission()
+        }
+        var waited: Duration = .zero
+        while authorizationStatus == .notDetermined, waited < timeout, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(200))
+            waited += .milliseconds(200)
+        }
+        return authorizationStatus
     }
 
     // MARK: - Get Current Location
@@ -152,6 +176,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         Task { @MainActor in
             let status = manager.authorizationStatus
             self.authorizationStatus = status
+            self.accuracyAuthorization = manager.accuracyAuthorization
             guard !Self.isAuthorized(status) else { return }
 
             // Revoked. Drop the fix rather than only refusing to hand out new

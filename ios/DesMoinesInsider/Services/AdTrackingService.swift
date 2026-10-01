@@ -4,8 +4,13 @@ import Supabase
 // MARK: - IOS-ADS-011 / IOS-ADS-013 / IOS-ADS-014 · Ad tracking
 //
 // Logs impressions and clicks for paid campaign CREATIVES into the shared
-// `ad_impressions` / `ad_clicks` tables — the same analytics the web writes via
-// `src/lib/tracking.ts` — so in-app ad performance is measurable alongside web.
+// `ad_impressions` / `ad_clicks` tables through the `track-ad-event` edge
+// function, the same path the web uses. Direct inserts from the app were
+// refused by RLS (neither table has an INSERT policy), so every iOS impression
+// failed, filled the offline queue to its cap with rows that could never land,
+// and no advertiser ever saw an iOS number (IOS-DD-MONETIZATION-07). The edge
+// function also checks the campaign is live and the creative approved, and
+// takes the user id from the JWT rather than from the body.
 //
 // Four inventory classes are tracked DISTINCTLY (IOS-ADS-014) so fill-rate and
 // per-class conversion are measurable:
@@ -24,7 +29,10 @@ import Supabase
 //
 // Viewability (IOS-ADS-014): callers gate `logImpression` behind
 // `AdViewabilityModifier` (≥50% on-screen for ≥1s), matching the web's
-// IntersectionObserver, and behind `shouldShowAd` frequency capping.
+// IntersectionObserver. Frequency capping is the server's job:
+// CampaignAdService passes this session id and the user id to get_active_ads.
+// The old client-side `shouldShowAd` SELECTed ad_impressions, which viewers
+// cannot read, so it capped nothing.
 //
 // Offline-safe (IOS-ADS-014): when `NetworkMonitor` reports no connectivity, or
 // an insert fails, the event is persisted to a durable queue and flushed the
@@ -125,6 +133,9 @@ final class AdTrackingService {
     /// impression, every click and every frequency-cap check.
     private static let sessionPersistInterval: TimeInterval = 60
 
+    /// The rolling ad session id, for get_active_ads' per-session cap.
+    var currentSessionId: String { sessionId }
+
     private var sessionId: String {
         let now = Date().timeIntervalSince1970
 
@@ -186,55 +197,68 @@ final class AdTrackingService {
         Self.dayFormatter.string(from: Date())
     }
 
-    // MARK: - Frequency capping (IOS-ADS-014 · shouldShowAd parity)
-    //
-    // Mirrors the web `shouldShowAd` (src/lib/tracking.ts): at most 3 impressions
-    // per campaign per session within 5 minutes, and at most 10 per campaign per
-    // signed-in user per day. Errors fail OPEN (allow the ad), like the web.
-    func shouldShowAd(campaignId: String) async -> Bool {
-        guard let client = supabase, !Config.isUITesting else { return true }
-        struct IdRow: Decodable { let id: String }
+    // MARK: - Paid campaign creatives → track-ad-event
 
-        let iso = ISO8601DateFormatter()
-        let fiveMinutesAgo = iso.string(from: Date().addingTimeInterval(-5 * 60))
-        let session = sessionId
-
-        do {
-            let sessionRows: [IdRow] = try await client
-                .from("ad_impressions")
-                .select("id")
-                .eq("campaign_id", value: campaignId)
-                .eq("session_id", value: session)
-                .gte("timestamp", value: fiveMinutesAgo)
-                .limit(3)
-                .execute()
-                .value
-            if sessionRows.count >= 3 { return false }
-        } catch {
-            return true // fail open
-        }
-
-        if let userId = AuthService.shared.currentUser?.id.uuidString {
-            do {
-                let userRows: [IdRow] = try await client
-                    .from("ad_impressions")
-                    .select("id")
-                    .eq("campaign_id", value: campaignId)
-                    .eq("user_id", value: userId)
-                    .eq("date", value: todayString)
-                    .limit(10)
-                    .execute()
-                    .value
-                if userRows.count >= 10 { return false }
-            } catch {
-                return true // fail open
-            }
-        }
-
-        return true
+    /// Body of a `track-ad-event` call. Internal so AdsMonetizationTests can
+    /// pin the keys to the ones the edge function destructures.
+    struct TrackPayload: Encodable {
+        let kind: String
+        let campaign_id: String
+        let creative_id: String
+        let placement_type: String?
+        let session_id: String?
+        let client_event_id: String
+        let impression_id: String?
     }
 
-    // MARK: - Paid campaign creatives → ad_impressions / ad_clicks
+    struct TrackResponse: Decodable {
+        let recorded: Bool?
+        let id: String?
+        let reason: String?
+    }
+
+    /// What to do with a queued row after one send attempt.
+    enum SendOutcome { case recorded(String?), drop, retry }
+
+    /// Refusals that will never succeed on retry. `automated` and
+    /// `not_billable` (campaign ended, creative unapproved) are answered 200
+    /// with recorded:false; lookup/write failures are worth another try.
+    private static let permanentRefusals: Set<String> = ["not_billable", "automated"]
+
+    private func send(_ payload: TrackPayload, client: SupabaseClient) async -> SendOutcome {
+        do {
+            let response: TrackResponse = try await client.functions.invoke(
+                "track-ad-event",
+                options: .init(method: .post, body: payload)
+            )
+            if response.recorded == true { return .recorded(response.id) }
+            if let reason = response.reason, Self.permanentRefusals.contains(reason) { return .drop }
+            return .retry
+        } catch let functionsError as FunctionsError {
+            // 400 is a malformed id; it will never be accepted. 429 and 5xx retry.
+            if case let .httpError(code, _) = functionsError, code == 400 { return .drop }
+            return .retry
+        } catch {
+            return .retry
+        }
+    }
+
+    /// Rows left after a flush: everything not sent or dropped, including
+    /// rows enqueued while the flush was awaiting. The flush used to assign
+    /// its own snapshot back to the queue, losing those.
+    static func remainingAfterFlush(_ rows: [String], done: Set<String>) -> [String] {
+        remaining(rows, done: done) { $0 }
+    }
+
+    private static func remaining<Row>(_ rows: [Row], done: Set<String>, key: (Row) -> String?) -> [Row] {
+        rows.filter { row in
+            guard let k = key(row) else { return true }
+            return !done.contains(k)
+        }
+    }
+
+    /// Rows sent per flush; the edge function allows 120 calls per window.
+    private static let flushBatch = 50
 
     /// Logs one viewable impression for a campaign creative, de-duped per
     /// campaign+creative+session. Returns the impression id (for click linkage)
@@ -275,22 +299,19 @@ final class AdTrackingService {
             return nil
         }
 
-        struct IdRow: Decodable { let id: String }
-        do {
-            let inserted: IdRow = try await client
-                .from("ad_impressions")
-                .insert(row)
-                .select("id")
-                .single()
-                .execute()
-                .value
-            return inserted.id
-        } catch {
+        switch await send(Self.payload(for: row), client: client) {
+        case .recorded(let id):
+            return id
+        case .drop:
+            return nil
+        case .retry:
             #if DEBUG
-            AppLogger.network.warning("AdTracking impression failed; queued: \(error.localizedDescription)")
+            AppLogger.network.warning("AdTracking impression not recorded; queued")
             #endif
+            // The queued row IS the retry (same client_event_id, so the
+            // server dedupes). Keeping the dedupe key stops the slot from
+            // logging a second impression when it scrolls back into view.
             enqueue(impression: row)
-            loggedImpressions.remove(dedupeKey) // allow a retry when the slot reappears
             return nil
         }
     }
@@ -314,14 +335,36 @@ final class AdTrackingService {
             return
         }
 
-        do {
-            try await client.from("ad_clicks").insert(row).execute()
-        } catch {
+        if case .retry = await send(Self.payload(for: row), client: client) {
             #if DEBUG
-            AppLogger.network.warning("AdTracking click failed; queued: \(error.localizedDescription)")
+            AppLogger.network.warning("AdTracking click not recorded; queued")
             #endif
             enqueue(click: row)
         }
+    }
+
+    private static func payload(for row: ImpressionRow) -> TrackPayload {
+        TrackPayload(
+            kind: "impression",
+            campaign_id: row.campaign_id,
+            creative_id: row.creative_id,
+            placement_type: row.placement_type,
+            session_id: row.session_id,
+            client_event_id: row.client_event_id ?? UUID().uuidString,
+            impression_id: nil
+        )
+    }
+
+    private static func payload(for row: ClickRow) -> TrackPayload {
+        TrackPayload(
+            kind: "click",
+            campaign_id: row.campaign_id,
+            creative_id: row.creative_id,
+            placement_type: nil,
+            session_id: nil,
+            client_event_id: row.client_event_id ?? UUID().uuidString,
+            impression_id: row.impression_id
+        )
     }
 
     // MARK: - Affiliate creatives (distinct fill tracking) — IOS-ADS-014
@@ -475,36 +518,42 @@ final class AdTrackingService {
         guard let client = supabase, !Config.isUITesting else { return }
         guard NetworkMonitor.shared.isConnected, !pending.isEmpty else { return }
 
-        // Upsert on the queued idempotency key, not insert (IOS-AUDIT-BUG-017).
-        // A lost response is indistinguishable from a lost request here, so a
-        // requeued row used to be counted twice - inflating exactly the numbers
-        // advertisers are billed against.
-        var remainingImpressions: [ImpressionRow] = []
-        for row in pending.impressions {
-            do {
-                try await client
-                    .from("ad_impressions")
-                    .upsert(row, onConflict: "client_event_id", ignoreDuplicates: true)
-                    .execute()
-            } catch {
-                remainingImpressions.append(row)
+        // Rows queued by an older build may have no idempotency key. Mint one
+        // and persist it BEFORE sending, so a lost response followed by a
+        // retry reuses the same key (IOS-AUDIT-BUG-017).
+        var minted = false
+        for i in pending.impressions.indices where pending.impressions[i].client_event_id == nil {
+            pending.impressions[i].client_event_id = UUID().uuidString
+            minted = true
+        }
+        for i in pending.clicks.indices where pending.clicks[i].client_event_id == nil {
+            pending.clicks[i].client_event_id = UUID().uuidString
+            minted = true
+        }
+        if minted { persistQueue() }
+
+        // Snapshot, capped per flush; the rest wait for the next one.
+        let impressions = Array(pending.impressions.prefix(Self.flushBatch))
+        let clicks = Array(pending.clicks.prefix(max(0, Self.flushBatch - impressions.count)))
+
+        var done: Set<String> = []
+        for row in impressions {
+            switch await send(Self.payload(for: row), client: client) {
+            case .recorded, .drop: if let key = row.client_event_id { done.insert(key) }
+            case .retry: break
+            }
+        }
+        for row in clicks {
+            switch await send(Self.payload(for: row), client: client) {
+            case .recorded, .drop: if let key = row.client_event_id { done.insert(key) }
+            case .retry: break
             }
         }
 
-        var remainingClicks: [ClickRow] = []
-        for row in pending.clicks {
-            do {
-                try await client
-                    .from("ad_clicks")
-                    .upsert(row, onConflict: "client_event_id", ignoreDuplicates: true)
-                    .execute()
-            } catch {
-                remainingClicks.append(row)
-            }
-        }
-
-        pending.impressions = remainingImpressions
-        pending.clicks = remainingClicks
+        // Remove by key from the LIVE queue, so rows enqueued during the
+        // awaits above survive (IOS-DD-MONETIZATION-07).
+        pending.impressions = Self.remaining(pending.impressions, done: done) { $0.client_event_id }
+        pending.clicks = Self.remaining(pending.clicks, done: done) { $0.client_event_id }
         persistQueue()
     }
 }

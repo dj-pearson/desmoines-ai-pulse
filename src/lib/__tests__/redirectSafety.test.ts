@@ -26,9 +26,29 @@ const REJECTED = [
   ['/@evil.com', 'userinfo bypass'],
   ['/%2F%2Fevil.com', 'encoded protocol-relative'],
   ['/path:8080', 'embedded colon'],
+  ['/%5Cevil.com', 'encoded backslash'],
+  ['/%2F%5Cevil.com', 'encoded slash-backslash'],
+  ['/\tevil.com', 'tab after the slash'],
+  ['/\t/evil.com', 'tab the URL parser would strip to make //evil.com'],
+  ['/\n/evil.com', 'newline the URL parser would strip'],
+  ['/events\u0000', 'NUL byte'],
+  ['JavaScript:alert(1)', 'mixed-case scheme'],
+  ['https:/evil.com', 'scheme with one slash'],
+  ['/user@evil.com', 'userinfo in the first segment'],
+  ['/events?q=jazz\u0007', 'control character in the query'],
 ] as const;
 
-const ACCEPTED = ['/', '/events', '/events/today', '/restaurants?open=now', '/a/b/c#frag'];
+const ACCEPTED = [
+  '/',
+  '/events',
+  '/events/today',
+  '/restaurants?open=now',
+  '/a/b/c#frag',
+  // WP2 item 1: all three used to come back as '/'.
+  '/events?q=jazz%20night',
+  '/events/abc?time=19:00',
+  '/restaurants?cuisine=a%26b',
+];
 
 describe('isValidRedirectUrl', () => {
   it.each(REJECTED)('rejects %s (%s)', (input) => {
@@ -61,6 +81,33 @@ describe('isValidRedirectUrl', () => {
 describe('getSafeRedirectUrl', () => {
   it('passes a valid path through', () => {
     expect(getSafeRedirectUrl('/events')).toBe('/events');
+  });
+
+  it('keeps the query string the person was on (account plan WP2 item 1)', () => {
+    expect(getSafeRedirectUrl('/events?q=jazz%20night')).toBe('/events?q=jazz%20night');
+    expect(getSafeRedirectUrl('/events/abc?time=19:00')).toBe('/events/abc?time=19:00');
+    expect(getSafeRedirectUrl('/restaurants?cuisine=a%26b')).toBe('/restaurants?cuisine=a%26b');
+    expect(getSafeRedirectUrl('/events?q=jazz#results')).toBe('/events?q=jazz#results');
+  });
+
+  it('survives the redirect param being decoded once by URLSearchParams', () => {
+    // /auth?redirect=%2Fevents%3Fq%3Djazz%2520night is what a link builder
+    // produces; searchParams.get() hands back the once-decoded value.
+    const redirect = new URLSearchParams('redirect=%2Fevents%3Fq%3Djazz%2520night').get('redirect');
+    expect(getSafeRedirectUrl(redirect)).toBe('/events?q=jazz%20night');
+  });
+
+  it('falls back to the path, not the default, when only the query is broken', () => {
+    expect(getSafeRedirectUrl('/events?q=%E0%A4%A', '/home')).toBe('/events');
+    expect(getSafeRedirectUrl('/events#%', '/home')).toBe('/events');
+    expect(isValidRedirectUrl('/events?q=%E0%A4%A')).toBe(false);
+  });
+
+  it('never returns an off-site destination whatever the fallback path does', () => {
+    for (const [input] of REJECTED) {
+      const out = getSafeRedirectUrl(input as string | null, '/fallback');
+      expect(out).toBe('/fallback');
+    }
   });
 
   it('falls back rather than returning anything that failed', () => {

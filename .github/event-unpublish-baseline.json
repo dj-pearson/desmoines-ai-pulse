@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "Queries on `events` that filter ONE unpublish switch and not the other, on purpose.",
+    "Read by scripts/check-event-unpublish-filters.mjs; see its header for the rule.",
+    "",
+    "Every entry here is a job that OWNS one switch and therefore has to see rows the",
+    "other one hides. A reader surface never belongs in this file.",
+    "",
+    "Keyed by file plus the switch it has, not by line, so moving a query does not break",
+    "the check - and a NEW asymmetric query in the same file under the same switch is not",
+    "silently covered, because the check also fails on an entry that matches nothing."
+  ],
+  "allowed": [
+    {
+      "site": "supabase/functions/cleanup-old-events/index.ts#is_hidden",
+      "reason": "This IS the hide job. Its dry-run counts select rows that are not yet hidden; filtering archived_at would hide part of its own work list from the operator reading the count."
+    },
+    {
+      "site": "supabase/functions/_shared/agents/link-content-monitor.ts#archived_at",
+      "reason": "This IS the archive sweep. Its work list is past events with archived_at IS NULL, and a moderator-hidden past event still needs archiving - filtering is_hidden would leave those un-archived forever. The link-health sample below it is internal maintenance, not a reader surface."
+    },
+    {
+      "site": "supabase/functions/agent-link-monitor/index.ts#archived_at",
+      "reason": "The deployed copy of link-content-monitor.ts; same reason, and the pair must stay identical (scripts/check-agent-pair-drift.mjs)."
+    }
+  ]
+}

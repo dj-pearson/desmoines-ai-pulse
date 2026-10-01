@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
+import { toJsonLd } from "@/lib/jsonLd";
 
 interface BreadcrumbItem {
   name: string;
@@ -143,25 +144,18 @@ export default function EnhancedLocalSEO({
         name: BRAND.state,
       },
     },
-    sameAs: [
-      "https://www.instagram.com/desmoinespulse",
-      "https://www.facebook.com/desmoinespulse",
-      "https://www.twitter.com/desmoinespulse",
-    ],
+    // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
+    // OLD brand's handle, under the new brand's name. sameAs is a
+    // machine-readable identity claim, so the property is OMITTED rather
+    // than emitted empty until BRAND.social has real URLs in it.
+    ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
   };
 
-  // WebSite Schema with SearchAction
-  const websiteSchema = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: BRAND.name,
-    url: BRAND.baseUrl,
-    potentialAction: {
-      "@type": "SearchAction",
-      target: `${BRAND.baseUrl}/search?q={query}`,
-      "query-input": "required name=query",
-    },
-  };
+  // WEB-SEO-029: no WebSite node here. This component mounts on the event
+  // landing pages (/events/free, /events/date-night, /events/kids,
+  // /events/location/*), and a WebSite node on each of them is a site-level
+  // claim repeated per page, competing with the one Index.tsx publishes. The
+  // canonical node, with the SearchAction, lives on / only.
 
   // Breadcrumb Schema
   const breadcrumbSchema =
@@ -337,51 +331,56 @@ export default function EnhancedLocalSEO({
       <meta name="twitter:description" content={pageDescription} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
-      {/* Time-sensitive content for AI */}
-      {isTimeSensitive && (
-        <>
-          <meta
-            name="article:published_time"
-            content={new Date().toISOString()}
-          />
-          <meta
-            name="article:modified_time"
-            content={new Date().toISOString()}
-          />
-          <meta property="og:updated_time" content={new Date().toISOString()} />
-        </>
-      )}
+      {/* WEB-SEO-031 -- THREE TIMESTAMPS USED TO BE EMITTED HERE and every one
+          of them was wrong in a different way.
+
+          article:published_time and article:modified_time were written with
+          `name=` instead of `property=`. Those are Open Graph properties, so
+          an OG parser looked for them under `property` and found nothing: the
+          tags were inert on all four pages that pass isTimeSensitive. They are
+          also article metadata on pages that are LISTINGS - /events/today,
+          /events/this-weekend, the monthly pages and /restaurants/open-now are
+          not articles, so the honest fix for those two is not to correct the
+          attribute but to stop claiming it.
+
+          All three, including the og:updated_time that WAS spelled correctly,
+          interpolated `new Date()`. In a client render that is now; in the
+          PRERENDERED file it is the build clock, frozen, so every one of these
+          pages told a crawler it had been updated at the moment of the last
+          deploy, forever. A freshness signal that is always the same date is
+          worse than none - it is a stale claim that looks like a fresh one.
+
+          Freshness is published from DATA instead: <ListFreshness> renders it
+          from the newest row's updated_at. Nothing here has access to that, and
+          plumbing it in only to re-emit a tag two of whose three forms do not
+          belong on a listing page is not worth the prop. */}
 
       {/* Schema.org Structured Data */}
       <script type="application/ld+json">
-        {JSON.stringify(organizationSchema)}
-      </script>
-
-      <script type="application/ld+json">
-        {JSON.stringify(websiteSchema)}
+        {toJsonLd(organizationSchema)}
       </script>
 
       {breadcrumbSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(breadcrumbSchema)}
+          {toJsonLd(breadcrumbSchema)}
         </script>
       )}
 
       {eventSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(eventSchema)}
+          {toJsonLd(eventSchema)}
         </script>
       )}
 
       {restaurantSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(restaurantSchema)}
+          {toJsonLd(restaurantSchema)}
         </script>
       )}
 
       {attractionSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(attractionSchema)}
+          {toJsonLd(attractionSchema)}
         </script>
       )}
 

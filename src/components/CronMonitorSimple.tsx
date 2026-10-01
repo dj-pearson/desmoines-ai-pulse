@@ -180,9 +180,9 @@ export default function CronMonitor() {
                     {logs.map((log) => (
                       <div 
                         key={log.id} 
-                        className={`border-l-4 pl-4 py-2 ${
-                          log.error_details ? 'border-l-red-500 bg-red-50 dark:bg-red-950/20' : 
-                          'border-l-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                        className={`rounded-md px-3 py-2 ${
+                          log.error_details ? 'bg-red-50 dark:bg-red-950/20' :
+                          'bg-blue-50 dark:bg-blue-950/20'
                         }`}
                       >
                         <div className="flex items-start justify-between">

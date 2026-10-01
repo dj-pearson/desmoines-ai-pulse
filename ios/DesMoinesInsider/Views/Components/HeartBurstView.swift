@@ -31,11 +31,18 @@ struct HeartBurstView<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scale: CGFloat = 1
     @State private var particleProgress: CGFloat = 0
+    /// Particles exist only during a burst. At rest, progress 0 meant six
+    /// fully opaque particles stacked under every heart: a red dot on each
+    /// unsaved card (IOS-DD-SAVED-14).
+    @State private var isBursting = false
+    /// Which burst is current, so the end-of-burst reset from an earlier tap
+    /// cannot hide the particles of a later one mid-flight.
+    @State private var burstGeneration = 0
 
     var body: some View {
         ZStack {
             // Particles behind the main icon
-            if !reduceMotion {
+            if !reduceMotion && isBursting {
                 ForEach(0..<6, id: \.self) { index in
                     particle(at: index)
                 }
@@ -79,10 +86,24 @@ struct HeartBurstView<Content: View>: View {
             }
         }
 
-        // Particle radiate
-        particleProgress = 0
-        withAnimation(.easeOut(duration: 0.55)) {
-            particleProgress = 1
+        // Particle radiate. Reset without animation, then animate on the
+        // next pass: setting 0 and 1 in one pass coalesced to "already at 1",
+        // so every burst after the first played nothing (IOS-DD-SAVED-14).
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        burstGeneration += 1
+        let generation = burstGeneration
+        withTransaction(reset) {
+            particleProgress = 0
+            isBursting = true
+        }
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.55)) {
+                particleProgress = 1
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            if burstGeneration == generation { isBursting = false }
         }
     }
 }

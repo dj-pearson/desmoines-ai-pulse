@@ -64,27 +64,14 @@ export const useWebVitals = () => {
       });
     }
 
-    // Send to performance monitoring endpoint
-    if (webVitalsConfig.rumConfig.endpoint) {
-      fetch(webVitalsConfig.rumConfig.endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          metric: metric.name,
-          value: metric.value,
-          rating: metric.rating,
-          timestamp: metric.timestamp,
-          url: window.location.pathname,
-          userAgent: navigator.userAgent,
-          viewport: {
-            width: window.innerWidth,
-            height: window.innerHeight
-          }
-        })
-      }).catch(() => {
-        // Silently fail - don't impact user experience
-      });
-    }
+    // No second reporter here. This used to POST every metric to
+    // '/api/performance-metrics', a route that has never existed in functions/
+    // - on Cloudflare Pages the SPA fallback answers it with index.html and a
+    // 200, so the swallowed .catch() never fired and nothing looked wrong.
+    // Real-user reporting is src/lib/webVitals.ts, which writes the web_vitals
+    // table that the weekly rollup and the admin panel actually read, and it is
+    // started from main.tsx on idle. This hook is the dev overlay's read model.
+    // WEB-PERF-039.
   };
 
   useEffect(() => {

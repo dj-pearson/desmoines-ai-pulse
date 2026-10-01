@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { CrmDashboardStats } from '@/types/crm';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const CRM_DASHBOARD_KEY = 'crm-dashboard';
 
@@ -17,10 +18,10 @@ export function useCrmDashboard() {
         segmentsResult,
       ] = await Promise.all([
         // Contacts data
-        supabase.from('crm_contacts').select('status, source, lead_score, created_at'),
+        fromUnknownTable('crm_contacts').select('status, source, lead_score, created_at'),
 
         // Deals data
-        supabase.from('crm_deals').select(`
+        fromUnknownTable('crm_deals').select(`
           status, value, stage_id, created_at, actual_close_date,
           stage:crm_pipeline_stages(id, name)
         `),
@@ -36,16 +37,14 @@ export function useCrmDashboard() {
           .limit(10),
 
         // Tasks
-        supabase
-          .from('crm_tasks')
+        fromUnknownTable('crm_tasks')
           .select('*')
           .in('status', ['pending', 'in_progress'])
           .order('due_date', { ascending: true })
           .limit(20),
 
         // Segments
-        supabase
-          .from('crm_segments')
+        fromUnknownTable('crm_segments')
           .select('id, name, contact_count')
           .order('contact_count', { ascending: false })
           .limit(5),
@@ -167,8 +166,7 @@ export function useCrmLeadScoreRules() {
   return useQuery({
     queryKey: ['crm-lead-score-rules'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_lead_score_rules')
+      const { data, error } = await fromUnknownTable('crm_lead_score_rules')
         .select('*')
         .order('name', { ascending: true });
 
@@ -184,8 +182,7 @@ export function useCrmLeadScoreHistory(contactId: string | undefined) {
     queryFn: async () => {
       if (!contactId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_lead_score_history')
+      const { data, error } = await fromUnknownTable('crm_lead_score_history')
         .select(`
           *,
           rule:crm_lead_score_rules(name)

@@ -1,15 +1,23 @@
 /**
- * Verify Apple Receipt Edge Function
+ * Verify Apple Receipt Edge Function (DEPRECATED, inert)
  *
- * Validates StoreKit 2 transactions from the iOS app and syncs
- * subscription entitlements to the database.
+ * IOS-DD-MONETIZATION-01. This endpoint used to write an ACTIVE subscription row
+ * for any signed-in caller without ever asking Apple: the
+ * tier came from `productId.includes('vip')`, the row carried no platform (so
+ * the column default 'web' applied and the grant showed up on every surface),
+ * and the existing-row lookup had no platform filter. Anyone with an account
+ * could POST {transactionId:'x', productId:'vip'} and get permanent VIP.
  *
- * Accepts: transactionId, productId, originalTransactionId
- * Returns: { success: true, tier: "insider" | "vip" }
+ * validate-ios-receipt is the real path: it verifies the transaction with the
+ * App Store Server API and binds it to one account. No shipped client calls
+ * this endpoint (grep over ios/, android/ and src/, plus git history), so the
+ * name is kept and the body answers 410 without touching the database. The
+ * warning below makes any legacy caller visible in the function logs.
+ *
+ * Returns: 410 { success: false, error: "deprecated", use: "validate-ios-receipt" }
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,183 +26,64 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/**
+ * Read the `sub` claim for logging only. The token is NOT verified: nothing
+ * here grants anything, so an attacker-chosen id just mislabels a log line.
+ */
+function unverifiedSubject(authHeader: string | null): string | null {
+  if (!authHeader) return null;
+  try {
+    const parts = authHeader.replace("Bearer ", "").split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Get the authenticated user
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization required" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid authentication" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Parse request body
-    const body = await req.json();
-    const { transactionId, productId, originalTransactionId } = body;
-
-    if (!transactionId || !productId) {
-      return new Response(
-        JSON.stringify({ error: "transactionId and productId are required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Determine tier from product ID (App Store Connect "Des Moines Insider Premium" group)
-    // Product IDs: prod_U4oa7Cpn0bRnuo (Insider Monthly), prod_U4oaGFEy12auTx (VIP Monthly)
-    // Reference names: prod_Insider_Monthly (level 1), prod_VIP_Monthly (level 2)
-    const INSIDER_PRODUCT_IDS = new Set(["prod_U4oa7Cpn0bRnuo"]);
-    const VIP_PRODUCT_IDS = new Set(["prod_U4oaGFEy12auTx"]);
-
-    let tier: string;
-    if (VIP_PRODUCT_IDS.has(productId) || productId.includes("vip")) {
-      tier = "vip";
-    } else if (INSIDER_PRODUCT_IDS.has(productId) || productId.includes("insider")) {
-      tier = "insider";
-    } else {
-      return new Response(
-        JSON.stringify({ error: "Unknown product ID" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Look up the matching subscription plan
-    const { data: plan, error: planError } = await supabase
-      .from("subscription_plans")
-      .select("id")
-      .ilike("name", `%${tier}%`)
-      .limit(1)
-      .single();
-
-    // Survivable: plan_id is only spread in when present, so a failed lookup
-    // writes the subscription without it rather than losing the purchase.
-    if (planError) console.warn(`[verify-apple-receipt] subscription_plans lookup failed: ${planError.message}`);
-
-    // Upsert into user_subscriptions
-    const subscriptionData = {
-      user_id: user.id,
-      status: "active",
-      apple_transaction_id: transactionId,
-      apple_original_transaction_id: originalTransactionId || transactionId,
-      apple_product_id: productId,
-      updated_at: new Date().toISOString(),
-      ...(plan?.id ? { plan_id: plan.id } : {}),
-    };
-
-    // Check if user already has a subscription record
-    const { data: existing, error: existingError } = await supabase
-      .from("user_subscriptions")
-      .select("id")
-      .eq("user_id", user.id)
-      .limit(1)
-      .single();
-
-    // This read decides UPDATE vs INSERT, and a dropped error reads as "no
-    // row" and inserts - so every renewal would add another user_subscriptions
-    // row and the entitlement a reader sees would depend on row order
-    // (WEB-BE-032 AC2). Same defect fixed in validate-ios-receipt, which
-    // supersedes this function; this one is kept because no shipped binary can
-    // be proven not to call it (XPLAT-008 AC3), which is exactly why it needs
-    // the fix rather than being left to rot.
-    //
-    // PGRST116 IS NOT A FAILURE HERE. This uses .single(), not maybeSingle(),
-    // so "no rows" arrives as an error - and that is the ordinary first-time
-    // subscriber. Throwing on every error would break exactly the case this
-    // path exists for, so only the OTHER errors throw.
-    if (existingError && existingError.code !== "PGRST116") {
-      throw new Error(`user_subscriptions lookup failed: ${existingError.message}`);
-    }
-
-    if (existing) {
-      // Update existing subscription
-      const { error: updateError } = await supabase
-        .from("user_subscriptions")
-        .update(subscriptionData)
-        .eq("id", existing.id);
-
-      if (updateError) {
-        console.error("Error updating subscription:", updateError.message);
-        return new Response(
-          JSON.stringify({ error: "Failed to update subscription record" }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    } else {
-      // Insert new subscription
-      const { error: insertError } = await supabase
-        .from("user_subscriptions")
-        .insert({
-          ...subscriptionData,
-          created_at: new Date().toISOString(),
-        });
-
-      if (insertError) {
-        console.error("Error inserting subscription:", insertError.message);
-        return new Response(
-          JSON.stringify({ error: "Failed to create subscription record" }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    }
-
-    console.log(`Verified Apple receipt for user ${user.id}: ${tier} (${productId})`);
-
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
     return new Response(
-      JSON.stringify({ success: true, tier }),
+      JSON.stringify({ error: "Authorization required" }),
       {
-        status: 200,
+        status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  } catch (error) {
-    console.error("Verify receipt error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
+
+  let productId: unknown = null;
+  try {
+    const body = await req.json();
+    productId = body?.productId ?? null;
+  } catch {
+    // An unreadable body is still a legacy call worth logging.
+  }
+
+  console.warn(
+    `[verify-apple-receipt] deprecated endpoint called: user=${
+      unverifiedSubject(authHeader) ?? "unknown"
+    } (unverified), productId=${String(productId)}`,
+  );
+
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: "deprecated",
+      use: "validate-ios-receipt",
+    }),
+    {
+      status: 410,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 });

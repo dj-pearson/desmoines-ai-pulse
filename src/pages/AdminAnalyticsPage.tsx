@@ -8,7 +8,6 @@ import AdminNav from "@/components/admin/AdminNav";
 import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import { ActivityLogViewer } from "@/components/ActivityLogViewer";
 import { DataQualityDashboard } from "@/components/DataQualityDashboard";
-import { CrmDashboard } from "@/components/crm";
 import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard";
 import AuditLogPanel from "@/components/admin/AuditLogPanel";
 import ConversionFunnelChart from "@/components/admin/ConversionFunnelChart";
@@ -21,13 +20,17 @@ import {
   BarChart3,
   ScrollText,
   CheckCircle,
-  Contact,
   TrendingUp,
   ClipboardList,
   Filter,
   Users,
 } from "lucide-react";
 
+// No "CRM Dashboard" tab: CrmDashboard reads crm_contacts, crm_deals,
+// crm_tasks and crm_segments, and none of them exists (scripts/db-snapshot.json
+// lists only crm_accounts, crm_activities, crm_leads and crm_opportunities), so
+// every panel on it was an empty state. The advertiser pipeline that does work
+// is /admin/crm. An old ?tab=crm link falls back to the first tab.
 const ANALYTICS_TABS = [
   { id: "users", label: "Users", icon: Users },
   { id: "analytics", label: "Advanced Analytics", icon: BarChart3 },
@@ -36,7 +39,6 @@ const ANALYTICS_TABS = [
   { id: "activity-logs", label: "Activity Logs", icon: ScrollText },
   { id: "audit-log", label: "Audit Log", icon: ClipboardList },
   { id: "data-quality", label: "Data Quality", icon: CheckCircle },
-  { id: "crm", label: "CRM Dashboard", icon: Contact },
 ];
 
 const ANALYTICS_TAB_IDS = ANALYTICS_TABS.map((tab) => tab.id);
@@ -117,8 +119,6 @@ export default function AdminAnalyticsPage() {
         )}
 
         {activeTab === "audit-log" && <AuditLogPanel />}
-
-        {activeTab === "crm" && <CrmDashboard />}
       </div>
     </div>
   );

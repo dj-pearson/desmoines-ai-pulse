@@ -2,6 +2,13 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+
+// Every call bills Google Geocode + Places Nearby. The only caller is the admin
+// GooglePlacesHotelTools panel, so the endpoint is admin/API-key only and its
+// inputs are clamped (Places Nearby caps radius at 50km anyway).
+const MAX_RADIUS_M = 50_000;
+const MAX_LOCATION_CHARS = 200;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,8 +228,20 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
-    const { location, radius, offset = 0 }: SearchRequest = await req.json();
+    const body: SearchRequest = await req.json();
+    const location = String(body.location ?? "").trim().slice(0, MAX_LOCATION_CHARS);
+    const radius = Math.min(Math.max(Number(body.radius) || 5_000, 100), MAX_RADIUS_M);
+    const offset = Math.max(Number(body.offset) || 0, 0);
+    if (!location) {
+      return new Response(JSON.stringify({ error: "location required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const GOOGLE_API_KEY = Deno.env.get("GOOGLE_SEARCH_API");
     if (!GOOGLE_API_KEY) {

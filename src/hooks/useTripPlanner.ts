@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
+import { handleError } from '@/lib/errorHandler';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('useTripPlanner');
 
@@ -142,7 +144,7 @@ export function useTripPlanner() {
       if (!user) return [];
 
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const plansQuery = supabase.from('trip_plans');
+      const plansQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await plansQuery.select('*').eq('user_id', user.id).order('created_at', { ascending: false });
 
@@ -194,16 +196,17 @@ export function useTripPlanner() {
       setSelectedTrip(data.tripPlan);
       queryClient.invalidateQueries({ queryKey: ['trip-plans', user?.id] });
     },
+    // No toast here: the caller (TripPlanner handleGenerate) reports through
+    // handleError, so a failed generate is reported once, not twice.
     onError: (error: Error) => {
       log.error('generateItinerary', 'Failed to generate itinerary', { error: error.message });
-      toast.error(`Failed to generate itinerary: ${error.message}`);
     },
   });
 
   // Fetch a specific trip with its items
   const fetchTripDetails = useCallback(async (tripId: string): Promise<TripPlan | null> => {
     // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-    const tripQuery = supabase.from('trip_plans');
+    const tripQuery = fromUnknownTable('trip_plans');
     // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
     const { data: tripData, error: tripError } = await tripQuery.select('*').eq('id', tripId).single();
 
@@ -216,8 +219,11 @@ export function useTripPlanner() {
     // @ts-ignore -- RPC function not in generated types yet
     const { data: itemsData, error: itemsError } = await supabase.rpc('get_trip_itinerary', { p_trip_id: tripId });
 
+    // plan-stay WP1 item 4: an items error used to come back as `items: []`,
+    // which the page then rendered as "No itinerary items found" for a trip
+    // whose stops simply failed to load. Let the caller show the error.
     if (itemsError) {
-      log.error('fetchTripDetails', 'Error fetching trip items', { error: itemsError.message });
+      throw new Error(`Couldn't load this trip's stops: ${itemsError.message}`);
     }
 
     return {
@@ -236,7 +242,7 @@ export function useTripPlanner() {
       updates: Partial<TripPlan>;
     }) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const updateQuery = supabase.from('trip_plans');
+      const updateQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await updateQuery.update(updates as Record<string, unknown>).eq('id', tripId).select().single();
 
@@ -256,7 +262,7 @@ export function useTripPlanner() {
   const deleteTripMutation = useMutation({
     mutationFn: async (tripId: string) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const deleteQuery = supabase.from('trip_plans');
+      const deleteQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { error } = await deleteQuery.delete().eq('id', tripId);
 
@@ -282,7 +288,7 @@ export function useTripPlanner() {
       updates: Partial<TripPlanItem>;
     }) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const itemUpdateQuery = supabase.from('trip_plan_items');
+      const itemUpdateQuery = fromUnknownTable('trip_plan_items');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await itemUpdateQuery.update(updates as Record<string, unknown>).eq('id', itemId).select().single();
 
@@ -311,12 +317,16 @@ export function useTripPlanner() {
     mutationFn: async (
       swaps: { id: string; order_index: number }[]
     ) => {
-      await Promise.all(
+      // A PostgREST failure resolves with { error } rather than rejecting, so
+      // Promise.all alone reported a failed reorder as a success.
+      const results = (await Promise.all(
         swaps.map((s) =>
           // @ts-ignore -- Supabase SDK deep-type instantiation under strict mode
-          supabase.from('trip_plan_items').update({ order_index: s.order_index }).eq('id', s.id)
+          fromUnknownTable('trip_plan_items').update({ order_index: s.order_index }).eq('id', s.id)
         )
-      );
+      )) as Array<{ error: { message: string } | null }>;
+      const failed = results.find((r) => r?.error);
+      if (failed?.error) throw new Error(failed.error.message);
     },
     onSuccess: () => {
       if (selectedTrip) {
@@ -342,7 +352,7 @@ export function useTripPlanner() {
       item: Partial<TripPlanItem>;
     }) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const itemInsertQuery = supabase.from('trip_plan_items');
+      const itemInsertQuery = fromUnknownTable('trip_plan_items');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await itemInsertQuery.insert({ trip_plan_id: tripId, ...(item as Record<string, unknown>) }).select().single();
 
@@ -369,7 +379,7 @@ export function useTripPlanner() {
   const removeItemMutation = useMutation({
     mutationFn: async (itemId: string) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const itemDeleteQuery = supabase.from('trip_plan_items');
+      const itemDeleteQuery = fromUnknownTable('trip_plan_items');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { error } = await itemDeleteQuery.delete().eq('id', itemId);
 
@@ -395,18 +405,25 @@ export function useTripPlanner() {
   const shareTripMutation = useMutation({
     mutationFn: async (tripId: string) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const shareQuery = supabase.from('trip_plans');
+      const shareQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await shareQuery.update({ is_public: true }).eq('id', tripId).select('share_code').single();
 
       if (error) throw error;
       return (data as unknown as { share_code: string }).share_code;
     },
-    onSuccess: (shareCode) => {
+    onSuccess: async (shareCode) => {
       const shareUrl = `${window.location.origin}/trips/shared/${shareCode}`;
-      navigator.clipboard.writeText(shareUrl);
-      toast.success('Share link copied to clipboard!');
       queryClient.invalidateQueries({ queryKey: ['trip-plans', user?.id] });
+      // writeText rejects without focus or permission; the old un-awaited call
+      // toasted "copied" either way (plan-stay WP1 item 4).
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success('Share link copied to clipboard!');
+      } catch (error) {
+        handleError(error, { component: 'useTripPlanner', action: 'copyShareLink' });
+        toast.message(`Share link: ${shareUrl}`);
+      }
     },
     onError: (error: Error) => {
       toast.error(`Failed to share trip: ${error.message}`);
@@ -416,7 +433,7 @@ export function useTripPlanner() {
   // Fetch shared trip by code
   const fetchSharedTrip = useCallback(async (shareCode: string): Promise<TripPlan | null> => {
     // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-    const sharedQuery = supabase.from('trip_plans');
+    const sharedQuery = fromUnknownTable('trip_plans');
     // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
     const { data, error } = await sharedQuery.select('*').eq('share_code', shareCode).eq('is_public', true).single();
 
@@ -427,7 +444,9 @@ export function useTripPlanner() {
 
     // Fetch items — cast through unknown for strict compatibility
     // @ts-ignore -- RPC function not in generated types yet
-    const { data: itemsData } = await supabase.rpc('get_trip_itinerary', { p_trip_id: (data as unknown as { id: string }).id });
+    const { data: itemsData, error: itemsError } = await supabase.rpc('get_trip_itinerary', { p_trip_id: (data as unknown as { id: string }).id });
+    // A trip with its stops missing is not the trip; say it failed.
+    if (itemsError) throw itemsError;
 
     return {
       ...(data as unknown as Record<string, unknown>),

@@ -28,9 +28,15 @@ interface RouteCanonicalProps {
  * The slug is a route param. It is known synchronously, before any request is
  * made, so the canonical never needs to wait for anything.
  *
- * Render this ONLY in the loading branch. Those branches return early, so the
- * SEOHead below them never renders in the same pass and there is no second
- * canonical to collide with.
+ * THE RULE IS ONE CANONICAL PER RENDER, not "only in the loading branch".
+ * On a detail page those are the same instruction: SEOHead emits a canonical
+ * once the entity resolves, so this belongs in the early-returning loading
+ * branch where SEOHead cannot also be mounted. On a page whose only head block
+ * is route-derived - /best-of/:category, which had no canonical at all and so
+ * inherited the SPA shell's (WEB-SEO-035) - render it unconditionally.
+ * Last-one-wins in react-helmet-async means two of these on one page is a
+ * coin toss, not a duplicate tag, which is why the count matters and the
+ * placement only follows from it.
  */
 export function RouteCanonical({ path }: RouteCanonicalProps) {
   // A missing param would produce ".../restaurants/undefined" and assert a

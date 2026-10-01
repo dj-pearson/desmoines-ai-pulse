@@ -120,10 +120,14 @@ export function normalizeJsonLdDate(raw: unknown): string | null {
     const hours = hh ?? "00";
     const mins = mm ?? "00";
     const secs = ss ?? "00";
-    // Date-only values (no time) get a 7:00 PM default, matching the rest of the
-    // pipeline's convention for events with no published time.
+    // WEB-BE-037. This returned "19:00:00" for a date-only value, under a
+    // comment claiming it matched the rest of the pipeline. It did not: the
+    // pipeline had FOUR answers (19:31:58, 19:30, 19:00, 19:00) and none of
+    // them was agreed. Return the date alone and let parseEventDateTime stamp
+    // NO_TIME_MARKER, which is the only value that records "no time published"
+    // rather than inventing an evening.
     if (hh === undefined) {
-      return `${y}-${mo}-${d} 19:00:00`;
+      return `${y}-${mo}-${d}`;
     }
     return `${y}-${mo}-${d} ${hours}:${mins}:${secs}`;
   }

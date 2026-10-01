@@ -37,9 +37,9 @@ RUN crawl4ai-setup || true
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
-# Copy crawler script
-COPY catchdesmoines_crawler.py .
+# Copy crawler script and the stdlib helpers it imports
+COPY catchdesmoines_crawler.py event_detail.py venue_match.py ./
 
 # Default command
 ENTRYPOINT ["python", "catchdesmoines_crawler.py"]
-CMD ["--max-pages", "5"]
+CMD ["--max-pages", "20"]

@@ -1,3 +1,4 @@
+import StoreKit
 import XCTest
 @testable import DesMoinesInsider
 
@@ -160,5 +161,114 @@ final class StoreKitTests: XCTestCase {
     func testProductIDsContainAllTierProducts() {
         XCTAssertTrue(StoreKitService.productIDs.isSuperset(of: StoreKitService.insiderProductIDs))
         XCTAssertTrue(StoreKitService.productIDs.isSuperset(of: StoreKitService.vipProductIDs))
+    }
+    // MARK: - IOS-DD-MONETIZATION-02: purchases carry the account
+
+    func testPurchaseOptionsCarryAppAccountTokenWhenSignedIn() {
+        let uid = UUID()
+        let options = StoreKitService.purchaseOptions(for: uid)
+        XCTAssertTrue(options.contains(.appAccountToken(uid)))
+        XCTAssertEqual(options.count, 1)
+        XCTAssertTrue(StoreKitService.purchaseOptions(for: nil).isEmpty,
+                      "Signed out there is no account to bind to")
+    }
+
+    // MARK: - IOS-DD-MONETIZATION-03: 4xx rejections are classified
+
+    private func body(_ json: String) -> Data { Data(json.utf8) }
+
+    func testRevoked403IsDefinitive() {
+        let result = StoreKitService.classifyValidationFailure(
+            statusCode: 403,
+            body: body(#"{"valid":false,"reason":"Transaction has been revoked"}"#)
+        )
+        XCTAssertEqual(result, .definitive(reason: "Transaction has been revoked"))
+    }
+
+    func testOwnedByAnotherAccountIsAccountMismatch() {
+        let result = StoreKitService.classifyValidationFailure(
+            statusCode: 409,
+            body: body(#"{"valid":false,"reason":"owned_by_another_account"}"#)
+        )
+        XCTAssertEqual(result, .accountMismatch)
+    }
+
+    func testNotFound404KeepsGrace() {
+        let result = StoreKitService.classifyValidationFailure(
+            statusCode: 404,
+            body: body(#"{"valid":false,"reason":"Transaction not found with Apple"}"#)
+        )
+        XCTAssertEqual(result, .grace, "404 is also a sandbox/production race; it must not revoke")
+    }
+
+    func testServerErrorIsTransient() {
+        XCTAssertEqual(StoreKitService.classifyValidationFailure(statusCode: 503, body: nil), .transient)
+        XCTAssertEqual(StoreKitService.classifyValidationFailure(statusCode: 429, body: nil), .transient)
+    }
+
+    func testUnauthorizedKeepsGrace() {
+        XCTAssertEqual(StoreKitService.classifyValidationFailure(statusCode: 401, body: nil), .grace)
+    }
+
+    func testUserMismatch403KeepsGrace() {
+        let result = StoreKitService.classifyValidationFailure(
+            statusCode: 403,
+            body: body(#"{"valid":false,"reason":"userId does not match authenticated user"}"#)
+        )
+        XCTAssertEqual(result, .grace, "A session problem is not a bad receipt")
+    }
+
+    // MARK: - IOS-DD-MONETIZATION-04: sync after sign-in, once
+
+    func testSyncAfterSignInGating() {
+        XCTAssertTrue(StoreKitService.shouldSyncAfterSignIn(
+            userId: "u1", alreadySynced: [], hasAppStoreSubscription: true))
+        XCTAssertFalse(StoreKitService.shouldSyncAfterSignIn(
+            userId: "u1", alreadySynced: ["u1"], hasAppStoreSubscription: true),
+            "Once per user per launch")
+        XCTAssertFalse(StoreKitService.shouldSyncAfterSignIn(
+            userId: "u1", alreadySynced: [], hasAppStoreSubscription: false),
+            "Nothing to sync without an App Store subscription")
+    }
+
+    // MARK: - IOS-DD-MONETIZATION-06: row entitlement mirrors the server
+
+    private let periodEnd = Date(timeIntervalSince1970: 1_790_000_000)
+
+    private func days(_ n: Int, after date: Date) -> Date {
+        Calendar(identifier: .gregorian).date(byAdding: .day, value: n, to: date)!
+    }
+
+    func testActiveWithoutDateIsEntitled() {
+        XCTAssertTrue(StoreKitService.isRowEntitled(status: "active", currentPeriodEnd: nil))
+    }
+
+    func testTrialingIsEntitled() {
+        XCTAssertTrue(StoreKitService.isRowEntitled(status: "trialing", currentPeriodEnd: nil))
+    }
+
+    func testPastDueInsideGraceIsEntitled() {
+        XCTAssertTrue(StoreKitService.isRowEntitled(
+            status: "past_due", currentPeriodEnd: periodEnd, now: days(13, after: periodEnd)))
+    }
+
+    func testPastDueAfterGraceIsNotEntitled() {
+        XCTAssertFalse(StoreKitService.isRowEntitled(
+            status: "past_due", currentPeriodEnd: periodEnd, now: days(15, after: periodEnd)))
+    }
+
+    func testPastDueWithoutEndIsNotEntitled() {
+        XCTAssertFalse(StoreKitService.isRowEntitled(status: "past_due", currentPeriodEnd: nil))
+    }
+
+    func testCanceledAndExpiredAreNotEntitled() {
+        XCTAssertFalse(StoreKitService.isRowEntitled(status: "canceled", currentPeriodEnd: periodEnd))
+        XCTAssertFalse(StoreKitService.isRowEntitled(status: "expired", currentPeriodEnd: periodEnd))
+    }
+
+    func testTimestampParsesWithAndWithoutFraction() {
+        XCTAssertNotNil(StoreKitService.parseTimestamp("2026-09-30T12:00:00.123456+00:00"))
+        XCTAssertNotNil(StoreKitService.parseTimestamp("2026-09-30T12:00:00+00:00"))
+        XCTAssertNil(StoreKitService.parseTimestamp(""))
     }
 }

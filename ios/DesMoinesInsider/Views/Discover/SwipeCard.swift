@@ -39,22 +39,13 @@ struct SwipeCard: View {
             VStack {
                 Spacer()
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image(systemName: item.typeIcon)
-                            .font(.caption.weight(.semibold))
-                        Text(item.typeLabel)
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(.white.opacity(0.9))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.ultraThinMaterial.opacity(0.7), in: Capsule())
-                    .environment(\.colorScheme, .dark)
+                    chipRow
 
                     Text(item.title)
                         .font(.title2.bold())
                         .foregroundStyle(.white)
                         .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                         .truncationMode(.tail)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -75,6 +66,10 @@ struct SwipeCard: View {
                             .truncationMode(.tail)
                     }
                 }
+                // The card has a fixed frame, so the largest accessibility sizes
+                // pushed the title off it. Capped here; the full text is in the
+                // accessibility label (IOS-DD-DISCOVER-10).
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
                 .background(
@@ -114,11 +109,39 @@ struct SwipeCard: View {
         .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 12)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Swipe right to save, left to skip, up for more like this. Or use the buttons below.")
+    }
+
+    /// Type chip, then the badges (urgency, Free, open now) as small capsules
+    /// (IOS-DD-DISCOVER-10).
+    private var chipRow: some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: item.typeIcon)
+                    .font(.caption.weight(.semibold))
+                Text(item.typeLabel)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(.white.opacity(0.9))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial.opacity(0.7), in: Capsule())
+            .environment(\.colorScheme, .dark)
+
+            ForEach(item.badges, id: \.self) { badge in
+                Text(badge)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.45), in: Capsule())
+            }
+        }
     }
 
     private var accessibilityLabel: String {
         var parts: [String] = [item.title, item.typeLabel, item.subtitle]
+        parts.append(contentsOf: item.badges)
         if !item.locationText.isEmpty { parts.append(item.locationText) }
         return parts.filter { !$0.isEmpty }.joined(separator: ". ")
     }

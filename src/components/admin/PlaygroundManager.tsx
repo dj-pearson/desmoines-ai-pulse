@@ -304,6 +304,9 @@ export default function PlaygroundManager() {
   const [busy, setBusy] = useState(false);
 
   const state = usePlaygrounds({
+    // Admin paginates on this number, so it pays for an exact count
+    // (WEB-PERF-033).
+    countMode: "exact",
     search: search || undefined,
     source: sourceFilter === "all" ? undefined : sourceFilter,
     manuallyCuratedOnly: manuallyCuratedOnly || undefined,

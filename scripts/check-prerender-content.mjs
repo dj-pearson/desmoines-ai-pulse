@@ -70,7 +70,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { walkPrerenderedPages, prerenderRouteFromPath } from './prerender-output.mjs';
+import { walkPrerenderedPages, prerenderRouteFromPath, prerenderOutputPath } from './prerender-output.mjs';
 
 const DIST = 'dist';
 
@@ -80,6 +80,20 @@ if (!existsSync(DIST)) {
 }
 
 const allFiles = walkPrerenderedPages(DIST).map((p) => p.file);
+
+// The frozen-time assertion below can only fire on a page that was written. A
+// route the prerender dropped is a different defect with its own gate (the
+// strict prerender gate in pr-checks.yml), so a missing one is a warning here,
+// not a pass nobody sees. stderr, and once: shards never print it.
+if (!process.env.PRERENDER_CONTENT_SHARD) {
+  // Written as dist/restaurants.html, not dist/restaurants/index.html (see
+  // prerenderOutputPath), so the path comes from the helper the writer uses.
+  for (const route of ['/restaurants', '/restaurants/open-now', '/breweries']) {
+    if (!existsSync(prerenderOutputPath(DIST, route))) {
+      console.error(`[prerender-content] WARN ${route}: not prerendered, so its frozen-time check did not run.`);
+    }
+  }
+}
 
 /**
  * Shard the work across child processes, because jsdom cannot survive dist/.
@@ -146,6 +160,149 @@ const ALLOWED_SKELETON_ROUTES = new Map([
   // ['/example', 'why a crawler seeing this skeleton is acceptable'],
 ]);
 
+/**
+ * Routes whose content is a grid of cards, where a card with no image is not a
+ * design choice (WEB-SEO-032 AC3).
+ *
+ * WHY THIS NEEDED A GUARD. OptimizedImage used to render no img element at all
+ * until its IntersectionObserver fired. Nothing in the app passed `priority`,
+ * so at capture time the prerenderer got a card grid with zero images in it -
+ * and every AI crawler public/robots.txt explicitly invites (GPTBot,
+ * ClaudeBot, PerplexityBot and the rest) runs no JavaScript, so that is the
+ * page they index. It is the same failure mode as the skeleton this file was
+ * written for: correct in a browser, empty everywhere else.
+ *
+ * WEB-PERF-041 removed the gate, so the component no longer creates that
+ * failure. The guard stays because the failure did not depend on the gate: a
+ * grid that renders its cards from a query the prerenderer never resolves
+ * produces the identical empty page, and that is the shape this file has
+ * caught before.
+ *
+ * GATED ON THE PAGE'S OWN CLAIM, not on a fixed number. The assertion only
+ * fires when the route's ItemList says it rendered items - a hub with nothing
+ * to show legitimately has no images, and the DOM cannot tell "no rows" from
+ * "rows never arrived" (see the ItemList note below for the same reasoning).
+ */
+const CARD_IMAGE_ROUTES = new Set([
+  '/events',
+  '/events/today',
+  '/events/this-weekend',
+  '/events/free',
+  '/events/kids',
+  '/events/date-night',
+  '/events/west-des-moines',
+  '/events/ankeny',
+  '/events/urbandale',
+  '/events/johnston',
+  '/events/altoona',
+  '/events/clive',
+  '/events/windsor-heights',
+  '/events/waukee',
+  '/restaurants',
+  '/restaurants/open-now',
+  '/restaurants/dietary',
+  '/attractions',
+  '/playgrounds',
+  '/articles',
+  '/guides',
+  '/breweries',
+  '/itineraries',
+]);
+
+/**
+ * THE BAR IS ONE IMAGE, NOT THREE, and the reason matters.
+ *
+ * "The first three cards loaded eagerly" is the rule, and it is enforced at the
+ * source by scripts/check-lcp-priority.mjs, which can see the code. This file
+ * sees only the output, and the output cannot distinguish a card whose image
+ * did not render from a card whose row has no image_url - every one of these
+ * grids guards its <img> on the row actually having one. Asserting three would
+ * turn "the first three itineraries have no cover art" into a red build.
+ *
+ * One is what the DOM can prove. The defect that shipped was OptimizedImage
+ * rendering no img element at all until its IntersectionObserver fired, so the
+ * prerendered grid had zero images in it. Zero is the failure; one is evidence
+ * the mechanism works. Raising the bar now that the gate is gone would still
+ * be measuring the rows rather than the rendering.
+ */
+const MIN_CARD_IMAGES = 1;
+
+/**
+ * Listing routes permitted to prerender no card images, each with the reason.
+ * EMPTY TODAY. An entry here means every JS-less crawler sees an imageless grid
+ * on that route - add one only when the rows genuinely carry no images, never
+ * to make a red build green.
+ */
+const ALLOWED_IMAGELESS_ROUTES = new Map([
+  // ['/example', 'why this grid legitimately has no images'],
+]);
+
+/**
+ * The homepage's crawler content (home-pass2 WP1 item 1).
+ *
+ * Home defers its lower sections with LazySection, which mounts on scroll. The
+ * prerender never scrolls, so until the __DMI_PRERENDER__ flag existed every
+ * one of them shipped as an empty placeholder: the dated snapshot, the
+ * neighbourhood links and the dashboard were missing from the HTML that
+ * non-JS crawlers get. Two absolute assertions and one warning:
+ *
+ *   no data-lazy-section="pending"   a section the crawler never sees
+ *   a link to every NEIGHBORHOOD_ROUTES entry   the strip actually rendered
+ *   [data-speakable] present (WARN)  the dated snapshot rendered. A warning,
+ *                         because a placeholder-env build cannot fetch the
+ *                         counts, and the snapshot correctly renders nothing
+ *                         rather than a zero.
+ */
+const PENDING_LAZY = /data-lazy-section\s*=\s*["']pending["']/i;
+
+/**
+ * The prerendered neighbourhood slugs, read from the TypeScript inventory
+ * without compiling it, the same way check-neighborhood-inventory.mjs does. A
+ * file that stops matching fails loudly instead of reading zero routes.
+ */
+function neighborhoodRoutes() {
+  const src = readFileSync(join('src', 'lib', 'neighborhoods.ts'), 'utf8');
+  const routes = [...src.matchAll(/^\s{4}slug: '([a-z0-9-]+)',[\s\S]*?^\s{4}prerender: (true|false),/gm)]
+    .filter((m) => m[2] === 'true')
+    .map((m) => `/neighborhoods/${m[1]}`);
+  if (routes.length === 0) {
+    console.error('[prerender-content] read 0 neighbourhood routes from src/lib/neighborhoods.ts; the file changed shape.');
+    process.exit(1);
+  }
+  return routes;
+}
+
+/**
+ * Time claims frozen into static HTML (Eat & Drink pass 2, WP6 item 2).
+ *
+ * These three routes are prerendered, and each one has a line that is only
+ * true at the minute it was computed: a card's "Open until 10 PM", the
+ * open-now clock in a <time> ending "CT", a "Closed, opens 11 AM", the hub's
+ * "Dinner before a show tonight" strip. Captured at build time, every one of
+ * them is wrong within the hour and stays wrong until the next deploy, and the
+ * JS-less crawler reading the HTML has no clock to correct it. The pages skip
+ * those lines under isPrerender(); this asserts that they did.
+ *
+ * Matched against #root only. The literal strings go against its markup
+ * ("CT</time>" is a markup shape on purpose). "Open Now" is the exception: it
+ * is also the name of a route, so it legitimately appears as a link label, in
+ * the open-now page's h1 and in the breadcrumb. The frozen claim is the status
+ * badge, so that one matches an element whose whole text is "Open Now" and
+ * which is not a link, heading or nav entry.
+ */
+const FROZEN_TIME_ROUTES = new Set(['/restaurants', '/restaurants/open-now', '/breweries']);
+const FROZEN_TIME_LITERALS = ['Open until', 'Closed, opens', 'CT</time>', 'Dinner before a show tonight'];
+
+/** Elements claiming "Open Now" as a status, not naming the route. */
+function openNowStatusClaims(root) {
+  return [...root.querySelectorAll('*')].filter((el) => {
+    if ((el.textContent || '').replace(/\s+/g, ' ').trim() !== 'Open Now') return false;
+    // Only the innermost element carrying the text, so one badge counts once.
+    if ([...el.children].some((c) => (c.textContent || '').replace(/\s+/g, ' ').trim() === 'Open Now')) return false;
+    return !el.closest('a, h1, h2, h3, h4, h5, h6, nav, title, [aria-hidden="true"]');
+  });
+}
+
 /** An <a> with nothing a screen reader or a crawler could announce. */
 function unnamedLinks(doc, root) {
   return [...root.querySelectorAll('a[href]')].filter((a) => {
@@ -174,6 +331,42 @@ for (const file of files) {
     }
   }
 
+  // A PRERENDER=false build (or one whose prerender wrote nothing) leaves only
+  // Vite's dist/index.html: the SPA shell with its no-JS fallback, not a
+  // rendered homepage. The home assertions below are about what the prerender
+  // produced, so they wait for one; the canonical-url-shape and entity-coverage
+  // checks are what fail a build whose prerender went missing.
+  const homeWasPrerendered = allFiles.length > 1;
+  if (route === '/' && !homeWasPrerendered) {
+    console.error(
+      '[prerender-content] WARN /: dist/index.html is the unprerendered SPA shell (no other page was prerendered), ' +
+        'so the homepage lazy-section, neighbourhood and snapshot checks did not run.',
+    );
+  }
+
+  if (route === '/' && homeWasPrerendered) {
+    if (PENDING_LAZY.test(html)) {
+      const n = (html.match(new RegExp(PENDING_LAZY.source, 'gi')) || []).length;
+      failures.push({
+        route,
+        what: `ships ${n} unmounted lazy section(s) (data-lazy-section="pending"); the prerender flag did not reach LazySection`,
+      });
+    }
+    const missing = neighborhoodRoutes().filter((r) => !html.includes(`href="${r}"`));
+    if (missing.length > 0) {
+      failures.push({ route, what: `has no link to ${missing.join(', ')} (the neighbourhood strip did not render)` });
+    }
+    // An attribute on an element, not the "[data-speakable]" selector string
+    // the Speakable JSON-LD carries on every build.
+    if (!/<[a-z][^>]*\sdata-speakable(?:[\s=>/])/i.test(html)) {
+      // stderr: the sharded parent only forwards stdout for failures.
+      console.error(
+        '[prerender-content] WARN /: no [data-speakable] block. The dated snapshot did not render; ' +
+          'expected on a placeholder-env build, a defect on a real one.',
+      );
+    }
+  }
+
   // Parsed rather than regexed: nesting and accessible names are tree
   // questions, and a regex over serialized HTML cannot answer either.
   const doc = new JSDOM(html).window.document;
@@ -182,6 +375,23 @@ for (const file of files) {
 
   const unnamed = unnamedLinks(doc, root).length;
   if (unnamed > 0) failures.push({ route, what: `${unnamed} link(s) with no accessible name` });
+
+  if (FROZEN_TIME_ROUTES.has(route)) {
+    const markup = root.innerHTML;
+    for (const literal of FROZEN_TIME_LITERALS) {
+      if (markup.includes(literal)) {
+        failures.push({ route, what: `ships a time claim frozen at build time ("${literal}")` });
+      }
+    }
+    const badges = openNowStatusClaims(root).length;
+    if (badges > 0) {
+      failures.push({ route, what: `ships ${badges} "Open Now" status badge(s) frozen at build time` });
+    }
+  }
+
+  // Card images, for the listing routes only. `declaredItems` is filled by the
+  // ItemList pass below and read after it.
+  let declaredItems = null;
 
   // THE ITEMLIST HALF OF THE DEFECT IN THIS FILE'S HEADER, which went
   // unguarded. The header opens with "/restaurants shipped ... an ItemList with
@@ -211,15 +421,32 @@ for (const file of files) {
       if (!node || node['@type'] !== 'ItemList') continue;
       const declared = node.numberOfItems;
       if (typeof declared !== 'number') continue;
+      declaredItems = Math.max(declaredItems ?? 0, declared);
       const actual = Array.isArray(node.itemListElement) ? node.itemListElement.length : 0;
       if (declared !== actual) {
         failures.push({ route, what: `ItemList declares numberOfItems ${declared} but supplies ${actual}` });
       }
     }
   }
+
+  if (CARD_IMAGE_ROUTES.has(route) && declaredItems !== null && declaredItems > 0) {
+    // src must be non-empty: a lazy placeholder with src="" is exactly what
+    // this is looking for, and it would satisfy a bare img[src] selector.
+    const withSrc = [...root.querySelectorAll('img[src]')].filter(
+      (img) => (img.getAttribute('src') || '').trim() !== '',
+    ).length;
+    if (withSrc < MIN_CARD_IMAGES && !ALLOWED_IMAGELESS_ROUTES.has(route)) {
+      failures.push({
+        route,
+        what:
+          `renders ${declaredItems} card(s) and not one <img src>. A JS-less crawler - ` +
+          'which is every AI crawler robots.txt invites - sees a grid of empty cards.',
+      });
+    }
+  }
 }
 
-console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links and self-contradictory ItemLists.`);
+console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links, self-contradictory ItemLists, imageless card grids and frozen time claims.`);
 
 for (const a of allowed) {
   console.log(`  allowed: ${a.route} (aria-busy x${a.occurrences}) - ${a.reason}`);
@@ -251,6 +478,13 @@ if (failures.some((f) => f.what.startsWith('ItemList declares'))) {
     'An ItemList that declares one count and supplies another is a claim a ' +
       'crawler can check and find false. numberOfItems must count the items in ' +
       'itemListElement, not the collection the page was drawn from.',
+  );
+}
+if (failures.some((f) => f.what.includes('frozen at build time'))) {
+  console.error(
+    'A status computed at build time is wrong within the hour and stays wrong until ' +
+      'the next deploy. Gate the line on isPrerender() (src/lib/isPrerender.ts) and ' +
+      'let the browser compute it against the clock.',
   );
 }
 process.exit(1);

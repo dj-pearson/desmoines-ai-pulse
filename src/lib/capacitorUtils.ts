@@ -121,27 +121,58 @@ const logger = createLogger('capacitorUtils');
 /* ------------------------------------------------------------------ */
 
 /**
+ * Returns the URL normalised by the URL parser when its scheme is http: or
+ * https:, otherwise null.
+ *
+ * Every external link on the site ultimately comes from a scraper
+ * (`events.source_url`) or an advertiser (`campaign_creatives.link_url`), so
+ * neither can be trusted to hold a web URL. `javascript:`, `data:`, `file:`,
+ * `intent:` and friends are refused here, in one place, rather than at each
+ * call site. Relative URLs are refused too: an "external" link that resolves
+ * against our own origin is a data error, not a link.
+ */
+export function toSafeExternalUrl(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  return parsed.href;
+}
+
+/**
  * Opens a URL externally.
  *
- * - In Capacitor → uses the Browser plugin to open the system browser
- * - On web → uses window.open (standard _blank behaviour)
+ * - In Capacitor -> uses the Browser plugin to open the system browser
+ * - On web -> uses window.open (standard _blank behaviour)
  *
- * Returns a boolean indicating whether the open was attempted.
+ * Refuses anything that is not an absolute http(s) URL (see
+ * `toSafeExternalUrl`) and returns false without opening anything.
+ * Otherwise returns true to say the open was attempted.
  */
 export async function openExternalUrl(url: string): Promise<boolean> {
-  if (!url) return false;
+  const safeUrl = toSafeExternalUrl(url);
+  if (!safeUrl) {
+    logger.warn('openExternalUrl', 'Refused non-http(s) URL');
+    return false;
+  }
 
   try {
     if (isCapacitor() && window.Capacitor?.Plugins?.Browser) {
-      await window.Capacitor.Plugins.Browser.open({ url });
+      await window.Capacitor.Plugins.Browser.open({ url: safeUrl });
       return true;
     }
   } catch (err) {
     logger.warn('openExternalUrl', 'Browser.open failed, falling back', { error: String(err) });
   }
 
-  // Fallback – works everywhere
-  window.open(url, '_blank', 'noopener,noreferrer');
+  // Fallback - works everywhere
+  window.open(safeUrl, '_blank', 'noopener,noreferrer');
   return true;
 }
 
@@ -179,6 +210,48 @@ export async function nativeShare(opts: {
   }
 
   return false;
+}
+
+export type ShareOutcome = 'shared' | 'cancelled' | 'unavailable';
+
+/** True when a share rejection means the person closed the sheet. */
+function isShareCancel(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === 'AbortError') return true;
+  const message = String((err as { message?: unknown } | null)?.message ?? err ?? '');
+  return /cancel/i.test(message);
+}
+
+/**
+ * nativeShare with the outcome spelled out. nativeShare answers false for a
+ * cancel and for "no share sheet here" alike, so a caller that falls back to
+ * the clipboard overwrote whatever the person had copied after they chose not
+ * to share. 'cancelled' is the person's answer and needs no fallback;
+ * 'unavailable' (no sheet, or it failed) does.
+ */
+export async function shareWithOutcome(opts: {
+  title?: string;
+  text?: string;
+  url?: string;
+}): Promise<ShareOutcome> {
+  try {
+    if (isCapacitor() && window.Capacitor?.Plugins?.Share) {
+      await window.Capacitor.Plugins.Share.share({
+        title: opts.title,
+        text: opts.text,
+        url: opts.url,
+        dialogTitle: opts.title,
+      });
+      return 'shared';
+    }
+    if (typeof navigator.share === 'function') {
+      await navigator.share(opts);
+      return 'shared';
+    }
+  } catch (err) {
+    if (isShareCancel(err)) return 'cancelled';
+    logger.warn('shareWithOutcome', 'share failed', { error: String(err) });
+  }
+  return 'unavailable';
 }
 
 /* ------------------------------------------------------------------ */

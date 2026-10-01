@@ -5,6 +5,8 @@ struct AttractionDetailView: View {
     let attraction: Attraction
 
     @State private var showShareSheet = false
+    @State private var favorites = FavoritesService.shared
+    @State private var toast: ToastMessage?
 
     var body: some View {
         ScrollView {
@@ -12,6 +14,7 @@ struct AttractionDetailView: View {
                 heroImage
                 infoSection
                 actionButtons
+                AttractionPlanVisitSection(attraction: attraction)
                 descriptionSection
                 ReviewsSection(contentType: "attraction", contentId: attraction.id)
             }
@@ -20,6 +23,7 @@ struct AttractionDetailView: View {
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { saveButton }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -31,13 +35,19 @@ struct AttractionDetailView: View {
             }
         }
         .sheet(isPresented: $showShareSheet) {
-            ShareSheet(items: [shareText])
+            // The link goes as its own item so Messages and Mail show a
+            // preview; without a slug there is no web page to link
+            // (IOS-DD-BROWSE-11).
+            ShareSheet(items: shareItems)
         }
+        .toastOverlay(message: $toast)
         .task {
             // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
             RecentlyViewedService.shared.record(
                 type: "attraction", id: attraction.id, title: attraction.name, imageUrl: attraction.imageUrl
             )
+            // As ArticleDetailView does (IOS-DD-PLATFORM-08).
+            await SpotlightService.shared.indexAttractions([attraction])
         }
     }
 
@@ -69,7 +79,7 @@ struct AttractionDetailView: View {
                     Image(systemName: attraction.attractionType.icon)
                         .font(.caption2)
                         .accessibilityHidden(true)
-                    Text(attraction.type)
+                    Text(attraction.typeLabel)
                         .appText(.caption)
                 }
                 .foregroundStyle(.white)
@@ -91,65 +101,34 @@ struct AttractionDetailView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Rating
-            if let rating = attraction.rating {
-                HStack(spacing: 6) {
-                    HStack(spacing: 2) {
-                        ForEach(1...5, id: \.self) { star in
-                            Image(systemName: Double(star) <= rating ? "star.fill" : (Double(star) - 0.5 <= rating ? "star.leadinghalf.filled" : "star"))
-                                .font(.system(size: 14))
-                                .foregroundStyle(Double(star) <= rating ? .yellow : .gray.opacity(0.3))
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    Text(String(format: "%.1f", rating))
-                        .appText(.bodyEmphasized)
-
-                    Spacer()
-
-                    if attraction.isFeatured == true {
-                        Label("Featured", systemImage: "star.fill")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.orange)
-                    }
+            // Rating. The Featured/Sponsored label sits outside it, so an
+            // unrated featured row still says so (IOS-DD-BROWSE-11).
+            HStack(spacing: 6) {
+                if let rating = attraction.rating {
+                    ratingStars(rating)
                 }
-                // Combine the star row + numeric value into one VoiceOver element
-                // (IOS-AUDIT-UX-013) so it announces the rating once instead of
-                // reading five individual star images.
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(
-                    "Rating: \(String(format: "%.1f", rating)) out of 5 stars"
-                    + (attraction.isFeatured == true ? ". Featured" : "")
-                )
+                Spacer()
+                placementLabel
             }
 
             Divider()
 
-            // Location
-            if let location = attraction.location, !location.isEmpty {
+            // Location. The address when entered; directions live in the
+            // action row only (IOS-DD-BROWSE-11).
+            if let location = attraction.displayAddress {
                 HStack(spacing: 10) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.title3)
                         .foregroundStyle(.red)
                         .frame(width: 28)
+                        .accessibilityHidden(true)
 
                     Text(location)
                         .appText(.bodySmall)
                         .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
 
                     Spacer()
-
-                    if attraction.coordinate != nil {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            openInMaps()
-                        } label: {
-                            Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.blue)
-                        }
-                        .accessibilityLabel("Get directions")
-                    }
                 }
             }
 
@@ -192,11 +171,10 @@ struct AttractionDetailView: View {
                 .accessibilityLabel("Visit \(attraction.name) website")
             }
 
-            if attraction.coordinate != nil {
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    openInMaps()
-                } label: {
+            // Coordinates or the address (IOS-DD-BROWSE-11); the old button
+            // needed coordinates and built its query by hand.
+            if let url = attraction.directionsURL {
+                Link(destination: url) {
                     Label("Directions", systemImage: "map.fill")
                         .appText(.bodyEmphasized)
                         .frame(maxWidth: .infinity)
@@ -214,6 +192,11 @@ struct AttractionDetailView: View {
 
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let summary = attraction.geoSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
+                Text(summary)
+                    .appText(.bodyEmphasized)
+                    .padding(.bottom, 4)
+            }
             if let description = attraction.description, !description.isEmpty {
                 Text("About")
                     .appText(.title)
@@ -230,22 +213,84 @@ struct AttractionDetailView: View {
 
     // MARK: - Helpers
 
-    private func openInMaps() {
-        guard let coord = attraction.coordinate else { return }
-        let name = attraction.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let query = "daddr=\(coord.latitude),\(coord.longitude)&q=\(name)"
-        // Prefer the Apple Maps app, but fall back to the universal https link so
-        // we never force-unwrap and never silently no-op if Maps is unavailable.
-        if let appURL = URL(string: "maps://?\(query)"), UIApplication.shared.canOpenURL(appURL) {
-            UIApplication.shared.open(appURL)
-        } else if let webURL = URL(string: "https://maps.apple.com/?\(query)") {
-            UIApplication.shared.open(webURL)
+    // MARK: - Rating & placement
+
+    private func ratingStars(_ rating: Double) -> some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 2) {
+                ForEach(1...5, id: \.self) { star in
+                    // A half star is yellow too (IOS-DD-BROWSE-11).
+                    Image(systemName: Double(star) <= rating ? "star.fill" : (Double(star) - 0.5 <= rating ? "star.leadinghalf.filled" : "star"))
+                        .font(.system(size: 14))
+                        .foregroundStyle(Double(star) - 0.5 <= rating ? .yellow : .gray.opacity(0.3))
+                        .accessibilityHidden(true)
+                }
+            }
+            Text(String(format: "%.1f", rating))
+                .appText(.bodyEmphasized)
+        }
+        // Combine the star row + numeric value into one VoiceOver element
+        // (IOS-AUDIT-UX-013) so it announces the rating once instead of
+        // reading five individual star images.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Rating: \(String(format: "%.1f", rating)) out of 5 stars")
+    }
+
+    /// "Sponsored" for a live paid placement, else "Featured"
+    /// (IOS-DD-BROWSE-09): a paid slot is never presented as an editorial pick.
+    @ViewBuilder
+    private var placementLabel: some View {
+        if attraction.isActivelySponsored {
+            Label("Sponsored", systemImage: "megaphone.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
+        } else if attraction.isFeatured == true {
+            Label("Featured", systemImage: "star.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
         }
     }
 
+    // MARK: - Save (IOS-DD-BROWSE-11)
+
+    private var saveButton: some View {
+        let isSaved = favorites.isAttractionFavorited(attraction.id)
+        return Button {
+            toggleFavorite()
+        } label: {
+            Image(systemName: isSaved ? "heart.fill" : "heart")
+                .foregroundStyle(isSaved ? Color.red : Color.primary)
+        }
+        .accessibilityLabel(isSaved ? "Saved" : "Save")
+        .accessibilityAddTraits(isSaved ? .isSelected : [])
+    }
+
+    private func toggleFavorite() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            do {
+                let nowSaved = try await favorites.toggleFavoriteAttraction(attractionId: attraction.id)
+                toast = nowSaved ? .success("Saved \(attraction.name)") : .info("Removed from saved")
+            } catch let error as FavoritesService.FavoritesError {
+                // The favorites cap presents the upsell paywall app-wide
+                // (IOS-SUB-011); don't double up with a toast.
+                if case .limitReached = error { return }
+                toast = .error(error.localizedDescription)
+            } catch {
+                toast = .error("Couldn't update saved")
+            }
+        }
+    }
+
+    private var shareItems: [Any] {
+        var items: [Any] = [shareText]
+        if let url = attraction.shareURL { items.append(url) }
+        return items
+    }
+
     private var shareText: String {
-        var text = "\(attraction.name) (\(attraction.type))"
-        if let location = attraction.location {
+        var text = "\(attraction.name) (\(attraction.typeLabel))"
+        if let location = attraction.displayAddress {
             text += " - \(location)"
         }
         if let rating = attraction.rating {

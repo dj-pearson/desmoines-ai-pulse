@@ -14,6 +14,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Trophy, Target, Award, Star, Camera, MapPin, Share2 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 // Sample XP activities for demo
 const XP_ACTIVITIES = [
@@ -56,7 +57,8 @@ const XP_ACTIVITIES = [
 
 export default function Gamification() {
   const { isAuthenticated, user } = useAuth();
-  const { challenges, awardPoints, reputation } = useGamification();
+  const { challenges, awardPoints, reputation, error: gamificationError, refetch: refetchGamification } =
+    useGamification();
   useDocumentTitle("Rewards & Achievements");
 
   const handleTestXP = (activityType: string, points: number) => {
@@ -260,7 +262,19 @@ export default function Gamification() {
                 <CommunityChallenge key={challenge.id} challenge={challenge} />
               ))}
               
-              {challenges.length === 0 && (
+              {/* WEB-QA-031: "No active challenges right now" tells the
+                  visitor there is nothing to do. A failed load has not
+                  established that. */}
+              {challenges.length === 0 && gamificationError && (
+                <div className="col-span-full">
+                  <ErrorState
+                    error={gamificationError}
+                    compact
+                    onRetry={() => void refetchGamification()}
+                  />
+                </div>
+              )}
+              {challenges.length === 0 && !gamificationError && (
                 <div className="col-span-full text-center py-12">
                   <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">No active challenges right now.</p>

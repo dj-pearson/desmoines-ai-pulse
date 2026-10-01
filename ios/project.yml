@@ -76,6 +76,11 @@ targets:
       - path: DesMoinesInsiderClip
         excludes:
           - "**/.DS_Store"
+      # Shared pure files (IOS-DD-PLATFORM-04): Central time and the web's
+      # event slug. Foundation only; neither may reference app-only types.
+      - path: DesMoinesInsider/Services/DesMoinesTime.swift
+      - path: DesMoinesInsider/Services/EventSlug.swift
+      - path: DesMoinesInsider/Services/ClipDateFormat.swift
     settings:
       base:
         INFOPLIST_FILE: DesMoinesInsiderClip/Info.plist

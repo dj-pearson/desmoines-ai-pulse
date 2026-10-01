@@ -1,8 +1,11 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Event, RestaurantOpening, Restaurant, Attraction, Playground } from "@/lib/types";
-import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
+import { Event, Restaurant } from "@/lib/types";
+import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { createLogger } from "@/lib/logger";
+import { queryKeys } from "@/lib/queryKeys";
+import { JUST_OPENED_WINDOW_DAYS, orderOpeningsWatch } from "@/lib/restaurantOpenings";
+import { addCentralDays, centralDateOf } from "@/lib/timezone";
 
 const logger = createLogger("useSupabase");
 
@@ -19,12 +22,34 @@ function deterministicShuffle<T>(arr: T[], seed: number): T[] {
   return result;
 }
 
+/**
+ * Featured and opening hooks for the homepage (WEB-PERF-032).
+ *
+ * FIVE OF THIS FILE'S SEVEN EXPORTS WERE IMPORTED BY NOTHING and have been
+ * deleted: useEvents, useFeaturedRestaurants, useFeaturedAttractions,
+ * useFeaturedPlaygrounds and useEventScraper. The story that found this named
+ * only useEvents; a grep for each export in turn found the other four.
+ *
+ * The dead useEvents mattered more than the rest. It was a SECOND events
+ * fetcher - `select('*')`, limit 100, keyed ['events', filters, today] - sharing
+ * a name with the real one in @/hooks/useEvents, so an import from the wrong
+ * module would have compiled, run, and quietly fetched every column of a
+ * hundred rows including the tsvector and the PostGIS blob.
+ *
+ * What remains: useFeaturedEvents (FeaturedEvents.tsx) and useRestaurantOpenings
+ * (RestaurantOpenings.tsx, AllInclusiveDashboard.tsx).
+ */
+
 // Events hooks
 export function useFeaturedEvents() {
   const today = new Date().toISOString().split('T')[0];
   
   return useQuery<Event[]>({
-    queryKey: ['events', 'featured', today],
+    // WEB-PERF-032: was the bare ['events', 'featured', today], which sits
+    // UNDER the ['events'] prefix every write invalidated - so approving one
+    // queued event refetched a rail whose contents could not have changed.
+    // queryKeys.events.featured() is outside lists(); see invalidateEvents.
+    queryKey: queryKeys.events.featured(today),
     queryFn: async () => {
       const MAX_DISPLAY = 6;
 
@@ -67,7 +92,41 @@ export function useFeaturedEvents() {
         .slice(0, remainingSlots)
         .map(transformEvent);
 
-      return [...sponsored, ...rotated];
+      const chosen = [...sponsored, ...rotated];
+      const fallbackSlots = MAX_DISPLAY - chosen.length;
+      if (fallbackSlots <= 0) return chosen;
+
+      // Pass 3 (WEB-BE-040): featured used to be a coin toss at ingest, so the
+      // rail was never short of rows. Now that only admins and campaigns set
+      // it, a quiet week can leave fewer than six. Fill the rest with a
+      // deterministic ranking (most popular, then soonest) rather than an
+      // empty rail, and never repeat a row already chosen above.
+      const chosenIds = chosen.map((e) => e.id);
+      let fallbackQuery = supabase
+        .from('events')
+        .select(EVENT_LIST_COLUMNS)
+        .gte('date', today)
+        .neq('is_merged', true)
+        .neq('is_hidden', true)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is('archived_at', null)
+        .order('popularity_score', { ascending: false, nullsFirst: false })
+        .order('date', { ascending: true })
+        .limit(fallbackSlots);
+      if (chosenIds.length > 0) {
+        fallbackQuery = fallbackQuery.not('id', 'in', `(${chosenIds.join(',')})`);
+      }
+
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+
+      if (fallbackError) {
+        // The rail already has what it has; a failed fallback is not worth an
+        // error state on the homepage.
+        logger.warn('useFeaturedEvents', 'Fallback ranking failed', { error: fallbackError });
+        return chosen;
+      }
+
+      return [...chosen, ...(fallbackData || []).map(transformEvent)];
     },
     staleTime: 60000, // 1 minute
     gcTime: 300000, // 5 minutes
@@ -76,174 +135,82 @@ export function useFeaturedEvents() {
   });
 }
 
-export function useEvents(filters?: { category?: string; location?: string; date?: string }) {
-  const today = new Date().toISOString().split('T')[0];
-  
-  return useQuery<Event[]>({
-    queryKey: ['events', filters, today],
-    queryFn: async () => {
-      let query = supabase.from('events').select('*');
-      
-      const dateFilter = filters?.date || today;
-      logger.info('useEvents', 'Fetching events', { from: dateFilter });
-      query = query.gte('date', dateFilter);
-      
-      if (filters?.category) {
-        query = query.ilike('category', `%${filters.category}%`);
-      }
-      if (filters?.location) {
-        query = query.ilike('location', `%${filters.location}%`);
-      }
-      
-      const { data, error } = await query.order('date', { ascending: true }).limit(100);
+/**
+ * A restaurant as the transform returns it, plus the stored `slug` and `city`.
+ *
+ * `slug` is selected by RESTAURANT_LIST_COLUMNS and was dropped here, so the
+ * home dashboard rebuilt one from the name and linked "Proof's" to proof-s
+ * where the row says proofs (home plan WP3 item 1). It is a new key, so the
+ * callers that read `Restaurant` are unaffected. `city` is the same case: the
+ * openings watch prints it next to the cuisine.
+ */
+export type RestaurantWithSlug = Restaurant & { slug?: string; city?: string };
 
-      if (error) {
-        logger.error('useEvents', 'Error fetching events', { error });
-        throw error;
-      }
-      logger.info('useEvents', 'Events fetched', { count: data?.length });
-      return data?.map(transformEvent) || [];
-    },
-    staleTime: 60000,
-    gcTime: 300000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-  });
+interface RestaurantOpeningsOptions {
+  /** Row cap. Omitted = every opening. */
+  limit?: number;
+  /**
+   * Also return places marked newly_opened whose opening_date falls in the
+   * last JUST_OPENED_WINDOW_DAYS. The hub's openings watch wants them; the
+   * home dashboard prints "Opens <date>" for every row, so it leaves this off.
+   */
+  includeRecentlyOpened?: boolean;
 }
 
-export function useRestaurantOpenings() {
-  return useQuery<Restaurant[]>({
-    queryKey: ['restaurant-openings'],
+export function useRestaurantOpenings(options: RestaurantOpeningsOptions = {}) {
+  const { limit, includeRecentlyOpened = false } = options;
+  // Central calendar dates, so the key changes once a day, not every render.
+  const today = centralDateOf();
+  const since = includeRecentlyOpened ? addCentralDays(today, -JUST_OPENED_WINDOW_DAYS) : null;
+  return useQuery<RestaurantWithSlug[]>({
+    // Every variant starts with 'restaurant-openings', so an invalidation of
+    // that prefix still reaches all of them.
+    queryKey:
+      limit || since
+        ? ['restaurant-openings', { limit: limit ?? null, since, today }]
+        : ['restaurant-openings', { today }],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('restaurants')
         .select(RESTAURANT_LIST_COLUMNS)
-        .in('status', ['opening_soon', 'announced'])
-        .order('opening_date', { ascending: true, nullsFirst: false });
-      
+        // Hide rows merged into a duplicate (WEB-AUTO-005).
+        .neq('is_merged', true);
+      // An upcoming row whose date has passed is a stale announcement
+      // (eat-drink pass 2, WP2.7). It is left out here so it cannot take one
+      // of the capped slots; /restaurants/new lists it under "Announced, not
+      // confirmed". A stale year in an undated timeframe is dropped below.
+      const upcoming = `and(status.in.(opening_soon,announced),or(opening_date.gte.${today},opening_date.is.null))`;
+      query = since
+        ? query.or(`${upcoming},and(status.eq.newly_opened,opening_date.gte.${since})`)
+        : query.or(upcoming);
+      // Ascending picks the right rows under the cap: every recent opening
+      // (at most JUST_OPENED_WINDOW_DAYS old), then the soonest upcoming
+      // dates, undated last. The display order is set after the fetch.
+      query = query.order('opening_date', { ascending: true, nullsFirst: false });
+      if (limit) {
+        query = query.limit(limit);
+      }
+      const { data, error } = await query;
+
       if (error) {
         logger.error('useRestaurantOpenings', 'Error fetching restaurant openings', { error });
         throw error;
       }
       logger.info('useRestaurantOpenings', 'Restaurant openings fetched', { count: data?.length });
-      return data?.map(transformRestaurant) || [];
+      // Newest opening first, then the soonest upcoming, then undated; stale
+      // announcements dropped.
+      return orderOpeningsWatch((data ?? []).map(transformRestaurant), (row) => ({
+        id: row.id,
+        name: row.name,
+        status: row.status ?? null,
+        opening_date: row.openingDate ?? null,
+        opening_timeframe: row.openingTimeframe ?? null,
+      }));
     },
     staleTime: 120000, // 2 minutes
     gcTime: 600000, // 10 minutes
     refetchOnMount: true,
     refetchOnWindowFocus: false,
-  });
-}
-
-export function useFeaturedRestaurants() {
-  const today = new Date().toISOString().split('T')[0];
-
-  return useQuery<Restaurant[]>({
-    queryKey: ['restaurants', 'featured', today],
-    queryFn: async () => {
-      const MAX_DISPLAY = 6;
-
-      // Pass 1: sponsored restaurants take priority
-      const { data: sponsoredData, error: sponsoredError } = await supabase
-        .from('restaurants')
-        .select(RESTAURANT_LIST_COLUMNS)
-        .eq('is_sponsored', true)
-        .order('rating', { ascending: false });
-
-      if (sponsoredError) {
-        logger.error('useFeaturedRestaurants', 'Error fetching sponsored restaurants', { error: sponsoredError });
-        throw sponsoredError;
-      }
-
-      const sponsored = (sponsoredData || []).map(transformRestaurant);
-      const remainingSlots = Math.max(0, MAX_DISPLAY - sponsored.length);
-
-      if (remainingSlots === 0) return sponsored.slice(0, MAX_DISPLAY);
-
-      // Pass 2: organic featured + highly-rated (≥4.0) restaurants as rotation pool
-      const { data: featuredData, error: featuredError } = await supabase
-        .from('restaurants')
-        .select(RESTAURANT_LIST_COLUMNS)
-        .or('is_featured.eq.true,rating.gte.4.0')
-        .eq('is_sponsored', false)
-        .order('rating', { ascending: false })
-        .limit(30); // fetch more than needed to enable rotation
-
-      if (featuredError) {
-        logger.error('useFeaturedRestaurants', 'Error fetching featured restaurants', { error: featuredError });
-        throw featuredError;
-      }
-
-      // Deduplicate (in case a restaurant is both is_featured and high-rated)
-      const seen = new Set<string>();
-      const pool = (featuredData || []).filter((r) => {
-        if (seen.has(r.id)) return false;
-        seen.add(r.id);
-        return true;
-      });
-
-      // Daily deterministic rotation
-      const seed = parseInt(today.replace(/-/g, ''), 10);
-      const rotated = deterministicShuffle(pool, seed)
-        .slice(0, remainingSlots)
-        .map(transformRestaurant);
-
-      return [...sponsored, ...rotated];
-    },
-    staleTime: 120000,
-    gcTime: 600000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-  });
-}
-
-export function useFeaturedAttractions() {
-  return useQuery<Attraction[]>({
-    queryKey: ['attractions', 'featured'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('attractions')
-        .select(ATTRACTION_LIST_COLUMNS)
-        .eq('is_featured', true)
-        .order('rating', { ascending: false })
-        .limit(6);
-      
-      if (error) throw error;
-      return data?.map(transformAttraction) || [];
-    },
-  });
-}
-
-export function useFeaturedPlaygrounds() {
-  return useQuery<Playground[]>({
-    queryKey: ['playgrounds', 'featured'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('playgrounds')
-        .select('*')
-        .eq('is_featured', true)
-        .order('rating', { ascending: false })
-        .limit(6);
-      
-      if (error) throw error;
-      return data?.map(transformPlayground) || [];
-    },
-  });
-}
-
-export function useEventScraper() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('scrape-events');
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      // Invalidate and refetch events
-      queryClient.invalidateQueries({ queryKey: ['events'] });
-    },
   });
 }
 
@@ -270,9 +237,11 @@ function transformEvent(event: Record<string, unknown>): Event {
   };
 }
 
-function transformRestaurant(restaurant: Record<string, unknown>): Restaurant {
+function transformRestaurant(restaurant: Record<string, unknown>): RestaurantWithSlug {
   return {
     id: restaurant.id as string,
+    slug: (restaurant.slug as string | null) ?? undefined,
+    city: (restaurant.city as string | null) ?? undefined,
     name: restaurant.name as string,
     cuisine: restaurant.cuisine as string,
     location: restaurant.location as string,
@@ -287,41 +256,9 @@ function transformRestaurant(restaurant: Record<string, unknown>): Restaurant {
     sponsoredUntil: restaurant.sponsored_until as string | null,
     openingDate: restaurant.opening_date as string | undefined,
     openingTimeframe: restaurant.opening_timeframe as string | undefined,
-    status: restaurant.status as string | undefined,
+    status: restaurant.status as Restaurant["status"],
     sourceUrl: restaurant.source_url as string | undefined,
     createdAt: restaurant.created_at as string,
     updatedAt: restaurant.updated_at as string,
-  };
-}
-
-function transformAttraction(attraction: Record<string, unknown>): Attraction {
-  return {
-    id: attraction.id as string,
-    name: attraction.name as string,
-    type: attraction.type as string,
-    location: attraction.location as string,
-    description: attraction.description as string,
-    rating: attraction.rating as number,
-    website: attraction.website as string,
-    image_url: attraction.image_url as string,
-    isFeatured: attraction.is_featured as boolean,
-    createdAt: attraction.created_at as string,
-    updatedAt: attraction.updated_at as string,
-  };
-}
-
-function transformPlayground(playground: Record<string, unknown>): Playground {
-  return {
-    id: playground.id as string,
-    name: playground.name as string,
-    location: playground.location as string,
-    description: playground.description as string,
-    ageRange: playground.age_range as string,
-    amenities: playground.amenities as string[],
-    rating: playground.rating as number,
-    image_url: playground.image_url as string,
-    isFeatured: playground.is_featured as boolean,
-    createdAt: playground.created_at as string,
-    updatedAt: playground.updated_at as string,
   };
 }

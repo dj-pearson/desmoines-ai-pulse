@@ -1,0 +1,20 @@
+{
+  "_comment": "Tables carrying an identity column (user_id and friends) whose SELECT policy is USING(true) for public/anon - anyone with the bundled anon key can read who did what. WEB-SEC-025 AC7. Whether each is public BY DESIGN is a product decision per table, so this list is triage, not a vulnerability list. It must only ever SHRINK. Tightening one is a multi-release deprecation when a shipped mobile binary reads it (CLAUDE.md). ONE ENTRY IS NOT LIKE THE OTHERS AND SHOULD NOT SIT HERE LONG: user_subscriptions is flagged by \"Service role can manage all subscriptions\" (20251225000000_stripe_payment_enhancements.sql), which is FOR ALL USING(true) WITH CHECK(true) with NO `TO` clause - so despite the name it applies to public, not to service_role. docs/RLS_AUDIT.md has reported it since the audit was written and no story covers it. See WEB-SEC-025's notes.",
+  "generated": "2026-09-18",
+  "tables": [
+    "brewery_trail_checkins",
+    "content_helpful_votes",
+    "discussion_likes",
+    "event_attendance",
+    "event_checkins",
+    "event_discussion_reactions",
+    "event_discussions",
+    "event_live_feed",
+    "event_photos",
+    "event_reviews",
+    "event_tips",
+    "photo_likes",
+    "swipe_session_participants",
+    "user_subscriptions"
+  ]
+}

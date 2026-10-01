@@ -4,11 +4,14 @@ enum ChatRole {
     case user, assistant
 }
 
-/// Chat bubble used in the Trip Planner conversational UI.
-/// Mirrors Android `ChatBubble.kt`.
+/// Chat bubble for Ask Pulse (IOS-DD-DISCOVER-16). Mirrors Android
+/// `ChatBubble.kt`.
 struct ChatBubble: View {
     let text: String
     let role: ChatRole
+    /// Inside a container that already pads its content: no horizontal
+    /// padding of its own.
+    var embedded: Bool = false
 
     var body: some View {
         HStack {
@@ -31,16 +34,19 @@ struct ChatBubble: View {
                 )
             if role == .assistant { Spacer(minLength: 40) }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, embedded ? 0 : 16)
         .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            (role == .user ? "You said: " : "Assistant said: ") + text
+            (role == .user ? "You said: " : "Pulse said: ") + text
         )
     }
 }
 
 /// Three-dot typing indicator shown while the assistant is thinking.
 struct TypingIndicator: View {
+    /// As on ChatBubble: no horizontal padding inside a padded container.
+    var embedded: Bool = false
     @State private var phase: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -60,7 +66,7 @@ struct TypingIndicator: View {
             .clipShape(RoundedRectangle(cornerRadius: 18))
             Spacer(minLength: 40)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, embedded ? 0 : 16)
         .padding(.vertical, 4)
         .onAppear {
             guard !reduceMotion else { return }
@@ -68,7 +74,8 @@ struct TypingIndicator: View {
                 phase = 1
             }
         }
-        .accessibilityLabel("Assistant is typing")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pulse is thinking")
     }
 
     private func dotOffset(index: Int) -> CGFloat {

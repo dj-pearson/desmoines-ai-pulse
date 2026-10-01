@@ -75,14 +75,17 @@ struct EventDetailInfo: View {
                 .frame(width: 28)
                 .accessibilityHidden(true)
 
-            if event.isFree {
+            // One definition of free, shared with the Free filter
+            // (IOS-DD-EVENTS-06). Nil means not listed, which is not free.
+            switch Event.isFreePrice(event.price) {
+            case .some(true):
                 Label("Free Event", systemImage: "checkmark.seal.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.green)
-            } else if let price = event.price {
-                Text(price)
+            case .some(false):
+                Text(event.price?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
                     .font(.subheadline.weight(.semibold))
-            } else {
+            case .none:
                 Text("Price not listed")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

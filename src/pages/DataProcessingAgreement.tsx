@@ -1,6 +1,5 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Mail } from "lucide-react";
 
@@ -17,7 +16,6 @@ import { Mail } from "lucide-react";
  * review is still recommended for enterprise deals.
  */
 export default function DataProcessingAgreement() {
-  useDocumentTitle("Data Processing Agreement");
 
   return (
     <>

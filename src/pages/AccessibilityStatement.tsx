@@ -6,12 +6,10 @@ import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Accessibility, Keyboard, Eye, EyeOff, Volume2, Smartphone, Mail, CheckCircle, AlertCircle, Moon, Type, Palette, MonitorSmartphone, Mic, Subtitles, AudioLines, Pause, Shield, Settings, Scale } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AccessibilityStatement() {
-  useDocumentTitle("Accessibility Statement");
 
   const lastUpdated = "March 2, 2026";
   const wcagVersion = "2.1";
@@ -218,7 +216,7 @@ export default function AccessibilityStatement() {
     <div className="min-h-screen bg-background">
       <SEOHead
         title="Accessibility Statement | Des Moines Insider"
-        description="Des Moines Insider is committed to digital accessibility for people with disabilities. Learn about our WCAG 2.1 Level AA conformance, ADA compliance, Apple accessibility support, and accessibility features."
+        description="Des Moines Insider's commitment to digital accessibility: WCAG 2.1 Level AA conformance, ADA compliance and the features we support."
         url="https://desmoinesinsider.com/accessibility"
         type="website"
       />

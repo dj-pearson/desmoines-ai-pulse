@@ -35,16 +35,18 @@ export function BackToTop({ showAfter = 500, className }: BackToTopProps) {
   }, [showAfter]);
 
   const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth',
-    });
-  };
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      scrollToTop();
+    // The button unmounts once we are back at the top, which would drop focus
+    // to <body>. Send it to the start of the content instead, so a keyboard or
+    // screen reader user continues from where they now are.
+    const main = document.getElementById('main-content');
+    if (main) {
+      if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+      main.focus({ preventScroll: true });
     }
   };
 
@@ -55,11 +57,13 @@ export function BackToTop({ showAfter = 500, className }: BackToTopProps) {
   return (
     <Button
       onClick={scrollToTop}
-      onKeyDown={handleKeyDown}
       size="icon"
       className={cn(
-        'fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full shadow-lg',
-        'transition-all duration-300 hover:scale-110',
+        // BottomNav (lg:hidden, z-50) renders after <main>, so at the same z it
+        // paints over anything in its band. Sit above it on phones and tablets.
+        'fixed right-6 z-50 h-12 w-12 rounded-full shadow-lg',
+        'bottom-[calc(5.5rem+env(safe-area-inset-bottom))] lg:bottom-6',
+        'transition-transform duration-300 motion-safe:hover:scale-110',
         'bg-primary text-primary-foreground',
         'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
         className

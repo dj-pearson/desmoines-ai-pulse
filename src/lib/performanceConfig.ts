@@ -23,33 +23,8 @@ export const imageOptimizationConfig = {
   }
 };
 
-// Critical resource preloading for LCP optimization
-export const criticalResourcesConfig = {
-  preloadLinks: [
-    // Preload critical fonts for Des Moines Insider branding
-    { 
-      href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
-      rel: 'preload',
-      as: 'style',
-      crossorigin: 'anonymous'
-    },
-    // Preload hero images for main pages
-    {
-      href: '/DMI-Logo-Header.png',
-      rel: 'preload', 
-      as: 'image',
-      media: '(min-width: 768px)'
-    }
-  ],
-  
-  // DNS prefetching for external resources
-  prefetchDomains: [
-    'fonts.googleapis.com',
-    'fonts.gstatic.com',
-    'www.googletagmanager.com',
-    'www.google-analytics.com'
-  ]
-};
+// No criticalResourcesConfig: it preloaded Google-hosted Inter (no CSS uses
+// it) and DMI-Logo-Header.png (the header renders logo2), and nothing read it.
 
 // Code splitting configuration for reduced bundle size
 export const codeSplittingConfig = {
@@ -71,36 +46,8 @@ export const codeSplittingConfig = {
   }
 };
 
-// Service Worker configuration for caching strategy
-export const serviceWorkerConfig = {
-  // Cache static assets for performance
-  staticCache: {
-    name: 'des-moines-insider-static-v1',
-    urls: [
-      '/',
-      '/restaurants',
-      '/events', 
-      '/neighborhoods',
-      '/manifest.json',
-      '/DMI-Logo-Header.png'
-    ]
-  },
-  
-  // Cache API responses for offline functionality
-  apiCache: {
-    name: 'des-moines-insider-api-v1',
-    strategy: 'network-first', // Fresh content when online
-    maxAge: 5 * 60 * 1000, // 5 minutes
-    maxEntries: 100
-  },
-  
-  // Cache Google Fonts and external resources
-  externalCache: {
-    name: 'des-moines-insider-external-v1',
-    strategy: 'cache-first',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-  }
-};
+// No serviceWorkerConfig: index.html unregisters every service worker on load,
+// so a cache list here described nothing that runs.
 
 // Core Web Vitals monitoring configuration
 export const webVitalsConfig = {
@@ -121,11 +68,16 @@ export const webVitalsConfig = {
     }
   },
   
-  // Real User Monitoring (RUM) setup
+  // Sampling for the dev overlay's GA4 forwarding (src/hooks/useWebVitals.ts).
+  //
+  // There is no `endpoint` here any more. It read '/api/performance-metrics',
+  // a route functions/ has never contained, and the one caller POSTed to it on
+  // every metric. Real-user collection is src/lib/webVitals.ts writing the
+  // web_vitals table - the one the weekly rollup and the admin panel read.
+  // WEB-PERF-039.
   rumConfig: {
     sampleRate: 0.1, // 10% of users for performance monitoring
-    reportInterval: 30000, // Report every 30 seconds
-    endpoint: '/api/performance-metrics'
+    reportInterval: 30000 // Report every 30 seconds
   }
 };
 
@@ -176,9 +128,7 @@ export const performanceMonitoring = {
 
 export default {
   imageOptimizationConfig,
-  criticalResourcesConfig,
   codeSplittingConfig,
-  serviceWorkerConfig,
   webVitalsConfig,
   mobileFirstConfig,
   performanceMonitoring

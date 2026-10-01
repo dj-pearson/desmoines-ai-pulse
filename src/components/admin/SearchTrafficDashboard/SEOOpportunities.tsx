@@ -155,12 +155,6 @@ export function SEOOpportunities({ dateRange, propertyId, connectedProviders }: 
     return <Lightbulb className="h-5 w-5 text-yellow-500" />;
   };
 
-  const impactColor = (impact: string) => {
-    if (impact === "High") return "#ef4444";
-    if (impact === "Medium") return "#0ea5e9";
-    return "#6b7280";
-  };
-
   const impactVariant = (impact: string): "destructive" | "default" | "secondary" => {
     if (impact === "High") return "destructive";
     if (impact === "Medium") return "default";
@@ -224,11 +218,7 @@ export function SEOOpportunities({ dateRange, propertyId, connectedProviders }: 
         <CardContent>
           <div className="space-y-4">
             {opportunities.map((opp, index) => (
-              <Card
-                key={index}
-                className="border-l-4"
-                style={{ borderLeftColor: impactColor(opp.impact) }}
-              >
+              <Card key={index}>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">

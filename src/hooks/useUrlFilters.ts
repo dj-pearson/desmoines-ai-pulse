@@ -70,25 +70,43 @@ export function useUrlFilters() {
   );
 
   /**
-   * Write several params at once (used by pages with one combined filter object).
-   * Empty string / empty array values delete the param. Always resets page.
+   * Write several params in ONE navigation (used by pages with one combined
+   * filter object, and by presets that set category, price and date together).
+   *
+   * One call matters: react-router 6 runs each setSearchParams updater against
+   * the params from the last render, so two setParam calls in the same handler
+   * each start from the old URL and the second overwrites the first. That is
+   * how "Free This Weekend" kept the weekend and lost "free".
+   *
+   * Empty string / empty array / null delete the param. `defaults` removes a
+   * key whose value equals its default, the same as setParam's `def`, so a
+   * preset that resets price to "any-price" leaves no `price=` in the URL.
+   * Always resets page.
    */
   const setMany = useCallback(
-    (entries: Record<string, string | string[] | number | null>) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        for (const [key, value] of Object.entries(entries)) {
-          const serialized = Array.isArray(value)
-            ? value.join(",")
-            : value === null
-            ? ""
-            : String(value);
-          if (!serialized) next.delete(key);
-          else next.set(key, serialized);
-        }
-        next.delete(PAGE_KEY);
-        return next;
-      }, { replace: false });
+    (
+      entries: Record<string, string | string[] | number | null>,
+      opts?: { defaults?: Record<string, string | number>; replace?: boolean }
+    ) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [key, value] of Object.entries(entries)) {
+            const serialized = Array.isArray(value)
+              ? value.join(",")
+              : value === null
+              ? ""
+              : String(value);
+            const def = opts?.defaults?.[key];
+            const isDefault = def !== undefined && serialized === String(def);
+            if (!serialized || isDefault) next.delete(key);
+            else next.set(key, serialized);
+          }
+          next.delete(PAGE_KEY);
+          return next;
+        },
+        { replace: opts?.replace ?? false }
+      );
     },
     [setSearchParams]
   );

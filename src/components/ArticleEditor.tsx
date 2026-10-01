@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 
 const log = createLogger('ArticleEditor');
 
@@ -177,7 +178,7 @@ export default function ArticleEditor() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <LoadingSpinner size="lg" label="Loading article" />
       </div>
     );
   }

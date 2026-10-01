@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { interpretSignUpResult } from "@/lib/signUpResult";
+import { sessionStartedAt } from "@/lib/sessionAge";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // Only the redirect validator is needed here, and it lives in a file with no
@@ -6,6 +9,8 @@ import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // dompurify onto the critical path (WEB-PERF-020).
 import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { createLogger } from '@/lib/logger';
+import { clearPersonalStorage } from '@/lib/userPreferencesStore';
+import { DEFAULT_ROLE, highestRole, isFullAdmin, isUserRole, type UserRole } from '@/lib/roles';
 
 const log = createLogger('AuthContext');
 
@@ -15,23 +20,58 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  /**
+   * The strongest role the user holds (WEB-AUTH-010). `isAdmin` is derived
+   * from it via isFullAdmin, so the nav and the route guard cannot disagree -
+   * they used to, because useAdminAuth resolved the role separately and ranked
+   * by created_at instead of by precedence.
+   */
+  userRole: UserRole;
   isAdminLoading: boolean; // True while admin check is in progress
   requiresMFA: boolean;
   mfaFactorId: string | null;
+  /**
+   * True between a PASSWORD_RECOVERY event and the password actually changing.
+   *
+   * WEB-AUTH-001: a recovery link creates an ordinary aal1 session, so every
+   * listener sees a normal sign-in and Auth.tsx used to redirect the user to
+   * the homepage before they could set a password. This flag is what tells the
+   * two apart.
+   */
+  isPasswordRecovery: boolean;
 }
 
 interface AuthActions {
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }>;
-  signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean }>;
-  logout: () => Promise<void>;
+  /**
+   * WEB-SEC-029: captchaToken is OPTIONAL at every one of these three call
+   * sites, and stays optional. Supabase ignores it until Turnstile is switched
+   * on in the dashboard, and the web forms supply it only when
+   * VITE_TURNSTILE_SITE_KEY is set - so an existing caller that passes nothing
+   * behaves exactly as it did.
+   */
+  login: (email: string, password: string, captchaToken?: string) => Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }>;
+  /** `alreadyRegistered` is true when the address already had an account (WEB-AUTH-004). */
+  signup: (email: string, password: string, metadata?: Record<string, unknown>, captchaToken?: string) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }>;
+  /**
+   * `scope` defaults to 'global', which is right for a deliberate sign-out.
+   * A TIMEOUT must pass 'local' (WEB-AUTH-007): an idle desktop tab signing
+   * someone out of their phone is not a security measure, it is a bug that
+   * looks like one.
+   */
+  logout: (options?: { scope?: 'local' | 'global' }) => Promise<void>;
   requireAdmin: () => void;
   refreshSession: () => Promise<boolean>;
   signInWithGoogle: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
   signInWithApple: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
-  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (email: string, captchaToken?: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
-  resendVerification: (email: string) => Promise<{ success: boolean; error?: string }>;
+  /** Starts a double-confirmation email change and alerts the current address (WEB-AUTH-012). */
+  updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
+  /** captchaToken optional for the same reason as login's (WEB-SEC-029). */
+  resendVerification: (email: string, captchaToken?: string) => Promise<{ success: boolean; error?: string }>;
   getSessionExpiresAt: () => number | null;
+  /** Epoch ms this session began, or null when it cannot be determined (WEB-AUTH-007). */
+  getSessionStartedAt: () => number | null;
 }
 
 type AuthContextType = AuthState & AuthActions;
@@ -46,8 +86,11 @@ export interface AuthFlags {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  /** WEB-AUTH-010: the strongest role held; isAdmin is isFullAdmin(userRole). */
+  userRole: UserRole;
   isAdminLoading: boolean;
   requiresMFA: boolean;
+  isPasswordRecovery: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,10 +98,12 @@ const AuthStateContext = createContext<AuthState | undefined>(undefined);
 const AuthFlagsContext = createContext<AuthFlags | undefined>(undefined);
 const AuthActionsContext = createContext<AuthActions | undefined>(undefined);
 
-// Cache for admin status
-const adminStatusCache = new Map<string, { isAdmin: boolean; timestamp: number }>();
+// Cache for the resolved role. WEB-AUTH-010: this held a boolean, which is
+// why a second consumer (useAdminAuth) had to re-query for the role name and
+// could reach a different answer.
+const roleCache = new Map<string, { role: UserRole; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
-const pendingChecks = new Map<string, Promise<boolean>>();
+const pendingChecks = new Map<string, Promise<UserRole | null>>();
 
 /**
  * Synchronous read of the admin cache. Returns null when there is no fresh
@@ -66,10 +111,10 @@ const pendingChecks = new Map<string, Promise<boolean>>();
  * entering the `isAdminLoading` state (which unmounts ProtectedRoute
  * subtrees). See handleAuthChange. (WEB-UX-008)
  */
-function readCachedAdmin(userId: string): boolean | null {
-  const cached = adminStatusCache.get(userId);
+function readCachedRole(userId: string): UserRole | null {
+  const cached = roleCache.get(userId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.isAdmin;
+    return cached.role;
   }
   return null;
 }
@@ -130,10 +175,14 @@ interface ServerLockoutResult {
 async function checkServerLockout(
   email: string,
   action: 'check' | 'record_failure' | 'record_success',
+  // WEB-SEC-027: clearing a lockout requires proof that the sign-in actually
+  // succeeded. The server verifies this token against GoTrue and checks the
+  // address on it; a call without one is accepted and changes nothing.
+  accessToken?: string,
 ): Promise<ServerLockoutResult | null> {
   try {
     const { data, error } = await supabase.functions.invoke('check-login-attempt', {
-      body: { email, action },
+      body: accessToken ? { email, action, accessToken } : { email, action },
     });
     if (error) return null;
     return data as ServerLockoutResult;
@@ -142,17 +191,39 @@ async function checkServerLockout(
   }
 }
 
+/**
+ * Where a sign-up confirmation link sends the person (WEB-AUTH-005): through
+ * /auth/callback, which waits for the session and renders a failed link, and
+ * on to /auth/verified. Used by signup and by resend so the two cannot differ.
+ */
+function confirmationRedirectUrl(): string {
+  return `${window.location.origin}/auth/callback?redirect=${encodeURIComponent("/auth/verified")}`;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // WEB-SEC-031. AuthProvider is mounted INSIDE QueryClientProvider
+  // (main.tsx wraps App), so this resolves.
+  const queryClient = useQueryClient();
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     session: null,
     isLoading: true,
     isAuthenticated: false,
     isAdmin: false,
+    userRole: DEFAULT_ROLE,
     isAdminLoading: false,
     requiresMFA: false,
     mfaFactorId: null,
+    isPasswordRecovery: false,
   });
+
+  // Id of the signed-in user, readable from callbacks whose closures predate
+  // the sign-in. Logout needs it to remove that account's scoped preferences
+  // (Home plan WP2 item 1) after setAuthState has already nulled the user.
+  const currentUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (authState.user?.id) currentUserIdRef.current = authState.user.id;
+  }, [authState.user?.id]);
 
   // Track if we're in the middle of a logout to prevent race conditions
   const isLoggingOutRef = useRef(false);
@@ -163,47 +234,98 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // already hold. (WEB-UX-008 — see handleAuthChange.)
   const resolvedAdminForUserRef = useRef<string | null>(null);
 
-  // Check admin status with caching
-  const checkIsAdmin = useCallback(async (user: User): Promise<boolean> => {
-    const cached = adminStatusCache.get(user.id);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-      return cached.isAdmin;
-    }
+  /**
+   * The user's strongest role, cached. Returns null when the read FAILED, which
+   * is not the same as `'user'`: callers deny access on either, but only the
+   * real answer is cached (WEB-CI-032).
+   */
+  const resolveRole = useCallback(async (user: User): Promise<UserRole | null> => {
+    const cached = readCachedRole(user.id);
+    if (cached !== null) return cached;
 
     const pending = pendingChecks.get(user.id);
     if (pending) return pending;
 
     const checkPromise = (async () => {
       try {
-        const { data: rolesData } = await supabase
+        // WEB-CI-032: both reads used to discard `error`. supabase-js RESOLVES
+        // with an { error } object rather than throwing, so a failed read
+        // arrived here as data: null - indistinguishable from "this user holds
+        // no admin row". The function then fell through to
+        // `adminStatusCache.set(..., { isAdmin: false })` and pinned that
+        // answer for CACHE_TTL, five minutes. One dropped request and a real
+        // admin lost /admin/* for five minutes with nothing logged anywhere,
+        // because esbuild.drop strips console.* from production.
+        //
+        // A failure is not an answer, so it is not cached. `false` is still
+        // returned - denying admin on an unknown is the safe direction - but
+        // the next call retries instead of reading back a guess.
+        // WEB-AUTH-010: ALL rows, ranked by precedence. This was
+        // .maybeSingle(), which resolves with PGRST116 when a user holds two
+        // role rows - so the handler above logged it and returned false, and
+        // an extra row silently revoked admin. A role row is a grant; holding
+        // two means holding both, and the effective role is the strongest.
+        const { data: rolesData, error: rolesError } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", user.id)
-          .maybeSingle();
+          .eq("user_id", user.id);
 
-        if (rolesData?.role) {
-          const isAdmin = rolesData.role === 'admin' || rolesData.role === 'root_admin';
-          adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-          return isAdmin;
+        if (rolesError) {
+          log.error('resolveRole', 'Role read failed; not caching', { error: rolesError });
+          return null;
         }
 
-        const { data: profileData } = await supabase
+        if (rolesData && rolesData.length > 0) {
+          const role = highestRole(rolesData);
+          roleCache.set(user.id, { role, timestamp: Date.now() });
+          return role;
+        }
+
+        // OAUTH ROLE LINKING, moved here from useAdminAuth (WEB-AUTH-010).
+        //
+        // A user who signs in with Google gets a NEW auth user id, so their
+        // user_roles rows - keyed by the id of the account they made with a
+        // password - do not match. sync_oauth_user_role links them by email.
+        // useAdminAuth called it and AuthContext did not, which is a second way
+        // the two disagreed: an OAuth admin got the nav and then Access Denied.
+        //
+        // Consulted before the profiles fallback, matching the order
+        // useAdminAuth used, so no user loses a role they had yesterday. An
+        // error is ignored rather than fatal: the RPC is a best-effort link,
+        // and a user with no linkable row is the normal case.
+        const { data: syncedRole, error: syncError } = await supabase.rpc(
+          'sync_oauth_user_role',
+          { p_user_id: user.id },
+        );
+        if (!syncError && isUserRole(syncedRole) && syncedRole !== DEFAULT_ROLE) {
+          roleCache.set(user.id, { role: syncedRole, timestamp: Date.now() });
+          return syncedRole;
+        }
+
+        const { data: profileData, error: profileError } = await supabase
           .from("profiles")
           .select("user_role")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (profileData?.user_role) {
-          const isAdmin = profileData.user_role === 'admin' || profileData.user_role === 'root_admin';
-          adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-          return isAdmin;
+        if (profileError) {
+          log.error('resolveRole', 'Profile role read failed; not caching', { error: profileError });
+          return null;
         }
 
-        adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
-        return false;
+        if (profileData?.user_role) {
+          const role = highestRole([{ role: profileData.user_role }]);
+          roleCache.set(user.id, { role, timestamp: Date.now() });
+          return role;
+        }
+
+        // Both reads succeeded and neither carries a role: a real answer, so
+        // it is safe to cache.
+        roleCache.set(user.id, { role: DEFAULT_ROLE, timestamp: Date.now() });
+        return DEFAULT_ROLE;
       } catch (error) {
-        log.error('checkIsAdmin', 'Admin check error', { error });
-        return false;
+        log.error('resolveRole', 'Role check error', { error });
+        return null;
       } finally {
         pendingChecks.delete(user.id);
       }
@@ -223,14 +345,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * case. (WEB-UX-008)
    */
   const revalidateAdminSilently = useCallback(async (user: User) => {
-    const isAdmin = await checkIsAdmin(user);
+    const role = await resolveRole(user);
     if (isLoggingOutRef.current) return;
+    const nextRole = role ?? DEFAULT_ROLE;
+    const isAdmin = role !== null && isFullAdmin(role);
     setAuthState(prev => {
-      if (prev.user?.id !== user.id || prev.isAdmin === isAdmin) return prev;
-      log.debug('revalidateAdminSilently', 'Admin status changed', { isAdmin });
-      return { ...prev, isAdmin };
+      if (prev.user?.id !== user.id) return prev;
+      if (prev.isAdmin === isAdmin && prev.userRole === nextRole) return prev;
+      log.debug('revalidateAdminSilently', 'Role changed', { role: nextRole, isAdmin });
+      return { ...prev, isAdmin, userRole: nextRole };
     });
-  }, [checkIsAdmin]);
+  }, [resolveRole]);
+
+  /**
+   * Drop every cached query when a session ends (WEB-SEC-031).
+   *
+   * Logout removed the sb-* storage keys and nothing else, so the previous
+   * user's profile, favorites, subscription, trip plans and -- if they were an
+   * admin -- the whole admin surface stayed in the TanStack cache until
+   * staleTime expired. On a shared device the next person's first paint could
+   * come off that cache.
+   *
+   * clear(), not removeQueries on a list of user-scoped prefixes. A prefix list
+   * is a second inventory that has to be maintained in step with 100-odd hooks,
+   * and the failure mode when it drifts is silent and invisible. The cost of
+   * clearing everything is that public lists refetch after a logout, which is
+   * one request on a screen the user is leaving anyway.
+   *
+   * Called from BOTH places a session can end, and that is deliberate:
+   * handleAuthChange returns early while isLoggingOutRef is set, so the
+   * SIGNED_OUT event raised by the logout button never reaches its handler.
+   * Putting this only in the event handler would cover expiry and
+   * sign-out-elsewhere and miss the button, which is the common case.
+   */
+  const clearQueryCache = useCallback(() => {
+    try {
+      queryClient.clear();
+    } catch (error) {
+      // Never let cache teardown block a sign-out.
+      log.warn('clearQueryCache', 'Failed to clear query cache', { error });
+    }
+  }, [queryClient]);
 
   // Handle auth state changes
   const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null, isMounted: boolean) => {
@@ -247,7 +402,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Handle specific events
     if (event === 'SIGNED_OUT') {
       log.info('handleAuthChange', 'User signed out via event');
-      adminStatusCache.clear();
+      clearQueryCache();
+      clearPersonalStorage(currentUserIdRef.current);
+      currentUserIdRef.current = null;
+      roleCache.clear();
       resolvedAdminForUserRef.current = null;
       setAuthState({
         user: null,
@@ -255,10 +413,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
         isAuthenticated: false,
         isAdmin: false,
+        userRole: DEFAULT_ROLE,
         isAdminLoading: false,
         requiresMFA: false,
         mfaFactorId: null,
+        isPasswordRecovery: false,
       });
+      return;
+    }
+
+    // WEB-AUTH-001. Supabase signs the user in on a recovery link and then
+    // fires this. Keep the session -- the password change needs it -- but mark
+    // it so Auth.tsx sends them to /auth/reset-password instead of the
+    // homepage, and so nothing else mistakes it for a deliberate sign-in.
+    if (event === 'PASSWORD_RECOVERY') {
+      log.debug('handleAuthChange', 'Password recovery session');
+      setAuthState(prev => ({
+        ...prev,
+        user: session?.user ?? prev.user,
+        session: session ?? prev.session,
+        isLoading: false,
+        isAuthenticated: !!session,
+        isPasswordRecovery: true,
+      }));
+      return;
+    }
+
+    // The password (or email) has been changed, so the recovery is over. Without
+    // this the flag would survive and keep redirecting the user back to the
+    // reset page they just finished with.
+    if (event === 'USER_UPDATED') {
+      setAuthState(prev => ({
+        ...prev,
+        user: session?.user ?? prev.user,
+        session: session ?? prev.session,
+        isPasswordRecovery: false,
+      }));
       return;
     }
 
@@ -308,12 +498,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // WEB-SEC-026. signInWithPassword stores an aal1 session before the TOTP
+    // dialog can open, so SIGNED_IN fires, isAuthenticated went true, and
+    // Auth.tsx navigated away before the second factor was ever asked for.
+    // Anyone holding the password of an MFA-enrolled admin got a working admin
+    // session out of it.
+    //
+    // getAuthenticatorAssuranceLevel() decodes the stored session locally, so
+    // this costs no round trip. The rule is narrow on purpose: only a session
+    // that is positively aal1 with a positively pending aal2 is held back, so a
+    // user with no second factor can never be locked out by it.
+    //
+    // This is the UX half of the fix. The half that actually stops an attacker
+    // is in supabase/functions/_shared/mfaAssurance.ts: the aal1 token works
+    // against the API whether or not our app agrees to render a dashboard.
+    let mfaPending = false;
+    if (session) {
+      try {
+        // The catch below only fires on a thrown error, and this call resolves
+        // with { error } instead, so the failure branch was unreachable. It
+        // still fails OPEN deliberately - a user with no second factor must
+        // never be locked out by an assurance-level read - but a failure now
+        // says so rather than looking like a clean aal2 session.
+        const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aalError) {
+          log.warn('handleAuthChange', 'assurance-level read failed', { error: aalError });
+        }
+        mfaPending = aal?.currentLevel === 'aal1' && aal?.nextLevel === 'aal2';
+      } catch (err) {
+        log.warn('handleAuthChange', 'assurance-level read failed', { error: String(err) });
+      }
+    }
+
     // A fresh admin answer already in cache resolves synchronously — no loading
     // state, so a returning user never sees the page blink.
-    const cachedAdmin = nextUser ? readCachedAdmin(nextUser.id) : null;
+    const cachedRole = nextUser ? readCachedRole(nextUser.id) : null;
     const needsAdminCheck =
       !!nextUser &&
-      cachedAdmin === null &&
+      cachedRole === null &&
       (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');
 
     setAuthState(prev => ({
@@ -321,25 +543,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: nextUser,
       session,
       isLoading: false,
-      isAuthenticated: !!session,
-      isAdmin: cachedAdmin ?? prev.isAdmin, // Keep previous admin status while checking
+      // WEB-SEC-026: a session that still owes a second factor is not signed in.
+      isAuthenticated: !!session && !mfaPending,
+      requiresMFA: mfaPending,
+      // Keep the previous answer while checking.
+      isAdmin: cachedRole !== null ? isFullAdmin(cachedRole) : prev.isAdmin,
+      userRole: cachedRole ?? prev.userRole,
       isAdminLoading: needsAdminCheck ? true : prev.isAdminLoading, // Mark as loading if checking
     }));
 
-    if (nextUser && cachedAdmin !== null) {
+    if (nextUser && cachedRole !== null) {
       resolvedAdminForUserRef.current = nextUser.id;
     }
 
     // Check admin status for new sessions
     if (needsAdminCheck) {
-      const isAdmin = await checkIsAdmin(nextUser);
+      const role = await resolveRole(nextUser);
       if (isMounted && !isLoggingOutRef.current) {
-        log.debug('handleAuthChange', 'Admin check result', { isAdmin });
+        log.debug('handleAuthChange', 'Role check result', { role });
         resolvedAdminForUserRef.current = nextUser.id;
-        setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
+        setAuthState(prev => ({
+          ...prev,
+          isAdmin: role !== null && isFullAdmin(role),
+          userRole: role ?? DEFAULT_ROLE,
+          isAdminLoading: false,
+        }));
       }
     }
-  }, [checkIsAdmin, revalidateAdminSilently]);
+  }, [resolveRole, revalidateAdminSilently, clearQueryCache]);
 
   useEffect(() => {
     log.info('init', 'Initializing auth context');
@@ -361,28 +592,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isMounted) return;
         log.debug('init', 'Initial session', { hasSession: !!session, email: session?.user?.email });
 
-        const cachedAdmin = session?.user ? readCachedAdmin(session.user.id) : null;
+        const cachedRole = session?.user ? readCachedRole(session.user.id) : null;
 
-        setAuthState({
+        setAuthState(prev => ({
           user: session?.user || null,
           session,
           isLoading: false,
           isAuthenticated: !!session,
-          isAdmin: cachedAdmin ?? false,
-          isAdminLoading: !!session?.user && cachedAdmin === null, // Set to true if we have a user to check
+          isAdmin: cachedRole !== null && isFullAdmin(cachedRole),
+          userRole: cachedRole ?? DEFAULT_ROLE,
+          isAdminLoading: !!session?.user && cachedRole === null, // Set to true if we have a user to check
           requiresMFA: false,
           mfaFactorId: null,
-        });
+          // PASSWORD_RECOVERY and INITIAL_SESSION can arrive in either order on
+          // a recovery link, so this must not clobber the flag.
+          isPasswordRecovery: prev.isPasswordRecovery,
+        }));
 
         if (session?.user) {
-          if (cachedAdmin !== null) {
+          if (cachedRole !== null) {
             resolvedAdminForUserRef.current = session.user.id;
           } else {
-            const isAdmin = await checkIsAdmin(session.user);
+            const role = await resolveRole(session.user);
             if (isMounted) {
-              log.debug('init', 'Initial admin check', { isAdmin });
+              log.debug('init', 'Initial role check', { role });
               resolvedAdminForUserRef.current = session.user.id;
-              setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
+              setAuthState(prev => ({
+                ...prev,
+                isAdmin: role !== null && isFullAdmin(role),
+                userRole: role ?? DEFAULT_ROLE,
+                isAdminLoading: false,
+              }));
             }
           }
         }
@@ -409,10 +649,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscriptionRef.current = null;
       log.debug('cleanup', 'Auth context cleanup');
     };
-  }, [checkIsAdmin, handleAuthChange]);
+  }, [resolveRole, handleAuthChange]);
 
   // Login with email/password (with attempt throttling)
-  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }> => {
+  const login = useCallback(async (email: string, password: string, captchaToken?: string): Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }> => {
     try {
       // Fast local throttle (defense in depth; bypassable so not authoritative).
       const throttle = checkLoginThrottle(email);
@@ -431,13 +671,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       log.info('login', 'Attempting login', { email });
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
 
       if (error) {
         recordFailedLogin(email);
         void checkServerLockout(email, 'record_failure');
-        log.error('login', 'Login error', { message: error.message });
-        return { success: false, error: error.message };
+        log.error('login', 'Login error', { message: error.message, code: error.code });
+        // WEB-AUTH-008: the CODE travels with the message now. The form used to
+        // render error.message straight into a toast, so a user whose only
+        // problem was an unclicked confirmation link read "Email not confirmed"
+        // and was offered nothing. Matching that on message text at the call
+        // site would be a second place for Supabase's wording to break; the
+        // code is the stable identifier. `error` is unchanged for the callers
+        // that already read it.
+        return { success: false, error: error.message, errorCode: error.code };
       }
 
       // Check if MFA is required (AAL1 but user has MFA factors).
@@ -497,7 +744,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       resetLoginAttempts(email);
-      void checkServerLockout(email, 'record_success');
+      // WEB-SEC-027: the server clears a lockout only against a session that
+      // a correct password produced, so the token goes with the call. Without
+      // it the request is still accepted and simply does nothing.
+      void checkServerLockout(email, 'record_success', data.session?.access_token);
       log.info('login', 'Login successful');
       return { success: !!data.session };
     } catch (error: unknown) {
@@ -508,14 +758,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Signup with email/password
-  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
+  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>, captchaToken?: string): Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }> => {
     try {
       log.info('signup', 'Attempting signup', { email });
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/verified`,
+          captchaToken,
+          // WEB-AUTH-005. Was /auth/verified directly, which is a page with no
+          // machinery: it could not exchange a code, could not wait for a
+          // session, and read no error parameter -- so every failed
+          // confirmation landed on a celebration screen.
+          //
+          // /auth/callback already polls for the session and renders failures;
+          // it forwards here only once one exists. The confirmed user still ends
+          // up on the same welcome page, and a broken link now stops one screen
+          // earlier, where it can be explained.
+          emailRedirectTo: confirmationRedirectUrl(),
           data: metadata
         }
       });
@@ -525,11 +785,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: error.message };
       }
 
-      // Check if email confirmation is required
-      const needsVerification = !!data.user && !data.session;
-      log.info('signup', 'Signup successful', { needsVerification });
+      // WEB-AUTH-004. This was `!!data.user && !data.session`, which cannot tell
+      // a new account from an address that already had one -- Supabase answers
+      // both with a user and no session, on purpose, so the response cannot be
+      // used to enumerate accounts. The tell is an empty `identities` array.
+      const { needsVerification, alreadyRegistered } = interpretSignUpResult(data);
+      // The email is NOT logged on this branch. "already registered" plus an
+      // address is exactly the pairing the neutral response exists to withhold,
+      // and a log line is a place it leaks.
+      log.info('signup', 'Signup successful', { needsVerification, alreadyRegistered });
 
-      return { success: true, needsVerification };
+      return { success: true, needsVerification, alreadyRegistered };
     } catch (error: unknown) {
       log.error('signup', 'Signup exception', { error });
       const message = error instanceof Error ? error.message : "An unexpected error occurred";
@@ -538,7 +804,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Logout - robust implementation with race condition prevention
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (options?: { scope?: 'local' | 'global' }) => {
     // Prevent race conditions - set flag before any async operations
     if (isLoggingOutRef.current) {
       log.debug('logout', 'Logout already in progress, skipping');
@@ -548,8 +814,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     log.info('logout', 'Starting logout');
     isLoggingOutRef.current = true;
 
+    // Before the await below, not after: signOut can time out (there is a 3s
+    // race here) and the cached rows must be gone either way.
+    clearQueryCache();
+    // Same reasoning for what the account left in local storage: its taste
+    // preferences and the recently viewed list. Without this the next person
+    // to sign in on this browser inherited both (Home plan WP2 item 1).
+    clearPersonalStorage(currentUserIdRef.current);
+    currentUserIdRef.current = null;
+
     // Clear admin cache first
-    adminStatusCache.clear();
+    roleCache.clear();
     pendingChecks.clear();
     resolvedAdminForUserRef.current = null;
 
@@ -560,9 +835,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: false,
       isAdmin: false,
+      userRole: DEFAULT_ROLE,
       isAdminLoading: false,
       requiresMFA: false,
       mfaFactorId: null,
+      isPasswordRecovery: false,
     });
 
     // Call signOut with global scope and timeout
@@ -572,7 +849,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
 
       await Promise.race([
-        supabase.auth.signOut({ scope: 'global' }),
+        // WEB-AUTH-007. 'global' revokes every refresh token the account holds,
+        // on every device. Correct when a person presses Log Out; wrong when a
+        // desktop tab has simply been idle, which used to sign them out of
+        // their phone too.
+        supabase.auth.signOut({ scope: options?.scope ?? 'global' }),
         timeoutPromise
       ]);
       log.info('logout', 'signOut completed successfully');
@@ -623,7 +904,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTimeout(() => {
       isLoggingOutRef.current = false;
     }, 500);
-  }, []);
+  }, [clearQueryCache]);
 
   // Refresh session manually - returns true if successful
   const refreshSession = useCallback(async (): Promise<boolean> => {
@@ -711,10 +992,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Reset password via email
-  const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+  const resetPassword = useCallback(async (email: string, captchaToken?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?reset=true`,
+        captchaToken,
+        // WEB-AUTH-001: this pointed at /auth?reset=true, a parameter nothing
+        // read, on a page that redirects any authenticated visitor away. The
+        // link signed the user in and left the old password in place.
+        //
+        // OWNER: this URL must also be on the Supabase redirect allowlist
+        // (Dashboard -> Authentication -> URL Configuration), or GoTrue falls
+        // back to the site URL and the reset page never sees the token.
+        redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
       if (error) {
@@ -762,12 +1051,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Change the sign-in email (WEB-AUTH-012).
+   *
+   * Supabase's default is DOUBLE CONFIRMATION: a link goes to the current
+   * address and to the new one, and the change lands only when both are
+   * clicked. That is what makes this safe against a hijacked session -- an
+   * attacker cannot move the account to an address they control without the
+   * real owner clicking a link in their own inbox.
+   *
+   * The alert goes to the CURRENT address, through the same path updatePassword
+   * uses, so the owner hears about an attempt even if they never click.
+   */
+  const updateEmail = useCallback(async (newEmail: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+
+      if (error) {
+        log.error('updateEmail', 'Email update error', { message: error.message });
+        return { success: false, error: error.message };
+      }
+
+      void supabase.functions
+        .invoke('send-security-notification', {
+          body: {
+            event_type: 'email_change_requested',
+            context: {
+              user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+            },
+          },
+        })
+        .catch((err) => log.warn('updateEmail', 'security alert failed', { error: String(err) }));
+
+      return { success: true };
+    } catch (error: unknown) {
+      log.error('updateEmail', 'Email update exception', { error });
+      const message = error instanceof Error ? error.message : "Failed to update email";
+      return { success: false, error: message };
+    }
+  }, []);
+
   // Resend verification email
-  const resendVerification = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+  const resendVerification = useCallback(async (email: string, captchaToken?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
+        // Without emailRedirectTo the resent link fell back to the project's
+        // Site URL and skipped /auth/callback, so a resent confirmation landed
+        // somewhere that could not exchange the code or show a failure. Same
+        // URL as signup's, from the same function.
+        options: { emailRedirectTo: confirmationRedirectUrl(), captchaToken },
       });
 
       if (error) {
@@ -788,6 +1122,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return authState.session?.expires_at || null;
   }, [authState.session]);
 
+  /**
+   * When this session actually began, in epoch milliseconds (WEB-AUTH-007).
+   *
+   * Null when it cannot be told, and callers must handle that rather than
+   * substituting now(): doing so silently restores the page-load-relative
+   * measurement this replaces.
+   */
+  const getSessionStartedAt = useCallback((): number | null => {
+    return sessionStartedAt(authState.session);
+  }, [authState.session]);
+
   const requireAdmin = useCallback(() => {
     if (!authState.isAdmin) {
       throw new Error("Admin access required");
@@ -804,9 +1149,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithApple,
     resetPassword,
     updatePassword,
+    updateEmail,
     resendVerification,
     getSessionExpiresAt,
-  }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, resendVerification, getSessionExpiresAt]);
+    getSessionStartedAt,
+  }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, updateEmail, resendVerification, getSessionExpiresAt, getSessionStartedAt]);
 
   // Memoized boolean slice — identity only changes when a flag actually flips,
   // not when session/user are swapped on a token refresh.
@@ -814,14 +1161,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: authState.isLoading,
     isAuthenticated: authState.isAuthenticated,
     isAdmin: authState.isAdmin,
+    userRole: authState.userRole,
     isAdminLoading: authState.isAdminLoading,
     requiresMFA: authState.requiresMFA,
+    isPasswordRecovery: authState.isPasswordRecovery,
   }), [
     authState.isLoading,
     authState.isAuthenticated,
     authState.isAdmin,
+    authState.userRole,
     authState.isAdminLoading,
     authState.requiresMFA,
+    authState.isPasswordRecovery,
   ]);
 
   const combined = useMemo<AuthContextType>(() => ({

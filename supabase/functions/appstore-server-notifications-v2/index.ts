@@ -522,18 +522,25 @@ serve(async (req) => {
   }
 
   // ---------------------------------------------------------------------
-  // Update the matching user_subscriptions row
+  // Update EVERY matching user_subscriptions row
   // ---------------------------------------------------------------------
-  const { data: subRow, error: subLookupError } = await supabase
+  // IOS-DD-MONETIZATION-02: this used .maybeSingle(), which errors when more
+  // than one account holds the same original transaction. That was exactly
+  // the shared-subscription case, so a refund or expiry revoked nobody. There
+  // is no unique index on apple_original_transaction_id yet, so apply the
+  // same update to all of them.
+  const { data: subRows, error: subLookupError } = await supabase
     .from('user_subscriptions')
     .select('id, user_id, status, plan_id')
     .eq('platform', 'ios')
-    .eq('apple_original_transaction_id', originalTransactionId)
-    .maybeSingle();
+    .eq('apple_original_transaction_id', originalTransactionId);
 
   if (subLookupError) {
     console.error('user_subscriptions lookup error:', subLookupError.message);
   }
+
+  const matchedRows: Array<{ id: string; user_id: string }> = subRows ?? [];
+  const subRow = matchedRows[0] ?? null;
 
   let updateError: string | null = null;
 
@@ -561,18 +568,19 @@ serve(async (req) => {
     const { error: updErr } = await supabase
       .from('user_subscriptions')
       .update(update)
-      .eq('id', subRow.id);
+      .in('id', matchedRows.map((r) => r.id));
 
     if (updErr) {
       updateError = updErr.message;
       console.error(
-        `user_subscriptions update failed for id=${subRow.id}, uuid=${notificationUUID}:`,
+        `user_subscriptions update failed for ids=${matchedRows.map((r) => r.id).join(',')}, uuid=${notificationUUID}:`,
         updErr.message,
       );
     } else {
       console.log(
         `Apple webhook applied: type=${notificationType}, subtype=${subtype ?? 'none'}, ` +
-          `user=${subRow.user_id}, status=${nextStatus ?? 'unchanged'}, ` +
+          `users=${matchedRows.map((r) => r.user_id).join(',')}, rows=${matchedRows.length}, ` +
+          `status=${nextStatus ?? 'unchanged'}, ` +
           `cancelAtPeriodEnd=${cancelAtPeriodEnd ?? 'unchanged'}, expires=${expiresAt}`,
       );
     }

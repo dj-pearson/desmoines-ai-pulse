@@ -1,8 +1,9 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
+import { format, parseISO } from "date-fns";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,40 +15,123 @@ import { RouteCanonical } from "@/components/RouteCanonical";
 import { ogImageUrl } from "@/lib/ogImage";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import AIWriteup from "@/components/AIWriteup";
-import RestaurantStatus from "@/components/RestaurantStatus";
+import { AIWriteup } from "@/components/AIWriteup";
+import { RestaurantStatus } from "@/components/RestaurantStatus";
 import ShareDialog from "@/components/ShareDialog";
-import RestaurantCard from "@/components/RestaurantCard";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
-import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map } from "lucide-react";
-import { useState, useMemo } from "react";
+import {
+  buildRestaurantSchema,
+  currentDescription,
+  priceTier,
+  restaurantLocality,
+  restaurantMetaDescription,
+  restaurantPageTitle,
+} from "@/lib/restaurantMeta";
+import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
+import { Phone, Star, DollarSign, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
+import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
+import {
+  formatOpenStatusLine,
+  hoursTextOf,
+  resolveOpenStatus,
+  resolveOpeningHoursSpecification,
+  type RestaurantOpenResult,
+  type StoredOpeningHours,
+} from "@/lib/restaurantHours";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { useRestaurantMenu } from "@/hooks/useRestaurantMenu";
+import { tonightHeading, useTonightNearRestaurant } from "@/hooks/useTonightNearRestaurant";
+import { handleError } from "@/lib/errorHandler";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
+import { resolveReservation, safeWebUrl, telHref } from "@/lib/reservations";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
-import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
-import { NearbyContent } from "@/components/NearbyContent";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
+import { isSponsoredActive } from "@/lib/sponsored";
+import { NearbyContent, TonightNearRestaurant } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
 import { RatingSystem } from "@/components/RatingSystem";
+import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
-export default function RestaurantDetails() {
-  const { slug } = useParams();
-  const [imageError, setImageError] = useState(false);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  const {
-    data: restaurant,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: ["restaurant", slug],
+/**
+ * Why you can't eat here today, or null when nothing says so. Two columns
+ * record it (eat-drink pass 2, WP3.2, first-pass WP8.2):
+ *  - `status`, whose CHECK (20250728165446:13) allows open, newly_opened,
+ *    opening_soon, announced and closed. "closed" means closed for good, the
+ *    reading RestaurantCard gives it. The legacy spellings are for rows
+ *    written before the CHECK.
+ *  - `business_status`, Google's CLOSED_PERMANENTLY / CLOSED_TEMPORARILY. It
+ *    is read off the select("*") row the way hours_json is, so it is undefined
+ *    until migration 20260919000009 is applied, and no select names it.
+ */
+type Lifecycle = RestaurantLifecycle;
+
+function lifecycleOf(status: string | null | undefined, businessStatus?: string | null): Lifecycle {
+  const google = (businessStatus ?? "").trim().toUpperCase();
+  const own = (status ?? "").trim().toLowerCase();
+  if (google === "CLOSED_PERMANENTLY" || own === "closed" || own === "permanently_closed") return "closed";
+  if (google === "CLOSED_TEMPORARILY" || own === "temporarily_closed") return "temporarily_closed";
+  if (own === "opening_soon" || own === "announced") return "not_open_yet";
+  return null;
+}
+
+function formatOpeningDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const parsed = parseISO(value);
+  return Number.isNaN(parsed.getTime()) ? null : format(parsed, "MMMM d, yyyy");
+}
+
+/**
+ * Open/closed for this page, from one evaluation on the shared minute clock,
+ * so the hero badge and the hours block cannot disagree (WP8 item 5).
+ * hours_json is used when select("*") returns it; nothing adds the column.
+ */
+function useRestaurantOpenStatus(
+  hoursJson: StoredOpeningHours | null | undefined,
+  opening: string | null | undefined,
+): { status: RestaurantOpenResult; now: Date } {
+  const now = useMinuteClock();
+  const status = useMemo(() => resolveOpenStatus(hoursJson, opening, now), [hoursJson, opening, now]);
+  return { status, now };
+}
+
+interface DetailLocationState {
+  /** Set by the merge redirect so two rows that point at each other can't loop. */
+  mergedFrom?: string[];
+  /** Set by RestaurantCard's link: the list URL the visitor came from (WP3.9). */
+  from?: string;
+}
+
+/** "August 3, 2026" in Central time, or null. */
+function centralDate(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+}
+
+/** hours_json.fetchedAt, written by _shared/placeHours.ts when Google's hours were read. */
+function hoursCheckedAt(hoursJson: StoredOpeningHours | null | undefined): string | null {
+  const fetchedAt = (hoursJson as { fetchedAt?: unknown } | null | undefined)?.fetchedAt;
+  return hoursJson?.periods?.length ? centralDate(fetchedAt) : null;
+}
+
+/** The restaurant row by slug, falling back to the id only when the param is a uuid. */
+function useRestaurantDetail(slug: string | undefined) {
+  return useQuery({
+    queryKey: detailQueryKey("restaurant", slug ?? ""),
     queryFn: async () => {
       let { data, error } = await supabase
         .from("restaurants")
@@ -55,7 +139,10 @@ export default function RestaurantDetails() {
         .eq("slug", slug)
         .maybeSingle();
 
-      if (!data && !error) {
+      // Fall back to the id only when the param IS a uuid. Comparing a uuid
+      // column with a slug raises 22P02, which surfaced as the error page for
+      // any unknown slug instead of not-found.
+      if (!data && !error && UUID_RE.test(slug ?? "")) {
         const result = await supabase
           .from("restaurants")
           .select("*")
@@ -68,78 +155,125 @@ export default function RestaurantDetails() {
       if (error) throw error;
       return data;
     },
+    staleTime: DETAIL_STALE_TIME,
   });
+}
+
+interface ProvenanceProps {
+  rating: number | null | undefined;
+  menuCapturedAt: string | null;
+  menuFromTheirSite: boolean;
+  hoursCheckedOn: string | null;
+}
+
+/**
+ * Where the facts on this page came from, each with its source and date
+ * (WP3.6, bet 4). It replaced a blanket freshness badge that measured when
+ * any column last changed, not whether anyone checked anything.
+ */
+function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hoursCheckedOn }: ProvenanceProps) {
+  const lines = [
+    rating ? "Rating: Google rating" : null,
+    menuCapturedAt ? `Menu captured ${menuCapturedAt}${menuFromTheirSite ? " from their site" : ""}` : null,
+    hoursCheckedOn ? `Hours from Google, checked ${hoursCheckedOn}` : null,
+  ].filter((l): l is string => !!l);
+  if (lines.length === 0) return null;
+  return (
+    <section aria-labelledby="sources-heading" className="mt-2 px-4 pb-8 text-center">
+      <h2 id="sources-heading" className="text-sm font-semibold text-foreground">
+        Where this comes from
+      </h2>
+      <ul className="mt-1 text-sm text-muted-foreground">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export default function RestaurantDetails() {
+  const { slug } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [imageError, setImageError] = useState(false);
+  const locationState = location.state as DetailLocationState | null;
+
+  const { data: restaurant, isLoading, error, refetch, isFetching } = useRestaurantDetail(slug);
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
-
-  const { data: relatedRestaurants } = useQuery({
-    queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
-    queryFn: async () => {
-      if (!restaurant) return [];
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select(RESTAURANT_LIST_COLUMNS)
-        .eq("cuisine", restaurant.cuisine)
-        .neq("id", restaurant.id)
-        .limit(4);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!restaurant,
-  });
-
-  const { data: nearbyRestaurants } = useQuery({
-    queryKey: ["nearby-restaurants", restaurant?.city, restaurant?.id],
-    queryFn: async () => {
-      if (!restaurant) return [];
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select(RESTAURANT_LIST_COLUMNS)
-        .eq("city", restaurant.city || "Des Moines")
-        .neq("id", restaurant.id)
-        .neq("cuisine", restaurant.cuisine)
-        .order("popularity_score", { ascending: false })
-        .limit(4);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!restaurant,
-  });
-
-  const openStatus = useMemo(
-    () => getRestaurantOpenStatus(restaurant?.opening),
-    [restaurant?.opening]
+  // Record into the unified recently-viewed feed (WEB-FEAT-007). Only
+  // EventDetails used to, so the home rail could never resume a restaurant.
+  useRecordRecentView(
+    restaurant
+      ? {
+          id: restaurant.id,
+          type: "restaurant",
+          title: restaurant.name,
+          href: `/restaurants/${restaurant.slug || restaurant.id}`,
+          image_url: restaurant.image_url ?? undefined,
+          subtitle: restaurant.cuisine ?? undefined,
+        }
+      : null,
   );
 
-  const formatPrice = (price: string) => {
-    const count = price?.length || 1;
-    return "$".repeat(Math.min(count, 4));
-  };
-
-  const formatRating = (rating: number) => {
-    return rating ? rating.toFixed(1) : "N/A";
-  };
-
-  const getPriceDescription = (priceRange: string) => {
-    switch (priceRange) {
-      case "$": return "Under $15 per person";
-      case "$$": return "$15-30 per person";
-      case "$$$": return "$30-50 per person";
-      case "$$$$": return "Over $50 per person";
-      default: return priceRange;
+  // An error is not a missing page: log it here, and the render below shows a
+  // retry state without noindex (WP8 item 8).
+  useEffect(() => {
+    if (error) {
+      handleError(error, { component: "RestaurantDetails", action: "fetchRestaurant", metadata: { slug } });
     }
-  };
+  }, [error, slug]);
 
-  if (isLoading) {
+  // A merged duplicate sends the visitor to the row it was merged into. The
+  // state trail stops a pair of rows that point at each other from looping.
+  const mergedInto = restaurant?.is_merged && restaurant.merged_into ? restaurant.merged_into : null;
+  const mergedFrom = locationState?.mergedFrom ?? [];
+  const { data: survivorPath, isLoading: survivorLoading } = useQuery({
+    queryKey: ["restaurant-merge-target", mergedInto],
+    enabled: !!mergedInto,
+    staleTime: DETAIL_STALE_TIME,
+    queryFn: async () => {
+      const target = mergedInto as string;
+      const lookup = supabase.from("restaurants").select("id, slug");
+      const { data, error } = await (UUID_RE.test(target)
+        ? lookup.eq("id", target)
+        : lookup.eq("slug", target)
+      ).maybeSingle();
+      if (error) throw error;
+      return data ? `/restaurants/${data.slug || data.id}` : null;
+    },
+  });
+  const redirectTo =
+    mergedInto && survivorPath && !mergedFrom.includes(survivorPath) ? survivorPath : null;
+  useEffect(() => {
+    if (!redirectTo || !restaurant) return;
+    const here = `/restaurants/${restaurant.slug || restaurant.id}`;
+    // `from` rides along so "Back to results" survives the redirect.
+    const state: DetailLocationState = { mergedFrom: [...mergedFrom, here], from: locationState?.from };
+    navigate(redirectTo, { replace: true, state });
+    // mergedFrom is read from location.state, which the navigate replaces.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redirectTo, restaurant, navigate]);
+
+  const hoursJson = (restaurant as { hours_json?: StoredOpeningHours | null } | null | undefined)?.hours_json;
+  const { status: openStatus, now } = useRestaurantOpenStatus(hoursJson, restaurant?.opening);
+
+  // Same query key as RestaurantMenuSection's, so this is one request.
+  const { data: menuData } = useRestaurantMenu(restaurant?.id, { includeVersions: false });
+  const hasCapturedMenu = !!menuData?.menu && menuData.sections.length > 0;
+
+  // The minute clock, so an event that has started leaves the list (WP3.7).
+  const tonight = useTonightNearRestaurant(restaurant?.latitude, restaurant?.longitude, now);
+
+  if (isLoading || (mergedInto && (survivorLoading || redirectTo))) {
     return (
       <>
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/restaurants/${slug}`} />
         <Header />
-        <div className="min-h-screen bg-gray-50" role="status" aria-live="polite" aria-busy="true">
+        <div className="min-h-screen bg-gray-50 dark:bg-background" role="status" aria-live="polite" aria-busy="true">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
             <div className="animate-pulse space-y-6 motion-reduce:animate-none">
               <div className="h-6 w-48 bg-gray-200 rounded" />
@@ -165,29 +299,69 @@ export default function RestaurantDetails() {
     );
   }
 
-  if (error || !restaurant) {
+  if (error) {
+    // Not "not found", and no noindex: a failed fetch says nothing about
+    // whether the page exists, and a crawler that hit it during an outage
+    // must not be told to drop it (WP8 item 8).
+    return (
+      <>
+        <RouteCanonical path={`/restaurants/${slug}`} />
+        <Header />
+        {/* A div: App.tsx already provides the one <main>. */}
+        <div className="min-h-screen bg-gray-50 dark:bg-background flex items-center justify-center px-4">
+          <div className="max-w-md text-center" role="alert">
+            <h1 className="text-2xl font-bold text-foreground mb-2">
+              We couldn't load this restaurant
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              Something went wrong on our side or with your connection. Try again in a moment.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Button
+                onClick={() => void refetch()}
+                disabled={isFetching}
+                className="min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin motion-reduce:animate-none" : ""}`} />
+                {isFetching ? "Trying again" : "Try again"}
+              </Button>
+              <Button asChild variant="outline" className="min-h-11">
+                <Link to="/restaurants">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  All restaurants
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+        <Footer preferredSource={false} />
+      </>
+    );
+  }
+
+  if (!restaurant) {
     return (
       <>
         <Helmet>
           <meta name="robots" content="noindex, follow" />
         </Helmet>
         <Header />
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-background flex items-center justify-center px-4">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
-              <Utensils className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              <Utensils className="h-16 w-16 text-muted-foreground mx-auto mb-4" aria-hidden="true" />
+              <h1 className="text-2xl font-bold text-foreground mb-2">
                 Restaurant Not Found
-              </h2>
-              <p className="text-gray-600 mb-6">
+              </h1>
+              <p className="text-muted-foreground mb-6">
                 The restaurant you're looking for doesn't exist or has been removed.
               </p>
-              <Link to="/restaurants">
-                <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90">
+              <Button asChild className="min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90">
+                <Link to="/restaurants">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to Restaurants
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -196,41 +370,50 @@ export default function RestaurantDetails() {
     );
   }
 
-  const showImage = restaurant.image_url && !imageError;
-  const cityName = restaurant.city || "Des Moines";
-  const neighborhoodText = restaurant.location
-    ? `${restaurant.location}, ${cityName}`
-    : cityName;
-
-  // Comprehensive SEO
-  //
-  // SEO-005: a hand-set seo_title overrides the generated fallback, and the
-  // fallback is the only one of the two that names the city. Texas Roadhouse has
-  // two real Des Moines-area locations - Johnston and Mills Civic Pkwy in West
-  // Des Moines - and BOTH rows carry seo_title "Texas Roadhouse", so two
-  // different restaurants served one identical title and neither told a searcher
-  // which branch they had found.
-  //
-  // qualifyTitleWithCity fills that gap and never overrides an editor: a title
-  // that already names a place is returned untouched, and a row with no city
-  // gets nothing appended rather than an invented one.
-  //
-  // This is worth doing beyond the one collision. The suburb-qualified branded
-  // lookup is one of the most common query shapes this site receives -
-  // "dave's hot chicken west des moines" at 1,184 impressions, "bonchon west
-  // des moines" at 1,391, "atlas cafe west des moines" at 282, plus marvs
-  // norwalk, bubbies bbq pleasant hill and others - and a title with no suburb
-  // in it cannot match any of them well.
-  const seoTitle = qualifyTitleWithCity(
-    restaurant.seo_title ||
-      `${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa | Menu, Hours & Reviews`,
-    restaurant.city,
+  // WP8 items 1 and 2. Every scraped URL goes through safeWebUrl before it
+  // reaches an href or the schema, and a closed place makes no open claim.
+  const safeWebsite = safeWebUrl(restaurant.website);
+  const safeMenuUrl = safeWebUrl(restaurant.menu_url);
+  const phoneHref = telHref(restaurant.phone);
+  const lifecycle = lifecycleOf(
+    restaurant.status,
+    (restaurant as { business_status?: string | null }).business_status,
   );
+  const isShut = lifecycle === "closed" || lifecycle === "temporarily_closed";
+  const liveStatus = lifecycle ? null : openStatus;
+  const tier = priceTier(restaurant.price_range);
+  const openingDateLabel = formatOpeningDate(restaurant.opening_date);
+  const sponsored = isSponsoredActive(restaurant);
+  // Pre-opening copy on a place that has opened is left out everywhere (WP3.4).
+  const aboutText = currentDescription(restaurant);
+  const hoursSpec = resolveOpeningHoursSpecification(hoursJson, restaurant.opening);
 
-  const seoDescription = restaurant.seo_description ||
-    (restaurant.description
-      ? `${restaurant.description.slice(0, 140)}... ${restaurant.name} serves ${restaurant.cuisine || "diverse"} cuisine at ${neighborhoodText}. ${restaurant.price_range ? `Price: ${getPriceDescription(restaurant.price_range)}.` : ""} ${restaurant.rating ? `Rated ${restaurant.rating}/5.` : ""}`
-      : `${restaurant.name} is a ${restaurant.cuisine || "local"} restaurant in ${cityName}, Iowa. View menu, hours, ratings, photos, and directions. ${restaurant.price_range ? `Price range: ${getPriceDescription(restaurant.price_range)}.` : ""}`);
+  const showImage = restaurant.image_url && !imageError;
+  // The address's city, not the `city` column: the column says "Des Moines" for
+  // rows whose address is in West Des Moines (Bonchon, Dave's Hot Chicken).
+  const cityName = restaurantLocality(restaurant) || "Des Moines";
+  // `location` is already the full address; appending the city used to print
+  // "..., West Des Moines, IA 50266, USA, Des Moines".
+  const neighborhoodText = restaurant.location || cityName;
+
+  // One builder for this page and the edge shell (functions/_middleware.ts), so
+  // a crawler that misses the prerender sees the same title. seo_title and
+  // seo_description are used only when they name the suburb and an intent word
+  // (and, for descriptions, the cuisine); anything else gets the template.
+  // The AI-written ones never said "menu" or "hours", and the 33 listings
+  // ranking inside the top 12 at under 1% CTR all used them (SEO-030; GSC
+  // numbers in src/lib/restaurantMeta.ts).
+  // "Menu", "Hours" and "Photos" only when this page shows them (WP3.5).
+  const metaInput = {
+    ...restaurant,
+    hasMenu: hasCapturedMenu || !!safeMenuUrl,
+    // SEO-054: `opening` is a date column; only hours text counts.
+    hasHours: lifecycle !== "closed" && (!!hoursSpec || hoursTextOf(restaurant.opening) !== null),
+    hasPhone: !isShut && !!phoneHref,
+    hasPhotos: !!restaurant.image_url,
+  };
+  const seoTitle = restaurantPageTitle(metaInput);
+  const seoDescription = restaurantMetaDescription(metaInput);
 
   const seoKeywords = [
     ...(restaurant.seo_keywords || []),
@@ -243,7 +426,6 @@ export default function RestaurantDetails() {
     `${restaurant.name} hours`,
     `${restaurant.name} reviews`,
     restaurant.cuisine ? `${restaurant.cuisine} restaurant Des Moines` : "",
-    restaurant.cuisine ? `best ${restaurant.cuisine} food Des Moines` : "",
     restaurant.cuisine ? `${restaurant.cuisine} menu Des Moines` : "",
     `restaurants in ${cityName}`,
     `${cityName} dining`,
@@ -258,94 +440,77 @@ export default function RestaurantDetails() {
   // inventing one is a review-snippet policy breach. There is no reviews table
   // in the schema, so there is no real count to use and the block is gone.
 
-  // Comprehensive Restaurant schema for AI search engines
-  const restaurantSchema = {
-    "@context": "https://schema.org",
-    "@type": "Restaurant",
-    "@id": `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}`,
-    name: restaurant.name,
-    description: restaurant.description || seoDescription,
-    servesCuisine: restaurant.cuisine,
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: restaurant.location,
-      addressLocality: cityName,
-      addressRegion: "Iowa",
-      addressCountry: "US",
-    },
-    ...(restaurant.phone && { telephone: restaurant.phone }),
-    ...(restaurant.website && { url: restaurant.website }),
-    priceRange: restaurant.price_range,
-    ...(restaurant.image_url && { image: [restaurant.image_url] }),
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: restaurant.latitude || 41.5868,
-      longitude: restaurant.longitude || -93.6250,
-    },
-    // Derived from the same parser as the visible open/closed badge; omitted
-    // entirely when the free-form hours can't be parsed (no fabricated hours).
-    ...(getOpeningHoursSpecification(restaurant.opening)
-      ? { openingHoursSpecification: getOpeningHoursSpecification(restaurant.opening) }
-      : {}),
-    paymentAccepted: "Cash, Credit Card, Debit Card",
-    currenciesAccepted: "USD",
-    hasMenu: {
-      "@type": "Menu",
-      "@id": `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
-      name: `${restaurant.name} Menu`,
-      url: `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
-    },
-    areaServed: {
-      "@type": "City",
-      name: "Des Moines",
-      containedInPlace: {
-        "@type": "State",
-        name: "Iowa",
-      },
-    },
-  };
+  // The Restaurant node, from one pure builder (WP3.14). The rules it keeps
+  // are written there: no invented hours, pin, price tier or menu claim.
+  const canonicalUrl = getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`);
+  const restaurantSchema = buildRestaurantSchema(restaurant, {
+    url: canonicalUrl,
+    description: aboutText || seoDescription,
+    locality: cityName,
+    website: safeWebsite,
+    menuUrl: safeMenuUrl,
+    hasCapturedMenu,
+    openingHoursSpecification: hoursSpec,
+    // A closed or not-yet-open place publishes no hours.
+    openForBusiness: !lifecycle,
+  });
 
-  const breadcrumbs = [
-    { name: "Home", url: "/" },
-    { name: "Restaurants", url: "/restaurants" },
-    ...(restaurant.cuisine ? [{ name: restaurant.cuisine, url: `/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}` }] : []),
-    {
-      name: restaurant.name,
-      url: `/restaurants/${restaurant.slug || restaurant.id}`,
-    },
-  ];
+  // WEB-SEO-027: the BreadcrumbList this used to build lived here AND in the
+  // <BreadcrumbListSchema> below, with DIFFERENT urls - relative here, absolute
+  // through getCanonicalUrl there - so the page shipped two competing trails
+  // and the prerenderer's dedupeJsonLd kept whichever came last. One emitter
+  // now, and it is the typed schema component, which is the one with the
+  // absolute URLs a crawler can resolve.
 
-  // Generate dynamic FAQ for this specific restaurant
-  const restaurantFaqs = [
-    {
-      question: `What type of food does ${restaurant.name} serve?`,
-      answer: `${restaurant.name} serves ${restaurant.cuisine || "a variety of"} cuisine in ${cityName}, Iowa. ${restaurant.description ? restaurant.description.slice(0, 200) : `Located at ${restaurant.location || cityName}, it's a popular dining destination in the Des Moines metro area.`}`,
-    },
-    {
-      question: `What are the hours for ${restaurant.name}?`,
-      answer: restaurant.opening
-        ? `${restaurant.name} is typically open ${restaurant.opening}. Hours may vary on holidays and special occasions. We recommend calling ahead at ${restaurant.phone || "the restaurant"} to confirm current hours, especially for holiday dining.`
-        : `For the most current hours at ${restaurant.name}, please call the restaurant directly${restaurant.phone ? ` at ${restaurant.phone}` : ""} or visit their website${restaurant.website ? ` at ${restaurant.website}` : ""}. Hours may vary by season and holidays.`,
-    },
-    {
-      question: `How much does it cost to eat at ${restaurant.name}?`,
-      answer: restaurant.price_range
-        ? `${restaurant.name} is in the ${restaurant.price_range} price range, which means approximately ${getPriceDescription(restaurant.price_range)}. This is ${restaurant.price_range === "$" ? "one of the most affordable" : restaurant.price_range === "$$" ? "a moderately priced" : restaurant.price_range === "$$$" ? "an upscale" : "a fine dining"} option in the ${cityName} area.`
-        : `Contact ${restaurant.name} directly for current pricing and menu information.`,
-    },
-    {
-      question: `Where is ${restaurant.name} located?`,
-      answer: `${restaurant.name} is located at ${restaurant.location || cityName + ", Iowa"}. ${restaurant.latitude ? "You can find directions using the map on this page." : "Visit our restaurants page for a map of all Des Moines dining locations."}`,
-    },
-    {
-      question: `Does ${restaurant.name} have an online menu?`,
-      answer: `Yes, you can view the full ${restaurant.name} menu with prices on this page. Scroll down to the Menu section or click the "Menu" button to see all menu categories and items${restaurant.cuisine ? ` featuring ${restaurant.cuisine} cuisine` : ''}. The menu is regularly updated to reflect current offerings. ${restaurant.website ? `You can also visit ${restaurant.name}'s official website for their latest menu.` : ''}`,
-    },
-    ...(restaurant.rating ? [{
-      question: `What is the rating for ${restaurant.name}?`,
-      answer: `${restaurant.name} has a rating of ${restaurant.rating.toFixed(1)} out of 5 stars based on local reviews. ${restaurant.rating >= 4.5 ? "It's one of the highest-rated restaurants in the Des Moines area." : restaurant.rating >= 4.0 ? "It's a highly-rated restaurant in Des Moines." : "Diners appreciate its " + (restaurant.cuisine || "diverse") + " cuisine offerings."} ${restaurant.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
-    }] : []),
-  ];
+  // Fact-only answers for the FAQPage schema; geo_faq comes back separately
+  // and is shown as AI-assisted, outside the schema (WP3.1).
+  const { faqs: restaurantFaqs, aiFaqs } = buildRestaurantFaqs(restaurant, {
+    lifecycle,
+    locality: cityName,
+    hoursJson,
+    website: safeWebsite,
+    menuUrl: safeMenuUrl,
+    hasCapturedMenu,
+  });
+
+  // WEB-FEAT-024. Resolved once and used by both the in-page action bar and the
+  // sticky mobile CTA, so the two can never disagree about whether this place
+  // takes reservations.
+  const reservation = resolveReservation(restaurant);
+  const showReserve =
+    !isShut && (reservation.kind === "booking" || reservation.kind === "call_to_reserve");
+  const directionsHref = getDirectionsUrl({
+    latitude: restaurant.latitude,
+    longitude: restaurant.longitude,
+    address: `${restaurant.name} ${restaurant.location}`,
+  });
+  // The Menu action goes to the captured menu when there is one, to their own
+  // menu page when there isn't, and is hidden when neither exists (WP8 item 3).
+  const menuAction = hasCapturedMenu
+    ? { href: "#menu", label: "Menu", external: false }
+    : safeMenuUrl
+      ? { href: safeMenuUrl, label: "Menu (on their site)", external: true }
+      : null;
+  // Back to the filtered list the visitor came from (WP3.9). Only a
+  // /restaurants?... URL counts: anything else is not "results".
+  const backToResults =
+    typeof locationState?.from === "string" && locationState.from.startsWith("/restaurants?")
+      ? locationState.from
+      : null;
+
+  // Tonight nearby sits under the hours (WP3.7). Not for a place you can't eat at.
+  const showTonight = !lifecycle && tonight.events.length > 0;
+  const statusLine = liveStatus ? formatOpenStatusLine(liveStatus) : null;
+  const restaurantHoursLine =
+    statusLine && (liveStatus?.closesAt || liveStatus?.nextOpensAt) ? `${statusLine} CT` : statusLine;
+  const showLocalGuide =
+    !isShut && !!(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0));
+  const menuCapturedAt = hasCapturedMenu ? centralDate(menuData?.menu?.captured_at) : null;
+  const menuFromTheirSite =
+    !!menuData?.menu && (menuData.menu.source_type === "scraped" || !!safeWebUrl(menuData.menu.source_url));
+
+  const chipClass =
+    "inline-flex min-h-11 items-center text-xs px-3 bg-gray-100 text-gray-800 dark:bg-muted dark:text-foreground hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium";
 
   return (
     <>
@@ -358,20 +523,20 @@ export default function RestaurantDetails() {
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
         imageUrl={ogImageUrl("restaurant", restaurant.id)}
-        breadcrumbs={breadcrumbs}
-        location={{
-          name: restaurant.name,
-          address: restaurant.location || `${cityName}, IA`,
-          latitude: restaurant.latitude,
-          longitude: restaurant.longitude,
-        }}
+        // No `location` prop: it emitted a second, unlinked Place node for the
+        // same business alongside restaurantSchema, which already carries the
+        // address and geo.
         modifiedTime={restaurant.updated_at}
+        // A place that has closed for good should leave search results.
+        // noindex, follow: the related-restaurant links stay followable.
+        robots={lifecycle === "closed" ? "noindex, follow" : undefined}
       />
+      {/* No cuisine crumb here: /restaurants?cuisine= is a filtered view, not
+          a page of its own. The visible trail below keeps it as a link. */}
       <BreadcrumbListSchema
         items={[
           { name: "Home", url: getCanonicalUrl("/") },
           { name: "Restaurants", url: getCanonicalUrl("/restaurants") },
-          ...(restaurant.cuisine ? [{ name: restaurant.cuisine, url: getCanonicalUrl(`/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}`) }] : []),
           { name: restaurant.name, url: getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`) },
         ]}
       />
@@ -382,7 +547,7 @@ export default function RestaurantDetails() {
         dateModified={restaurant.updated_at}
       />
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-background">
         <div className="container mx-auto px-4 py-6 max-w-6xl">
           {/* Breadcrumb Navigation */}
           <Breadcrumbs
@@ -397,20 +562,23 @@ export default function RestaurantDetails() {
 
           {/* Top Actions Bar */}
           <div className="flex items-center justify-between mb-6">
-            <Link to="/restaurants">
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 -ml-2">
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                All Restaurants
-              </Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="min-h-11 text-muted-foreground hover:text-foreground -ml-2">
+              <Link to={backToResults ?? "/restaurants"}>
+                <ArrowLeft className="h-4 w-4 mr-1" aria-hidden="true" />
+                {backToResults ? "Back to results" : "All restaurants"}
+              </Link>
+            </Button>
             <div className="flex gap-2">
               <ShareDialog
                 title={restaurant.name}
-                description={restaurant.description || `Check out ${restaurant.name} - ${restaurant.cuisine} cuisine in Des Moines`}
+                description={
+                  aboutText ||
+                  `${restaurant.name}${restaurant.cuisine ? `, ${restaurant.cuisine}` : ""} in ${cityName}`
+                }
                 url={typeof window !== 'undefined' ? window.location.href : ''}
                 onShare={trackShare}
                 trigger={
-                  <Button variant="outline" size="sm" className="rounded-xl">
+                  <Button variant="outline" size="sm" className="min-h-11 rounded-xl">
                     <SpriteIcon name="share-2" className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>
@@ -423,51 +591,59 @@ export default function RestaurantDetails() {
                 size="sm"
                 showText
                 itemName={restaurant.name}
-                className="rounded-xl"
+                className="min-h-11 rounded-xl"
               />
             </div>
           </div>
 
           {/* Hero Card */}
           <Card className="shadow-xl rounded-3xl overflow-hidden border-0 mb-8">
-            {/* Hero Image / Gradient */}
-            <div className="relative h-72 md:h-96 overflow-hidden">
-              {showImage ? (
-                <img
-                  src={restaurant.image_url}
-                  alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="eager"
-                  decoding="async"
-                  onError={() => setImageError(true)}
-                />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69] via-[#5B2D8E] to-[#DC143C]">
-                  <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-10 right-10 w-40 h-40 border-2 border-white/30 rounded-full" />
-                    <div className="absolute bottom-10 left-10 w-64 h-64 border border-white/20 rounded-full" />
-                  </div>
-                </div>
+            {/* Hero Image, or a flat brand surface */}
+            <div className="relative h-72 md:h-96 overflow-hidden bg-[#2D1B69]">
+              {showImage && (
+                <>
+                  <OptimizedImage
+                    src={restaurant.image_url}
+                    alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa`}
+                    className="object-cover"
+                    containerClassName="absolute inset-0"
+                    priority
+                    sizes="(max-width: 768px) 100vw, 1024px"
+                    onError={() => setImageError(true)}
+                  />
+                  {/* Scrim so the white title stays readable over any photo */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                </>
               )}
-
-              {/* Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
               {/* Badges */}
               <div className="absolute top-4 left-4 flex gap-2 z-10">
-                {restaurant.is_featured && (
-                  <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
-                    Featured
+                {/* is_featured is not shown: only sponsored rows kept it
+                    (20260902000004:20-24), so it was a paid flag reading as
+                    an editorial one (WP3.3). */}
+                {sponsored && <SponsoredBadge className="shadow-lg text-sm px-3 py-1" />}
+                {lifecycle === "closed" && (
+                  <Badge className="bg-gray-900 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
+                    Permanently closed
                   </Badge>
                 )}
-                {openStatus.isOpen && (
-                  <Badge className={`${openStatus.closingSoon ? 'bg-amber-500' : 'bg-emerald-500'} text-white border-0 shadow-lg text-sm font-semibold px-3 py-1`}>
-                    <span className="relative flex h-2 w-2 mr-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                {lifecycle === "temporarily_closed" && (
+                  <Badge className="bg-gray-900 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
+                    Temporarily closed
+                  </Badge>
+                )}
+                {lifecycle === "not_open_yet" && (
+                  <Badge className="bg-gray-900 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
+                    Not open yet
+                  </Badge>
+                )}
+                {liveStatus?.isOpen && (
+                  <Badge className={`${liveStatus.closingSoon ? 'bg-amber-700' : 'bg-emerald-700'} text-white border-0 shadow-lg text-sm font-semibold px-3 py-1`}>
+                    <span className="relative flex h-2 w-2 mr-1.5" aria-hidden="true">
+                      <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
                     </span>
-                    {openStatus.closingSoon ? 'Closing Soon' : 'Open Now'}
+                    {liveStatus.closingSoon ? 'Closing Soon' : 'Open Now'}
                   </Badge>
                 )}
               </div>
@@ -477,30 +653,31 @@ export default function RestaurantDetails() {
                 <div className="max-w-3xl">
                   {restaurant.cuisine && (
                     <div className="flex items-center gap-2 mb-2">
-                      <SpriteIcon name="chef-hat" className="h-4 w-4 text-white/70" />
-                      <span className="text-white/80 text-sm font-medium uppercase tracking-wider">
-                        {restaurant.cuisine} Cuisine
+                      <SpriteIcon name="chef-hat" className="h-4 w-4 text-white/80" />
+                      <span className="text-white/90 text-sm font-medium">
+                        {restaurant.cuisine} cuisine
                       </span>
                     </div>
                   )}
                   <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight drop-shadow-lg">
                     {restaurant.name}
                   </h1>
-                  <div className="flex flex-wrap items-center gap-3 text-white/90">
-                    {restaurant.rating && (
-                      <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        <span className="font-semibold">{formatRating(restaurant.rating)}</span>
+                  <div className="flex flex-wrap items-center gap-3 text-white">
+                    {restaurant.rating ? (
+                      <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
+                        <span className="font-semibold">{restaurant.rating.toFixed(1)}</span>
+                        <span className="text-sm">Google rating</span>
                       </div>
-                    )}
-                    {restaurant.price_range && (
-                      <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <DollarSign className="h-4 w-4" />
-                        <span className="font-semibold">{formatPrice(restaurant.price_range)}</span>
+                    ) : null}
+                    {tier && (
+                      <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
+                        <DollarSign className="h-4 w-4" aria-hidden="true" />
+                        <span className="font-semibold">{tier}</span>
                       </div>
                     )}
                     {restaurant.location && (
-                      <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
+                      <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
                         <SpriteIcon name="map-pin" className="h-4 w-4" />
                         <span className="text-sm">{neighborhoodText}</span>
                       </div>
@@ -510,124 +687,178 @@ export default function RestaurantDetails() {
               </div>
             </div>
 
+            {/* Closed or not-yet-open notice (WP8 item 2) */}
+            {lifecycle && (
+              <div className="px-4 md:px-6 pt-4">
+                <div role="note" className="rounded-xl border bg-gray-100 p-4 text-gray-900">
+                  {lifecycle === "closed" && (
+                    <p>
+                      <strong>{restaurant.name} has closed permanently.</strong>{" "}
+                      {restaurant.cuisine ? (
+                        <Link
+                          to={`/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}`}
+                          className="font-medium text-[#2D1B69] underline"
+                        >
+                          See other {restaurant.cuisine} restaurants
+                        </Link>
+                      ) : (
+                        <Link to="/restaurants" className="font-medium text-[#2D1B69] underline">
+                          See restaurants that are open
+                        </Link>
+                      )}
+                    </p>
+                  )}
+                  {lifecycle === "temporarily_closed" && (
+                    <p>
+                      <strong>{restaurant.name} is temporarily closed.</strong> We don't have a reopening
+                      date. Check with the restaurant before you go.
+                    </p>
+                  )}
+                  {lifecycle === "not_open_yet" && (
+                    <p>
+                      <strong>{restaurant.name} hasn't opened yet.</strong>{" "}
+                      {openingDateLabel
+                        ? `Expected ${openingDateLabel}.`
+                        : restaurant.opening_timeframe
+                          ? `Expected ${restaurant.opening_timeframe}.`
+                          : "We don't have an opening date."}{" "}
+                      <Link to="/restaurants/new" className="font-medium text-[#2D1B69] underline">
+                        More new openings
+                      </Link>
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Quick Actions Bar */}
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
-              {restaurant.phone && (
-                <a href={`tel:${restaurant.phone}`}>
-                  <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
+              {/* WEB-FEAT-024: booking is the highest-intent action on this
+                  page and previously had no path at all. Only rendered when
+                  there is real evidence the place takes reservations, and
+                  never for a place that is closed. */}
+              {showReserve && reservation.href && (
+                <Button asChild className="min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
+                  <a
+                    href={reservation.href}
+                    {...(reservation.external
+                      ? { target: "_blank", rel: "noopener noreferrer" }
+                      : {})}
+                  >
+                    <CalendarCheck className="h-4 w-4 mr-2" />
+                    {reservation.label}
+                  </a>
+                </Button>
+              )}
+              {!isShut && phoneHref && (
+                <Button asChild className="min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
+                  <a href={phoneHref}>
                     <Phone className="h-4 w-4 mr-2" />
                     Call
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
-              {restaurant.website && (
-                <a href={restaurant.website} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" className="rounded-xl">
+              {safeWebsite && (
+                <Button asChild variant="outline" className="min-h-11 rounded-xl">
+                  <a href={safeWebsite} target="_blank" rel="noopener noreferrer">
                     <Globe className="h-4 w-4 mr-2" />
                     Website
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
-              {restaurant.location && (
-                <a
-                  href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button variant="outline" className="rounded-xl">
+              {restaurant.location && !isShut && (
+                <Button asChild variant="outline" className="min-h-11 rounded-xl">
+                  <a href={directionsHref} target="_blank" rel="noopener noreferrer">
                     <Navigation className="h-4 w-4 mr-2" />
                     Directions
-                  </Button>
-                </a>
-              )}
-              <a href="#menu">
-                <Button variant="outline" className="rounded-xl">
-                  <Utensils className="h-4 w-4 mr-2" />
-                  Menu
+                  </a>
                 </Button>
-              </a>
-              <Button variant="outline" className="rounded-xl">
-                <MessageCircle className="h-4 w-4 mr-2" />
-                Write Review
+              )}
+              {menuAction && (
+                <Button asChild variant="outline" className="min-h-11 rounded-xl">
+                  <a
+                    href={menuAction.href}
+                    {...(menuAction.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  >
+                    <Utensils className="h-4 w-4 mr-2" />
+                    {menuAction.label}
+                  </a>
+                </Button>
+              )}
+              <Button asChild variant="outline" className="min-h-11 rounded-xl">
+                <a href="#reviews">
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Rate this place
+                </a>
               </Button>
             </div>
 
             {/* On-page section navigation for quick jumping */}
             <nav className="flex flex-wrap gap-2 px-4 md:px-6 py-3 bg-white border-b overflow-x-auto" aria-label="Page sections">
-              <a href="#about" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
-                About
-              </a>
-              <a href="#menu" className="text-xs px-3 py-1.5 bg-[#2D1B69]/10 text-[#2D1B69] hover:bg-[#2D1B69]/20 rounded-full transition-colors whitespace-nowrap font-medium">
-                <Utensils className="w-3 h-3 inline mr-1" />
-                Menu
-              </a>
-              {restaurant.ai_writeup && (
-                <a href="#writeup" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
-                  Review
+              {aboutText && (
+                <a href="#about" className={chipClass}>
+                  About
                 </a>
               )}
-              {(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0)) && (
-                <a href="#local-guide" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
+              {lifecycle !== "closed" && (
+                <a href="#hours" className={chipClass}>
+                  Hours
+                </a>
+              )}
+              {showTonight && (
+                <a href="#tonight" className={chipClass}>
+                  Tonight nearby
+                </a>
+              )}
+              {menuAction && (
+                <a
+                  href={menuAction.href}
+                  {...(menuAction.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  className={chipClass}
+                >
+                  <Utensils className="w-3 h-3 inline mr-1" aria-hidden="true" />
+                  {menuAction.label}
+                </a>
+              )}
+              {restaurant.ai_writeup && (
+                <a href="#writeup" className={chipClass}>
+                  Our take
+                </a>
+              )}
+              {showLocalGuide && (
+                <a href="#local-guide" className={chipClass}>
                   Local Guide
                 </a>
               )}
-              <a href="#faq" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
+              <a href="#faq" className={chipClass}>
                 FAQ
               </a>
             </nav>
 
             <CardContent className="p-6 md:p-10">
-              {/* Key Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="text-center p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                  <Star className="h-6 w-6 text-amber-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">
-                    {formatRating(restaurant.rating)}
-                  </div>
-                  <div className="text-sm text-gray-600">Rating</div>
+              {/* Hours: one block, one evaluation (WP8 items 5 and 9) */}
+              {lifecycle !== "closed" && (
+                <div className="mb-8 scroll-mt-20">
+                  <RestaurantStatus
+                    hours={restaurant.opening}
+                    hoursJson={hoursJson}
+                    openStatus={liveStatus}
+                    now={now}
+                  />
                 </div>
-                <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                  <DollarSign className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">
-                    {formatPrice(restaurant.price_range)}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {restaurant.price_range ? getPriceDescription(restaurant.price_range) : "Price Range"}
-                  </div>
-                </div>
-                <div className="text-center p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <SpriteIcon name="chef-hat" className="h-6 w-6 text-blue-500 mx-auto mb-2" />
-                  <div className="text-lg font-bold text-gray-900 line-clamp-1">
-                    {restaurant.cuisine || "Various"}
-                  </div>
-                  <div className="text-sm text-gray-600">Cuisine</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-2xl border border-purple-100">
-                  <Award className="h-6 w-6 text-purple-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">
-                    {restaurant.is_featured ? (
-                      <Check className="h-7 w-7 text-purple-500 mx-auto" />
-                    ) : (
-                      "—"
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {restaurant.is_featured ? "Editor's Pick" : "Featured"}
-                  </div>
-                </div>
-              </div>
+              )}
 
-              {/* Real-Time Status */}
-              <div className="mb-8">
-                <RestaurantStatus
-                  restaurant={{
-                    name: restaurant.name,
-                    phone: restaurant.phone,
-                    website: restaurant.website,
-                    hours: restaurant.opening,
-                  }}
+              {/* Your evening from here (WP3.7, bet 5): tonight's events next
+                  to this place's own closing time, right under the hours. */}
+              {showTonight && (
+                <TonightNearRestaurant
+                  events={tonight.events}
+                  heading={tonightHeading(tonight.events, liveStatus?.closesAt, now)}
+                  restaurantName={restaurant.name}
+                  restaurantHoursLine={restaurantHoursLine}
+                  className="mb-8 scroll-mt-20"
                 />
-              </div>
+              )}
 
               <Separator className="my-8" />
 
@@ -642,19 +873,21 @@ export default function RestaurantDetails() {
                   <div className="space-y-3">
                     {restaurant.location && (
                       <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-600 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-gray-900 font-medium">{restaurant.location}</p>
-                          <p className="text-sm text-gray-500">{cityName}, Iowa</p>
-                          <a
-                            href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
-                          >
-                            <Navigation className="h-3.5 w-3.5 mr-1" />
-                            Get Directions
-                          </a>
+                          <p className="text-sm text-gray-700">{cityName}, Iowa</p>
+                          {!isShut && (
+                            <a
+                              href={directionsHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex min-h-11 items-center text-sm text-[#2D1B69] hover:underline"
+                            >
+                              <Navigation className="h-3.5 w-3.5 mr-1" />
+                              Get Directions
+                            </a>
+                          )}
                         </div>
                       </div>
                     )}
@@ -669,24 +902,13 @@ export default function RestaurantDetails() {
                         />
                       </div>
                     )}
-                    {restaurant.phone && (
+                    {!isShut && phoneHref && (
                       <a
-                        href={`tel:${restaurant.phone}`}
-                        className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                        href={phoneHref}
+                        className="flex min-h-11 items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                       >
-                        <Phone className="h-5 w-5 text-gray-500 shrink-0" />
+                        <Phone className="h-5 w-5 text-gray-600 shrink-0" />
                         <span className="text-gray-900">{restaurant.phone}</span>
-                      </a>
-                    )}
-                    {restaurant.website && (
-                      <a
-                        href={restaurant.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-                      >
-                        <SpriteIcon name="external-link" className="h-5 w-5 text-gray-500 shrink-0" />
-                        <span className="text-[#2D1B69] hover:underline">Visit Website</span>
                       </a>
                     )}
                   </div>
@@ -699,51 +921,44 @@ export default function RestaurantDetails() {
                     Restaurant Details
                   </h2>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <span className="text-gray-600">Cuisine Type</span>
-                      <Badge variant="secondary" className="bg-[#2D1B69]/10 text-[#2D1B69] font-medium">
-                        {restaurant.cuisine || "Various"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <span className="text-gray-600">Price Range</span>
-                      <div className="text-right">
-                        <span className="text-gray-900 font-semibold">
-                          {formatPrice(restaurant.price_range)}
-                        </span>
-                        {restaurant.price_range && (
-                          <p className="text-xs text-gray-500">{getPriceDescription(restaurant.price_range)}</p>
-                        )}
-                      </div>
-                    </div>
-                    {restaurant.opening && (
-                      <div className="flex items-start justify-between p-4 bg-gray-50 rounded-xl">
-                        <span className="text-gray-600 flex items-center gap-1.5">
-                          <SpriteIcon name="clock" className="h-4 w-4" />
-                          Hours
-                        </span>
-                        <span className="text-gray-900 text-right text-sm">
-                          {restaurant.opening}
+                    {restaurant.cuisine && (
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <span className="text-gray-700">Cuisine</span>
+                        <span className="rounded-full bg-[#2D1B69]/10 px-2.5 py-0.5 text-sm font-medium text-[#2D1B69]">
+                          {restaurant.cuisine}
                         </span>
                       </div>
                     )}
-                    {restaurant.is_featured && (
-                      <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-                        <div className="flex items-center text-amber-700">
-                          <Award className="h-5 w-5 mr-2" />
-                          <span className="font-medium">Editor's Pick - Featured Restaurant</span>
+                    {tier && (
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <span className="text-gray-700">Price level</span>
+                        <div className="text-right">
+                          <span className="text-gray-900 font-semibold">{tier}</span>
+                          <p className="text-xs text-gray-700">on Google</p>
                         </div>
-                        <p className="text-sm text-amber-600 mt-1">
-                          Selected by our editors for exceptional quality and dining experience.
-                        </p>
+                      </div>
+                    )}
+                    {restaurant.rating ? (
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <span className="text-gray-700">Google rating</span>
+                        <span className="flex items-center gap-1 font-semibold text-gray-900">
+                          <Star className="h-4 w-4 fill-amber-400 text-amber-500" aria-hidden="true" />
+                          {restaurant.rating.toFixed(1)} of 5
+                        </span>
+                      </div>
+                    ) : null}
+                    {sponsored && (
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <span className="text-gray-700">Paid placement</span>
+                        <SponsoredBadge />
                       </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* About Section — collapsible */}
-              {restaurant.description && (
+              {/* About section, collapsible */}
+              {aboutText && (
                 <>
                   <Separator className="my-8" />
                   <CollapsibleSection
@@ -754,17 +969,18 @@ export default function RestaurantDetails() {
                   >
                     <div className="pt-2">
                       <p className="text-gray-700 leading-relaxed text-lg">
-                        {restaurant.description}
+                        {aboutText}
                       </p>
                       {/* AI-friendly summary paragraph */}
-                      <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                      <div className="mt-4 p-4 bg-gray-50 rounded-xl border">
                         <p className="text-sm text-gray-700 leading-relaxed">
                           <strong>{restaurant.name}</strong> is a {restaurant.cuisine || "local"} restaurant
                           located {restaurant.location ? `at ${restaurant.location} in` : "in"} {cityName}, Iowa.
-                          {restaurant.rating ? ` Rated ${restaurant.rating.toFixed(1)} out of 5 stars by local diners.` : ""}
-                          {restaurant.price_range ? ` The price range is ${restaurant.price_range} (${getPriceDescription(restaurant.price_range)}).` : ""}
-                          {restaurant.phone ? ` Call ${restaurant.phone} for reservations.` : ""}
-                          {restaurant.is_featured ? " This restaurant is an editor's pick on Des Moines Insider." : ""}
+                          {lifecycle === "closed" ? " It has closed permanently." : ""}
+                          {lifecycle === "temporarily_closed" ? " It is temporarily closed." : ""}
+                          {restaurant.rating ? ` Google rating: ${restaurant.rating.toFixed(1)} out of 5.` : ""}
+                          {tier ? ` Google lists its price level as ${tier}.` : ""}
+                          {!isShut && reservation.detail ? ` ${reservation.detail}.` : ""}
                         </p>
                       </div>
                     </div>
@@ -772,40 +988,35 @@ export default function RestaurantDetails() {
                 </>
               )}
 
-              {/* Menu Section — collapsible, with enhanced SEO props */}
+              {/* Menu: a section of its own, not a card inside this card (WP3.14) */}
               <Separator className="my-8" />
               <RestaurantMenuSection
                 restaurantId={restaurant.id}
                 restaurantName={restaurant.name}
                 restaurantSlug={restaurant.slug || restaurant.id}
-                restaurantDescription={restaurant.description}
+                restaurantDescription={aboutText ?? undefined}
                 city={cityName}
                 cuisine={restaurant.cuisine}
+                menuUrl={restaurant.menu_url}
               />
 
-              {/* AI Writeup Section — collapsible */}
+              {/* Our take (AI-assisted) */}
               {restaurant.ai_writeup && (
                 <>
                   <Separator className="my-8" />
-                  <CollapsibleSection
-                    id="writeup"
-                    title={`${restaurant.name} Review & Insights`}
-                    icon={<BookOpen className="h-5 w-5 text-[#2D1B69]" />}
-                    defaultOpen={true}
-                  >
-                    <div className="pt-2">
-                      <AIWriteup
-                        writeup={restaurant.ai_writeup}
-                        generatedAt={restaurant.writeup_generated_at}
-                        prompt={restaurant.writeup_prompt_used}
-                      />
-                    </div>
-                  </CollapsibleSection>
+                  <div id="writeup" className="scroll-mt-20">
+                    <AIWriteup
+                      writeup={restaurant.ai_writeup}
+                      generatedAt={restaurant.writeup_generated_at}
+                      headingLevel={2}
+                    />
+                  </div>
                 </>
               )}
 
-              {/* Geo Summary / Key Facts — collapsible */}
-              {(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0)) && (
+              {/* Local guide: AI-written, labelled as such, and not shown for
+                  a place that is closed (WP3.6). */}
+              {showLocalGuide && (
                 <>
                   <Separator className="my-8" />
                   <CollapsibleSection
@@ -815,18 +1026,19 @@ export default function RestaurantDetails() {
                     defaultOpen={true}
                   >
                     <div className="pt-2">
+                      <AIDisclosureBadge
+                        label="AI-assisted"
+                        tooltip="Drafted with AI from public information. It can be wrong or out of date, so check hours, prices and details with the restaurant."
+                      />
                       {restaurant.geo_summary && (
-                        <p className="text-gray-700 leading-relaxed">{restaurant.geo_summary}</p>
+                        <p className="mt-3 text-gray-700 leading-relaxed">{restaurant.geo_summary}</p>
                       )}
                       {restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0 && (
                         <div className="mt-4">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Key Facts</h3>
-                          <ul className="space-y-2">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Key facts</h3>
+                          <ul className="list-disc space-y-2 pl-5 text-gray-700">
                             {restaurant.geo_key_facts.map((fact, index) => (
-                              <li key={index} className="flex items-start gap-2 text-gray-700">
-                                <Check className="h-4 w-4 text-emerald-500 mt-1 shrink-0" />
-                                <span>{fact}</span>
-                              </li>
+                              <li key={index}>{fact}</li>
                             ))}
                           </ul>
                         </div>
@@ -838,116 +1050,142 @@ export default function RestaurantDetails() {
             </CardContent>
           </Card>
 
+          {/* Own this business? (WEB-ADS-009). Not for a place that has closed. */}
+          {!isShut && (
+            <div className="mb-8">
+              <ClaimListingCta
+                listingType="restaurant"
+                listingId={restaurant.id}
+                listingName={restaurant.name}
+              />
+            </div>
+          )}
+
           {/* Ratings & Reviews (WEB-FEAT-010) */}
-          <div id="reviews" className="mb-8">
+          <div id="reviews" className="mb-8 scroll-mt-20">
             <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
           </div>
 
-          {/* Restaurant-Specific FAQ */}
-          <Card id="faq" className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">
+          {/* Restaurant-Specific FAQ. FAQSection draws its own card. */}
+          <div id="faq" className="mb-8 scroll-mt-20">
             <FAQSection
               title={`Frequently Asked Questions About ${restaurant.name}`}
-              description={`Common questions about ${restaurant.name} in ${cityName}, Iowa.`}
+              description={`Answered from the details on this page for ${restaurant.name} in ${cityName}, Iowa.`}
               faqs={restaurantFaqs}
               showSchema={true}
-              className="border-0"
+              className="rounded-2xl border-0 shadow-lg"
             />
-          </Card>
+          </div>
 
-          {/* Related Restaurants - Same Cuisine — hidden when fewer than 3 matches */}
-          {relatedRestaurants && relatedRestaurants.length >= 3 && (
-            <section className="mb-8" aria-labelledby="related-heading">
-              <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
-                More {restaurant.cuisine} Restaurants in Des Moines
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Explore other {restaurant.cuisine} dining options near {cityName}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
-                {relatedRestaurants.map((related) => (
-                  <RestaurantCard
-                    key={related.id}
-                    restaurant={related}
-                    variant="compact"
-                  />
-                ))}
+          {/* geo_faq: AI-written, shown as such, and kept out of the FAQPage
+              schema (WP3.1). Not for a place that has closed. */}
+          {!isShut && aiFaqs.length > 0 && (
+            <section aria-labelledby="ai-answers-heading" className="mb-8 rounded-2xl bg-card p-6 shadow-lg">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 id="ai-answers-heading" className="text-xl font-semibold text-foreground">
+                  AI-assisted answers
+                </h2>
+                <AIDisclosureBadge
+                  label="AI-assisted"
+                  tooltip="Written with AI from public information. Check anything that matters with the restaurant."
+                />
               </div>
+              <dl className="mt-4 divide-y divide-border">
+                {aiFaqs.map((faq) => (
+                  <div key={faq.question} className="py-3">
+                    <dt className="font-medium text-foreground">{faq.question}</dt>
+                    <dd className="mt-1 max-w-prose text-muted-foreground">{faq.answer}</dd>
+                  </div>
+                ))}
+              </dl>
             </section>
           )}
 
-          {/* Nearby Restaurants - Different Cuisine */}
-          {nearbyRestaurants && nearbyRestaurants.length > 0 && (
-            <section className="mb-8" aria-labelledby="nearby-heading">
-              <h2 id="nearby-heading" className="text-2xl font-bold text-gray-900 mb-2">
-                Other Popular Restaurants in {cityName}
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Discover more dining options in the {cityName} area
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                {nearbyRestaurants.map((nearby) => (
-                  <RestaurantCard
-                    key={nearby.id}
-                    restaurant={nearby}
-                    variant="compact"
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+          {/* One restaurant rail (WP3.8): within two miles, same cuisine
+              first, closed and merged places left out. */}
+          <div onClick={trackClick}>
+            <NearbyContent
+              variant="restaurants-near-restaurant"
+              excludeId={restaurant.id}
+              latitude={restaurant.latitude}
+              longitude={restaurant.longitude}
+              preferCuisine={restaurant.cuisine}
+              limit={4}
+            />
+          </div>
 
-          {/* Cross-Content: Nearby Events */}
-          <NearbyContent
-            variant="events-near-restaurant"
-            city={restaurant.city || "Des Moines"}
-            excludeId={restaurant.id}
-          />
+          {/* Any-date events nearby, only when nothing is on tonight. It asks
+              once tonight's answer is in, so the page never makes both event
+              requests for the same spot. */}
+          {tonight.events.length === 0 && tonight.isSettled ? (
+            <NearbyContent
+              variant="events-near-restaurant"
+              city={restaurant.city || "Des Moines"}
+              excludeId={restaurant.id}
+              latitude={restaurant.latitude}
+              longitude={restaurant.longitude}
+            />
+          ) : null}
 
           {/* Browse More CTA */}
           <div className="text-center py-8">
-            <Link to="/restaurants">
-              <Button size="lg" className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl px-8">
+            <Button asChild size="lg" className="min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl px-8">
+              <Link to="/restaurants">
                 <Utensils className="h-5 w-5 mr-2" />
                 Browse All Des Moines Restaurants
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
 
-        <LastUpdatedBadge updatedAt={restaurant.updated_at} className="mt-6 justify-center" />
+        <RestaurantProvenance
+          rating={restaurant.rating}
+          menuCapturedAt={menuCapturedAt}
+          menuFromTheirSite={menuFromTheirSite}
+          hoursCheckedOn={lifecycle !== "closed" ? hoursCheckedAt(hoursJson) : null}
+        />
       </div>
       <Footer preferredSource={false} />
       <BackToTop />
 
-      <StickyMobileCTA
-        variant="restaurant"
-        primaryAction={
-          restaurant.phone
-            ? {
-                label: "Call to Reserve",
-                href: `tel:${restaurant.phone}`,
-                icon: "phone",
-              }
-            : restaurant.website
-            ? {
-                label: "Website",
-                href: restaurant.website,
-                icon: "website",
-                isExternal: true,
-              }
-            : undefined
-        }
-        secondaryAction={
-          restaurant.location
-            ? {
-                label: "Directions",
-                href: getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` }),
-                icon: "directions",
-                isExternal: true,
-              }
-            : undefined
-        }
-      />
+      {/* No sticky actions for a closed place: every one of them (reserve,
+          call, website, directions) sends someone to a business that isn't
+          serving. */}
+      {!isShut && (
+        <StickyMobileCTA
+          variant="restaurant"
+          primaryAction={
+            // WEB-FEAT-024: this said "Call to Reserve" for every restaurant with
+            // a phone number, asserting that a counter-service taco shop takes
+            // bookings. resolveReservation only makes that claim on evidence.
+            reservation.href && reservation.kind !== "website"
+              ? {
+                  label: reservation.label,
+                  href: reservation.href,
+                  icon: reservation.kind === "booking" ? "website" : "phone",
+                  isExternal: reservation.external,
+                }
+              : safeWebsite
+              ? {
+                  label: "Website",
+                  href: safeWebsite,
+                  icon: "website",
+                  isExternal: true,
+                }
+              : undefined
+          }
+          secondaryAction={
+            restaurant.location
+              ? {
+                  label: "Directions",
+                  href: directionsHref,
+                  icon: "directions",
+                  isExternal: true,
+                }
+              : undefined
+          }
+        />
+      )}
     </>
   );
 }

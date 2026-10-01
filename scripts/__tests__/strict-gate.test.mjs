@@ -166,6 +166,42 @@ check(
   strictGateFailures(productionShell, '/restaurants/atlas-caf', null).some((f) => f === 'no JSON-LD'),
 );
 
+console.log('\nstrictGateFailures — SEO-029: the prerendered homepage title is forbidden too');
+
+// Production's SPA fallback is the PRERENDERED homepage, not the vite shell, so
+// the title a crawler saw on 74 pSEO URLs on 2026-09-30 was this one. The vite
+// title alone would have waved that page through.
+const VITE_TITLE = 'Des Moines Insider: Events, Restaurants &amp; Attractions';
+const HOME_TITLE = 'Des Moines Insider | Events, Restaurants &amp; Things to Do';
+const homeAtPseo = good('/things-to-do/east-village', HOME_TITLE);
+check(
+  'a pSEO page carrying the homepage title is rejected',
+  strictGateFailures(homeAtPseo, '/things-to-do/east-village', [VITE_TITLE, HOME_TITLE]).some((f) =>
+    f.startsWith('still carrying the shell title'),
+  ),
+  JSON.stringify(strictGateFailures(homeAtPseo, '/things-to-do/east-village', [VITE_TITLE, HOME_TITLE])),
+);
+check(
+  'the match survives a different escaping of the ampersand',
+  strictGateFailures(
+    good('/things-to-do/east-village', 'Des Moines Insider | Events, Restaurants & Things to Do'),
+    '/things-to-do/east-village',
+    [VITE_TITLE, HOME_TITLE],
+  ).length === 1,
+);
+check(
+  'the same pSEO page with its own title passes',
+  strictGateFailures(
+    good('/things-to-do/east-village', 'Things to Do in East Village Des Moines | Local Guide | Des Moines Insider'),
+    '/things-to-do/east-village',
+    [VITE_TITLE, HOME_TITLE],
+  ).length === 0,
+);
+check(
+  'with only the vite title known, the homepage title is NOT caught (why the list exists)',
+  strictGateFailures(homeAtPseo, '/things-to-do/east-village', VITE_TITLE).length === 0,
+);
+
 console.log(
   `\n${failures === 0 ? 'PASS' : 'FAIL'}: strict-gate — ${failures} failing check(s)\n`,
 );

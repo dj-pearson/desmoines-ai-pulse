@@ -10,13 +10,13 @@ import { renderExtractionPrompt, contentWindowFor } from "../_shared/prompts/ind
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { parseISO, format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
-import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
-import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
-import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
+import { scrapeUrls } from "../_shared/scraper.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
+import { findKnownVenue, ingestCoordinates, type KnownVenue } from "../_shared/knownVenues.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
@@ -26,6 +26,29 @@ import {
   SPORTS_CONTENT_BUDGET,
 } from "../_shared/htmlContentWindow.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
+import { runJob } from "../_shared/jobRunner.ts";
+import { normalizeCategory } from "../_shared/eventCategories.ts";
+import { checkEventTitle } from "../_shared/scheduleTitleGuard.ts";
+import {
+  centralCalendarDate,
+  createDedupIndex,
+  generateEventFingerprint,
+  type DedupIndex,
+} from "../_shared/eventDedup.ts";
+import { dedupWindow, loadExistingEvents, type ExistingEventRow } from "../_shared/existingEvents.ts";
+import {
+  decideExtraction,
+  hashExtractionWindow,
+  JSONLD_SUFFICIENT,
+  readPageFingerprint,
+  recordExtraction,
+  recordSkip,
+  type PageFingerprint,
+} from "../_shared/pageFingerprint.ts";
+
+/** Rows per insert statement. One statement per event was a round trip each;
+ *  one statement for everything lets a single bad row refuse the rest. */
+const INSERT_CHUNK = 50;
 
 // Marker time for events without specific times (7:31:58 PM Central)
 
@@ -45,16 +68,30 @@ function isSportsScheduleDomain(url: string): boolean {
 interface ScrapRequest {
   url: string;
   category: string;
-  maxPages?: number; // Optional parameter for pagination
+  /**
+   * ACCEPTED AND IGNORED (WEB-BE-046). There is no multi-page crawl here:
+   * urlsToScrape is always [url]. The field stays because removing a request
+   * field is a contract change (CLAUDE.md, Supabase Edge Functions) and the
+   * shipped callers send it; a caller that wants more than one page should
+   * call this function once per page, or use skipEvents/batchSize to page
+   * through what one page yielded.
+   */
+  maxPages?: number;
   scraperBackend?: 'browserless' | 'puppeteer' | 'playwright' | 'firecrawl' | 'fetch'; // Allow backend override
   // Batching parameters for processing events in smaller chunks
   batchSize?: number; // Max events to process per request (default: 5)
   skipEvents?: number; // Number of events to skip (for pagination through large result sets)
   skipVisitWebsite?: boolean; // Skip fetching Visit Website URLs (faster, uses catchdesmoines URLs)
+  /** Run the model even when the page is unchanged since its last clean run
+   *  (see _shared/pageFingerprint.ts). Optional; absent means false. */
+  forceExtract?: boolean;
 }
 
-// Default batch size - keep small to avoid timeouts
-const DEFAULT_BATCH_SIZE = 5;
+// NO DEFAULT CAP (WEB-BE-046). This constant was 5, and applying it as a
+// default when the request omits batchSize would have capped every scrape at
+// five items - a severe ingestion regression, because the parameter was never
+// applied so a scrape has always written everything it extracted. An unset
+// batchSize therefore means "all of them"; 5 was a value nobody ever ran.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,234 +104,18 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Known venue data interface
-interface KnownVenueData {
-  id: string;
-  name: string;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-}
+// WEB-BE-050. The cache, the query and the matcher wrapper used to live here,
+// privately, which is why this was the only ingestion path that set
+// coordinates on an event - ai-crawler set none. They are in
+// _shared/knownVenues.ts now and both paths use them.
+//
+// The local name is kept so the ~12 call sites below read unchanged; the
+// behaviour is identical, including the deliberately loud log on a refused
+// match (a source that stops matching at all is worth noticing, and this is
+// the only place it is visible).
+type KnownVenueData = KnownVenue;
+const findMatchingKnownVenue = (venueName: string) => findKnownVenue(supabase, venueName);
 
-// Cache for known venues to avoid repeated DB queries
-let knownVenuesCache: KnownVenueData[] | null = null;
-let venuesCacheLoadedAt: number = 0;
-const VENUES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Load all known venues into memory cache for fast matching
- */
-async function loadKnownVenuesCache(): Promise<KnownVenueData[]> {
-  const now = Date.now();
-
-  // Return cached data if still valid
-  if (knownVenuesCache && (now - venuesCacheLoadedAt) < VENUES_CACHE_TTL) {
-    return knownVenuesCache;
-  }
-
-  console.log('🏢 Loading known venues cache...');
-
-  const { data, error } = await supabase
-    .from('known_venues')
-    .select('id, name, aliases, address, city, state, zip, latitude, longitude, phone, email, website')
-    .eq('is_active', true);
-
-  if (error) {
-    console.error('❌ Error loading known venues:', error);
-    return [];
-  }
-
-  knownVenuesCache = data || [];
-  venuesCacheLoadedAt = now;
-
-  console.log(`✅ Loaded ${knownVenuesCache.length} known venues into cache`);
-  return knownVenuesCache;
-}
-
-/**
- * Find a matching known venue by name or alias
- * Returns venue data if found, null otherwise
- */
-async function findMatchingKnownVenue(venueName: string): Promise<KnownVenueData | null> {
-  if (!venueName || venueName.trim().length === 0) {
-    return null;
-  }
-
-  const venues = await loadKnownVenuesCache();
-  const searchText = venueName.toLowerCase().trim();
-
-  // First, try exact name match
-  for (const venue of venues) {
-    if (venue.name.toLowerCase() === searchText) {
-      console.log(`🎯 Exact venue match: "${venueName}" -> "${venue.name}"`);
-      return venue;
-    }
-  }
-
-  // Then, try alias match
-  for (const venue of venues) {
-    const venueData = venue as any;
-    if (venueData.aliases && Array.isArray(venueData.aliases)) {
-      for (const alias of venueData.aliases) {
-        if (alias.toLowerCase() === searchText) {
-          console.log(`🎯 Alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
-          return venue;
-        }
-      }
-    }
-  }
-
-  // Try partial match on name (venue name contains search or vice versa)
-  for (const venue of venues) {
-    const venueLower = venue.name.toLowerCase();
-    if (venueLower.includes(searchText) || searchText.includes(venueLower)) {
-      // Only match if significant overlap (avoid matching "The" in everything)
-      if (searchText.length >= 5 || venueLower.length >= 5) {
-        console.log(`🎯 Partial venue match: "${venueName}" -> "${venue.name}"`);
-        return venue;
-      }
-    }
-  }
-
-  // Try partial match on aliases
-  for (const venue of venues) {
-    const venueData = venue as any;
-    if (venueData.aliases && Array.isArray(venueData.aliases)) {
-      for (const alias of venueData.aliases) {
-        const aliasLower = alias.toLowerCase();
-        if (aliasLower.includes(searchText) || searchText.includes(aliasLower)) {
-          if (searchText.length >= 5 || aliasLower.length >= 5) {
-            console.log(`🎯 Partial alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
-            return venue;
-          }
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Generate SEO content for an event using the lightweight AI model (Haiku)
- * This generates seo_title, seo_description, seo_keywords, seo_h1, and GEO content
- */
-async function generateEventSEO(
-  eventId: string,
-  event: { title: string; venue?: string; location?: string; date?: string; category?: string },
-  supabaseClient: any,
-  claudeApiKey: string,
-  supabaseUrl: string,
-  supabaseKey: string
-): Promise<boolean> {
-  try {
-    console.log(`🔍 Generating SEO content for event: ${event.title}`);
-
-    const prompt = `Generate comprehensive SEO and GEO optimization content for this Des Moines event. Return ONLY a JSON object with these exact fields:
-
-{
-  "title": "SEO title (under 60 chars, include event name + Des Moines + date)",
-  "description": "Meta description (150-155 chars, compelling with local keywords)",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "h1": "H1 tag matching primary search intent",
-  "summary": "2-3 sentence GEO summary for AI engines, location-focused",
-  "keyFacts": ["Fact 1", "Fact 2", "Fact 3", "Fact 4"],
-  "faq": [
-    {"question": "When is ${event.title}?", "answer": "Answer with date and time"},
-    {"question": "Where is ${event.title} located?", "answer": "Answer with venue and Des Moines"},
-    {"question": "What type of event is ${event.title}?", "answer": "Answer with category"}
-  ]
-}
-
-Event Details:
-- Title: ${event.title}
-- Venue: ${event.venue || 'N/A'}
-- Location: ${event.location || 'Des Moines, IA'}
-- Date: ${event.date || 'N/A'}
-- Category: ${event.category || 'General'}
-
-Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
-
-    const config = await getAIConfig(supabaseUrl, supabaseKey);
-    const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
-    // Use lightweight model (Haiku) for SEO - fast and cost-effective
-    const requestBody = await buildLightweightClaudeRequest(
-      [{ role: 'user', content: prompt }],
-      {
-        supabaseUrl,
-        supabaseKey,
-        customMaxTokens: 1000,
-        customTemperature: 0.1
-      }
-    );
-
-    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody)
-    }, 60_000);
-
-    if (!claudeResponse.ok) {
-      console.error(`❌ SEO generation API error: ${claudeResponse.status}`);
-      return false;
-    }
-
-    const claudeData = await claudeResponse.json();
-    const generatedContent = claudeData.content?.[0]?.text;
-
-    if (!generatedContent) {
-      console.error(`❌ No SEO content generated for: ${event.title}`);
-      return false;
-    }
-
-    // Parse the JSON response
-    let seoData;
-    try {
-      const jsonMatch = generatedContent.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      seoData = JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      console.error(`❌ Failed to parse SEO response for: ${event.title}`, parseError);
-      return false;
-    }
-
-    // Update the event with SEO content
-    const { error: updateError } = await supabaseClient
-      .from('events')
-      .update({
-        seo_title: seoData.title,
-        seo_description: seoData.description,
-        seo_keywords: seoData.keywords,
-        seo_h1: seoData.h1,
-        geo_summary: seoData.summary,
-        geo_key_facts: seoData.keyFacts,
-        geo_faq: seoData.faq,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', eventId);
-
-    if (updateError) {
-      console.error(`❌ Failed to save SEO content for: ${event.title}`, updateError);
-      return false;
-    }
-
-    console.log(`✅ SEO content generated for: ${event.title}`);
-    return true;
-  } catch (error) {
-    console.error(`❌ Error generating SEO for event: ${event.title}`, error);
-    return false;
-  }
-}
-
-// Sports schedule AI prompt - for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
 function getSportsSchedulePrompt(url: string, content: string): string {
   const now = new Date();
   const currentDate = dateFnsFormat(now, "MMMM d, yyyy");
@@ -344,8 +165,20 @@ serve(async (req) => {
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
-  // Rate limiting: 10 requests per 15 minutes (SEC-022), persistent across cold starts
-  const rateLimit = await checkRateLimitPersistent(req, { endpoint: 'firecrawl-scraper', max: 10, message: 'Scraper rate limit exceeded.' });
+  // Rate limiting: 10 requests per 15 minutes (SEC-022), persistent across cold
+  // starts - and NOT applied to internal callers (WEB-BE-047).
+  //
+  // The limit is keyed by client IP. scrape-events invokes this function once
+  // per scraping job from a single egress address and there are 15 seeded jobs,
+  // so the scraper was spending its own budget on itself: the eleventh job of a
+  // run got a 429, which is the "Edge Function returned a non-2xx status code"
+  // that every job_results entry carried on the days every source failed.
+  const rateLimit = await checkRateLimitPersistent(req, {
+    endpoint: 'firecrawl-scraper',
+    max: 10,
+    message: 'Scraper rate limit exceeded.',
+    exemptInternal: true,
+  });
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response;
   }
@@ -361,14 +194,14 @@ serve(async (req) => {
     const {
       url,
       category,
-      maxPages = 3,
       scraperBackend,
-      batchSize = DEFAULT_BATCH_SIZE,
+      batchSize,
       skipEvents = 0,
-      skipVisitWebsite = false
+      skipVisitWebsite = false,
+      forceExtract = false,
     }: ScrapRequest = await req.json();
 
-    console.log(`📦 Batch settings: size=${batchSize}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
+    console.log(`📦 Batch settings: size=${batchSize ?? 'all'}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
 
     if (!url || !category) {
       return new Response(
@@ -392,7 +225,9 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🚀 Starting scrape of ${url} for ${category} (max ${maxPages} pages) using ${scraperBackend || 'default backend'}`);
+    // NOT "(max N pages)". This said so while scraping exactly one, two lines
+    // above a log that says "Will scrape 1 pages" (WEB-BE-046).
+    console.log(`🚀 Starting scrape of ${url} for ${category} using ${scraperBackend || 'default backend'}`);
 
     // Try a domain-specific API adapter first (e.g. statsapi.mlb.com for Iowa
     // Cubs, SeatGeek Platform API). If it returns items, skip scrape + Claude.
@@ -405,7 +240,6 @@ serve(async (req) => {
     console.log(`📄 Will scrape ${urlsToScrape.length} pages`);
 
     const allExtractedItems: any[] = adapterResult ? [...adapterResult.items] : [];
-    let totalContentLength = 0;
 
     if (adapterResult) {
       console.log(`🎯 Using ${adapterResult.adapter} adapter — bypassing scrape + Claude (${adapterResult.items.length} items)`);
@@ -418,6 +252,13 @@ serve(async (req) => {
       waitTime: 5000,
       timeout: 30000,
     }, 2); // Scrape 2 URLs at a time
+
+    // Why the model was not called, when it was not. Reported in the response
+    // and the run ledger, so the saving is measured rather than asserted.
+    let modelSkipped: 'jsonld' | 'unchanged' | null = null;
+    // Pages the model read this run, recorded after the write only if the write
+    // was clean - a partial write must not teach the next run to skip.
+    const extractedPages: Array<{ url: string; hash: string; previous: PageFingerprint | null; items: number }> = [];
 
     // Process each result
     for (let i = 0; i < scrapeResults.length; i++) {
@@ -434,7 +275,6 @@ serve(async (req) => {
       const rawContent = result.markdown || result.text || result.html || '';
 
       console.log(`📄 ${result.backend} returned ${rawContent.length} characters (took ${result.duration}ms)`);
-      totalContentLength += rawContent.length;
 
       if (!rawContent || rawContent.length < 100) {
         console.error(`❌ No usable content returned from ${currentUrl}`);
@@ -463,9 +303,11 @@ serve(async (req) => {
       // returned nothing. These items carry exact ISO dates and canonical URLs, so
       // they need no LLM guessing. They flow into the SAME dedupe/insert pipeline
       // as the Claude items; duplicates collapse on (title, venue) downstream.
+      let jsonLdCount = 0;
       if (category === 'events' && result.html) {
         try {
           const jsonLdEvents = extractEventsFromJsonLd(result.html, currentUrl);
+          jsonLdCount = jsonLdEvents.length;
           if (jsonLdEvents.length > 0) {
             console.log(`🧩 JSON-LD structured data yielded ${jsonLdEvents.length} events from ${currentUrl}`);
             allExtractedItems.push(...jsonLdEvents);
@@ -474,6 +316,36 @@ serve(async (req) => {
           console.error(`⚠️ JSON-LD extraction failed for ${currentUrl}:`, jsonLdError);
         }
       }
+
+      // TIER 2 WAS NOT A SHORT-CIRCUIT. A page whose JSON-LD had already given
+      // up every event with an exact ISO date and its own URL was sent to the
+      // model anyway, and the model's fuzzier copies went through dedup
+      // beside the exact ones. Enough structured events now ends it here.
+      let fingerprint: { hash: string; previous: PageFingerprint | null } | null = null;
+      if (category === 'events') {
+        if (jsonLdCount >= JSONLD_SUFFICIENT) {
+          console.log(`🧩 ${jsonLdCount} JSON-LD events on ${currentUrl}; not calling the model`);
+          modelSkipped = 'jsonld';
+          continue;
+        }
+
+        // An unchanged page since the last clean run gets no model call.
+        const hash = await hashExtractionWindow(content);
+        const previous = await readPageFingerprint(supabase, currentUrl);
+        const decision = decideExtraction(previous, hash, new Date(), { force: forceExtract });
+        if (!decision.extract && previous) {
+          console.log(
+            `♻️ ${currentUrl} unchanged since ${previous.last_extracted_at} ` +
+            `(${previous.items_found} item(s) then); not calling the model`,
+          );
+          await recordSkip(supabase, previous, new Date());
+          modelSkipped = 'unchanged';
+          continue;
+        }
+        console.log(`🔎 Extracting ${currentUrl}: ${decision.reason}`);
+        fingerprint = { hash, previous };
+      }
+      const itemsBeforePage = allExtractedItems.length;
 
       // Extract events using Claude AI for this page
       const claudeApiKey = getAnthropicApiKey();
@@ -585,6 +457,14 @@ serve(async (req) => {
         
         console.log(`🤖 AI extracted ${pageItems.length} ${category} items from ${currentUrl}`);
         allExtractedItems.push(...pageItems);
+        if (fingerprint) {
+          extractedPages.push({
+            url: currentUrl,
+            hash: fingerprint.hash,
+            previous: fingerprint.previous,
+            items: allExtractedItems.length - itemsBeforePage + jsonLdCount,
+          });
+        }
         
       } catch (parseError) {
         console.error(`❌ Could not parse AI response JSON for ${currentUrl}:`, parseError);
@@ -594,32 +474,62 @@ serve(async (req) => {
 
     console.log(`🎯 Total ${category} extracted from all pages: ${allExtractedItems.length}`);
 
-    // For events category, filter out past events
+    // For events category, filter out past events.
+    //
+    // By the CENTRAL calendar day, read through the same parser the insert
+    // uses. This did `new Date(item.date).setHours(0)` on a runtime whose zone
+    // is UTC, so "today" began at 7pm the previous evening in Des Moines and a
+    // naive "2026-09-21 20:00:00" was read as UTC. Undated and unparseable
+    // items still pass here; the insert below drops them with a named warning.
     let filteredItems = allExtractedItems;
     if (category === 'events') {
-      const currentDate = new Date();
-      currentDate.setHours(0, 0, 0, 0);
+      const todayCentral = centralCalendarDate(new Date());
       filteredItems = allExtractedItems.filter(item => {
         if (!item.date) return true;
-        try {
-          const itemDate = new Date(item.date);
-          itemDate.setHours(0, 0, 0, 0);
-          return itemDate >= currentDate;
-        } catch (error) {
-          console.log(`⚠️ Could not parse date: ${item.date}`);
-          return true;
-        }
+        const parsed = parseEventDateTime(String(item.date));
+        if (!parsed?.event_start_utc) return true;
+        return centralCalendarDate(parsed.event_start_utc) >= todayCentral;
+      });
+
+      // SEO-031. A page heading ("Schedule") or a bare team name ("Iowa Cubs")
+      // is not an event; both reached the public calendar from milb.com/iowa.
+      // See _shared/scheduleTitleGuard.ts.
+      const teamSchedule = isSportsScheduleDomain(url);
+      filteredItems = filteredItems.filter((item) => {
+        const verdict = checkEventTitle(item.title, teamSchedule);
+        if (!verdict.ok) console.warn(`⚠️ Skipping event: ${verdict.reason} (${url})`);
+        return verdict.ok;
       });
     }
 
     console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
 
     // Track batch processing info for response
+    // WEB-BE-046. THE THREE NUMBERS BELOW WERE ALWAYS ZERO. batchInfo was a
+    // const object literal that nothing ever mutated, so every response
+    // reported processedStart: 0, processedEnd: 0, processedCount: 0,
+    // remainingEvents: 0 and nextSkipEvents: null - on a run that had just
+    // inserted forty events. A caller trying to page through a large listing
+    // read nextSkipEvents: null and stopped after the first request.
+    //
+    // `skipEvents` and `batchSize` were parsed off the request, logged, echoed
+    // back in the response, and never applied: the insert loop declared its own
+    // `const batchSize = 10` that shadowed the request's. So all three request
+    // fields were documented, accepted and ignored.
+    //
+    // They are implemented rather than removed. Removing a request field is a
+    // contract change (CLAUDE.md, Supabase Edge Functions) and these are the
+    // pagination a caller needs for a listing bigger than one invocation can
+    // process.
+    const processedStart = Math.max(0, Math.min(skipEvents, filteredItems.length));
+    const effectiveBatchSize =
+      typeof batchSize === 'number' && batchSize > 0 ? batchSize : filteredItems.length;
+    const processedEnd = Math.min(processedStart + effectiveBatchSize, filteredItems.length);
     const batchInfo = {
       totalEvents: filteredItems.length,
-      processedStart: 0,
-      processedEnd: 0,
-      remainingEvents: 0,
+      processedStart,
+      processedEnd,
+      remainingEvents: filteredItems.length - processedEnd,
       visitWebsiteExtracted: 0,
       skippedVisitWebsite: skipVisitWebsite,
     };
@@ -652,16 +562,70 @@ serve(async (req) => {
       competitor_analysis: 'competitor_content'
     };
 
+    // The slice the request actually asked for. Applied here rather than inside
+    // the loop so that every count below - inserted, duplicates, errors - is
+    // about the same set of items the response says it processed.
+    const itemsToWrite = filteredItems.slice(batchInfo.processedStart, batchInfo.processedEnd);
+    console.log(
+      `📦 Writing items ${batchInfo.processedStart}-${batchInfo.processedEnd} of ${batchInfo.totalEvents} ` +
+      `(${batchInfo.remainingEvents} remaining)`,
+    );
+
     const tableName = tableMapping[category as keyof typeof tableMapping] || 'events';
     let insertedCount = 0;
     let updatedCount = 0;
-    const errors = [];
+    // WEB-BE-043: counted, not just skipped. Duplicates were the one outcome
+    // this function never reported, and "extracted 40, inserted 0" reads as a
+    // broken source when it may only mean the page has not changed.
+    //
+    // It OVERLAPS with updatedCount on purpose: an event that already exists is
+    // a duplicate, and the events branch below may also heal its image or
+    // upgrade its source_url, which is a real write. So the three counts do not
+    // partition `totalFound`, and nothing downstream assumes they do - the
+    // zero-result rule reads `inserted`, the error-rate rule reads `errors`.
+    let duplicateCount = 0;
+    const errors: unknown[] = [];
 
-    if (filteredItems.length > 0) {
-      // Process in batches
-      const batchSize = 10;
-      for (let i = 0; i < filteredItems.length; i += batchSize) {
-        const batch = filteredItems.slice(i, i + batchSize);
+    // WEB-BE-043. One ledger row per scrape, keyed by the host being scraped -
+    // this function is invoked per URL, so the host IS the source. Without it a
+    // source that stops producing events is invisible: the run still returns
+    // 200 with inserted: 0, which is also what a quiet week looks like.
+    const sourceKey = (() => {
+      try { return new URL(url).hostname; } catch { return url; }
+    })();
+    const job = await runJob("firecrawl-scraper", async (ctx) => {
+    // ONE READ, THEN THE SHARED DEDUP (WEB-BE-036, eventDedup.ts).
+    //
+    // This used to ask the database once per item for a row with the same
+    // title and venue - with no date. Night two of a three-night run matched
+    // night one and was never inserted, although the unique key has allowed it
+    // since 20260902000006. It was also the only writer not using
+    // _shared/eventDedup.ts, so a title the hub would have collapsed ("X" vs
+    // "X: The Tour") was inserted twice here. Now the existing rows around the
+    // dates being written are read once, and every item is judged by the same
+    // four tiers ingest-events uses.
+    let dedupIndex: DedupIndex<ExistingEventRow> | null = null;
+    const pendingEventRows: Record<string, unknown>[] = [];
+    const pendingIds = new Set<string>();
+    if (category === 'events' && itemsToWrite.length > 0) {
+      const window = dedupWindow(
+        itemsToWrite
+          .map((item) => (item.date ? parseEventDateTime(String(item.date))?.event_start_utc : null))
+          .filter((d): d is Date => d instanceof Date),
+      );
+      // A failed read refuses the write (it throws, and runJob records the run
+      // as failed). Treating it as "nothing exists" would insert every item.
+      dedupIndex = createDedupIndex(window ? await loadExistingEvents(supabase, window) : []);
+      console.log(`🧮 Dedup index: ${dedupIndex.size} existing event(s) around the dates being written`);
+    }
+
+    if (itemsToWrite.length > 0) {
+      // How many rows are handled per inner pass. NOT the request's batchSize -
+      // this one used to shadow it, which is how a documented request field
+      // came to be ignored (WEB-BE-046).
+      const WRITE_CHUNK = 10;
+      for (let i = 0; i < itemsToWrite.length; i += WRITE_CHUNK) {
+        const batch = itemsToWrite.slice(i, i + WRITE_CHUNK);
 
         for (const item of batch) {
           try {
@@ -707,10 +671,15 @@ serve(async (req) => {
                   } else if (knownVenue.city) {
                     eventLocation = `${knownVenue.city}, ${knownVenue.state || 'IA'}`;
                   }
+                }
 
-                  // Use coordinates from known venue
-                  eventLatitude = knownVenue.latitude;
-                  eventLongitude = knownVenue.longitude;
+                // The known venue's pair when it has a whole one, else the pair
+                // the source published (Catch Des Moines carries geo for venues
+                // known_venues has never heard of), else none. Both or neither.
+                const coords = ingestCoordinates(knownVenue, item);
+                if ('latitude' in coords) {
+                  eventLatitude = coords.latitude;
+                  eventLongitude = coords.longitude;
                 }
 
                 transformedData = {
@@ -721,9 +690,17 @@ serve(async (req) => {
                   event_start_local: parsedEventDateTime.event_start_local,
                   event_timezone: parsedEventDateTime.event_timezone,
                   event_start_utc: parsedEventDateTime.event_start_utc,
+                  // WEB-BE-038. The adapter knows whether the source announced
+                  // a start time; the row is where that has to be recorded,
+                  // because by the time anything renders it there is only a
+                  // timestamp and no way to tell a placeholder from a showtime.
+                  time_tbd: item.time_tbd === true,
                   location: eventLocation,
                   venue: eventVenue,
-                  category: item.category?.substring(0, 50) || "General",
+                  // WEB-BE-049. Every domain adapter's output passes through
+                  // here, so this one call covers all twelve of them plus
+                  // whatever the model wrote.
+                  category: normalizeCategory(item.category),
                   price: item.price?.substring(0, 50) || "See website",
                   source_url: item.source_url || url,
                   is_enhanced: false,
@@ -744,7 +721,7 @@ serve(async (req) => {
                   description: item.description?.substring(0, 500) || "",
                   phone: item.phone?.substring(0, 20) || null,
                   website: item.website?.substring(0, 200) || null,
-                  is_featured: Math.random() > 0.8,
+                  is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
@@ -758,7 +735,7 @@ serve(async (req) => {
                   age_range: item.age_range?.substring(0, 50) || "All ages",
                   amenities: Array.isArray(item.amenities) ? item.amenities.slice(0, 10) : [],
                   rating: item.rating || null,
-                  is_featured: Math.random() > 0.8,
+                  is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
@@ -772,7 +749,7 @@ serve(async (req) => {
                   description: item.description?.substring(0, 500) || "",
                   rating: item.rating || null,
                   website: item.website?.substring(0, 200) || null,
-                  is_featured: Math.random() > 0.8,
+                  is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
@@ -823,14 +800,23 @@ serve(async (req) => {
             // run re-scrapes it, so a skip costs one cycle of latency, while a
             // wrong insert has to be found and cleaned up by hand.
             let dupCheckError: { message?: string } | null = null;
-            if (category === 'events') {
-              const { data, error } = await supabase
-                .from(tableName)
-                .select('*')
-                .eq('title', transformedData.title)
-                .eq('venue', transformedData.venue);
-              existingItems = data || [];
-              dupCheckError = error;
+            if (category === 'events' && dedupIndex) {
+              const verdict = dedupIndex.find({
+                title: transformedData.title,
+                date: new Date(transformedData.date),
+                venue: transformedData.venue,
+                source_url: transformedData.source_url,
+                fingerprint: generateEventFingerprint({
+                  title: transformedData.title,
+                  date: new Date(transformedData.date),
+                  venue: transformedData.venue,
+                  source_url: transformedData.source_url,
+                }),
+              });
+              if (verdict.isDuplicate && verdict.existingEvent) {
+                existingItems = [verdict.existingEvent];
+                console.log(`🔁 Duplicate (${verdict.reason}): ${transformedData.title}`);
+              }
             } else if (category === 'competitor_analysis') {
               const { data, error } = await supabase
                 .from(tableName)
@@ -857,12 +843,19 @@ serve(async (req) => {
             }
 
             if (existingItems.length > 0) {
+              duplicateCount++;
               const existingItem = existingItems[0];
 
               // For events: heal a missing image and/or upgrade to a better
               // source_url on the existing row, folded into a single UPDATE.
               // Non-events categories fall through to the plain duplicate log.
-              if (category === 'events') {
+              //
+              // A match on a row THIS run queued (the page's JSON-LD and the
+              // model both reported it) has nothing to heal: it is not in the
+              // table yet, and the copy already queued is the one that lands.
+              if (category === 'events' && pendingIds.has(existingItem.id)) {
+                console.log(`⚠️ Duplicate within this run: ${transformedData.title}`);
+              } else if (category === 'events') {
                 const updates: Record<string, unknown> = {};
 
                 // Heal a missing image (WEB-AUTO-016): the existing row has no
@@ -881,6 +874,7 @@ serve(async (req) => {
                 if (!existingHasImage) {
                   const healResolved = await resolveEventImage(supabase, {
                     sourceUrl: existingItem.source_url || item.source_url || "",
+                    venueText: transformedData.venue,
                     scrapedImageUrl: item.image_url,
                   });
                   if (healResolved.skipFetch && healResolved.imageUrl) {
@@ -941,8 +935,11 @@ serve(async (req) => {
             } else {
               // Insert new item
               if (category === 'events') {
-                transformedData.is_featured = Math.random() > 0.8;
+                transformedData.is_featured = false; // WEB-BE-040: never decided at ingest
                 transformedData.created_at = new Date().toISOString();
+                // Every event row carries its id, so a chunk never mixes rows
+                // with and without one (see flushEventRows).
+                transformedData.id = crypto.randomUUID();
               }
 
               // Persist the image the domain adapter already fetched (seatgeek /
@@ -956,10 +953,12 @@ serve(async (req) => {
               // A single-venue source reuses one venue image for every event, so
               // there is nothing to gain from downloading a near-duplicate per
               // event: skipFetch means no egress, no storage object and no
-              // media_assets row. Aggregators (Catch Des Moines, SeatGeek,
-              // Eventbrite) declare no venue and keep the per-event path.
+              // media_assets row. An aggregator's event (Catch Des Moines,
+              // SeatGeek, Eventbrite) takes the same saving when the venue it
+              // names has a default image, and keeps its own artwork otherwise.
               const resolvedImage = await resolveEventImage(supabase, {
                 sourceUrl: item.source_url || "",
+                venueText: category === 'events' ? transformedData.venue : null,
                 scrapedImageUrl: item.image_url,
               });
               if (resolvedImage.skipFetch) {
@@ -967,7 +966,7 @@ serve(async (req) => {
                 console.log(`\u{1F3DB}\uFE0F Venue image for ${resolvedImage.venueName}: skipped per-event fetch`);
               } else if (resolvedImage.imageUrl && CONTENT_TYPE_MAP[category]) {
                 // Pre-assign the row id so the stored media_asset is keyed to this record.
-                const contentId = crypto.randomUUID();
+                const contentId = transformedData.id ?? crypto.randomUUID();
                 transformedData.id = contentId;
                 transformedData.image_url = await fetchAndStoreImage(
                   supabase,
@@ -977,11 +976,32 @@ serve(async (req) => {
                 );
               }
 
-              // For events, get the inserted ID for SEO generation
-              const { data: insertedData, error: insertError } = await supabase
+              // Events are queued and written in chunks after the loop, and
+              // entered in the index now so a second copy later in this same
+              // run collapses onto this one.
+              if (category === 'events' && dedupIndex) {
+                pendingEventRows.push(transformedData);
+                pendingIds.add(transformedData.id);
+                dedupIndex.add({
+                  id: transformedData.id,
+                  title: transformedData.title,
+                  date: transformedData.date,
+                  venue: transformedData.venue,
+                  source_url: transformedData.source_url,
+                  image_url: transformedData.image_url ?? null,
+                  fingerprint: generateEventFingerprint({
+                    title: transformedData.title,
+                    date: new Date(transformedData.date),
+                    venue: transformedData.venue,
+                    source_url: transformedData.source_url,
+                  }),
+                });
+                continue;
+              }
+
+              const { error: insertError } = await supabase
                 .from(tableName)
-                .insert([transformedData])
-                .select('id');
+                .insert([transformedData]);
 
               if (insertError) {
                 console.error(`❌ Error inserting ${category} item:`, insertError);
@@ -990,32 +1010,20 @@ serve(async (req) => {
                 insertedCount++;
                 console.log(`✅ Inserted new ${category}: ${transformedData.title || transformedData.name}`);
 
-                // Generate SEO content for newly inserted events using lightweight AI (Haiku)
-                if (category === 'events' && insertedData?.[0]?.id) {
-                  const claudeApiKey = getAnthropicApiKey();
-                  if (claudeApiKey) {
-                    // Include known venue info for better SEO
-                    const seoVenueInfo = knownVenue
-                      ? `${knownVenue.name} at ${knownVenue.address || ''}, ${knownVenue.city || 'Des Moines'}, ${knownVenue.state || 'IA'}`
-                      : transformedData.venue;
-
-                    // Run SEO generation asynchronously (don't wait, don't block)
-                    generateEventSEO(
-                      insertedData[0].id,
-                      {
-                        title: transformedData.title,
-                        venue: seoVenueInfo,
-                        location: transformedData.location,
-                        date: transformedData.event_start_local,
-                        category: transformedData.category
-                      },
-                      supabase,
-                      claudeApiKey,
-                      supabaseUrl,
-                      supabaseKey
-                    ).catch(err => console.error(`SEO generation failed: ${err.message}`));
-                  }
-                }
+                // WEB-BE-046. THE SEO CALL THAT USED TO BE HERE NEVER FINISHED.
+                // It was invoked without await and without EdgeRuntime.waitUntil
+                // - "Run SEO generation asynchronously (don't wait, don't
+                // block)" - and the Supabase Edge Runtime kills pending
+                // promises when the response is returned. So a Haiku request
+                // was started for every inserted event and abandoned mid-flight
+                // a few milliseconds later. The .catch() attached to it made it
+                // look handled; what it caught was nothing, because the isolate
+                // was gone before the fetch resolved.
+                //
+                // Nothing is lost by removing it: generate-seo-content selects
+                // exactly the rows this was for (seo_title IS NULL OR ''), and
+                // data-quality-heal runs it nightly. The row gets its SEO
+                // fields from a call that is actually awaited.
               }
             }
           } catch (error) {
@@ -1026,17 +1034,73 @@ serve(async (req) => {
       }
     }
 
+      if (pendingEventRows.length > 0) {
+        const flushed = await flushEventRows(pendingEventRows);
+        insertedCount += flushed.inserted;
+        // Refused by events_title_venue_date_unique: a row another writer
+        // inserted between the read above and this write. A duplicate, not an
+        // error - the unique key is doing its job.
+        duplicateCount += flushed.conflicts;
+        errors.push(...flushed.errors);
+        console.log(
+          `✅ Inserted ${flushed.inserted} event(s); ${flushed.conflicts} refused by the unique key; ${flushed.errors.length} error(s)`,
+        );
+      }
+
+      // Only a clean write earns a fingerprint. Recorded inside the job so a
+      // paused run (which never gets here) records nothing either.
+      if (errors.length === 0) {
+        for (const page of extractedPages) {
+          await recordExtraction(supabase, page.previous, page.url, page.hash, page.items, new Date());
+        }
+      }
+
+      ctx.processed(insertedCount + updatedCount);
+      ctx.failed(errors.length);
+      ctx.meta({
+        url,
+        category,
+        modelSkipped,
+        // An unchanged page is left OUT of `sources`. It inserted nothing
+        // because nothing changed, and counting it would start the
+        // zero_inserted_streak alert (ingestionHealth.ts) on a healthy source.
+        // The daily forced re-extract (REEXTRACT_AFTER_HOURS) keeps a source
+        // that really went dark in the counts.
+        sources: modelSkipped === 'unchanged' ? {} : {
+          [sourceKey]: {
+            fetched: allExtractedItems.length,
+            // An update is a write. A source whose events all already exist and
+            // get refreshed is alive, and counting only inserts would page about it.
+            inserted: insertedCount + updatedCount,
+            duplicates: duplicateCount,
+            errors: errors.length,
+          },
+        },
+      });
+    });
+
     const result = {
       success: true,
+      runId: job.runId,
+      // The kill switch makes runJob skip the body entirely. scrape-events
+      // reads `inserted` from this response, so without this flag a paused
+      // scraper would be recorded upstream as a source that produced nothing.
+      ...(job.status === "skipped" ? { paused: true } : {}),
       totalFound: allExtractedItems.length,
+      // 'jsonld' | 'unchanged' | null - why the model was not called, if it was not.
+      modelSkipped,
       futureEvents: batchInfo.totalEvents,
       inserted: insertedCount,
       updated: updatedCount,
+      duplicates: duplicateCount,
       errors: errors.length,
       url: url,
       // Batch processing info
       batch: {
-        size: batchSize,
+        // The size actually applied, not the one that was asked for - they
+        // differ when the request omitted batchSize, which is every scheduled
+        // call.
+        size: effectiveBatchSize,
         processedStart: batchInfo.processedStart,
         processedEnd: batchInfo.processedEnd,
         processedCount: batchInfo.processedEnd - batchInfo.processedStart,
@@ -1068,3 +1132,52 @@ serve(async (req) => {
     );
   }
 });
+/**
+ * Write queued event rows in chunks, ON CONFLICT DO NOTHING against
+ * (title, venue, event_local_date) - the same statement ingest-events uses.
+ *
+ * `defaultToNull: false` because a bulk insert's column list is the union of
+ * every row's keys, and a key one row lacks would otherwise be written as NULL
+ * over the column default. A chunk that fails as a whole is retried row by row,
+ * so one bad row costs itself and not the forty-nine beside it.
+ */
+async function flushEventRows(
+  rows: Record<string, unknown>[],
+): Promise<{ inserted: number; conflicts: number; errors: unknown[] }> {
+  let inserted = 0;
+  let conflicts = 0;
+  const errors: unknown[] = [];
+
+  const write = async (chunk: Record<string, unknown>[]) =>
+    await supabase
+      .from('events')
+      .upsert(chunk, {
+        onConflict: 'title,venue,event_local_date',
+        ignoreDuplicates: true,
+        defaultToNull: false,
+      })
+      .select('id');
+
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+    const chunk = rows.slice(i, i + INSERT_CHUNK);
+    const { data, error } = await write(chunk);
+    if (!error) {
+      inserted += (data || []).length;
+      conflicts += chunk.length - (data || []).length;
+      continue;
+    }
+    console.error(`❌ Chunk insert failed (${error.message}); retrying ${chunk.length} row(s) one at a time`);
+    for (const row of chunk) {
+      const single = await write([row]);
+      if (single.error) {
+        console.error(`❌ Error inserting event "${row.title}":`, single.error);
+        errors.push(single.error);
+      } else if ((single.data || []).length === 1) {
+        inserted++;
+      } else {
+        conflicts++;
+      }
+    }
+  }
+  return { inserted, conflicts, errors };
+}

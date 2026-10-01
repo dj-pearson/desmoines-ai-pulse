@@ -1050,7 +1050,7 @@ export default function ContentTable({
                     key={item.id}
                     className={`overflow-hidden ${
                       hasMissingDate ? "border-destructive border-2" : ""
-                    } ${seoStatus === "complete" ? "border-l-4 border-l-green-500" : ""}`}
+                    } ${seoStatus === "complete" ? "bg-blue-50/50" : ""}`}
                   >
                     <CardContent className="p-4">
                       {/* Header with title and SEO status */}
@@ -1324,17 +1324,17 @@ export default function ContentTable({
                             className={`
                             ${
                               hasMissingDate
-                                ? "bg-destructive/5 border-l-4 border-l-destructive"
+                                ? "bg-destructive/5"
                                 : ""
                             }
                             ${
                               isHighlighted
-                                ? "bg-warning/10 border-l-4 border-l-warning"
+                                ? "bg-warning/10"
                                 : ""
                             }
                             ${
                               hasAiWriteup && !hasMissingDate && !isHighlighted
-                                ? "bg-green-50 border-l-4 border-l-green-500"
+                                ? "bg-green-50"
                                 : ""
                             }
                             ${

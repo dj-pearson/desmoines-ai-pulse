@@ -48,4 +48,25 @@ final class SponsoredArrangerTests: XCTestCase {
         let items = [Item(id: 1, sponsored: false), Item(id: 2, sponsored: true)]
         XCTAssertEqual(arrange(items, maxFront: 0), [1, 2])
     }
+
+    // MARK: - sponsored_until (IOS-DD-EVENTS-13)
+
+    private func sponsoredEvent(until: Date?) -> Event {
+        var e = Event(id: "s1", title: "Sponsored", date: "2026-10-01T00:00:00Z")
+        e.isSponsored = true
+        e.sponsoredUntil = until.map(DateParser.toISO)
+        return e
+    }
+
+    func testAnExpiredSponsorshipIsNotActive() {
+        XCTAssertFalse(sponsoredEvent(until: Date().addingTimeInterval(-86_400)).isActivelySponsored)
+    }
+
+    func testAFutureSponsorshipIsActive() {
+        XCTAssertTrue(sponsoredEvent(until: Date().addingTimeInterval(86_400)).isActivelySponsored)
+    }
+
+    func testNoEndDateLeavesTheFlagInCharge() {
+        XCTAssertTrue(sponsoredEvent(until: nil).isActivelySponsored)
+    }
 }

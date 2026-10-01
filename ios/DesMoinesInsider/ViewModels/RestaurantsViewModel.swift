@@ -17,34 +17,66 @@ final class RestaurantsViewModel {
     private(set) var totalCount = 0
     private(set) var errorMessage: String?
     private(set) var availableCuisines: [String] = []
-    private(set) var availableLocations: [String] = []
+
+    /// The last reset failed while older rows were on screen, so what is shown
+    /// may not match the chips (IOS-DD-RESTAURANTS-02).
+    private(set) var lastFetchFailed = false
+    /// The rows are the fuzzy "did you mean" fallback for a search with no
+    /// exact hits (IOS-DD-RESTAURANTS-13).
+    private(set) var isFuzzyFallback = false
+    /// Open Now is loading further pages by itself to find open rows
+    /// (IOS-DD-RESTAURANTS-04).
+    private(set) var isAutoFilling = false
+
+    // MARK: - Filters
+    //
+    // Every filter except search and sort clears `activePreset` when the user
+    // changes it, so a preset chip never stays lit over filters it no longer
+    // describes, and tapping it then re-applies instead of wiping everything
+    // (IOS-DD-RESTAURANTS-07, same rule as EventsViewModel). Bulk updates set
+    // the preset themselves.
 
     var searchText = "" {
         didSet { if oldValue != searchText { resetAndFetch() } }
     }
     var selectedCuisines: Set<String> = [] {
-        didSet { if oldValue != selectedCuisines { resetAndFetch() } }
+        didSet { filterChanged(oldValue != selectedCuisines) }
     }
     var selectedPriceRanges: Set<String> = [] {
-        didSet { if oldValue != selectedPriceRanges { resetAndFetch() } }
+        didSet { filterChanged(oldValue != selectedPriceRanges) }
     }
+    /// LocationArea raw values (IOS-DD-RESTAURANTS-05). An older value that is
+    /// not an area still works as an exact `location` match.
     var selectedLocations: Set<String> = [] {
-        didSet { if oldValue != selectedLocations { resetAndFetch() } }
+        didSet { filterChanged(oldValue != selectedLocations) }
     }
+    /// Sent to the server as keyword or-groups (IOS-DD-RESTAURANTS-04).
     var selectedDietary: Set<String> = [] {
-        didSet { if oldValue != selectedDietary { resetAndFetch() } }
+        didSet { filterChanged(oldValue != selectedDietary) }
     }
     var minRating: Double = 0 {
-        didSet { if oldValue != minRating { resetAndFetch() } }
+        didSet { filterChanged(oldValue != minRating) }
     }
+    /// Only sponsored rows carry is_featured since 20260902000004; there is no
+    /// UI for it any more, but Discover and old state still set it.
     var featuredOnly = false {
-        didSet { if oldValue != featuredOnly { resetAndFetch() } }
+        didSet { filterChanged(oldValue != featuredOnly) }
+    }
+    /// Newly opened, opening soon and announced (IOS-DD-RESTAURANTS-07).
+    var newOpeningsOnly = false {
+        didSet { filterChanged(oldValue != newOpeningsOnly) }
     }
     var sortBy: RestaurantSortOption = .popularity {
         didSet { if oldValue != sortBy { resetAndFetch() } }
     }
+    /// Time-dependent, so client-side; see `continueOpenNowFillIfNeeded`.
     var showOpenNowOnly = false {
-        didSet { if oldValue != showOpenNowOnly { scheduleClientFilters() } }
+        didSet {
+            guard oldValue != showOpenNowOnly else { return }
+            if !isBulkUpdating { activePreset = nil }
+            autoFillPages = 0
+            scheduleClientFilters()
+        }
     }
     var activePreset: RestaurantPreset? = nil
 
@@ -54,13 +86,49 @@ final class RestaurantsViewModel {
     /// (IOS-AUDIT-PERF-004).
     private var isBulkUpdating = false
 
-    private var currentOffset = 0
+    private func filterChanged(_ changed: Bool) {
+        guard changed else { return }
+        if !isBulkUpdating { activePreset = nil }
+        resetAndFetch()
+    }
+
+    static let newOpeningStatuses = ["newly_opened", "opening_soon", "announced"]
+
+    // MARK: - Paging state
+
+    /// Raw server rows fetched so far; the next page's offset. Open Now drops
+    /// rows client-side, so it cannot be `restaurants.count`.
+    private var rawFetchedCount = 0
+    /// Ids of the first page, the only part the sponsored arrangement touches
+    /// (IOS-DD-RESTAURANTS-02).
+    private var firstPageIds: Set<String> = []
+    /// One seed per list, picked on reset, so every page comes from the same
+    /// rotation shuffle.
+    private var rotationSeed: Int?
+    /// Pages Open Now has loaded by itself since the last reset.
+    private var autoFillPages = 0
+    static let openNowFillTarget = 10
+    static let maxAutoFillPages = 5
+
     private let pageSize = Config.defaultPageSize
     private var fetchTask: Task<Void, Never>?
     private var clientFilterTask: Task<Void, Never>?
 
-    private let service = RestaurantsService.shared
+    /// Bumped by every reset. A fetch that finds it changed when its await
+    /// returns belongs to an older filter and throws its result away
+    /// (IOS-DD-RESTAURANTS-02, the EventsViewModel pattern).
+    private var generation = 0
+    /// The in-flight load-more, owned here so a reset can cancel it. It ran in
+    /// a per-row `.task` nothing could cancel, so a page fetched for the old
+    /// filter appended under the new one.
+    private var loadMoreTask: Task<Void, Never>?
+
+    private let service: RestaurantFeedProviding
     private let cache = QueryCache.shared
+
+    init(service: RestaurantFeedProviding = RestaurantsService.shared) {
+        self.service = service
+    }
 
     // MARK: - Load
 
@@ -68,15 +136,13 @@ final class RestaurantsViewModel {
         guard restaurants.isEmpty else { return }
 
         // Serve cached data immediately for instant cold start
-        let cacheKey = restaurantsCacheKey()
         let isOffline = !NetworkMonitor.shared.isConnected
 
-        if let cached: [Restaurant] = await cache.get(cacheKey, allowStale: isOffline) {
+        if let cacheKey = restaurantsCacheKey(),
+           let cached: [Restaurant] = await cache.get(cacheKey, allowStale: isOffline) {
             allRestaurants = cached
-            // Apply BOTH active client-side filters (open-now AND dietary) to the
-            // cached list, not just open-now — otherwise a cold start with a
-            // dietary filter active briefly shows non-matching restaurants.
-            restaurants = Self.applyClientSide(to: cached, openNow: showOpenNowOnly, dietary: selectedDietary)
+            firstPageIds = Set(cached.map(\.id))
+            restaurants = Self.applyClientSide(to: cached, openNow: showOpenNowOnly)
             isLoading = false
         }
 
@@ -84,85 +150,189 @@ final class RestaurantsViewModel {
 
         async let restaurantsTask: () = fetchRestaurants(reset: true)
         async let cuisinesTask: () = loadCuisines()
-        async let locationsTask: () = loadLocations()
-        _ = await (restaurantsTask, cuisinesTask, locationsTask)
+        _ = await (restaurantsTask, cuisinesTask)
     }
 
-    func refresh() async {
+    /// Returns whether the refresh succeeded, for the pull-to-refresh haptic.
+    @discardableResult
+    func refresh() async -> Bool {
+        // A pending debounced fetch would land after this one and replace it.
+        fetchTask?.cancel()
         await fetchRestaurants(reset: true)
+        return errorMessage == nil
     }
 
     // MARK: - Fetch
 
     func fetchRestaurants(reset: Bool = false) async {
         if reset {
-            currentOffset = 0
+            generation += 1
+            loadMoreTask?.cancel()
+            loadMoreTask = nil
+            // The cancelled load-more no longer owns this flag.
+            isLoadingMore = false
+            isAutoFilling = false
+            autoFillPages = 0
+            rotationSeed = RestaurantsService.rotationSeed(now: .now)
             if restaurants.isEmpty { isLoading = true }
         } else {
             isLoadingMore = true
         }
         errorMessage = nil
 
-        do {
-            var query = RestaurantsService.RestaurantsQuery()
-            query.searchText = searchText.isEmpty ? nil : searchText
-            query.cuisines = selectedCuisines.isEmpty ? nil : Array(selectedCuisines)
-            query.priceRanges = selectedPriceRanges.isEmpty ? nil : Array(selectedPriceRanges)
-            query.locations = selectedLocations.isEmpty ? nil : Array(selectedLocations)
-            query.minRating = minRating > 0 ? minRating : nil
-            query.isFeatured = featuredOnly ? true : nil
-            query.sortBy = sortBy
-            query.limit = pageSize
-            query.offset = currentOffset
-
-            let response = try await service.fetchRestaurants(query: query)
-            guard !Task.isCancelled else { return }
-
-            if reset {
-                allRestaurants = response.restaurants
-                await cache.set(restaurantsCacheKey(), value: response.restaurants)
-                // Keep Spotlight in sync so restaurants show up in system search
-                // (IOS-AUDIT-FEAT-026).
-                let toIndex = response.restaurants
-                Task { await SpotlightService.shared.indexRestaurants(toIndex) }
-            } else {
-                allRestaurants.append(contentsOf: response.restaurants)
-            }
-            // Apply client-side filters (open now, dietary) on a background
-            // task so 100+ isOpenNow() calls + description string-matching
-            // don't block the main thread during scroll.
-            restaurants = await Self.applyClientSideOffMain(
-                list: allRestaurants,
-                openNow: showOpenNowOnly,
-                dietary: selectedDietary
-            )
-
-            totalCount = response.totalCount
-            hasMore = response.hasMore
-            // Use the unfiltered fetch count for pagination so client-side
-            // filters (Open Now, Dietary) don't cause duplicate pages.
-            currentOffset = allRestaurants.count
-        } catch {
-            if restaurants.isEmpty {
-                errorMessage = error.localizedDescription
+        let gen = generation
+        let offset = reset ? 0 : rawFetchedCount
+        // Only the current generation may clear the flags; a stale fetch
+        // leaves them to the one that replaced it. Covers every exit,
+        // cancellation included. Open Now's fill runs after the flags clear,
+        // so the next page is not started while this one still owns them.
+        defer {
+            if gen == generation {
+                if reset { isLoading = false } else { isLoadingMore = false }
+                continueOpenNowFillIfNeeded()
             }
         }
 
-        isLoading = false
-        isLoadingMore = false
+        let query = currentQuery(offset: offset)
+        let searchForFallback = searchText
+
+        do {
+            let response = try await service.fetchRestaurants(query: query)
+            guard gen == generation else { return }
+
+            if reset {
+                // Nothing matched a bare search: offer the fuzzy "did you
+                // mean" rows rather than a dead end (IOS-DD-RESTAURANTS-13).
+                if response.restaurants.isEmpty,
+                   searchForFallback.count >= 3,
+                   activeFilterCount == 1,
+                   let fuzzy = try? await service.fuzzySearchRestaurants(query: searchForFallback, limit: pageSize),
+                   gen == generation,
+                   !fuzzy.isEmpty {
+                    isFuzzyFallback = true
+                    lastFetchFailed = false
+                    allRestaurants = fuzzy
+                    firstPageIds = Set(fuzzy.map(\.id))
+                    restaurants = fuzzy
+                    totalCount = fuzzy.count
+                    hasMore = false
+                    rawFetchedCount = fuzzy.count
+                    return
+                }
+                guard gen == generation else { return }
+            }
+
+            let newAll: [Restaurant]
+            if reset {
+                newAll = response.restaurants
+            } else {
+                // A row can shift pages between requests; never show it twice.
+                let existing = Set(allRestaurants.map(\.id))
+                newAll = allRestaurants + response.restaurants.filter { !existing.contains($0.id) }
+            }
+            // Open Now runs off the main thread so 100+ evaluations don't
+            // block scrolling.
+            let filtered = await Self.applyClientSideOffMain(list: newAll, openNow: showOpenNowOnly)
+            guard gen == generation else { return }
+
+            if reset {
+                isFuzzyFallback = false
+                lastFetchFailed = false
+                firstPageIds = Set(response.restaurants.map(\.id))
+            }
+            allRestaurants = newAll
+            restaurants = filtered
+            totalCount = response.totalCount
+            hasMore = response.hasMore
+            // From the offset this request used, not +=: two overlapping
+            // requests used to both add.
+            rawFetchedCount = offset + response.restaurants.count
+
+            if reset {
+                let toCache = response.restaurants
+                // Keep Spotlight in sync so restaurants show up in system search
+                // (IOS-AUDIT-FEAT-026).
+                Task { await SpotlightService.shared.indexRestaurants(toCache) }
+                if let key = restaurantsCacheKey() {
+                    await cache.set(key, value: toCache)
+                }
+            }
+        } catch {
+            guard gen == generation else { return }
+            // A cancelled request is not an error the user did anything about.
+            if EventsViewModel.isCancellation(error) { return }
+            // Always recorded (IOS-DD-RESTAURANTS-02). It used to be set only
+            // when the list was empty, so the stale banner could never show
+            // and pull-to-refresh reported success on a failure.
+            errorMessage = error.localizedDescription
+            if reset && !restaurants.isEmpty { lastFetchFailed = true }
+        }
     }
 
-    func loadMoreIfNeeded(currentItem: Restaurant?) async {
+    /// The query for the current filters.
+    private func currentQuery(offset: Int) -> RestaurantsService.RestaurantsQuery {
+        var query = RestaurantsService.RestaurantsQuery()
+        query.searchText = searchText.isEmpty ? nil : searchText
+        query.cuisines = selectedCuisines.isEmpty ? nil : selectedCuisines.sorted()
+        query.priceRanges = selectedPriceRanges.isEmpty ? nil : selectedPriceRanges.sorted()
+        query.locations = selectedLocations.isEmpty ? nil : selectedLocations.sorted()
+        query.dietary = selectedDietary.isEmpty ? nil : selectedDietary.sorted()
+        query.minRating = minRating > 0 ? minRating : nil
+        query.isFeatured = featuredOnly ? true : nil
+        query.statuses = newOpeningsOnly ? Self.newOpeningStatuses : nil
+        query.sortBy = sortBy
+        query.limit = pageSize
+        query.offset = offset
+        query.rotationSeed = rotationSeed
+        return query
+    }
+
+    // MARK: - Load More
+
+    /// Starts the next page when `currentItem` is within five rows of the end
+    /// of what is rendered. Synchronous: the task is owned here so a reset can
+    /// cancel it. Indexes `arrangedRestaurants`, which is what the list renders.
+    func loadMoreIfNeeded(currentItem: Restaurant?) {
         guard let currentItem,
               hasMore,
               !isLoadingMore,
-              let index = restaurants.firstIndex(where: { $0.id == currentItem.id }),
-              index >= restaurants.count - 5 else { return }
-
-        await fetchRestaurants(reset: false)
+              !isFuzzyFallback,
+              let index = arrangedRestaurants.firstIndex(where: { $0.id == currentItem.id }),
+              index >= arrangedRestaurants.count - 5 else { return }
+        startLoadMore()
     }
 
-    // MARK: - Cuisines & Locations
+    private func startLoadMore() {
+        isLoadingMore = true
+        loadMoreTask = Task { [weak self] in
+            // Cancelled by a reset before it ran: fetching now would use the
+            // new filters with the old list's offset.
+            guard !Task.isCancelled else { return }
+            await self?.fetchRestaurants(reset: false)
+        }
+    }
+
+    /// Open Now filters loaded pages, and the next page loads only when a row
+    /// near the end appears, so a list with few open rows stalled on "No
+    /// Restaurants Found" while more pages existed. Pull up to
+    /// `maxAutoFillPages` more pages until `openNowFillTarget` rows show.
+    private func continueOpenNowFillIfNeeded() {
+        guard showOpenNowOnly,
+              !isFuzzyFallback,
+              errorMessage == nil,
+              hasMore,
+              !isLoadingMore,
+              restaurants.count < Self.openNowFillTarget,
+              autoFillPages < Self.maxAutoFillPages else {
+            isAutoFilling = false
+            return
+        }
+        autoFillPages += 1
+        isAutoFilling = true
+        startLoadMore()
+    }
+
+    // MARK: - Cuisines
 
     private func loadCuisines() async {
         do {
@@ -172,19 +342,16 @@ final class RestaurantsViewModel {
         }
     }
 
-    func loadLocations() async {
-        guard availableLocations.isEmpty else { return }
-        do {
-            availableLocations = try await service.fetchAvailableLocations()
-        } catch {
-            availableLocations = []
-        }
-    }
+    // MARK: - Client-Side Filter (Open Now)
 
-    // MARK: - Client-Side Filters (Open Now, Dietary)
-
-    /// All fetched restaurants before client-side filters are applied.
+    /// All fetched restaurants before Open Now is applied.
     private var allRestaurants: [Restaurant] = []
+
+    /// Re-run Open Now against the clock, e.g. when the app returns to the
+    /// foreground: a list filtered at 9pm is wrong at 11pm.
+    func reevaluateClientFilters() {
+        scheduleClientFilters()
+    }
 
     /// Debounce toggle bursts (user tapping Open Now on/off quickly) and run
     /// the actual filter off the main thread. Matches the 150ms target in
@@ -192,77 +359,54 @@ final class RestaurantsViewModel {
     private func scheduleClientFilters() {
         guard !isBulkUpdating else { return }
         clientFilterTask?.cancel()
+        let gen = generation
         clientFilterTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled, let self else { return }
-            let filtered = await Self.applyClientSideOffMain(
-                list: self.allRestaurants,
-                openNow: self.showOpenNowOnly,
-                dietary: self.selectedDietary
-            )
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let self, gen == self.generation else { return }
+            let snapshot = self.allRestaurants
+            var filtered = await Self.applyClientSideOffMain(list: snapshot, openNow: self.showOpenNowOnly)
+            guard !Task.isCancelled, gen == self.generation else { return }
+            // A page appended while the filter ran: filter what is there now,
+            // not the snapshot, or the appended rows vanish.
+            if self.allRestaurants.count != snapshot.count {
+                filtered = Self.applyClientSide(to: self.allRestaurants, openNow: self.showOpenNowOnly)
+            }
             self.restaurants = filtered
+            self.continueOpenNowFillIfNeeded()
         }
     }
 
-    /// Runs `applyClientSide` inside a detached task so the isOpenNow() /
-    /// string-matching loop never blocks the UI. Keeps the pure filter logic
-    /// as a nonisolated static function so it's straightforward to unit test.
-    private static func applyClientSideOffMain(
-        list: [Restaurant],
-        openNow: Bool,
-        dietary: Set<String>
-    ) async -> [Restaurant] {
+    /// Runs `applyClientSide` inside a detached task so the evaluation loop
+    /// never blocks the UI.
+    private static func applyClientSideOffMain(list: [Restaurant], openNow: Bool) async -> [Restaurant] {
         // Cheap no-op path: nothing to filter, stay on the caller's actor.
-        if !openNow && dietary.isEmpty { return list }
+        if !openNow { return list }
+        let now = Date()
         return await Task.detached(priority: .userInitiated) {
-            applyClientSide(to: list, openNow: openNow, dietary: dietary)
+            applyClientSide(to: list, openNow: openNow, at: now)
         }.value
     }
 
-    /// Shared pure-function filter. Runs on any actor; callers that care
-    /// about perf should go through `applyClientSideOffMain`.
-    nonisolated private static func applyClientSide(
-        to list: [Restaurant],
-        openNow: Bool,
-        dietary: Set<String>
-    ) -> [Restaurant] {
-        var result = list
-        if openNow {
-            result = result.filter { $0.isOpenNow() == true }
-        }
-        if !dietary.isEmpty {
-            result = result.filter { r in
-                let haystack = [r.description, r.cuisine, r.name]
-                    .compactMap { $0?.lowercased() }
-                    .joined(separator: " ")
-                return dietary.contains { diet in
-                    keywords(for: diet).contains(where: haystack.contains)
-                }
-            }
-        }
-        return result
-    }
-
-    /// Keyword list mirroring the web app's dietary search fallback.
-    nonisolated private static func keywords(for diet: String) -> [String] {
-        switch diet {
-        case "vegan":        return ["vegan"]
-        case "vegetarian":   return ["vegetarian", "veggie"]
-        case "gluten-free":  return ["gluten free", "gluten-free", "celiac"]
-        case "keto":         return ["keto", "low carb"]
-        case "halal":        return ["halal"]
-        default:             return [diet.lowercased()]
-        }
+    /// Shared pure-function filter. Dietary is server-side now
+    /// (IOS-DD-RESTAURANTS-04); only Open Now, which depends on the clock,
+    /// stays here.
+    nonisolated static func applyClientSide(to list: [Restaurant], openNow: Bool, at date: Date = Date()) -> [Restaurant] {
+        guard openNow else { return list }
+        return list.filter { $0.isOpenNow(at: date) == true }
     }
 
     // MARK: - Sponsored Arrangement (IOS-AUDIT-PERF-010)
 
-    /// Recomputes `arrangedRestaurants` off the render path whenever
-    /// `restaurants` changes. Sponsored listings are pulled to the front;
-    /// organic order is otherwise preserved.
+    /// Recomputes `arrangedRestaurants` whenever `restaurants` changes.
+    /// Sponsored listings are pulled to the front of the FIRST page only;
+    /// later pages keep server order, so a sponsored row arriving in page 3
+    /// no longer jumps above the user's scroll position (IOS-DD-RESTAURANTS-02).
+    /// Open Now keeps order, so the first page's rows are a prefix.
     private func recomputeArrangedRestaurants() {
-        arrangedRestaurants = SponsoredArranger.arrange(restaurants, isSponsored: { $0.isActivelySponsored })
+        let headCount = restaurants.prefix { firstPageIds.contains($0.id) }.count
+        let head = Array(restaurants.prefix(headCount))
+        arrangedRestaurants = SponsoredArranger.arrange(head, isSponsored: { $0.isActivelySponsored })
+            + restaurants.dropFirst(headCount)
     }
 
     // MARK: - Filter Summary
@@ -275,9 +419,20 @@ final class RestaurantsViewModel {
         if !selectedDietary.isEmpty { count += 1 }
         if minRating > 0 { count += 1 }
         if featuredOnly { count += 1 }
+        if newOpeningsOnly { count += 1 }
         if !searchText.isEmpty { count += 1 }
         if showOpenNowOnly { count += 1 }
         return count
+    }
+
+    /// The chip-bar count. `restaurants.count` was the loaded rows, not the
+    /// matches; Open Now can only count what it has checked, hence the "+".
+    var resultCountText: String {
+        if showOpenNowOnly {
+            let n = restaurants.count
+            return hasMore ? "\(n)+ open now" : "\(n) open now"
+        }
+        return "\(totalCount) result\(totalCount == 1 ? "" : "s")"
     }
 
     func clearFilters() {
@@ -290,6 +445,7 @@ final class RestaurantsViewModel {
         selectedDietary = []
         minRating = 0
         featuredOnly = false
+        newOpeningsOnly = false
         searchText = ""
         sortBy = .popularity
         showOpenNowOnly = false
@@ -307,15 +463,19 @@ final class RestaurantsViewModel {
             clearFilters()
             return
         }
+        // A cuisine preset uses only the cuisines that have rows.
+        let cuisines = RestaurantPreset.available(cuisines: availableCuisines)
+            .first { $0.preset == preset }?.cuisines ?? preset.cuisines
         // Reset first so presets don't compound. Coalesce into one fetch
         // (IOS-AUDIT-PERF-004).
         isBulkUpdating = true
-        selectedCuisines = []
+        selectedCuisines = Set(cuisines)
         selectedPriceRanges = Set(preset.priceRanges)
         selectedLocations = []
         selectedDietary = Set(preset.dietary)
         minRating = preset.minRating
         featuredOnly = false
+        newOpeningsOnly = preset.newOpeningsOnly
         showOpenNowOnly = preset.openNow
         sortBy = preset.sortBy
         activePreset = preset
@@ -328,23 +488,61 @@ final class RestaurantsViewModel {
         // one go; suppress their per-property fetches and fire one at the end.
         guard !isBulkUpdating else { return }
         fetchTask?.cancel()
-        fetchTask = Task {
+        // Anything in flight was asked for the old filters: retire it now, not
+        // 300ms from now, so it cannot land during the debounce.
+        generation += 1
+        loadMoreTask?.cancel()
+        loadMoreTask = nil
+        isLoadingMore = false
+        isAutoFilling = false
+        fetchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            await fetchRestaurants(reset: true)
+            await self?.fetchRestaurants(reset: true)
         }
     }
 
     // MARK: - Cache Key
 
-    private func restaurantsCacheKey() -> String {
-        var parts = ["restaurants"]
-        if !selectedCuisines.isEmpty { parts.append("c-\(selectedCuisines.sorted().joined(separator: ","))") }
-        if !selectedPriceRanges.isEmpty { parts.append("p-\(selectedPriceRanges.sorted().joined(separator: ","))") }
-        if !selectedLocations.isEmpty { parts.append("l-\(selectedLocations.sorted().joined(separator: ","))") }
+    private func restaurantsCacheKey() -> String? {
+        Self.cacheKey(
+            searchText: searchText,
+            cuisines: selectedCuisines,
+            priceRanges: selectedPriceRanges,
+            locations: selectedLocations,
+            dietary: selectedDietary,
+            minRating: minRating,
+            featuredOnly: featuredOnly,
+            newOpeningsOnly: newOpeningsOnly,
+            sortBy: sortBy
+        )
+    }
+
+    /// Every filter that changes the server result is in the key. A search
+    /// is never cached (IOS-DD-RESTAURANTS-14): the key becomes a filename,
+    /// which is outside file protection, and searches are rarely repeated.
+    /// The prefix moved to "restaurants2" because the row shape changed
+    /// (hours_json), so rows cached before cannot fill Open Now.
+    static func cacheKey(
+        searchText: String,
+        cuisines: Set<String>,
+        priceRanges: Set<String>,
+        locations: Set<String>,
+        dietary: Set<String>,
+        minRating: Double,
+        featuredOnly: Bool,
+        newOpeningsOnly: Bool,
+        sortBy: RestaurantSortOption
+    ) -> String? {
+        guard searchText.isEmpty else { return nil }
+        var parts = ["restaurants2"]
+        if !cuisines.isEmpty { parts.append("c-\(cuisines.sorted().joined(separator: ","))") }
+        if !priceRanges.isEmpty { parts.append("p-\(priceRanges.sorted().joined(separator: ","))") }
+        if !locations.isEmpty { parts.append("l-\(locations.sorted().joined(separator: ","))") }
+        if !dietary.isEmpty { parts.append("d-\(dietary.sorted().joined(separator: ","))") }
         if minRating > 0 { parts.append("r-\(minRating)") }
         if featuredOnly { parts.append("f-1") }
-        if !searchText.isEmpty { parts.append("q-\(searchText)") }
+        if newOpeningsOnly { parts.append("n-1") }
         parts.append("s-\(sortBy.rawValue)")
         return parts.joined(separator: "-")
     }

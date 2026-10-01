@@ -42,7 +42,9 @@ interface GooglePlacesResult {
   business_status: string;
   rating?: number;
   user_ratings_total?: number;
-  price_level?: number;
+  // Places API (New) enum, e.g. "PRICE_LEVEL_MODERATE" (search-new-restaurants
+  // passes place.priceLevel through as-is).
+  price_level?: string;
   types: string[];
   opening_hours?: {
     open_now: boolean;
@@ -96,6 +98,30 @@ const BLACKLIST_CATEGORIES: { value: BlacklistCategory; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+// BEGIN pure: placesPriceRange
+// Self-contained: supabase/functions/_tests/restaurant-ingest-honesty.test.ts
+// lifts this block out and runs it.
+const PLACES_PRICE_RANGE: Record<string, string> = {
+  PRICE_LEVEL_INEXPENSIVE: "$",
+  PRICE_LEVEL_MODERATE: "$$",
+  PRICE_LEVEL_EXPENSIVE: "$$$",
+  PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
+};
+
+/**
+ * Google's price level as the dollar signs the site shows, or null when
+ * Google gave none (or FREE / UNSPECIFIED). `Array(level).fill("$")` on the
+ * enum string produced "$" for every place, and a missing level became "$$".
+ */
+function placesPriceRange(level: string | null | undefined): string | null {
+  if (!level) return null;
+  return PLACES_PRICE_RANGE[level] ?? null;
+}
+// END pure: placesPriceRange
+
+// check-restaurant-status refuses more than this many ids per call.
+const STATUS_CHECK_BATCH = 50;
+
 export default function GooglePlacesRestaurantTools() {
   const [searchLocation, setSearchLocation] = useState("Des Moines, IA");
   const [searchRadius, setSearchRadius] = useState("5000");
@@ -107,6 +133,7 @@ export default function GooglePlacesRestaurantTools() {
   >([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isCheckingClosed, setIsCheckingClosed] = useState(false);
+  const [hasCheckedStatus, setHasCheckedStatus] = useState(false);
   const [searchResults, setSearchResults] = useState<string>("");
   const [searchOffset, setSearchOffset] = useState(0);
   const [hasMoreResults, setHasMoreResults] = useState(false);
@@ -306,25 +333,28 @@ export default function GooglePlacesRestaurantTools() {
     setIsCheckingClosed(true);
 
     try {
-      // Get all restaurants from database
+      // Only rows Google can answer for, and rows with no status yet (a bare
+      // .neq("status", "closed") drops NULLs).
       const { data: restaurants, error: fetchError } = await supabase
         .from("restaurants")
         .select("id, name, google_place_id, status")
-        .neq("status", "closed");
+        .not("google_place_id", "is", null)
+        .or("status.is.null,status.neq.closed");
 
       if (fetchError) throw fetchError;
 
-      // Call Supabase Edge Function to check status
-      const { data, error } = await supabase.functions.invoke(
-        "check-restaurant-status",
-        {
-          body: {
-            restaurants: restaurants || [],
-          },
-        }
-      );
-
-      if (error) throw error;
+      const rows = restaurants || [];
+      const flagged: RestaurantStatus[] = [];
+      for (let i = 0; i < rows.length; i += STATUS_CHECK_BATCH) {
+        const { data: batch, error } = await supabase.functions.invoke(
+          "check-restaurant-status",
+          { body: { restaurants: rows.slice(i, i + STATUS_CHECK_BATCH) } }
+        );
+        if (error) throw error;
+        flagged.push(...((batch?.closedRestaurants as RestaurantStatus[]) ?? []));
+      }
+      const data = { closedRestaurants: flagged };
+      setHasCheckedStatus(true);
 
       if (data?.closedRestaurants) {
         setClosedRestaurants(data.closedRestaurants);
@@ -354,26 +384,20 @@ export default function GooglePlacesRestaurantTools() {
 
   const addRestaurant = async (restaurant: GooglePlacesResult) => {
     try {
-      // Determine cuisine type from Google Places types
-      const cuisineTypes = restaurant.types.filter((type) =>
-        ["restaurant", "food", "meal_takeaway", "meal_delivery"].includes(type)
-      );
-
-      const priceRange = restaurant.price_level
-        ? Array(restaurant.price_level).fill("$").join("")
-        : "$$";
-
+      // Only what Google said. A missing cuisine or price stays null so the
+      // site shows nothing rather than "American" and "$$" it made up, and
+      // the description is left for a writer, not filled with provenance text.
       const { error } = await supabase.from("restaurants").insert({
         name: restaurant.name,
         location: restaurant.formatted_address,
         phone: restaurant.formatted_phone_number,
         website: restaurant.website,
         rating: restaurant.rating,
-        price_range: priceRange,
+        price_range: placesPriceRange(restaurant.price_level),
         google_place_id: restaurant.place_id,
-        cuisine: restaurant.cuisine_type || "American",
+        cuisine: restaurant.cuisine_type || null,
         status: "open",
-        description: `Discovered via Google Places API`,
+        description: null,
         is_featured: false,
       });
 
@@ -399,6 +423,7 @@ export default function GooglePlacesRestaurantTools() {
   };
 
   const markAsClosed = async (restaurantStatus: RestaurantStatus) => {
+    if (restaurantStatus.google_status !== "CLOSED_PERMANENTLY") return;
     try {
       const { error } = await supabase
         .from("restaurants")
@@ -608,8 +633,10 @@ export default function GooglePlacesRestaurantTools() {
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  Found {closedRestaurants.length} restaurants that appear to be
-                  permanently closed
+                  Google reports {closedRestaurants.length}{" "}
+                  {closedRestaurants.length === 1 ? "restaurant" : "restaurants"}{" "}
+                  as closed or missing. Only a permanent closure can be marked
+                  here; the rest need someone to check.
                 </AlertDescription>
               </Alert>
 
@@ -631,15 +658,24 @@ export default function GooglePlacesRestaurantTools() {
                           </Badge>
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => markAsClosed(restaurant)}
-                        className="ml-4"
-                      >
-                        <XCircle className="h-4 w-4 mr-1" />
-                        Mark Closed
-                      </Button>
+                      {restaurant.google_status === "CLOSED_PERMANENTLY" ? (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => markAsClosed(restaurant)}
+                          className="ml-4"
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Mark Closed
+                        </Button>
+                      ) : (
+                        // Temporarily closed or not found on Google isn't a
+                        // closure: a renovation or a moved listing would drop
+                        // an open restaurant from the site and the sitemap.
+                        <Badge variant="outline" className="ml-4 whitespace-nowrap">
+                          Needs review
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -647,12 +683,11 @@ export default function GooglePlacesRestaurantTools() {
             </div>
           )}
 
-          {closedRestaurants.length === 0 && !isCheckingClosed && (
+          {closedRestaurants.length === 0 && !isCheckingClosed && hasCheckedStatus && (
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                No closed restaurants detected. All restaurants appear to be
-                operational.
+                Google lists every checked restaurant as operating.
               </AlertDescription>
             </Alert>
           )}

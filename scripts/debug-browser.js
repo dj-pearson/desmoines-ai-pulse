@@ -8,7 +8,10 @@ async function debugEventSources() {
     // Use the existing supabase client from the app
     const { createClient } = await import('@supabase/supabase-js');
     const supabaseUrl = 'https://nrwafwjzhvdchkijyihp.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yd2Fmd2p6aHZkY2hraWp5aWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc2MDQ0MTQsImV4cCI6MjA1MzE4MDQxNH0.bPLJLyYJqbBhxBFaRmSbNZXfBtM7-RMI4ypNu8jbqMw';
+    // WEB-SEC-032: was a committed anon key. Read it from the environment;
+    // a key in a debug script is still a key in the repository.
+    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseKey) throw new Error('VITE_SUPABASE_ANON_KEY is not set');
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     

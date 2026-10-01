@@ -89,6 +89,10 @@ export function AccessibilityWidget() {
         aria-label={isOpen ? 'Close accessibility settings' : 'Open accessibility settings'}
         className={cn(
           'fixed bottom-20 left-4 z-[9998] lg:bottom-6',
+          // On a phone the cookie banner's buttons sit where this button does,
+          // and this one is on top (z-[9998] over z-[60]). Step aside while
+          // the banner is up; CookieConsentBanner sets data-consent-open.
+          'max-sm:[html[data-consent-open]_&]:hidden',
           'h-12 w-12 rounded-full shadow-lg',
           'bg-primary text-primary-foreground',
           'flex items-center justify-center',

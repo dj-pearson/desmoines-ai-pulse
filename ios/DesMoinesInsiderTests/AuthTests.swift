@@ -149,4 +149,46 @@ final class AuthTests: XCTestCase {
         vm.confirmPassword = "secret124"
         XCTAssertFalse(vm.passwordsMatch)
     }
+
+    // MARK: - Password recovery callback (IOS-DD-ACCOUNT-07)
+
+    private let callbackURL = URL(string: "com.desmoines.aipulse://auth-callback?code=abc")!
+
+    func testRecentResetMarkerAndAuthCallbackIsRecovery() {
+        let now = Date()
+        XCTAssertTrue(AuthService.isRecoveryCallback(
+            url: callbackURL, markedAt: now.addingTimeInterval(-10 * 60), now: now
+        ))
+    }
+
+    func testStaleResetMarkerIsNotRecovery() {
+        let now = Date()
+        XCTAssertFalse(AuthService.isRecoveryCallback(
+            url: callbackURL, markedAt: now.addingTimeInterval(-2 * 60 * 60), now: now
+        ))
+    }
+
+    func testNonCallbackURLIsNotRecovery() {
+        let now = Date()
+        XCTAssertFalse(AuthService.isRecoveryCallback(
+            url: URL(string: "https://desmoinesinsider.com/events/1")!,
+            markedAt: now.addingTimeInterval(-60), now: now
+        ))
+    }
+
+    func testNoMarkerIsNotRecovery() {
+        XCTAssertFalse(AuthService.isRecoveryCallback(url: callbackURL, markedAt: nil, now: Date()))
+    }
+
+    // MARK: - Admin detection with several role rows (IOS-DD-ACCOUNT-13)
+
+    func testAdminAmongSeveralRolesIsAdmin() {
+        XCTAssertTrue(AuthService.isAdmin(roles: ["moderator", "admin"]))
+        XCTAssertTrue(AuthService.isAdmin(roles: ["root_admin"]))
+    }
+
+    func testNonAdminRolesAreNotAdmin() {
+        XCTAssertFalse(AuthService.isAdmin(roles: ["moderator"]))
+        XCTAssertFalse(AuthService.isAdmin(roles: []))
+    }
 }

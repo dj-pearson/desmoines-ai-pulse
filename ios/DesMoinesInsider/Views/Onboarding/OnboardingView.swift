@@ -1,15 +1,29 @@
 import SwiftUI
 
-/// Onboarding flow shown on first launch: a few value pages, then a final,
-/// skippable trial moment that presents the annual free-trial paywall
-/// (IOS-SUB-013). The trial screen never hard-walls the app — "Maybe later" is
-/// one tap and always lets the user into the app (App Store-safe).
+/// Onboarding flow shown on first launch: a welcome page, a "What are you
+/// into?" interest picker, then a final, skippable trial moment that presents
+/// the annual free-trial paywall (IOS-SUB-013). The trial screen never
+/// hard-walls the app — "Maybe later" is one tap and always lets the user into
+/// the app (App Store-safe).
+///
+/// The interest step replaced two static feature pages (IOS-DD-ACCOUNT-04).
+/// The picks are saved on the device (InterestPreferences) and rerank the
+/// cold-start For You rail at once, so a new user's first Home screen already
+/// leads with their kind of thing; the next sign-in copies them to the profile.
 struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @State private var currentPage = 0
+    @State private var pickedInterests: Set<String> = []
+    @ScaledMetric(relativeTo: .largeTitle) private var logoHeight: CGFloat = 160
+    @ScaledMetric(relativeTo: .largeTitle) private var heroIconSize: CGFloat = 72
     /// Once the user passes the value pages, we show the trial step.
     @State private var showTrialStep = false
     @State private var showOnboardingPaywall = false
+    /// Whether an eligible free trial actually exists. The step promised
+    /// "free for 7 days" while the monthly SKUs carry no intro offer and the
+    /// annual ones may be missing (IOS-DD-MONETIZATION-21). Defaults to false
+    /// so nothing promises a trial before StoreKit has answered.
+    @State private var trialAvailable = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let analytics = AnalyticsService.shared
@@ -26,28 +40,6 @@ struct OnboardingView: View {
                 "Explore attractions and hidden gems"
             ],
             color: .accentColor
-        ),
-        OnboardingPageData(
-            icon: "heart.circle.fill",
-            title: "Save Your Favorites",
-            subtitle: "Keep track of events and places you love. Never miss what matters to you.",
-            highlights: [
-                "Tap the heart to save events",
-                "Build your personal collection",
-                "Get reminded before events start"
-            ],
-            color: .red
-        ),
-        OnboardingPageData(
-            icon: "map.circle.fill",
-            title: "Explore What's Nearby",
-            subtitle: "Use the map to discover events and restaurants near your current location.",
-            highlights: [
-                "See events on an interactive map",
-                "Filter by category and date",
-                "Get directions with one tap"
-            ],
-            color: .blue
         ),
     ]
 
@@ -66,7 +58,20 @@ struct OnboardingView: View {
     }
 
     private func complete() {
+        // Skipping from the welcome page must not wipe picks saved earlier.
+        if !pickedInterests.isEmpty { saveInterests() }
         hasCompletedOnboarding = true
+    }
+
+    /// The interest step comes after the value pages.
+    private var interestPageIndex: Int { pages.count }
+    private var pageCount: Int { pages.count + 1 }
+
+    /// Catalog order, so the stored list is stable.
+    private func saveInterests() {
+        InterestPreferences.shared.local = InterestCatalog.all
+            .map(\.id)
+            .filter { pickedInterests.contains($0) }
     }
 
     // MARK: - Value pages
@@ -79,6 +84,8 @@ struct OnboardingView: View {
                     pageView(pages[index])
                         .tag(index)
                 }
+                interestStep
+                    .tag(interestPageIndex)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(reduceMotion ? nil : .easeInOut, value: currentPage)
@@ -87,7 +94,7 @@ struct OnboardingView: View {
             VStack(spacing: 16) {
                 // Page indicator
                 HStack(spacing: 8) {
-                    ForEach(pages.indices, id: \.self) { index in
+                    ForEach(0..<pageCount, id: \.self) { index in
                         Capsule()
                             .fill(index == currentPage ? Color.accentColor : Color(.systemGray4))
                             .frame(width: index == currentPage ? 24 : 8, height: 8)
@@ -95,16 +102,16 @@ struct OnboardingView: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
+                .accessibilityLabel("Page \(currentPage + 1) of \(pageCount)")
                 // Announce page changes to VoiceOver as the user advances (UX-009).
                 .onChange(of: currentPage) { _, newValue in
                     AccessibilityNotification.Announcement(
-                        AttributedString("Page \(newValue + 1) of \(pages.count)")
+                        AttributedString("Page \(newValue + 1) of \(pageCount)")
                     ).post()
                 }
 
                 // Primary action — full-width, ≥44pt (brandPrimary), per UX-009.
-                if currentPage < pages.count - 1 {
+                if currentPage < interestPageIndex {
                     Button {
                         withAnimation(reduceMotion ? nil : .default) { currentPage += 1 }
                     } label: {
@@ -114,11 +121,15 @@ struct OnboardingView: View {
                     .padding(.horizontal)
                 } else {
                     Button {
+                        saveInterests()
                         analytics.trackOnboardingTrial(action: "shown")
                         SoftPaywallService.shared.noteOnboardingUpsellShown()
                         showTrialStep = true
                     } label: {
-                        Text("Continue")
+                        // "Next" with nothing picked, not "Skip": the
+                        // secondary Skip below leaves onboarding entirely, and
+                        // two "Skip" buttons doing different things is a trap.
+                        Text(pickedInterests.isEmpty ? "Next" : "Continue")
                     }
                     .buttonStyle(.brandPrimary)
                     .padding(.horizontal)
@@ -156,59 +167,70 @@ struct OnboardingView: View {
     // MARK: - Trial step (final, skippable)
 
     private var trialStep: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ScrollView {
+            VStack(spacing: 24) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: min(heroIconSize, 110)))
+                    .foregroundStyle(Color.accentColor.gradient)
+                    .accessibilityHidden(true)
 
-            Image(systemName: "sparkles")
-                .font(.system(size: 72))
-                .foregroundStyle(Color.accentColor.gradient)
-                .accessibilityHidden(true)
+                Text(trialAvailable ? "Try Insider free for 7 days" : "Go further with Insider")
+                    .font(.title.bold())
+                    .multilineTextAlignment(.center)
 
-            Text("Try Insider free for 7 days")
-                .font(.title.bold())
-                .multilineTextAlignment(.center)
+                Text(trialAvailable
+                     ? "Unlock the full experience. Cancel anytime — no charge during your trial."
+                     : "Unlimited saves, the AI Trip Planner and no ads. Cancel anytime.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
 
-            Text("Unlock the full experience. Cancel anytime — no charge during your trial.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 12) {
+                    trialBullet("heart.fill", "Unlimited saved favorites")
+                    trialBullet("map.fill", "AI Trip Planner itineraries")
+                    trialBullet("bell.badge.fill", "Saved searches & event alerts")
+                    trialBullet("eye.slash.fill", "Ad-free browsing")
+                }
                 .padding(.horizontal, 40)
+                .padding(.top, 4)
 
-            VStack(alignment: .leading, spacing: 12) {
-                trialBullet("heart.fill", "Unlimited saved favorites")
-                trialBullet("map.fill", "AI Trip Planner itineraries")
-                trialBullet("slider.horizontal.3", "Advanced filters & insider tips")
-                trialBullet("eye.slash.fill", "Ad-free browsing")
-            }
-            .padding(.horizontal, 40)
-            .padding(.top, 4)
+                VStack(spacing: 12) {
+                    Button {
+                        analytics.trackOnboardingTrial(action: "start_tapped")
+                        showOnboardingPaywall = true
+                    } label: {
+                        Text(trialAvailable ? "Start Free Trial" : "See Insider plans")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityHint(trialAvailable
+                                       ? "Opens the subscription options with a free trial"
+                                       : "Opens the subscription options")
 
-            Spacer()
-
-            VStack(spacing: 12) {
-                Button {
-                    analytics.trackOnboardingTrial(action: "start_tapped")
-                    showOnboardingPaywall = true
-                } label: {
-                    Text("Start Free Trial")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundStyle(.white)
+                    Button("Maybe later") {
+                        analytics.trackOnboardingTrial(action: "skipped")
+                        complete()
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
-                .accessibilityHint("Opens the subscription options with a free trial")
-
-                Button("Maybe later") {
-                    analytics.trackOnboardingTrial(action: "skipped")
-                    complete()
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .padding(.horizontal, 32)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 32)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 48)
+            .padding(.bottom, 40)
         }
-        .padding(.bottom, 40)
+        .scrollBounceBehavior(.basedOnSize)
+        .task {
+            let storeKit = StoreKitService.shared
+            await storeKit.loadProducts()
+            trialAvailable = await storeKit.isFreeTrialAvailable(for: .insider)
+        }
     }
 
     private func trialBullet(_ icon: String, _ text: String) -> some View {
@@ -226,47 +248,123 @@ struct OnboardingView: View {
     // MARK: - Page View
 
     private func pageView(_ page: OnboardingPageData) -> some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ScrollView {
+            VStack(spacing: 24) {
+                if let assetImage = page.assetImage {
+                    Image(assetImage)
+                        .resizable()
+                        .scaledToFit()
+                        // Scales with Dynamic Type but is capped, so the text
+                        // below still fits at accessibility sizes and in landscape.
+                        .frame(height: min(logoHeight, 200))
+                        .accessibilityLabel("Des Moines Insider")
+                } else {
+                    Image(systemName: page.icon)
+                        .font(.system(size: min(heroIconSize * 1.1, 110)))
+                        .foregroundStyle(page.color.gradient)
+                        .accessibilityHidden(true)
+                }
 
-            if let assetImage = page.assetImage {
-                Image(assetImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 160)
-            } else {
-                Image(systemName: page.icon)
-                    .font(.system(size: 80))
-                    .foregroundStyle(page.color.gradient)
-            }
+                Text(page.title)
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
 
-            Text(page.title)
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
+                Text(page.subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
 
-            Text(page.subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(page.highlights, id: \.self) { highlight in
+                        HStack(spacing: 10) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.body)
+                                .foregroundStyle(page.color)
+                                .accessibilityHidden(true)
+                            Text(highlight)
+                                .font(.subheadline)
+                        }
+                    }
+                }
                 .padding(.horizontal, 40)
+                .padding(.top, 8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 48)
+            .padding(.bottom, 24)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
 
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(page.highlights, id: \.self) { highlight in
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.body)
-                            .foregroundStyle(page.color)
-                        Text(highlight)
-                            .font(.subheadline)
+    // MARK: - Interest step (IOS-DD-ACCOUNT-04)
+
+    private var interestStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("What are you into?")
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Text("Pick a few and Home will lead with them. You can change these on your profile.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                    ForEach(InterestCatalog.all) { option in
+                        interestChip(option)
                     }
                 }
             }
-            .padding(.horizontal, 40)
-            .padding(.top, 8)
-
-            Spacer()
-            Spacer()
+            .padding(.horizontal, 24)
+            .padding(.top, 48)
+            .padding(.bottom, 24)
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .task {
+            // Returning to onboarding (Debug reset) shows the earlier picks.
+            if pickedInterests.isEmpty {
+                pickedInterests = Set(InterestPreferences.shared.local)
+            }
+        }
+    }
+
+    private func interestChip(_ option: InterestOption) -> some View {
+        let isSelected = pickedInterests.contains(option.id)
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if isSelected {
+                pickedInterests.remove(option.id)
+            } else {
+                pickedInterests.insert(option.id)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: option.icon)
+                    .font(.body)
+                    .accessibilityHidden(true)
+                Text(option.label)
+                    .font(.subheadline.weight(.medium))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.15) : Color(.secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
+            )
+            .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+        }
+        .buttonStyle(.plain)
+        .minHitTarget()
+        .accessibilityLabel(option.label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

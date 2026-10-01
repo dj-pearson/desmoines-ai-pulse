@@ -12,7 +12,15 @@
  *      `<script type="application/ld+json">` Event blob for title, dates,
  *      image, description, venue, and geo coordinates.
  *   4. Parse the same detail HTML's DOM for the external "Visit Website"
- *      anchor — that URL is the only field NOT in ld+json.
+ *      anchor — that URL is the only field NOT in ld+json. When there is no
+ *      such anchor, fall back to linkUrl / a ticket link / a "Website" link
+ *      (catchdesmoinesParse.ts) before settling for the listing URL.
+ *
+ * The street address and geo pair from the ld+json are carried through too,
+ * and the image falls back to og:image. What image the row finally stores is
+ * decided at ingest by venueImage.ts: a show at a venue with a default image
+ * (Vibrant, Hoyt Sherman, Wells Fargo Arena...) takes the venue's image and
+ * this per-event URL is never downloaded.
  *
  * Matches `catchdesmoines.com/events*` (list pages). Skips `/event/...`
  * detail URLs so the generic path can still handle one-off detail scrapes.
@@ -21,60 +29,33 @@
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { scrapeUrl } from "../scraper.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
+import {
+  extractExternalUrlFallback,
+  normalizeUrl,
+  parseLdJsonEvent,
+  toAdapterEvent,
+} from "./catchdesmoinesParse.ts";
 
 const SITE_ORIGIN = "https://www.catchdesmoines.com";
 const PAGE_SIZE = 12;
-const MAX_LIST_PAGES = 3;
-const MAX_DETAIL_PAGES = 50; // safety cap; one date-filtered week rarely exceeds ~36
-const DETAIL_CONCURRENCY = 5;
+// Three pages was 36 events, which on the unfiltered /events/ listing the
+// scheduled job crawls is two or three days of the calendar. Eight pages is
+// about two weeks. Each page is a Browserless render, so the walk is also
+// bounded by LIST_BUDGET_MS: whatever pages fit are used and the run goes on to
+// the detail pages instead of timing out the whole function with nothing saved.
+const MAX_LIST_PAGES = 8;
+const LIST_BUDGET_MS = 75_000;
+const MAX_DETAIL_PAGES = 100;
+const DETAIL_CONCURRENCY = 6;
 
 const VALID_DETAIL_PATH = /^\/event\/[a-z0-9-]+\/\d+\/?$/i;
 const EVENT_LINK_RE =
   /href="(https?:\/\/(?:www\.)?catchdesmoines\.com)?(\/event\/[a-z0-9-]+\/\d+\/?)"/gi;
 
-const EXCLUDED_DOMAINS = [
-  "catchdesmoines.com",
-  "simpleview",
-  "facebook.com",
-  "twitter.com",
-  "instagram.com",
-  "youtube.com",
-  "vimeo.com",
-  "google.com",
-  "googleapis.com",
-  "googletagmanager.com",
-  "gstatic.com",
-  "doubleclick.net",
-  "cloudflare.com",
-];
-
-const BROWSER_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-};
-
-interface SchemaOrgEvent {
-  "@type"?: string;
-  name?: string;
-  description?: string;
-  startDate?: string;
-  endDate?: string;
-  image?: string | { url?: string };
-  url?: string;
-  location?: {
-    name?: string;
-    address?: {
-      streetAddress?: string;
-      addressLocality?: string;
-      addressRegion?: string;
-      postalCode?: string;
-    };
-    geo?: { latitude?: number; longitude?: number };
-  };
-}
+// WEB-SEC-024: BROWSER_HEADERS used to be declared here, with its own pasted
+// Chrome/120 User-Agent. adapterHeaders() builds them from getScraperConfig(),
+// so SCRAPER_USER_AGENT reaches this adapter instead of being decoration.
 
 export const catchdesmoinesAdapter: DomainAdapter = {
   name: "catchdesmoines",
@@ -128,8 +109,15 @@ export const catchdesmoinesAdapter: DomainAdapter = {
 
 async function discoverEventUrls(baseUrl: string): Promise<Set<string>> {
   const eventUrls = new Set<string>();
+  const startedAt = Date.now();
 
   for (let page = 0; page < MAX_LIST_PAGES; page++) {
+    if (page > 0 && Date.now() - startedAt > LIST_BUDGET_MS) {
+      console.log(
+        `  ⏱️ [catchdesmoines] list budget spent after ${page} page(s); continuing with ${eventUrls.size} URL(s)`,
+      );
+      break;
+    }
     const pageUrl = new URL(baseUrl);
     pageUrl.searchParams.set("bounds", "false");
     pageUrl.searchParams.set("view", "grid");
@@ -172,7 +160,11 @@ async function discoverEventUrls(baseUrl: string): Promise<Set<string>> {
 
 async function fetchEventDetail(url: string): Promise<AdapterEvent | null> {
   try {
-    const response = await globalThis.fetch(url, { headers: BROWSER_HEADERS });
+    const response = await fetchAllowed(url);
+    if (!response) {
+      console.log(`  ⛔ [catchdesmoines] detail ${url}: disallowed by robots.txt`);
+      return null;
+    }
     if (!response.ok) {
       console.log(
         `  ❌ [catchdesmoines] detail ${url} → HTTP ${response.status}`,
@@ -187,41 +179,15 @@ async function fetchEventDetail(url: string): Promise<AdapterEvent | null> {
       return null;
     }
 
-    const externalUrl = extractVisitWebsiteUrl(html, url);
+    const externalUrl = extractVisitWebsiteUrl(html, url) ??
+      extractExternalUrlFallback(html, url);
 
-    return toAdapterEvent(ldEvent, url, externalUrl);
+    return toAdapterEvent(ldEvent, url, externalUrl, html);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.log(`  ❌ [catchdesmoines] detail ${url} threw: ${msg}`);
     return null;
   }
-}
-
-function parseLdJsonEvent(html: string): SchemaOrgEvent | null {
-  const re = /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]+?)<\/script>/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    try {
-      const parsed = JSON.parse(m[1]);
-      const candidates = Array.isArray(parsed) ? parsed : [parsed];
-      for (const c of candidates) {
-        if (c && isEventType(c["@type"])) return c as SchemaOrgEvent;
-      }
-    } catch {
-      // Skip malformed ld+json blocks, keep scanning
-    }
-  }
-  return null;
-}
-
-// Accept schema.org Event AND its subtypes (MusicEvent, SportsEvent,
-// TheaterEvent, ComedyEvent, Festival, Hackathon, BusinessEvent, etc.)
-function isEventType(t: unknown): boolean {
-  if (typeof t !== "string") return false;
-  return t === "Event" ||
-    t === "Festival" ||
-    t === "Hackathon" ||
-    t.endsWith("Event");
 }
 
 function extractVisitWebsiteUrl(html: string, eventUrl: string): string | null {
@@ -240,79 +206,7 @@ function extractVisitWebsiteUrl(html: string, eventUrl: string): string | null {
     if (normalized) return normalized;
   }
 
-  // Fallback: look for linkUrl in embedded JSON (older Simpleview pattern)
-  const linkMatch = html.match(/["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/);
-  if (linkMatch) {
-    const normalized = normalizeUrl(linkMatch[1], eventUrl);
-    if (normalized) return normalized;
-  }
   return null;
-}
-
-function normalizeUrl(
-  href: string | null | undefined,
-  base: string,
-): string | null {
-  if (!href) return null;
-  let url = href.trim();
-  if (url.startsWith("//")) url = `https:${url}`;
-  else if (url.startsWith("/")) {
-    try {
-      url = new URL(url, base).toString();
-    } catch {
-      return null;
-    }
-  }
-  if (!/^https?:\/\//i.test(url)) return null;
-  const lower = url.toLowerCase();
-  if (EXCLUDED_DOMAINS.some((d) => lower.includes(d))) return null;
-  return url;
-}
-
-function toAdapterEvent(
-  ev: SchemaOrgEvent,
-  detailUrl: string,
-  externalUrl: string | null,
-): AdapterEvent | null {
-  if (!ev.name) return null;
-
-  const date = parseDateTime(ev.startDate);
-  if (!date) return null;
-
-  const venue = ev.location?.name ?? "TBD";
-  const address = ev.location?.address;
-  const location = address
-    ? [address.addressLocality, address.addressRegion]
-      .filter(Boolean)
-      .join(", ") || "Des Moines, IA"
-    : "Des Moines, IA";
-
-  const image = typeof ev.image === "string"
-    ? ev.image
-    : ev.image?.url ?? null;
-
-  return {
-    title: ev.name,
-    description: (ev.description ?? "").substring(0, 500),
-    date,
-    location,
-    venue,
-    category: "Community",
-    price: "See website",
-    source_url: externalUrl ?? detailUrl,
-    image_url: image,
-  };
-}
-
-function parseDateTime(raw: string | undefined): string | null {
-  if (!raw) return null;
-  // schema.org dates: "YYYY-MM-DD" (all-day) or "YYYY-MM-DDTHH:MM:SS[Z|±HH:MM]"
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2})(?::(\d{2}))?)?/);
-  if (!m) return null;
-  const date = m[1];
-  const hhmm = m[2] ?? "19:00";
-  const ss = m[3] ?? "00";
-  return `${date} ${hhmm}:${ss}`;
 }
 
 // Minimal Element interface — deno-dom's types don't carry through cleanly

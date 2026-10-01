@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ErrorState } from "@/components/ui/error-state";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
@@ -74,7 +75,7 @@ function downloadICS(title: string, stops: ItineraryStop[]) {
 
 export default function ItineraryDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: itinerary, isLoading } = useItinerary(slug || '');
+  const { data: itinerary, isLoading, error, refetch } = useItinerary(slug || '');
 
   if (isLoading) {
     return (
@@ -88,6 +89,29 @@ export default function ItineraryDetail() {
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  /**
+   * WEB-SEO-040. A FAILED LOAD AND A MISSING ROW ARE DIFFERENT ANSWERS.
+   * This used to fall straight through to the not-found branch below, which
+   * renders "not found" AND a noindex - so Googlebot arriving during a
+   * PostgREST blip was told a real page should not be indexed. No query here
+   * sets throwOnError, so RouteErrorBoundary never sees these either.
+   *
+   * The retry state carries NO robots meta: the page is fine, the fetch was
+   * not, and saying nothing leaves whatever is already indexed alone.
+   */
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/itineraries/${slug}`} />
+        <Header />
+        <div className="container mx-auto px-4 py-16">
+          <ErrorState error={error} onRetry={() => refetch()} />
         </div>
         <Footer />
       </div>
@@ -120,6 +144,14 @@ export default function ItineraryDetail() {
 
   return (
     <>
+      {/* WEB-SEO-033. RouteCanonical was only in the LOADING branch, so the
+          canonical existed for the few hundred milliseconds before the fetch
+          resolved and then vanished. A crawler that executes JS sees the
+          settled DOM, which had none -- and SEO-028 put it in the loading
+          branch precisely because the canonical must not wait for data, not
+          because it should stop existing once data arrives. It belongs in
+          both. */}
+      <RouteCanonical path={`/itineraries/${slug}`} />
       <Helmet>
         <title>{itinerary.seo_title || itinerary.title} | Des Moines Insider</title>
         <meta name="description" content={itinerary.seo_description || itinerary.description || ''} />

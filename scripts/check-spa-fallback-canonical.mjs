@@ -19,7 +19,8 @@
  * because each line looks fine on its own.
  *
  * TWO ASSERTIONS:
- *   1. Every `ASSETS.fetch(new URL("/"` in the middleware is either inside the
+ *   1. Every shell fetch in the middleware (`ASSETS.fetch(new URL("/"` or
+ *      `= await context.next()`) is either inside the
  *      rewrite helper or immediately handed to it. This one always runs.
  *   2. If dist/ has been built, the homepage shell still contains the canonical
  *      the rewrite targets. A selector that matches nothing is a rewrite that
@@ -57,7 +58,11 @@ if (!src.includes(`function ${HELPER}`)) {
   );
 }
 
-const shellFetch = /ASSETS\.fetch\(\s*new URL\(\s*["']\/["']/;
+// Two shapes serve the shell. The original fetched "/" explicitly; the current
+// middleware lets Pages' single-page-app mode answer via `await context.next()`
+// and corrects the result. The static-asset branch's `return context.next()`
+// serves files, not the shell, and is deliberately not matched.
+const shellFetch = /ASSETS\.fetch\(\s*new URL\(\s*["']\/["']|=\s*await\s+context\.next\(\)/;
 const shellFetchLines = [];
 lines.forEach((line, i) => {
   if (shellFetch.test(line)) shellFetchLines.push(i);
@@ -65,7 +70,8 @@ lines.forEach((line, i) => {
 
 if (shellFetchLines.length === 0) {
   failures.push(
-    'No ASSETS.fetch(new URL("/")) found in the middleware. The SPA fallback moved; ' +
+    'No shell fetch (ASSETS.fetch(new URL("/")) or `= await context.next()`) found in ' +
+      'the middleware. The SPA fallback moved; ' +
       'this check no longer covers it.'
   );
 }
@@ -84,16 +90,25 @@ lines.forEach((line, i) => {
   }
 });
 
+// The context.next() fallback branches on entity type before correcting, so its
+// first withSelfCanonical call sits ~60 lines below the fetch.
+const WINDOW = 100;
+
 // Each remaining shell fetch has to reach a canonical rewrite. Both shapes are
 // accepted: the helper, or an inline HTMLRewriter chain that names the selector.
 for (const i of shellFetchLines) {
   if (/\breturn\b/.test(lines[i])) continue; // already reported above
-  const after = lines.slice(i, i + 40).join('\n');
-  const corrected = after.includes(HELPER) || after.includes('link[rel="canonical"]');
+  // Code only: the fallback's own comment names the helper, and a comment is not
+  // a correction.
+  const after = lines
+    .slice(i, i + WINDOW)
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join('\n');
+  const corrected = after.includes(`${HELPER}(`) || after.includes('link[rel="canonical"]');
   if (!corrected) {
     failures.push(
       `functions/_middleware.ts:${i + 1} fetches the shell but nothing within the ` +
-        `next 40 lines corrects its canonical.`
+        `next ${WINDOW} lines corrects its canonical.`
     );
   }
 }

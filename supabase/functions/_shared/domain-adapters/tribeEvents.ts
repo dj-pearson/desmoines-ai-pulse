@@ -34,6 +34,8 @@ import {
   type EventSourceProfile,
 } from "../eventSourceProfiles.ts";
 import { BROWSER_HEADERS } from "../eventPageDiscovery.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
+import { normalizeCategory } from "../eventCategories.ts";
 
 const PER_PAGE = 50;
 const MAX_PAGES = 4; // 200 events is far more than any of these venues publishes
@@ -203,10 +205,17 @@ async function getJson(apiUrl: string): Promise<TribeResponse | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(apiUrl, {
+    // WEB-SEC-024: this is a WordPress REST endpoint on SOMEONE ELSE'S site,
+    // discovered by crawling it - not an API published for us the way
+    // statsapi.mlb.com is - so robots.txt applies.
+    const res = await fetchAllowed(apiUrl, {
       headers: { ...BROWSER_HEADERS, Accept: "application/json" },
       signal: controller.signal,
     });
+    if (!res) {
+      console.log(`  ⛔ [wp-tribe-events] ${apiUrl} disallowed by robots.txt`);
+      return null;
+    }
     if (!res.ok) {
       console.log(`  ⚠️ [wp-tribe-events] HTTP ${res.status} for ${apiUrl}`);
       return null;
@@ -253,7 +262,8 @@ function toAdapterEvent(
     location: location.substring(0, 200),
     // The plugin's own venue name wins; the profile default only fills a blank.
     venue: (venueName || profile.venue?.name || "TBD").substring(0, 100),
-    category: mapCategory(evt.categories) ?? profile.defaultCategory ?? "General",
+    // WEB-BE-049: the canonical fallback, not "General".
+    category: normalizeCategory(mapCategory(evt.categories) ?? profile.defaultCategory),
     price: normalizeCost(evt.cost),
     // `url` is the event permalink — a real per-event deep link, which is
     // exactly what the listing-page-only path could never produce.

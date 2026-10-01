@@ -1,3 +1,10 @@
+-- WEB-SEC-032: a service_role JWT was written here as a literal in 2025. It is
+-- replaced with the Vault read the rest of the codebase uses. This file is
+-- APPLIED HISTORY and is never re-run, so editing it changes no database --
+-- what it does is stop the tree carrying a live credential. The key that was
+-- installed by this migration is removed from the DATABASE by
+-- 20260902000015_purge_embedded_service_key.sql, and rotating it is a
+-- separate, owner-only action (docs/SECRETS_ROTATION.md).
 -- Create webhook configuration table for articles
 CREATE TABLE IF NOT EXISTS public.article_webhooks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -42,7 +49,7 @@ DO $$ BEGIN
           url := 'https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/publish-article-webhook',
           headers := jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzUzNzk3NywiZXhwIjoyMDY5MTEzOTc3fQ.zsR9yYH5T0UnQT9U-umyUf--yIiDYJMMF4tvhkzPzRM'
+            'Authorization', 'Bearer ' || public.app_secret('service_role_key')
           ),
           body := jsonb_build_object(
             'articleId', NEW.id,
