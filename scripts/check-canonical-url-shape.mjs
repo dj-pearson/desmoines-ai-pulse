@@ -30,7 +30,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { CANONICAL_ELSEWHERE, PRERENDER_ROUTES } from './prerender-routes.mjs';
 import { prerenderOutputPath } from './prerender-output.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -85,7 +85,8 @@ for (const route of PRERENDER_ROUTES) {
     problems.push(`${route}: canonical href is not an absolute URL (${href})`);
     continue;
   }
-  const want = canonicalPathFor(route);
+  // SEO-036: a route declared in CANONICAL_ELSEWHERE names its target instead.
+  const want = canonicalPathFor(CANONICAL_ELSEWHERE[route] ?? route);
   if (declared !== want) {
     problems.push(
       `${route}: canonical declares ${declared}, but the build serves ${want}. ` +

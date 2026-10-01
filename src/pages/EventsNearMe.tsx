@@ -77,6 +77,19 @@ const PAGE_SIZE = 24;
 
 const PAGE_URL = `${BRAND.baseUrl}/events/near-me`;
 
+/**
+ * SEO-036: this page canonicals to /events/today and is in no sitemap.
+ *
+ * It ranked 72 on 494 impressions while /events/today sat at 47-53: two pages
+ * answering "what's on in Des Moines right now" split the signal, and this one
+ * cannot win "near me" for a searcher it has not located (the prerendered copy
+ * is always "near Downtown"). A canonical hands its links and impressions to
+ * the page meant to rank; noindex would discard them. It stays prerendered so
+ * a crawler that runs no JavaScript still reads this canonical rather than
+ * the SPA shell's self-canonical (functions/_middleware.ts).
+ */
+const CANONICAL_URL = `${BRAND.baseUrl}/events/today`;
+
 function readStoredOrigin(): string {
   const stored = storage.get<string>(NEAR_ME_ORIGIN_STORAGE_KEY);
   return findNearMeOrigin(stored)?.slug ?? DEFAULT_NEAR_ME_ORIGIN;
@@ -242,7 +255,7 @@ export default function EventsNearMe() {
         title="Events Near Me in Des Moines | Des Moines Insider"
         description="Des Moines events nearest first, measured from where you are or from Downtown, East Village, Ankeny, Waukee and other parts of the metro."
         keywords={['events near me', 'nearby events', 'Des Moines events', 'local events', 'events by distance']}
-        canonicalUrl={PAGE_URL}
+        canonicalUrl={CANONICAL_URL}
       />
       <EventListJsonLd
         events={visibleEvents as unknown as Event[]}

@@ -304,13 +304,24 @@ function parts(isoDate: string) {
   return { y, m, d, month: MONTHS[m - 1] };
 }
 
-/** "October 2-4, 2026", "October 30 - November 1, 2026", "December 31, 2027 - January 2, 2028". */
-export function formatWeekendRange(w: WeekendWindow): string {
-  const f = parts(w.friday);
-  const s = parts(w.sunday);
+/**
+ * Two YYYY-MM-DD dates as one range: "October 2-4, 2026",
+ * "October 30 - November 1, 2026", "December 31, 2027 - January 2, 2028", and
+ * "October 2, 2026" when both are the same day. SEO-036 uses it for the hub
+ * headings, so a hub and its weekly article print the weekend identically.
+ */
+export function formatDateRange(first: string, last: string): string {
+  const f = parts(first);
+  const s = parts(last);
+  if (first === last) return `${f.month} ${f.d}, ${f.y}`;
   if (f.y !== s.y) return `${f.month} ${f.d}, ${f.y} - ${s.month} ${s.d}, ${s.y}`;
   if (f.m !== s.m) return `${f.month} ${f.d} - ${s.month} ${s.d}, ${s.y}`;
   return `${f.month} ${f.d}-${s.d}, ${f.y}`;
+}
+
+/** "October 2-4, 2026", "October 30 - November 1, 2026", "December 31, 2027 - January 2, 2028". */
+export function formatWeekendRange(w: WeekendWindow): string {
+  return formatDateRange(w.friday, w.sunday);
 }
 
 /** this-weekend-in-des-moines-october-2-4-2026 */

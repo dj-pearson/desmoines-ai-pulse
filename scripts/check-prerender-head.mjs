@@ -33,6 +33,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { walkPrerenderedPages } from './prerender-output.mjs';
+import { CANONICAL_ELSEWHERE } from './prerender-routes.mjs';
 
 const DIST = 'dist';
 
@@ -124,7 +125,10 @@ for (const p of pages) {
       canonicalPath = null;
     }
     const normalise = (s) => (s === null ? null : s.replace(/\/+$/, '') || '/');
-    if (normalise(canonicalPath) !== normalise(p.route)) {
+    // SEO-036: a route declared in CANONICAL_ELSEWHERE must point at its
+    // declared target, and only there.
+    const expected = CANONICAL_ELSEWHERE[p.route] ?? p.route;
+    if (normalise(canonicalPath) !== normalise(expected)) {
       problems.push(`${p.route}: canonical points at ${p.canonical}`);
     }
   }

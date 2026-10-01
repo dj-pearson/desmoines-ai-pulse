@@ -325,9 +325,12 @@ export function stripPrerenderSignal(html) {
  * @param {string} route     the pathname it was captured for
  * @param {string|null|Array<string|null>} shellTitle  title(s) that mean the
  *   page never rendered as itself: the vite shell's, and the homepage's
+ * @param {string} [expectedCanonical] the path the canonical must name; the
+ *   route itself unless it is declared in CANONICAL_ELSEWHERE
+ *   (scripts/prerender-routes.mjs, SEO-036)
  * @returns {string[]} failure reasons, empty if the page is publishable
  */
-export function strictGateFailures(html, route, shellTitle) {
+export function strictGateFailures(html, route, shellTitle, expectedCanonical = route) {
   const failures = [];
 
   // Compare decoded text, so "&amp;" in one capture and "&" in another (Helmet
@@ -371,8 +374,8 @@ export function strictGateFailures(html, route, shellTitle) {
       /* keep the raw value; the comparison below reports it as-is */
     }
     const norm = (p) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
-    if (norm(canonicalPath) !== norm(route)) {
-      failures.push(`canonical points at ${canonicalPath}, not ${route}`);
+    if (norm(canonicalPath) !== norm(expectedCanonical)) {
+      failures.push(`canonical points at ${canonicalPath}, not ${expectedCanonical}`);
     }
   }
 
