@@ -16,6 +16,8 @@ import { computePseoShippable } from './lib/pseoShippable';
 import { computePseoCoverage, PSEO_CANONICAL_ELSEWHERE_FILE, PSEO_NOINDEX_ROUTES_FILE } from './lib/pseoCoverage';
 import { childLastmod } from './lib/sitemapLastmod';
 import { isInMetro } from '../src/lib/geo';
+// SEO-045. No `@/` imports in hotelsNear.ts, so the page and this file share one rule.
+import { hotelsNear, hotelsNearPath, isHotelsNearIndexable } from '../src/lib/hotelsNear';
 // The month floor, the range and the Central-month rule are the month page's
 // own (src/lib/monthPages.ts has no `@/` imports so it loads under tsx here).
 import {
@@ -515,7 +517,7 @@ async function generateHotelsSitemap(): Promise<number | null> {
 
   const { data: hotels, error } = await supabase
     .from('hotels')
-    .select('id, slug, updated_at')
+    .select('id, slug, updated_at, latitude, longitude')
     // Only rows the detail page will actually render. useHotel filters on
     // is_active too, so an inactive hotel resolves to nothing.
     .eq('is_active', true)
@@ -536,6 +538,37 @@ async function generateHotelsSitemap(): Promise<number | null> {
       changefreq: 'weekly',
       priority: '0.6',
     }));
+
+  // SEO-045: /stay/near/:slug, one per venue with enough hotels in range.
+  // The rule is the page's own (hotelsNear + isHotelsNearIndexable), so a URL
+  // is submitted exactly when the page would not noindex itself. In this
+  // sitemap rather than a new one: it is the stay module, and the prerenderer
+  // already renders every URL here.
+  const { data: venues, error: venuesError } = await supabase
+    .from('venues')
+    .select('slug, latitude, longitude, updated_at')
+    .not('slug', 'is', null)
+    .not('latitude', 'is', null)
+    .order('slug');
+  if (venuesError) {
+    // The hotel pages above are still right; the near pages are left out
+    // rather than guessed at, and the log says so.
+    console.error('❌ Error fetching venues for hotels-near pages:', venuesError);
+  } else {
+    let nearPages = 0;
+    for (const venue of venues ?? []) {
+      const near = hotelsNear(venue, hotels ?? []);
+      if (!venue.slug || !isHotelsNearIndexable(near.length)) continue;
+      urls.push({
+        loc: `${baseUrl}${hotelsNearPath(venue.slug)}`,
+        lastmod: venue.updated_at ? venue.updated_at.split('T')[0] : currentDate,
+        changefreq: 'monthly',
+        priority: '0.6',
+      });
+      nearPages += 1;
+    }
+    console.log(`   ${nearPages} hotels-near-venue page(s) of ${(venues ?? []).length} located venues`);
+  }
 
   // The hub only as the empty-set fallback, as for venues/trails/teams below:
   // /stay is already in sitemap-static.xml, and a URL in two sitemaps fails

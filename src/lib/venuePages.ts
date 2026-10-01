@@ -21,7 +21,7 @@
  * a field not to assert, so it is neither rendered nor emitted.
  */
 import { BRAND } from "@/lib/brandConfig";
-import { haversineDistance } from "@/lib/geo";
+import { coordinatesOf, rankByDistance } from "@/lib/hotelsNear";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 export interface VenueLike {
@@ -80,6 +80,20 @@ export const VENUE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   ],
   woolys: ["Wooly's", "Wooly's Des Moines"],
   "leftys-live-music": ["Lefty's Live Music", "Lefty's", "Leftys"],
+  // SEO-045. The spellings the events table carries for the top 30 venues
+  // (production, 2026-10-01). Before these, the Civic Center's 11 upcoming
+  // events and xBk's 8 never reached their venue pages: "Civic Center of
+  // Greater Des Moines" does not contain "Des Moines Civic Center", and a
+  // one-word name only matches exactly.
+  "des-moines-civic-center": ["Civic Center of Greater Des Moines"],
+  xbk: ["xBk Live"],
+  "prairie-meadows": ["Prairie Meadows", "Prairie Meadows Racetrack and Casino"],
+  "flix-brewhouse": ["Flix Brewhouse Des Moines"],
+  "funny-bone-comedy-club": ["Funny Bone Des Moines", "Des Moines Funny Bone"],
+  "knapp-center": ["Drake Knapp Center"],
+  "the-ingersoll": ["Ingersoll Dinner Theater", "Ingersoll Theater"],
+  "des-moines-community-playhouse": ["Des Moines Playhouse"],
+  "iowa-state-fairgrounds": ["Iowa State Fair Grounds"],
 };
 
 /**
@@ -106,15 +120,55 @@ export function venueNames(venue: { name: string; slug?: string | null }): strin
   return [venue.name, ...aliases];
 }
 
-/** How well one venue name matches the event's text; 0 is no match. */
+/**
+ * The shortest share of a venue name an event's text may be and still match
+ * it. "Civic Center" is 12 of "Des Moines Civic Center"'s 23 characters and
+ * matches; "Des Moines" is 10 of 23 and must not, or every event whose venue
+ * field says only the city lands on the Civic Center (and, once it had a row,
+ * the Greater Des Moines Botanical Garden). Same number as venueMatch.ts.
+ */
+export const MIN_FRAGMENT_COVERAGE = 0.5;
+
+/**
+ * Event venue text that names a place, not a venue. Coverage alone does not
+ * stop these: "Des Moines" is 10 of the 17 characters in Woolys' alias
+ * "Wooly's Des Moines". Normalised spellings.
+ */
+const PLACE_NOT_VENUE = new Set([
+  "des moines",
+  "west des moines",
+  "downtown des moines",
+  "east village",
+  "iowa",
+  "des moines iowa",
+  "des moines ia",
+]);
+
+/**
+ * How well one venue name matches the event's text; 0 is no match.
+ *
+ * Tiers, so a weaker kind of match never outranks a stronger one when several
+ * venues match: equal names, then event text that contains the whole venue
+ * name ("Principal Park, Home of the Iowa Cubs"), then event text that is a
+ * fragment of the name ("Civic Center"). Within a tier, the longer name wins.
+ * Without the tiers, "Iowa Events Center" went to the arena, whose alias
+ * "Casey's Center at Iowa Events Center" contains it and is longer.
+ */
 function nameMatchScore(needle: string, rawName: string): number {
   const name = normaliseVenueName(rawName);
   if (!name) return 0;
+  if (name === needle) return 3000 + name.length;
   const shorter = name.length <= needle.length ? name : needle;
-  if (shorter.split(" ").length < 2) {
-    return name === needle ? name.length : 0;
+  if (shorter.split(" ").length < 2) return 0;
+  if (` ${needle} `.includes(` ${name} `)) return 2000 + name.length;
+  if (
+    ` ${name} `.includes(` ${needle} `) &&
+    needle.length / name.length >= MIN_FRAGMENT_COVERAGE &&
+    !PLACE_NOT_VENUE.has(needle)
+  ) {
+    return 1000 + needle.length;
   }
-  return ` ${needle} `.includes(` ${name} `) || ` ${name} `.includes(` ${needle} `) ? name.length : 0;
+  return 0;
 }
 
 /**
@@ -122,9 +176,10 @@ function nameMatchScore(needle: string, rawName: string): number {
  * for "is this event at this venue": event detail, the venue page
  * (useVenueEvents) and the /music venue cards (eventAtVenue) all use it.
  *
- * A venue matches under its own name or any alias in VENUE_ALIASES. The
- * longer matching name wins when several venues match, so "Des Moines Civic
- * Center" beats a hypothetical "Civic Center" row for an event at the former.
+ * A venue matches under its own name or any alias in VENUE_ALIASES. When
+ * several venues match, the stronger kind of match wins (see nameMatchScore),
+ * then the longer name, so "Des Moines Civic Center" beats a hypothetical
+ * "Civic Center" row for an event at the former.
  */
 export function matchVenue<V extends Pick<VenueLike, "name"> & { slug?: string | null }>(
   eventVenue: string | null | undefined,
@@ -168,35 +223,18 @@ export function venueIlikeOrFilter(venue: { name: string; slug?: string | null }
   return [...patterns].join(",");
 }
 
-function coords(p: { latitude?: number | string | null; longitude?: number | string | null }) {
-  const latitude = p.latitude == null ? NaN : Number(p.latitude);
-  const longitude = p.longitude == null ? NaN : Number(p.longitude);
-  return Number.isFinite(latitude) && Number.isFinite(longitude) && (latitude !== 0 || longitude !== 0)
-    ? { latitude, longitude }
-    : null;
-}
-
 /**
  * Items within `maxMiles` of `origin`, nearest first, each with its
  * straight-line distance. Items without coordinates are left out rather than
- * placed last: an unknown distance is not "far".
+ * placed last: an unknown distance is not "far". The ranking itself lives in
+ * hotelsNear.ts so the sitemap generator can run it without the `@/` alias.
  */
 export function nearby<T extends { latitude?: number | string | null; longitude?: number | string | null }>(
   origin: { latitude?: number | string | null; longitude?: number | string | null },
   items: T[],
   opts: { maxMiles?: number; limit?: number } = {},
 ): Array<{ item: T; miles: number }> {
-  const from = coords(origin);
-  if (!from) return [];
-  const maxMiles = opts.maxMiles ?? NEARBY_MILES;
-  return items
-    .map((item) => {
-      const at = coords(item);
-      return at ? { item, miles: haversineDistance(from, at) } : null;
-    })
-    .filter((x): x is { item: T; miles: number } => !!x && x.miles <= maxMiles)
-    .sort((a, b) => a.miles - b.miles)
-    .slice(0, opts.limit ?? 5);
+  return rankByDistance(origin, items, { maxMiles: opts.maxMiles ?? NEARBY_MILES, limit: opts.limit ?? 5 });
 }
 
 /** "0.3 mi", or "under 0.1 mi" - one decimal is all a straight line earns. */
@@ -218,7 +256,7 @@ export function venuePageUrl(venue: Pick<VenueLike, "slug">): string {
 /** The venue as an EventVenue node. Only stored fields; capacity omitted (see header). */
 export function buildVenueJsonLd(venue: VenueLike) {
   const url = venuePageUrl(venue);
-  const at = coords(venue);
+  const at = coordinatesOf(venue);
   const city = venueCity(venue.address);
   return {
     "@context": "https://schema.org",

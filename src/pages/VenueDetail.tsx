@@ -13,9 +13,11 @@ import { Navigation } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
 import { NearbyHotels } from '@/components/venues/NearbyHotels';
+import { LazyLocationMap } from '@/components/LazyLocationMap';
 import { buildEventItemList } from '@/lib/eventSchema';
 import { toJsonLd } from '@/lib/jsonLd';
 import { buildVenueJsonLd, currentVenueName, venueCity, venuePageUrl } from '@/lib/venuePages';
+import { coordinatesOf, hotelsNearPath } from '@/lib/hotelsNear';
 import { BRAND } from '@/lib/brandConfig';
 import { safeHttpUrl } from '@/lib/safeUrl';
 import type { Event } from '@/lib/types';
@@ -109,6 +111,8 @@ export default function VenueDetail() {
   const city = venueCity(venue.address) || BRAND.city;
   // Admin-written; a javascript: value must never become a link (item 11).
   const websiteUrl = safeHttpUrl(venue.website);
+  const venueCoords = coordinatesOf(venue);
+  const hasCoordinates = venueCoords !== null;
   const upcoming = (events ?? []) as unknown as Event[];
   const next = upcoming[0];
   const nextWhen = next ? formatEventPart(next, 'EEEE, MMMM d') : null;
@@ -184,11 +188,22 @@ export default function VenueDetail() {
           </div>
 
           {/* Venue Info */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 ${hasCoordinates ? 'mb-4' : 'mb-10'}`}>
             <Card>
               <CardContent className="p-5">
                 <h3 className="font-semibold mb-2 flex items-center gap-2"><SpriteIcon name="map-pin" className="h-4 w-4" /> Location</h3>
                 {venue.address && <p className="text-sm text-muted-foreground mb-3">{venue.address}</p>}
+                {/* SEO-045: the pin is the stored, geocoded pair - the same one
+                    every hotel distance is measured from. */}
+                {venueCoords && (
+                  <LazyLocationMap
+                    latitude={venueCoords.latitude}
+                    longitude={venueCoords.longitude}
+                    venue={venueName}
+                    location={venue.address}
+                    className="mb-3 h-40 w-full rounded-lg"
+                  />
+                )}
                 {directionsUrl && (
                   <Button asChild variant="outline" size="sm">
                     <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
@@ -208,8 +223,19 @@ export default function VenueDetail() {
                 </CardContent>
               </Card>
             )}
-            <NearbyHotels latitude={venue.latitude} longitude={venue.longitude} placeName={venueName} limit={4} nearSlug={venue.slug} />
+            <NearbyHotels latitude={venue.latitude} longitude={venue.longitude} placeName={venueName} limit={4} />
           </div>
+
+          {/* SEO-045. Outside the card on purpose: NearbyHotels renders
+              nothing when no hotel is within 2 miles (the Fairgrounds), and
+              the wider list on /stay/near/:slug is still the answer then. */}
+          {hasCoordinates && (
+            <p className="mb-10 text-sm">
+              <Link to={hotelsNearPath(venue.slug)} className="inline-flex min-h-11 items-center font-medium text-primary hover:underline">
+                Hotels near {venueName}, by straight-line distance
+              </Link>
+            </p>
+          )}
 
           {/* Upcoming Events */}
           <section>

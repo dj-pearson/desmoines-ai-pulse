@@ -294,7 +294,7 @@ export default function GettingAround() {
                 tonight, then pick the nearest garage above.
               </li>
               <li>
-                <Link to="/stay?near=wells-fargo-arena" className="underline font-medium text-foreground">Hotels near {ARENA_NAME} at the Iowa Events Center</Link>, nearest first.
+                <Link to="/stay/near/wells-fargo-arena" className="underline font-medium text-foreground">Hotels near {ARENA_NAME} at the Iowa Events Center</Link>, nearest first.
               </li>
               <li>
                 <Link to="/music/venues/wells-fargo-arena" className="underline font-medium text-foreground">Events at {ARENA_NAME} and the Iowa Events Center</Link>

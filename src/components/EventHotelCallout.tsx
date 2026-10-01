@@ -9,6 +9,7 @@ import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { formatMiles } from "@/lib/venuePages";
+import { hotelsNearPath } from "@/lib/hotelsNear";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -22,7 +23,7 @@ interface EventHotelCalloutProps {
   /** What NearbyHotels measures from, e.g. "Wells Fargo Arena". */
   placeName?: string;
   /**
-   * The venue slug /stay?near= understands (a `venues` slug). When given,
+   * The venue's `venues` slug, for its /stay/near/:slug page. When given,
    * both the linked-hotels list and the NearbyHotels fallback end with
    * "See all hotels near X" (plan-stay WP2 item 7 / hand-off).
    */
@@ -113,8 +114,13 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
   );
 }
 
+/**
+ * SEO-045: the venue's own "Hotels near" page, which a crawler can index, in
+ * place of the /stay?near= filter state, which it cannot. The filter still
+ * works for anyone holding an old link.
+ */
 function staysHref(nearSlug: string | null): string {
-  return nearSlug ? `/stay?near=${encodeURIComponent(nearSlug)}` : "/stay";
+  return nearSlug ? hotelsNearPath(nearSlug) : "/stay";
 }
 
 /**
