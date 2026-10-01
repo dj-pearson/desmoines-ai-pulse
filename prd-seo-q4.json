@@ -683,13 +683,30 @@
       "priority": 1,
       "phase": 1,
       "branch": "claude/seo-q4-loop",
-      "passes": false,
+      "passes": true,
       "description": "Found by SEO-043: a full prerender on claude/seo-q4-loop exits 1 on 26 restaurant x time pSEO routes (e.g. /bbq/today) that SEO-064 set to noindex,follow with a canonical to /restaurants. They are listed in both the noindex list and CANONICAL_ELSEWHERE, and the strict gate (canonical must resolve to the route itself) rejects them. If CI behaves the same, PR #443 can never build and nothing on this branch can ship.",
       "acceptanceCriteria": [
         "Reproduce with a full build (or the pSEO pass alone) on claude/seo-q4-loop and capture the exact failure for 2 routes.",
         "Fix the gate/route lists so a page that deliberately canonicalises elsewhere is accepted when its canonical matches its declared target (and still fails if it accidentally points at the homepage or anything undeclared). Add a negative control test.",
         "Decide whether these noindex pages should be prerendered at all or excluded from the pSEO pass; justify.",
         "Full build exits 0 on the branch; check PR #443's CI build step result."
+      ],
+      "notes": "PASSES 2026-10-01 (seo/SEO-066 4b02d14b, merged to claude/seo-q4-loop): the acceptance criteria are local-build criteria and were verified. Cause: SEO-064 wrote canonical targets to scripts/.generated/pseo-canonical-elsewhere.json, which check-prerender-head read but prerender.mjs did not, so the strict gate demanded self-canonicals ('pSEO prerender incomplete: 26/96', e.g. /bbq/today canonical points at /restaurants). Fix: scripts/pseo-canonical-elsewhere.mjs (:38,:61,:85) validates the map and drops homepage/self/off-site targets; prerender.mjs:674,974 and check-prerender-head.mjs read through it; 9 new strict-gate checks incl. 4 negative controls (no map, homepage canonical, undeclared target, undeclared page) that fail as intended. Decision: noindex pages stay in the pSEO pass, because without static HTML Cloudflare serves the indexable homepage with a self-canonical at that URL. dist/bbq/today.html: own title, noindex,follow, canonical /restaurants. Full build with entities exit 0: hubs 55/55, pSEO 96/96, entities 1175/1175, 0 strict rejections; check-prerender-head 1326 pages; route parity, check-pseo-coverage, lint, type-check pass. PR #443 CI was failing earlier for other reasons -> SEO-067."
+    },
+    {
+      "id": "SEO-067",
+      "title": "PR #443 CI is red: About.tsx JSON-LD escaping, edge invariants, migration safety",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-066 on PR #443 (head d9ec1799): 'Lint, Type Check, Test & Build' fails at 'Offline helper suites' on json-ld-escape (pages/About.tsx, added by SEO-037, must use toJsonLd), so the production build step never runs. 'Edge function & migration invariants', 'Migration Safety', the AOS review and the secret scan also fail. The secret scan and AOS review were earlier diagnosed as inherited from main (test fixtures; process.env.TZ in tests) and may clear once main is merged into develop; the others are new. Nothing on this branch can ship to develop until CI is green.",
+      "acceptanceCriteria": [
+        "Pull the failing job logs for the latest #443 run (gh run view --log-failed) and list each failure with its cause.",
+        "Fix About.tsx to use toJsonLd and any other json-ld-escape hits.",
+        "Fix the edge-function and migration invariants failures (likely the additive migrations and edge function edits from SEO-054/057/059/060/041: missing ledger/ordering, verify_jwt, CORS/rate-limit middleware, migration naming/order). Keep CLAUDE.md backward-compat rules.",
+        "For secret-scan/AOS failures, confirm whether they come from main-only commits; if so, document and leave; if from this branch, fix.",
+        "Push and re-run; record each check's result."
       ],
       "notes": ""
     }
