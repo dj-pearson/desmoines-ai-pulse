@@ -420,7 +420,7 @@
         "Write docs/seo/ai-citation-prompts.md with 20 prompts covering restaurants by name, 'best X in neighborhood', this weekend, open now, playgrounds.",
         "Run what can be run from here (web search tools, Perplexity/Google AI Mode via browser if available) and log whether desmoinesinsider.com or Catch Des Moines is cited. Record what could not be run."
       ],
-      "notes": ""
+      "notes": "PARTIAL 2026-10-01, merged to claude/seo-q4-loop (51072cbb); passes FALSE: 6 of 160 prompt x engine cells measured and none is an AI answer engine. Cells: Bing top 10 (ChatGPT/Copilot proxy) 4 usable, 16 returned unrelated results (marked not run); DuckDuckGo 2 then a block page; Claude Code WebSearch 0 (session's 200-call budget used); Anthropic API 0 (no key in .env/env); Perplexity, Google AI Mode, ChatGPT, Gemini 0 (no browser connected). Cited us 4 of 6 (Jungle Tea #6 Bing / #7 DDG; Atlas Cafe #3 both); Catch Des Moines in 1. Gaps: (1) 'things to do in des moines this weekend': Catch #1, /events/this-weekend not in Bing top 10 (Eventbrite, Register, desmoinesgirl, greaterdsmusa rank); (2) restaurant pages appear only where the official site is thin (Kura drops behind kurasushi.com, Yelp, DoorDash despite 419 Google impressions at pos 7.4); (3) no AI answer measured. Prompt 9 (East Village brunch) has no page of ours to cite. Files: docs/seo/ai-citation-prompts.md (prompts, targets, summary, monthly steps), docs/seo/ai-citation-baseline-2026-10.csv (160 rows), scripts/ai-citation-check.ts (Bing, DDG, Anthropic API with web search when a key is set; needs @anthropic-ai/sdk installed). OWNER: add ANTHROPIC_API_KEY (or connect the Chrome extension) and re-run to fill the 120 AI-engine cells."
     },
     {
       "id": "SEO-050",
