@@ -588,6 +588,25 @@
         "Fix data quality found: Menchie's and Cheesecake Factory tagged brunch, Toasted Cone duplicated (merge per existing dedupe conventions).",
         "Decide /steakhouse/west-des-moines (7 places): publish via the rule if steakhouse is a taxonomy cuisine."
       ],
+      "notes": "DONE IN PRODUCTION 2026-10-01, merged to claude/seo-q4-loop (971ff4f1); passes FALSE until the 301s and noindex tags are live and generate-pseo-page is deployed. New additive column restaurants.neighborhood (migration applied + recorded); polygons in src/lib/neighborhoodBoundaries.ts (Downtown per the City definition quoted on Wikipedia 'Downtown Des Moines'; East Village per Wikipedia street boundaries; Sherman Hill per the NRHP boundary; Valley Junction PROVISIONAL box Grand/Railroad/1st/8th, no source fetched - search quota exhausted). Assigned 58 rows: downtown 30, East Village 22, Valley Junction 5, Sherman Hill 1; 24 rows skipped because they sit on a city-centre fallback geocode (9 share one downtown point, one is an Ankeny address). Outcomes: /asian/east-village (3 places) kept as noindex with copy from rows; /italian/east-village and /asian/downtown (2) and 12 other downtown/East Village/Valley Junction cuisine pages (0-1) unpublished + 301 (downtown/EV -> /things-to-do/<area>; VJ -> /neighborhoods/west-des-moines). TRADE-OFF: these 15 URLs had 1,027 impressions and 13 clicks in 3 months at pos ~7-11; they were ranking on generated copy over 0-3 real listings, which is a doorway risk. They can come back once SEO-061 fills coverage. 6 older indexable pages rebuilt from rows ('Tacos La Familia' gone); /brunch/ankeny and /italian/ankeny rebuilt, still noindex; /steakhouse/west-des-moines (7) published indexable. Data: Menchie's -> Frozen Yogurt; Cheesecake Factory -> 'American, Brunch' (its location page lists weekend brunch); Toasted Cone rows -> Ice Cream and toasted-cone merged into the-toasted-cone (389 vs 174 impr) with a 301. Backups + SQL in backups/seo-060/ (main checkout, untracked). Verified: check-pseo-coverage (9 indexable, 3 noindex), -demand, -collisions, check-sitemap-registration, check-sitemap-redirects, 37 coverage tests, lint, type-check. OPEN -> SEO-061: 24 fallback geocodes, cuisine mislabels (Jethro's BBQ and The Breakfast Club as 'American'), Valley Junction boundary source, /restaurants/<area> pages still carry LLM copy, and thin neighbourhood restaurant coverage."
+    },
+    {
+      "id": "SEO-061",
+      "title": "Restaurant coverage downtown, East Village and Valley Junction is too thin to support neighbourhood pages",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-060: only 30 restaurants geocode to downtown, 22 to East Village and 5 to Valley Junction, so 15 neighbourhood cuisine pages that ranked at position 7-11 (1,027 impressions in 3 months) had to be retired. Catch Des Moines's member listings cover these districts; matching their coverage with verified, non-member listings is the clearest way to beat them on 'east village restaurants' (5,000/mo) and 'downtown des moines restaurants' (5,000/mo). Data defects block it: 24 rows on a city-centre fallback geocode, cuisine mislabels (Jethro's BBQ and The Breakfast Club as 'American'), an unsourced Valley Junction boundary, and /restaurants/<area> pages still carrying LLM copy.",
+      "acceptanceCriteria": [
+        "Re-geocode the 24 fallback rows from their street addresses (existing geocoding helper or a free geocoder); fix the Ankeny row; re-run the neighbourhood assignment.",
+        "Fix cuisine tags where the restaurant's own site/menu shows a clearer cuisine; record evidence.",
+        "Source the Valley Junction boundary (city or district association page) and adjust the polygon.",
+        "Add missing currently-open restaurants in Downtown, East Village and Valley Junction via the existing ingestion path, each verified open from its own site or listing fetched this session, with address, cuisine and geocode. Target: enough to bring at least 5 combos back over the 5-place rule. Back up and record each insert.",
+        "Re-run scripts/write-pseo-coverage-pages.ts; re-publish combos that now pass and remove their 301s per redirect rules (only if the redirect target was temporary).",
+        "Replace LLM copy on /restaurants/<area> pages with copy templated from rows.",
+        "NEEDS WEB SEARCH QUOTA: verify before starting."
+      ],
       "notes": ""
     }
   ]
