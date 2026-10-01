@@ -70,7 +70,9 @@
 # was removed is the clean-slugged one, and these keep its URL alive.
 # Renaming the survivor instead would have moved a URL that ranks at position
 # 11.9 with 388 impressions, which is the one thing worth not doing here.
-/restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
+# SEO-063: daves-hot-chicken-2 is the Davenport store, hidden by SEO-062 (out of
+# area, noindex), so the old slug goes to the restaurant list instead.
+/restaurants/daves-hot-chicken   /restaurants   301
 /restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
 
 # The other direction: bonchon-2 was the duplicate removed, and it had ranked -
@@ -116,7 +118,7 @@
 /restaurants/cozy-caf-johnston             /restaurants/cozy-cafe-johnston  301
 /restaurants/crme                          /restaurants/creme  301
 /restaurants/el-fogn                       /restaurants/el-fogon  301
-/restaurants/ritual-caf                    /restaurants/ritual-cafe  301
+/restaurants/ritual-caf                    /restaurants  301
 /restaurants/trellis-caf                   /restaurants/trellis-cafe  301
 
 # SEO-053: two 2025 articles carried invented venue facts (a Salisbury House
@@ -167,3 +169,11 @@
 # fetched 2026-10-01). Moving the row moved its date-suffixed URL. Keep this
 # for at least one release cycle (CLAUDE.md, Backward Compatibility).
 /events/the-slaughterhouse-haunted-house-2026-10-01  /events/the-slaughterhouse-haunted-house-2026-10-02  301
+
+# SEO-063: taste-of-new-york-pleasant-hill was the Waukee store (769 SE Alices
+# Rd, tasteofnypizza.com); renamed. "empire" was Kids Empire, an indoor
+# playground: the restaurant row is hidden and the playgrounds row is the page.
+# Rows changed in production 2026-10-01 (scripts/content-backups/seo-063/).
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/restaurants/taste-of-new-york-pleasant-hill  /restaurants/taste-of-new-york-waukee  301
+/restaurants/empire  /playgrounds/kids-empire-merle-hay  301
