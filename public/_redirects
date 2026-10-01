@@ -202,3 +202,17 @@
 /things-to-do/tourists/this-weekend  /events/this-weekend  301
 /things-to-do/tourists/today  /events/today  301
 /things-to-do/tourists/winter  /things-to-do/winter  301
+
+# SEO-061: duplicate rows merged in production 2026-10-01; the survivor is the
+# slug with more Search Console impressions (2026-09-30 export). Restaurants
+# went through merge_duplicate_content; the playground losers were deleted
+# after their image/text was copied to the survivor. Backups, SQL and evidence
+# in scripts/content-backups/seo-061/ on claude/seo-q4-loop (branch
+# seo/SEO-061). Same rules as on claude/seo-q4-loop. Keep for at least one
+# release cycle (CLAUDE.md, Backward Compatibility).
+/restaurants/taste-of-new-york               /restaurants/taste-of-new-york-pizza-bar  301
+/restaurants/pizza-bar-by-taste-of-new-york  /restaurants/the-pizza-bar                301
+/restaurants/iowa-taproom                    /restaurants/the-iowa-taproom             301
+/playgrounds/riverview-park-2                /playgrounds/riverview-park               301
+/playgrounds/union-park                      /playgrounds/union-park-playground        301
+/playgrounds/union-park-2                    /playgrounds/union-park-playground        301
