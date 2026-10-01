@@ -52,6 +52,12 @@ import { Link } from "react-router-dom";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { createSlug } from "@/lib/slug";
+import { PlaygroundHubGuide } from "@/components/playgrounds/PlaygroundHubGuide";
+import {
+  buildPlaygroundHubSections,
+  playgroundHubDescription,
+  playgroundHubLead,
+} from "@/lib/playgroundHub";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
@@ -325,6 +331,12 @@ export default function Playgrounds() {
     amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
   });
 
+  // SEO-042. The lead sections describe the whole metro catalogue. They render
+  // only when no filter is set, and then the list above IS the whole
+  // catalogue (search is client-side and counts as a filter), so they read it
+  // rather than paying for a second request.
+  const hubSections = useMemo(() => buildPlaygroundHubSections(allPlaygrounds), [allPlaygrounds]);
+
   // The filter controls and the two "Browse By" grids describe the whole
   // catalogue, so they cannot come from a list that is now filtered. One
   // three-column query covers age ranges, suburbs, amenities and both counts.
@@ -418,14 +430,26 @@ export default function Playgrounds() {
     ? `"${searchQuery}" Playgrounds in Des Moines`
     : selectedAgeRange && selectedAgeRange !== "all"
     ? `Playgrounds for Ages ${selectedAgeRange} in Des Moines`
-    : "Des Moines Playgrounds - Parks, Splash Pads & Family Fun";
+    : "Des Moines Playgrounds & Splash Pads, Best by Age";
 
   // Explore pass 2 WP4 item 7. The metro count from the facets query, which
   // is the whole catalogue, not the filtered list; no number while it loads.
+  //
+  // SEO-042: the old line promised "shade, restrooms, surface and
+  // accessibility notes", which no row in production carries (0 of 69 on
+  // 2026-10-01). It now names what the page lists. hubSections reads the list,
+  // which a filter narrows, so a filtered view keeps the count-only line.
+  const hubDescription =
+    !hasActiveFilters && metroCount != null ? playgroundHubDescription(metroCount, hubSections) : null;
   const pageDescription =
-    metroCount != null && metroCount > 0
-      ? `${metroCount} playgrounds across the Des Moines metro, with shade, restrooms, surface and accessibility notes where we have them.`
-      : "Playgrounds across the Des Moines metro, with shade, restrooms, surface and accessibility notes where we have them.";
+    hubDescription ??
+    (metroCount != null && metroCount > 0
+      ? `${metroCount} playgrounds across the Des Moines metro, by age, splash pad and distance, with directions to each.`
+      : "Playgrounds across the Des Moines metro, by age, splash pad and distance, with directions to each.");
+
+  // SEO-042. The first paragraph answers with counts of rows this page lists.
+  // A filtered list would undercount, so a filtered view gets the plain line.
+  const hubLead = hasActiveFilters ? null : playgroundHubLead(metroCount ?? 0, hubSections);
 
   const breadcrumbs = [
     { name: "Home", url: "/" },
@@ -488,10 +512,10 @@ export default function Playgrounds() {
       <section className="bg-[#2D1B69]" data-playgrounds-hero>
         <div className="container mx-auto px-4 py-6 md:py-16 text-center">
           <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white mb-2 md:mb-4 tracking-tight">
-            Discover Des Moines Playgrounds
+            Des Moines Playgrounds and Splash Pads
           </h1>
-          <p className="text-base md:text-xl text-white/90 mb-4 md:mb-8 max-w-3xl mx-auto">
-            Filter by age, shade, restrooms or distance.
+          <p className="text-base md:text-xl text-white/90 mb-4 md:mb-8 max-w-3xl mx-auto" data-playgrounds-lead>
+            {hubLead ?? "Playgrounds across the Des Moines metro, by age, splash pad and distance."}
           </p>
 
           <div className="max-w-3xl mx-auto">
@@ -630,6 +654,12 @@ export default function Playgrounds() {
             { label: "Playgrounds" },
           ]}
         />
+
+        {/* SEO-042: best by age and splash pads lead the page. A filtered view
+            is a question already asked, so it goes straight to its results. */}
+        {!hasActiveFilters && !isLoading && !error && (
+          <PlaygroundHubGuide sections={hubSections} />
+        )}
 
         {/* Filters Section - Desktop */}
         {!isMobile && showFilters && (
@@ -1022,11 +1052,11 @@ export default function Playgrounds() {
             faqs={[
               {
                 question: "What are the best playgrounds in Des Moines?",
-                answer: "This guide maps playgrounds across the Des Moines metro. Each one has its own page with its location, the amenities it lists, its age range and its rating where one is recorded, so you can compare them on what matters to your family."
+                answer: "The picks at the top of this page are ranked by how many amenities each listing records, split into toddler and preschool picks and all-ages picks. Each playground has its own page with its location, the amenities it lists and its age range where one is recorded, so you can compare them on what matters to your family."
               },
               {
                 question: "Are there splash pads or accessible playgrounds in Des Moines?",
-                answer: "Yes. Use the amenity filters on this page to show playgrounds that list a splash pad, accessible equipment or other features. Splash pads are seasonal, so check the park operator's schedule before you go."
+                answer: "Yes. The splash pad list on this page shows every playground whose listing names a splash pad or sprayground, and the amenity filters find accessible equipment and other features. Splash pads are seasonal and their dates are not in our listings, so check the park operator's schedule before you go."
               },
               {
                 question: "What ages are Des Moines playgrounds for?",

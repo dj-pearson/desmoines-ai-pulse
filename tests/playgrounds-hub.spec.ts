@@ -20,7 +20,9 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *     "Playground Not Found", and nothing says "dawn to dusk".
  *
  * Explore pass 2 WP4 adds:
- *  7. A result card is on the first 390x844 screen (item 6).
+ *  7. A playground link is on the first 390x844 screen (item 6). Since
+ *     SEO-042 the hub leads with its best-by-age and splash pad lists, so the
+ *     first link may be one of those rather than a grid card.
  *  8. "Des Moines" is a comma segment, not a substring: West Des Moines rows
  *     are not counted under it, and the request is the segment or() (item 9).
  *  9. Name A-Z by default; an error offers Try again (item 10).
@@ -267,7 +269,7 @@ test.describe('/playgrounds hub (explore WP4)', () => {
 
     await page.getByRole('button', { name: 'Switch to map view' }).click();
     await expect(page).toHaveURL(/view=map/);
-    await expect(page.getByRole('heading', { level: 1, name: /Discover Des Moines Playgrounds/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Des Moines Playgrounds and Splash Pads/ })).toBeVisible();
     await expect(page.locator('[data-playground-filters]')).toBeVisible();
     // Either the 600px skeleton or the map itself holds the space.
     await expect(
@@ -299,12 +301,13 @@ test.describe('/playgrounds hub (explore WP4)', () => {
 });
 
 test.describe('/playgrounds hub (explore pass 2 WP4)', () => {
-  test('a result card is on the first 390x844 screen', async ({ page }) => {
+  test('a playground link is on the first 390x844 screen', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installFixtureBackend(page);
     await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    const firstCard = page.locator('[data-playground-grid] a').first();
+    // SEO-042: the guide lists lead the page when no filter is set.
+    const firstCard = page.locator('[data-playground-guide] a[href^="/playgrounds/"], [data-playground-grid] a').first();
     await expect(firstCard).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 0));
     const box = await firstCard.boundingBox();
@@ -368,6 +371,25 @@ test.describe('/playgrounds hub (explore pass 2 WP4)', () => {
     await expect(page.locator('[data-playground-grid]')).toBeVisible();
   });
 
+  test('SEO-042: lead answer, best by age with its rule, splash pads, no indoor section', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installPlaygrounds(page);
+    await page.goto('/playgrounds');
+    const guide = page.locator('[data-playground-guide]');
+    await expect(guide).toBeVisible();
+    await expect(page.locator('[data-playgrounds-lead]')).toContainText('playgrounds across the Des Moines metro');
+    await expect(guide.getByRole('heading', { level: 2, name: 'Best playgrounds by age' })).toBeVisible();
+    await expect(guide.locator('[data-selection-rule]')).toContainText('how many amenities');
+    // The fixture Ankeny row lists "Splash Pad".
+    await expect(page.locator('[data-picks="splash"]')).toContainText('Fixture Ankeny Playground');
+    await expect(page.getByRole('heading', { name: /indoor/i })).toHaveCount(0);
+
+    // A filtered view goes straight to its results.
+    await page.goto('/playgrounds?shade=1');
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
+    await expect(page.locator('[data-playground-guide]')).toHaveCount(0);
+  });
+
   test('Explore row, Show on map, and no unbacked claims', async ({ page }) => {
     await installFixtureBackend(page);
     await installPlaygrounds(page);
@@ -387,7 +409,8 @@ test.describe('/playgrounds hub (explore pass 2 WP4)', () => {
     // n is the metro count from the facets query: four fixture rows.
     await expect(page.locator('meta[name="description"]').last()).toHaveAttribute(
       'content',
-      '4 playgrounds across the Des Moines metro, with shade, restrooms, surface and accessibility notes where we have them.',
+      // SEO-042: what the page lists, not shade/restroom notes no row carries.
+      '4 playgrounds across the Des Moines metro, with the best picks by age, 1 splash pad or sprayground and directions to each.',
     );
   });
 });

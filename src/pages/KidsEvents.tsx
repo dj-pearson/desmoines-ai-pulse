@@ -326,7 +326,7 @@ export default function KidsEvents() {
               <div>
                 <h3 className="font-semibold mb-2">Get outside</h3>
                 <p className="text-sm text-muted-foreground">
-                  Between events, the <Link to="/playgrounds" className="text-primary underline underline-offset-2">playgrounds guide</Link> shows where to play near you.
+                  Between events, the <Link to="/playgrounds" className="text-primary underline underline-offset-2">playgrounds guide</Link> shows where to play near you, with its <Link to="/playgrounds#splash-pads" className="text-primary underline underline-offset-2">splash pads</Link> and <Link to="/playgrounds#best-by-age" className="text-primary underline underline-offset-2">best playgrounds by age</Link>.
                 </p>
               </div>
             </div>
