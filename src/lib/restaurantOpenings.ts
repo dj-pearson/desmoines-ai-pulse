@@ -82,6 +82,28 @@ export function isStaleUpcoming(row: OpeningRow, now: Date = new Date()): boolea
 }
 
 /**
+ * Why a row marked upcoming should be re-checked by a person, or null.
+ * The upcoming status is never cleared by anything, so a place that opened
+ * keeps telling searchers it hasn't (SEO-062: 15 open places were still
+ * opening_soon/announced, including the most-clicked restaurant pages).
+ * Google's business_status OPERATIONAL means the place is trading; a passed
+ * opening_date or timeframe year means the announcement is stale.
+ * scripts/check-stale-openings.ts runs this nightly against production.
+ */
+export function staleUpcomingReason(
+  row: OpeningRow & { business_status?: string | null },
+  now: Date = new Date(),
+): string | null {
+  if (!isUpcomingStatus(row.status)) return null;
+  if ((row.business_status ?? "").trim().toUpperCase() === "OPERATIONAL") {
+    return "Google business_status is OPERATIONAL";
+  }
+  if (!isStaleUpcoming(row, now)) return null;
+  const day = openingDay(row.opening_date);
+  return day ? `opening_date ${day} has passed` : `opening_timeframe "${row.opening_timeframe}" has passed`;
+}
+
+/**
  * THE definition of a newly opened restaurant, for the hub's openings watch,
  * /restaurants/new and the card. A place is new when it has an opening_date
  * in the last `windowDays` Central days (today included) and is not closed or
