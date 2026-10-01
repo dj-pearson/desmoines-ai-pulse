@@ -5,8 +5,9 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * Openings, "new" and the restaurant card (docs/page-plans/eat-drink-pass2.md,
  * WP2 items 5-8).
  *
- * - /restaurants/new files a stale announcement (opening_soon, dated
- *   2025-06-15) under "Announced, not confirmed", never under "Opening soon".
+ * - /restaurants/new lists openings under month headers and leaves a stale
+ *   announcement (opening_soon, dated 2025-06-15) off entirely (SEO-039),
+ *   counting it in the "set aside" sentence instead.
  * - Each opening carries a Source link from source_url; a javascript: URL is
  *   not rendered as one.
  * - "N added since your last visit" reads a timestamp the page stored on the
@@ -144,7 +145,7 @@ async function openNewPage(page: Page, lastVisit?: string) {
   // Registered after the fixture backend, so it wins for the restaurants table.
   await page.route('**/rest/v1/restaurants?*', (route) => json(route, [FRESH, STALE, NEXT, OLD_FAVORITE]));
   await page.goto('/restaurants/new');
-  await expect(page.getByRole('heading', { name: /^Recently opened/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: /^Opened in [A-Z][a-z]+ \d{4}/ }).first()).toBeVisible({ timeout: 30_000 });
 }
 
 async function openHub(page: Page, { prerender = false } = {}) {
@@ -171,20 +172,19 @@ async function openHub(page: Page, { prerender = false } = {}) {
 }
 
 test.describe('/restaurants/new', () => {
-  test('files a stale announcement under "Announced, not confirmed"', async ({ page }) => {
+  test('lists openings by month and leaves a stale announcement off', async ({ page }) => {
     await openNewPage(page);
+
+    // The first sentence is computed from the rows: one opening, one date.
+    await expect(page.getByText(/^1 restaurant opened in the Des Moines area on [A-Z][a-z]+ \d{1,2}, \d{4}, going by/)).toBeVisible();
 
     const upcoming = page.locator('section[aria-labelledby="upcoming-heading"]');
     await expect(upcoming.getByRole('link', { name: 'Next Month Tacos' })).toBeVisible();
-    await expect(upcoming.getByText('Stale Promise Cafe')).toHaveCount(0);
+    await expect(page.getByText('Stale Promise Cafe')).toHaveCount(0);
+    await expect(page.getByText(/1 more place is marked new or announced without a confirmed, sourced date/)).toBeVisible();
 
-    const unconfirmed = page.locator('section[aria-labelledby="unconfirmed-heading"]');
-    await expect(unconfirmed.getByRole('heading', { name: /Announced, not confirmed/ })).toBeVisible();
-    const staleCard = unconfirmed.locator('article', { hasText: 'Stale Promise Cafe' });
-    await expect(staleCard).toContainText('Announced for Jun 15, 2025, not confirmed');
-
-    const recent = page.locator('section[aria-labelledby="recent-heading"]');
-    await expect(recent.locator('article', { hasText: 'Fresh Noodle Bar' })).toContainText(/Opened [A-Z][a-z]{2} \d{1,2}/);
+    const month = page.locator('section[aria-labelledby^="opened-"]').first();
+    await expect(month.locator('article', { hasText: 'Fresh Noodle Bar' })).toContainText(/Opened [A-Z][a-z]{2} \d{1,2}/);
     // Opened in 2019: not in the past year, whatever created_at says.
     await expect(page.getByText('Old Favorite Diner')).toHaveCount(0);
   });
@@ -201,7 +201,6 @@ test.describe('/restaurants/new', () => {
       'href',
       'https://news.example.org/tacos',
     );
-    await expect(page.locator('article', { hasText: 'Stale Promise Cafe' }).getByRole('link', { name: /^Source:/ })).toHaveCount(0);
     await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
   });
 

@@ -247,6 +247,12 @@ export default function Footer({ preferredSource = true }: FooterProps = {}) {
                   </Link>
                 </li>
                 <li>
+                  {/* SEO-039: a static link to the openings list from every page, the homepage included. */}
+                  <Link to="/restaurants/new" className="footer-link">
+                    New Restaurants
+                  </Link>
+                </li>
+                <li>
                   <Link to="/attractions" className="footer-link flex items-center gap-2">
                     <SpriteIcon name="map-pin" className="h-3.5 w-3.5" /> Attractions
                   </Link>
