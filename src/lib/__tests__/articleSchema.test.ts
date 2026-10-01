@@ -19,6 +19,8 @@ describe("articleSchemaType", () => {
     // Month guides
     "things-to-do-in-des-moines-october-2026",
     "november-2026-des-moines-events",
+    // SEO-048: timely, dated by the month in its slug.
+    "trick-or-treat-times-des-moines-suburbs-october-2026",
   ])("%s is NewsArticle", (slug) => {
     expect(articleSchemaType(slug)).toBe("NewsArticle");
   });
