@@ -23,7 +23,9 @@ import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { RestaurantAtAGlance } from "@/components/RestaurantAtAGlance";
 import {
+  acceptsReservationsOf,
   buildRestaurantSchema,
   currentDescription,
   priceTier,
@@ -32,7 +34,7 @@ import {
   restaurantPageTitle,
 } from "@/lib/restaurantMeta";
 import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
-import { Phone, Star, DollarSign, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
+import { Phone, Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
@@ -46,6 +48,8 @@ import {
 } from "@/lib/restaurantHours";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useRestaurantMenu } from "@/hooks/useRestaurantMenu";
+import { useRestaurantAreaPages } from "@/hooks/useRestaurantAreaPages";
+import { lastUpdatedLabel, neighborhoodLink, scheduleHoursSentence } from "@/lib/restaurantAtAGlance";
 import { tonightHeading, useTonightNearRestaurant } from "@/hooks/useTonightNearRestaurant";
 import { handleError } from "@/lib/errorHandler";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
@@ -267,6 +271,9 @@ export default function RestaurantDetails() {
   // The minute clock, so an event that has started leaves the list (WP3.7).
   const tonight = useTonightNearRestaurant(restaurant?.latitude, restaurant?.longitude, now);
 
+  // Published, indexable cuisine x area pages that list this place (SEO-034).
+  const { data: areaPages } = useRestaurantAreaPages(restaurant);
+
   if (isLoading || (mergedInto && (survivorLoading || redirectTo))) {
     return (
       <>
@@ -387,14 +394,19 @@ export default function RestaurantDetails() {
   // Pre-opening copy on a place that has opened is left out everywhere (WP3.4).
   const aboutText = currentDescription(restaurant);
   const hoursSpec = resolveOpeningHoursSpecification(hoursJson, restaurant.opening);
+  // Columns select("*") returns that types.ts does not list yet (Places
+  // enrichment and SEO-060). Each is optional and read defensively.
+  const placeExtras = restaurant as {
+    google_maps_uri?: string | null;
+    reservable?: boolean | null;
+    reservation_url?: string | null;
+    neighborhood?: string | null;
+  };
 
   const showImage = restaurant.image_url && !imageError;
   // The address's city, not the `city` column: the column says "Des Moines" for
   // rows whose address is in West Des Moines (Bonchon, Dave's Hot Chicken).
   const cityName = restaurantLocality(restaurant) || "Des Moines";
-  // `location` is already the full address; appending the city used to print
-  // "..., West Des Moines, IA 50266, USA, Des Moines".
-  const neighborhoodText = restaurant.location || cityName;
 
   // One builder for this page and the edge shell (functions/_middleware.ts), so
   // a crawler that misses the prerender sees the same title. seo_title and
@@ -453,6 +465,8 @@ export default function RestaurantDetails() {
     openingHoursSpecification: hoursSpec,
     // A closed or not-yet-open place publishes no hours.
     openForBusiness: !lifecycle,
+    mapsUrl: safeWebUrl(placeExtras.google_maps_uri),
+    acceptsReservations: acceptsReservationsOf(placeExtras, safeWebUrl),
   });
 
   // WEB-SEO-027: the BreadcrumbList this used to build lived here AND in the
@@ -508,6 +522,12 @@ export default function RestaurantDetails() {
   const menuCapturedAt = hasCapturedMenu ? centralDate(menuData?.menu?.captured_at) : null;
   const menuFromTheirSite =
     !!menuData?.menu && (menuData.menu.source_type === "scraped" || !!safeWebUrl(menuData.menu.source_url));
+
+  // SEO-034: the answers under the name. Hours by schedule, so the prerendered
+  // sentence stays true; none for a place you can't walk into.
+  const hoursSentence = lifecycle ? null : scheduleHoursSentence(hoursJson, restaurant.opening, now);
+  const hoodLink = neighborhoodLink(placeExtras, cityName);
+  const areaLinks = [...(hoodLink ? [hoodLink] : []), ...(areaPages ?? [])];
 
   const chipClass =
     "inline-flex min-h-11 items-center text-xs px-3 bg-gray-100 text-gray-800 dark:bg-muted dark:text-foreground hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium";
@@ -670,18 +690,9 @@ export default function RestaurantDetails() {
                         <span className="text-sm">Google rating</span>
                       </div>
                     ) : null}
-                    {tier && (
-                      <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
-                        <DollarSign className="h-4 w-4" aria-hidden="true" />
-                        <span className="font-semibold">{tier}</span>
-                      </div>
-                    )}
-                    {restaurant.location && (
-                      <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
-                        <SpriteIcon name="map-pin" className="h-4 w-4" />
-                        <span className="text-sm">{neighborhoodText}</span>
-                      </div>
-                    )}
+                    {/* Price and address moved to the at-a-glance list
+                        below, where they are text a crawler reads next to
+                        the hours (SEO-034). */}
                   </div>
                 </div>
               </div>
@@ -730,6 +741,20 @@ export default function RestaurantDetails() {
                 </div>
               </div>
             )}
+
+            {/* SEO-034: hours, address, phone, price and menu, in that order,
+                before the buttons and long copy. */}
+            <RestaurantAtAGlance
+              hoursSentence={hoursSentence}
+              priceTier={tier}
+              address={restaurant.location}
+              locality={restaurantLocality(restaurant)}
+              phone={!isShut ? restaurant.phone : null}
+              phoneHref={!isShut ? phoneHref : null}
+              menu={menuAction}
+              areaLinks={areaLinks}
+              lastUpdated={lastUpdatedLabel(restaurant.updated_at)}
+            />
 
             {/* Quick Actions Bar */}
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
