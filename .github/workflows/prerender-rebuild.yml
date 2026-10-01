@@ -1,0 +1,67 @@
+# Daily Prerender Rebuild (SEO-035, supersedes WEB-SEO-011's deploy step)
+#
+# The production build is the only thing that regenerates public/sitemap-*.xml
+# and re-runs the prerenderer, and it only ran on push to main. So the daily
+# crawler's new events, and /events/today, /events/this-weekend and every other
+# prerendered list, stayed frozen at the last merge for crawlers that do not run
+# JavaScript. This workflow POSTs a Cloudflare Pages deploy hook once a day,
+# which rebuilds main against current data.
+#
+# 13:00 UTC is 8 am CDT / 7 am CST: after the 12:00 UTC crawler (usually done
+# by 12:20), and after the Thursday weekend article (11:00 UTC), so Thursday's
+# rebuild prerenders it. This is the single place the hook is called; the
+# crawler's publish-freshness job no longer calls it, so there is one build a
+# day rather than two.
+#
+# NEEDS ONE SECRET: CLOUDFLARE_DEPLOY_HOOK_URL (repository secret). Without it
+# the run goes yellow with a warning, not red, so a missing secret is visible
+# in the Actions list without paging anyone.
+
+name: Daily Prerender Rebuild
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prerender-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Trigger Cloudflare Pages rebuild
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST the deploy hook
+        id: deploy
+        env:
+          DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "${DEPLOY_HOOK}" ]; then
+            echo "::warning::CLOUDFLARE_DEPLOY_HOOK_URL is not set. Create a deploy hook for branch main in the Cloudflare Pages project (Settings > Builds & deployments > Deploy hooks) and add its URL as a repository secret with that name (SEO-035)."
+            echo "triggered=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/deploy.json -w '%{http_code}' -X POST "${DEPLOY_HOOK}" --max-time 60) || true
+          echo "deploy hook HTTP ${code}"
+          # The response carries a deployment id, not the hook URL; safe to show.
+          head -c 300 /tmp/deploy.json 2>/dev/null || true
+          echo
+          if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+            echo "::error::Deploy hook returned ${code}; today's prerender will not run."
+            exit 1
+          fi
+          echo "triggered=true" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Daily prerender rebuild" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Rebuild triggered**: ${{ steps.deploy.outputs.triggered || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- The build regenerates sitemap-*.xml and re-runs the prerenderer against current events." >> "$GITHUB_STEP_SUMMARY"
