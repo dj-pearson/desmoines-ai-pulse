@@ -308,7 +308,7 @@ export function SearchTrafficDashboard() {
   };
 
   const handleDisconnectAll = async () => {
-    if (!confirm("Disconnect all Google Search Console properties? You'll need to reconnect.")) return;
+    if (!confirm("Disconnect all Google Search Console properties? This deletes the property rows and, with them, every synced keyword and page row. To fix a broken connection, use Connect instead: reconnecting keeps the history.")) return;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -758,8 +758,12 @@ export function SearchTrafficDashboard() {
         </TabsContent>
       </Tabs>
 
-      {/* Setup OAuth if no providers connected */}
-      {connectedProviders.length === 0 && (
+      {/* Setup OAuth when nothing has a usable credential. SEO-050: this used
+          to require connectedProviders to be EMPTY, so a property whose grant
+          was revoked hid the Connect button, and the only way to reach it was
+          Disconnect - which deletes the property and, by cascade, every synced
+          row. gsc-oauth now re-links the existing property on reconnect. */}
+      {!connectedProviders.some((p) => p.status === "connected" || p.status === "expired") && (
         <OAuthProviderSetup onComplete={loadConnectedProviders} />
       )}
     </div>
