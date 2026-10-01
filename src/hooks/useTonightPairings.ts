@@ -101,7 +101,7 @@ async function fetchRestaurantsNear(boxes: string[]): Promise<TonightRestaurant[
     .from("restaurants")
     .select(TONIGHT_RESTAURANT_COLUMNS)
     .neq("is_merged", true)
-    .not("opening", "is", null)
+    .not("hours_json", "is", null)
     .or(logic)
     // Deterministic when the row cap truncates the result.
     .order("id", { ascending: true })

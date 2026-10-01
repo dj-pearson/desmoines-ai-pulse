@@ -31,6 +31,7 @@
  * a three-day festival exports as three days. The row never had the
  * event_end_utc it used to read.
  */
+import { markdownToPlainText } from '@/lib/aiText';
 import { BRAND } from '@/lib/brandConfig';
 import { DEFAULT_EVENT_HOURS, eventEnd } from '@/lib/eventTiming';
 import { createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
@@ -285,8 +286,10 @@ export function toIcsEvent(row: {
   return {
     id: row.id,
     title: row.title,
+    // ICS DESCRIPTION is plain text; calendars show markdown verbatim.
     description:
-      row.enhanced_description || row.original_description || row.description || undefined,
+      markdownToPlainText(row.enhanced_description || row.original_description || row.description) ||
+      undefined,
     date,
     location: row.location ?? undefined,
     venue: row.venue ?? undefined,

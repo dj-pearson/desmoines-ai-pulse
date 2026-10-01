@@ -4,6 +4,134 @@
 # /things-to-do/tourists page duplicated that concept — 301 to the canonical.
 /things-to-do/tourists  /visitors-guide  301
 
+# SEO-041: these two pSEO pages promised BBQ in Ankeny and West Des Moines and
+# listed none; the restaurants table has no BBQ place in either city. Under the
+# coverage rule (src/pseo/coverageRule.ts) a page with fewer than 3 places is
+# not published, so both were unpublished on 2026-10-01 and point at the area
+# guide. /bbq/ankeny had 67 Search Console impressions, /bbq/west-des-moines 18.
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/bbq/ankeny  /guide/ankeny  301
+/bbq/west-des-moines  /guide/west-des-moines  301
+
+# SEO-060: the downtown, East Village and Valley Junction cuisine pages listed
+# nothing because no restaurant row recorded its neighbourhood. Rows now carry
+# restaurants.neighborhood (assigned from lat/lng, src/lib/neighborhoodBoundaries.ts)
+# and the coverage rule measured these 14 at 0-2 places, so they were unpublished
+# on 2026-10-01. /asian/east-village (3 places) stays, noindexed. Targets: the
+# area's things-to-do page for downtown and the East Village; for Valley
+# Junction, /things-to-do/valley-junction is in no sitemap, so the West Des
+# Moines neighbourhood page, which covers it. Impressions are from the
+# 2026-09-30 Search Console export. Keep for at least one release cycle
+# (CLAUDE.md, Backward Compatibility).
+/asian/downtown  /things-to-do/downtown  301
+/bbq/downtown  /things-to-do/downtown  301
+/brunch/downtown  /things-to-do/downtown  301
+/italian/downtown  /things-to-do/downtown  301
+/mexican/downtown  /things-to-do/downtown  301
+/bbq/east-village  /things-to-do/east-village  301
+/brunch/east-village  /things-to-do/east-village  301
+/italian/east-village  /things-to-do/east-village  301
+/mexican/east-village  /things-to-do/east-village  301
+/asian/valley-junction  /neighborhoods/west-des-moines  301
+/bbq/valley-junction  /neighborhoods/west-des-moines  301
+/brunch/valley-junction  /neighborhoods/west-des-moines  301
+/italian/valley-junction  /neighborhoods/west-des-moines  301
+/mexican/valley-junction  /neighborhoods/west-des-moines  301
+
+# SEO-040: one URL per intent. Numbers are clicks / impressions / position from
+# the 2026-09-30 Search Console export (Pages.csv). Keep for at least one
+# release cycle (CLAUDE.md, Backward Compatibility).
+#  - East Village: /things-to-do/east-village 14 / 1,208 / 11.8 beat
+#    /neighborhoods/east-village 2 / 124 / 17.0 (plus 0 / 14 / 17.5 slashed).
+#    /guide/east-village had no impressions and no sitemap entry; it was a third
+#    page for the same query. Its pSEO row was unpublished on 2026-10-01.
+#  - Date night: /events/date-night 15 / 495 (13 / 390 slashed at 23.0 plus
+#    2 / 105 at 21.4) beat /things-to-do/date-night 1 / 215 / 24.6. pSEO row
+#    unpublished on 2026-10-01.
+#  - /neighborhoods/downtown (0 / 45 / 24.7, plus 0 / 4 slashed) has no guide
+#    entry, so it served a noindex "we don't have a guide" page. The footer
+#    linked it. /things-to-do/downtown (1 / 172 / 33.3) is the area page.
+/neighborhoods/east-village  /things-to-do/east-village  301
+/guide/east-village  /things-to-do/east-village  301
+/things-to-do/date-night  /events/date-night  301
+/neighborhoods/downtown  /things-to-do/downtown  301
+
+# SEO-056: the pSEO "things to do this weekend / today" pages duplicated the
+# events hubs SEO-040 flagged, and carried copy generated in March 2026 (St.
+# Patrick's Day, "spring") that the prerender served in October. The hubs
+# win: /things-to-do/this-weekend had 7 impressions and /things-to-do/today 1
+# in the 2026-09-30 Search Console export. Both pSEO rows were unpublished on
+# 2026-10-01 (src/pseo/timeRelative.ts HUB_DUPLICATES; check-pseo-time-copy
+# fails if a line here goes missing). Keep for at least one release cycle
+# (CLAUDE.md, Backward Compatibility).
+/things-to-do/this-weekend  /events/this-weekend  301
+/things-to-do/today  /events/today  301
+
+# SEO-064: pSEO pages whose extra dimension changes nothing in their listing.
+# /things-to-do/<audience>/<time> lists exactly /things-to-do/<time> (the
+# calendar records no audience) and /<cuisine>/<time> lists the same
+# restaurants all year (restaurants carry no date): 100% overlap with the
+# parent, measured 2026-10-01 in docs/seo/pseo-time-duplicates-2026-10-01.csv.
+# These had 0 impressions in the 2026-09-30 Search Console export, so they
+# were unpublished and 301 to the parent page (src/pseo/duplicateRule.ts;
+# check-pseo-coverage fails if one points anywhere else). The ones with
+# impressions stay published as noindex with a canonical to the parent.
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/asian/august  /restaurants  301
+/asian/summer  /restaurants  301
+/asian/today  /restaurants  301
+/brunch/august  /restaurants  301
+/brunch/fall  /restaurants  301
+/brunch/spring  /restaurants  301
+/brunch/summer  /restaurants  301
+/brunch/winter  /restaurants  301
+/italian/august  /restaurants  301
+/italian/december  /restaurants  301
+/italian/fall  /restaurants  301
+/italian/spring  /restaurants  301
+/italian/summer  /restaurants  301
+/italian/winter  /restaurants  301
+/things-to-do/budget/august  /things-to-do/august  301
+/things-to-do/budget/december  /things-to-do/december  301
+/things-to-do/budget/fall  /things-to-do/fall  301
+/things-to-do/budget/spring  /things-to-do  301
+/things-to-do/budget/summer  /things-to-do/summer  301
+/things-to-do/budget/this-weekend  /events/this-weekend  301
+/things-to-do/budget/today  /events/today  301
+/things-to-do/budget/winter  /things-to-do/winter  301
+/things-to-do/date-night/august  /things-to-do/august  301
+/things-to-do/date-night/december  /things-to-do/december  301
+/things-to-do/date-night/fall  /things-to-do/fall  301
+/things-to-do/date-night/spring  /things-to-do  301
+/things-to-do/date-night/summer  /things-to-do/summer  301
+/things-to-do/date-night/this-weekend  /events/this-weekend  301
+/things-to-do/date-night/today  /events/today  301
+/things-to-do/date-night/winter  /things-to-do/winter  301
+/things-to-do/families/august  /things-to-do/august  301
+/things-to-do/families/december  /things-to-do/december  301
+/things-to-do/families/fall  /things-to-do/fall  301
+/things-to-do/families/spring  /things-to-do  301
+/things-to-do/families/summer  /things-to-do/summer  301
+/things-to-do/families/this-weekend  /events/this-weekend  301
+/things-to-do/families/today  /events/today  301
+/things-to-do/families/winter  /things-to-do/winter  301
+/things-to-do/foodies/august  /things-to-do/august  301
+/things-to-do/foodies/december  /things-to-do/december  301
+/things-to-do/foodies/fall  /things-to-do/fall  301
+/things-to-do/foodies/spring  /things-to-do  301
+/things-to-do/foodies/summer  /things-to-do/summer  301
+/things-to-do/foodies/this-weekend  /events/this-weekend  301
+/things-to-do/foodies/today  /events/today  301
+/things-to-do/foodies/winter  /things-to-do/winter  301
+/things-to-do/tourists/august  /things-to-do/august  301
+/things-to-do/tourists/december  /things-to-do/december  301
+/things-to-do/tourists/fall  /things-to-do/fall  301
+/things-to-do/tourists/spring  /things-to-do  301
+/things-to-do/tourists/summer  /things-to-do/summer  301
+/things-to-do/tourists/this-weekend  /events/this-weekend  301
+/things-to-do/tourists/today  /events/today  301
+/things-to-do/tourists/winter  /things-to-do/winter  301
+
 # WEB-SEO-007: /weekend and /events/this-weekend targeted the same query.
 # /events/this-weekend is the canonical one — it declares its own canonical URL,
 # emits EventListJsonLd and carries FAQ content, none of which /weekend did.
@@ -18,7 +146,9 @@
 # was removed is the clean-slugged one, and these keep its URL alive.
 # Renaming the survivor instead would have moved a URL that ranks at position
 # 11.9 with 388 impressions, which is the one thing worth not doing here.
-/restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
+# SEO-063: daves-hot-chicken-2 is the Davenport store, hidden by SEO-062 (out of
+# area, noindex), so the old slug goes to the restaurant list instead.
+/restaurants/daves-hot-chicken   /restaurants   301
 /restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
 
 # The other direction: bonchon-2 was the duplicate removed, and it had ranked -
@@ -26,6 +156,11 @@
 # with history behind it. There is one Bonchon in the metro (EP True Pkwy, West
 # Des Moines) and its row is the clean slug.
 /restaurants/bonchon-2           /restaurants/bonchon               301
+
+# SEO-060: Toasted Cone existed twice at 9500 University Ave (same Google place
+# id). Merged with merge_duplicate_content into the-toasted-cone, which had 389
+# Search Console impressions to toasted-cone's 174 (2026-09-30 export).
+/restaurants/toasted-cone        /restaurants/the-toasted-cone      301
 
 # SEO-005: NO REDIRECT HERE, DELIBERATELY, and this note is the point of the
 # entry. Both remaining -2 pairs on this site are TWO REAL RESTAURANTS:
@@ -59,8 +194,29 @@
 /restaurants/cozy-caf-johnston             /restaurants/cozy-cafe-johnston  301
 /restaurants/crme                          /restaurants/creme  301
 /restaurants/el-fogn                       /restaurants/el-fogon  301
-/restaurants/ritual-caf                    /restaurants/ritual-cafe  301
+/restaurants/ritual-caf                    /restaurants  301
 /restaurants/trellis-caf                   /restaurants/trellis-cafe  301
+
+# SEO-053: two 2025 articles carried invented venue facts (a Salisbury House
+# "haunted basement", the Slaughterhouse placed in Ankeny, a Pierce's Pumpkin
+# Patch in Grimes). Both rows are archived, not deleted (backups in
+# scripts/content-backups/seo-053/), and each URL goes to the verified SEO-032
+# guide that replaced it. Keep these for at least one release cycle.
+/articles/halloweekend-in-des-moines-your-ultimate-guide-to-spooky-events-family-fun-2023  /articles/haunted-houses-near-des-moines  301
+/articles/fall-colors-cider-the-ultimate-guide-to-des-moines-apple-orchards-pumpkin-patches-des-moines-guide  /articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide  301
+
+# SEO-058: seven more 2025 articles were raw generator JSON naming closed
+# businesses and wrong towns, and none had a search impression in the three
+# months to 2026-09-30. Archived, not deleted (backups in
+# scripts/content-backups/seo-058/); each URL goes to the closest live hub.
+# Keep these for at least one release cycle.
+/articles/beaverdales-best-a-locals-guide-to-des-moines-most-charming-brick-streets-des-moines-guide  /things-to-do  301
+/articles/7-unexpected-date-night-ideas-in-des-moines-under-50-des-moines-guide  /events/date-night  301
+/articles/des-moines-indoor-farmers-markets-2023-24-complete-winter-shopping-guide-des-moines-guide  /things-to-do/winter  301
+/articles/des-moines-best-air-conditioned-adventures-indoor-activities-for-scorching-days-des-moines-guide  /things-to-do  301
+/articles/oktoberfest-in-des-moines-complete-guide-to-2023-beer-gardens-german-events-des-moines-guide  /guides/fall-festivals  301
+/articles/last-call-for-farmers-market-your-september-shopping-cooking-guide-des-moines-guide  /things-to-do/downtown  301
+/articles/morning-to-midnight-the-perfect-summer-saturday-in-downtown-des-moines-des-moines-guide  /things-to-do/downtown  301
 
 # WEB-FEAT-027: /calendar rendered a permanently empty calendar. Its hook,
 # useSmartCalendar, was commented "Mock functions since tables don't exist yet"
@@ -85,3 +241,50 @@
 # question from listed hours. App.tsx carries the same redirect for in-app
 # navigation. Keep for at least one release cycle.
 /real-time  /restaurants/open-now  301
+# SEO-055: the Slaughterhouse row said Thu Oct 1; it opens Fri Oct 2 (HauntPay,
+# fetched 2026-10-01). Moving the row moved its date-suffixed URL. Keep this
+# for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/events/the-slaughterhouse-haunted-house-2026-10-01  /events/the-slaughterhouse-haunted-house-2026-10-02  301
+
+# SEO-056 (shipped early with the hotfix, 2026-10-01): the pSEO "things to do
+# this weekend / today" pages duplicated the events hubs and carried copy
+# generated in March 2026. Both rows were unpublished in production; same
+# rules as on claude/seo-q4-loop. Keep for at least one release cycle.
+
+# SEO-063: taste-of-new-york-pleasant-hill was the Waukee store (769 SE Alices
+# Rd, tasteofnypizza.com); renamed. "empire" was Kids Empire, an indoor
+# playground: the restaurant row is hidden and the playgrounds row is the page.
+# Rows changed in production 2026-10-01 (backups and evidence in
+# scripts/content-backups/seo-063/ on claude/seo-q4-loop, branch seo/SEO-063).
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/restaurants/taste-of-new-york-pleasant-hill  /restaurants/taste-of-new-york-waukee  301
+/restaurants/empire  /playgrounds/kids-empire-merle-hay  301
+
+# SEO-064: pSEO pages whose extra dimension changes nothing in their listing.
+# /things-to-do/<audience>/<time> lists exactly /things-to-do/<time> (the
+# calendar records no audience) and /<cuisine>/<time> lists the same
+# restaurants all year (restaurants carry no date): 100% overlap with the
+# parent, measured 2026-10-01 in docs/seo/pseo-time-duplicates-2026-10-01.csv.
+# These had 0 impressions in the 2026-09-30 Search Console export, so they
+# were unpublished and 301 to the parent page (src/pseo/duplicateRule.ts;
+# check-pseo-coverage fails if one points anywhere else). The ones with
+# impressions stay published as noindex with a canonical to the parent.
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+
+# SEO-067: /restaurants/valley-junction unpublished (zero measured demand;
+# Valley Junction is part of West Des Moines). Keep for at least one release.
+/restaurants/valley-junction  /restaurants/west-des-moines  301
+
+# SEO-061: duplicate rows merged in production 2026-10-01; the survivor is the
+# slug with more Search Console impressions (2026-09-30 export). Restaurants
+# went through merge_duplicate_content; the playground losers were deleted
+# after their image/text was copied to the survivor. Backups, SQL and evidence
+# in scripts/content-backups/seo-061/ on claude/seo-q4-loop (branch
+# seo/SEO-061). Keep for at least one release cycle (CLAUDE.md, Backward
+# Compatibility).
+/restaurants/taste-of-new-york               /restaurants/taste-of-new-york-pizza-bar  301
+/restaurants/pizza-bar-by-taste-of-new-york  /restaurants/the-pizza-bar                301
+/restaurants/iowa-taproom                    /restaurants/the-iowa-taproom             301
+/playgrounds/riverview-park-2                /playgrounds/riverview-park               301
+/playgrounds/union-park                      /playgrounds/union-park-playground        301
+/playgrounds/union-park-2                    /playgrounds/union-park-playground        301

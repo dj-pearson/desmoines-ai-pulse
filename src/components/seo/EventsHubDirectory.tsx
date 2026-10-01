@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
 import { useVenueLinks } from "@/hooks/useVenues";
-import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, neighborhoodHref } from "@/lib/neighborhoods";
 import { SUBURB_EVENT_PAGES, hasNeighborhoodGuide, hasSuburbPage } from "@/lib/suburbs";
 import { DIRECTORY_PILL, MonthLinks } from "@/components/seo/MonthLinks";
+import { AnnualEventLinks } from "@/components/seo/AnnualEventLinks";
 
 /**
  * Every way into the events calendar, on the /events hub (SEO-009, SEO-015).
@@ -86,7 +87,8 @@ const pairLink =
  * exists, then the guides that have no events page (East Village).
  */
 function PlacesSection() {
-  const guidesWithoutEvents = NEIGHBORHOODS.filter((n) => n.prerender && !hasSuburbPage(n.slug));
+  // guidePath (SEO-040): the East Village guide moved to /things-to-do/east-village.
+  const guidesWithoutEvents = NEIGHBORHOODS.filter((n) => (n.prerender || n.guidePath) && !hasSuburbPage(n.slug));
 
   return (
     <section>
@@ -119,7 +121,7 @@ function PlacesSection() {
         )}
         {guidesWithoutEvents.map((n) => (
           <li key={n.slug}>
-            <Link to={`/neighborhoods/${n.slug}`} className={DIRECTORY_PILL}>
+            <Link to={neighborhoodHref(n)} className={DIRECTORY_PILL}>
               {n.name} guide
             </Link>
           </li>
@@ -139,6 +141,8 @@ export function EventsHubDirectory({ className = "" }: { className?: string }) {
       <div className="space-y-8">
         <Section title="By when and who" links={WHEN_AND_WHO} />
         <MonthLinks embedded />
+        {/* SEO-043: one page per annual event, every year's dates. */}
+        <AnnualEventLinks embedded title="Annual events, every year's dates" />
         <PlacesSection />
         {/* The venues table is the music venue list, and every link goes to
             /music/venues/<slug>, so the heading says so. "What's on at each

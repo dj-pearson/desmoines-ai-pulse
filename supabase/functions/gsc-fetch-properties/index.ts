@@ -9,16 +9,28 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { validateInput } from "../_shared/validation.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  // SEO-050: shared CORS instead of "*". Callers are AdminGscCallback and
+  // SearchTrafficDashboard, both on the site origin.
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  const rateLimit = await checkRateLimitPersistent(req, {
+    max: 20,
+    endpoint: "gsc-fetch-properties",
+    exemptInternal: true,
+    message: "Too many requests. Please try again later.",
+  });
+  if (!rateLimit.success && rateLimit.response) {
+    return addRateLimitHeaders(rateLimit.response, rateLimit);
   }
 
   // Runs as service_role and had no caller check. verify_jwt defaults to
@@ -37,11 +49,21 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { credentialId } = await req.json();
+    let body: Record<string, unknown> = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Fall through: a missing body is reported as a missing credentialId,
+      // the same 400 it produced before, rather than a 500.
+    }
+    const validation = validateInput(body ?? {}, {
+      credentialId: { type: "string", required: true, pattern: UUID_PATTERN },
+    });
+    const credentialId = validation.data?.credentialId as string | undefined;
 
-    if (!credentialId) {
+    if (!validation.success || !credentialId) {
       return new Response(
-        JSON.stringify({ error: "credentialId is required" }),
+        JSON.stringify({ error: "credentialId is required", details: validation.errors }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

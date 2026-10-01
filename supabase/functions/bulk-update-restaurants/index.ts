@@ -8,7 +8,12 @@ import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
 import { runJob } from '../_shared/jobRunner.ts'
 import { isPlacesMediaUrl, GOOGLE_ATTRIBUTION_TEXT } from '../_shared/placesPhoto.ts'
-import { normalizeBusinessStatus, normalizeOpeningHours } from '../_shared/placeHours.ts'
+import {
+  buildHoursOnlyUpdate,
+  HOURS_ONLY_FIELD_MASK,
+  normalizeBusinessStatus,
+  normalizeOpeningHours,
+} from '../_shared/placeHours.ts'
 import type { BusinessStatus, StoredHours } from '../_shared/placeHours.ts'
 
 interface GooglePlaceDetails {
@@ -74,6 +79,120 @@ interface RestaurantUpdate {
   updated_at: string;
 }
 
+/**
+ * SEO-054. `hoursOnly: true` fills hours_json and business_status for rows
+ * that have a Google place id and no hours yet, and touches nothing else.
+ *
+ * WHY A SEPARATE MODE. hours_json was added by WEB-BE-045 and written only by
+ * the full enrichment below, which (a) runs only on rows whose `enhanced` is
+ * not 'completed' unless forceUpdate is set, and 428 of 478 rows were
+ * completed before the column existed; (b) with forceUpdate, re-reads the
+ * first N rows of an unordered select, so it re-enriches the same rows; and
+ * (c) overwrites description, location, cuisine, rating, phone, website and
+ * the photo on every row it touches. Filling hours through it would rewrite
+ * 440 descriptions to get 440 hours. This mode asks Places for two fields
+ * (HOURS_ONLY_FIELD_MASK), writes two columns, never sets `enhanced`, and
+ * works through the backlog in id order so each call takes the next rows.
+ *
+ * Additive: an optional request field, absent means the old behaviour, and
+ * the response keeps the old keys (CLAUDE.md, edge function compatibility).
+ */
+async function refreshHoursOnly(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  googleApiKey: string,
+  batchSize: number,
+  afterId: string | null,
+  corsHeaders: Record<string, string>,
+  req: Request,
+): Promise<Response> {
+  let query = supabase
+    .from('restaurants')
+    .select('id, name, google_place_id')
+    .not('google_place_id', 'is', null)
+    .is('hours_json', null)
+    .order('id', { ascending: true })
+    .limit(batchSize)
+  // A place Google has no hours for keeps hours_json null and would head every
+  // batch forever. The caller passes back `lastId` to move past it.
+  if (afterId) query = query.gt('id', afterId)
+  const { data: rows, error: fetchError } = await query
+  if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
+
+  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string }>
+  let updated = 0
+  let noHours = 0
+  const errors: Array<{ id: string; name: string; error: string }> = []
+
+  const job = await runJob('bulk-update-restaurants-hours', async (ctx) => {
+    for (const row of targets) {
+      try {
+        const res = await fetchWithTimeout(
+          `https://places.googleapis.com/v1/places/${encodeURIComponent(row.google_place_id)}`,
+          { method: 'GET', headers: { 'X-Goog-Api-Key': googleApiKey, 'X-Goog-FieldMask': HOURS_ONLY_FIELD_MASK } },
+        )
+        if (!res.ok) {
+          errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
+          continue
+        }
+        const update = buildHoursOnlyUpdate(await res.json())
+        if (!update) {
+          // Google has no hours and no status for this place. Leave the row
+          // alone: null means unknown, and an empty object would read as data.
+          noHours++
+          continue
+        }
+        const { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
+        if (updateError) errors.push({ id: row.id, name: row.name, error: updateError.message })
+        else updated++
+      } catch (error) {
+        errors.push({ id: row.id, name: row.name, error: error instanceof Error ? error.message : String(error) })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    ctx.processed(updated)
+    ctx.failed(errors.length)
+    ctx.meta({
+      mode: 'hoursOnly',
+      noHours,
+      sources: { 'google-places': { fetched: targets.length, inserted: updated, duplicates: 0, errors: errors.length } },
+    })
+  })
+
+  if (!job.ok) {
+    return new Response(
+      JSON.stringify({ success: false, error: job.error ?? 'Hours refresh failed', runId: job.runId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
+    )
+  }
+
+  await writeAuditLog(supabase, {
+    eventType: 'admin_action',
+    actorId: null,
+    action: 'bulk_update_restaurants_hours',
+    resource: 'restaurants',
+    severity: 'low',
+    ipAddress: auditIp(req),
+    details: { processed: targets.length, updated, noHours, errors: errors.length },
+  })
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      runId: job.runId,
+      message: 'Hours refresh completed',
+      mode: 'hoursOnly',
+      processed: targets.length,
+      updated,
+      noHours,
+      lastId: targets.length > 0 ? targets[targets.length - 1].id : null,
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined,
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+  )
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   const corsResponse = handleCors(req);
@@ -109,10 +228,16 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false } = await req.json()
+    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null } = await req.json()
     // Each row is a paid Google Places lookup, and batchSize went straight into
     // .limit(). 50 is the admin form's own max (RestaurantBulkUpdater.tsx).
     const batchSize = Math.min(Math.max(Math.floor(Number(rawBatchSize)) || 10, 1), 50)
+
+    // SEO-054: hours and status only, for rows with a place id and no hours.
+    if (hoursOnly === true) {
+      const cursor = typeof afterId === 'string' && /^[0-9a-f-]{36}$/i.test(afterId) ? afterId : null
+      return await refreshHoursOnly(supabase, googleApiKey, batchSize, cursor, corsHeaders, req)
+    }
 
     console.log(`Starting bulk restaurant update with batch size: ${batchSize}, forceUpdate: ${forceUpdate}, clearEnhanced: ${clearEnhanced}`)
 

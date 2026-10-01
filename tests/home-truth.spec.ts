@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { installFixtureBackend } from './support/fixtureBackend';
-import { NEIGHBORHOODS, NEIGHBORHOOD_ROUTES } from '../src/lib/neighborhoods';
+import { NEIGHBORHOODS, neighborhoodHref } from '../src/lib/neighborhoods';
 
 /**
  * Home: what the crawler-facing content says (home pass-2 WP4,
@@ -279,7 +279,9 @@ test.describe('Home: truth in the crawler-facing content', () => {
     await expect(tile('Free Events')).toHaveText(String(snapshotFree));
   });
 
-  test('every area chip links to a prerendered neighbourhood route', async ({ page }) => {
+  // SEO-040: the East Village chip goes to /things-to-do/east-village, its
+  // guide, which the pSEO pass prerenders; the rest go to /neighborhoods/<slug>.
+  test('every area chip links to its area guide', async ({ page }) => {
     await page.clock.setFixedTime(THURSDAY_4PM);
     await page.route('**/rest/v1/events?**', answerEvents({ rows: [] }));
     await page.goto('/');
@@ -290,7 +292,7 @@ test.describe('Home: truth in the crawler-facing content', () => {
       links.map((a) => a.getAttribute('href')),
     );
     expect(hrefs).toHaveLength(NEIGHBORHOODS.length);
-    for (const href of hrefs) expect(NEIGHBORHOOD_ROUTES).toContain(href);
+    expect(hrefs).toEqual(NEIGHBORHOODS.map((n) => neighborhoodHref(n)));
   });
 
   test('an area chip carries tonight\'s count from the Tonight rail\'s rows', async ({ page }) => {

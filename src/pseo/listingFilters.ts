@@ -9,6 +9,7 @@
  * Nothing in this file touches React or the Supabase client, which is what lets
  * a plain node script import it.
  */
+import { isNeighborhoodSlug } from '../lib/neighborhoodBoundaries';
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -46,12 +47,66 @@ export const CATEGORY_FILTERS: Record<string, { entity: 'events' | 'restaurants'
   brunch: { entity: 'restaurants', column: 'cuisine', pattern: 'brunch|breakfast|caf|coffee|bakery|diner' },
   coffee: { entity: 'restaurants', column: 'cuisine', pattern: 'coffee|caf|espresso' },
   steakhouse: { entity: 'restaurants', column: 'cuisine', pattern: 'steak' },
+  // SEO-041. 'pizz' covers Pizza, Pizzeria and "Italian/Pizza". It is a subset
+  // of italian's pattern on purpose: an area's pizza page and its italian page
+  // can overlap, and src/pseo/coverageRule.ts refuses to index two pages whose
+  // listings are identical.
+  pizza: { entity: 'restaurants', column: 'cuisine', pattern: 'pizz' },
 };
+
+/**
+ * How a location dimension selects restaurants (SEO-060).
+ *
+ * A suburb is a municipality and its name is in restaurants.city or the
+ * address, so it is matched as text. A neighbourhood is not: every downtown
+ * and East Village row reads "Des Moines", and the location NAME the pages
+ * carried ("Downtown Des Moines", "East Village") appears on almost no row,
+ * so those pages listed nothing. Neighbourhoods match restaurants.neighborhood,
+ * which scripts/assign-restaurant-neighborhoods.ts fills from lat/lng against
+ * the polygons in src/lib/neighborhoodBoundaries.ts.
+ *
+ * Events and attractions keep the text match; they have no such column.
+ */
+export type RestaurantLocationMatch =
+  | { kind: 'neighborhood'; slug: string }
+  | { kind: 'text'; name: string };
+
+export function restaurantLocationMatch(location: { slug: string; name: string }): RestaurantLocationMatch {
+  return isNeighborhoodSlug(location.slug)
+    ? { kind: 'neighborhood', slug: location.slug }
+    : { kind: 'text', name: location.name };
+}
+
+/**
+ * Which table a page lists, from its dimensions. The one copy: the live
+ * listing component, the shippable-set gate and the coverage rule all call it.
+ * Category membership comes from CATEGORY_FILTERS rather than a second
+ * hand-kept list, which is how /pizza/* would otherwise have been resolved to
+ * events and listed nothing.
+ */
+export function resolveEntityType(contentSlug?: string, categorySlug?: string): 'events' | 'restaurants' | 'attractions' {
+  if (contentSlug === 'restaurants') return 'restaurants';
+  if (contentSlug === 'attractions') return 'attractions';
+  if (contentSlug === 'events' || contentSlug === 'things-to-do' || contentSlug === 'nightlife') return 'events';
+  const cat = categorySlug ? CATEGORY_FILTERS[categorySlug] : undefined;
+  if (cat) return cat.entity;
+  return 'events';
+}
 
 function ymd(d: Date): string {
   const m = `${d.getMonth() + 1}`.padStart(2, '0');
   const day = `${d.getDate()}`.padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/**
+ * The calendar day after a YYYY-MM-DD key, for an exclusive upper bound.
+ * temporalRange's `to` is the last day INCLUDED; events.date is timestamptz,
+ * so a query must stop before the next day starts, not at midnight of `to`.
+ */
+export function dayAfter(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return ymd(new Date(y, m - 1, d + 1));
 }
 
 /**

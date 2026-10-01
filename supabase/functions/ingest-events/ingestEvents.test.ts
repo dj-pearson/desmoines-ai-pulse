@@ -51,6 +51,17 @@ Deno.test("a well-formed item becomes a row with all three date columns", () => 
   assertEquals((v.row.event_start_utc as Date).toISOString(), "2026-09-13T00:30:00.000Z");
 });
 
+Deno.test("SEO-057: a model label on the description is dropped, the text and the row are kept", () => {
+  const v = validateItem(
+    item({ description: "**Enhanced Event Description:**\n\nAn evening of brass band music.\n\n**Location:**" }),
+    URL_,
+  );
+  assert(v.ok, "an item with a labelled description is still accepted");
+  if (!v.ok) return;
+  assertEquals(v.row.enhanced_description, "An evening of brass band music.");
+  assertEquals(v.row.original_description, "An evening of brass band music.");
+});
+
 Deno.test("a MALFORMED item is rejected with a named reason, never coerced", () => {
   // The three fields that decide whether a row is a real event. The cloud path
   // defaults a missing title to "Untitled Event"; on a public calendar that is

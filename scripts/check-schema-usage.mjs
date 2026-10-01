@@ -196,9 +196,8 @@ const PENDING_MIGRATIONS = [
   // until the same migration has created trip_plans, so the pending window is
   // the one where the endpoint already refuses with trip_storage_unavailable.
   { table: 'trip_plan_generations', migration: '20261014000001' },
-  // Restaurant lifecycle status (IOS-DD-DISCOVER-15). discover-chat and
-  // get-sponsored-pick retry without the column on 42703.
-  { table: 'restaurants', column: 'business_status', migration: '20260919000009' },
+  // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
+  // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];
 
 const isPending = (table, column) =>

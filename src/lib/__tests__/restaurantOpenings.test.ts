@@ -6,6 +6,7 @@ import {
   openingDay,
   openingLabel,
   orderOpeningsWatch,
+  staleUpcomingReason,
   type OpeningRow,
 } from "@/lib/restaurantOpenings";
 
@@ -144,6 +145,33 @@ describe("isStaleUpcoming", () => {
 
   it("only applies to upcoming statuses", () => {
     expect(isStaleUpcoming(row("newly_opened", "2020-01-01"), NOW)).toBe(false);
+  });
+});
+
+describe("staleUpcomingReason (SEO-062)", () => {
+  const row = (
+    status: string,
+    opening_date: string | null,
+    extra: { opening_timeframe?: string; business_status?: string } = {},
+  ) => ({ id: "x", name: "x", status, opening_date, ...extra });
+
+  it("flags an upcoming row Google says is trading, even with a future date", () => {
+    expect(staleUpcomingReason(row("opening_soon", "2026-12-01", { business_status: "OPERATIONAL" }), NOW)).toBe(
+      "Google business_status is OPERATIONAL",
+    );
+  });
+
+  it("flags a passed opening_date or timeframe year", () => {
+    expect(staleUpcomingReason(row("opening_soon", "2026-03-31"), NOW)).toBe("opening_date 2026-03-31 has passed");
+    expect(staleUpcomingReason(row("announced", null, { opening_timeframe: "2025" }), NOW)).toBe(
+      'opening_timeframe "2025" has passed',
+    );
+  });
+
+  it("leaves a genuinely upcoming row and every non-upcoming row alone", () => {
+    expect(staleUpcomingReason(row("announced", null, { opening_timeframe: "April 2027" }), NOW)).toBeNull();
+    expect(staleUpcomingReason(row("opening_soon", "2026-10-15"), NOW)).toBeNull();
+    expect(staleUpcomingReason(row("open", "2020-01-01", { business_status: "OPERATIONAL" }), NOW)).toBeNull();
   });
 });
 

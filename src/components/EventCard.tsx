@@ -26,6 +26,7 @@ import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewTracking } from "@/hooks/useViewTracking";
 import { recordView } from "@/lib/recentlyViewed";
+import { markdownToPlainText } from "@/lib/aiText";
 import { Event } from "@/lib/types";
 import {
   createEventSlugWithCentralTime,
@@ -181,7 +182,7 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
 
       <CardContent className="space-y-3">
         <CardDescription className="line-clamp-3">
-          {event.enhanced_description || event.original_description}
+          {markdownToPlainText(event.enhanced_description || event.original_description)}
         </CardDescription>
 
         <div className="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
@@ -228,7 +229,7 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
 
             <ShareDialog
               title={event.title}
-              description={event.enhanced_description || event.original_description || `Join us for ${event.title}`}
+              description={markdownToPlainText(event.enhanced_description || event.original_description) || `Join us for ${event.title}`}
               url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`}
             />
           </div>

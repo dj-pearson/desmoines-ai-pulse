@@ -3,13 +3,14 @@ import {
   formatClockLabel,
   getOpeningCoverage,
   getOpeningHoursSpecificationFromJson,
+  hoursTextOf,
   type RestaurantOpenResult,
   type StoredOpeningHours,
 } from "@/lib/restaurantHours";
 import { cn } from "@/lib/utils";
 
 interface RestaurantStatusProps {
-  /** The free-text `opening` column. */
+  /** The `opening` column. A date in production (SEO-054), which is never printed as hours. */
   hours?: string | null;
   /** restaurants.hours_json when the row carries it (select("*") does once the column exists). */
   hoursJson?: StoredOpeningHours | null;
@@ -137,7 +138,7 @@ export function RestaurantStatus({ hours, hoursJson, openStatus, now }: Restaura
   const rows = weekRows(hoursJson, hours);
   const today = desMoinesNow(now).getDay();
   const sentence = statusSentence(openStatus);
-  const rawText = typeof hours === "string" && hours.trim() ? hours.trim() : null;
+  const rawText = hoursTextOf(hours);
 
   if (!rows && !rawText) {
     return (

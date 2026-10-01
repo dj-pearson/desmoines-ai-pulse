@@ -908,6 +908,26 @@ export const categoryDimension: Dimension = {
         subtopics: ['prime cuts', 'business dinners', 'special occasions', 'happy hour steak deals'],
       },
     },
+    // SEO-041. Pizza is the largest single cuisine in restaurants.cuisine after
+    // American and Mexican (28 rows say exactly "Pizza"), and 'italian' already
+    // matched it, so /italian/<area> was the only page a pizza search could
+    // land on. Tier 2 so the batch worker's tier-1 cross-product does not pick
+    // it up; pizza pages are published only where SEO-041's coverage rule
+    // (src/pseo/coverageRule.ts) says the area has the places to back them.
+    {
+      slug: 'pizza',
+      name: 'Pizza',
+      dimension: 'category',
+      tier: 2,
+      context: {
+        audience: 'Families, groups and anyone deciding where to order or eat pizza',
+        pain_points: 'Chains and local pizzerias sit side by side in every suburb and look alike in a map search',
+        search_behavior: '"pizza west des moines", "best pizza ankeny", "pizza near me"',
+        content_that_works: 'The pizza places actually listed in an area, linked to their own pages',
+        what_makes_it_useful: 'One list of the pizzerias in a suburb, drawn from the restaurant directory',
+        subtopics: ['pizzerias', 'pizza and pasta', 'pizza pubs'],
+      },
+    },
     // --- Event categories ---
     {
       slug: 'live-music',

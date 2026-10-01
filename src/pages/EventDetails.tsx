@@ -53,12 +53,15 @@ import {
   type EventTimingTone,
 } from "@/lib/eventTiming";
 import { eventOutboundLink } from "@/lib/eventSchema";
+import { seriesForEvent, seriesForSlug, seriesPath } from "@/lib/eventSeries";
 import { eventPriceLabel, isFreePrice } from "@/lib/eventPrice";
 import { findEventArea, isInBBox } from "@/lib/eventAreas";
 import { handleError } from "@/lib/errorHandler";
+import { markdownToPlainText } from "@/lib/aiText";
 import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
 import { EventProvenance } from "@/components/events/EventProvenance";
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
+import { PlainTextBlocks } from "@/components/PlainTextBlocks";
 
 // Below-the-fold widgets that each fire their own requests on mount. React.lazy
 // defers the chunk; LazySection defers the mount until the reader scrolls near
@@ -169,7 +172,7 @@ function EventLoadingState({ slug }: { slug: string | undefined }) {
           </div>
         </div>
       </div>
-      <Footer />
+      <Footer preferredSource={false} />
     </div>
   );
 }
@@ -282,12 +285,16 @@ export default function EventDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </div>
     );
   }
 
   if (!event) {
+    // SEO-043: a past edition of an annual event is hidden by the stale sweep
+    // and lands here. Its series page is where that search wanted to go. Not
+    // a 301 (yet): that would change a public URL, see the SEO-043 notes.
+    const pastSeries = seriesForSlug(slug);
     return (
       <>
         {/* NO SEOHead HERE (WEB-SEO-040). It emits
@@ -313,6 +320,16 @@ export default function EventDetails() {
               <p className="text-muted-foreground">
                 This event may have ended or been removed. Browse our latest events to find something new.
               </p>
+              {pastSeries && (
+                <p>
+                  <Link
+                    to={seriesPath(pastSeries)}
+                    className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+                  >
+                    {pastSeries.name}: every year's dates
+                  </Link>
+                </p>
+              )}
               <div className="flex gap-3 justify-center">
                 <Button onClick={() => navigate("/events")} variant="default">
                   Browse Events
@@ -324,7 +341,7 @@ export default function EventDetails() {
               </div>
             </div>
           </div>
-          <Footer />
+          <Footer preferredSource={false} />
         </div>
       </>
     );
@@ -373,6 +390,7 @@ export default function EventDetails() {
   const bigVenue = (venuePage?.capacity ?? 0) > 0;
   const showHotelList = multiDay || weekendNight || bigVenue;
   const otherDates = seriesDates.filter((d) => d.id !== event.id);
+  const series = seriesForEvent(event);
   const aboutFallback = `${event.title} is ${withArticle(category)}${
     event.venue ? ` at ${event.venue}` : ""
   } in ${event.city?.trim() || `the ${BRAND.city} area`}.`;
@@ -581,7 +599,10 @@ export default function EventDetails() {
                       <FavoriteButton eventId={event.id} size="sm" variant="outline" />
                       <ShareDialog
                         title={event.title}
-                        description={event.enhanced_description || event.original_description || `Check out ${event.title} in Des Moines`}
+                        description={
+                          markdownToPlainText(event.enhanced_description || event.original_description) ||
+                          `Check out ${event.title} in Des Moines`
+                        }
                         url={eventUrl}
                         onShare={trackShare}
                       />
@@ -621,6 +642,20 @@ export default function EventDetails() {
                       </p>
                     )}
 
+                    {/* SEO-043: an annual event's dated page points at the URL
+                        that lasts, the series page with every year's dates. */}
+                    {series && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {series.name} happens every year.{" "}
+                        <Link
+                          to={seriesPath(series)}
+                          className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+                        >
+                          Every year's dates for {series.name}
+                        </Link>
+                      </p>
+                    )}
+
                     {/* Bet 4: restaurants open before a timed, upcoming evening
                         show, with picks whose dinner time has passed dropped.
                         A daytime event gets the plain nearby list below instead;
@@ -643,9 +678,12 @@ export default function EventDetails() {
                     )}
                   </div>
                   <div className="prose prose-slate max-w-none">
-                    <p className="text-muted-foreground leading-relaxed text-base">
-                      {event.enhanced_description || event.original_description || aboutFallback}
-                    </p>
+                    {/* Paragraphs, without the markdown and model labels some
+                        stored descriptions carry (SEO-057). */}
+                    <PlainTextBlocks
+                      text={event.enhanced_description || event.original_description || aboutFallback}
+                      paragraphClassName="text-muted-foreground leading-relaxed text-base"
+                    />
                   </div>
 
                   {event.ai_writeup && (
@@ -894,7 +932,7 @@ export default function EventDetails() {
           <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
         </div>
 
-        <Footer />
+        <Footer preferredSource={false} />
       </div>
 
       {/* The sticky bar's link takes no onClick, so outbound clicks are

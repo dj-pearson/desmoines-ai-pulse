@@ -93,7 +93,7 @@ export const TASTE_CHIPS: readonly TasteChip[] = [
     label: 'East Village',
     pattern: new RegExp(`\\b(${EAST_VILLAGE_TERMS.map(escapeRegExp).join('|')})\\b`, 'i'),
     field: 'place',
-    hub: '/neighborhoods/east-village',
+    hub: '/things-to-do/east-village',
     hubLabel: 'See the East Village',
   },
   {

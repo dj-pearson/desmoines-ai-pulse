@@ -1,0 +1,714 @@
+{
+  "project": "Des Moines Insider - Q4 2026 page-by-page SEO and AI search",
+  "branchName": "claude/seo-q4-loop",
+  "description": "Derived from docs/seo/SEO_GEO_PAGE_PLAN_2026-Q4.md and the GSC export in Keyword/desmoinesinsider.com-Performance-on-Search-2026-09-30. This file is the single SEO queue: every open story in prd-seo.json, prd-seo-organic.json and the WEB-SEO-* stories in prd.json is folded into a story here (see each story's 'supersedes'); when a story here passes, close the superseded ones in their own file with a pointer. BRANCHES: phase 0 stories ship on hotfix/pseo-homepage-shell off main (PR to main AND develop); everything else on claude/seo-q4-loop off develop (PR to develop). PRODUCTION DATA: the owner authorised direct production writes on 2026-09-30 (articles, pseo_pages, restaurant seo_title backfill). Back up before any bulk UPDATE. FACTS: no fabricated hours, prices, dates or opinions; verified source or omit. All CLAUDE.md rules bind: backward compatibility, additive migrations, safeStorage, errorHandler, import.meta.env.DEV logs, conventional commits, no --no-verify. Pick the highest-priority passes:false story whose dependencies are met; stories marked needsOwner do everything possible and record the owner step. RULE ADDED 2026-10-01: any story that unpublishes, archives or renames a production row must also put its 301 on hotfix/pseo-homepage-shell (or the current release path), because database changes are live immediately while claude/seo-q4-loop only deploys at the next release.",
+  "baselines": {
+    "measuredOn": "2026-09-30",
+    "window": "3 months (2026-06-29 to 2026-09-28), web",
+    "clicks": 1040,
+    "impressions": 108773,
+    "ctrPercent": 0.96,
+    "avgPosition": 13.26,
+    "clicksByMonth": {
+      "2026-07": 292,
+      "2026-08": 349,
+      "2026-09": 385
+    },
+    "restaurantDetailClicks": 714,
+    "pseoPagesServingHomepageTitle": "10 of 10 checked",
+    "restaurantsHubPosition": 27.5,
+    "eventsThisWeekendPosition": 63,
+    "octoberMonthPageCtrPercent": 30.38
+  },
+  "userStories": [
+    {
+      "id": "SEO-029",
+      "title": "pSEO and things-to-do pages serve the homepage title, description and H1 to crawlers",
+      "priority": 1,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "Live check 2026-09-30 as Googlebot: /things-to-do/east-village, /things-to-do/ankeny, /things-to-do/festivals, /things-to-do/families, /things-to-do/date-night, /things-to-do/fall, /asian/east-village, /brunch/valley-junction, /mexican/downtown and /festivals/valley-junction all return 'Des Moines Insider | Events, Restaurants & Things to Do' and H1 'What's Happening in Des Moines'. /things-to-do/* alone has 3,948 impressions in the last 3 months; 'east village des moines' (458 impr, pos 12.1) lands on a page titled as the homepage. A local build renders /things-to-do/fall with its own title, so the cause is either missing published pseo_pages rows (SEO-012 found festivals, east-village and ankeny had none) or the entity-pass budget dropping pSEO.",
+      "acceptanceCriteria": [
+        "Reproduce first: curl every pSEO/things-to-do URL in Keyword/desmoinesinsider.com-Performance-on-Search-2026-09-30/Pages.csv as Googlebot and list which return the homepage title. Record the count in notes.",
+        "For each, determine the cause: no published pseo_pages row, or row exists but the prerender did not capture it. Check pseo_pages in production via SUPABASE_DB_URL.",
+        "Missing rows: publish them through the existing pipeline (src/pseo/pipeline.ts) or by inserting rows built from real restaurant/event/attraction data. Production writes are authorised by the owner (2026-09-30). No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "Render misses: move every pSEO URL with GSC impressions into the always-run hub pass (scripts/prerender-routes.mjs) or an unbudgeted pSEO pass.",
+        "Build fails if any pSEO page's prerendered <title> equals the homepage shell title (extend strictGateFailures or the hub-pass assertion). Run the negative control: break one page and confirm the build fails.",
+        "Every published pSEO URL is in sitemap-pseo.xml (14 today; GSC shows 78+ such URLs with impressions).",
+        "Verify after deploy: the same curl list returns each page's own title. If the hotfix is not yet deployed, say so and leave passes false."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to hotfix/pseo-homepage-shell (f0827762); passes stays FALSE until the live Googlebot curl is re-run after deploy. Cause: 74 of 86 pSEO paths with GSC impressions returned the homepage title. All 86 HAD published pseo_pages rows; they were absent from sitemap-pseo.xml (14 URLs), so the prerender never rendered them and Cloudflare served the prerendered homepage as fallback. The old strict gate only knew the vite shell title, not the homepage title. Fix: scripts/generate-pseo-demand-routes.mjs -> scripts/pseo-demand-routes.json (85 demand paths); sitemap-pseo = shippable set + demand paths (90 URLs, generate-dynamic-sitemaps.ts:748,865); unbudgeted pSEO prerender pass with one retry that fails the build on any miss (prerender.mjs:391,1062,1085); strict gate rejects the homepage title too (lazy-preload-patterns.mjs:342,634, strict-gate.test.mjs). Verified locally: full build exit 0, hubs 55/55, pSEO 90/90, entities 1187/1187 in ~841s; negative control (homepage title forced onto /things-to-do/fall) fails the build 'pSEO prerender incomplete: 1/90'. ALSO FIXES MAIN'S BUILD: src/pages/EventsToday.tsx restored from 9c6142f1 (the useEventLanding version); merge a75cbea3 had left it unparseable. Develop is BEHIND main for this file: when the hotfix merges back to develop, keep main's version. DB: 7 pseo_pages rows had stale March 2026 dates removed from title/h1/description (backup backups/seo-029/pseo_pages-stale-dates-2026-09-30.json in the main checkout, untracked). RISKS/OPEN: (1) local build is ~14 min; Cloudflare Pages has a 20-minute build limit, so watch the first deploy; (2) npm run validate reports check-supabase-await, check-identity-reads, check-csp-hashes failing on files unchanged from main, not yet confirmed as pre-existing on clean main; (3) 154 other published pSEO pages stay out of the sitemap by design (doorway filter); (4) body copy of /festivals/today and /things-to-do/this-weekend is March-specific generated text -> SEO-056.",
+      "supersedes": [
+        "SEO-012 (things-to-do sub-pages half)",
+        "SEO-025 (render half)",
+        "WEB-SEO-013"
+      ]
+    },
+    {
+      "id": "SEO-030",
+      "title": "Restaurant seo_title values in the database override the Menu, Hours & Reviews template",
+      "priority": 1,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "RestaurantDetails.tsx:224-233 builds '${name} - ${cuisine} in ${city}, Iowa | Menu, Hours & Reviews', but restaurants.seo_title wins and is weaker. Live: 'The Contrary - Reviews', 'Dutch Bros Coffee Des Moines - Reviews', 'Marv's Mainstreet Dive Norwalk - Reviews'. The queries are 'the contrary menu' (811 impr), 'dutch bros hours' (333), 'bonchon des moines menu' (840). 18 restaurant pages sit at position 12 or better with 500+ impressions and CTR under 1% (jungle-tea, bonchon, dutch-bros-coffee, the-contrary, triple-bs, tous-les-jours, taste-of-new-york-pizza-bar, el-rincn-catracho-2, bandit-burrito, 100th-st-corner-cafe, bix-co, sushi-a-go-go, el-molcajete, pallys-pub-pizza, cajun-belle, texas-roadhouse, wayback-burgers, gus-and-lisas).",
+      "acceptanceCriteria": [
+        "Back up current seo_title/seo_description for every restaurant to a file in the repo (scripts/backups/ or similar) before writing, so the change is reversible.",
+        "Backfill restaurants.seo_title in production to '{Name} {City}: Menu, Hours & Reviews', trimmed to fit ~60 characters with ' | Des Moines Insider' appended by SEOHead. Say 'Menu' only when the row has a menu URL; otherwise 'Hours, Photos & Reviews'.",
+        "Do the same review for seo_description: it should name the city, cuisine and one concrete fact from the row, under 155 characters.",
+        "Change the code so a future seo_title that drops the city or the intent words falls back to the template (or add a check script that flags them).",
+        "Verify on live HTML for the 18 pages listed after the prerender rebuild. Record before/after titles in notes."
+      ],
+      "notes": "CODE AND PRODUCTION BACKFILL DONE 2026-10-01 (seo/SEO-030 -> hotfix/pseo-homepage-shell, 35d00132); passes stays FALSE until live HTML is verified after deploy. Premise correction: on main the title already came from src/lib/restaurantMeta.ts, not seo_title; weak titles came from thin data (hours_json null on all 478 rows, photo not counted, 'Des Moines, IA' locations gave no city), while seo_description always won and carried wrong facts. New template '{Name} {Suburb}: Menu, Hours, Photos & Reviews' with each word only when the row backs it (restaurantMeta.ts:169); stored seo_title/seo_description used only if they pass a validator, else template (:214,:239,:315,:351). scripts/backfill-restaurant-seo.ts (dry-run default, --apply, --restore) and npm run check-restaurant-seo. Production: 478 titles and 427 descriptions rewritten; backup scripts/backups/restaurants-seo-2026-10-01.json; re-run dry-run 0 changes, check 0 findings. restaurantMeta.test.ts 45/45. OPEN: (1) 'Hours' cannot appear until hours_json is populated (440 rows have a Google place id) - new story candidate; (2) restaurants.opening is a date column the code treats as hours text; (3) re-curl the 18 target pages as Googlebot after the next successful deploy; main currently fails to build (EventsToday.tsx:44 bad merge), fix travelling with SEO-029."
+    },
+    {
+      "id": "SEO-031",
+      "title": "Five small SEO defects found in the 2026-09-30 audit",
+      "priority": 2,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "Each is under an hour and each is live.",
+      "acceptanceCriteria": [
+        "Restaurant JSON-LD @id uses https://desmoinespulse.com (RestaurantDetails.tsx:265). Use the canonical domain from BRAND.",
+        "/events/schedule-2026-09-26 renders as 'Schedule - Sat, Sep 26 | Principal Park' and ranks position 2 (479 impr). Fix the crawler/title so team-schedule rows carry team and opponent; fix the existing row(s) in production.",
+        "public/rss.xml was last built 2025-07-30 and is not linked from <head>. Generate it at build time from articles + upcoming events with RFC-822 dates and add <link rel=alternate>, or delete it.",
+        "robots.txt still has 'Allow: /weekend' for a route that 301s. Remove it.",
+        "Restaurants hub meta description says '200+ restaurants'; the sitemap has 477. Derive the number from data."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to hotfix/pseo-homepage-shell (b01ca50a, 06826e16, 7a71aa05); passes stays FALSE until robots.txt, rss.xml and the hidden event are checked on the live site after deploy. (1) Restaurant @id: ALREADY FIXED by 83cac1f5 (WEB-SEO-023); no desmoinespulse in source or live HTML. (2) /events/schedule-2026-09-26 was a phantom: MiLB stats API shows the Iowa Cubs season ended 2026-09-20 at Omaha; the AI scraper wrote it (and a bare 'Iowa Cubs' row) from the team schedule page in July 2025. Hidden, not retitled: events 57564c69-... and 4e190bd2-... is_hidden=true, backup docs/fixes/SEO-031-phantom-iowa-cubs-rows.backup.json. Scraper guard supabase/functions/_shared/scheduleTitleGuard.ts (6 Deno tests, in CI) called from firecrawl-scraper/index.ts:494 drops page-label titles and opponent-less games; ingest-events deliberately NOT guarded (would tighten a public endpoint). Middleware now 404s hidden events (functions/_middleware.ts:266) since RLS exposes hidden rows to anon. (3) RSS generated at build by scripts/generate-rss.ts (30 articles + next 30 days of events, cap 50, RFC-822), linked at index.html:310, served as application/rss+xml via _headers; committed file regenerated from production (70 items). 7 offline tests. (4) robots.txt Allow: /weekend removed (/weekend confirmed 301). (5) '200+ restaurants' ALREADY FIXED (restaurantsHubCopy.ts derives 470+). OPEN: AI-enhanced event meta descriptions contain raw markdown ('**Enhanced Event Description:**') -> SEO-057."
+    },
+    {
+      "id": "SEO-051",
+      "title": "Verify the code-complete SEO stories in production and close them",
+      "priority": 2,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "SEO-001 and SEO-002 (prd-seo.json) are marked code complete with production verification pending since 2026-08-29. WEB-SEO-006 and WEB-SEO-008 (prd.json) record fixes on loop branches. None has been checked against production since. This is a verification story: close what is true, reopen what is not.",
+      "acceptanceCriteria": [
+        "SEO-001: curl a sample of 30 entity URLs (10 restaurants, 10 events, 10 others, chosen by GSC impressions) as GPTBot; each must return its own title, canonical and JSON-LD. Record the pass rate.",
+        "SEO-002: run the Rich Results test (or validate JSON-LD locally against Google's Event requirements) on /events, /events/today, /events/this-weekend and 5 event detail pages.",
+        "WEB-SEO-006 / WEB-SEO-008: check the latest build log or a fresh build for prerender coverage and duplicate BreadcrumbList blocks.",
+        "Set passes=true in the original files only for what verified. For anything that did not, add a note with the measurement and fold the remaining work into a story here."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-001",
+        "SEO-002",
+        "WEB-SEO-006",
+        "WEB-SEO-008"
+      ]
+    },
+    {
+      "id": "SEO-032",
+      "title": "Halloween season content: haunted houses, pumpkin patches, corn mazes near Des Moines 2026",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "'haunted houses des moines' is 5,000/mo and +900% over three months in keyword-opportunities.csv. 'pumpkin patch' already gives us 73 impressions at position 10 with no page built for it; last year's pumpkin patch guide had 2,609 impressions (SEO-019). Demand peaks in the first three weeks of October, so this ships first.",
+      "acceptanceCriteria": [
+        "Publish to production (articles table, is_published) three articles: haunted houses near Des Moines 2026, pumpkin patches and apple orchards near Des Moines 2026, corn mazes near Des Moines 2026. Refresh last year's pumpkin patch URL instead of duplicating it if it exists.",
+        "Each entry: name, town, distance from downtown, 2026 dates and hours, price, a link to the official site, one sentence on what it is. Every date and price is from the venue's own 2026 page, fetched this session, and the article lists sources. No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "Article schema with datePublished, dateModified and author; visible 'Updated' date; links to /events/october-2026 and the relevant events and back from the month page.",
+        "Request indexing: add to the articles sitemap and ping IndexNow if SEO-047 has landed."
+      ],
+      "notes": "CONTENT LIVE IN PRODUCTION DB 2026-10-01; code merged to claude/seo-q4-loop (a2776b56). passes stays FALSE: prerendered HTML needs a rebuild/deploy, full tsc type-check did not finish (ESLint clean on changed files), IndexNow not pinged. Articles: /articles/haunted-houses-near-des-moines (4 venues, inserted), /articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide (8 venues, last year's row refreshed in place, published_at kept), /articles/corn-mazes-near-des-moines (5 venues, inserted). Backup of the updated row in scripts/content-backups/seo-032/; full SQL in scripts/seo-032-halloween-articles.sql. Inserts ran with the article social-post webhook trigger disabled (owner may want social posts; slug/word-count/sitemap-queue fields were set by hand). Unverifiable facts are written as 'check the site' (Slaughterhouse beyond opening night/$25, County Line Road price, Wilson's and Berry Patch 2026 dates, Pumpkinville price conflict). Adventureland Phantom Fall Fest omitted (403). ArticleDetails.tsx shows a visible Updated date; MonthlyEventsPage.tsx links October to the three guides; sitemap-articles.xml regenerated (20 URLs). Follow-ups filed as SEO-053 (fabricated 2025 Halloweekend article, Fall Colors overlap) and SEO-055 (event slug off-by-one from midnight-UTC dates).",
+      "supersedes": [
+        "SEO-019 (fall half)"
+      ]
+    },
+    {
+      "id": "SEO-033",
+      "title": "Month event pages ship 6-8 weeks ahead with a seasonal block",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/events/october-2026 converts at 30.4% CTR at position 3.1 (24 clicks from 79 impr); /events/november-2026 at 7.8%. These are the best-converting pages on the site, and they only earn once indexed, so they need to exist before demand.",
+      "acceptanceCriteria": [
+        "December 2026 and January 2027 month pages exist, prerender, and are in sitemap-events.xml now, even if the event count is below the current minimum (lower or bypass the minimum for months within 10 weeks).",
+        "Each month page has a short seasonal intro block above the list (October: Halloween, haunted houses, pumpkin patches, trick-or-treat; November: Thanksgiving, holiday lights; December: lights, markets, New Year's Eve), linking to the matching articles. Text is data-driven or factual, never invented.",
+        "H2s use the phrasing people search: 'Things to do in Des Moines in October 2026', 'October events in Des Moines'.",
+        "Previous/next month links. Months more than 2 months in the past are noindexed or 301 to the current month; pick one and justify it in notes."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (b350e7f9); passes stays FALSE until prerendered output is checked on Cloudflare after deploy. Found live: /events/december-2026 was in the sitemap but served the homepage shell; /events/january-2027 was in no sitemap (1 production event); prev/next were navigate() buttons crawlers can't follow; and the month query used .lte on timestamptz so every month lost its last evening (October dropped 5 Oct 31 events incl. Spooky Science and Trick or Trees). Changes: src/lib/monthPages.ts (LEAD_WINDOW_DAYS=98 :99 - 98 not 70 days because ten weeks cannot reach January; selectSitemapMonths :131; noindex rule :85; SEASONAL_GUIDES :201), new MonthSeasonalBlock.tsx, MonthlyEventsPage.tsx Central-time bounds :84, noindex :171, block :237, H2 :307, anchor prev/next :382; month routes render first in prerender (prerender-order.mjs:150, prerender.mjs:342, generate-dynamic-sitemaps.ts:306). Policy: months more than 2 back get noindex,follow (not 301: a moving target is a soft-404 risk and conflicts with redirect retention). Verified: npm run validate exit 0 (route parity 42/4/46 consistent), vitest 19/19, offline 18/18, sitemap run against production lists september-2026..february-2027, headless check of October/December/June. OPEN: November-January have no article links (only winter article is a 2023-24 guide) - covered by SEO-048; sitemap counts events per month in UTC while the page uses Central (affects only the 3-event floor)."
+    },
+    {
+      "id": "SEO-034",
+      "title": "Restaurant detail pages answer the query above the fold and carry complete Restaurant schema",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Restaurant pages are 714 of 1,040 clicks. 239 of 329 pages with impressions got zero clicks (13,522 impressions). Catch Des Moines's listings have no openingHours, priceRange, servesCuisine or hasMenu in JSON-LD and load hours by JavaScript; this is the gap.",
+      "acceptanceCriteria": [
+        "Above the fold, in server-rendered text: today's hours and an open/closed line (phrased by schedule so it survives prerender, e.g. 'Open until 9 pm on Fridays'), price range, menu link when present, address with neighborhood/suburb, phone.",
+        "Restaurant JSON-LD includes servesCuisine, priceRange, hasMenu, openingHoursSpecification, acceptsReservations, geo, sameAs (official site, maps URL, social) when the row has them. Drop AggregateRating unless the ratings are first-party.",
+        "Visible 'Last verified' date from updated_at, and dateModified in WebPage schema.",
+        "Each page links to its neighborhood/suburb page and matching cuisine x area pSEO page when one is published, and those pages link back.",
+        "Image alt text names the restaurant and dish/space.",
+        "Measure with a script over the top 50 restaurants by impressions: fields present in prerendered HTML. Record coverage before and after."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (f0c5f28b); passes FALSE until live, and hours stay 1/50 until the SEO-054 backfill runs. Top-50 coverage between H1 and first H2 (before -> after): hours 0/1 -> 1/1, phone 0/38 -> 38/38, price/address/menu unchanged (47/47, 45/45, 9/9), visible 'Listing last updated' 0/50 -> 50/50, suburb link 0/26 -> 26/26, cuisine x area link 0 -> 6; schema hasMenu 5/9 -> 9/9, sameAs 36/37 -> 37/37, acceptsReservations 0/1 -> 1/1, aggregateRating 0 -> 0. Files: src/lib/restaurantAtAGlance.ts (:108 schedule-phrased hours sentence, never infers closed days; :130 date; :158 suburb link), src/components/RestaurantAtAGlance.tsx placed at RestaurantDetails.tsx:747 (price/address moved here from hero chips), src/pseo/restaurantAreaPages.ts:31 + useRestaurantAreaPages.ts (links only published, indexable pSEO pages whose listing includes the restaurant), restaurantMeta.ts:412,:446 schema shared with the edge shell (_middleware.ts:634,:658), scripts/measure-restaurant-answer.mjs. Schema decisions: no AggregateRating (only rating is Google's; first-party table has 0 restaurant ratings); sameAs = own site + Google Maps (no social columns); hasMenu = our menu section or their menu page; acceptsReservations omitted when unknown; label is 'Listing last updated' not 'Last verified' because updated_at changes on any write. Verified: type-check, lint, functions type-check, 104 targeted tests, edge-shell suite, check-lcp-priority, check-seo-meta-length; 390px and 1280px layouts. OPEN: production status wrong on top pages -> SEO-062; neighbourhood pages list only 12 most popular so not every restaurant gets a backlink; edge shell lacks cuisine x area links (extra DB read); photo alt can't name dishes (unknown photo content)."
+    },
+    {
+      "id": "SEO-035",
+      "title": "A weekly 'This weekend in Des Moines' article, generated from the events table, plus a daily prerender rebuild",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/events/this-weekend ranks 63; 'things to do in des moines this weekend' is ours at pos 24 and desmoinesparent.com ranks top 5 with a weekly list. A dated weekly URL is also the news-style content Top Stories and preferred sources reward. The daily crawler's output never reaches prerendered HTML because CLOUDFLARE_DEPLOY_HOOK_URL is unset (WEB-SEO-011).",
+      "acceptanceCriteria": [
+        "A scheduled job (GitHub Action or edge function cron) publishes every Thursday an article 'This weekend in Des Moines: {dates}' built only from events rows: top picks by a stated rule (e.g. featured, ticketed venues, family), the free list, and a link to /events/this-weekend. No invented descriptions.",
+        "Publish this week's (Oct 2-4, 2026) now in production.",
+        "Daily rebuild: wire a Cloudflare Pages deploy hook so the prerender reruns at least daily. If the secret must be created in Cloudflare, create it via API if credentials exist; otherwise record the exact step for the owner.",
+        "The weekend article links to the hub and the hub links to the latest article."
+      ],
+      "notes": "CODE + OCT 2-4 ARTICLE DONE 2026-10-01, merged to claude/seo-q4-loop (225b7028, 65e8619b); passes stays FALSE: daily rebuild and Thursday automation need two owner secrets. Live: /articles/this-weekend-in-des-moines-october-2-4-2026 (74 rows -> 37 events: 34 by day Fri 19/Sat 10/Sun 5, 8 top picks, 2 weekly regulars; 0 free because 1,035 of 1,059 upcoming rows have price 'See website'; article says so and links /events/free). src/lib/weekendArticle.ts (window :86, visibility :123, pick rule :195,:276, builder :405; never reads description columns); scripts/publish-weekend-article.ts (writes with session_replication_role=replica :122 so the social webhook does not fire; sets slug/word_count/updated_at and sitemap queue by hand; backs up on rerun); .github/workflows/weekend-article.yml (Thu 11:00 UTC); .github/workflows/prerender-rebuild.yml (daily 13:00 UTC; hook call removed from event-crawler.yml so one build/day); EventsThisWeekend.tsx:246 links latest article via useLatestWeekendArticle and now hides merged/hidden events. 20/20 tests, validate exit 0, all 34 event links match visible slugs. OWNER STEPS: (1) Cloudflare Pages > Settings > Builds & deployments > Deploy hooks: create one for main, save as repo secret CLOUDFLARE_DEPLOY_HOOK_URL (local wrangler login expired Dec 2025); (2) add repo secret SUPABASE_DB_URL or Thursday's run fails. OPEN: midnight-UTC rows fall on the previous Central day, so Ringling Bros., the Slaughterhouse (opens Oct 2) and Pumpkin Fest were excluded and print no time -> SEO-055 raised to priority 1.",
+      "supersedes": [
+        "WEB-SEO-011",
+        "WEB-SEO-017"
+      ],
+      "needsOwner": "Cloudflare deploy hook secret if no API token is available"
+    },
+    {
+      "id": "SEO-036",
+      "title": "Event hubs lead with the date and the count, and /events/near-me stops splitting signals",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/events pos 31-37, /events/today pos 47-53, /events/this-weekend pos 59-63, /events/near-me pos 72 (494 impr, not prerendered, not in a sitemap). SEO-009 added ListFreshness; the rest of that story is still open.",
+      "acceptanceCriteria": [
+        "Confirm prerendered HTML for /events, /events/today and /events/this-weekend contains the full event list (names, dates, venues, links). Record counts.",
+        "H1 and first sentence state the date range and counts: 'This weekend in Des Moines: Oct 2-4, 2026. 47 events, 12 free.' Computed from data at render.",
+        "A short 'top picks' block above the full list, chosen by a stated rule, linking to the weekly article (SEO-035).",
+        "/events/near-me canonicals to /events/today (or this-weekend; justify), stays out of the sitemap.",
+        "Close SEO-009 in prd-seo.json with a note pointing here."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (a4ed13bb); passes FALSE until live and positions are re-measured. Prerendered vs DB (Oct 1): /events 30 of 293 linked (paginated with Load more; full list not added), /events/today 30 of 30, /events/this-weekend 45 of 45 (live Sep 30 build had 28 linked, capped 12/day); 5 slugs shared by duplicate listings. src/lib/eventHubSummary.ts builds absolute-date H1/first sentence ('This weekend in Des Moines: October 2-4, 2026 / 45 events ... none listed as free'); wired at EventsThisWeekend.tsx:292, EventsToday.tsx:139, EventsPage.tsx:438,708; client refetches on load. Top picks use the weekly-article rule (hubTopPicks) on today and this-weekend, linking the article; rows past the card cap render as plain links (HubEventLinks.tsx). Picks not on /events (pushed first card to 817px on mobile vs 560px limit). /events/near-me canonical -> /events/today (EventsNearMe.tsx:91), out of sitemap, still prerendered so JS-less crawlers don't get the shell's self-canonical; declared in CANONICAL_ELSEWHERE (prerender-routes.mjs:171). Request ceilings raised /events 10->12, /events/today 4->5. Verified: 17 new unit tests, weekend/landing/hub-list/request-budget Playwright specs on Chromium, check-event-unpublish, check-seo-route-parity, check-seo-meta-length, check-lcp-priority, strict gate, head and canonical checks, type-check. OPEN: duplicate listings inflate counts; confirm Google honours the near-me canonical in URL Inspection after deploy; daily rebuild needs the owner's deploy hook.",
+      "supersedes": [
+        "SEO-009"
+      ]
+    },
+    {
+      "id": "SEO-037",
+      "title": "Google preferred source button, NewsArticle schema, and a real author page",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Google preferred sources (developers.google.com/search/docs/appearance/preferred-sources) boosts a chosen site in Top Stories and AI Mode/AI Overviews for users who pick it. Button: <script async src='https://news.google.com/swg/js/v1/publisher.js'></script><div google-add-preferred-source-btn></div>, or link https://www.google.com/preferences/source?q=desmoinesinsider.com. It pays off only with dated, bylined, timely content, which is why SEO-035 runs alongside it.",
+      "acceptanceCriteria": [
+        "PreferredSourceButton component: lazy-loads publisher.js only when scrolled into view (no LCP cost), data-theme follows the site theme, falls back to the plain link if the script fails. Named export, typed props.",
+        "Placed at the end of every article, on /events/this-weekend, on the homepage below the fold, and in the footer. Not on restaurant/event detail pages.",
+        "Articles emit BlogPosting (evergreen) or NewsArticle (timely: weekend posts, openings) with datePublished, dateModified, author (Person with url), publisher (Organization with logo).",
+        "An author page (/about/<slug> or /authors/<slug>) and an About section stating who runs the site and how listings are chosen. Real names and facts only; ask the owner for the byline if none exists in the DB. ",
+        "Playwright test that the button renders on an article and is absent from a restaurant page.",
+        "Note for the owner in progress: check google.com/preferences/source for desmoinesinsider.com and enable 'Search generative AI features' in Search Console."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (0f30f1ea, merges 1d1d0e47, bd82b16a); passes stays FALSE until live and until the owner steps below are done. PreferredSourceButton (src/components/seo/PreferredSourceButton.tsx:91): server-renders the plain https://www.google.com/preferences/source?q=desmoinesinsider.com link; loads news.google.com/swg/js/v1/publisher.js only near viewport and never under navigator.webdriver (prerender, Playwright); falls back to the link on script failure or no render within 4s; theme follows site, footer forces dark. Placements: end of articles (ArticleDetails), /events/this-weekend after the FAQ, homepage between FAQ and footer, footer elsewhere; off on restaurant and event detail pages (incl. their error-state footers); one button per page. Schema: src/lib/articleSchema.ts:39,81 - NewsArticle when slug starts this-weekend-in-des-moines-, contains an opening phrase, or <month>-20YY; else BlogPosting; 23 unit tests. Author = Organization (no author_profiles table; all articles share one author_id); bylines link to new /about page (route, prerender, sitemap, footer link) built only from facts in the repo. CSP: added https://news.google.com to script-src and frame-src only; real script tested under production headers - button draws, no CSP violations, popup opens. Verified: check-csp-hashes (LF), check-lcp-priority, route parity (56 prerendered), prerendered /, /events/this-weekend, /about carry the link and no Google markup; Playwright 4/4 Chromium desktop+mobile; check-seo-meta-length fixed for About. 7 unrelated unit-test files fail on the base or under load. OWNER STEPS: search desmoinesinsider.com at google.com/preferences/source; enable 'Search generative AI features' in Search Console; supply a byline name and bio to switch author to Person. OPEN: Cross-Origin-Embedder-Policy: credentialless blocks Google's background iframe (button and popup work; logging/toast likely don't); publisher.js loads without a cookie-consent check - decide.",
+      "needsOwner": "Author name/bio for the byline; Search Console setting"
+    },
+    {
+      "id": "SEO-038",
+      "title": "Restaurants hub targets the head term with a data-backed ranked list and suburb/neighborhood sections",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/restaurants pos 27.5; 'restaurants in des moines' pos 39.6 (535 impr), 'best restaurants in des moines' pos 38. Head term is 50,000/mo at competition index 11. SEO-010 and SEO-026 stalled on editorial picks needing someone who has eaten there; this story uses a stated, checkable rule instead.",
+      "acceptanceCriteria": [
+        "A ranked list of 20 at the top of the HTML chosen by a published rule (e.g. rating x review count from first-party/stored data, open now, local-owned), with the rule stated on the page and one factual line per entry from the row. No invented opinions.",
+        "Sections linking to /restaurants/west-des-moines, /restaurants/ankeny, /restaurants/east-village, /restaurants/downtown (or their pSEO equivalents). Each must exist, prerender with its own title, and be in a sitemap; publish missing ones (see SEO-041).",
+        "Cuisine section linking to best pizza / burger / breakfast pages once SEO-041 publishes them.",
+        "ItemList schema for the ranked list. Close SEO-010 and SEO-026 with notes pointing here."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (f93a3104); passes FALSE until live and the head terms are re-measured. No review count is stored, so the rule ranks on Google star rating alone and says so: 'Ranked by Google star rating, highest first and ties in alphabetical order, among open restaurants inside the Des Moines metro, counting each Google listing once and leaving out bakeries, coffee shops and dessert shops', plus a warning that few-review places can rank beside many-review ones. Today: ten 5.0, seven 4.9, three 4.8, matching a direct production query. Before -> after: first paragraph hidden on phones -> visible; 1,744 words / 189 unique internal links -> 2,261 / 213; cuisine x area links 0 -> 9 (read from pseo_pages at render); ItemList was the first 20 of the daily shuffle (incl. San Antonio, Crested Butte, Ames restaurants) -> the ranked 20; no aggregateRating. Ranked list sits right after the hero, before filters. Guide/FAQ kept. Files: src/lib/restaurantRanking.ts (15 tests), useTopRatedRestaurants.ts, useRestaurantHubAreaPages.ts, RestaurantsTopRated.tsx, pseo/restaurantAreaPages.ts, seo/RestaurantsHubDirectory.tsx, Restaurants.tsx, restaurantsHubCopy.ts. Verified: build; all 9 linked pSEO pages prerender, indexable, sitemapped; type-check, lint, check-seo-routes, check-seo-meta-length, check-lcp-priority, check-restaurant-seo, check-pseo-coverage; vitest 2,325/2,332; hub Playwright 20/21; 390px and 1280px light/dark. SEO-010 and SEO-026 closed in their files. OPEN: store Google review count (userRatingCount) then add a minimum; cuisine mislabels in the top 20 (SEO-061); no metro-wide best pizza/burger/breakfast pages and no burger category; /restaurants/<area> pSEO rows 404 live -> SEO-065; restaurants-hub-pass2 tonight-strip test mocks the retired opening column.",
+      "supersedes": [
+        "SEO-010",
+        "SEO-026"
+      ]
+    },
+    {
+      "id": "SEO-039",
+      "title": "A standing 'New restaurants in Des Moines' hub",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "'new restaurants des moines 2026' is our best generic query: 203 impr, 15 clicks, pos 8.8, served by a detail page. Openings are timely and citable by local media.",
+      "acceptanceCriteria": [
+        "/restaurants/new lists restaurants by opened/created date from the DB (and the restaurant-opening scraper's data), newest first, with month headers.",
+        "Title targets 'New Restaurants in Des Moines (2026)'; first sentence states how many opened and the date range.",
+        "Monthly article 'New restaurants in Des Moines: October 2026' generated from the same data and published in production.",
+        "In sitemap, prerendered, linked from /restaurants and the homepage."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (62254c8a); passes FALSE: the monthly article was NOT published (0 October and 0 September openings against a minimum of 3) and the page is not live yet. Rule (src/lib/newRestaurants.ts, stated on the page): opening_date within the last 365 Central days, not closed (ours or Google's), not merged/hidden/upcoming; created_at deliberately not used (316 of 533 rows came from the July 2025 import). Opening soon requires an upcoming status, a future date and a real source URL. restaurant_openings table has 0 rows. Production: 3 opened (Bonchon Apr 2026, Le's Chinese Bar-B-Que Mar 2026, Birdies Tavern & Grill Oct 2025), 0 opening soon, 10 flagged rows set aside for lack of a dated source. /restaurants/new (already prerendered and in sitemap-static) retitled 'New Restaurants in Des Moines (2026)' with month headers, ItemList, data-driven first sentence; static footer link added. Monthly article generator scripts/publish-new-restaurants-article.ts (--month/--next/--apply, replica mode, calls article_body_problem() itself since replica mode skips the SEO-058 trigger; sample passes in a rolled-back transaction). Verified: check-seo-route-parity, check-sitemap-registration, check-seo-meta-length, lint, type-check, 11 unit tests; Playwright 6/8 (2 'last visit' tests fail on the base too). OPEN: hub link from /restaurants belongs to SEO-038; the 3 opening dates are unverified this session (Le's may be a move); the 15 rows SEO-062 confirmed open have no opening_date; monthly script unscheduled (needs a workflow + SUPABASE_DB_URL secret). The page is thin (3 entries) until sourced opening dates exist."
+    },
+    {
+      "id": "SEO-040",
+      "title": "One URL per intent: East Village and date night are split across competing pages",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/things-to-do/east-village (1,208 impr, pos 11.8) vs /neighborhoods/east-village (124, pos 17.0). /events/date-night (390+105 impr) vs /things-to-do/date-night (215). Two pages for one query split the signals.",
+      "acceptanceCriteria": [
+        "For each pair pick the winner from GSC (record the numbers), turn the loser into a section linking to it or 301 it. A 301 must follow the Backward Compatibility rule (keep for 1+ release) and update _redirects, sitemaps and internal links.",
+        "Audit the rest of the GSC page list for the same pattern (neighborhood vs things-to-do vs pSEO) and list any other pairs found.",
+        "The winning East Village page has: two-sentence intro, parking, 8-10 restaurants linked, bars, what's on this week, map. Facts from data only."
+      ],
+      "notes": "DONE 2026-10-01, merged to claude/seo-q4-loop (e835c555); passes FALSE until the 301s and the new East Village page are live. Pairs (clicks/impr/pos): /things-to-do/east-village (14/1,208/11.8) wins over /neighborhoods/east-village (2/124/17.0 + 14 slashed) and a third page /guide/east-village (0 impr) - both 301. /events/date-night (15/495 both slash forms) wins over /things-to-do/date-night (1/215/24.6) - 301. /neighborhoods/downtown (0/49, a noindex 'no guide' page linked from the footer) 301 to /things-to-do/downtown; footer Beaverdale/Highland Park links repointed to real guides. Ambiguous, left: /guide/<area> vs /things-to-do/<area> for Ankeny (20@12.2 vs 645@21.5), WDM (18@12.6 vs 107@29.0), Downtown (22@23.1 vs 172@33.3). Left for SEO-036: /things-to-do/this-weekend (7) and /things-to-do/today (1) duplicate the events hubs. East Village page (src/pseo/areaGuide.ts): two-sentence intro from the boundary definition, 10 restaurants + 5 bars from restaurants.neighborhood, next-7-day events inside the boundary, parking copy reused from /getting-around (no rates), Leaflet map. Production: /things-to-do/date-night and /guide/east-village unpublished (backup + SQL backups/seo-040/, untracked). Verified: type-check, lint, check-sitemap-redirects, check-seo-route-parity, check-pseo-collisions, check-sitemap-registration; production build desktop + 375px clean. REDIRECT GAP CLOSED: the loop branch's 29 new 301s (SEO-040/041/053/055/058/060) were copied to hotfix/pseo-homepage-shell (4a621896) with regenerated sitemaps, so unpublished URLs stop 404ing as soon as #444 deploys rather than at the next develop release. OPEN: Iowa Taproom stored twice; 33 of 83 events this week lack coordinates; leaflet excluded from Vite pre-bundling breaks maps in dev only."
+    },
+    {
+      "id": "SEO-041",
+      "title": "Publish the suburb and cuisine x area pSEO pages with real coverage, noindex the thin ones",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Suburbs are the largest volume block in keyword-opportunities.csv and out of Catch Des Moines's scope. SEO-025 ranked locations by demand (src/pseo/measuredDemand.ts) but could not publish without credentials; production writes are now authorised. SEO-017 warned that filtered pages over the same restaurants are duplicates.",
+      "acceptanceCriteria": [
+        "Publish pseo_pages for the top locations by measured demand (Ankeny, West Des Moines, Johnston, Urbandale, Waukee, Altoona, Clive and the cuisines with demand: pizza, burger, breakfast, brunch, mexican, asian, bbq).",
+        "Rule: a page needs at least 5 published places to be indexed and 3 to exist at all. Enforce it in code and a check script; under 5 gets noindex and leaves the sitemap.",
+        "Each published page prerenders with its own title (SEO-029 gate) and is in sitemap-pseo.xml.",
+        "Record per-page place counts. Close SEO-025 and SEO-017 with notes."
+      ],
+      "notes": "DONE IN PRODUCTION 2026-10-01, merged to claude/seo-q4-loop (f01d58b9); passes stays FALSE until the new pages and noindex tags are confirmed live and generate-pseo-page is deployed. Counts exclude restaurants.status closed/announced/opening_soon. Indexable (5+): WDM asian 12, brunch 9, italian 9, mexican 6, pizza 5 (NEW); Ankeny asian 5, mexican 5; Waukee mexican 5 (NEW). Noindex (3-4): Ankeny brunch 4, italian 3 (set noindex). Unpublished (<3): /bbq/ankeny, /bbq/west-des-moines (now 301 to area guides). Johnston, Urbandale, Altoona, Clive: every combo 0-2; burger 0 everywhere; breakfast 0-1. Rows: 2 inserted, 4 updated (backup + SQL in backups/seo-041/ in the main checkout, untracked). Copy templated from rows (FAQ names only listed places); the LLM pipeline was not used because its prompt contains no restaurant data. Rule in code: src/pseo/coverageRule.ts, scripts/lib/pseoCoverage.ts, scripts/check-pseo-coverage.ts, scripts/write-pseo-coverage-pages.ts, supabase/functions/_shared/pseoCoverage.ts, generate-pseo-page/index.ts:122, generate-dynamic-sitemaps.ts:870, prerender.mjs:425 (noindex pages still prerender with own title), listingFilters.ts:49, _redirects:7. Verified: build (entity prerender off) exit 0, pSEO 91/91; new pages index,follow with 5 restaurant links; noindex pages noindex,follow; check-pseo-coverage/-demand/-collisions, check-sitemap-registration, check-seo-routes pass; 24/24 new tests. SEO-025 close-out: suburbs published where places exist (Waukee); Johnston/Urbandale/Altoona/Clive have <5 places for every cuisine. SEO-017 close-out: duplicate risk is a coded rule; copy from rows only. OPEN -> SEO-060: 6 older indexable pages carry LLM copy naming places not in the table (/mexican/ankeny recommends 'Tacos La Familia'); 15 downtown/East Village/Valley Junction cuisine pages list 0 places because no restaurant row records a neighbourhood; data quality (Menchie's and Cheesecake Factory count as brunch, Toasted Cone duplicated). /steakhouse/west-des-moines (7 places) is indexable but unpublished.",
+      "supersedes": [
+        "SEO-025",
+        "SEO-017",
+        "SEO-012 (hub half)"
+      ]
+    },
+    {
+      "id": "SEO-042",
+      "title": "Playgrounds hub converts nothing; detail titles miss what parents search",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/playgrounds + /playgrounds/ : 1,655 impressions, 0 clicks, pos 16-29. Detail pages rank well (riverview park 472 impr, big creek state park playground pos 4.3). 'splash pads des moines' and 'indoor playground des moines' are 500/mo each.",
+      "acceptanceCriteria": [
+        "Hub leads with 'Best playgrounds by age' and a splash pad section (with season dates from the city/park source) and an indoor playground section, from data.",
+        "Detail titles '{Park} Playground, {City}: Equipment, Shade, Restrooms' when those fields exist.",
+        "Two-way links between playgrounds, /events/kids and family-friendly restaurants. Close SEO-014."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (e04039d7); passes FALSE until the live HTML is checked and module CTR (baseline 0.61%) and hub position (14.73) are re-measured. Hub: title 'Des Moines Playgrounds & Splash Pads, Best by Age'; H1 'Des Moines Playgrounds and Splash Pads'; first paragraph from data (48 metro playgrounds, 8 with a splash pad or sprayground, 14 with toddler equipment or preschool age range); sections 'Best playgrounds by age' (toddler and all-ages, 3 each, rule printed: most amenities recorded, then name) and 8 splash pads; ItemLists 1 -> 4; 46 detail links kept; description no longer promises shade/restroom notes. No indoor section (no indoor field) and no family-friendly restaurant links (no kid-friendly field). Detail titles '{Park} Playground, {City}: Equipment, Shade, Restrooms' with each word only when the row backs it; all 48 fit 60 chars. Two-way links with /events/kids. Files: src/lib/playgroundHub.ts, playgroundMeta.ts, components/playgrounds/PlaygroundHubGuide.tsx, Playgrounds.tsx, PlaygroundDetails.tsx, KidsEvents.tsx, EnhancedPlaygroundSEO.tsx, usePlaygrounds.ts, tests/playgrounds-hub.spec.ts. Verified: 44 unit tests; hub Playwright spec desktop + mobile (first playground link y=653 on 390px; first grid card moved to y=2072); route parity, meta length, LCP priority, internal links, lint, type-check. Detail-page Playwright spec fails locally on a dev-server Leaflet error (known dev-only pre-bundling issue). DATA GAPS: has_shade, has_restrooms, surface_type, accessibility_notes empty on all 69 rows; no splash pad season dates or park URLs; Riverview Park and Union Park duplicated.",
+      "supersedes": [
+        "SEO-014"
+      ]
+    },
+    {
+      "id": "SEO-043",
+      "title": "Series pages for annual events so authority survives each year",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Annual events are searched by name and year ('cloris awards 2026' pos 4.4, 'forever in love bridal show' 21% CTR, 'rainbow safari blank park zoo' 15.8%). Dated event URLs die after the event.",
+      "acceptanceCriteria": [
+        "/events/series/:slug for the 20 biggest annual events, listing the current dated instance, past years, venue and official link.",
+        "Past dated instances 301 or link to their series page; follow the redirect-retention rule.",
+        "Event schema on the instance, EventSeries on the series page. In sitemap and prerendered."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (60cd243e); passes FALSE until live. 20 /events/series/<slug> pages: Panda Fest, Cloris Awards, Farmstasia, Jazz in July (4 instances), CITYVIEW Martini Fest, Rainbow Safari, FemCity Beyond Business Conference, Hinterland (4), Living History Farms Race, LHF Family Halloween, Head of the Des Moines Regatta, Forever in Love Bridal Show, Center Grove Pumpkin Fest, Beaverdale Fall Festival (2), National Balloon Classic, Eerie Evenings, Holiday Boutique, Original Oktoberfest, Taste of the Junction, Des Moines Concours (2). Production rows only span Apr 2026-Jul 2027, so 'annual' came from the title ('11th Annual', year) or description; Prairie Trail Labor Day Fest excluded (2026 was its first year), State Fair excluded (/iowa-state-fair covers it). 7 have a current edition; 13 say '2027 date not announced yet'. Storage: code mapping src/lib/eventSeries.ts (editorial pick; membership derived from normalised titles at load, so next year's rows join without edits). New: eventSeriesView.ts, useEventSeriesPage.ts, EventSeriesPage.tsx, seo/AnnualEventLinks.tsx, public/sitemap-event-series.xml (registered in robots.txt and sitemap.xml). Instances (and the not-found page hidden past events show) link to their series; month pages and the events hub directory link the series. EventSeries JSON-LD with subEvents. Verified: check-seo-route-parity, check-sitemap-registration, check-seo-meta-length, check-event-unpublish, type-check, lint, strict type-check on new files, edge-shell test, 39 unit tests; prerendered HTML has own title, canonical and JSON-LD. OPEN: decide whether to 301 past instances to their series; regenerate-sitemaps needs deploy; some organiser links are year-specific; LOCAL PRERENDER EXITS 1 on 26 restaurant x time pSEO routes (e.g. /bbq/today) that SEO-064 made noindex+canonical -> SEO-066 (build blocker on this branch)."
+    },
+    {
+      "id": "SEO-044",
+      "title": "Contextual internal links between restaurants, events, neighborhoods, playgrounds and articles",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "SEO-015 added a 45-link footer directory; the lateral links (event to nearby restaurants, restaurant to its neighborhood, article to its hub and back) are still missing.",
+      "acceptanceCriteria": [
+        "Event detail: 3-5 restaurants near the venue (by lat/lng). Restaurant detail: neighborhood page, 3 nearby restaurants, upcoming events at nearby venues. Article: its hub; hub: its articles.",
+        "Measure unique internal links on 10 sample pages before and after. Close SEO-015."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (cf1991b3); passes FALSE until live. Most lateral links already existed from SEO-015 work (Grab a Bite Nearby within 2 miles when the event has coordinates, restaurant rails, article -> top-level hubs). Added: article <-> area page links (src/lib/areaHubs.ts; /neighborhoods/:slug and location-wide pSEO pages list articles that name them); restaurant area links fixed (East Village rows linked /neighborhoods/east-village, which 301s -> /things-to-do/east-village; Downtown -> /things-to-do/downtown; Valley Junction -> West Des Moines); a not-yet-open restaurant with events nearby tonight now shows nearby events (one fewer request); closed/merged/out-of-metro/hidden/archived filters in tested src/lib/nearbyLinks.ts (NOT_CLOSED_RESTAURANT_FILTER, applyEventVisibility). EventDetails.tsx untouched. Measured body links on 10 top pages before -> after: patio guide 28 -> 29, soups 26 -> 27, /things-to-do/east-village 32 -> 35; flat rows have data reasons (Cloris event is is_hidden; Atlas has no coordinates; Kura/Marv's no upcoming events within 2 miles; no article names Ankeny). Verified: check-internal-links, check-event-unpublish, check-lcp-priority, lint, type-checks; request-budget specs 12/12 on Chromium; 22 new tests. SEO-015 closed in prd-seo.json. OPEN: /things-to-do/ankeny has 8 body links; the Cloris awards URL still earns traffic but renders not-found (hidden past event; series page from SEO-043 exists); Drake and Highland Park have no area page.",
+      "supersedes": [
+        "SEO-015"
+      ]
+    },
+    {
+      "id": "SEO-045",
+      "title": "Venue pages, then hotels near each venue",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Concert queries name venues ('gary clark jr val air ballroom' 145 impr). SEO-018 said a venue table or reliable venue normalisation is the prerequisite; SEO-013 (stay) depends on it. /stay is pos 50.",
+      "acceptanceCriteria": [
+        "A venues table (additive migration) or a normalisation over events.venue, populated for the top 30 venues with lat/lng from geocoding.",
+        "/music/venues/:slug (route exists) lists upcoming events at the venue; no generated parking/capacity facts.",
+        "'Hotels near {venue}' pages for Wells Fargo Arena, Iowa State Fairgrounds, Principal Park, Jordan Creek, computed by distance from the hotels table. Add /stay/:slug to a sitemap.",
+        "Close SEO-018 and SEO-013."
+      ],
+      "notes": "CODE COMPLETE + MIGRATION APPLIED 2026-10-01 (seo/SEO-045 cae47777, merged to claude/seo-q4-loop); passes FALSE until the pages are live. Probe: production had 9 venue rows and 0 of 63 hotels with coordinates, so every SEO-013 'Hotels near X' card rendered nothing; seeded venue pins were wrong (Val Air 1.2 mi off, 2.3 mi in known_venues; Vibrant Music Hall address wrong; Wells Fargo Arena at the EMC Expo Center's address). /stay/:slug already in sitemap-hotels.xml. Migration 20261018000045_venues_top30_and_hotel_coordinates.sql (data only, guarded UPDATEs; coordinates from OpenStreetMap accepted only for the named place or exact house number): APPLIED to production by the loop coordinator in one transaction with a ledger row - INSERT 22 venues, re-pinned 9, 59 of 63 hotels located (4 hotels and Middlebrook Mercantile left NULL). Production now 31 venues. Backups before: scripts/content-backups/seo-045/venues-before.json, hotels-coords-before.json. Code: venue matching fixes in src/lib/venuePages.ts (events with venue just 'Des Moines' no longer land on the Civic Center; Civic Center's 11 and xBk's 8 events now reach their pages); /stay/near/:slug (HotelsNearVenue.tsx, rule in src/lib/hotelsNear.ts): hotels within 5 straight-line miles, labelled straight-line, never 'walkable'; <3 hotels -> noindex and out of the sitemap (30 of 31 venues qualify); venue pages show a map; links from venue pages, hotel pages, the event hotel callout and Getting Around. No capacity/parking facts. Verified: named checks, type-check, lint, 69 new tests; production build at 390px. SEO-018 and SEO-013 closed in prd-seo.json. OPEN: re-measure stay module CTR (baseline 0.03%) after deploy.",
+      "supersedes": [
+        "SEO-018",
+        "SEO-013"
+      ]
+    },
+    {
+      "id": "SEO-046",
+      "title": "Attractions carry hours, admission and time-to-spend from verified sources",
+      "priority": 4,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "22 attractions, 1 click in the last 3 months, pos 30+. Catch Des Moines's core product, so this is low priority. SEO-011 stalled on unverified facts.",
+      "acceptanceCriteria": [
+        "For each of the 22, fill hours, admission and parking from the attraction's own site fetched this session, with the source URL stored. No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "TouristAttraction schema carries openingHoursSpecification where verified. Close SEO-011."
+      ],
+      "notes": "DONE 2026-10-01 (seo/SEO-046 2188c450, merged to claude/seo-q4-loop); migration 20261019000001_attractions_visit_facts and data applied in production; passes FALSE until the pages are live and position is re-measured (baseline 40.1). 18 of 22 attractions carry verified facts from their own sites (hours/admission/parking): all three for Art Center, Science Center, Botanical Garden, Blank Park Zoo, Prairie Meadows, Iowa State Capitol (+ duplicate row); Adventureland admission+parking (hours calendar is script-loaded); Pappajohn and Principal Park hours-as-text + admission + parking; High Trestle Trail hours+admission; Farmers' Market, Water Works Park, State Fair hours+parking; Gray's Lake parking; A.H. Blank Golf Course hours text. Empty (no website on the row): 17th Avenue Dog Park, 515 Brewing, Altoona Aquatics Park, East Village. US News listings followed to official sites (their text shows COVID-era hours); six website values and five 'Not provided in content' addresses corrected. Backup + SQL in scripts/content-backups/seo-046/. EnhancedAttractionSEO already built openingHoursSpecification from attractions.hours (empty until now); dated hours carry validFrom/validThrough. Detail pages show facts under the H1 with 'Source: <site>, checked <date>'; /attractions hub gets an intro and a free-admission list from verified rows. Verified: validate except the three CRLF checks, 50 attraction tests, production build at 390/1280. SEO-011 closed in prd-seo.json. OPEN: duplicate Pappajohn and Adventureland rows; Pappajohn and the Capitol on downtown fallback coordinates; edge shell fallback has no hours; Botanical Garden hours expire 2027-01-03.",
+      "supersedes": [
+        "SEO-011"
+      ]
+    },
+    {
+      "id": "SEO-047",
+      "title": "Get indexed where AI search looks: Bing, IndexNow, Brave; generate llms.txt from data",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "ChatGPT search uses OAI-SearchBot plus Bing; Claude's results overlap heavily with Brave. Google says it ignores llms.txt, so it stays cheap and generated, not hand-kept.",
+      "acceptanceCriteria": [
+        "IndexNow: key file in public/, and a build or crawler step that pings IndexNow with changed event/restaurant/article URLs.",
+        "Bing Webmaster Tools: if no account access, write the exact steps for the owner (verify, submit the 9 sitemaps). Check Brave Search for site:desmoinesinsider.com and record result counts.",
+        "llms.txt generated at build from real counts and top hubs; remove the hand-maintained drift comment."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (39993a14); passes FALSE until Bing is verified, a Brave count is recorded and the workflows have run in Actions. IndexNow key already existed and is live (public/c2d7b3a0ed753ae68b306e25422227ff.txt, 200; used by supabase/functions/_shared/indexNow.ts); the new script reads it from the file. Pings to api.indexnow.org: first run sent 17 mangled URLs (Git Bash rewrote leading '/' args to Windows paths; IndexNow still answered 200, those URLs 404 for Bing); script now refuses Windows-style paths. Re-run: 17 correct URLs HTTP 200 (3 Halloween guides, weekend article, 8 rewritten articles, /articles, /about, /events/december-2026, /events/january-2027, /restaurants); sitemap-diff run 64 URLs with lastmod >= 2026-09-30, HTTP 200; second run against that snapshot submitted nothing. Files: scripts/indexnow-ping.ts:203, scripts/lib/indexNowSitemaps.ts:89, scripts/generate-llms-txt.ts:119, scripts/lib/llmsTxt.ts:83 (llms.txt now generated at build from real counts), .github/workflows/prerender-rebuild.yml:79, weekend-article.yml:96, docs/seo/bing-webmaster-setup.md, two test suites. Brave: not checkable (HTTP 429 + CAPTCHA). Bing: not verified (no BingSiteAuth.xml, no msvalidate meta; Google verified by DNS TXT). OWNER: Bing Webmaster Tools > Import from GSC (or DNS CNAME in Cloudflare), submit sitemap.xml; manual Brave site: count.",
+      "needsOwner": "Bing Webmaster Tools verification"
+    },
+    {
+      "id": "SEO-048",
+      "title": "November-December seasonal content",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Next seasonal wave from keyword-opportunities.csv: ice skating (5,000/mo), holiday lights, Thanksgiving dining out, Small Business Saturday, trick-or-treat times by suburb.",
+      "acceptanceCriteria": [
+        "Publish by the dates in docs/seo/SEO_GEO_PAGE_PLAN_2026-Q4.md: trick-or-treat times by suburb (by Oct 8), Thanksgiving dinner out (Oct 29), holiday lights (Nov 5), ice skating (Nov 12), Small Business Saturday in Valley Junction and East Village (Nov 19).",
+        "Refresh last year's soups article rather than duplicating it.",
+        "No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "Each linked from the matching month page and back. Close SEO-019."
+      ],
+      "notes": "PARTIAL 2026-10-01, merged to claude/seo-q4-loop (880da65f); passes FALSE: four of five guides are drafts awaiting 2026 announcements. PUBLISHED: /articles/trick-or-treat-times-des-moines-suburbs-october-2026 (NewsArticle): 7 cities verified on their own pages (Altoona, Ankeny, Grimes, Johnston, Urbandale, Waukee, Windsor Heights; all Sat Oct 31, 6-8 pm); 9 listed 'not confirmed' with links (Des Moines and Norwalk notices cover 2025; Clive, Pleasant Hill, Bondurant, Indianola, Carlisle not posted); West Des Moines and Polk City returned 403. Replica-mode insert, article_body_problem() clean, October month page links both ways, IndexNow HTTP 200. DRAFTS (body starts with a marker the SEO-058 guard refuses to publish; gaps in scripts/seo-048-seasonal-articles.sql header): holiday lights 2 verified (Botanical Garden Dome for the Holidays, East Village Holiday Promenade; Jolly Holiday Lights root still shows 2023-24 and its /schedule page now serves gambling spam - do not link; Adventureland 403); ice skating (Brenton prices, no 2026 opening date; indoor rink domains didn't resolve); Thanksgiving dinner out 0; Small Business Saturday 0. Soups skipped (rewritten by SEO-058). NEXT: re-check the drafts weekly from mid-October; publish each at 5 verified entries; re-check Des Moines/WDM/Clive trick-or-treat times before Oct 24. SEO-019 closed in prd-seo.json.",
+      "supersedes": [
+        "SEO-019"
+      ]
+    },
+    {
+      "id": "SEO-049",
+      "title": "AI citation baseline: 20 prompts across assistants",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "We have no measurement of AI citations. Without a baseline nothing in this PRD can claim an AI search effect.",
+      "acceptanceCriteria": [
+        "Write docs/seo/ai-citation-prompts.md with 20 prompts covering restaurants by name, 'best X in neighborhood', this weekend, open now, playgrounds.",
+        "Run what can be run from here (web search tools, Perplexity/Google AI Mode via browser if available) and log whether desmoinesinsider.com or Catch Des Moines is cited. Record what could not be run."
+      ],
+      "notes": "PARTIAL 2026-10-01, merged to claude/seo-q4-loop (51072cbb); passes FALSE: 6 of 160 prompt x engine cells measured and none is an AI answer engine. Cells: Bing top 10 (ChatGPT/Copilot proxy) 4 usable, 16 returned unrelated results (marked not run); DuckDuckGo 2 then a block page; Claude Code WebSearch 0 (session's 200-call budget used); Anthropic API 0 (no key in .env/env); Perplexity, Google AI Mode, ChatGPT, Gemini 0 (no browser connected). Cited us 4 of 6 (Jungle Tea #6 Bing / #7 DDG; Atlas Cafe #3 both); Catch Des Moines in 1. Gaps: (1) 'things to do in des moines this weekend': Catch #1, /events/this-weekend not in Bing top 10 (Eventbrite, Register, desmoinesgirl, greaterdsmusa rank); (2) restaurant pages appear only where the official site is thin (Kura drops behind kurasushi.com, Yelp, DoorDash despite 419 Google impressions at pos 7.4); (3) no AI answer measured. Prompt 9 (East Village brunch) has no page of ours to cite. Files: docs/seo/ai-citation-prompts.md (prompts, targets, summary, monthly steps), docs/seo/ai-citation-baseline-2026-10.csv (160 rows), scripts/ai-citation-check.ts (Bing, DDG, Anthropic API with web search when a key is set; needs @anthropic-ai/sdk installed). OWNER: add ANTHROPIC_API_KEY (or connect the Chrome extension) and re-run to fill the 120 AI-engine cells."
+    },
+    {
+      "id": "SEO-050",
+      "title": "Search Console sync, so the next plan does not depend on a manual export",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "WEB-SEO-014: gsc-oauth, gsc-fetch-properties and gsc-sync-data are not deployed; the refresh token was expected to lapse around 2026-09-30.",
+      "acceptanceCriteria": [
+        "Deploy the three functions if SUPABASE_ACCESS_TOKEN allows, following the edge-function backward-compat rules.",
+        "If OAuth needs the owner's browser, record the exact step. Close or update WEB-SEO-014."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (64157385); passes FALSE until the fixed gsc-oauth is deployed (owner). State found: gsc-oauth, gsc-fetch-properties, gsc-sync-data ARE deployed (v2, v27, v30, 2026-09-30); SUPABASE_ACCESS_TOKEN is now a repo secret and deploy-edge-functions.yml succeeds on every push to main; cron gsc-sync-daily (10:15 UTC) succeeds daily and refreshed the token today, so the 2026-09-30 lapse did not happen; data spans 2025-09-03 to 2026-09-28. Kept its 28-day re-pull rather than 3 days. BUG FIXED: live gsc-oauth deleted the property row on reconnect, cascade-deleting 24,015 keyword and 18,598 page rows; now saves the new credential, re-links the property, then retires old credentials; no longer logs tokens; requires admin. gsc-sync-data and gsc-fetch-properties use shared CORS/rate-limit/validation; failures recorded on the property. Admin panel shows last sync, 'not connected' and 'last sync failed'. Fallback: new additive table gsc_export_performance (not the daily tables, which nine readers sum by date) - migration applied to production; scripts/import-gsc-export.ts loaded the 2026-09-30 export (1,000 queries, 992 pages), re-run dedupes. Owner steps in docs/seo/gsc-sync-setup.md: deploy the functions BEFORE anyone reconnects. OPEN: daily page table shows 425 clicks for the same 92 days the export shows 1,040 - cause unknown (likely sitemap/property filter or page-level vs query-level aggregation). WEB-SEO-014 can close once deployed; WEB-BE-031 remains an owner decision.",
+      "supersedes": [
+        "WEB-SEO-014",
+        "WEB-BE-031"
+      ],
+      "needsOwner": "Google OAuth consent"
+    },
+    {
+      "id": "SEO-052",
+      "title": "Desktop ranks twelve positions worse than mobile: finish the diagnosis",
+      "priority": 4,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Carried from SEO-020. Mobile 9.28 vs desktop 22.76 in the 3-month export. Blocked on a PageSpeed Insights API key.",
+      "acceptanceCriteria": [
+        "Run PSI/CrUX per device for the top 10 URLs if a key is available; otherwise record the block and leave passes false."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-020"
+      ],
+      "needsOwner": "PSI_API_KEY"
+    },
+    {
+      "id": "SEO-053",
+      "title": "Retire or correct the 2025 Halloweekend article that carries invented venues",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-032: the article halloweekend-in-des-moines-...-2023 (still published) claims a Salisbury House haunted basement, the Slaughterhouse in Ankeny, and 'Nightmare on Hickman' at Sleepy Hollow, none verified. Published false venue facts are a trust and helpful-content risk and compete with the new Halloween guides. 'Fall Colors & Cider' overlaps the pumpkin guide.",
+      "acceptanceCriteria": [
+        "Find every article in production with claims that cannot be verified against a source fetched this session; start with the Halloweekend one.",
+        "Either correct it with verified facts or unpublish it and 301 its URL to the closest new guide (follow the redirect-retention rule). Back up rows first.",
+        "Decide Fall Colors & Cider vs the pumpkin guide: merge or differentiate; record the GSC numbers behind the choice.",
+        "List any other articles with the same problem in notes."
+      ],
+      "notes": "DONE IN PRODUCTION 2026-10-01, code merged to claude/seo-q4-loop (56054113); passes stays FALSE until the two 301s are confirmed live after deploy. Archived (not deleted) bd35e640 halloweekend-in-des-moines-...-2023 -> 301 /articles/haunted-houses-near-des-moines (false: Slaughterhouse is 500 Locust St downtown not Ankeny; Salisbury House lists only a Ghoulish Gala; no source for Nightmare on Hickman; also wrong towns for Wilson's, Bloomsbury, an unfindable Faulkner's Pumpkin Ranch; 37 impr/16 mo) and a6670630 fall-colors-cider -> 301 pumpkin guide (body was raw JSON; Pierce's and Center Grove in wrong towns; 24 impr pos 51 vs pumpkin 2,609 pos 19). Webhook fires only on transition TO published, so no social posts. Backups scripts/content-backups/seo-053/, SQL scripts/seo-053-retire-fabricated-articles.sql (its header lists per-article failures for all 15 others). _redirects +2, sitemap-articles 20->18. check-sitemap-redirects OK, check-seo-route-parity consistent, validate 0 lint errors. OPEN: scripts/prerender-priority.json still lists both old URLs (regenerate with npm run generate-prerender-priority); the other 15 published 2025 articles all fail spot-checks -> SEO-058."
+    },
+    {
+      "id": "SEO-054",
+      "title": "Populate restaurant hours so pages and titles can truthfully say Hours",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-030: hours_json is null on all 478 restaurants, so no title says Hours and no page can answer 'X hours' or open-now queries ('dutch bros hours' 333 impr, 'food open now' 353). 440 rows have a Google place id. restaurants.opening is a date column the code reads as hours text.",
+      "acceptanceCriteria": [
+        "Find the existing hours ingestion path (Google Places or other) and why it never filled hours_json; fill it for rows with a place id, within API cost limits the code already uses. Back up first.",
+        "Fix the opening-column misuse so a date never renders as hours.",
+        "Re-run scripts/backfill-restaurant-seo.ts so titles gain Hours where now true; run npm run check-restaurant-seo.",
+        "Record coverage (rows with hours) before and after."
+      ],
+      "notes": "PARTIAL 2026-10-01, merged to claude/seo-q4-loop (ead81386 via 21c9f236); passes FALSE: only 8 of 478 restaurants have hours; the remaining 443 with a place id need an edge-function deploy first. INCIDENT: a probe meant to fail instead ran the full Google enrichment on 10 restaurants (05:33Z, run f4097e19) BEFORE a backup, overwriting description, location, phone, website and rating with Google's values. Their ids are in already_enriched in scripts/content-backups/seo-054/restaurants-before.json; previous values exist only in Supabase backups/PITR. Cause of empty hours: the nightly auto-enrich-restaurants has failed every night (non-2xx from bulk update; edge logs not reachable), it never selects rows missing hours, bulk-update-restaurants ignored the ids it was sent, and 428 rows were marked enriched before the hours column existed. Fixes: hoursOnly mode in supabase/functions/bulk-update-restaurants/index.ts:100 (optional flag, additive; requests opening_hours + business_status only, writes only those columns); scripts/backfill-restaurant-hours.ts (refuses to run until the deployed function supports the mode); src/lib/hoursText.ts:19 date guard (opening date '2026-03-15' used to parse as 3 AM-3 PM); useOpenNowRestaurants.ts:95 sent an empty-string filter on a date column that production rejects with 400, so /restaurants/open-now listed NOTHING - now reads hours_json; edge shell _middleware.ts:662 printed opening raw as 'Hours:'. Coverage hours 0->8, business_status 0->10, titles with Hours 0->8; check-restaurant-seo 477/0. 239 touched-file tests + 15 Deno tests pass. Gitleaks false positives from the hotfix allowlisted by value in .gitleaks.toml. Merge conflicts: month indexability rule combined (in range AND (>=3 events OR inside lead window)); EventsThisWeekend took main's version + SEO-035 link; three SEO-058 redirects retargeted to /things-to-do/downtown and /things-to-do because main removed /neighborhoods/downtown and /beaverdale from the sitemap. OWNER STEPS: (1) deploy bulk-update-restaurants from merged code; (2) npm run backfill-restaurant-hours -- --apply (443 calls, ~15 min); (3) npm run backfill-restaurant-seo -- --apply. OPEN: why nightly auto-enrich fails.",
+      "needsOwner": "Google Places API key/billing if not already configured"
+    },
+    {
+      "id": "SEO-055",
+      "title": "Event slugs land a day early because dates are stored at midnight UTC",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-032: the Slaughterhouse opens Oct 2 but its event slug ends -2026-10-01. Wrong dates in URLs are visible in search results. SEO-035 shows the damage is wider than URLs: date-only events stored at 00:00 UTC are filed on the previous Central day site-wide, so the Oct 2-4 weekend article and /events/this-weekend dropped the Slaughterhouse, Ringling Bros. and Pumpkin Fest, and those rows print no start time.",
+      "acceptanceCriteria": [
+        "Reproduce with a few rows; find where the slug date is derived.",
+        "Decide how a date-only event is represented (all-day on its Central date) and apply it everywhere events are bucketed by day: centralWindow, month pages, today/this-weekend, weekendArticle, sitemaps. Count how many upcoming rows are date-only before and after.",
+        "Derive the slug date in America/Chicago. Existing slugs are public URLs: do not rename them without a 301 kept for 1+ release; new rows get the correct date.",
+        "Add a test.",
+        "Re-run scripts/publish-weekend-article.ts for Oct 2-4 after the fix so the article includes the dropped events."
+      ],
+      "notes": "DONE 2026-10-01, merged to claude/seo-q4-loop (65a4c86c, 8a0e8baa, merge 05fd59cc); passes stays FALSE until the Slaughterhouse 301 and 'All day' rendering are confirmed live. THE STORY'S DIAGNOSIS WAS WRONG: 147 of 319 upcoming rows sit at 00:00 UTC and 146 of those are 7:00 pm Central, the catchdesmoines crawler's old default and often a real show time (SeatGeek URLs read -7-pm), so their Central date and slug are already right. Treating 00:00 UTC as all-day on the UTC date would have shifted every real 7 pm show. Real causes: Ringling Bros. and Pumpkin Fest are multi-day runs with no end_date; the Slaughterhouse row had the wrong day (HauntPay: Fri Oct 2, 7 pm). Representation: day = Central date (existing event_local_date); 'no start time' = time_tbd or the existing 19:31:58 marker; runs via end_date; helper src/lib/eventTime.ts (hasStatedStartTime :83, eventOverlapsDays :97). No migration. Production (206 rows backed up in scripts/content-backups/seo-055/, SQL scripts/seo-055-event-dates.sql): time_tbd=true on 148 unbacked 7 pm rows; end_date on Ringling (Oct 4) and Pumpkin Fest (Nov 6) from venue pages; Slaughterhouse moved to Oct 2 with a 301 from the old slug, haunted-houses article relinked. Oct 2-4 article republished: 37 -> 40 events (Fri 20, Sat 10, Sun 5, 2 runs, 8 picks). Crawler no longer invents 7 pm; generate-sitemaps edge function now builds event URLs from the Central date like the app; time_tbd added to listColumns and LANDING_LIGHT_COLUMNS. Merge resolution took main's useEventLanding pages (includeOngoing already handles runs). Tests: eventTime, weekendArticle and src/hooks 401/401; check-sitemap-redirects OK; check-event-unpublish-filters OK; type-check:scripts, tsc, check-schema pass. OPEN: month and event detail pages don't show runs yet; real 7 pm shows (Hoyt Sherman, Iowa Wild) now show date only until the source gives a time; src/lib/eventTiming.ts (main) and eventTime.ts overlap and could be consolidated."
+    },
+    {
+      "id": "SEO-056",
+      "title": "Time-relative pSEO pages carry March-specific generated body copy",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-029: /festivals/today has 18 St. Patrick's Day mentions and /things-to-do/this-weekend has March-specific text, generated in spring and now baked into prerendered HTML. A 'today' or 'this weekend' page whose body talks about March is a quality signal against the site.",
+      "acceptanceCriteria": [
+        "List every published pseo_pages row whose slug is time-relative (today, this-weekend, tonight, month or season names) and grep its body for month/holiday words that no longer apply.",
+        "Make time-relative pages render their list from live data with only evergreen intro copy, or regenerate the copy and schedule regeneration; back up rows first.",
+        "Add a check script that flags past-month or past-holiday words in time-relative pSEO bodies."
+      ],
+      "notes": "DONE IN PRODUCTION 2026-10-01; merged to claude/seo-q4-loop (e049d1af) and the 301s to hotfix/pseo-homepage-shell (d1802754). passes FALSE until live and generate-pseo-page is redeployed. Found 128 published time-relative pSEO rows; 118 named a month/season/holiday/year outside their window (1,190 words; worst /festivals/today 53 incl. St. Patrick's Day 23, /things-to-do/families/this-weekend 45, /events/this-weekend 40); none had a live listing. 126 rewritten with evergreen intro + FAQ from src/pseo/timeRelative.ts (describes how the list is chosen; names no event, venue, date or price) plus the live list; PseoPage renders through the same builder so regenerated rows can't reintroduce stale copy; generate-pseo-page skips time-relative pages; listing date filter now includes the whole last day. Consolidated: /things-to-do/this-weekend (7 impr) -> 301 /events/this-weekend, /things-to-do/today (1) -> 301 /events/today; both rows unpublished and out of sitemap-pseo.xml. Backup + SQL in backups/seo-056/ (main checkout, untracked). check-pseo-time-copy added to validate (126 rows, 0 stale words); check-pseo-collisions, check-sitemap-redirects, check-seo-route-parity, lint, type-check, 45 pSEO tests pass. OPEN -> SEO-064: 40 audience x time pages duplicate their non-audience page's listings and 40 restaurant x time pages list the same restaurants year-round; check-pseo-coverage now flags /asian/west-des-moines and /brunch/west-des-moines after restaurant list changes."
+    },
+    {
+      "id": "SEO-057",
+      "title": "AI-enhanced event descriptions leak raw markdown into meta descriptions and page text",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-031: the schedule event's meta description began '**Enhanced Event Description:**'. Search snippets showing markdown and a model's heading label look machine-made and lower CTR across the ~500 event pages.",
+      "acceptanceCriteria": [
+        "Count events (and restaurants/attractions with enhanced_description) whose stored text contains markdown markers or labels like 'Enhanced Event Description'. Record the count.",
+        "Strip labels and markdown when building meta descriptions and plain-text snippets (shared helper, tested); render markdown properly or as plain text on the page.",
+        "Clean the stored rows in production with a backup, and fix the enhancement prompt/code so new rows don't carry the label.",
+        "Verify on 5 prerendered event pages."
+      ],
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (8b9b35ae); passes stays FALSE until deploy: the live 9/11 event page still shows 'serve.**'. Data was smaller than assumed: events.enhanced_description (1,951 rows) had 2 labelled rows (the phantom Cubs rows SEO-031 hid) and 3 with **; restaurants.ai_writeup (314) had 222 opening with a '# Name' heading and 46 with ** (left stored, now rendered cleanly); all other description/SEO/GEO columns on events, restaurants, attractions, playgrounds were clean. Rows touched: 2 events (57564c69, 4e190bd2), label and footer lines only; backup scripts/content-backups/seo-057/events-before.json, SQL scripts/seo-057-strip-ai-labels.sql. Shared helper src/lib/aiText.ts:56,:150 with Deno twin supabase/functions/_shared/aiText.ts (a test fails if they diverge; in CI), wired into eventMeta.ts:172, eventSchema.ts:303, _middleware.ts:734, rssFeed.ts:84, icsEvent.ts:291 and card/quick-view/search/map/share snippets; EventDetails.tsx:653 and AIWriteup.tsx:54 render via new PlainTextBlocks.tsx. Writer prompts asking for plain text, no labels: firecrawl-scraper:689, ai-crawler:1464, ingest-events/plan.ts:80, enhance-content:79, bulk-enhance-events:205 (nothing rejected; request/response shapes unchanged). Verified: meta, JSON-LD and edge-shell body for 5 production events contain 0 markdown/labels; helper 11 tests, eventMeta regression, rss-feed, middleware shell, Deno ingest 11, Deno helper 3. OPEN: useWriteupGenerator still calls the deleted generate-writeup edge function (restaurant writeups; dead path); edge functions need deploying."
+    },
+    {
+      "id": "SEO-058",
+      "title": "Fifteen published articles carry raw JSON bodies, placeholders, closed businesses and wrong towns",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-053: every other published 2025 article failed spot-checks. 13 render the generator's raw JSON/HTML as the body, 4 end in '[Content continues...]', and they name closed businesses (Django, Peace Tree, Star Bar, the Science Center IMAX) and wrong towns. Some still earn search traffic: patio guide 1,043 impr/3 mo, soups 449, coffee crawl 113, Highland Park 74, Drake 41. Pages like this are the clearest helpful-content risk on the site and they sit in the section that preferred sources and Top Stories depend on.",
+      "acceptanceCriteria": [
+        "Use the per-article failure list in the header of scripts/seo-053-retire-fabricated-articles.sql (on claude/seo-q4-loop) as the starting audit.",
+        "Articles with GSC impressions (patio, soups, coffee crawl, Highland Park, Drake): rewrite in place on the same URL with every venue verified against a source fetched this session; drop closed or unverifiable places; render clean prose, not JSON; keep published_at, bump updated_at. Back up rows first.",
+        "Articles with no impressions and failed facts: archive and 301 to the closest live guide or hub (redirect retention rule), or rewrite if a clear current topic.",
+        "Fix the generator so a JSON or placeholder body can never be published (a check on publish or a CI check over the articles table).",
+        "Regenerate scripts/prerender-priority.json and sitemap-articles.xml. Record per-article outcome in notes."
+      ],
+      "notes": "DONE IN PRODUCTION 2026-10-01, merged to claude/seo-q4-loop (acee85dc); passes stays FALSE until the 7 new 301s are confirmed live after deploy. Rewritten in place as markdown with sources and a 'What changed' note (published_at kept): patio 13 kept/5 dropped (Juniper Moon, Star Bar closed; no patio confirmed at Up-Down, Harbinger, RoCA), soups 11/9 (Django, Ritual, Malo closed/closing; 6 with no named soup on current menu), coffee crawl 14/9 (5 never existed), Highland Park 6/3, Drake 7/5, Valley Junction 12 real shops (all 15 invented makers dropped), hidden history 10 sites (speakeasy/Green Hat Club claims dropped), budget 12 (zoo over $15 dropped; Botanical Garden price and Neal Smith trail length corrected). Archived + 301 (zero impressions): beaverdale, date-night, indoor farmers markets, air-conditioned, oktoberfest-2023, last-call farmers market, summer-saturday. 15 rows backed up in scripts/content-backups/seo-058/; content in scripts/seo-058-rewrite-and-retire-articles.sql; webhook definition read and confirmed it only fires on transition to published. GUARD: supabase/migrations/20261016000001_articles_publishable_body_guard.sql (additive function + BEFORE trigger, APPLIED TO PRODUCTION, ledger row written) rejects JSON/HTML/placeholder bodies on publish or body change; tested in rolled-back transactions (JSON publish rejected, view-count update allowed); all 12 published articles pass. sitemap-articles 18->12, prerender-priority regenerated. validate 0 errors; check-sitemap-redirects and check-seo-route-parity pass. OPEN: some 'open' evidence is directory listings (search quota ran out); slugs still carry old counts ('20-must-try'), rename needs 301 (low value, leave); prerender-priority.json still lists 9 archived URLs (built from GSC); the AI article pipeline does not handle the guard's error, so a blocked publish fails silently -> SEO-059; restaurants table lists closed places as open (jethros-bbq, ritual-cafe) -> SEO-059."
+    },
+    {
+      "id": "SEO-059",
+      "title": "Closed restaurants are still listed as open, and the article pipeline ignores the publish guard's error",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-058 while verifying venues: restaurants rows for places that have closed (jethros-bbq Forest Ave burned in 2022, ritual-cafe, Django, Malo, Juniper Moon, Star Bar and others) still render as open restaurant pages. A guide that sends someone to a closed restaurant is the fastest way to lose a local reader, and these pages carry Restaurant schema claiming a live business. Separately, the new articles_publishable_body guard makes a bad publish fail, but the AI pipeline does not check the error, so it fails silently.",
+      "acceptanceCriteria": [
+        "List every restaurant SEO-058 found closed, then check the top 150 restaurants by GSC impressions for closure (Google Places business_status if a key exists, else the business site/listings fetched this session). Record evidence per row.",
+        "Mark closed rows with the existing status/closed column if one exists, else an additive column; closed pages show 'Permanently closed' clearly, drop Restaurant schema openingHours, leave the sitemap (noindex) or 301 to a relevant hub, per CLAUDE.md redirect rules. Back up first.",
+        "Exclude closed restaurants from hubs, open-now, pSEO lists and nearby-restaurant links.",
+        "Make the article publish path check and surface the guard error (log via errorHandler, mark the queue item failed).",
+        "Tests for the closed state rendering and list filtering."
+      ],
+      "notes": "PARTIAL 2026-10-01, merged to claude/seo-q4-loop (bd321081, 559f3036); passes FALSE: 37 of the top-150 rows unchecked (web-search quota ran out) and two edge functions need deploying. Closed (existing restaurants.status='closed', backup scripts/content-backups/seo-059/restaurants-before.json, evidence in scripts/seo-059-mark-closed-restaurants.sql header): ritual-cafe (closed 2025-08-01; site redirects to a GoDaddy for-sale page), bistro-nomad (Google CLOSED_PERMANENTLY from the SEO-054 run; domain no longer resolves). NOT closed, contrary to SEO-058's list: all three jethros-bbq rows are listed on jethrosdesmoines.com/locations (the burned Forest Ave location has no row); scratch-cupcakery trades as Molly's at 215 E 3rd St. Django, Malo, Juniper Moon, Star Bar have no rows. Top 150 by impressions: 142 rows, 18 already closed, 84 open per their own sites, 37 unknown. Changes: get_rotated_restaurants excludes closed from browse (search still finds them) - migration 20261017000059 APPLIED TO PRODUCTION, browse count 477->457; useRestaurants.ts:125,:386; shared isPermanentlyClosedRestaurant / NOT_CLOSED_RESTAURANT_FILTER (restaurantHours.ts:798,:816); neighborhood, related/featured, trending, recommendations, new-openings lists filter closed (open-now, pSEO, nearby, dinner pairings already did); edge shell reads business_status, closed pages 200 + noindex + 'Permanently closed' + no openingHours (_middleware.ts:515,:615,:659); sitemaps skip Google-closed (generate-dynamic-sitemaps.ts:380). Article pipeline checks every write; a guard refusal keeps the draft, records pipeline_reasons and decision 'blocked' (ai-article-pipeline/index.ts:303); CMS shows the reason. Verified: type-check, lint, check-schema, check-sitemap-redirects, check-restaurant-seo 477/0, middleware shell tests, Deno 5/5, vitest 2155/2162 (failures in untouched files). OPEN/OWNER: recheck 37 unknowns when search quota allows; taste-of-new-york rows moved to 7450 Bridgewood Blvd (address fix); Google CLOSED_PERMANENTLY doesn't update status (client-side only); deploy bulk-update-restaurants and ai-article-pipeline."
+    },
+    {
+      "id": "SEO-060",
+      "title": "Neighborhood cuisine pages list zero restaurants, and older pSEO copy names places we don't have",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-041: 15 published downtown, East Village and Valley Junction cuisine pages (e.g. /asian/east-village pos 9.3, /mexican/downtown, /brunch/valley-junction, /italian/east-village pos 7.5) list 0 places because no restaurant row records its neighbourhood, so they are thin pages ranking on generated copy. 6 older indexable pages carry LLM copy naming restaurants not in our table (/mexican/ankeny recommends 'Tacos La Familia'). These are among our best-ranked pSEO URLs, so fixing them beats noindexing them.",
+      "acceptanceCriteria": [
+        "Assign restaurants to neighbourhoods from lat/lng (polygons or bounding definitions in src/lib/neighborhoods.ts or a new additive column populated by script); record method and counts per neighbourhood. Back up first.",
+        "Re-run the SEO-041 coverage rule (scripts/write-pseo-coverage-pages.ts, check-pseo-coverage) for downtown, East Village and Valley Junction combos: 5+ indexable with templated copy from rows; 3-4 noindex; <3 unpublish and 301 to the neighbourhood or things-to-do page per redirect rules.",
+        "Replace LLM copy on the 6 older indexable pages with copy templated from rows; remove any place not in the table.",
+        "Fix data quality found: Menchie's and Cheesecake Factory tagged brunch, Toasted Cone duplicated (merge per existing dedupe conventions).",
+        "Decide /steakhouse/west-des-moines (7 places): publish via the rule if steakhouse is a taxonomy cuisine."
+      ],
+      "notes": "DONE IN PRODUCTION 2026-10-01, merged to claude/seo-q4-loop (971ff4f1); passes FALSE until the 301s and noindex tags are live and generate-pseo-page is deployed. New additive column restaurants.neighborhood (migration applied + recorded); polygons in src/lib/neighborhoodBoundaries.ts (Downtown per the City definition quoted on Wikipedia 'Downtown Des Moines'; East Village per Wikipedia street boundaries; Sherman Hill per the NRHP boundary; Valley Junction PROVISIONAL box Grand/Railroad/1st/8th, no source fetched - search quota exhausted). Assigned 58 rows: downtown 30, East Village 22, Valley Junction 5, Sherman Hill 1; 24 rows skipped because they sit on a city-centre fallback geocode (9 share one downtown point, one is an Ankeny address). Outcomes: /asian/east-village (3 places) kept as noindex with copy from rows; /italian/east-village and /asian/downtown (2) and 12 other downtown/East Village/Valley Junction cuisine pages (0-1) unpublished + 301 (downtown/EV -> /things-to-do/<area>; VJ -> /neighborhoods/west-des-moines). TRADE-OFF: these 15 URLs had 1,027 impressions and 13 clicks in 3 months at pos ~7-11; they were ranking on generated copy over 0-3 real listings, which is a doorway risk. They can come back once SEO-061 fills coverage. 6 older indexable pages rebuilt from rows ('Tacos La Familia' gone); /brunch/ankeny and /italian/ankeny rebuilt, still noindex; /steakhouse/west-des-moines (7) published indexable. Data: Menchie's -> Frozen Yogurt; Cheesecake Factory -> 'American, Brunch' (its location page lists weekend brunch); Toasted Cone rows -> Ice Cream and toasted-cone merged into the-toasted-cone (389 vs 174 impr) with a 301. Backups + SQL in backups/seo-060/ (main checkout, untracked). Verified: check-pseo-coverage (9 indexable, 3 noindex), -demand, -collisions, check-sitemap-registration, check-sitemap-redirects, 37 coverage tests, lint, type-check. OPEN -> SEO-061: 24 fallback geocodes, cuisine mislabels (Jethro's BBQ and The Breakfast Club as 'American'), Valley Junction boundary source, /restaurants/<area> pages still carry LLM copy, and thin neighbourhood restaurant coverage."
+    },
+    {
+      "id": "SEO-061",
+      "title": "Restaurant coverage downtown, East Village and Valley Junction is too thin to support neighbourhood pages",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-060: only 30 restaurants geocode to downtown, 22 to East Village and 5 to Valley Junction, so 15 neighbourhood cuisine pages that ranked at position 7-11 (1,027 impressions in 3 months) had to be retired. Catch Des Moines's member listings cover these districts; matching their coverage with verified, non-member listings is the clearest way to beat them on 'east village restaurants' (5,000/mo) and 'downtown des moines restaurants' (5,000/mo). Data defects block it: 24 rows on a city-centre fallback geocode, cuisine mislabels (Jethro's BBQ and The Breakfast Club as 'American'), an unsourced Valley Junction boundary, and /restaurants/<area> pages still carrying LLM copy.",
+      "acceptanceCriteria": [
+        "Re-geocode the 24 fallback rows from their street addresses (existing geocoding helper or a free geocoder); fix the Ankeny row; re-run the neighbourhood assignment.",
+        "Fix cuisine tags where the restaurant's own site/menu shows a clearer cuisine; record evidence.",
+        "Source the Valley Junction boundary (city or district association page) and adjust the polygon.",
+        "Add missing currently-open restaurants in Downtown, East Village and Valley Junction via the existing ingestion path, each verified open from its own site or listing fetched this session, with address, cuisine and geocode. Target: enough to bring at least 5 combos back over the 5-place rule. Back up and record each insert.",
+        "Re-run scripts/write-pseo-coverage-pages.ts; re-publish combos that now pass and remove their 301s per redirect rules (only if the redirect target was temporary).",
+        "Replace LLM copy on /restaurants/<area> pages with copy templated from rows.",
+        "NEEDS WEB SEARCH QUOTA: verify before starting."
+      ],
+      "notes": "PARTIAL 2026-10-01 (seo/SEO-061 95aedb56 -> loop; seo/SEO-061-hotfix b36ac521 -> hotfix); passes FALSE: adding missing Downtown/East Village/Valley Junction restaurants needs a session with web-search budget, and the Valley Junction boundary has no citable source. Geocode: 23 flagged rows; all 18 with a street address got exact US Census matches (incl. Birdies, the Ankeny row); 5 with only 'Des Moines, IA' unmatched (el-fogon, exile-brewing-co, motley-school-tavern, ritual-cafe, the-contrary). 14 of 23 were suites in one shared building, so assign-restaurant-neighborhoods.ts no longer treats them as fallbacks (5 tests). Neighbourhoods now: downtown 32 (Blue Sushi, Dore moved in), East Village 21, Valley Junction 5. Cuisine: Jethro's x3 -> BBQ; The Breakfast Club -> Breakfast & Brunch; Cowboy, El Gran Amigo, Taqueria tacos la palma -> Mexican; Wasabi WDM (was American) and Wasabi Waukee (was Thai) -> sushi; Wasabi Waukee's own site gives a WDM address, so WDM is correct; Gabriela's Salsa-Picante left (no site). Duplicates: Taste of New York two pairs (WDM, Pleasant Hill) and a third restaurant merge via merge_duplicate_content; playgrounds have no merge function, so the survivor got the image/text and the loser rows were DELETED (backup playgrounds-before.json); Union Park had 3 rows. 6 x 301 on both branches; targets exist on the hotfix. Backups/SQL/evidence in scripts/content-backups/seo-061/. Valley Junction polygon unchanged (valleyjunction.com states no boundary; NRHP district 100-318 5th St can't be drawn without guessing; reasoning in neighborhoodBoundaries.ts). Coverage: 7 pages rewritten; /pizza/west-des-moines fell 5 -> 4 (a Taste of New York duplicate had been counted twice) -> noindex, out of sitemap-pseo. Verified: check-pseo-coverage, check-sitemap-redirects both branches, check-restaurant-seo 0, lint, type-check. OPEN: WDM Taste of New York address (site says 7450 Bridgewood Blvd); The Breakfast Club address (site: 418 E Grand Ave vs stored 212 E 3rd St); mi-patria and brick-street look duplicated."
+    },
+    {
+      "id": "SEO-062",
+      "title": "Top restaurant pages say 'opening soon' or 'announced' for places that are open",
+      "priority": 1,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "Found by SEO-034: 22 restaurants have status opening_soon or announced, and they include most of the highest-traffic pages on the site: atlas-caf (101 clicks, Google OPERATIONAL), marvs-mainstreet-dive (86 clicks, opening_date 2026-03-31), yard-house (69), canopy (65, Google OPERATIONAL), jungle-tea (45, opening_date 2026-05-15), san-miguel-eatery (35), the-contrary? (check), dutch-bros-coffee (20), bonchon (opening_date 2026-04-29), kura-revolving-sushi-bar, wayback-burgers, bubbies-pleasant-hill, taste-of-new-york-pleasant-hill. Pages tell searchers the place hasn't opened, which kills CTR and is false. daves-hot-chicken-2 is a Davenport address in a Des Moines guide. This is data, so it is live the moment it is fixed - no deploy needed.",
+      "acceptanceCriteria": [
+        "For each of the 22 rows, establish current status from evidence fetched this session: Google business_status where already stored, the restaurant's own site/location page, or its official listing. Record evidence per row in the SQL header.",
+        "Back up all 22 rows, then set status to 'open' (or 'newly_opened' if the codebase uses it for recent openings; check how it is rendered) where evidence shows operating; leave opening_soon only with a future date and evidence; set closed with evidence.",
+        "daves-hot-chicken-2 (Davenport): mark it out of scope per existing conventions (status, region, or hide) and make sure it leaves Des Moines lists and the sitemap; 301 only if a Des Moines location row exists.",
+        "Add a nightly or build-time check that flags opening_soon/announced rows whose opening_date has passed or whose business_status is OPERATIONAL, so this cannot silently recur.",
+        "Verify on the live site: curl atlas-caf, bonchon, canopy, marvs-mainstreet-dive as Googlebot and confirm no 'opening soon' text (client render may need the prerender rebuild; note it)."
+      ],
+      "notes": "DATA FIXED IN PRODUCTION 2026-10-01; code merged to hotfix/pseo-homepage-shell (b2561353). passes FALSE: prerendered pages still say 'hasn't opened yet' until #444 deploys and rebuilds, and 5 rows remain unknown. 15 of 22 set to open with evidence (backup + per-row evidence in scripts/content-backups/seo-062/): atlas-caf and canopy (stored Google OPERATIONAL; oakparkdsm.com same address), bonchon (bonchon.com location page), bubbies-pleasant-hill, wayback-burgers, highland-underground, judges-dsm, les-chinese-bar-b-que, chikin-likin (own sites with hours), bar-martinez and littleleaf-luncheonette (own sites; row address/phone/website belong to other businesses), moes-southwest-grill (official Urbandale listing; row location only 'Des Moines metro'), taste-of-new-york-pleasant-hill (Waukee store open; name says Pleasant Hill), empire (Kids Empire is open but is an indoor playground, not a restaurant). daves-hot-chicken-2 (Davenport) -> is_merged with no target + blacklisted out_of_scope: out of every list and the sitemap, edge shell serves noindex. Unchanged: kura-revolving-sushi-bar (Kura lists 0 Iowa stores), san-miguel-eatery (site 'under construction'). UNKNOWN: dutch-bros-coffee (1534 E Grand not among Dutch Bros' 3 Iowa stores), jungle-tea and marvs-mainstreet-dive (no website, dates passed), the-ingersoll, yard-house (fetch blocked; listed April 2027). Guard: staleUpcomingReason() in src/lib/restaurantOpenings.ts (25 tests), scripts/check-stale-openings.ts, nightly .github/workflows/stale-openings-check.yml (network needed, so not in validate); today it exits 1 on dutch-bros, jungle-tea, marvs. OPEN -> SEO-063."
+    },
+    {
+      "id": "SEO-063",
+      "title": "Restaurant rows carry stale 'opening soon' copy, wrong addresses and a playground",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-062. Three top-traffic pages have unknown status with passed opening dates: marvs-mainstreet-dive (86 clicks), jungle-tea (45), dutch-bros-coffee (20). Stored GEO copy (geo_faq, geo_summary, description) still says 'opening soon' for atlas-caf, bonchon, moes and probably others. bar-martinez and littleleaf-luncheonette carry another business's address/phone/website; moes-southwest-grill has no street address; taste-of-new-york-pleasant-hill is a Waukee store; 'empire' (Kids Empire) is an indoor playground listed as a restaurant; yard-house is listed for April 2027 while it ranks for 'yard house west des moines'.",
+      "acceptanceCriteria": [
+        "Resolve status for marvs-mainstreet-dive, jungle-tea, dutch-bros-coffee, the-ingersoll, yard-house with evidence fetched this session (official social pages, the business's Google listing, local news); leave unknown only if nothing can be fetched, and say so. NEEDS WEB SEARCH QUOTA or reachable official pages.",
+        "Scan every restaurant row's description, geo_summary, geo_faq and seo_description for 'opening soon', 'coming soon', 'will open', 'opens in' where status is open; rewrite those sentences from facts in the row (templated, no invention). Back up first.",
+        "Fix bar-martinez, littleleaf-luncheonette, moes-southwest-grill and taste-of-new-york-pleasant-hill identity data (address, phone, website, name/slug city) from their own sites; slug renames need 301s on both branches per the redirect rule.",
+        "Move 'empire' (Kids Empire) out of restaurants (hide + add to playgrounds if that table fits, or just hide) and 301 per the rule.",
+        "Re-run scripts/check-stale-openings.ts and check-restaurant-seo; both clean."
+      ],
+      "notes": "DONE IN PRODUCTION 2026-10-01; merged to claude/seo-q4-loop (38d31915) and 301s to hotfix/pseo-homepage-shell (b54e8226). passes FALSE: dutch-bros-coffee, jungle-tea, marvs-mainstreet-dive and yard-house status still unknown (web search quota exhausted). Opening copy rewritten on 6 open rows (atlas-caf, bonchon, highland-underground, les-chinese-bar-b-que, mee-mochi-donuts-soft-serve, moes-southwest-grill), only the false sentences/FAQs/key facts; el-fogon (about San Miguel opening, true) and bandit-burrito ('pickup coming soon') left. Identity fixes, re-geocoded with the US Census geocoder (exact matches; repo geocode-location found none): bar-martinez -> 515 Euclid Ave (Bar Nico's address/phone/site/place id/rating/'Mexican' cleared; barmartinezdsm.com); littleleaf-luncheonette -> 405 6th St, Waukee, (515) 777-7171 (littleleafluncheonette.com); moes-southwest-grill -> 4206 Merle Hay Rd, Urbandale, (515) 337-9337 (locations.moes.com/ia/urbandale); taste-of-new-york-pleasant-hill renamed taste-of-new-york-waukee with 301 (tasteofnypizza.com). empire hidden + blacklisted not_restaurant; /restaurants/empire 301 -> /playgrounds/kids-empire-merle-hay (already in playgrounds). the-ingersoll -> open ('reopened in late 2025' on its own history page). /restaurants/daves-hot-chicken -> /restaurants (old target hidden by SEO-062); ritual-caf redirect restored. Also fixed stale 'Bakery' descriptions on the-cheesecake-factory and the-toasted-cone. Backups, SQL and evidence in scripts/content-backups/seo-063/. Verified: check-stale-openings flags 3 (dutch-bros, jungle-tea, marvs); check-restaurant-seo 0; check-sitemap-redirects and check-seo-routes pass on both branches. OPEN: the 4 unknown statuses; highland-underground ai_writeup says 'opens in Fall 2025' with another address; ai_writeup cleared on 3 rows that described the wrong business; taste-of-new-york (WDM) address differs from the chain's site."
+    },
+    {
+      "id": "SEO-064",
+      "title": "80 time-relative pSEO pages duplicate another page's listing",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-056: 40 audience x time pages (e.g. /things-to-do/families/this-weekend) list the same events as their non-audience page, and 40 restaurant x time pages list the same restaurants all year. Near-duplicate pages at scale are the doorway pattern Google demotes; check-pseo-coverage also now flags /asian/west-des-moines and /brunch/west-des-moines after restaurant list changes from SEO-059/060/062.",
+      "acceptanceCriteria": [
+        "For each of the 80, measure listing overlap with its parent page and GSC impressions; record the table.",
+        "Audience x time pages: keep indexable only where an audience filter actually changes the list (e.g. kid-tagged events) by a stated threshold; otherwise noindex,follow with canonical to the parent, or 301 if 0 impressions. 301s go on both branches per the redirect rule.",
+        "Restaurant x time pages: noindex or 301 unless the time window changes the list (e.g. open-late hours data, seasonal patios).",
+        "Resolve the two check-pseo-coverage flags.",
+        "check-pseo-coverage, check-pseo-collisions, check-sitemap-redirects pass."
+      ],
+      "notes": "DONE IN PRODUCTION 2026-10-01; merged to claude/seo-q4-loop (aec98726) and the 301s to hotfix/pseo-homepage-shell (d421b171, merge 730dc9bd). passes FALSE until live. None of the 80 passed: every one listed 100% of its parent (the listing query never reads the audience dimension; restaurants have no dates). 26 restaurant x time pages with impressions -> noindex,follow + canonical /restaurants (a stand-in; no single-cuisine page exists); 54 (all 40 audience x time with 0 impressions + 14 restaurant x time) unpublished + 301 to /things-to-do/<time>, /events/today, /events/this-weekend or /restaurants (spring -> /things-to-do because /things-to-do/spring is in no sitemap). Rule src/pseo/duplicateRule.ts: indexable only with >=5 items and <70% overlap with the parent; else noindex+canonical if it has impressions, 301 if not; enforced by check-pseo-coverage offline and live. PseoPage honours a stored site-path canonical. Table docs/seo/pseo-time-duplicates-2026-10-01.csv. Rewrote /asian/west-des-moines (13) and /brunch/west-des-moines (7) from current listings; check-pseo-coverage passes. Backups + SQL in backups/seo-064/ (untracked). Verified: check-pseo-coverage, -collisions, -time-copy, check-sitemap-redirects, check-seo-route-parity, lint, type-check, 65 vitest (loop); check-sitemap-redirects, route parity, collisions (hotfix). NOTE: a CI build of #444 failed mid-run because this story unpublished /things-to-do/budget/this-weekend while the build was prerendering; the next build regenerates the sitemap from the DB. OPEN: hotfix code ignores pseo robots, so the 26 noindex pages stay indexable in production until the loop branch ships; same duplication pattern untouched on 8 /restaurants/<time> pages, 27 audience pages without a time dimension, and /things-to-do/<time> vs /events/<time>; 'Wasabi Waukee' counted under West Des Moines."
+    },
+    {
+      "id": "SEO-065",
+      "title": "/restaurants/<area> pages are published but 404 because the detail route catches them",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-038: /restaurants/ankeny, /restaurants/west-des-moines, /restaurants/downtown, /restaurants/east-village and /restaurants/valley-junction are published pSEO rows that return 404 live because /restaurants/:slug (restaurant detail) matches first and finds no restaurant. These are the highest-volume targets in keyword-opportunities.csv ('restaurants in west des moines iowa' 50,000/mo; Ankeny, East Village and Downtown 5,000 each), all marked out of Catch Des Moines's scope.",
+      "acceptanceCriteria": [
+        "Reproduce: curl the five URLs as Googlebot and record status/title; find the route order in src/App.tsx and how RestaurantDetails handles an unknown slug.",
+        "Make /restaurants/<area> render the area page when the slug is a taxonomy location with a published row and no restaurant has that slug (check for collisions with real restaurant slugs; scripts/check-pseo-route-collisions). Prerender them and add to sitemap-pseo.xml.",
+        "Copy on these pages templated from rows (SEO-041 writer), using restaurants.neighborhood for downtown/east-village/valley-junction and city for suburbs; apply the coverage rule (5+ indexable).",
+        "Link them from the /restaurants hub directory (SEO-038) and from restaurant detail pages' suburb link (SEO-034) where they exist.",
+        "Verify prerendered HTML has each page's own title; check-pseo-route-collisions, check-seo-route-parity, check-sitemap-registration pass."
+      ],
+      "notes": "CODE + DATA DONE 2026-10-01, merged to claude/seo-q4-loop (32d0a2e9); passes FALSE until live. Cause: /restaurants/:slug (App.tsx:551) matched before the pSEO catch-all, RestaurantDetails found no restaurant 'ankeny', and the middleware 404'd a missing restaurant; all five returned 404 + noindex + homepage title as Googlebot. No restaurants.slug equals a taxonomy location slug. Fix: RestaurantDetails renders the published pSEO row when no restaurant has the slug and it is a location slug (src/pseo/restaurantAreaSlugs.ts, test pins it to the taxonomy); a real restaurant still wins; middleware serves 200 with the row's title/description/canonical if the prerender missed it; pseoRouteClaims.mjs no longer claims them, so they reach sitemap-pseo.xml and the prerender. Coverage rule and an area template in the writer. Production: rewritten West Des Moines 82 places, Ankeny 39, Downtown 27, East Village 21, Valley Junction 5; inserted Waukee 25, Johnston 20, Clive 16, Urbandale 13, Altoona 9, Pleasant Hill 8, Windsor Heights 6; Sherman Hill (1) skipped. All 12 indexable, each prerenders with its own title; /restaurants hub links all 12; detail pages show 'Restaurants in <area>'. Backup + SQL backups/seo-065/ (untracked). Verified: check-pseo-route-collisions, check-pseo-coverage, route parity, sitemap registration, sitemap redirects, lint, type-checks. OPEN: area copy goes stale as restaurants open/close (re-run the writer; consider scheduling); Baru 66 counted in Windsor Heights though its address says 'former location'; duplicate Taste of New York rows in Pleasant Hill and WDM; 20 other /restaurants/<cuisine|season|audience> rows still 404; generate-pseo-page not bound by the rule for area pages. CANDIDATE FOR THE HOTFIX: these URLs 404 in production today and target the largest volumes."
+    },
+    {
+      "id": "SEO-066",
+      "title": "Loop-branch build fails: 26 noindex+canonical pSEO pages are rejected by the strict prerender gate",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": true,
+      "description": "Found by SEO-043: a full prerender on claude/seo-q4-loop exits 1 on 26 restaurant x time pSEO routes (e.g. /bbq/today) that SEO-064 set to noindex,follow with a canonical to /restaurants. They are listed in both the noindex list and CANONICAL_ELSEWHERE, and the strict gate (canonical must resolve to the route itself) rejects them. If CI behaves the same, PR #443 can never build and nothing on this branch can ship.",
+      "acceptanceCriteria": [
+        "Reproduce with a full build (or the pSEO pass alone) on claude/seo-q4-loop and capture the exact failure for 2 routes.",
+        "Fix the gate/route lists so a page that deliberately canonicalises elsewhere is accepted when its canonical matches its declared target (and still fails if it accidentally points at the homepage or anything undeclared). Add a negative control test.",
+        "Decide whether these noindex pages should be prerendered at all or excluded from the pSEO pass; justify.",
+        "Full build exits 0 on the branch; check PR #443's CI build step result."
+      ],
+      "notes": "PASSES 2026-10-01 (seo/SEO-066 4b02d14b, merged to claude/seo-q4-loop): the acceptance criteria are local-build criteria and were verified. Cause: SEO-064 wrote canonical targets to scripts/.generated/pseo-canonical-elsewhere.json, which check-prerender-head read but prerender.mjs did not, so the strict gate demanded self-canonicals ('pSEO prerender incomplete: 26/96', e.g. /bbq/today canonical points at /restaurants). Fix: scripts/pseo-canonical-elsewhere.mjs (:38,:61,:85) validates the map and drops homepage/self/off-site targets; prerender.mjs:674,974 and check-prerender-head.mjs read through it; 9 new strict-gate checks incl. 4 negative controls (no map, homepage canonical, undeclared target, undeclared page) that fail as intended. Decision: noindex pages stay in the pSEO pass, because without static HTML Cloudflare serves the indexable homepage with a self-canonical at that URL. dist/bbq/today.html: own title, noindex,follow, canonical /restaurants. Full build with entities exit 0: hubs 55/55, pSEO 96/96, entities 1175/1175, 0 strict rejections; check-prerender-head 1326 pages; route parity, check-pseo-coverage, lint, type-check pass. PR #443 CI was failing earlier for other reasons -> SEO-067."
+    },
+    {
+      "id": "SEO-067",
+      "title": "PR #443 CI is red: About.tsx JSON-LD escaping, edge invariants, migration safety",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-066 on PR #443 (head d9ec1799): 'Lint, Type Check, Test & Build' fails at 'Offline helper suites' on json-ld-escape (pages/About.tsx, added by SEO-037, must use toJsonLd), so the production build step never runs. 'Edge function & migration invariants', 'Migration Safety', the AOS review and the secret scan also fail. The secret scan and AOS review were earlier diagnosed as inherited from main (test fixtures; process.env.TZ in tests) and may clear once main is merged into develop; the others are new. Nothing on this branch can ship to develop until CI is green.",
+      "acceptanceCriteria": [
+        "Pull the failing job logs for the latest #443 run (gh run view --log-failed) and list each failure with its cause.",
+        "Fix About.tsx to use toJsonLd and any other json-ld-escape hits.",
+        "Fix the edge-function and migration invariants failures (likely the additive migrations and edge function edits from SEO-054/057/059/060/041: missing ledger/ordering, verify_jwt, CORS/rate-limit middleware, migration naming/order). Keep CLAUDE.md backward-compat rules.",
+        "For secret-scan/AOS failures, confirm whether they come from main-only commits; if so, document and leave; if from this branch, fix.",
+        "Push and re-run; record each check's result."
+      ],
+      "notes": "BRANCH FIXES DONE 2026-10-01 (seo/SEO-067 eb0da607, 7c913741, 1fe33514, merged to claude/seo-q4-loop); passes FALSE until PR #443's CI re-run is green. Fixed: (1) json-ld-escape - About.tsx uses toJsonLd; (2) middleware-detail-status - SEO-065's area shell removed the homepage JSON-LD without a replacement; now adds a CollectionPage node, moved below entityShell, middleware-restaurant-area.test.mjs checks exactly one JSON-LD block; (3) invariants no-time-marker - restored the replace(hour=19, minute=31, second=58) literal in catchdesmoines_crawler.py; (4) seatgeek-time-tbd - test follows delegation to eventTime.ts (negative control confirmed); (5) Migration Safety dead-lib - check-dead-lib-modules.mjs now treats scripts/ as production code (newRestaurantsArticle.ts is used by a script; guard change, review before merge); (6) check-pseo-demand - /restaurants/valley-junction unpublished in production and 301 -> /restaurants/west-des-moines on this branch only (on the hotfix the target still 404s, and the URL already 404s in production). Inherited from main, unchanged: check-migration-safety flags 6 CHECK migrations in main but not develop (this branch's 3 migrations pass); secret scan (sns-signed.json, scraper-rate-limit.test.ts fixtures); AOS review (process.env.TZ in tests); CodeQL 245 alerts in the main-vs-develop diff. These clear only when main is merged into develop. Local (LF copy): offline suites 51/52 (marketing-consent-callers is a Windows path issue, passes on CI), lint, unit 2399/2400 (seoSurfaceInventory 5s timeout, passes alone), post-build checks all pass incl. check-pseo-demand after the Valley Junction change."
+    }
+  ]
+}

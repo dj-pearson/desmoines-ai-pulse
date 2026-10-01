@@ -1,0 +1,81 @@
+slug,family,parent_listing,target,child_items,parent_items,shared,overlap_pct,gsc_impressions_3mo,gsc_clicks_3mo,verdict,previous_robots,measured_at
+/asian/august,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/asian/december,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,4,0,noindex-canonical,,2026-10-01
+/asian/fall,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,26,0,noindex-canonical,,2026-10-01
+/asian/spring,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,25,0,noindex-canonical,,2026-10-01
+/asian/summer,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/asian/this-weekend,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,10,0,noindex-canonical,,2026-10-01
+/asian/today,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/asian/winter,restaurant-time,"asian restaurants, no time window",/restaurants,12,12,12,100,68,2,noindex-canonical,,2026-10-01
+/bbq/august,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,11,0,noindex-canonical,,2026-10-01
+/bbq/december,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,9,0,noindex-canonical,,2026-10-01
+/bbq/fall,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,13,0,noindex-canonical,,2026-10-01
+/bbq/spring,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,13,0,noindex-canonical,,2026-10-01
+/bbq/summer,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,5,0,noindex-canonical,,2026-10-01
+/bbq/this-weekend,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,38,0,noindex-canonical,,2026-10-01
+/bbq/today,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,25,0,noindex-canonical,,2026-10-01
+/bbq/winter,restaurant-time,"bbq restaurants, no time window",/restaurants,4,4,4,100,3,0,noindex-canonical,,2026-10-01
+/brunch/august,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/brunch/december,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,1,0,noindex-canonical,,2026-10-01
+/brunch/fall,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/brunch/spring,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/brunch/summer,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/brunch/this-weekend,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,8,0,noindex-canonical,,2026-10-01
+/brunch/today,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,19,0,noindex-canonical,,2026-10-01
+/brunch/winter,restaurant-time,"brunch restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/italian/august,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/italian/december,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/italian/fall,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/italian/spring,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/italian/summer,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/italian/this-weekend,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,5,0,noindex-canonical,,2026-10-01
+/italian/today,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,11,0,noindex-canonical,,2026-10-01
+/italian/winter,restaurant-time,"italian restaurants, no time window",/restaurants,12,12,12,100,0,0,redirect,,2026-10-01
+/mexican/august,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,32,0,noindex-canonical,,2026-10-01
+/mexican/december,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,2,0,noindex-canonical,,2026-10-01
+/mexican/fall,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,22,1,noindex-canonical,,2026-10-01
+/mexican/spring,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,21,2,noindex-canonical,,2026-10-01
+/mexican/summer,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,5,0,noindex-canonical,,2026-10-01
+/mexican/this-weekend,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,2,0,noindex-canonical,,2026-10-01
+/mexican/today,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,6,1,noindex-canonical,,2026-10-01
+/mexican/winter,restaurant-time,"mexican restaurants, no time window",/restaurants,12,12,12,100,11,0,noindex-canonical,,2026-10-01
+/things-to-do/budget/august,audience-time,/things-to-do/august,/things-to-do/august,0,0,0,100,0,0,redirect,,2026-10-01
+/things-to-do/budget/december,audience-time,/things-to-do/december,/things-to-do/december,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/budget/fall,audience-time,/things-to-do/fall,/things-to-do/fall,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/budget/spring,audience-time,/things-to-do/spring,/things-to-do,2,2,2,100,0,0,redirect,,2026-10-01
+/things-to-do/budget/summer,audience-time,/things-to-do/summer,/things-to-do/summer,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/budget/this-weekend,audience-time,/things-to-do/this-weekend,/events/this-weekend,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/budget/today,audience-time,/things-to-do/today,/events/today,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/budget/winter,audience-time,/things-to-do/winter,/things-to-do/winter,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/august,audience-time,/things-to-do/august,/things-to-do/august,0,0,0,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/december,audience-time,/things-to-do/december,/things-to-do/december,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/fall,audience-time,/things-to-do/fall,/things-to-do/fall,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/spring,audience-time,/things-to-do/spring,/things-to-do,2,2,2,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/summer,audience-time,/things-to-do/summer,/things-to-do/summer,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/this-weekend,audience-time,/things-to-do/this-weekend,/events/this-weekend,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/today,audience-time,/things-to-do/today,/events/today,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/date-night/winter,audience-time,/things-to-do/winter,/things-to-do/winter,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/families/august,audience-time,/things-to-do/august,/things-to-do/august,0,0,0,100,0,0,redirect,,2026-10-01
+/things-to-do/families/december,audience-time,/things-to-do/december,/things-to-do/december,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/families/fall,audience-time,/things-to-do/fall,/things-to-do/fall,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/families/spring,audience-time,/things-to-do/spring,/things-to-do,2,2,2,100,0,0,redirect,,2026-10-01
+/things-to-do/families/summer,audience-time,/things-to-do/summer,/things-to-do/summer,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/families/this-weekend,audience-time,/things-to-do/this-weekend,/events/this-weekend,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/families/today,audience-time,/things-to-do/today,/events/today,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/families/winter,audience-time,/things-to-do/winter,/things-to-do/winter,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/august,audience-time,/things-to-do/august,/things-to-do/august,0,0,0,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/december,audience-time,/things-to-do/december,/things-to-do/december,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/fall,audience-time,/things-to-do/fall,/things-to-do/fall,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/spring,audience-time,/things-to-do/spring,/things-to-do,2,2,2,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/summer,audience-time,/things-to-do/summer,/things-to-do/summer,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/this-weekend,audience-time,/things-to-do/this-weekend,/events/this-weekend,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/today,audience-time,/things-to-do/today,/events/today,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/foodies/winter,audience-time,/things-to-do/winter,/things-to-do/winter,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/august,audience-time,/things-to-do/august,/things-to-do/august,0,0,0,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/december,audience-time,/things-to-do/december,/things-to-do/december,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/fall,audience-time,/things-to-do/fall,/things-to-do/fall,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/spring,audience-time,/things-to-do/spring,/things-to-do,2,2,2,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/summer,audience-time,/things-to-do/summer,/things-to-do/summer,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/this-weekend,audience-time,/things-to-do/this-weekend,/events/this-weekend,12,12,12,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/today,audience-time,/things-to-do/today,/events/today,1,1,1,100,0,0,redirect,,2026-10-01
+/things-to-do/tourists/winter,audience-time,/things-to-do/winter,/things-to-do/winter,12,12,12,100,0,0,redirect,,2026-10-01

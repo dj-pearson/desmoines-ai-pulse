@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
-import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, neighborhoodHref } from "@/lib/neighborhoods";
 import { SUBURBS } from "@/lib/suburbs";
 
 /**
@@ -70,7 +70,8 @@ describe("PlaceCrossLinks", () => {
     for (const n of NEIGHBORHOODS) {
       const found = href(new RegExp(`^${n.name}$`, "i"));
       if (n.slug === "ankeny") expect(found).toBeNull();
-      else expect(found).toBe(`/neighborhoods/${n.slug}`);
+      // SEO-040: an area whose guide moved links to its new URL.
+      else expect(found).toBe(neighborhoodHref(n));
     }
   });
 

@@ -87,7 +87,7 @@ export function useStripDinners(items: readonly TonightItem[], now: Date): Strip
         .from("restaurants")
         .select(TONIGHT_RESTAURANT_COLUMNS)
         .neq("is_merged", true)
-        .not("opening", "is", null)
+        .not("hours_json", "is", null)
         .or(boxes.join(","))
         .order("id", { ascending: true })
         .limit(STRIP_DINNER_ROW_LIMIT);

@@ -93,6 +93,7 @@ export type CategorySlug =
   | 'brunch'
   | 'coffee'
   | 'steakhouse'
+  | 'pizza'
   | 'live-music'
   | 'festivals'
   | 'arts-culture'

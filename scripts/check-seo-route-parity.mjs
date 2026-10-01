@@ -10,9 +10,11 @@
  * empty JavaScript shell for them.
  *
  * Enforced direction (hard failure):
- *   PRERENDER_ROUTES ⊆ sitemap-static.xml
+ *   PRERENDER_ROUTES ⊆ sitemap-static.xml ∪ PRERENDERED_NOT_SITEMAPPED
  *   Prerendering a route we do not submit is wasted build time, and if we do
- *   not want it indexed it should not be rendered for crawlers either.
+ *   not want it indexed it should not be rendered for crawlers either. The one
+ *   exception is a page that canonicals elsewhere (SEO-036): it is rendered so
+ *   JS-less crawlers read that canonical, and it is never submitted.
  *
  * Reported direction (hard failure unless declared):
  *   sitemap-static.xml ⊆ PRERENDER_ROUTES ∪ SITEMAP_ONLY_ROUTES
@@ -30,6 +32,7 @@ import {
   PRERENDER_ROUTES,
   SITEMAP_ONLY_ROUTES,
   DELIBERATELY_EXCLUDED_ROUTES,
+  PRERENDERED_NOT_SITEMAPPED,
 } from './prerender-routes.mjs';
 
 const SITEMAP = path.resolve('public/sitemap-static.xml');
@@ -73,10 +76,13 @@ function main() {
   const prerender = new Set(PRERENDER_ROUTES);
   const sitemapOnly = new Set(SITEMAP_ONLY_ROUTES);
   const excluded = new Set(DELIBERATELY_EXCLUDED_ROUTES);
+  const canonicalisedAway = new Set(PRERENDERED_NOT_SITEMAPPED);
   const errors = [];
 
-  // 1. Everything we prerender must be submitted.
-  const prerenderedNotSubmitted = PRERENDER_ROUTES.filter((r) => !sitemapPaths.has(r));
+  // 1. Everything we prerender must be submitted, unless it canonicals away.
+  const prerenderedNotSubmitted = PRERENDER_ROUTES.filter(
+    (r) => !sitemapPaths.has(r) && !canonicalisedAway.has(r),
+  );
   if (prerenderedNotSubmitted.length) {
     errors.push(
       `  Prerendered but NOT in sitemap-static.xml (${prerenderedNotSubmitted.length}):`,
@@ -118,6 +124,21 @@ function main() {
       `  Declared in SITEMAP_ONLY_ROUTES but absent from the sitemap (${staleExceptions.length}):`,
       ...staleExceptions.map((r) => `    ${r}`),
       '    → remove the stale declaration.',
+      '',
+    );
+  }
+
+  // 5. A route that canonicals elsewhere must be prerendered (or JS-less
+  //    crawlers never see its canonical) and must not be submitted (a sitemap
+  //    entry contradicts a canonical pointing at another URL).
+  const badCanonicalised = PRERENDERED_NOT_SITEMAPPED.filter(
+    (r) => !prerender.has(r) || sitemapPaths.has(r),
+  );
+  if (badCanonicalised.length) {
+    errors.push(
+      `  In PRERENDERED_NOT_SITEMAPPED but not prerendered, or still sitemapped (${badCanonicalised.length}):`,
+      ...badCanonicalised.map((r) => `    ${r}`),
+      '    → keep it in PRERENDER_ROUTES and out of sitemap-static.xml.',
       '',
     );
   }

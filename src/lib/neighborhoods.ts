@@ -53,6 +53,14 @@ export interface Neighborhood {
   matchTerms: string[];
   /** Prerendered and listed in sitemap-static.xml. See the check script. */
   prerender: boolean;
+  /**
+   * SEO-040. Set when this area's guide lives at another URL. Every link the
+   * site builds goes there (neighborhoodHref), /neighborhoods/<slug> 301s to it
+   * in public/_redirects, and the entry carries prerender: false so it leaves
+   * the prerender list and sitemap-static.xml. The entry stays for its
+   * matchTerms and copy, which other surfaces read.
+   */
+  guidePath?: string;
 }
 
 export const NEIGHBORHOODS: Neighborhood[] = [
@@ -70,7 +78,11 @@ export const NEIGHBORHOODS: Neighborhood[] = [
       'bars and late-night dining, and the Downtown Farmers Market runs through the summer.',
     bestFor: 'Urban nightlife, craft breweries, cultural events, downtown dining',
     matchTerms: ['East Village', 'Court Avenue', 'Downtown Des Moines'],
-    prerender: true,
+    // SEO-040: /things-to-do/east-village had 1,208 impressions at position
+    // 11.8 in the 2026-09-30 Search Console export against 124 + 14 at 17.0
+    // here, for the same query. One URL per intent; this one 301s there.
+    prerender: false,
+    guidePath: '/things-to-do/east-village',
   },
   {
     slug: 'west-des-moines',
@@ -180,6 +192,11 @@ export const NEIGHBORHOODS: Neighborhood[] = [
 export function findNeighborhood(slug: string | undefined): Neighborhood | undefined {
   if (!slug) return undefined;
   return NEIGHBORHOODS.find((n) => n.slug === slug);
+}
+
+/** Where the site links for this area: its guide, wherever that lives (SEO-040). */
+export function neighborhoodHref(n: Pick<Neighborhood, 'slug' | 'guidePath'>): string {
+  return n.guidePath ?? `/neighborhoods/${n.slug}`;
 }
 
 /** The routes prerender-routes.mjs and sitemap-static.xml must carry, in order. */

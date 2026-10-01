@@ -347,6 +347,55 @@ export async function countHub(filters: HubFilters, now: Date): Promise<number> 
   return count ?? 0;
 }
 
+/** The whole calendar with no filters: what the hub's first sentence describes. */
+export const UNFILTERED_HUB: HubFilters = {
+  search: "",
+  category: "all",
+  window: null,
+  area: undefined,
+  freeOnly: false,
+  sort: "date_asc",
+};
+
+export interface HubCalendarSummary {
+  /** Upcoming rows (not over), the same set the unfiltered list pages through. */
+  total: number | null;
+  /** Of those, rows the Free chip returns. */
+  free: number;
+  /** Central date of the latest upcoming row, null when there is none. */
+  lastDay: string | null;
+}
+
+/**
+ * SEO-036: the counts and the range for /events' first sentence, from the
+ * same filters the unfiltered list uses. Two requests: the latest row with an
+ * exact count (the total and the last date in one read), and a count-only
+ * HEAD for the free rows. tests/events-request-budget.spec.ts counts both.
+ */
+export async function fetchHubCalendarSummary(now: Date): Promise<HubCalendarSummary> {
+  const lastQuery = applyHubFilters(
+    supabase.from("events").select("date, event_start_utc", { count: "exact" }),
+    UNFILTERED_HUB,
+    now
+  )
+    .order("date", { ascending: false })
+    .limit(1);
+  const [free, last] = await Promise.all([
+    countHub({ ...UNFILTERED_HUB, freeOnly: true }, now),
+    lastQuery,
+  ]);
+  if (last.error) throw last.error;
+  const row = (last.data ?? [])[0] as { date: string | null; event_start_utc: string | null } | undefined;
+  const instant = row ? row.event_start_utc || row.date : null;
+  return {
+    // null when the count header did not come back; the page then says nothing
+    // rather than "no upcoming events".
+    total: last.count ?? null,
+    free,
+    lastDay: instant ? centralDateOf(new Date(instant)) : null,
+  };
+}
+
 /** The PostgREST arm for "sponsorship not expired". */
 export function sponsoredActiveFilter(now: Date): string {
   return `sponsored_until.is.null,sponsored_until.gt.${now.toISOString()}`;

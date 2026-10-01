@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useHotelPins } from "@/hooks/useHotels";
 import { formatMiles, nearby, NEARBY_MILES } from "@/lib/venuePages";
+import { hotelsNearPath } from "@/lib/hotelsNear";
 
 interface NearbyHotelsProps {
   latitude?: number | string | null;
@@ -10,9 +11,8 @@ interface NearbyHotelsProps {
   placeName: string;
   limit?: number;
   /**
-   * The venue slug /stay?near= understands (a `venues` slug, or
-   * iowa-state-fairgrounds). When given, the card ends with a "See all hotels
-   * near X" link to the full distance-sorted list (plan-stay WP2 item 7).
+   * A `venues` slug. When given, the card ends with a "See all hotels near X"
+   * link to that venue's /stay/near/:slug page (plan-stay WP2 item 7, SEO-045).
    */
   nearSlug?: string | null;
 }
@@ -54,7 +54,7 @@ export function NearbyHotels({ latitude, longitude, placeName, limit = 5, nearSl
         </p>
         {nearSlug && (
           <Link
-            to={`/stay?near=${encodeURIComponent(nearSlug)}`}
+            to={hotelsNearPath(nearSlug)}
             className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
           >
             See all hotels near {placeName}

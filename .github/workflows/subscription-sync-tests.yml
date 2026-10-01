@@ -112,6 +112,9 @@ jobs:
       # two-row user that .maybeSingle() used to deny. --allow-read is for the
       # src/lib/roles.ts comparison.
       - run: deno test --allow-read supabase/functions/_shared/roles.test.ts
+      # SEO-057. The writers' copy of the model-label strip must match the web
+      # app's; --allow-read is for the src/lib/aiText.ts comparison.
+      - run: deno test --allow-read supabase/functions/_shared/aiText.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
       # XPLAT-011. Asserts docstring, implementation and all three clients agree
@@ -229,6 +232,10 @@ jobs:
       # are null rather than an empty periods array, because `{periods: []}`
       # reads as "closed all week" and means "Google did not answer".
       - run: deno test --allow-read supabase/functions/_tests/place-hours.test.ts
+      # SEO-059. articles_publishable_body_guard refuses a JSON/HTML/placeholder
+      # body on publish; ai-article-pipeline used to drop that error and report
+      # the article as published. Pins that it reads it and keeps a draft.
+      - run: deno test --allow-read supabase/functions/_tests/article-publish-guard.test.ts
       # WEB-CI-029 AC3. create-subscription-checkout decides whether a signed-in
       # user is sold a second subscription, and the decision was reachable only
       # through a live Stripe key. The ORDER of its checks is the behaviour: the
@@ -367,6 +374,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-unique-key.test.ts
       # eventDedup has had its own suite since DMI-010 and no lane ever ran it.
       - run: deno test supabase/functions/_shared/eventDedup.test.ts
+      # SEO-031. "Schedule" and a bare "Iowa Cubs" reached the public calendar
+      # as events; firecrawl-scraper now refuses both shapes.
+      - run: deno test supabase/functions/_shared/scheduleTitleGuard.test.ts
       # The day-bucketed index both event writers dedup through, and the paged
       # read that feeds it (a single select stops at max-rows silently).
       - run: deno test supabase/functions/_shared/existingEvents.test.ts

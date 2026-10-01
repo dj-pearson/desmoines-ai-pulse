@@ -3,6 +3,8 @@ import { EventContext } from "@cloudflare/workers-types";
 // which does not read the app's "@/" alias. restaurantMeta has no imports;
 // restaurantHours imports date-fns-tz, which the Pages bundler resolves.
 import {
+  acceptsReservationsOf,
+  buildRestaurantSchema,
   parseIowaAddress,
   restaurantLocality,
   restaurantMetaDescription,
@@ -10,8 +12,16 @@ import {
   isStaleOpeningCopy,
   type RestaurantMetaInput,
 } from "../src/lib/restaurantMeta";
-import { resolveOpeningHoursSpecification } from "../src/lib/restaurantHours";
+import { lastUpdatedLabel, neighborhoodLink, scheduleHoursSentence } from "../src/lib/restaurantAtAGlance";
+import {
+  hoursDisplayLine,
+  isPermanentlyClosedRestaurant,
+  resolveOpeningHoursSpecification,
+} from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
+import { isRestaurantAreaSlug } from "../src/pseo/restaurantAreaSlugs";
+import { markdownToPlainText } from "../src/lib/aiText";
+import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -131,7 +141,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // types.ts is not proof a column exists - so a failed select falls back to the
 // minimal one below instead of turning a real page into a 404.
 const RESTAURANT_SHELL_COLUMNS =
-  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,latitude,longitude,opening,seo_description,description,status,is_merged,merged_into";
+  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,business_status,is_merged,merged_into,updated_at,google_maps_uri,reservable,reservation_url";
 const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
 const EVENT_SHELL_COLUMNS =
   "id,title,date,event_start_utc,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
@@ -264,10 +274,13 @@ export async function resolveEntity(
       const start = new Date(`${day}T00:00:00Z`);
       const from = new Date(start.getTime() - 36 * 60 * 60 * 1000).toISOString();
       const to = new Date(start.getTime() + 60 * 60 * 60 * 1000).toISOString();
+      // A row a moderator hid is not a page (SEO-031): RLS still serves it to
+      // anon, and the app answers it with "gone", so the shell must not 200 it.
+      const visible = "is_hidden=not.is.true";
       const inWindow = async (sel: string) => {
         const [a, b] = await Promise.all([
-          sbGet(base, anon, `events?event_start_utc=gte.${from}&event_start_utc=lt.${to}&select=${sel}&limit=200`),
-          sbGet(base, anon, `events?date=gte.${from}&date=lt.${to}&select=${sel}&limit=200`),
+          sbGet(base, anon, `events?event_start_utc=gte.${from}&event_start_utc=lt.${to}&${visible}&select=${sel}&limit=200`),
+          sbGet(base, anon, `events?date=gte.${from}&date=lt.${to}&${visible}&select=${sel}&limit=200`),
         ]);
         return a && b ? [...a, ...b] : null;
       };
@@ -504,7 +517,8 @@ export function detailResponsePlan(
  */
 export function restaurantShellRobots(row: Record<string, any> | undefined): string | null {
   if (!row) return null;
-  if (row.status === "closed") return "noindex, follow";
+  // Our status or Google's business_status (SEO-059), the rule the React page uses.
+  if (isPermanentlyClosedRestaurant(row)) return "noindex, follow";
   if (row.is_merged) return "noindex, follow";
   return null;
 }
@@ -604,59 +618,71 @@ function breadcrumb(hubHref: string, hubLabel: string, name: string): string {
  * the hours it plans to keep; neither is a schedule a visitor can use.
  */
 function showsHours(row: Record<string, any>): boolean {
-  return row.status !== "closed" && row.status !== "opening_soon" && row.status !== "announced";
+  if (isPermanentlyClosedRestaurant(row)) return false;
+  if (String(row.business_status ?? "").toUpperCase() === "CLOSED_TEMPORARILY") return false;
+  return row.status !== "opening_soon" && row.status !== "announced";
 }
 
+/**
+ * The Restaurant node, from the builder the React page uses (SEO-034), so a
+ * crawler that misses the prerender reads the same properties: servesCuisine,
+ * priceRange, hasMenu, openingHoursSpecification, acceptsReservations, geo,
+ * sameAs (site and Google listing), address. The shell cannot see a captured
+ * menu, so hasMenu here is their own menu page.
+ *
+ * One ld+json block, so the page's freshness rides on the node itself as
+ * mainEntityOfPage: a WebPage with dateModified from updated_at.
+ */
 export function restaurantShellNode(row: Record<string, any>, pageUrl: string): Record<string, unknown> {
-  const addr = parseIowaAddress(row.location);
-  const hours = showsHours(row) ? resolveOpeningHoursSpecification(null, row.opening) : null;
-  // Scraped text, not links we built: only http(s) reaches the node.
-  const website = safeHttpUrl(row.website);
-  const menu = safeHttpUrl(row.menu_url);
-  return {
-    "@context": "https://schema.org",
-    "@type": "Restaurant",
-    "@id": pageUrl,
+  const open = showsHours(row);
+  // SEO-054: Google's hours_json first. `opening` is a date column in
+  // production, and resolveOpeningHoursSpecification never reads a date as hours.
+  const hours = open ? resolveOpeningHoursSpecification(row.hours_json, row.opening) : null;
+  const node: Record<string, unknown> = buildRestaurantSchema(row as Parameters<typeof buildRestaurantSchema>[0], {
     url: pageUrl,
-    name: row.name,
     description: restaurantMetaDescription(row as RestaurantMetaInput),
-    ...(row.cuisine ? { servesCuisine: row.cuisine } : {}),
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: addr?.streetAddress || row.location || undefined,
-      addressLocality: restaurantLocality(row) || "Des Moines",
-      addressRegion: "IA",
-      ...(addr?.postalCode ? { postalCode: addr.postalCode } : {}),
-      addressCountry: "US",
-    },
-    ...(row.phone ? { telephone: row.phone } : {}),
-    ...(row.price_range ? { priceRange: row.price_range } : {}),
-    ...(row.latitude != null && row.longitude != null
-      ? { geo: { "@type": "GeoCoordinates", latitude: row.latitude, longitude: row.longitude } }
-      : {}),
-    ...(hours ? { openingHoursSpecification: hours } : {}),
-    ...(website ? { sameAs: [website] } : {}),
-    ...(menu ? { hasMenu: menu } : {}),
-  };
+    locality: restaurantLocality(row) || "Des Moines",
+    // Scraped text, not links we built: only http(s) reaches the node.
+    website: safeHttpUrl(row.website),
+    menuUrl: safeHttpUrl(row.menu_url),
+    hasCapturedMenu: false,
+    openingHoursSpecification: hours,
+    openForBusiness: open,
+    mapsUrl: safeHttpUrl(row.google_maps_uri),
+    acceptsReservations: acceptsReservationsOf(row, safeHttpUrl),
+  });
+  if (lastUpdatedLabel(row.updated_at)) {
+    node.mainEntityOfPage = { "@type": "WebPage", "@id": pageUrl, dateModified: row.updated_at };
+  }
+  return node;
 }
 
-export function restaurantShellBody(row: Record<string, any>): string {
+export function restaurantShellBody(row: Record<string, any>, now: Date = new Date()): string {
   const loc = restaurantLocality(row) || "Des Moines";
   const kind = row.cuisine ? `${row.cuisine} restaurant` : "Restaurant";
   const facts: string[] = [];
-  const closed = row.status === "closed";
+  const closed = isPermanentlyClosedRestaurant(row);
   // A javascript: or relative value renders no link at all, the same answer
   // the React page gives (reservations.safeWebUrl delegates to safeHttpUrl).
   const menu = safeHttpUrl(row.menu_url);
   const website = safeHttpUrl(row.website);
+  // SEO-034: the day's hours by schedule first, the answer to "<name> hours".
+  const open = showsHours(row);
+  const today = open ? scheduleHoursSentence(row.hours_json, row.opening, now) : null;
+  if (today) facts.push(`<li>${escapeHtml(today)}</li>`);
+  // SEO-054: this printed `opening` raw, which is a date in production. Google's
+  // own weekday lines come first; hours text only when it is not a date.
+  const hoursLine = hoursDisplayLine(row.hours_json, row.opening);
+  if (hoursLine && open) facts.push(`<li>Hours: ${escapeHtml(hoursLine)}</li>`);
   if (row.location) facts.push(`<li>Address: ${escapeHtml(row.location)}</li>`);
-  if (row.phone) facts.push(`<li>Phone: <a href="tel:${escapeHtml(String(row.phone).replace(/[^\d+]/g, ""))}">${escapeHtml(row.phone)}</a></li>`);
+  if (row.phone && !closed) facts.push(`<li>Phone: <a href="tel:${escapeHtml(String(row.phone).replace(/[^\d+]/g, ""))}">${escapeHtml(row.phone)}</a></li>`);
   if (row.price_range) facts.push(`<li>Price: ${escapeHtml(row.price_range)}</li>`);
-  if (row.opening && showsHours(row)) facts.push(`<li>Hours: ${escapeHtml(row.opening)}</li>`);
   if (menu) facts.push(`<li><a href="${escapeHtml(menu)}" rel="nofollow noopener">Menu</a></li>`);
   if (website) facts.push(`<li><a href="${escapeHtml(website)}" rel="nofollow noopener">Website</a></li>`);
+  const updated = lastUpdatedLabel(row.updated_at);
   // Pre-opening copy is left out rather than repeated to a crawler as current.
   const about = [row.description, row.seo_description].find((d) => d && !isStaleOpeningCopy(d));
+  const hood = neighborhoodLink(row, restaurantLocality(row));
   return [
     "<article>",
     breadcrumb("/restaurants", "Restaurants", row.name),
@@ -665,9 +691,11 @@ export function restaurantShellBody(row: Record<string, any>): string {
     closed ? "<p><strong>Permanently closed.</strong></p>" : "",
     `<p>${escapeHtml(kind)} in ${escapeHtml(loc)}, Iowa.</p>`,
     facts.length ? `<ul>${facts.join("")}</ul>` : "",
+    updated ? `<p>Listing last updated ${escapeHtml(updated)}</p>` : "",
     about ? `<p>${escapeHtml(clipText(about, 1200))}</p>` : "",
     "<h2>More places to eat</h2>",
     linkList([
+      ...(hood ? ([[hood.href, hood.label]] as Array<[string, string]>) : []),
       ["/restaurants", "All Des Moines restaurants"],
       ["/restaurants/open-now", "Restaurants open now"],
       ["/restaurants/new", "New restaurants in Des Moines"],
@@ -721,7 +749,10 @@ export function eventShellBody(row: Record<string, any>, now: Date = new Date())
       })
     : "";
   const where = [row.venue, row.location].filter(Boolean).join(", ");
-  const about = row.enhanced_description || row.original_description || row.geo_summary || row.seo_description;
+  // Plain text, without the model labels and markdown some rows carry (SEO-057).
+  const about = markdownToPlainText(
+    row.enhanced_description || row.original_description || row.geo_summary || row.seo_description,
+  );
   const locality = parseIowaAddress(row.location)?.addressLocality || row.city || "";
   const suburbSlug = slugify(locality);
   const past = when ? Date.parse(when) < now.getTime() - 24 * 60 * 60 * 1000 : false;
@@ -732,6 +763,9 @@ export function eventShellBody(row: Record<string, any>, now: Date = new Date())
     ["/events", "All Des Moines events"],
   ];
   if (EVENT_SUBURB_HUBS.has(suburbSlug)) links.unshift([`/events/${suburbSlug}`, `Events in ${locality}`]);
+  // SEO-043: an annual event's dated page links its series page first.
+  const series = seriesForEvent({ title: row.title, venue: row.venue, location: row.location });
+  if (series) links.unshift([seriesPath(series), `${series.name}: every year's dates`]);
 
   return [
     "<article>",
@@ -823,7 +857,7 @@ export function entityShellRewrites(opts: {
   let body = genericShellBody(type, opts.entity);
   if (row && type === "restaurant" && row.name) {
     node = restaurantShellNode(row, pageUrl);
-    body = restaurantShellBody(row);
+    body = restaurantShellBody(row, now);
   } else if (row && type === "event" && row.title) {
     node = eventShellNode(row, pageUrl);
     body = eventShellBody(row, now);
@@ -890,12 +924,9 @@ export function entityShellRewrites(opts: {
  * generic website with no structured data. Here the og:type follows the segment
  * and a real Event or Restaurant node is injected.
  */
-function entityShell(
-  shell: Response,
-  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
-): Response {
+function rewriterFor(rules: EntityShellRewrite[]): HTMLRewriter {
   let rewriter = new HTMLRewriter();
-  for (const rule of entityShellRewrites(opts)) {
+  for (const rule of rules) {
     if ("appendHtml" in rule) {
       rewriter = rewriter.on(rule.selector, new HtmlAppender(rule.appendHtml));
     } else if ("setInnerHtml" in rule) {
@@ -908,6 +939,14 @@ function entityShell(
       rewriter = rewriter.on(rule.selector, new AttrSetter(rule.setAttribute, rule.to));
     }
   }
+  return rewriter;
+}
+
+function entityShell(
+  shell: Response,
+  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
+): Response {
+  const rewriter = rewriterFor(entityShellRewrites(opts));
 
   const headers: Record<string, string> = {
     "Content-Type": "text/html; charset=utf-8",
@@ -920,6 +959,93 @@ function entityShell(
   if (restaurantRobots) headers["X-Robots-Tag"] = restaurantRobots;
 
   return new Response(rewriter.transform(shell).body, { status: 200, headers });
+}
+
+
+/** The stored seo of a published /restaurants/<area> pSEO row (SEO-065). */
+export interface RestaurantAreaSeo {
+  title?: string;
+  h1?: string;
+  description?: string;
+  robots?: string;
+}
+
+/**
+ * The published pSEO row for /restaurants/<area>: its seo, null when there is
+ * none, "error" when the read failed. Asked only after the restaurant lookup
+ * missed and only for a taxonomy location slug, so a dead restaurant slug
+ * costs no extra read.
+ */
+async function publishedRestaurantAreaPage(
+  base: string,
+  anon: string,
+  slug: string,
+): Promise<RestaurantAreaSeo | null | "error"> {
+  const rows = await sbGet(
+    base,
+    anon,
+    `pseo_pages?slug=eq.${encodeURIComponent(`/restaurants/${slug}`)}&is_published=eq.true&select=seo&limit=1`,
+  );
+  if (!rows) return "error";
+  if (!rows[0]) return null;
+  return (rows[0].seo ?? {}) as RestaurantAreaSeo;
+}
+
+/**
+ * SEO-065: the shell for /restaurants/<area> when it missed the prerender. It
+ * was answered as a missing restaurant (404, noindex) because the detail
+ * route's lookup found no restaurant called "ankeny". It now carries the pSEO
+ * page's own title, description, canonical and robots, and a body naming the
+ * page, in place of the homepage's. The client renders the full page.
+ *
+ * The homepage's ld+json blocks are claims about the wrong page, so they go,
+ * and the page's own CollectionPage node replaces them: the same "never strip
+ * without replacing" rule the entity shell follows.
+ */
+export function restaurantAreaShellRewrites(pageUrl: string, seo: RestaurantAreaSeo): EntityShellRewrite[] {
+  const title = seo.title ? `${seo.title} | Des Moines Insider` : "";
+  const heading = seo.h1 || seo.title || "";
+  const node: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    url: pageUrl,
+    ...(heading ? { name: heading } : {}),
+    ...(seo.description ? { description: seo.description } : {}),
+  };
+  const rules: EntityShellRewrite[] = [
+    { selector: 'script[type="application/ld+json"]', remove: true },
+    { selector: "head", appendHtml: jsonLdScript(node) },
+    { selector: 'link[rel="canonical"]', setAttribute: "href", to: pageUrl },
+    { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
+    { selector: 'meta[property="og:type"]', setAttribute: "content", to: "website" },
+  ];
+  if (heading) {
+    const body =
+      `<h1>${escapeHtml(heading)}</h1>` +
+      (seo.description ? `<p>${escapeHtml(seo.description)}</p>` : "") +
+      linkList([["/restaurants", "All Des Moines restaurants"]]);
+    rules.push({ selector: "main#main-content", setInnerHtml: body });
+  }
+  if (title) {
+    rules.push(
+      // RAW for the text sink, escaped for the attribute sinks (see EntityShellRewrite).
+      { selector: "title", setText: title },
+      { selector: 'meta[property="og:title"]', setAttribute: "content", to: escapeHtml(title) },
+      { selector: 'meta[name="twitter:title"]', setAttribute: "content", to: escapeHtml(title) },
+    );
+  }
+  if (seo.description) {
+    const desc = escapeHtml(seo.description);
+    rules.push(
+      { selector: 'meta[name="description"]', setAttribute: "content", to: desc },
+      { selector: 'meta[property="og:description"]', setAttribute: "content", to: desc },
+      { selector: 'meta[name="twitter:description"]', setAttribute: "content", to: desc },
+    );
+  }
+  if (seo.robots === "noindex, follow") {
+    rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
+  }
+  return rules;
 }
 
 /**
@@ -1154,6 +1280,31 @@ export async function onRequest(context: EventContext) {
 
         if (sbBase && sbAnon) {
           const outcome = await resolveEntityCached(context, sbBase, sbAnon, type!, slug);
+
+          // SEO-065: no restaurant has this slug, and it is a taxonomy
+          // location, so it may be the published /restaurants/<area> page that
+          // missed the prerender. That is a 200 page, not a missing restaurant.
+          if (type === "restaurant" && outcome.kind === "not-found" && isRestaurantAreaSlug(slug)) {
+            const area = await publishedRestaurantAreaPage(sbBase, sbAnon, slug);
+            if (area === "error") {
+              const rewritten = withSelfCanonical(passthrough(), pageUrl);
+              const headers = new Headers(rewritten.headers);
+              headers.set("Cache-Control", "no-store");
+              return new Response(rewritten.body, { status: 200, headers });
+            }
+            if (area) {
+              const headers: Record<string, string> = {
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "public, max-age=600",
+              };
+              if (area.robots === "noindex, follow") headers["X-Robots-Tag"] = "noindex";
+              return new Response(rewriterFor(restaurantAreaShellRewrites(pageUrl, area)).transform(passthrough()).body, {
+                status: 200,
+                headers,
+              });
+            }
+          }
+
           const plan = detailResponsePlan(outcome, type!, slug, url.origin);
 
           // A merged duplicate goes to its survivor, and a restaurant asked

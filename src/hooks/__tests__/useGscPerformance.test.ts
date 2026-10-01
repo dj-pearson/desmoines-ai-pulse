@@ -177,4 +177,72 @@ describe("aggregateGscPerformance", () => {
     expect(result.topQueries[0].position).toBe(0);
     expect(result.pageTwoOpportunities).toHaveLength(0);
   });
+
+  it("reads a property with no linked credential as not connected", () => {
+    const result = aggregateGscPerformance(
+      { ...property, gsc_oauth_credentials: null },
+      [keyword()],
+      [],
+      NOW,
+    );
+
+    expect(result.freshness.connection).toBe("not_connected");
+  });
+
+  it("reads a deactivated credential as not connected even with a year of rows", () => {
+    // gsc-sync-data deactivates the credential on invalid_grant. The rows stay,
+    // and they render exactly like live ones, which is the reason for the flag.
+    const result = aggregateGscPerformance(
+      {
+        ...property,
+        status: "error",
+        error_message: "Google rejected the refresh token (invalid_grant). Reconnect through OAuth.",
+        gsc_oauth_credentials: { is_active: false, last_refreshed_at: null, last_used_at: null },
+      },
+      [keyword()],
+      [],
+      NOW,
+    );
+
+    expect(result.freshness.connection).toBe("not_connected");
+    expect(result.freshness.errorMessage).toMatch(/invalid_grant/);
+  });
+
+  it("separates a failed run on a live credential from a disconnect", () => {
+    const result = aggregateGscPerformance(
+      {
+        ...property,
+        status: "error",
+        gsc_oauth_credentials: { is_active: true, last_refreshed_at: null, last_used_at: null },
+      },
+      [],
+      [],
+      NOW,
+    );
+
+    expect(result.freshness.connection).toBe("error");
+  });
+
+  it("does not invent a disconnect when the credential was not read", () => {
+    expect(aggregateGscPerformance(property, [], [], NOW).freshness.connection).toBe("connected");
+  });
+
+  it("runs the refresh-token clock from the latest use, not only the last sync", () => {
+    // last_sync_at says 2026-03-31; a refresh on 2026-08-26 is the real last use.
+    const result = aggregateGscPerformance(
+      {
+        ...property,
+        gsc_oauth_credentials: {
+          is_active: true,
+          last_refreshed_at: "2026-08-26T12:00:00Z",
+          last_used_at: "2026-03-31T00:00:00Z",
+        },
+      },
+      [],
+      [],
+      NOW,
+    );
+
+    expect(result.freshness.refreshTokenDaysRemaining).toBe(179);
+  });
 });

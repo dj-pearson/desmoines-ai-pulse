@@ -16,7 +16,11 @@ import { createLogger } from "@/lib/logger";
 import { hubSearchQuery } from "@/components/events/eventsHubQuery";
 // One rule for "can you eat here" (eat-drink pass 2 WP2 item 4). It counts
 // `announced`, which the local set here left out.
-import { isVisitableStatus } from "@/lib/restaurantHours";
+import {
+  isPermanentlyClosedRestaurant,
+  isVisitableStatus,
+  NOT_CLOSED_RESTAURANT_FILTER,
+} from "@/lib/restaurantHours";
 
 const logger = createLogger("useRestaurants");
 
@@ -112,6 +116,23 @@ function hasRatingFilter(
  * Done client-side on purpose: the ordering lives in the RPC, and changing that
  * is a migration. This needs no schema change and no shape change.
  */
+/**
+ * Does this list leave out places that have closed for good (SEO-059)? Every
+ * public browse does. A search keeps them, so a reader who types a name finds
+ * out it closed (the card says so); the admin table keeps them so they can be
+ * managed.
+ */
+export function listHidesClosed(filters: Pick<RestaurantFilters, "search" | "includeAdminFields">): boolean {
+  return !filters.includeAdminFields && !(filters.search?.trim());
+}
+
+/** The rows a browse list shows: permanently closed ones dropped (SEO-059). */
+export function withoutPermanentlyClosed(list: Restaurant[]): Restaurant[] {
+  return list.filter(
+    (r) => !isPermanentlyClosedRestaurant(r as { status?: string | null; business_status?: string | null }),
+  );
+}
+
 function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
   const visitable: Restaurant[] = [];
   const unvisitable: Restaurant[] = [];
@@ -280,9 +301,13 @@ export async function fetchRestaurantList(
     const sortBy = filters.sortBy || "popularity";
     const dietarySelections = resolveDietarySelections(filters);
     const search = filters.search?.trim() ?? "";
+    const hideClosed = listHidesClosed(filters);
+    // The admin table takes the table path: since SEO-059 the RPC leaves
+    // closed places out of a browse, and the admin needs to see them.
     const useRotationRpc =
       sortBy === "popularity" &&
       !filters.sponsoredOnly &&
+      !filters.includeAdminFields &&
       dietarySelections.length === 0 &&
       !search;
 
@@ -322,7 +347,11 @@ export async function fetchRestaurantList(
             // the backend is down. Found while giving the E2E specs a fixture
             // backend (WEB-CI-028): one row of the wrong shape, and the page
             // reported an outage.
-            rpcData.map((r) => r.restaurant_data).filter(Boolean) as unknown as Restaurant[]
+            // The RPC already leaves closed rows out of a browse (migration
+            // 20261017000059); this catches a database that has not got it.
+            withoutPermanentlyClosed(
+              rpcData.map((r) => r.restaurant_data).filter(Boolean) as unknown as Restaurant[]
+            )
           ),
           totalCount: rpcData.length > 0 ? Number(rpcData[0].total_count) : 0,
         };
@@ -351,6 +380,12 @@ export async function fetchRestaurantList(
       // while always yielding a number.
       .select(withAdminColumns(RESTAURANT_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
       .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
+
+    // SEO-059: a browse never lists a place that has closed for good. In the
+    // query, not after it, so the count matches the pages.
+    if (hideClosed) {
+      query = query.or(NOT_CLOSED_RESTAURANT_FILTER);
+    }
 
     // Prefix full-text search: every word must match and the last one is a
     // prefix, so "harb" finds Harbinger. Quotes or OR go to websearch.

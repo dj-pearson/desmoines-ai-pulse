@@ -130,3 +130,9 @@ IMG_*.jpg
 *.report.html
 supabase_logs.json
 test-failures.csv
+
+# SEO-041: per-build list of noindex pSEO routes, written by generate-dynamic-sitemaps.ts for prerender.mjs
+scripts/.generated/
+
+# IndexNow sitemap snapshot written by scripts/indexnow-ping.ts --state (SEO-047)
+.indexnow/

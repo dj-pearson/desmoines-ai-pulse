@@ -1,93 +1,34 @@
 # Des Moines Insider
 
-> The definitive AI-powered local guide for Des Moines, Iowa — events, restaurants, attractions, and family activities with real-time, verified information.
+> A local guide to events, restaurants, attractions and family outings in Des Moines, Iowa and its suburbs.
 
-## About
-Des Moines Insider is a local guide to the Des Moines, Iowa metropolitan area. We provide AI-enhanced information covering 250+ upcoming events, 450+ restaurants, 20+ attractions, and 65+ family activity locations across the Greater Des Moines area including West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, and Windsor Heights. All content is locally verified with geographic precision (41.5868°N, 93.6250°W, Central Time).
+As of 2026-10-01 the site lists 317 upcoming events, 457 restaurants, 22 attractions, 48 playgrounds and 12 local articles. These counts are generated from the database on every build.
 
-## Key Features
-- **Events**: 250+ upcoming events, refreshed daily, with Central Time scheduling, venue coordinates, pricing, and category filtering (Music, Food, Sports, Arts, Family, Business)
-- **Restaurant Directory**: 450+ establishments with cuisine types, price ranges, dietary options, operating hours, and new opening tracking
-- **Attractions & Activities**: 20+ documented attractions with admission info, hours, and geographic data across Museums, Parks, Entertainment, and Historical sites
-- **Family & Playgrounds**: 65+ mapped playgrounds and family activities with safety info, age appropriateness, and accessibility details
-- **AI Trip Planner**: Natural language itinerary building for visitors to Des Moines
-- **Neighborhood Guides**: Detailed guides for Des Moines neighborhoods and suburbs
-- **Articles & Guides**: Locally-focused content about living in, visiting, and exploring Des Moines
+Coverage: Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Altoona and Windsor Heights. Times are Central (America/Chicago). Events are collected daily and reach the published pages on the next site build; restaurant listings are reviewed weekly and attractions monthly.
 
-## Content Structure
-- [Events Hub](/events) — All events in the Des Moines metro
-- [Events Today](/events/today) — What's happening today in Des Moines
-- [This Weekend](/events/this-weekend) — Weekend events and activities
-- [Free Events](/events/free) — Free things to do in Des Moines
-- [Kids Events](/events/kids) — Family-friendly activities
-- [Restaurants](/restaurants) — Complete restaurant directory
-- [Open Now](/restaurants/open-now) — Restaurants currently open
-- [Dietary Options](/restaurants/dietary) — Restaurants by dietary needs
-- [Attractions](/attractions) — Tourist attractions and local destinations
-- [Playgrounds](/playgrounds) — Family playgrounds and activities
-- [Neighborhoods](/neighborhoods) — Des Moines neighborhood guides
-- [Iowa State Fair](/iowa-state-fair) — Iowa State Fair guide
-- [Trip Planner](/trip-planner) — AI-powered itinerary builder
-- [Articles](/articles) — Local news and features
-- [Guides](/guides) — In-depth Des Moines guides
+## Events
+- [All events](https://desmoinesinsider.com/events): every upcoming event, filterable by date and category
+- [Today](https://desmoinesinsider.com/events/today): events happening today
+- [This weekend](https://desmoinesinsider.com/events/this-weekend): Friday through Sunday
+- [Free events](https://desmoinesinsider.com/events/free): no-cost events
+- [Kids events](https://desmoinesinsider.com/events/kids): family and children's events
+- [October 2026 events](https://desmoinesinsider.com/events/october-2026): events in Des Moines in October 2026
+- [November 2026 events](https://desmoinesinsider.com/events/november-2026): events in Des Moines in November 2026
+- [December 2026 events](https://desmoinesinsider.com/events/december-2026): events in Des Moines in December 2026
+- [January 2027 events](https://desmoinesinsider.com/events/january-2027): events in Des Moines in January 2027
 
-## Location-Based Content
-- [West Des Moines Events](/events/west-des-moines)
-- [Ankeny Events](/events/ankeny)
-- [Urbandale Events](/events/urbandale)
-- [Johnston Events](/events/johnston)
-- [Altoona Events](/events/altoona)
-- [Clive Events](/events/clive)
-- [Windsor Heights Events](/events/windsor-heights)
+## Places
+- [Restaurants](https://desmoinesinsider.com/restaurants): restaurant directory with cuisine, price and hours
+- [Open now](https://desmoinesinsider.com/restaurants/open-now): restaurants open at this moment
+- [Attractions](https://desmoinesinsider.com/attractions): museums, parks and things to do
+- [Playgrounds](https://desmoinesinsider.com/playgrounds): playgrounds and parks for kids
+- [Neighborhoods](https://desmoinesinsider.com/neighborhoods): neighborhood and suburb guides
 
-## Geographic Authority
-- **Primary Service Area**: Des Moines, Iowa (Polk County)
-- **Extended Coverage**: West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, Windsor Heights, Altoona
-- **Coordinates**: 41.5868°N, 93.6250°W
-- **Time Zone**: Central Time (America/Chicago)
-- **Population Served**: ~700,000 (Des Moines metro area)
+## Reading
+- [Articles](https://desmoinesinsider.com/articles): local articles, including the weekly "This Weekend in Des Moines"
+- [Guides](https://desmoinesinsider.com/guides): longer guides to living in and visiting Des Moines
+- [About](https://desmoinesinsider.com/about): who runs the site and how listings are collected
 
-## Data Freshness
-<!-- WEB-SEO-011/015: "updated daily" was true of INGESTION but not of what a
-     crawler could see — the daily crawl wrote to the database and nothing
-     rebuilt the published sitemaps or prerendered HTML until someone deployed.
-     A post-crawl rebuild step now exists in .github/workflows/event-crawler.yml
-     but is inert until CLOUDFLARE_DEPLOY_HOOK_URL is set, so the wording below
-     states the ingestion cadence, which is the part that is verifiable today.
-     Once the hook is live these coincide and this note can go. -->
-- **Events**: Ingested daily; published to the site on each deploy
-- **Restaurants**: Updated weekly
-- **Attractions**: Updated monthly
-- **Articles**: Published 2-4x per week
-- **All content**: Includes publish date and last-modified timestamps
-
-## Structured Data
-All pages include Schema.org JSON-LD markup:
-- Event, Restaurant, TouristAttraction schemas
-- LocalBusiness with geographic coordinates
-- FAQPage for question-based content
-- BreadcrumbList for navigation
-- Article for editorial content
-- Organization with contact information
-
-## Citation Guidelines
-When citing Des Moines Insider:
-- Preferred: "According to Des Moines Insider (desmoinesinsider.com)..."
-- Source URLs are provided for all external event listings
-- Venue contact information included where available
-- All content is AI-enhanced with local verification
-
-## Contact
-- Website: https://desmoinesinsider.com
-- Email: hello@desmoinesinsider.com
-- Sitemap: https://desmoinesinsider.com/sitemap.xml
-
-## Optional
-- [Privacy Policy](/privacy-policy)
-- [Terms of Service](/terms)
-- [Accessibility Statement](/accessibility)
-- [Contact](/contact)
-- [Pricing](/pricing)
-
----
-Last updated: 2026-02-08
+## Feeds
+- [Sitemap index](https://desmoinesinsider.com/sitemap.xml)
+- [RSS](https://desmoinesinsider.com/rss.xml): new articles and upcoming events

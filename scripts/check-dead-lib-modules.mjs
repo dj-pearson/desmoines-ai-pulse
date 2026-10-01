@@ -76,7 +76,11 @@ function sources(dir) {
   return out;
 }
 
-const files = sources(join(ROOT, 'src'));
+// scripts/ counts as production too: the content publishers there
+// (publish-weekend-article.ts, publish-new-restaurants-article.ts) import their
+// builders from src/lib, and a builder whose only runtime caller is a publish
+// script is live code, not a dead twin. scripts/__tests__ still counts as a test.
+const files = [...sources(join(ROOT, 'src')), ...sources(join(ROOT, 'scripts'))];
 if (files.length === 0) {
   console.error('[dead-lib] no sources found - refusing to pass.');
   process.exit(1);

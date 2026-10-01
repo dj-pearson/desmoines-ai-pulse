@@ -11,6 +11,7 @@ import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, 
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { buildEnhancePrompt } from "./prompt.ts";
+import { stripAiLabels } from "../_shared/aiText.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -200,7 +201,8 @@ serve(async (req) => {
         const { data: updateData, error: updateError } = await supabase
           .from('events')
           .update({
-            ai_writeup: result.aiWriteup,
+            // SEO-057: no model label or wrapper field in the stored text.
+            ai_writeup: typeof result.aiWriteup === 'string' ? stripAiLabels(result.aiWriteup) : result.aiWriteup,
             writeup_generated_at: new Date().toISOString(),
             writeup_prompt_used: promptUsed
           })

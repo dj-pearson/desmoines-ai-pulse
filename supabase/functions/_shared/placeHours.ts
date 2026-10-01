@@ -145,3 +145,38 @@ export function normalizeOpeningHours(
     fetchedAt,
   };
 }
+
+/**
+ * SEO-054. The Place Details field mask for an hours-only refresh.
+ *
+ * bulk-update-restaurants' full mask also asks for editorialSummary, photos,
+ * rating, phone and website, and writes them: description, image and contact
+ * fields get overwritten on every row it touches. Filling hours for rows that
+ * are already enriched must not rewrite their descriptions, so the hours-only
+ * mode asks for these two fields and writes these two columns.
+ */
+export const HOURS_ONLY_FIELD_MASK = "regularOpeningHours,businessStatus";
+
+export interface HoursOnlyUpdate {
+  hours_json?: StoredHours;
+  business_status?: BusinessStatus;
+}
+
+/**
+ * The columns an hours-only refresh writes for one Place Details response, or
+ * null when Places gave neither usable hours nor a recognised status. Nothing
+ * else in the response is read, so nothing else can be written.
+ */
+export function buildHoursOnlyUpdate(
+  details: unknown,
+  fetchedAt: string = new Date().toISOString(),
+): HoursOnlyUpdate | null {
+  if (!details || typeof details !== "object") return null;
+  const place = details as Record<string, unknown>;
+  const update: HoursOnlyUpdate = {};
+  const hours = normalizeOpeningHours(place.regularOpeningHours, fetchedAt);
+  if (hours) update.hours_json = hours;
+  const status = normalizeBusinessStatus(place.businessStatus);
+  if (status) update.business_status = status;
+  return Object.keys(update).length > 0 ? update : null;
+}

@@ -19,6 +19,7 @@ import {
   facetCounts,
   OPEN_AT_OPTIONS,
   OPEN_NOW_ROW_LIMIT,
+  openStatusOf,
   orderByDistance,
   resolveOpenAt,
   useOpenNowRestaurants,
@@ -35,7 +36,6 @@ import { isPrerender } from "@/lib/isPrerender";
 import {
   DES_MOINES_TIME_ZONE,
   formatOpenStatusLine,
-  getRestaurantOpenStatus,
 } from "@/lib/restaurantHours";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
@@ -77,7 +77,7 @@ const FAQ_DATA: FAQItem[] = [
   {
     question: "How does this page decide a place is open?",
     answer:
-      "It reads the hours text on each restaurant's listing and checks it against the time in Des Moines. When we can't read a place's hours, we don't call it open or closed; it goes in the \"Hours we couldn't read\" list with a link to its page.",
+      "It reads the opening hours Google lists for each restaurant and checks them against the time in Des Moines. When we can't read a place's hours, we don't call it open or closed; it goes in the \"Hours we couldn't read\" list with a link to its page.",
   },
   {
     question: "Can I see what's open later tonight?",
@@ -217,7 +217,7 @@ function DishResults({
   const open = matches
     .map((match) => {
       const row = rowsById.get(match.restaurant_id);
-      const status = row ? getRestaurantOpenStatus(row.opening, at) : null;
+      const status = row ? openStatusOf(row, at) : null;
       return row && status?.isOpen ? { match, row, line: formatOpenStatusLine(status) } : null;
     })
     .filter((x): x is { match: DishMatch; row: OpenNowRestaurantRow; line: string | null } => x !== null)

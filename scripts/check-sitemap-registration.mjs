@@ -14,7 +14,7 @@
  *   1. scripts/generate-dynamic-sitemaps.ts   writeSitemap('sitemap-X.xml')
  *   2. CHILD_SITEMAPS, the index that same file writes to public/sitemap.xml
  *   3. public/robots.txt                      Sitemap: .../sitemap-X.xml
- *   4. scripts/prerender.mjs                  ENTITY_SITEMAPS
+ *   4. scripts/prerender.mjs                  ENTITY_SITEMAPS (or UNBUDGETED_SITEMAPS)
  *
  * IT WAS FOUR. public/sitemap-index.xml, a hand copy of the generated index,
  * is deleted (WEB-SEO-038) and 301s to /sitemap.xml. The rule that replaced it
@@ -62,6 +62,13 @@ if (!entityBlock) {
   process.exit(1);
 }
 const inPrerender = namesFrom(entityBlock[1], /'(sitemap-[a-z0-9-]+\.xml)'/g);
+// SEO-029: sitemaps rendered in their own unbudgeted pass rather than the
+// entity pass. Registered is registered; which pass renders it is prerender.mjs's
+// business.
+const unbudgetedBlock = prerender.match(/const UNBUDGETED_SITEMAPS = \[([\s\S]*?)\];/);
+if (unbudgetedBlock) {
+  for (const name of namesFrom(unbudgetedBlock[1], /'(sitemap-[a-z0-9-]+\.xml)'/g)) inPrerender.add(name);
+}
 
 const problems = [];
 

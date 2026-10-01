@@ -25,6 +25,11 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *                     useViewTracking stopped fetching get_content_view_stats
  *                     once per related EventCard (2026-09-30).
  *
+ * SEO-036 (2026-10-01) added two reads to /events and one to /events/today,
+ * decided here. /events 10 -> 12: the hero's first sentence (the latest
+ * upcoming row with an exact count, plus a free-count HEAD). /events/today
+ * 4 -> 5: the newest weekly article, for the top-picks link (articles x1).
+ *
  * Each ceiling is the measured count, not the count plus headroom. A new read
  * on first view should be a decision somebody makes in this file, not
  * something that fits under slack. Run with EVENTS_BUDGET_REPORT=1 to print
@@ -38,8 +43,8 @@ import { installFixtureBackend } from './support/fixtureBackend';
  */
 
 const CEILINGS: Record<string, number> = {
-  '/events': 10,
-  '/events/today': 4,
+  '/events': 12,
+  '/events/today': 5,
   '/events/jazz-night-at-the-fixture-2026-10-01': 7,
 };
 

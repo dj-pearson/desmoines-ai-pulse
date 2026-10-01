@@ -148,6 +148,15 @@ try {
     JSON.stringify(param.shadowed),
   );
 
+  // SEO-065: RestaurantDetails falls back to the pSEO page for a taxonomy
+  // location slug no restaurant owns, so /restaurants/<area> is served, not claimed.
+  const area = classifySlugs(['/restaurants/ankeny', '/restaurants/west-des-moines'], { appPath, redirectsPath });
+  check(
+    'a /restaurants/<area> slug falls back to the pSEO page and is not claimed',
+    area.fallback.length === 2 && area.shadowed.length === 0 && area.claimed.size === 0,
+    JSON.stringify(area.fallback),
+  );
+
   const red = classifySlugs(['/things-to-do/tourists'], { appPath, redirectsPath });
   check(
     'an existing redirect is the resolution, not a claim',

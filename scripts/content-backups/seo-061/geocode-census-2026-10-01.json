@@ -1,0 +1,254 @@
+[
+  {
+    "slug": "birdies-tavern-grill",
+    "location": "1975 N Ankeny Blvd Suite 117, Ankeny, IA 50023, USA",
+    "query": "1975 N Ankeny Blvd Suite 117, Ankeny, IA 50023",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "1975 N ANKENY BLVD, ANKENY, IA, 50023",
+        "lat": 41.748045418355,
+        "lng": -93.60023951204,
+        "side": "R"
+      }
+    ]
+  },
+  {
+    "slug": "blue-sushi-sake-grill",
+    "location": "316 Court Ave, Des Moines, IA 50309, USA",
+    "query": "316 Court Ave, Des Moines, IA 50309",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "316 COURT AVE, DES MOINES, IA, 50309",
+        "lat": 41.585193373264,
+        "lng": -93.620659498932,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "blutaco",
+    "location": "114 Brick St SE, Bondurant, IA 50035, USA",
+    "query": "114 Brick St SE, Bondurant, IA 50035",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "114 BRICK ST SE, BONDURANT, IA, 50035",
+        "lat": 41.689197857366,
+        "lng": -93.463312012861,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "brick-street-cafe-bondurant-ia",
+    "location": "114 Brick St SE Suite A, Bondurant, IA 50035, USA",
+    "query": "114 Brick St SE Suite A, Bondurant, IA 50035",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "114 BRICK ST SE, BONDURANT, IA, 50035",
+        "lat": 41.689197857366,
+        "lng": -93.463312012861,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "brick-street-market-cafe",
+    "location": "114 Brick St SE Suite A, Bondurant, IA 50035, USA",
+    "query": "114 Brick St SE Suite A, Bondurant, IA 50035",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "114 BRICK ST SE, BONDURANT, IA, 50035",
+        "lat": 41.689197857366,
+        "lng": -93.463312012861,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "bubbies-pleasant-hill",
+    "location": "1225 Copper Creek Dr, Pleasant Hill, IA 50327, USA",
+    "query": "1225 Copper Creek Dr, Pleasant Hill, IA 50327",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "1225 COPPER CREEK DR, PLEASANT HILL, IA, 50327",
+        "lat": 41.601274063804,
+        "lng": -93.524358244194,
+        "side": "R"
+      }
+    ]
+  },
+  {
+    "slug": "dor-bakery",
+    "location": "340 SW 3rd St, Des Moines, IA 50309, USA",
+    "query": "340 SW 3rd St, Des Moines, IA 50309",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "340 SW 3RD ST, DES MOINES, IA, 50309",
+        "lat": 41.581393618769,
+        "lng": -93.61907374554,
+        "side": "R"
+      }
+    ]
+  },
+  {
+    "slug": "dutch-bros-coffee",
+    "location": "1534 E Grand Ave Suite D, Des Moines, IA 50316, USA",
+    "query": "1534 E Grand Ave Suite D, Des Moines, IA 50316",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "1534 E GRAND AVE, DES MOINES, IA, 50316",
+        "lat": 41.594184241643,
+        "lng": -93.594343096277,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "early-bird-west-des-moines",
+    "location": "9250 University Ave Unit 107, West Des Moines, IA 50266, USA",
+    "query": "9250 University Ave Unit 107, West Des Moines, IA 50266",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "9250 UNIVERSITY AVE, WEST DES MOINES, IA, 50266",
+        "lat": 41.600346185563,
+        "lng": -93.836361704615,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "glck-tea",
+    "location": "9250 University Ave Suite 101, West Des Moines, IA 50266, USA",
+    "query": "9250 University Ave Suite 101, West Des Moines, IA 50266",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "9250 UNIVERSITY AVE, WEST DES MOINES, IA, 50266",
+        "lat": 41.600346185563,
+        "lng": -93.836361704615,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "joes-pub",
+    "location": "5500 Merle Hay Rd Suite D, Johnston, IA 50131, USA",
+    "query": "5500 Merle Hay Rd Suite D, Johnston, IA 50131",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "5500 MERLE HAY RD, JOHNSTON, IA, 50131",
+        "lat": 41.660316117335,
+        "lng": -93.697740889608,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "pizza-bar-by-taste-of-new-york",
+    "location": "1225 Copper Creek Drive, Pleasant Hill, IA",
+    "query": "1225 Copper Creek Drive, Pleasant Hill, IA",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "1225 COPPER CREEK DR, PLEASANT HILL, IA, 50327",
+        "lat": 41.601274063804,
+        "lng": -93.524358244194,
+        "side": "R"
+      }
+    ]
+  },
+  {
+    "slug": "shirleys-bar-grill",
+    "location": "9250 University Ave Suite 117, West Des Moines, IA 50266, USA",
+    "query": "9250 University Ave Suite 117, West Des Moines, IA 50266",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "9250 UNIVERSITY AVE, WEST DES MOINES, IA, 50266",
+        "lat": 41.600346185563,
+        "lng": -93.836361704615,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "sushi-a-go-go",
+    "location": "5500 Merle Hay Rd, Johnston, IA 50131, USA",
+    "query": "5500 Merle Hay Rd, Johnston, IA 50131",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "5500 MERLE HAY RD, JOHNSTON, IA, 50131",
+        "lat": 41.660316117335,
+        "lng": -93.697740889608,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "teriyaki-house-japanese-grill",
+    "location": "9250 University Ave Suite 106, West Des Moines, IA 50266, USA",
+    "query": "9250 University Ave Suite 106, West Des Moines, IA 50266",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "9250 UNIVERSITY AVE, WEST DES MOINES, IA, 50266",
+        "lat": 41.600346185563,
+        "lng": -93.836361704615,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "the-pizza-bar",
+    "location": "1225 Copper Creek Dr, Pleasant Hill, IA 50327, USA",
+    "query": "1225 Copper Creek Dr, Pleasant Hill, IA 50327",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "1225 COPPER CREEK DR, PLEASANT HILL, IA, 50327",
+        "lat": 41.601274063804,
+        "lng": -93.524358244194,
+        "side": "R"
+      }
+    ]
+  },
+  {
+    "slug": "what-dak-korean-fried-chicken",
+    "location": "9250 University Ave Suite 113, West Des Moines, IA 50266, USA",
+    "query": "9250 University Ave Suite 113, West Des Moines, IA 50266",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "9250 UNIVERSITY AVE, WEST DES MOINES, IA, 50266",
+        "lat": 41.600346185563,
+        "lng": -93.836361704615,
+        "side": "L"
+      }
+    ]
+  },
+  {
+    "slug": "wongs-chopsticks",
+    "location": "5500 Merle Hay Rd Suite L, Johnston, IA 50131, USA",
+    "query": "5500 Merle Hay Rd Suite L, Johnston, IA 50131",
+    "n": 1,
+    "matches": [
+      {
+        "matched": "5500 MERLE HAY RD, JOHNSTON, IA, 50131",
+        "lat": 41.660316117335,
+        "lng": -93.697740889608,
+        "side": "L"
+      }
+    ]
+  }
+]

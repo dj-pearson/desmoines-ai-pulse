@@ -14,10 +14,15 @@ import { formatEventDateShort } from '@/lib/timezone';
 import { preferCuisineMatches, type HubKey } from '@/lib/articleHubs';
 import { DES_MOINES_TIME_ZONE, getRestaurantOpenStatus, isVisitableStatus } from '@/lib/restaurantHours';
 import { KIDS_EVENTS_FILTER, ongoingStartFilter } from '@/hooks/useEventLanding';
+import { articlePublishGuardMessage } from '@/lib/articlePublishGuard';
 
 const log = createLogger('useArticles');
 
 function errorMessage(err: unknown): string {
+  // The publish guard's refusal reads as what to fix, not as a database
+  // error (SEO-059). Creates and updates that publish hit the same trigger.
+  const guard = articlePublishGuardMessage(err);
+  if (guard) return guard;
   // PostgREST errors are plain objects with a message on some supabase-js
   // versions, so check the shape rather than the prototype.
   if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {

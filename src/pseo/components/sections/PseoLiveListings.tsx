@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
-import { CATEGORY_FILTERS, temporalRange } from '../../listingFilters';
+import { CATEGORY_FILTERS, dayAfter, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../listingFilters';
 import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { isVisitableStatus } from "@/lib/restaurantHours";
@@ -22,9 +22,18 @@ import { attractionListingHref, eventListingHref, restaurantListingHref } from '
 interface PseoLiveListingsProps {
   dimensions: PseoDimensionRef[];
   pageTypeId: string;
+  /** Section heading; falls back to the entity's generic heading. */
+  heading?: string;
+  /**
+   * SEO-056. Where to send a visitor when the window holds nothing. A
+   * time-relative page ("festivals today") is often legitimately empty, and
+   * without this the page would be an intro promising a list with no list.
+   */
+  emptyHref?: string;
+  emptyLabel?: string;
 }
 
-export function PseoLiveListings({ dimensions, pageTypeId }: PseoLiveListingsProps) {
+export function PseoLiveListings({ dimensions, pageTypeId, heading, emptyHref, emptyLabel }: PseoLiveListingsProps) {
   const contentType = dimensions.find((d) => d.dimension === 'content_type');
   const category = dimensions.find((d) => d.dimension === 'category');
 
@@ -52,15 +61,28 @@ export function PseoLiveListings({ dimensions, pageTypeId }: PseoLiveListingsPro
     );
   }
 
-  if (!items?.length) return null;
+  const title = heading ?? (entityType === 'events' ? 'Upcoming Events' :
+    entityType === 'restaurants' ? 'Top Restaurants' :
+    'Top Attractions');
+
+  if (!items?.length) {
+    if (!emptyHref) return null;
+    return (
+      <section>
+        <h2 className="text-2xl font-bold mb-4">{title}</h2>
+        <p className="text-muted-foreground">
+          Nothing on the calendar matches this page right now.{' '}
+          <Link to={emptyHref} className="font-medium text-foreground underline underline-offset-4">
+            {emptyLabel ?? 'See everything coming up'}
+          </Link>
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section>
-      <h2 className="text-2xl font-bold mb-4">
-        {entityType === 'events' ? 'Upcoming Events' :
-         entityType === 'restaurants' ? 'Top Restaurants' :
-         'Top Attractions'}
-      </h2>
+      <h2 className="text-2xl font-bold mb-4">{title}</h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
           <ListingCard key={item.id} item={item} />
@@ -145,21 +167,6 @@ function ListingCard({ item }: { item: ListingItem }) {
 // Data Fetching
 // ---------------------------------------------------------------------------
 
-function resolveEntityType(contentSlug?: string, categorySlug?: string): string {
-  if (contentSlug === 'restaurants') return 'restaurants';
-  if (contentSlug === 'attractions') return 'attractions';
-  if (contentSlug === 'events' || contentSlug === 'things-to-do' || contentSlug === 'nightlife') return 'events';
-
-  // Infer from category
-  const restaurantCategories = ['italian', 'mexican', 'asian', 'bbq', 'brunch', 'coffee', 'steakhouse'];
-  if (categorySlug && restaurantCategories.includes(categorySlug)) return 'restaurants';
-
-  const eventCategories = ['live-music', 'festivals', 'arts-culture', 'sports', 'farmers-markets'];
-  if (categorySlug && eventCategories.includes(categorySlug)) return 'events';
-
-  return 'events'; // Default
-}
-
 async function fetchListings(
   entityType: string,
   dimensions: PseoDimensionRef[]
@@ -209,7 +216,9 @@ async function fetchListings(
     }
     if (temporal) {
       const range = temporalRange(temporal.slug);
-      if (range) query = query.gte('date', range.from).lte('date', range.to);
+      // lt the day after, not lte the last day: events.date is timestamptz, so
+      // lte '2026-10-04' stops at midnight and drops everything later that day.
+      if (range) query = query.gte('date', range.from).lt('date', dayAfter(range.to));
     }
 
     const { data, error } = await query;
@@ -243,7 +252,13 @@ async function fetchListings(
       .limit(24);
 
     if (location) {
-      query = query.or(`city.ilike.%${location.name}%,location.ilike.%${location.name}%`);
+      // SEO-060: a neighbourhood matches restaurants.neighborhood; a suburb
+      // matches its name in city or the address.
+      const match = restaurantLocationMatch(location);
+      query =
+        match.kind === 'neighborhood'
+          ? query.eq('neighborhood', match.slug)
+          : query.or(`city.ilike.%${match.name}%,location.ilike.%${match.name}%`);
     }
     if (categoryFilter?.entity === 'restaurants') {
       query = query.filter(categoryFilter.column, 'imatch', categoryFilter.pattern);

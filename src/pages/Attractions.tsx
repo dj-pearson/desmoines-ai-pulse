@@ -58,6 +58,9 @@ import {
 } from "@/components/ui/sheet";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ExploreSectionLinks } from "@/components/explore/ExploreSectionLinks";
+import { AttractionsFactsIntro } from "@/components/attractions/AttractionsFactsIntro";
+import { useAttractionFacts } from "@/hooks/useAttractionFacts";
+import { hubFactsSummary } from "@/lib/attractionAtAGlance";
 import { useNow } from "@/hooks/useNow";
 import { useGeolocation } from "@/hooks/useProximitySearch";
 import { sortByDistanceFrom, formatMilesAway } from "@/hooks/usePlaygrounds";
@@ -246,6 +249,8 @@ export default function Attractions() {
     sortBy: sortBy === "rating" ? "rating" : sortBy === "newest" ? "newest" : "alphabetical",
   });
   const { announce, announcement, regionProps } = useAnnounce();
+  const { data: attractionFacts } = useAttractionFacts();
+  const verifiedFree = useMemo(() => hubFactsSummary(attractionFacts ?? []), [attractionFacts]);
 
   // The type list and the "Browse By Type" counts describe the WHOLE catalogue,
   // not the current view, so they cannot be derived from a filtered list any
@@ -571,6 +576,8 @@ export default function Attractions() {
           ]}
         />
         <ExploreSectionLinks current="/attractions" className="mb-6" />
+        {/* SEO-046: what the guide has checked, and the verified-free list. */}
+        <AttractionsFactsIntro total={catalogueTotal} />
         <div className="flex gap-8">
         <div className="flex-1 min-w-0">
 
@@ -1092,7 +1099,9 @@ export default function Attractions() {
             // the fields the story names as the ones a visitor acts on, with
             // no source in this repo, published as FAQPage schema. There is
             // no price column (only is_free), so no answer promises prices
-            // (Explore plan WP3 item 3).
+            // (Explore plan WP3 item 3). SEO-046 added admission_summary; the
+            // detail pages state it with its source, and the free answer
+            // below names only rows whose source page said free.
             faqs={[
               {
                 question: "What are the top attractions in Des Moines?",
@@ -1100,7 +1109,10 @@ export default function Attractions() {
               },
               {
                 question: "Are there free attractions in Des Moines?",
-                answer: "Yes. Pappajohn Sculpture Park is a public park downtown, and several museums and landmarks are free to visit. Tap Free above the list to see the ones marked free admission; for prices at the others, check the attraction's official site."
+                // SEO-046: the names come from rows whose source page said free.
+                answer: verifiedFree.free.length > 0
+                  ? `Yes. ${verifiedFree.free.map((r) => r.name).join(", ")} are free to visit, according to the source named on each attraction's page${verifiedFree.checkedLabel ? `, checked ${verifiedFree.checkedLabel}` : ""}. Each page lists admission for the others where their site states it.`
+                  : "Yes. Pappajohn Sculpture Park is a public park downtown, and several museums and landmarks are free to visit. Tap Free above the list to see the ones marked free admission; for prices at the others, check the attraction's official site."
               },
               {
                 question: "What are the best family attractions in Des Moines?",

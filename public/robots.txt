@@ -1,6 +1,6 @@
 # Des Moines Insider - Robots.txt
 # Optimized for search engine indexing and AI search crawlers
-# Last updated: 2026-09-23 (named-bot groups now carry the same disallows as *; a named group replaces * for that bot)
+# Last updated: 2026-09-30 (dropped Allow: /weekend, which 301s to /events/this-weekend)
 
 # Default rules for all crawlers
 User-agent: *
@@ -27,7 +27,6 @@ Allow: /neighborhoods/
 Allow: /articles/
 Allow: /guides/
 Allow: /trip-planner
-Allow: /weekend
 Allow: /iowa-state-fair
 Allow: /pricing
 Allow: /contact
@@ -288,4 +287,5 @@ Sitemap: https://desmoinesinsider.com/sitemap-teams.xml
 Sitemap: https://desmoinesinsider.com/sitemap-itineraries.xml
 Sitemap: https://desmoinesinsider.com/sitemap-best-of.xml
 Sitemap: https://desmoinesinsider.com/sitemap-guides.xml
+Sitemap: https://desmoinesinsider.com/sitemap-event-series.xml
 Sitemap: https://desmoinesinsider.com/sitemap-pseo.xml

@@ -8,7 +8,7 @@ import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, neighborhoodHref } from "@/lib/neighborhoods";
 
 export default function NeighborhoodsPage() {
   // WEB-SEO-028: the useDocumentTitle call that used to be here is GONE, and
@@ -94,7 +94,7 @@ export default function NeighborhoodsPage() {
                 </div>
 
                 {/* Action Button */}
-                <Link to={`/neighborhoods/${neighborhood.slug}`}>
+                <Link to={neighborhoodHref(neighborhood)}>
                   <Button className="w-full" size="sm">
                     Explore {neighborhood.name}
                   </Button>

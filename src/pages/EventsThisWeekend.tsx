@@ -14,9 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import { useLatestWeekendArticle } from "@/hooks/useLatestWeekendArticle";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import {
@@ -29,22 +31,21 @@ import {
   countStartingAfter5pm,
   dayPhase,
   formatCentralDate,
-  landingPicks,
   LANDING_LIGHT_COLUMNS,
   STILL_RUNNING_CAP,
   type LandingEvent,
 } from "@/hooks/useEventLanding";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
+import { EventLinkList, HubTopPicks } from "@/components/events/HubEventLinks";
 import { EVENT_AREAS } from "@/lib/eventAreas";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import {
   centralDateOf,
   centralWindow,
-  createEventSlugWithCentralTime,
-  formatEventDateShort,
 } from "@/lib/timezone";
 import { formatCount } from "@/lib/pluralize";
+import { hubTopPicks, weekendHeadline } from "@/lib/eventHubSummary";
 import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
 /**
@@ -124,6 +125,7 @@ export default function EventsThisWeekend() {
   const { getStr, setParam, setMany } = useUrlFilters();
   const selectedCategory = getStr("category", ALL);
   const selectedLocation = getStr("location", ALL);
+  const { data: weekendArticle } = useLatestWeekendArticle();
 
   /**
    * Friday 00:00 to Sunday 23:59 Central, from centralWindow - the same set the
@@ -199,18 +201,22 @@ export default function EventsThisWeekend() {
           anchor: `weekend-${formatCentralDate(day.id, "EEEE").toLowerCase()}`,
           shortLabel: formatCentralDate(day.id, "EEEE"),
           total: ordered.length + running.length,
-          startsTotal: ordered.length,
           events: ordered.slice(0, VISIBLE_PER_DAY),
+          // SEO-036: what the caps leave out is still listed, as plain links
+          // under the cards, so every counted event is in the HTML.
+          moreStarts: ordered.slice(VISIBLE_PER_DAY),
           // Carried festivals follow the day's own starts, three at most
           // (WP3 item 8), so they can't crowd out the day.
           runningTotal: running.length,
           running: running.slice(0, STILL_RUNNING_CAP),
+          moreRunning: running.slice(STILL_RUNNING_CAP),
         };
       }
     );
   }, [filteredEvents, weekend, today, todayInWeekend, indoorFlags, weather]);
 
-  const picks = useMemo(() => landingPicks(events), [events]);
+  // SEO-036: the weekly article's pick rule (eventHubSummary.hubTopPicks).
+  const picks = useMemo(() => hubTopPicks(events, today), [events, today]);
 
   /** Past days the reader opened. Closed ones render no cards at all. */
   const [openPast, setOpenPast] = useState<ReadonlySet<string>>(() => new Set());
@@ -276,9 +282,14 @@ export default function EventsThisWeekend() {
    */
   const pageTitle = `Des Moines Events This Weekend | ${BRAND.name}`;
   const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps and tips for the weekend's activities.`;
-  const weekendLabel =
+  /**
+   * SEO-036: the h1 and first sentence carry the dates and counts, from the
+   * rows this page fetched. Absolute dates, so the prerendered copy stays true
+   * about the weekend it names; the client refetches and redraws on load.
+   */
+  const headline =
     weekend && !isLoading && !isError
-      ? `${formatCentralDate(weekend.startDay, "EEEE, MMMM d")} - ${formatCentralDate(weekend.endDay, "EEEE, MMMM d, yyyy")}`
+      ? weekendHeadline(weekend, { total: events.length, free: countFree(events), cap: FETCH_LIMIT })
       : null;
 
   const breadcrumbs = [
@@ -355,9 +366,9 @@ export default function EventsThisWeekend() {
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold">This Weekend in Des Moines</h1>
+            <h1 className="text-3xl font-bold">{headline?.heading ?? "This Weekend in Des Moines"}</h1>
           </div>
-          {weekendLabel && <p className="text-lg text-muted-foreground mb-2">{weekendLabel}</p>}
+          {headline && <p className="text-lg mb-2">{headline.summary}</p>}
 
           {/* SEO-009: a visible, absolute freshness date from the rows. */}
           <ListFreshness rows={events} className="mb-4" />
@@ -369,6 +380,20 @@ export default function EventsThisWeekend() {
             Friday through Sunday in Des Moines and the suburbs, a day at a time.
             All times are Central.
           </p>
+
+          {/* SEO-035: the hub links to the newest weekly roundup article and
+              the article links back here. Renders nothing until one exists. */}
+          {weekendArticle && (
+            <p className="mt-3 text-base">
+              Our picks for the weekend:{" "}
+              <Link
+                to={`/articles/${weekendArticle.slug}`}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {weekendArticle.title}
+              </Link>
+            </p>
+          )}
         </div>
 
         <Card className="mb-8">
@@ -449,28 +474,13 @@ export default function EventsThisWeekend() {
           </SkeletonGroup>
         ) : filteredEvents.length > 0 ? (
           <>
-            {picks.length > 0 && weekend && (
-              <section aria-labelledby="weekend-picks" className="mb-8">
-                <h2 id="weekend-picks" className="text-2xl font-bold mb-3">
-                  Our weekend picks
-                </h2>
-                <ul className="divide-y rounded-xl border">
-                  {picks.map((event) => (
-                    <li key={event.id} className="p-4">
-                      <Link
-                        to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
-                        className="font-semibold text-primary hover:underline"
-                      >
-                        {event.title}
-                      </Link>
-                      <p className="text-sm text-muted-foreground">
-                        {[formatEventDateShort(event), event.venue || event.location]
-                          .filter(Boolean)
-                          .join(" - ")}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
+            {weekend && (
+              <HubTopPicks
+                picks={picks}
+                heading="Top picks this weekend"
+                headingId="weekend-picks"
+                article={weekendArticle}
+              >
                 <p className="mt-3 text-sm">
                   Visiting?{" "}
                   <Link
@@ -481,7 +491,7 @@ export default function EventsThisWeekend() {
                   </Link>{" "}
                   with events by day and hotels near them.
                 </p>
-              </section>
+              </HubTopPicks>
             )}
 
             <nav aria-label="Jump to a day" className="mb-6 flex flex-wrap gap-2">
@@ -575,14 +585,22 @@ export default function EventsThisWeekend() {
                     {hasFilters ? " with these filters" : ""}.
                   </p>
                 )}
-                {day.startsTotal > day.events.length && (
-                  <p className="mt-4 text-muted-foreground">
-                    Showing {day.events.length} of {formatCount(day.startsTotal, "event")} starting
-                    on {day.shortLabel}.{" "}
-                    <Link to={hubLink} className="text-primary hover:underline font-medium">
-                      See the whole weekend on the events page
-                    </Link>
-                  </p>
+                {day.moreStarts.length > 0 && (
+                  <div className="mt-6">
+                    <h3 id={`${day.anchor}-more`} className="text-lg font-semibold mb-3">
+                      More on {day.shortLabel}{" "}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        ({formatCount(day.moreStarts.length, "event")})
+                      </span>
+                    </h3>
+                    <EventLinkList events={day.moreStarts.map(card)} aria-labelledby={`${day.anchor}-more`} />
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      <Link to={hubLink} className="text-primary hover:underline font-medium">
+                        See the whole weekend on the events page
+                      </Link>{" "}
+                      with filters and a map.
+                    </p>
+                  </div>
                 )}
                 {day.running.length > 0 && (
                   <div className="mt-8" data-still-running={day.id}>
@@ -608,13 +626,17 @@ export default function EventsThisWeekend() {
                         </div>
                       ))}
                     </div>
-                    {day.runningTotal > day.running.length && (
-                      <p className="mt-4 text-muted-foreground">
-                        And {day.runningTotal - day.running.length} more running.{" "}
-                        <Link to={hubLink} className="text-primary hover:underline font-medium">
-                          See them on the events page
-                        </Link>
-                      </p>
+                    {day.moreRunning.length > 0 && (
+                      <>
+                        <p id={`${runningHeadingId}-more`} className="mt-4 text-muted-foreground">
+                          And {day.moreRunning.length} more running:
+                        </p>
+                        <EventLinkList
+                          className="mt-2"
+                          events={day.moreRunning.map(card)}
+                          aria-labelledby={`${runningHeadingId}-more`}
+                        />
+                      </>
                     )}
                   </div>
                 )}
@@ -699,9 +721,16 @@ export default function EventsThisWeekend() {
         {/* SEO-003: FAQSection renders the questions and emits the single
             FAQPage block, so schema only ships with a visible FAQ. */}
         <FAQSection faqs={faqData} />
+
+        {/* SEO-037: Google preferred source, last on the page. Outside the
+            events/no-events branch so it shows either way. */}
+        <PreferredSourceButton
+          className="mt-8"
+          description="Add Des Moines Insider as a preferred source and Google will show more of our weekend picks in Top Stories."
+        />
       </div>
 
-      <Footer />
+      <Footer preferredSource={false} />
     </div>
   );
 }

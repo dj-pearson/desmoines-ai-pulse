@@ -71,6 +71,9 @@
     "src/hooks/useEventBySlug.ts",
     "src/hooks/useActiveAds.ts",
     "src/hooks/useMinuteClock.ts",
+    "src/hooks/useEventSeriesPage.ts",
+    "src/pages/EventSeriesPage.tsx",
+    "src/components/seo/AnnualEventLinks.tsx",
     "src/content/eventsCopy.ts"
   ],
   "exclude": ["node_modules", "dist", "build"]

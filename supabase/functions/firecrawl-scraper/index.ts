@@ -6,6 +6,7 @@
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { parseEventDateTime } from "../_shared/eventDateTime.ts";
+import { stripAiLabels } from "../_shared/aiText.ts";
 import { renderExtractionPrompt, contentWindowFor } from "../_shared/prompts/index.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -28,6 +29,7 @@ import {
 import { resolveEventImage } from "../_shared/venueImage.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
+import { checkEventTitle } from "../_shared/scheduleTitleGuard.ts";
 import {
   centralCalendarDate,
   createDedupIndex,
@@ -489,6 +491,16 @@ serve(async (req) => {
         if (!parsed?.event_start_utc) return true;
         return centralCalendarDate(parsed.event_start_utc) >= todayCentral;
       });
+
+      // SEO-031. A page heading ("Schedule") or a bare team name ("Iowa Cubs")
+      // is not an event; both reached the public calendar from milb.com/iowa.
+      // See _shared/scheduleTitleGuard.ts.
+      const teamSchedule = isSportsScheduleDomain(url);
+      filteredItems = filteredItems.filter((item) => {
+        const verdict = checkEventTitle(item.title, teamSchedule);
+        if (!verdict.ok) console.warn(`⚠️ Skipping event: ${verdict.reason} (${url})`);
+        return verdict.ok;
+      });
     }
 
     console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
@@ -673,8 +685,9 @@ serve(async (req) => {
 
                 transformedData = {
                   title: item.title?.substring(0, 200) || "Untitled Event",
-                  original_description: item.description?.substring(0, 500) || "",
-                  enhanced_description: item.description?.substring(0, 500) || "",
+                  // SEO-057: the model's own labels and footers, not its text.
+                  original_description: stripAiLabels(item.description).substring(0, 500),
+                  enhanced_description: stripAiLabels(item.description).substring(0, 500),
                   date: parsedEventDateTime.event_start_utc.toISOString(),
                   event_start_local: parsedEventDateTime.event_start_local,
                   event_timezone: parsedEventDateTime.event_timezone,

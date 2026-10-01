@@ -2,34 +2,62 @@
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-static.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-25</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-events.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-restaurants.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-attractions.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-playgrounds.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-articles.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-01</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://desmoinesinsider.com/sitemap-hotels.xml</loc>
+    <lastmod>2026-03-12</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://desmoinesinsider.com/sitemap-venues.xml</loc>
+    <lastmod>2026-03-12</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://desmoinesinsider.com/sitemap-trails.xml</loc>
+    <lastmod>2026-03-12</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://desmoinesinsider.com/sitemap-teams.xml</loc>
+    <lastmod>2026-03-12</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://desmoinesinsider.com/sitemap-best-of.xml</loc>
+    <lastmod>2026-03-12</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://desmoinesinsider.com/sitemap-itineraries.xml</loc>
+    <lastmod>2026-03-12</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-guides.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-01</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://desmoinesinsider.com/sitemap-event-series.xml</loc>
+    <lastmod>2026-10-01</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://desmoinesinsider.com/sitemap-pseo.xml</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </sitemap>
 </sitemapindex>

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, neighborhoodHref } from "@/lib/neighborhoods";
 import { countTonightByArea, tonightCountLabel } from "@/lib/neighborhoodTonight";
 import { isPrerender } from "@/lib/isPrerender";
 import { useTonightEvents } from "@/hooks/useTonightPairings";
@@ -59,7 +59,7 @@ export function SocialProof() {
             return (
               <li key={n.slug}>
                 <Link
-                  to={`/neighborhoods/${n.slug}`}
+                  to={neighborhoodHref(n)}
                   data-area-chip={n.slug}
                   className="inline-flex min-h-11 items-center rounded-full border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >

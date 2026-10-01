@@ -123,6 +123,8 @@ const SearchResults = lazyWithRetry(() => import("./pages/SearchResults"));
 const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
 const EventsThisWeekend = lazyWithRetry(() => import("./pages/EventsThisWeekend"));
 const EventsByLocation = lazyWithRetry(() => import("./pages/EventsByLocation"));
+// SEO-043: one URL per annual event, outliving each year's dated URL.
+const EventSeriesPage = lazyWithRetry(() => import("./pages/EventSeriesPage"));
 const EventsNearMe = lazyWithRetry(() => import("./pages/EventsNearMe"));
 
 // SEO hub pages - new category pages
@@ -138,6 +140,7 @@ const EventPromotionPlanner = lazyWithRetry(() => import("./pages/EventPromotion
 // Hotels / Stay pages
 const Hotels = lazyWithRetry(() => import("./pages/Hotels"));
 const HotelDetails = lazyWithRetry(() => import("./pages/HotelDetails"));
+const HotelsNearVenue = lazyWithRetry(() => import("./pages/HotelsNearVenue"));
 
 // AI-powered features
 const TripPlanner = lazyWithRetry(() => import("./pages/TripPlanner"));
@@ -203,6 +206,8 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
+// About page (SEO-037): article bylines and the Organization author point here
+const About = lazyWithRetry(() => import("./pages/About"));
 const Support = lazyWithRetry(() => import("./pages/Support"));
 const Csat = lazyWithRetry(() => import("./pages/Csat"));
 
@@ -529,6 +534,7 @@ const App = () => (
               element={<EventsByLocation />}
             />
             <Route path="/events/waukee" element={<EventsByLocation />} />
+            <Route path="/events/series/:slug" element={<EventSeriesPage />} />
             <Route path="/events/:slug" element={<EventsSegmentHandler />} />
             <Route path="/articles" element={<Articles />} />
             <Route path="/articles/:slug" element={<ArticleDetails />} />
@@ -552,6 +558,8 @@ const App = () => (
             {/* Hotels / Stay pages */}
             <Route path="/stay" element={<Hotels />} />
             <Route path="/stay/:slug" element={<HotelDetails />} />
+            {/* SEO-045: hotels near one venue, by straight-line distance. */}
+            <Route path="/stay/near/:slug" element={<HotelsNearVenue />} />
             <Route path="/advertise" element={<Advertise />} />
             <Route path="/advertise/success" element={<AdvertiseSuccess />} />
             <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
@@ -616,6 +624,7 @@ const App = () => (
             <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
+            <Route path="/about" element={<About />} />
             <Route path="/support" element={<Support />} />
             <Route path="/csat" element={<Csat />} />
             {/* Community voting */}
