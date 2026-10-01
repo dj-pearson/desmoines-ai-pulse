@@ -140,6 +140,7 @@ const EventPromotionPlanner = lazyWithRetry(() => import("./pages/EventPromotion
 // Hotels / Stay pages
 const Hotels = lazyWithRetry(() => import("./pages/Hotels"));
 const HotelDetails = lazyWithRetry(() => import("./pages/HotelDetails"));
+const HotelsNearVenue = lazyWithRetry(() => import("./pages/HotelsNearVenue"));
 
 // AI-powered features
 const TripPlanner = lazyWithRetry(() => import("./pages/TripPlanner"));
@@ -557,6 +558,8 @@ const App = () => (
             {/* Hotels / Stay pages */}
             <Route path="/stay" element={<Hotels />} />
             <Route path="/stay/:slug" element={<HotelDetails />} />
+            {/* SEO-045: hotels near one venue, by straight-line distance. */}
+            <Route path="/stay/near/:slug" element={<HotelsNearVenue />} />
             <Route path="/advertise" element={<Advertise />} />
             <Route path="/advertise/success" element={<AdvertiseSuccess />} />
             <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
