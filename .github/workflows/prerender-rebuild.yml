@@ -42,7 +42,7 @@ concurrency:
 jobs:
   rebuild:
     name: Trigger Cloudflare Pages rebuild
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
     timeout-minutes: 5
@@ -83,7 +83,7 @@ jobs:
     # to main also deploy new sitemaps, and the diff finds those just the same.
     # It only waits for a fresh build when one was actually triggered.
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     timeout-minutes: 40
     steps:
       - name: Checkout repository

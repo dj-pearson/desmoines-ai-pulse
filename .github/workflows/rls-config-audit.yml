@@ -12,7 +12,7 @@ on:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     # SUPABASE_SERVICE_ROLE_KEY is an environment secret scoped to "Scrape", not
     # a repository secret. The bucket-posture step below needs it, and a job
     # without this line silently receives an empty string (WEB-SEO-017).

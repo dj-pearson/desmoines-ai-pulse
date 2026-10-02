@@ -72,7 +72,7 @@ concurrency:
 jobs:
   build:
     name: Build Signed Release
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     timeout-minutes: 45
 
     steps:

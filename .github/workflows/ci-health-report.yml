@@ -12,7 +12,7 @@ on:
 
 jobs:
   report:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_MONITOR || 'ubuntu-latest' }}  # seconds of curl; a slot-exempt monitor runner
     timeout-minutes: 5
     steps:
       - name: Report run outcome

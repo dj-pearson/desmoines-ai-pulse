@@ -26,7 +26,10 @@ jobs:
   # ================================================================
   build:
     name: Build iOS (Simulator)
-    runs-on: macos-15
+    runs-on: ${{ vars.RUNNER_MACOS || 'macos-15' }}
+    # GitHub-hosted minutes are used up; this runs only once a self-hosted macOS runner
+    # is registered and its label set as the repo variable RUNNER_MACOS.
+    if: vars.RUNNER_MACOS != ''
     timeout-minutes: 30
 
     steps:
@@ -143,7 +146,7 @@ jobs:
   # ================================================================
   validate-config:
     name: Validate iOS Configuration
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout code

@@ -11,7 +11,7 @@ concurrency:
 jobs:
   secret-scan:
     name: Secret Scanning (gitleaks)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
 
   validate:
     name: Lint, Type Check, Test & Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout code
@@ -519,7 +519,7 @@ jobs:
   # path, and it was a second copy of this job.
   app-type-ratchet:
     name: App project type ratchet
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     # A timeout, because a killed run and a clean pass look identical in the
     # Actions list until somebody opens it.
     timeout-minutes: 20
@@ -539,7 +539,7 @@ jobs:
 
   migration-safety:
     name: Migration Safety
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

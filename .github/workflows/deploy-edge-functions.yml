@@ -43,7 +43,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     # SUPABASE_ACCESS_TOKEN is scoped to this environment, matching how
     # rls-config-audit.yml scopes SUPABASE_SERVICE_ROLE_KEY. A job without this
     # line receives an empty string and every deploy fails on auth.

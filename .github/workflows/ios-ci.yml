@@ -73,7 +73,7 @@ jobs:
   # ================================================================
   version-bump:
     name: Auto Version Bump
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     # Auto version-bump DISABLED. The marketing version and build number are
     # now managed manually in ios/project.yml and via the release workflow's
     # `version` / `build_number` inputs, so the version no longer marches ahead
@@ -200,11 +200,13 @@ jobs:
   # ================================================================
   build:
     name: Build & Test (Simulator)
-    runs-on: macos-15
+    runs-on: ${{ vars.RUNNER_MACOS || 'macos-15' }}
     timeout-minutes: 30
     needs: [version-bump]
     # Run even if version-bump was skipped (PRs, manual dispatch)
-    if: always() && !failure() && !cancelled()
+    # GitHub-hosted minutes are used up; this runs only once a self-hosted macOS runner
+    # is registered and its label set as the repo variable RUNNER_MACOS.
+    if: ${{ vars.RUNNER_MACOS != '' && (always() && !failure() && !cancelled()) }}
 
     steps:
       - name: Checkout code
@@ -367,7 +369,7 @@ jobs:
   # ================================================================
   validate-config:
     name: Validate iOS Configuration
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout code

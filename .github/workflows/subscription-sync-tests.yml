@@ -74,7 +74,7 @@ concurrency:
 jobs:
   vitest:
     name: useSubscription read-side tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,7 +86,7 @@ jobs:
 
   deno:
     name: Edge function & migration invariants
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       # deno.lock is lockfile v5, which Deno 1.x refuses to read ("Unsupported

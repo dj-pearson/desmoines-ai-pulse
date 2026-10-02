@@ -41,7 +41,7 @@ concurrency:
 jobs:
   smoke:
     name: Smoke (critical journeys, required)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     timeout-minutes: 20
     env:
       CI: 'true'
@@ -135,7 +135,7 @@ jobs:
 
     name: Accessibility (axe, required)
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
 
     timeout-minutes: 20
 
@@ -219,7 +219,7 @@ jobs:
   # pass rate and what is quarantined.
   e2e:
     name: Playwright (broad suites, quarantined)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
       CI: 'true'
