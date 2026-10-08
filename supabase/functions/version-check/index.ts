@@ -7,9 +7,12 @@
  * is below the floor defined in `_shared/minSupportedVersions.ts`.
  *
  * Public, unauthenticated, pre-session (the app calls it before the user signs
- * in), so `verify_jwt = false` (see supabase/config.toml). It does no DB work
- * and takes no secrets — it only reads compile-time constants — so there is no
- * SSRF/cost surface. Rate-limited in-function as defense-in-depth.
+ * in), so `verify_jwt = false` (see supabase/config.toml). The answer comes
+ * only from compile-time constants. The one DB write is a per-day counter
+ * (public.app_version_checks, via _shared/versionCheckLog.ts) that tells the
+ * operator when old builds have stopped launching against this backend; it is
+ * started after validation, never awaited on the response path, and cannot
+ * change the answer. Rate-limited in-function as defense-in-depth.
  *
  * Request:
  *   POST { platform: 'ios' | 'android', version: string }   // e.g. "1.2.0"
@@ -41,6 +44,7 @@ import {
   isUpdateAvailable,
   type MobilePlatform,
 } from "../_shared/minSupportedVersions.ts";
+import { recordVersionCheck } from "../_shared/versionCheckLog.ts";
 
 const VALID_PLATFORMS: MobilePlatform[] = ["ios", "android"];
 
@@ -128,6 +132,15 @@ serve(async (req) => {
   if (!version) {
     return json({ error: "version is required" }, 400);
   }
+
+  // Counted off the response path: the apps fail open on any error here, so a
+  // recording failure must never become a slow or failed answer.
+  const recording = recordVersionCheck(platform, version).then((r) => {
+    if (!r.ok) console.warn(`[version-check] not counted: ${r.reason}`);
+  });
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (typeof runtime?.waitUntil === "function") runtime.waitUntil(recording);
 
   const forceUpgrade = isBelowMinimum(platform, version);
   const updateAvailable = isUpdateAvailable(platform, version);
