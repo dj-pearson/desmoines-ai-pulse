@@ -759,7 +759,8 @@ export function eventShellBody(row: Record<string, any>, now: Date = new Date())
 
   const links: Array<[string, string]> = [
     ["/events/today", "Things to do in Des Moines today"],
-    ["/events/this-weekend", "Des Moines events this weekend"],
+    // Matches the page's title: the higher-volume phrase (2,900/mo vs 1,900).
+    ["/events/this-weekend", "Things to do in Des Moines this weekend"],
     ["/events", "All Des Moines events"],
   ];
   if (EVENT_SUBURB_HUBS.has(suburbSlug)) links.unshift([`/events/${suburbSlug}`, `Events in ${locality}`]);

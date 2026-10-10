@@ -279,9 +279,15 @@ export default function EventsThisWeekend() {
    * WEB-SEO-031: the title and description stay date-free; the prerender froze
    * a build-time date into them. The weekend's dates are in the body, from the
    * same window the rows were fetched for, and only once those rows are here.
+   *
+   * The title leads with "things to do", not "events": in the Des Moines-Ames
+   * DMA "things to do in des moines this weekend" is 2,900 searches a month and
+   * "events in des moines this weekend" 1,900 (Google Ads volume via
+   * DataForSEO, 2026-10-10). Catch Des Moines holds #1 and #2 for the first
+   * with a page titled that way. The description carries "events".
    */
-  const pageTitle = `Des Moines Events This Weekend | ${BRAND.name}`;
-  const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps and tips for the weekend's activities.`;
+  const pageTitle = `Things to Do in Des Moines This Weekend | ${BRAND.name}`;
+  const pageDescription = `Events happening this weekend in Des Moines and the suburbs, Friday to Sunday: dates, times, maps and which ones are free.`;
   /**
    * SEO-036: the h1 and first sentence carry the dates and counts, from the
    * rows this page fetched. Absolute dates, so the prerendered copy stays true
