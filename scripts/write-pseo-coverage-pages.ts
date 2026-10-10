@@ -49,7 +49,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 import { categoryDimension, contentTypeDimension, locationDimension } from '../src/pseo/taxonomy';
-import { AREA_PAGE_CATEGORY, matchingPlaces, type CoverageRestaurantRow } from '../src/pseo/coverageRule';
+import { AREA_PAGE_CATEGORY, CITYWIDE, matchingPlaces, type CoverageRestaurantRow } from '../src/pseo/coverageRule';
 import { evaluateCoverage, DATA_TEMPLATE_GENERATOR, type PublishedPseoRow, type CoverageRow } from './lib/pseoCoverage';
 import { NEIGHBORHOOD_BOUNDARIES } from '../src/lib/neighborhoodBoundaries';
 
@@ -393,6 +393,148 @@ export function buildAreaPage(row: CoverageRow, places: Restaurant[], today: str
   };
 }
 
+/**
+ * The city-wide cuisine page, /restaurants/<cuisine> (content-category), from
+ * the rows. These were LLM-written and unreachable until RESTAURANT_CUISINE_SLUGS
+ * gave them the SEO-065 fallback, so making them reachable would have put
+ * unchecked copy in front of crawlers; this replaces it the way --rewrite-llm
+ * replaced the area pages'. Its listing has no location filter, so "Des Moines"
+ * here means the whole directory, suburbs included, and the copy says so.
+ */
+export function buildCitywidePage(row: CoverageRow, places: Restaurant[], today: string) {
+  const content = contentTypeDimension.values.find((v) => v.slug === AREA_PAGE_CATEGORY);
+  const cat = categoryDimension.values.find((v) => v.slug === row.category);
+  if (!content || !cat) throw new Error(`${row.slug}: not in taxonomy`);
+  const noun = NOUN[row.category] ?? {
+    plural: `${cat.name} Restaurants`,
+    inline: `${cat.name} restaurants`,
+    singular: `${cat.name} restaurant`,
+    matches: cat.name,
+  };
+  const n = places.length;
+  const rated = places
+    .filter((p) => p.rating !== null)
+    .sort((a, b) => (b.rating as number) - (a.rating as number) || a.name.localeCompare(b.name));
+  const topRated = rated.slice(0, 5);
+  const ordered = [...places].sort(byRating);
+
+  const towns = new Map<string, number>();
+  for (const p of places) {
+    const town = (p.city ?? '').trim();
+    if (town) towns.set(town, (towns.get(town) ?? 0) + 1);
+  }
+  const commonTowns = [...towns]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 5);
+
+  const title = `${noun.plural} in Des Moines, Iowa`;
+  const h1 = `${noun.plural} in Des Moines`;
+  const lead = joinNames((topRated.length >= 2 ? topRated : ordered).slice(0, 2).map((p) => p.name));
+  let description = `${n} ${noun.inline} in Des Moines and its suburbs, including ${lead}, listed from the Des Moines Insider restaurant directory.`;
+  if (description.length > 160) {
+    description = `${n} ${noun.inline} in Des Moines and its suburbs, listed from the Des Moines Insider restaurant directory.`;
+  }
+
+  const shown = Math.min(n, 12);
+  const listSentence =
+    n > shown
+      ? `The list below shows ${shown} of them, read from the directory live and ordered by rating`
+      : 'The list below is read from it live and ordered by rating';
+
+  const faqs = [
+    {
+      question: `How many ${noun.inline} in Des Moines does Des Moines Insider list?`,
+      answer:
+        `As of ${today}, ${n}, counting Des Moines and its suburbs.` +
+        (topRated.length
+          ? ` By Google star rating, the highest rated are ${joinNames(
+              topRated.map((p) => `${p.name} (${(p.rating as number).toFixed(1)})`),
+            )}.`
+          : ''),
+    },
+    ...(commonTowns.length
+      ? [
+          {
+            question: `Where in the Des Moines area are the ${noun.inline}?`,
+            answer:
+              `By the city each listing records, the most are in ` +
+              `${joinNames(commonTowns.map(([town, count]) => `${town} (${count})`))}.`,
+          },
+        ]
+      : []),
+    {
+      question: `Why is a ${noun.singular} missing from this list?`,
+      answer:
+        `This page lists restaurants in the Des Moines Insider directory whose cuisine is recorded as ${noun.matches}. ` +
+        'Restaurants marked closed, or announced but not yet open, are left out. ' +
+        'A place that is not listed is not in the directory yet.',
+    },
+  ];
+
+  const sections = [
+    {
+      id: 'hero_intro',
+      type: 'hero_intro',
+      content:
+        `The Des Moines Insider restaurant directory lists ${n} ${noun.inline} in Des Moines and its suburbs right now. ` +
+        `${listSentence}, and each name opens that restaurant's own page with the address, hours, price range ` +
+        'and links the directory holds for it. Closed restaurants and ones that are announced but not yet open ' +
+        'are left out.',
+    },
+    { id: 'live_listings', type: 'live_listings', heading: h1 },
+    { id: 'faq', type: 'faq', heading: 'About this list', faqs },
+  ];
+
+  return {
+    id: `content-category__${[AREA_PAGE_CATEGORY, row.category].sort().join('_')}`,
+    slug: row.slug,
+    page_type_id: 'content-category',
+    dimensions: [
+      { name: content.name, slug: content.slug, tier: content.tier, dimension: 'content_type' },
+      { name: cat.name, slug: cat.slug, tier: cat.tier, dimension: 'category' },
+    ],
+    seo: {
+      title,
+      h1,
+      description,
+      keywords: [
+        `${cat.name.toLowerCase()} restaurants des moines`,
+        `${cat.name.toLowerCase()} des moines`,
+        `best ${cat.name.toLowerCase()} des moines`,
+        `${cat.name.toLowerCase()} restaurants in des moines iowa`,
+      ],
+      canonicalUrl: row.slug,
+      ogType: 'website',
+      ...(row.verdict === 'noindex' ? { robots: 'noindex, follow' } : {}),
+    },
+    sections,
+    related_pages: [],
+    structured_data: {
+      '@type': 'WebPage',
+      breadcrumb: [
+        { name: 'Home', url: '/' },
+        { name: 'Restaurants', url: '/restaurants' },
+        { name: h1, url: row.slug },
+      ],
+      faqItems: faqs,
+    },
+    generation_meta: {
+      generatedAt: new Date().toISOString(),
+      generatedBy: DATA_TEMPLATE_GENERATOR,
+      promptVersion: 'none',
+      modelUsed: 'none',
+      wordCount: JSON.stringify(sections).split(/\s+/).length,
+      refreshSchedule: 'monthly',
+      placeFingerprint: row.fingerprint,
+      placeCount: n,
+      sourceTable: 'restaurants',
+    },
+    is_published: true,
+    quality_score: 0.8,
+  };
+}
+
 const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
 const str = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
@@ -426,9 +568,11 @@ async function main() {
         return { slug: r.slug, title: seo?.h1 ?? seo?.title ?? r.slug };
       });
   const build = (row: CoverageRow, places: Restaurant[]) =>
-    row.category === AREA_PAGE_CATEGORY
-      ? buildAreaPage(row, places, today, cuisinePagesFor(row.location))
-      : buildPage(row, places, today);
+    row.location === CITYWIDE
+      ? buildCitywidePage(row, places, today)
+      : row.category === AREA_PAGE_CATEGORY
+        ? buildAreaPage(row, places, today, cuisinePagesFor(row.location))
+        : buildPage(row, places, today);
 
   for (const row of report.rows) {
     const places = matchingPlaces(restaurants, { slug: row.location, name: row.locationName }, row.category);

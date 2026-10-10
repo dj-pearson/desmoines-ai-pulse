@@ -12,7 +12,7 @@
 import { HTMLRewriter } from 'html-rewriter-wasm';
 
 const { restaurantAreaShellRewrites } = await import('../_middleware.ts');
-const { isRestaurantAreaSlug, RESTAURANT_AREA_SLUGS } = await import('../../src/pseo/restaurantAreaSlugs.ts');
+const { isRestaurantAreaSlug, isRestaurantPseoSlug, RESTAURANT_AREA_SLUGS } = await import('../../src/pseo/restaurantAreaSlugs.ts');
 
 let bad = 0;
 const ck = (name, cond, detail = '') => {
@@ -98,6 +98,12 @@ ck('a noindex row keeps its noindex', noindex.includes('<meta name="robots" cont
 ck('the area slugs include the five that 404ed', ['ankeny', 'west-des-moines', 'downtown', 'east-village', 'valley-junction'].every(isRestaurantAreaSlug));
 ck('a cuisine slug is not an area slug', !isRestaurantAreaSlug('asian') && !isRestaurantAreaSlug(undefined));
 ck('the list is not empty', RESTAURANT_AREA_SLUGS.length > 0);
+
+// The city-wide cuisine pages 404ed the same way (2026-10-10).
+ck('the five published cuisine pages that 404ed fall back', ['italian', 'mexican', 'asian', 'bbq', 'brunch'].every(isRestaurantPseoSlug));
+ck('an area slug still falls back', isRestaurantPseoSlug('ankeny'));
+// Counter-assertion: the predicate is not 'anything'. An event category has no restaurant listing.
+ck('a non-restaurant category or an unknown slug does not', !isRestaurantPseoSlug('festivals') && !isRestaurantPseoSlug('live-music') && !isRestaurantPseoSlug('atlas-caf') && !isRestaurantPseoSlug(undefined));
 
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);

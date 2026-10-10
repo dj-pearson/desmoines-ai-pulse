@@ -66,7 +66,7 @@ import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
-import { isRestaurantAreaSlug } from "@/pseo/restaurantAreaSlugs";
+import { isRestaurantPseoSlug } from "@/pseo/restaurantAreaSlugs";
 
 // SEO-065: the pSEO renderer, loaded only for an area slug no restaurant owns.
 const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPseoPage"));
@@ -392,9 +392,10 @@ export default function RestaurantDetails() {
       </>
     );
     // SEO-065: no restaurant has this slug, and it is a taxonomy location, so
-    // it may be the published area page (/restaurants/ankeny). React Router
-    // sends it here before the generic pSEO route can see it.
-    if (slug && isRestaurantAreaSlug(slug)) {
+    // it may be the published area page (/restaurants/ankeny). The same holds
+    // for a restaurant cuisine and its city-wide page (/restaurants/italian).
+    // React Router sends both here before the generic pSEO route can see them.
+    if (slug && isRestaurantPseoSlug(slug)) {
       return (
         <Suspense fallback={null}>
           <RestaurantAreaPseoPage slug={slug} notFound={notFound} />

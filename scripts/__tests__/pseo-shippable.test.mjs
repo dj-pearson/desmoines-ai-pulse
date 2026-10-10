@@ -140,12 +140,22 @@ try {
     JSON.stringify(literal.exact),
   );
 
-  const param = classifySlugs(['/restaurants/asian'], { appPath, redirectsPath });
+  // /restaurants/festivals: an event category, which no restaurant listing
+  // serves, so the detail route answers it and nothing falls back. (This used
+  // /restaurants/asian, the cuisine page that 404ed for exactly this reason.)
+  const param = classifySlugs(['/restaurants/festivals'], { appPath, redirectsPath });
   check(
     'an entity-detail route hit is shadowed, and claimed',
-    eq(param.shadowed, [{ slug: '/restaurants/asian', route: '/restaurants/:slug' }]) &&
-      param.claimed.has('/restaurants/asian'),
+    eq(param.shadowed, [{ slug: '/restaurants/festivals', route: '/restaurants/:slug' }]) &&
+      param.claimed.has('/restaurants/festivals'),
     JSON.stringify(param.shadowed),
+  );
+
+  const cuisine = classifySlugs(['/restaurants/asian', '/restaurants/italian'], { appPath, redirectsPath });
+  check(
+    'a /restaurants/<cuisine> slug falls back to the pSEO page and is not claimed',
+    cuisine.fallback.length === 2 && cuisine.shadowed.length === 0 && cuisine.claimed.size === 0,
+    JSON.stringify(cuisine.fallback),
   );
 
   // SEO-065: RestaurantDetails falls back to the pSEO page for a taxonomy
