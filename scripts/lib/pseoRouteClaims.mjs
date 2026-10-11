@@ -43,6 +43,15 @@ export function readRestaurantAreaSlugs(path = AREA_SLUGS_FILE) {
   return slugs;
 }
 
+/** The city-wide cuisine pages, /restaurants/<cuisine>, fall back the same way. */
+export function readRestaurantCuisineSlugs(path = AREA_SLUGS_FILE) {
+  if (!existsSync(path)) throw new Error(`${path} not found - cannot tell which /restaurants/<cuisine> slugs fall back to pSEO.`);
+  const block = /export const RESTAURANT_CUISINE_SLUGS[^=]*=\s*\[([\s\S]*?)\]/.exec(readFileSync(path, 'utf8'))?.[1] ?? '';
+  const slugs = [...block.matchAll(/'([a-z0-9-]+)'/g)].map((m) => m[1]);
+  if (slugs.length === 0) throw new Error(`No RESTAURANT_CUISINE_SLUGS read from ${path}. The check is blind.`);
+  return slugs;
+}
+
 /**
  * Parses <Route path=... element={<X> pairs out of src/App.tsx.
  * Throws rather than returning an empty result: a regex that stops matching
@@ -101,8 +110,9 @@ export function routeMatcher(path) {
  *   exact       a non-parameterised route answers this URL
  *   shadowed    a parameterised route (an entity detail page) answers it
  *   redirected  public/_redirects already sends it somewhere
- *   fallback    /restaurants/<area>: the detail route renders the pSEO page
- *               when no restaurant has that slug (SEO-065)
+ *   fallback    /restaurants/<area> or /restaurants/<cuisine>: the detail
+ *               route renders the pSEO page when no restaurant has that slug
+ *               (SEO-065)
  *
  * `claimed` is the union of exact and shadowed: the URLs where the pSEO page is
  * not what a visitor gets. Redirected slugs are NOT claimed - the redirect is
@@ -111,7 +121,7 @@ export function routeMatcher(path) {
 export function classifySlugs(slugs, { appPath, redirectsPath, areaSlugsPath = AREA_SLUGS_FILE }) {
   const allRoutes = readRoutes(appPath);
   const redirectSources = readRedirectSources(redirectsPath);
-  const areaSlugs = new Set(readRestaurantAreaSlugs(areaSlugsPath));
+  const areaSlugs = new Set([...readRestaurantAreaSlugs(areaSlugsPath), ...readRestaurantCuisineSlugs(areaSlugsPath)]);
   const areaFallback = (slug, route) => {
     if (route !== AREA_FALLBACK_ROUTE) return false;
     const segs = slug.split('/').filter(Boolean);

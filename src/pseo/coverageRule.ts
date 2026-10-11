@@ -81,6 +81,20 @@ export const AREA_PAGE_CATEGORY = 'restaurants';
 /** Every category slot the rule measures: the area page, then each cuisine. */
 export const COVERAGE_PAGE_CATEGORIES: readonly string[] = [AREA_PAGE_CATEGORY, ...COVERAGE_CATEGORIES];
 
+/**
+ * The city-wide cuisine page, /restaurants/<cuisine> (content-category), has
+ * no area: its live listing is every restaurant in the directory whose cuisine
+ * matches. It is measured in the location slot as CITYWIDE so the same rows,
+ * thresholds and duplicate condition apply. Not a taxonomy slug, and never a
+ * URL segment: the slug is /restaurants/<cuisine>.
+ */
+export const CITYWIDE = '';
+export const CITYWIDE_NAME = 'Des Moines';
+
+export function citywideSlug(categorySlug: string): string {
+  return `/${AREA_PAGE_CATEGORY}/${categorySlug}`;
+}
+
 export type CoverageVerdict = 'not-generated' | 'noindex' | 'indexable';
 
 export function coverageVerdict(placeCount: number): CoverageVerdict {
@@ -101,6 +115,11 @@ export interface CoverageDimension {
  * /restaurants/<area> over a coverage area.
  */
 export function isCoverageScoped(pageTypeId: string, dimensions: readonly CoverageDimension[]): boolean {
+  if (pageTypeId === 'content-category') {
+    const content = dimensions.find((d) => d.dimension === 'content_type');
+    const category = dimensions.find((d) => d.dimension === 'category');
+    return Boolean(content?.slug === AREA_PAGE_CATEGORY && category && COVERAGE_CATEGORIES.includes(category.slug));
+  }
   if (pageTypeId === 'content-location') {
     const content = dimensions.find((d) => d.dimension === 'content_type');
     const area = dimensions.find((d) => d.dimension === 'location');
@@ -143,6 +162,13 @@ export function placeMatches(row: CoverageRestaurantRow, area: CoverageArea | st
   // PostgREST .neq('is_merged', true) drops NULL as well as true.
   if (row.is_merged !== false) return false;
   if (!isVisitableStatus(row.status)) return false;
+  // CITYWIDE: the content-category listing applies no location filter.
+  // Every real area carries a taxonomy slug; only CITYWIDE has none.
+  const citywide = typeof area === 'string' ? area === CITYWIDE : area.slug === CITYWIDE;
+  if (citywide) {
+    if (isAreaPage) return true;
+    return new RegExp(filter.pattern, 'i').test(row.cuisine ?? '');
+  }
   const match = restaurantLocationMatch(typeof area === 'string' ? { slug: '', name: area } : area);
   if (match.kind === 'neighborhood') {
     if (row.neighborhood !== match.slug) return false;

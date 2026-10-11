@@ -18,6 +18,10 @@
 import { locationDimension, categoryDimension } from '../../src/pseo/taxonomy';
 import {
   AREA_PAGE_CATEGORY,
+  CITYWIDE,
+  CITYWIDE_NAME,
+  citywideSlug,
+  COVERAGE_CATEGORIES,
   COVERAGE_PAGE_CATEGORIES,
   COVERAGE_LOCATIONS,
   finalVerdicts,
@@ -161,6 +165,34 @@ export function evaluateCoverage(pages: readonly PublishedPseoRow[], restaurants
             : null,
       });
     }
+  }
+
+  // The city-wide cuisine pages, /restaurants/<cuisine>: no area, so CITYWIDE
+  // in the location slot. They were LLM-written and unreachable (a 404 from
+  // the detail route) until RESTAURANT_CUISINE_SLUGS gave them the SEO-065
+  // fallback; measuring them is what lets the writer rebuild them from rows.
+  for (const catSlug of COVERAGE_CATEGORIES) {
+    if (!categoryDimension.values.some((v) => v.slug === catSlug)) {
+      throw new Error(`coverage category ${catSlug} is not in taxonomy.ts`);
+    }
+    const slug = citywideSlug(catSlug);
+    const page = bySlug.get(slug);
+    const places = matchingPlaces(restaurants, CITYWIDE, catSlug);
+    measured.push({
+      slug,
+      category: catSlug,
+      location: CITYWIDE,
+      locationName: CITYWIDE_NAME,
+      places: places.length,
+      names: places.map((p) => p.name).sort((a, b) => a.localeCompare(b)),
+      fingerprint: listingFingerprint(places),
+      published: page ? page.is_published : null,
+      noindexed: page?.seo?.robots === 'noindex, follow',
+      templateFingerprint:
+        page?.generation_meta?.generatedBy === DATA_TEMPLATE_GENERATOR
+          ? page.generation_meta.placeFingerprint ?? ''
+          : null,
+    });
   }
 
   const verdicts = finalVerdicts(measured.map((m) => ({ slug: m.slug, places: m.places, fingerprint: m.fingerprint })));

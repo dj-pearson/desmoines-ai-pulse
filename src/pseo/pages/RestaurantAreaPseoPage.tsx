@@ -2,7 +2,8 @@
  * SEO-065: /restaurants/<area> when no restaurant has that slug.
  *
  * RestaurantDetails renders this only after its own lookup came back empty
- * and the slug is a taxonomy location (isRestaurantAreaSlug), so a real
+ * and the slug is a taxonomy location or a restaurant cuisine
+ * (isRestaurantPseoSlug), so a real
  * restaurant can never be shadowed by an area page. The published pseo_pages
  * row is rendered exactly as the generic pSEO route would render it; with no
  * published row the caller's not-found state is shown, unchanged.
