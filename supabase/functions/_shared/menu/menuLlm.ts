@@ -158,6 +158,7 @@ async function requestMenu(
       return NO_REPLY;
     }
     const windowMs = llmAttemptWindow(deadline, Date.now());
+    const startedAt = Date.now();
 
     let response: Response;
     try {
@@ -239,7 +240,15 @@ async function requestMenu(
     }
     if (!sections) {
       console.warn(`  ⚠️ ${label}: no menu in reply (stop_reason=${state.stopReason})`);
-      if (state.stopReason !== "tool_use") onError?.(`no menu in reply (stop_reason=${state.stopReason})`);
+      if (state.stopReason !== "tool_use") {
+        const blocks = state.blocks.filter(Boolean);
+        const received = blocks.reduce((n, b) => n + b.json.length + b.text.length, 0);
+        onError?.(
+          `no menu in reply (stop_reason=${state.stopReason}, complete=${state.complete}, ` +
+            `blocks=${blocks.length}, chars=${received}, window_ms=${windowMs}, ` +
+            `took_ms=${Date.now() - startedAt})`,
+        );
+      }
     }
     return { sections, truncated };
   }
