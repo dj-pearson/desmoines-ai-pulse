@@ -169,10 +169,18 @@ async function requestMenu(
           headers: {
             "x-api-key": ctx.apiKey,
             "anthropic-version": config.anthropic_version,
+            // Without this the API sends a tool argument only once its whole
+            // value is written, and `sections` is one value: measured
+            // 2026-10-11, a 90s stream delivered 0 characters, so a reply cut
+            // off by the deadline had nothing to salvage.
+            "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
             "content-type": "application/json",
           },
           body: JSON.stringify({
-            model: config.default_model,
+            // Transcribing a menu is extraction, not reasoning; the lightweight
+            // model writes it several times faster, which is what decides
+            // whether a full menu fits inside the 150s idle limit.
+            model: config.lightweight_model || config.default_model,
             // Not config.max_tokens_large: see MENU_MAX_TOKENS.
             max_tokens: MENU_MAX_TOKENS,
             temperature: 0,
