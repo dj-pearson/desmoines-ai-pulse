@@ -68,6 +68,11 @@ export interface MenuExtraction {
   source_url: string;
   /** Unstructured text kept for debugging / manual review. */
   raw_text: string;
+  /**
+   * Set when the model's reply was incomplete ("max_tokens", "cut_off", or a
+   * chunk the deadline stopped). The items present are real; some are missing.
+   */
+  truncated?: string;
 }
 
 /** Quality assessment of an extraction — see `scoreExtraction`. */

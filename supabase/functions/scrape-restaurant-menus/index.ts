@@ -83,6 +83,16 @@ import {
   type MenuLlmContext,
 } from "../_shared/menu/menuLlm.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import {
+  fetchWindow,
+  MIN_FETCH_WINDOW_MS,
+  MIN_LLM_WINDOW_MS,
+  MS_PER_RESTAURANT,
+  remainingMs,
+  RESPONSE_DEADLINE_MS,
+  RUN_DEADLINE_MS,
+  withDeadline,
+} from "../_shared/menu/menuBudget.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,11 +124,11 @@ const DEFAULT_BUDGET = {
   /** Claude requests (a chunked text extraction counts once per chunk). */
   llmCalls: 6,
   /** Wall-clock per restaurant. */
-  msPerRestaurant: 110_000,
+  msPerRestaurant: MS_PER_RESTAURANT,
 };
 
-/** Wall-clock for the whole batch, leaving room to return a response. */
-const RUN_DEADLINE_MS = 260_000;
+// The run and response deadlines live in _shared/menu/menuBudget.ts, beside
+// the reasoning: Supabase drops a request that is silent for 150s.
 
 /** How long a menu stays fresh before it is re-scraped. */
 const DEFAULT_MAX_AGE_DAYS = 30;
@@ -188,16 +198,27 @@ interface PageContent {
   renderedWithJs: boolean;
 }
 
-function outOfTime(ctx: RunContext): boolean {
-  return Date.now() > ctx.deadline || Date.now() > ctx.runDeadline;
+/** The earlier of the restaurant's and the run's deadline. */
+function deadlineOf(ctx: RunContext): number {
+  return Math.min(ctx.deadline, ctx.runDeadline);
+}
+
+function timeLeft(ctx: RunContext): number {
+  return remainingMs(deadlineOf(ctx), Date.now());
 }
 
 function canFetch(ctx: RunContext): boolean {
-  return ctx.fetchesLeft > 0 && !outOfTime(ctx);
+  return ctx.fetchesLeft > 0 && timeLeft(ctx) >= MIN_FETCH_WINDOW_MS;
 }
 
+/** A Claude call started with less than MIN_LLM_WINDOW_MS left only wastes tokens. */
 function canCallLlm(ctx: RunContext): boolean {
-  return ctx.llmLeft > 0 && !outOfTime(ctx);
+  return ctx.llmLeft > 0 && timeLeft(ctx) >= MIN_LLM_WINDOW_MS;
+}
+
+/** A timeout for one fetch: at most `ceilingMs`, never past the deadline. */
+function fetchTimeout(ctx: RunContext, ceilingMs: number): number {
+  return fetchWindow(deadlineOf(ctx), Date.now(), ceilingMs);
 }
 
 // ─── Page fetching ──────────────────────────────────────────────────────────
@@ -211,6 +232,17 @@ const BROWSER_HEADERS: Record<string, string> = {
 };
 
 const PAGE_TIMEOUT_MS = 20_000;
+
+/** Ceiling on one JS render, across scrapeUrl's whole backend fallback chain. */
+const RENDER_TIMEOUT_MS = 40_000;
+const RENDER_DEADLINE = "render deadline";
+
+interface RenderResult {
+  success: boolean;
+  html?: string;
+  markdown?: string;
+  error?: string;
+}
 
 /**
  * Fetch a page, escalating to a JS-rendering backend when the plain response
@@ -235,7 +267,7 @@ async function fetchMenuPage(ctx: RunContext, url: string): Promise<PageContent 
   let html = "";
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), fetchTimeout(ctx, PAGE_TIMEOUT_MS));
     const response = await fetch(url, { headers: BROWSER_HEADERS, signal: controller.signal });
     clearTimeout(timer);
 
@@ -267,7 +299,27 @@ async function fetchMenuPage(ctx: RunContext, url: string): Promise<PageContent 
     console.log(
       `  🎭 ${url} needs rendering (platform=${platform.platform ?? "unknown"}) — escalating`,
     );
-    const rendered = await scrapeUrl(url, { waitTime: 6000, timeout: 30_000 });
+    // scrapeUrl chains render backends, each with its own timeout (one has
+    // none), so the deadline is enforced by not waiting past it.
+    const renderMs = fetchTimeout(ctx, RENDER_TIMEOUT_MS);
+    const rendered: RenderResult = await withDeadline<RenderResult>(
+      scrapeUrl(url, { waitTime: 6000, timeout: Math.min(30_000, renderMs) }).catch((error) => ({
+        success: false,
+        error: (error as Error).message,
+      })),
+      renderMs,
+      { success: false, error: RENDER_DEADLINE },
+    );
+    if (rendered.error === RENDER_DEADLINE) {
+      ctx.attempts.push({
+        url,
+        method: "render",
+        outcome: "error",
+        items: 0,
+        score: 0,
+        detail: `render did not finish within ${renderMs}ms`,
+      });
+    }
     if (rendered.success && (rendered.html || rendered.markdown)) {
       const body = rendered.html || rendered.markdown || "";
       const renderedText = prepareMenuContent(body);
@@ -344,6 +396,7 @@ function hasMenuHeading(html: string): boolean {
 function record(ctx: RunContext, raw: MenuExtraction, method: string): ScoredResult | null {
   const extraction = normalizeExtraction(raw);
   const quality = scoreExtraction(extraction);
+  const notes = raw.truncated ? [`reply incomplete: ${raw.truncated}`, ...quality.warnings] : quality.warnings;
 
   const attempt: AttemptRecord = {
     url: raw.source_url,
@@ -351,7 +404,7 @@ function record(ctx: RunContext, raw: MenuExtraction, method: string): ScoredRes
     outcome: quality.item_count === 0 ? "empty" : passesQualityGate(quality) ? "success" : "rejected",
     items: quality.item_count,
     score: quality.score,
-    detail: quality.warnings.join("; ") || undefined,
+    detail: notes.join("; ") || undefined,
   };
   ctx.attempts.push(attempt);
 
@@ -375,14 +428,22 @@ async function tryPdf(ctx: RunContext, url: string): Promise<void> {
   ctx.visited.add(key);
 
   ctx.fetchesLeft--;
-  const base64 = await fetchPdfAsBase64(url);
+  // The helper's timeout stops at the response headers, not the body, so the
+  // download as a whole is bounded here.
+  const pdfMs = fetchTimeout(ctx, 30_000);
+  const base64 = await withDeadline(fetchPdfAsBase64(url, pdfMs), pdfMs, null);
   if (!base64) {
     ctx.attempts.push({ url, method: "pdf_vision", outcome: "error", items: 0, score: 0, detail: "fetch failed" });
     return;
   }
 
+  // The download may have used the time a Claude call needs.
+  if (!canCallLlm(ctx)) {
+    ctx.attempts.push({ url, method: "pdf_vision", outcome: "skipped", items: 0, score: 0, detail: "deadline before extraction" });
+    return;
+  }
   ctx.llmLeft--;
-  const extraction = await extractMenuFromPdf(llmContext, base64, ctx.restaurant.name, url);
+  const extraction = await extractMenuFromPdf(llmContext, base64, ctx.restaurant.name, url, deadlineOf(ctx));
   if (extraction) record(ctx, extraction, "pdf_vision");
   else ctx.attempts.push({ url, method: "pdf_vision", outcome: "empty", items: 0, score: 0 });
 }
@@ -406,7 +467,8 @@ async function tryImages(ctx: RunContext, candidates: MenuCandidate[], sourceUrl
     ctx.visited.add(key);
 
     ctx.fetchesLeft--;
-    const fetched = await fetchImageAsBase64(candidate.url);
+    const imageMs = fetchTimeout(ctx, 20_000);
+    const fetched = await withDeadline(fetchImageAsBase64(candidate.url, imageMs), imageMs, null);
     if (fetched) images.push({ base64: fetched.base64, mediaType: fetched.mediaType });
   }
 
@@ -422,8 +484,12 @@ async function tryImages(ctx: RunContext, candidates: MenuCandidate[], sourceUrl
     return;
   }
 
+  if (!canCallLlm(ctx)) {
+    ctx.attempts.push({ url: sourceUrl, method: "image_vision", outcome: "skipped", items: 0, score: 0, detail: "deadline before extraction" });
+    return;
+  }
   ctx.llmLeft--;
-  const extraction = await extractMenuFromImages(llmContext, images, ctx.restaurant.name, sourceUrl);
+  const extraction = await extractMenuFromImages(llmContext, images, ctx.restaurant.name, sourceUrl, deadlineOf(ctx));
   if (extraction) record(ctx, extraction, "image_vision");
   else ctx.attempts.push({ url: sourceUrl, method: "image_vision", outcome: "empty", items: 0, score: 0 });
 }
@@ -448,7 +514,7 @@ async function tryPageText(ctx: RunContext, page: PageContent): Promise<void> {
   }
 
   ctx.llmLeft--;
-  const extraction = await extractMenuFromText(llmContext, page.text, ctx.restaurant.name, page.url);
+  const extraction = await extractMenuFromText(llmContext, page.text, ctx.restaurant.name, page.url, deadlineOf(ctx));
   if (extraction) record(ctx, extraction, "html_text");
   else ctx.attempts.push({ url: page.url, method: "html_text", outcome: "empty", items: 0, score: 0 });
 }
@@ -457,7 +523,19 @@ async function tryPageText(ctx: RunContext, page: PageContent): Promise<void> {
 
 async function scrapeRestaurantMenu(
   restaurant: RestaurantRow,
-  options: { forceUpdate: boolean; maxAgeDays: number; dryRun: boolean; runDeadline: number },
+  options: {
+    forceUpdate: boolean;
+    maxAgeDays: number;
+    dryRun: boolean;
+    runDeadline: number;
+    /**
+     * The attempt log, owned by the caller so that a response sent at the hard
+     * deadline can still persist what this restaurant tried.
+     */
+    attempts: AttemptRecord[];
+    /** True once the handler has answered without waiting for this restaurant. */
+    abandoned: () => boolean;
+  },
 ): Promise<RestaurantOutcome> {
   const ctx: RunContext = {
     restaurant,
@@ -468,7 +546,7 @@ async function scrapeRestaurantMenu(
     visited: new Set(),
     pages: new Map(),
     results: [],
-    attempts: [],
+    attempts: options.attempts,
   };
 
   // ── Freshness check ──
@@ -572,6 +650,19 @@ async function scrapeRestaurantMenu(
     await tryDensestFetchedPage(ctx);
   }
 
+  // Say so when the clock, not the search, ended this restaurant: "no menu
+  // found" and "ran out of time" call for different follow-ups.
+  if (timeLeft(ctx) < MIN_LLM_WINDOW_MS && !hasStrongResult(ctx)) {
+    ctx.attempts.push({
+      url: menuUrl ?? siteUrl ?? "",
+      method: "deadline",
+      outcome: "skipped",
+      items: 0,
+      score: 0,
+      detail: `stopped with ${Math.round(timeLeft(ctx) / 1000)}s left; ${ctx.llmLeft} Claude call(s) and ${ctx.fetchesLeft} fetch(es) unused`,
+    });
+  }
+
   // ── Phase 7: pick and merge ──
   if (ctx.results.length === 0) {
     return {
@@ -592,6 +683,17 @@ async function scrapeRestaurantMenu(
       method: best.extraction.method,
       source_url: best.extraction.source_url,
       confidence: best.quality.score,
+      attempts: ctx.attempts,
+    };
+  }
+
+  // The handler already answered and logged this restaurant as cut off;
+  // publishing now would contradict the response it sent.
+  if (options.abandoned()) {
+    return {
+      success: false,
+      items_count: 0,
+      error: "Response deadline reached before saving",
       attempts: ctx.attempts,
     };
   }
@@ -663,7 +765,7 @@ async function sitemapCandidates(ctx: RunContext, siteUrl: string): Promise<stri
     ctx.fetchesLeft--;
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10_000);
+      const timer = setTimeout(() => controller.abort(), fetchTimeout(ctx, 10_000));
       const response = await fetch(`${siteUrl}${path}`, {
         headers: BROWSER_HEADERS,
         signal: controller.signal,
@@ -878,6 +980,10 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // The 150s idle limit counts from the request, so the clock starts before
+  // the auth check and the restaurant query, not after them.
+  const startedAt = Date.now();
+
   // Runs as service_role and had no caller check. verify_jwt is not a gate:
   // it defaults to true, and true only means "a valid Supabase JWT" - which
   // the publishable anon key is, in every client bundle.
@@ -889,7 +995,8 @@ serve(async (req) => {
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
-  const runDeadline = Date.now() + RUN_DEADLINE_MS;
+  const runDeadline = startedAt + RUN_DEADLINE_MS;
+  const responseAt = startedAt + RESPONSE_DEADLINE_MS;
 
   try {
     const body: ScrapeRequest = await req.json().catch(() => ({}));
@@ -916,91 +1023,198 @@ serve(async (req) => {
 
     console.log(`Starting menu scrape for ${restaurants.length} restaurant(s)`);
 
-    let processed = 0;
-    let succeeded = 0;
-    let totalItems = 0;
-    const errors: string[] = [];
-    const results: Array<Record<string, unknown>> = [];
-    let deadlineHit = false;
+    const batch = newBatch();
+    const work = runBatch(restaurants, batch, {
+      forceUpdate: force_update,
+      maxAgeDays: max_age_days,
+      dryRun: dry_run,
+      runDeadline,
+    });
 
-    for (const restaurant of restaurants) {
-      if (Date.now() > runDeadline) {
-        deadlineHit = true;
-        console.warn(`⏱️ Run deadline reached — ${restaurants.length - processed} restaurant(s) not attempted`);
-        break;
-      }
+    // Every fetch and Claude call is bounded by runDeadline, so `work` should
+    // finish first. This is the guarantee that does not depend on that being
+    // true everywhere: at responseAt the caller gets an answer regardless.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cutoff = new Promise<"cutoff">((resolve) => {
+      timer = setTimeout(() => resolve("cutoff"), remainingMs(responseAt, Date.now()));
+    });
+    const winner = await Promise.race([work.then(() => "done" as const), cutoff]);
+    clearTimeout(timer);
 
-      console.log(`\nProcessing: ${restaurant.name} (${restaurant.website ?? restaurant.menu_url})`);
-
-      let outcome: RestaurantOutcome;
-      try {
-        outcome = await scrapeRestaurantMenu(restaurant, {
-          forceUpdate: force_update,
-          maxAgeDays: max_age_days,
-          dryRun: dry_run,
-          runDeadline,
-        });
-      } catch (error) {
-        // One pathological site must not abort the batch.
-        outcome = {
-          success: false,
-          items_count: 0,
-          error: `Unhandled error: ${(error as Error).message}`,
-          attempts: [],
-        };
-        console.error(`  💥 ${restaurant.name}:`, error);
-      }
-
-      processed++;
-      if (!dry_run) await logAttempts(restaurant.id, outcome);
-
-      results.push({
-        restaurant_id: restaurant.id,
-        name: restaurant.name,
-        success: outcome.success && outcome.items_count > 0,
-        skipped: outcome.skipped ?? false,
-        items_count: outcome.items_count,
-        method: outcome.method,
-        source_url: outcome.source_url,
-        confidence: outcome.confidence,
-        error: outcome.error,
-        attempts: outcome.attempts,
-      });
-
-      if (outcome.success && outcome.items_count > 0) {
-        succeeded++;
-        totalItems += outcome.items_count;
-        console.log(
-          `  ✅ ${restaurant.name}: ${outcome.items_count} items via ${outcome.method} (confidence ${outcome.confidence})`,
-        );
-      } else if (outcome.skipped) {
-        console.log(`  ⏭️ ${restaurant.name}: ${outcome.error}`);
-      } else {
-        const message = `${restaurant.name}: ${outcome.error ?? "Unknown error"}`;
-        console.log(`  ❌ ${message}`);
-        errors.push(message);
-      }
+    if (winner === "cutoff") {
+      console.warn(`⏱️ Response deadline (${RESPONSE_DEADLINE_MS / 1000}s) reached — answering with partial results`);
+      await abandonBatch(batch, dry_run);
     }
 
-    console.log(`\nComplete: ${succeeded}/${processed} restaurants, ${totalItems} total items`);
+    console.log(`\nComplete: ${batch.succeeded}/${batch.processed} restaurants, ${batch.totalItems} total items`);
 
     return json({
       success: true,
-      processed,
-      succeeded,
-      total_items: totalItems,
-      errors: errors.length > 0 ? errors : undefined,
+      processed: batch.processed,
+      succeeded: batch.succeeded,
+      total_items: batch.totalItems,
+      errors: batch.errors.length > 0 ? batch.errors : undefined,
       // Additive fields — older clients ignore unknown keys.
       dry_run,
-      deadline_reached: deadlineHit,
-      remaining: restaurants.length - processed,
-      results,
+      deadline_reached: batch.deadlineHit,
+      remaining: restaurants.length - batch.processed,
+      elapsed_ms: Date.now() - startedAt,
+      results: batch.results,
     });
   } catch (error) {
     console.error("Error in menu scraper:", error);
     return json({ error: "Internal server error", details: (error as Error).message }, 500);
   }
 });
+
+/** What the batch has done so far; read by the handler even mid-run. */
+interface BatchState {
+  processed: number;
+  succeeded: number;
+  totalItems: number;
+  errors: string[];
+  results: Array<Record<string, unknown>>;
+  deadlineHit: boolean;
+  /** Set when the handler answered without waiting; the loop stops writing. */
+  abandoned: boolean;
+  /** The restaurant in progress and the attempt log it is filling. */
+  current: { restaurant: RestaurantRow; attempts: AttemptRecord[] } | null;
+}
+
+function newBatch(): BatchState {
+  return {
+    processed: 0,
+    succeeded: 0,
+    totalItems: 0,
+    errors: [],
+    results: [],
+    deadlineHit: false,
+    abandoned: false,
+    current: null,
+  };
+}
+
+async function runBatch(
+  restaurants: RestaurantRow[],
+  batch: BatchState,
+  options: { forceUpdate: boolean; maxAgeDays: number; dryRun: boolean; runDeadline: number },
+): Promise<void> {
+  for (const restaurant of restaurants) {
+    if (batch.abandoned) return;
+    // A restaurant started with less time than one Claude call needs would
+    // only fetch pages it cannot read.
+    if (remainingMs(options.runDeadline, Date.now()) < MIN_LLM_WINDOW_MS) {
+      batch.deadlineHit = true;
+      console.warn(`⏱️ Run deadline reached — ${restaurants.length - batch.processed} restaurant(s) not attempted`);
+      return;
+    }
+
+    console.log(`\nProcessing: ${restaurant.name} (${restaurant.website ?? restaurant.menu_url})`);
+
+    const attempts: AttemptRecord[] = [];
+    batch.current = { restaurant, attempts };
+
+    let outcome: RestaurantOutcome;
+    try {
+      outcome = await scrapeRestaurantMenu(restaurant, {
+        ...options,
+        attempts,
+        abandoned: () => batch.abandoned,
+      });
+    } catch (error) {
+      // One pathological site must not abort the batch.
+      outcome = {
+        success: false,
+        items_count: 0,
+        error: `Unhandled error: ${(error as Error).message}`,
+        attempts,
+      };
+      console.error(`  💥 ${restaurant.name}:`, error);
+    }
+
+    // The handler has already reported and logged this restaurant.
+    if (batch.abandoned) return;
+    batch.current = null;
+
+    batch.processed++;
+    batch.results.push({
+      restaurant_id: restaurant.id,
+      name: restaurant.name,
+      success: outcome.success && outcome.items_count > 0,
+      skipped: outcome.skipped ?? false,
+      items_count: outcome.items_count,
+      method: outcome.method,
+      source_url: outcome.source_url,
+      confidence: outcome.confidence,
+      error: outcome.error,
+      attempts: outcome.attempts,
+    });
+
+    if (outcome.success && outcome.items_count > 0) {
+      batch.succeeded++;
+      batch.totalItems += outcome.items_count;
+      console.log(
+        `  ✅ ${restaurant.name}: ${outcome.items_count} items via ${outcome.method} (confidence ${outcome.confidence})`,
+      );
+    } else if (outcome.skipped) {
+      console.log(`  ⏭️ ${restaurant.name}: ${outcome.error}`);
+    } else {
+      const message = `${restaurant.name}: ${outcome.error ?? "Unknown error"}`;
+      console.log(`  ❌ ${message}`);
+      batch.errors.push(message);
+    }
+
+    if (!options.dryRun) await logAttempts(restaurant.id, outcome);
+  }
+}
+
+/** How long the attempt-log write may hold the response after the cutoff. */
+const ABANDON_LOG_MS = 4_000;
+
+/**
+ * Close out the restaurant still running at the response deadline: report it
+ * as cut off and persist what it had tried, so the attempt log shows the
+ * timeout instead of nothing.
+ */
+async function abandonBatch(batch: BatchState, dryRun: boolean): Promise<void> {
+  batch.abandoned = true;
+  batch.deadlineHit = true;
+  const current = batch.current;
+  batch.current = null;
+  if (!current) return;
+
+  const { restaurant, attempts } = current;
+  attempts.push({
+    url: restaurant.menu_url ?? restaurant.website ?? "",
+    method: "deadline",
+    outcome: "error",
+    items: 0,
+    score: 0,
+    detail: `response sent at ${RESPONSE_DEADLINE_MS / 1000}s with this restaurant still running`,
+  });
+  const snapshot = [...attempts];
+  const message = `${restaurant.name}: response deadline reached mid-restaurant`;
+
+  batch.processed++;
+  batch.errors.push(message);
+  batch.results.push({
+    restaurant_id: restaurant.id,
+    name: restaurant.name,
+    success: false,
+    skipped: false,
+    items_count: 0,
+    error: "Response deadline reached mid-restaurant",
+    attempts: snapshot,
+  });
+
+  if (!dryRun) {
+    await withDeadline(
+      logAttempts(restaurant.id, { success: false, items_count: 0, attempts: snapshot }),
+      ABANDON_LOG_MS,
+      undefined,
+    );
+  }
+}
 
 async function selectRestaurants(params: {
   restaurant_id?: string;

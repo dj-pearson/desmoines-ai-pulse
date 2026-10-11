@@ -21,6 +21,10 @@
  *
  * 3. TRANSIENT FAILURES. A 429 or 529 killed the whole restaurant. Requests now
  *    retry with backoff.
+ *
+ * 4. THE 150s IDLE LIMIT. Every call takes the caller's deadline, clamps its
+ *    timeout to it, streams so a cut-off reply keeps what arrived, and uses its
+ *    own output cap rather than the shared `max_tokens_large` (menuBudget.ts).
  */
 
 import { fetchWithTimeout } from "../fetchWithTimeout.ts";
@@ -30,8 +34,19 @@ import type { MenuExtraction, MenuSection } from "./types.ts";
 import { mergeExtractions } from "./menuNormalize.ts";
 import { parseMenuJson, sectionsOf } from "./menuJson.ts";
 import { chunkMenuText } from "./menuContent.ts";
+import {
+  canStartLlmAttempt,
+  llmAttemptWindow,
+  MENU_MAX_TOKENS,
+} from "./menuBudget.ts";
+import {
+  applyStreamEvent,
+  createStreamState,
+  sectionsFromStream,
+  splitSseEvents,
+  type StreamState,
+} from "./menuStream.ts";
 
-const REQUEST_TIMEOUT_MS = 90_000;
 const MAX_ATTEMPTS = 3;
 
 // ─── Prompt ─────────────────────────────────────────────────────────────────
@@ -107,21 +122,41 @@ export interface MenuLlmContext {
 
 type ContentBlock = Record<string, unknown>;
 
+/** What one Claude request produced. */
+interface MenuReply {
+  sections: MenuSection[] | null;
+  /** Why the reply is incomplete, if it is ("max_tokens" or "cut_off"). */
+  truncated: string | null;
+}
+
+const NO_REPLY: MenuReply = { sections: null, truncated: null };
+
 /**
  * One Claude request, returning sections or null.
  *
+ * Streams the reply so a call cut off by `deadline` keeps the items that had
+ * already arrived (see menuStream.ts). Each attempt's timeout is clamped to
+ * the time left, and a retry is only made when there is still enough time for
+ * it to produce something (`canStartLlmAttempt`).
+ *
  * Retries 429/5xx with linear backoff. A refusal or an empty reply is not
- * retried — it will not become a different answer.
+ * retried; it will not become a different answer.
  */
 async function requestMenu(
   ctx: MenuLlmContext,
   content: ContentBlock[],
   label: string,
-): Promise<MenuSection[] | null> {
+  deadline?: number,
+): Promise<MenuReply> {
   const config = await getAIConfig(ctx.supabaseUrl, ctx.supabaseKey);
-  const maxTokens = Number.parseInt(String(config.max_tokens_large), 10) || 8000;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (!canStartLlmAttempt(deadline, Date.now())) {
+      console.warn(`  ⏱️ ${label}: not enough time left for attempt ${attempt}`);
+      return NO_REPLY;
+    }
+    const windowMs = llmAttemptWindow(deadline, Date.now());
+
     let response: Response;
     try {
       response = await fetchWithTimeout(
@@ -135,18 +170,20 @@ async function requestMenu(
           },
           body: JSON.stringify({
             model: config.default_model,
-            max_tokens: maxTokens,
+            // Not config.max_tokens_large: see MENU_MAX_TOKENS.
+            max_tokens: MENU_MAX_TOKENS,
             temperature: 0,
+            stream: true,
             tools: [menuTool()],
             tool_choice: { type: "tool", name: "record_menu" },
             messages: [{ role: "user", content }],
           }),
         },
-        REQUEST_TIMEOUT_MS,
+        windowMs,
       );
     } catch (error) {
       console.error(`  ❌ ${label}: request failed — ${(error as Error).message}`);
-      if (attempt === MAX_ATTEMPTS) return null;
+      if (attempt === MAX_ATTEMPTS) return NO_REPLY;
       await delay(attempt * 2000);
       continue;
     }
@@ -154,7 +191,7 @@ async function requestMenu(
     if (response.status === 429 || response.status >= 500) {
       const detail = await response.text().catch(() => "");
       console.warn(`  ⏳ ${label}: ${response.status}, retry ${attempt}/${MAX_ATTEMPTS} — ${detail.slice(0, 200)}`);
-      if (attempt === MAX_ATTEMPTS) return null;
+      if (attempt === MAX_ATTEMPTS) return NO_REPLY;
       await delay(attempt * 3000);
       continue;
     }
@@ -162,39 +199,102 @@ async function requestMenu(
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       console.error(`  ❌ ${label}: Claude API ${response.status} — ${detail.slice(0, 400)}`);
-      return null;
+      return NO_REPLY;
     }
 
-    const data = await response.json().catch(() => null);
-    if (!data) return null;
-
-    const blocks: Array<Record<string, unknown>> = Array.isArray(data.content) ? data.content : [];
-
-    // Preferred path: the tool call, whose shape the API validated.
-    for (const block of blocks) {
-      if (block.type === "tool_use" && block.name === "record_menu") {
-        const sections = sectionsOf(block.input);
-        if (sections) return sections;
-      }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("text/event-stream")) {
+      // An endpoint override that ignored `stream` and answered in one body.
+      const data = await response.json().catch(() => null);
+      return data ? sectionsFromMessage(data, label) : NO_REPLY;
     }
 
-    // Fallback: an endpoint that ignored `tools` and replied with prose.
-    const text = blocks
-      .filter((b) => b.type === "text" && typeof b.text === "string")
-      .map((b) => b.text as string)
-      .join("\n");
+    const state = await readStream(response, label);
 
-    if (data.stop_reason === "max_tokens") {
-      console.warn(`  ⚠️ ${label}: reply hit max_tokens — recovering what parsed`);
+    if (state.error && !state.blocks.some((b) => b && (b.json || b.text))) {
+      // Overloaded mid-stream before anything arrived: retryable like a 529.
+      console.warn(`  ⏳ ${label}: stream error ${state.error.type}, retry ${attempt}/${MAX_ATTEMPTS} — ${state.error.message.slice(0, 200)}`);
+      if (attempt === MAX_ATTEMPTS) return NO_REPLY;
+      await delay(attempt * 3000);
+      continue;
     }
-    if (!text) {
-      console.warn(`  ⚠️ ${label}: empty reply (stop_reason=${data.stop_reason})`);
-      return null;
+
+    const { sections, truncated } = sectionsFromStream(state);
+    if (truncated) {
+      console.warn(
+        `  ⚠️ ${label}: reply ${truncated === "max_tokens" ? "hit max_tokens" : "was cut off"} — recovered ${sections ? countSectionItems(sections) : 0} item(s)`,
+      );
     }
-    return parseMenuJson(text);
+    if (!sections) {
+      console.warn(`  ⚠️ ${label}: no menu in reply (stop_reason=${state.stopReason})`);
+    }
+    return { sections, truncated };
   }
 
-  return null;
+  return NO_REPLY;
+}
+
+/**
+ * Drain an SSE body into a StreamState. An abort (the attempt's timeout, i.e.
+ * the deadline) ends the read without throwing: the state is then incomplete
+ * and `sectionsFromStream` salvages it.
+ */
+async function readStream(response: Response, label: string): Promise<StreamState> {
+  const state = createStreamState();
+  if (!response.body) return state;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const { events, rest } = splitSseEvents(buffer);
+      buffer = rest;
+      for (const event of events) applyStreamEvent(state, event);
+    }
+    buffer += decoder.decode();
+    for (const event of splitSseEvents(buffer + "\n\n").events) applyStreamEvent(state, event);
+  } catch (error) {
+    console.warn(`  ⏱️ ${label}: stream ended early — ${(error as Error).message}`);
+  } finally {
+    reader.releaseLock();
+  }
+  return state;
+}
+
+/** The non-streamed reply shape, kept for an endpoint that ignores `stream`. */
+function sectionsFromMessage(data: Record<string, unknown>, label: string): MenuReply {
+  const blocks: Array<Record<string, unknown>> = Array.isArray(data.content) ? data.content : [];
+  const truncated = data.stop_reason === "max_tokens" ? "max_tokens" : null;
+
+  // Preferred path: the tool call, whose shape the API validated.
+  for (const block of blocks) {
+    if (block.type === "tool_use" && block.name === "record_menu") {
+      const sections = sectionsOf(block.input);
+      if (sections) return { sections, truncated };
+    }
+  }
+
+  // Fallback: an endpoint that ignored `tools` and replied with prose.
+  const text = blocks
+    .filter((b) => b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text as string)
+    .join("\n");
+
+  if (truncated) {
+    console.warn(`  ⚠️ ${label}: reply hit max_tokens — recovering what parsed`);
+  }
+  if (!text) {
+    console.warn(`  ⚠️ ${label}: empty reply (stop_reason=${data.stop_reason})`);
+    return { sections: null, truncated };
+  }
+  return { sections: parseMenuJson(text), truncated };
+}
+
+function countSectionItems(sections: MenuSection[]): number {
+  return sections.reduce((n, s) => n + (Array.isArray(s?.items) ? s.items.length : 0), 0);
 }
 
 function delay(ms: number): Promise<void> {
@@ -209,13 +309,19 @@ export async function extractMenuFromText(
   content: string,
   restaurantName: string,
   sourceUrl: string,
+  deadline?: number,
 ): Promise<MenuExtraction | null> {
   const chunks = chunkMenuText(content);
   let combined: MenuExtraction | null = null;
 
   for (const [index, chunk] of chunks.entries()) {
     const part = chunks.length > 1 ? ` (part ${index + 1} of ${chunks.length})` : "";
-    const sections = await requestMenu(
+    if (!canStartLlmAttempt(deadline, Date.now())) {
+      // Keep the chunks already read; say that the rest were not.
+      if (combined) combined.truncated = `deadline before part ${index + 1} of ${chunks.length}`;
+      break;
+    }
+    const { sections, truncated } = await requestMenu(
       ctx,
       [
         {
@@ -232,6 +338,7 @@ ${chunk}
         },
       ],
       `text${part}`,
+      deadline,
     );
 
     if (!sections || sections.length === 0) continue;
@@ -241,9 +348,11 @@ ${chunk}
       source_url: sourceUrl,
       raw_text: chunk.slice(0, 50_000),
     };
+    const note = truncated ? `${truncated}${part}` : combined?.truncated;
     // Chunks share a source_url, so merging keeps `html_text` rather than
     // relabelling a single page's extraction as "merged".
     combined = combined ? mergeExtractions(combined, extraction) : extraction;
+    if (note) combined.truncated = note;
   }
 
   return combined;
@@ -255,8 +364,9 @@ export async function extractMenuFromPdf(
   pdfBase64: string,
   restaurantName: string,
   sourceUrl: string,
+  deadline?: number,
 ): Promise<MenuExtraction | null> {
-  const sections = await requestMenu(
+  const { sections, truncated } = await requestMenu(
     ctx,
     [
       {
@@ -271,6 +381,7 @@ ${MENU_EXTRACTION_RULES}`,
       },
     ],
     "pdf",
+    deadline,
   );
 
   if (!sections || sections.length === 0) return null;
@@ -279,6 +390,7 @@ ${MENU_EXTRACTION_RULES}`,
     method: "pdf_vision",
     source_url: sourceUrl,
     raw_text: `[PDF menu from ${sourceUrl}]`,
+    ...(truncated ? { truncated } : {}),
   };
 }
 
@@ -298,6 +410,7 @@ export async function extractMenuFromImages(
   images: VisionImage[],
   restaurantName: string,
   sourceUrl: string,
+  deadline?: number,
 ): Promise<MenuExtraction | null> {
   if (images.length === 0) return null;
   const used = images.slice(0, 8);
@@ -316,7 +429,7 @@ ${MENU_EXTRACTION_RULES}
 If an image is a photo of food, a logo, or anything other than a menu, ignore it entirely.`,
   });
 
-  const sections = await requestMenu(ctx, content, `images(${used.length})`);
+  const { sections, truncated } = await requestMenu(ctx, content, `images(${used.length})`, deadline);
   if (!sections || sections.length === 0) return null;
 
   return {
@@ -324,5 +437,6 @@ If an image is a photo of food, a logo, or anything other than a menu, ignore it
     method: "image_vision",
     source_url: sourceUrl,
     raw_text: `[${used.length} menu image(s) from ${sourceUrl}]`,
+    ...(truncated ? { truncated } : {}),
   };
 }
