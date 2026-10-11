@@ -19,7 +19,7 @@ import {
   resolveOpeningHoursSpecification,
 } from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
-import { isRestaurantAreaSlug } from "../src/pseo/restaurantAreaSlugs";
+import { isRestaurantPseoSlug } from "../src/pseo/restaurantAreaSlugs";
 import { markdownToPlainText } from "../src/lib/aiText";
 import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
 
@@ -759,7 +759,8 @@ export function eventShellBody(row: Record<string, any>, now: Date = new Date())
 
   const links: Array<[string, string]> = [
     ["/events/today", "Things to do in Des Moines today"],
-    ["/events/this-weekend", "Des Moines events this weekend"],
+    // Matches the page's title: the higher-volume phrase (2,900/mo vs 1,900).
+    ["/events/this-weekend", "Things to do in Des Moines this weekend"],
     ["/events", "All Des Moines events"],
   ];
   if (EVENT_SUBURB_HUBS.has(suburbSlug)) links.unshift([`/events/${suburbSlug}`, `Events in ${locality}`]);
@@ -1284,7 +1285,9 @@ export async function onRequest(context: EventContext) {
           // SEO-065: no restaurant has this slug, and it is a taxonomy
           // location, so it may be the published /restaurants/<area> page that
           // missed the prerender. That is a 200 page, not a missing restaurant.
-          if (type === "restaurant" && outcome.kind === "not-found" && isRestaurantAreaSlug(slug)) {
+          // The same holds for a restaurant cuisine's city-wide page
+          // (/restaurants/italian), which 404ed the same way.
+          if (type === "restaurant" && outcome.kind === "not-found" && isRestaurantPseoSlug(slug)) {
             const area = await publishedRestaurantAreaPage(sbBase, sbAnon, slug);
             if (area === "error") {
               const rewritten = withSelfCanonical(passthrough(), pageUrl);

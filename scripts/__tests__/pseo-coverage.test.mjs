@@ -9,7 +9,7 @@
  * condition, what counts as a place, and which published pages the rule
  * flags or keeps out of the sitemap.
  */
-import { coverageVerdict, finalVerdicts, isCoverageScoped, placeMatches } from '../../src/pseo/coverageRule.ts';
+import { CITYWIDE, coverageVerdict, finalVerdicts, isCoverageScoped, placeMatches } from '../../src/pseo/coverageRule.ts';
 import { evaluateCoverage, DATA_TEMPLATE_GENERATOR } from '../lib/pseoCoverage.ts';
 import { neighborhoodFor } from '../../src/lib/neighborhoodBoundaries.ts';
 
@@ -80,6 +80,29 @@ console.log('placeMatches + isCoverageScoped: the /restaurants/<area> page (SEO-
   const report = evaluateCoverage([], [base, { ...base, id: '2' }, { ...base, id: '3' }, { ...base, id: '4' }, { ...base, id: '5', cuisine: 'Pizza' }]);
   const waukee = report.rows.find((r) => r.slug === '/restaurants/waukee');
   check('the area page is measured with every cuisine: 5 places, indexable', waukee?.places === 5 && waukee?.verdict === 'indexable', JSON.stringify(waukee));
+}
+
+console.log('placeMatches + isCoverageScoped: the city-wide /restaurants/<cuisine> page');
+{
+  check('any city counts city-wide', placeMatches({ ...base, city: 'Clive' }, CITYWIDE, 'mexican'));
+  check('no city at all still counts', placeMatches({ ...base, city: null }, CITYWIDE, 'mexican'));
+  // Counter-assertions: city-wide drops the area test and nothing else.
+  check('another cuisine does not', !placeMatches({ ...base, cuisine: 'Thai' }, CITYWIDE, 'mexican'));
+  check('a closed row does not', !placeMatches({ ...base, status: 'closed' }, CITYWIDE, 'mexican'));
+  check('an event category never matches', !placeMatches(base, CITYWIDE, 'festivals'));
+  const dims = (content, slug) => [
+    { dimension: 'content_type', slug: content, name: content },
+    { dimension: 'category', slug, name: slug },
+  ];
+  check('content-category restaurants x cuisine is governed', isCoverageScoped('content-category', dims('restaurants', 'italian')));
+  check('restaurants x an event category is not', !isCoverageScoped('content-category', dims('restaurants', 'festivals')));
+  check('events x a cuisine is not', !isCoverageScoped('content-category', dims('events', 'italian')));
+  const rows = [base, { ...base, id: '2', city: 'Ankeny' }, { ...base, id: '3', city: 'Clive' }, { ...base, id: '4', city: 'Urbandale' }, { ...base, id: '5', city: 'Johnston' }];
+  const report = evaluateCoverage([], rows);
+  const mexican = report.rows.find((r) => r.slug === '/restaurants/mexican');
+  check('five Mexican places in five towns: one city-wide page, indexable', mexican?.places === 5 && mexican?.verdict === 'indexable' && mexican?.location === CITYWIDE, JSON.stringify(mexican));
+  const waukeeOnly = report.rows.find((r) => r.slug === '/mexican/waukee');
+  check('while the Waukee page sees only its one', waukeeOnly?.places === 1, JSON.stringify(waukeeOnly));
 }
 
 console.log('neighborhoodFor: the polygons, on real addresses');

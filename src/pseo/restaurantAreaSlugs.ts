@@ -41,3 +41,35 @@ export const RESTAURANT_AREA_SLUGS: readonly string[] = [
 export function isRestaurantAreaSlug(slug: string | undefined | null): boolean {
   return Boolean(slug && RESTAURANT_AREA_SLUGS.includes(slug));
 }
+
+/**
+ * The city-wide cuisine pages, /restaurants/<cuisine> (content-category rows):
+ * every category slug whose listing filter selects restaurants. They hit the
+ * same trap SEO-065 fixed for areas - /restaurants/italian looked for a
+ * restaurant called "italian" and answered 404 + noindex - and nobody had
+ * looked, because SEO-065 named only the area slugs. Five were published and
+ * unreachable on 2026-10-10 (italian, mexican, asian, bbq, brunch), against
+ * Des Moines-Ames searches of 3,600/mo for "italian restaurant des moines".
+ *
+ * A literal for the same three readers as RESTAURANT_AREA_SLUGS;
+ * src/pseo/__tests__/restaurantAreaSlugs.test.ts fails when it drifts from the
+ * restaurant entries in listingFilters.ts CATEGORY_FILTERS.
+ */
+export const RESTAURANT_CUISINE_SLUGS: readonly string[] = [
+  'asian',
+  'bbq',
+  'brunch',
+  'coffee',
+  'italian',
+  'mexican',
+  'pizza',
+  'steakhouse',
+];
+
+/**
+ * A second segment under /restaurants/ that may be a pSEO page rather than a
+ * restaurant: an area or a cuisine. A restaurant with the slug still wins.
+ */
+export function isRestaurantPseoSlug(slug: string | undefined | null): boolean {
+  return Boolean(slug && (RESTAURANT_AREA_SLUGS.includes(slug) || RESTAURANT_CUISINE_SLUGS.includes(slug)));
+}
