@@ -147,12 +147,14 @@ async function requestMenu(
   content: ContentBlock[],
   label: string,
   deadline?: number,
+  onError?: (detail: string) => void,
 ): Promise<MenuReply> {
   const config = await getAIConfig(ctx.supabaseUrl, ctx.supabaseKey);
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (!canStartLlmAttempt(deadline, Date.now())) {
       console.warn(`  ⏱️ ${label}: not enough time left for attempt ${attempt}`);
+      onError?.(`deadline: no time left for Claude attempt ${attempt}`);
       return NO_REPLY;
     }
     const windowMs = llmAttemptWindow(deadline, Date.now());
@@ -183,7 +185,10 @@ async function requestMenu(
       );
     } catch (error) {
       console.error(`  ❌ ${label}: request failed — ${(error as Error).message}`);
-      if (attempt === MAX_ATTEMPTS) return NO_REPLY;
+      if (attempt === MAX_ATTEMPTS) {
+        onError?.(`Claude request failed: ${(error as Error).message}`.slice(0, 300));
+        return NO_REPLY;
+      }
       await delay(attempt * 2000);
       continue;
     }
@@ -191,7 +196,10 @@ async function requestMenu(
     if (response.status === 429 || response.status >= 500) {
       const detail = await response.text().catch(() => "");
       console.warn(`  ⏳ ${label}: ${response.status}, retry ${attempt}/${MAX_ATTEMPTS} — ${detail.slice(0, 200)}`);
-      if (attempt === MAX_ATTEMPTS) return NO_REPLY;
+      if (attempt === MAX_ATTEMPTS) {
+        onError?.(`Claude API ${response.status}: ${detail}`.slice(0, 300));
+        return NO_REPLY;
+      }
       await delay(attempt * 3000);
       continue;
     }
@@ -199,6 +207,7 @@ async function requestMenu(
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       console.error(`  ❌ ${label}: Claude API ${response.status} — ${detail.slice(0, 400)}`);
+      onError?.(`Claude API ${response.status}: ${detail}`.slice(0, 300));
       return NO_REPLY;
     }
 
@@ -214,7 +223,10 @@ async function requestMenu(
     if (state.error && !state.blocks.some((b) => b && (b.json || b.text))) {
       // Overloaded mid-stream before anything arrived: retryable like a 529.
       console.warn(`  ⏳ ${label}: stream error ${state.error.type}, retry ${attempt}/${MAX_ATTEMPTS} — ${state.error.message.slice(0, 200)}`);
-      if (attempt === MAX_ATTEMPTS) return NO_REPLY;
+      if (attempt === MAX_ATTEMPTS) {
+        onError?.(`Claude stream error ${state.error.type}: ${state.error.message}`.slice(0, 300));
+        return NO_REPLY;
+      }
       await delay(attempt * 3000);
       continue;
     }
@@ -227,6 +239,7 @@ async function requestMenu(
     }
     if (!sections) {
       console.warn(`  ⚠️ ${label}: no menu in reply (stop_reason=${state.stopReason})`);
+      if (state.stopReason !== "tool_use") onError?.(`no menu in reply (stop_reason=${state.stopReason})`);
     }
     return { sections, truncated };
   }
@@ -310,6 +323,7 @@ export async function extractMenuFromText(
   restaurantName: string,
   sourceUrl: string,
   deadline?: number,
+  onError?: (detail: string) => void,
 ): Promise<MenuExtraction | null> {
   const chunks = chunkMenuText(content);
   let combined: MenuExtraction | null = null;
@@ -339,6 +353,7 @@ ${chunk}
       ],
       `text${part}`,
       deadline,
+      onError,
     );
 
     if (!sections || sections.length === 0) continue;
@@ -365,6 +380,7 @@ export async function extractMenuFromPdf(
   restaurantName: string,
   sourceUrl: string,
   deadline?: number,
+  onError?: (detail: string) => void,
 ): Promise<MenuExtraction | null> {
   const { sections, truncated } = await requestMenu(
     ctx,
@@ -382,6 +398,7 @@ ${MENU_EXTRACTION_RULES}`,
     ],
     "pdf",
     deadline,
+    onError,
   );
 
   if (!sections || sections.length === 0) return null;
@@ -411,6 +428,7 @@ export async function extractMenuFromImages(
   restaurantName: string,
   sourceUrl: string,
   deadline?: number,
+  onError?: (detail: string) => void,
 ): Promise<MenuExtraction | null> {
   if (images.length === 0) return null;
   const used = images.slice(0, 8);
@@ -429,7 +447,7 @@ ${MENU_EXTRACTION_RULES}
 If an image is a photo of food, a logo, or anything other than a menu, ignore it entirely.`,
   });
 
-  const { sections, truncated } = await requestMenu(ctx, content, `images(${used.length})`, deadline);
+  const { sections, truncated } = await requestMenu(ctx, content, `images(${used.length})`, deadline, onError);
   if (!sections || sections.length === 0) return null;
 
   return {

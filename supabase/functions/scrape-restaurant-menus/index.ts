@@ -392,6 +392,18 @@ function hasMenuHeading(html: string): boolean {
   return /<h[1-3]\b[^>]*>[^<]{0,60}\bmenus?\b/i.test(html);
 }
 
+/**
+ * The attempt for an extractor that returned nothing. A Claude failure (an API
+ * 4xx/5xx, a stream error, no time left) is an `error` carrying the reason; only
+ * a reply that genuinely held no menu is `empty`. Before this, both read
+ * "empty", so a rejected request looked exactly like a site with no menu.
+ */
+function noExtraction(url: string, method: string, llmError: string | undefined): AttemptRecord {
+  return llmError
+    ? { url, method, outcome: "error", items: 0, score: 0, detail: llmError }
+    : { url, method, outcome: "empty", items: 0, score: 0 };
+}
+
 /** Normalize, score and file a result. */
 function record(ctx: RunContext, raw: MenuExtraction, method: string): ScoredResult | null {
   const extraction = normalizeExtraction(raw);
@@ -443,9 +455,10 @@ async function tryPdf(ctx: RunContext, url: string): Promise<void> {
     return;
   }
   ctx.llmLeft--;
-  const extraction = await extractMenuFromPdf(llmContext, base64, ctx.restaurant.name, url, deadlineOf(ctx));
+  let llmError: string | undefined;
+  const extraction = await extractMenuFromPdf(llmContext, base64, ctx.restaurant.name, url, deadlineOf(ctx), (d) => (llmError = d));
   if (extraction) record(ctx, extraction, "pdf_vision");
-  else ctx.attempts.push({ url, method: "pdf_vision", outcome: "empty", items: 0, score: 0 });
+  else ctx.attempts.push(noExtraction(url, "pdf_vision", llmError));
 }
 
 /**
@@ -489,9 +502,10 @@ async function tryImages(ctx: RunContext, candidates: MenuCandidate[], sourceUrl
     return;
   }
   ctx.llmLeft--;
-  const extraction = await extractMenuFromImages(llmContext, images, ctx.restaurant.name, sourceUrl, deadlineOf(ctx));
+  let llmError: string | undefined;
+  const extraction = await extractMenuFromImages(llmContext, images, ctx.restaurant.name, sourceUrl, deadlineOf(ctx), (d) => (llmError = d));
   if (extraction) record(ctx, extraction, "image_vision");
-  else ctx.attempts.push({ url: sourceUrl, method: "image_vision", outcome: "empty", items: 0, score: 0 });
+  else ctx.attempts.push(noExtraction(sourceUrl, "image_vision", llmError));
 }
 
 /** Minimum menu signal density before a page is worth an LLM call. */
@@ -514,9 +528,10 @@ async function tryPageText(ctx: RunContext, page: PageContent): Promise<void> {
   }
 
   ctx.llmLeft--;
-  const extraction = await extractMenuFromText(llmContext, page.text, ctx.restaurant.name, page.url, deadlineOf(ctx));
+  let llmError: string | undefined;
+  const extraction = await extractMenuFromText(llmContext, page.text, ctx.restaurant.name, page.url, deadlineOf(ctx), (d) => (llmError = d));
   if (extraction) record(ctx, extraction, "html_text");
-  else ctx.attempts.push({ url: page.url, method: "html_text", outcome: "empty", items: 0, score: 0 });
+  else ctx.attempts.push(noExtraction(page.url, "html_text", llmError));
 }
 
 // ─── Orchestration ──────────────────────────────────────────────────────────
