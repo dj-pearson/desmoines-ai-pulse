@@ -15,8 +15,8 @@
 # (+1) on every push to ios/ on the main branch. For MINOR or MAJOR
 # bumps, update ios/project.yml manually before merging.
 #
-# On pull requests, this workflow validates the build WITHOUT bumping
-# the version (read-only).
+# Runs only on pushes to main that touch ios/ (or this file), plus
+# manual dispatch. Pull requests do not run it: macOS minutes bill 10x.
 #
 # ================================================================
 
@@ -31,16 +31,6 @@ name: iOS CI
 on:
   push:
     branches: [main]
-    paths:
-      - 'ios/**'
-      - '.github/workflows/ios-ci.yml'
-      - '!ios/README.md'
-      - '!ios/fastlane/metadata/**'
-  # develop and release/** too: feature work lands on develop first, so a
-  # Swift change was first compiled after release -> main. The version-bump
-  # job is disabled (if: false), so PR runs cannot bump anything.
-  pull_request:
-    branches: [main, develop, "release/**"]
     paths:
       - 'ios/**'
       - '.github/workflows/ios-ci.yml'
