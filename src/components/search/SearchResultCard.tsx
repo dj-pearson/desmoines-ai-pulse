@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { BedDouble, Utensils } from "lucide-react";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
 import type { EventPairing } from "@/hooks/useSearchPairings";
 import type { SearchRow } from "@/hooks/useSearchResults";
 import { hotelRateLabel } from "@/lib/hotelBooking";
@@ -93,6 +94,7 @@ export function SearchResultCard({ item, type, pairing, onOpen }: SearchResultCa
             containerClassName="h-full w-full"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
+          <PlacesPhotoCredit imageUrl={item.image_url} attribution={item.places_photo_attribution} />
         </div>
       )}
       <div className="flex flex-1 flex-col gap-1.5 p-4">

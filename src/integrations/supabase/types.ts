@@ -5584,6 +5584,7 @@ export type Database = {
           google_place_id: string | null
           hotel_type: string | null
           id: string
+          image_checked_at: string | null
           image_url: string | null
           is_active: boolean | null
           is_featured: boolean | null
@@ -5591,6 +5592,11 @@ export type Database = {
           longitude: number | null
           name: string
           phone: string | null
+          places_photo_attribution: string | null
+          places_photo_cached_at: string | null
+          places_photo_cached_path: string | null
+          places_photo_name: string | null
+          places_photo_seen_at: string | null
           price_range: string | null
           seo_description: string | null
           seo_h1: string | null
@@ -5629,6 +5635,7 @@ export type Database = {
           google_place_id?: string | null
           hotel_type?: string | null
           id?: string
+          image_checked_at?: string | null
           image_url?: string | null
           is_active?: boolean | null
           is_featured?: boolean | null
@@ -5636,6 +5643,11 @@ export type Database = {
           longitude?: number | null
           name: string
           phone?: string | null
+          places_photo_attribution?: string | null
+          places_photo_cached_at?: string | null
+          places_photo_cached_path?: string | null
+          places_photo_name?: string | null
+          places_photo_seen_at?: string | null
           price_range?: string | null
           seo_description?: string | null
           seo_h1?: string | null
@@ -5674,6 +5686,7 @@ export type Database = {
           google_place_id?: string | null
           hotel_type?: string | null
           id?: string
+          image_checked_at?: string | null
           image_url?: string | null
           is_active?: boolean | null
           is_featured?: boolean | null
@@ -5681,6 +5694,11 @@ export type Database = {
           longitude?: number | null
           name?: string
           phone?: string | null
+          places_photo_attribution?: string | null
+          places_photo_cached_at?: string | null
+          places_photo_cached_path?: string | null
+          places_photo_name?: string | null
+          places_photo_seen_at?: string | null
           price_range?: string | null
           seo_description?: string | null
           seo_h1?: string | null

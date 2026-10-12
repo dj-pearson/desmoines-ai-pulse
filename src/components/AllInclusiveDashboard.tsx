@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Calendar, ExternalLink, Hotel, Palette, TreePine, Utensils } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import OptimizedImage from "@/components/OptimizedImage";
+import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
@@ -144,6 +145,8 @@ interface CardModel {
   where?: string;
   description?: string;
   imageUrl?: string;
+  /** Google Places photo author for a hotel whose image is a Places copy. */
+  imageAttribution?: string;
   externalUrl?: string;
   /** Set for events so the title can open the quick view. */
   event?: Event;
@@ -296,6 +299,7 @@ export default function AllInclusiveDashboard({ onViewEventDetails }: AllInclusi
       where: joinParts(row.area ?? row.city, row.price_range),
       description: str(row.short_description) ?? str(row.description),
       imageUrl: str(row.image_url),
+      imageAttribution: str(row.places_photo_attribution),
       // HOTEL_LIST_COLUMNS carries no sponsorship columns.
       sponsored: false,
     })),
@@ -597,17 +601,20 @@ function DashboardCard({ card, titleLevel, onOpenEvent, onTrack }: DashboardCard
       ref={articleRef}
       className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-foreground/30 focus-within:border-foreground/30">
       {showImage ? (
-        <OptimizedImage
-          src={card.imageUrl}
-          alt=""
-          width={640}
-          height={360}
-          aspectRatio="16/9"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          containerClassName="w-full bg-muted"
-          className="object-cover"
-          onError={() => setImageFailed(true)}
-        />
+        <div className="relative">
+          <OptimizedImage
+            src={card.imageUrl}
+            alt=""
+            width={640}
+            height={360}
+            aspectRatio="16/9"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            containerClassName="w-full bg-muted"
+            className="object-cover"
+            onError={() => setImageFailed(true)}
+          />
+          <PlacesPhotoCredit imageUrl={card.imageUrl} attribution={card.imageAttribution} />
+        </div>
       ) : (
         <div className="flex aspect-video w-full items-center justify-center bg-muted" aria-hidden="true">
           <Icon className="h-10 w-10 text-muted-foreground/60" />

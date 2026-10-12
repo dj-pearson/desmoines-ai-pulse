@@ -101,6 +101,87 @@ export function isPlacesCopyExpired(
   return nowMs - at > maxAgeDays * 24 * 60 * 60 * 1000;
 }
 
+/** One Places photo as Text Search / Place Details return it. */
+export interface PlacesPhotoLike {
+  name?: string;
+  authorAttributions?: Array<{ displayName?: string; uri?: string }>;
+}
+
+export interface PlacesPhotoProvenance {
+  places_photo_name: string;
+  places_photo_attribution: string;
+  places_photo_seen_at: string;
+}
+
+/**
+ * The three provenance columns for the first photo in a Places response, or
+ * null when there is no usable photo. The same rule bulk-update-restaurants
+ * applies inline: the RESOURCE NAME, the author names joined, and the generic
+ * Google line only when Places named no author.
+ *
+ * `authorAttributions` is only present when the field mask asks for it; a
+ * caller that forgets gets the generic line, never an invented author.
+ */
+export function photoProvenance(
+  photos: PlacesPhotoLike[] | null | undefined,
+  seenAtIso: string,
+): PlacesPhotoProvenance | null {
+  const photo = photos?.[0];
+  if (!photo?.name || isPlacesMediaUrl(photo.name)) return null;
+  const authors = (photo.authorAttributions ?? [])
+    .map((a) => a?.displayName?.trim())
+    .filter((n): n is string => !!n);
+  return {
+    places_photo_name: photo.name,
+    places_photo_attribution: authors.join(", ") || GOOGLE_ATTRIBUTION_TEXT,
+    places_photo_seen_at: seenAtIso,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Storage copies of the bytes (hotels, 20261020000002).
+//
+// fetchAndStoreImage still refuses Places media outright: its copies are
+// permanent and deduplicated through media_assets. The hotel path keeps a copy
+// it can find and delete, under a file name that says what it is, and the
+// backfill job replaces or removes it on these two clocks.
+// ---------------------------------------------------------------------------
+
+/** Replace a copy once it is this old. Leaves 9 days of 6-hourly retries. */
+export const PLACES_COPY_REFRESH_AFTER_DAYS = 20;
+
+/**
+ * Delete a copy that is still this old after the refresh attempts. One day
+ * under the 30-day limit, so a missed run or two cannot push it over.
+ */
+export const PLACES_COPY_DELETE_AFTER_DAYS = PLACES_CACHE_MAX_AGE_DAYS - 1;
+
+/**
+ * Seconds a browser or the /media edge cache may hold a copy. A long max-age
+ * would let a cached copy outlive the deletion, so this is a day, not the year
+ * other media gets.
+ */
+export const PLACES_COPY_MAX_AGE_SECONDS = 24 * 60 * 60;
+
+/**
+ * The file-name marker for a Places copy. src/lib/placesPhotoCredit.ts keys
+ * the Google credit off the same marker (pinned by places-photo-terms.test.ts),
+ * so a card can tell a Places photo from any other image without a column.
+ */
+export const PLACES_COPY_MARKER = "places-photo-";
+
+/** `<type>s/<id>/places-photo-<ms>.<ext>` - a new key per copy, so no cache serves old bytes under it. */
+export function placesCopyPath(mediaContentType: string, contentId: string, fetchedAtMs: number, ext: string): string {
+  return `${mediaContentType}s/${contentId}/${PLACES_COPY_MARKER}${Math.floor(fetchedAtMs)}.${ext}`;
+}
+
+/** Does this Storage key, or a URL ending in one, name a Places copy? */
+export function isPlacesCopyPath(pathOrUrl: unknown): boolean {
+  if (typeof pathOrUrl !== "string" || !pathOrUrl) return false;
+  const path = pathOrUrl.split("?")[0];
+  return new RegExp(`/${PLACES_COPY_MARKER}\\d+\\.[A-Za-z0-9]{2,5}$`).test(path);
+}
+
 /**
  * The photo resource name inside a media URL, or null. Lets a repair pass turn
  * the broken image_url values already in the table back into something a

@@ -22,6 +22,8 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
+import { isPlacesPhotoCopy } from "@/lib/placesPhotoCredit";
 import { STATUS_BADGE } from "@/lib/categoryStyles";
 import { AFFILIATE_DISCLOSURE, hotelClassStars, hotelRateLabel, resolveBooking, safeWebUrl } from "@/lib/hotelBooking";
 import { telHref } from "@/lib/reservations";
@@ -149,10 +151,15 @@ export default function HotelDetails() {
   const keyFacts = (hotel.geo_key_facts ?? []).map((f) => f.trim()).filter(Boolean);
   const geoSummary = hotel.geo_summary?.trim() || null;
   const faqs = readGeoFaq(hotel.geo_faq);
-  const imageUrl = hotel.image_url
-    ? hotel.image_url.startsWith("/")
-      ? getCanonicalUrl(hotel.image_url)
-      : hotel.image_url
+  // A Google Places photo is shown on the page with its credit, but not handed
+  // to share previews or structured data: those copies are cached by other
+  // people for as long as they like, carry no credit, and outlive the 30 days
+  // the Maps Platform terms allow (backfill-images deletes ours before then).
+  const shareImage = isPlacesPhotoCopy(hotel.image_url) ? null : hotel.image_url;
+  const imageUrl = shareImage
+    ? shareImage.startsWith("/")
+      ? getCanonicalUrl(shareImage)
+      : shareImage
     : undefined;
 
   return (
@@ -167,14 +174,14 @@ export default function HotelDetails() {
         {/* WEB-SEO-034: was a RELATIVE path when a hotel has no image. Every
             social crawler resolves og:image against nothing and shows no
             preview image; the spec requires an absolute URL. */}
-        <meta property="og:image" content={getCanonicalUrl(hotel.image_url || BRAND.ogImage)} />
+        <meta property="og:image" content={getCanonicalUrl(shareImage || BRAND.ogImage)} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content={`${hotel.name} - Hotel in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:url" content={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={seoTitle} />
-        <meta name="twitter:image" content={getCanonicalUrl(hotel.image_url || BRAND.ogImage)} />
+        <meta name="twitter:image" content={getCanonicalUrl(shareImage || BRAND.ogImage)} />
       </Helmet>
 
       <HotelSchema
@@ -261,6 +268,12 @@ export default function HotelDetails() {
                 <SpriteIcon name="building-2" className="h-20 w-20 text-muted-foreground" />
               </div>
             )}
+            {/* Google requires its credit wherever a Places photo is shown. */}
+            <PlacesPhotoCredit
+              imageUrl={hotel.image_url}
+              attribution={hotel.places_photo_attribution}
+              className="text-xs"
+            />
             {hotel.is_featured && (
               <Badge className={`absolute top-4 left-4 ${STATUS_BADGE.featured} border-0`}>
                 Featured Hotel

@@ -6,6 +6,7 @@ import {
   extractImageFromHtml,
   CONTENT_TYPE_MAP,
 } from "../_shared/imageStorage.ts";
+import { backfillHotels, type HotelsOutcome } from "./hotels.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { runAgent } from "../_shared/agentRun.ts";
@@ -26,9 +27,16 @@ const corsHeaders = {
 
 type Category = "events" | "restaurants" | "attractions" | "playgrounds";
 
+/**
+ * "hotels" is not a Category: it does not run the scrape/venue/default chain
+ * below. Its only source is the hotel's own Google Places photo, copied into
+ * Storage and kept inside the 30-day rule (see backfillHotels).
+ */
+const CATEGORIES = new Set(["events", "restaurants", "attractions", "playgrounds", "hotels"]);
+
 interface BackfillRequest {
   /** Which table to backfill. Defaults to "events". */
-  category?: Category;
+  category?: Category | "hotels";
   /** Records to process in this single invocation. Keep low (5–10) to avoid timeouts. Default: 5 */
   batchSize?: number;
   /** Row offset for pagination — pass back nextOffset from the previous response. Default: 0 */
@@ -179,10 +187,49 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body: BackfillRequest = await req.json().catch(() => ({}));
-    const category: Category = body.category ?? "events";
+    const requested = body.category ?? "events";
+    // An unknown category used to reach supabase.from(undefined) and fail as a
+    // 500 with an opaque message. Say what is accepted instead.
+    if (!CATEGORIES.has(requested)) {
+      return new Response(
+        JSON.stringify({ error: `Unknown category "${requested}". Use one of: ${[...CATEGORIES].join(", ")}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     const batchSize = Math.min(body.batchSize ?? 5, 25); // hard cap at 25
     const offset = body.offset ?? 0;
     const dryRun = body.dryRun ?? false;
+
+    if (requested === "hotels") {
+      let outcome: HotelsOutcome | null = null;
+      const run = await runAgent("backfill-images", async (ctx) => {
+        if (dryRun) ctx.skip("dry run - preview only, no writes");
+        const done = await backfillHotels(supabase, { batchSize, dryRun });
+        outcome = done;
+        const b = done.body as { updated?: number; failed?: number; expired?: number; processed?: number };
+        ctx.processed(b.updated ?? 0);
+        ctx.failed(b.failed ?? 0);
+        ctx.meta({ category: "hotels", batchSize, expired: b.expired ?? 0 });
+        ctx.summary(
+          `[hotels] updated ${b.updated ?? 0}, expired ${b.expired ?? 0}, failed ${b.failed ?? 0} of ${b.processed ?? 0}`,
+        );
+        return done.body;
+      }, { client: supabase });
+      // fn never ran (pause gate) or threw: say which, rather than a bare 500.
+      const final: HotelsOutcome = outcome ?? {
+        status: run.status === "skipped" ? 503 : 500,
+        body: {
+          error: run.status === "skipped"
+            ? "backfill-images is paused by the agent pause gate; nothing was done"
+            : `hotels backfill failed: ${run.error ?? "unknown error"}`,
+        },
+      };
+      return new Response(JSON.stringify(final.body), {
+        status: final.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const category = requested as Category;
 
     const table = TABLE[category];
     const namecol = NAME_COL[category];

@@ -4,7 +4,14 @@
  */
 
 import { validateURLForSSRF } from "./validation.ts";
-import { isPlacesMediaUrl, redactPlacesKey, PLACES_CACHE_MAX_AGE_DAYS } from "./placesPhoto.ts";
+import {
+  isPlacesMediaUrl,
+  redactPlacesKey,
+  PLACES_CACHE_MAX_AGE_DAYS,
+  PLACES_COPY_MAX_AGE_SECONDS,
+  placesCopyPath,
+  placesMediaUrl,
+} from "./placesPhoto.ts";
 
 export const IMAGE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 
@@ -42,6 +49,7 @@ export const CONTENT_TYPE_MAP: Record<string, string> = {
   restaurant_openings: "restaurant",
   attractions: "attraction",
   playgrounds: "playground",
+  hotels: "hotel",
 };
 
 /**
@@ -504,6 +512,10 @@ export interface FetchAndStoreOptions {
    * permanent copies accumulating while the refresh path is built, and the
    * flag is what will let it be turned back on in one place rather than by
    * deleting this guard.
+   *
+   * The hotel photos do not come through here: storePlacesPhotoCopy below is
+   * the refresh path, and it writes no media_assets row, so a Places copy can
+   * never become the dedup target of a permanent image.
    */
   allowPlacesRefresh?: boolean;
 }
@@ -721,4 +733,101 @@ export async function fetchAndStoreImage(
     console.error(`❌ fetchAndStoreImage error for ${sourceImageUrl}:`, error.message);
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Places photo copies (hotels, migration 20261020000002)
+// ---------------------------------------------------------------------------
+
+export type PlacesCopyResult =
+  | { ok: true; path: string; publicUrl: string; fetchedAt: string }
+  | { ok: false; reason: string };
+
+/**
+ * Copy a Places photo into Storage as a copy that is MEANT to be replaced.
+ *
+ * Differs from fetchAndStoreImage in the three ways the 30-day rule needs:
+ *   - a new key per copy (`places-photo-<ms>.<ext>`), so no cache can serve
+ *     old bytes under a reused path;
+ *   - Cache-Control of a day rather than Storage's default, so a browser or
+ *     the /media edge cache cannot hold the bytes past the deletion;
+ *   - no media_assets row and no optimisation queue entry. media_assets is the
+ *     dedup index: a row there would let a later, byte-identical image for
+ *     some other record share this file, and the expiry would then delete it
+ *     out from under that record. Optimised variants would be copies of Place
+ *     content that nothing tracks.
+ *
+ * The caller records `path` and `fetchedAt` on the row and deletes the old
+ * path itself once the row points at the new one.
+ *
+ * The API key goes into the fetch URL only. Every log line uses
+ * redactPlacesKey, and nothing returned here contains it.
+ */
+export async function storePlacesPhotoCopy(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  args: { photoName: string; apiKey: string; category: string; contentId: string; nowMs?: number },
+): Promise<PlacesCopyResult> {
+  const { photoName, apiKey, category, contentId } = args;
+  const nowMs = args.nowMs ?? Date.now();
+  if (!photoName || !/^places\/[^/]+\/photos\/[^/]+$/.test(photoName)) {
+    return { ok: false, reason: "not a Places photo resource name" };
+  }
+  const mediaUrl = placesMediaUrl(photoName, { apiKey, maxWidthPx: 1600, maxHeightPx: 1200 });
+  try {
+    const response = await fetch(mediaUrl, {
+      // Listed rather than a wildcard: these are the types ALLOWED_IMAGE_MIME
+      // keeps, and a slash-star inside a string reads as a comment opener to
+      // the codeOnly() stripper the wiring tests use.
+      headers: { Accept: "image/jpeg, image/png, image/webp" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      return { ok: false, reason: `Places media ${response.status} for ${redactPlacesKey(mediaUrl)}` };
+    }
+    const contentType = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() || "";
+    if (!ALLOWED_IMAGE_MIME.has(contentType)) {
+      return { ok: false, reason: `unsupported mime type "${contentType}"` };
+    }
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > IMAGE_MAX_BYTES) {
+      return { ok: false, reason: `oversized image (${buffer.byteLength} bytes)` };
+    }
+    const dims = imageDimensions(new Uint8Array(buffer));
+    if (dims && (dims.width < MIN_IMAGE_DIMENSION || dims.height < MIN_IMAGE_DIMENSION)) {
+      return { ok: false, reason: `image too small (${dims.width}x${dims.height})` };
+    }
+
+    const mediaContentType = CONTENT_TYPE_MAP[category] || category;
+    const path = placesCopyPath(mediaContentType, contentId, nowMs, EXT_MAP[contentType] || "jpg");
+    const { error: uploadError } = await supabase.storage.from("media").upload(path, buffer, {
+      contentType,
+      upsert: false,
+      cacheControl: String(PLACES_COPY_MAX_AGE_SECONDS),
+    });
+    if (uploadError) {
+      return { ok: false, reason: `storage upload failed: ${uploadError.message}` };
+    }
+    return { ok: true, path, publicUrl: cdnUrlFor(path), fetchedAt: new Date(nowMs).toISOString() };
+  } catch (error) {
+    return { ok: false, reason: `Places photo fetch failed: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * Delete a Places copy from Storage. Refuses any key that is not a Places
+ * copy, so a wrong value in places_photo_cached_path cannot delete a curated
+ * image.
+ */
+export async function removePlacesPhotoCopy(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  path: string | null | undefined,
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!path) return { ok: true };
+  if (!/^[a-z_]+s\/[0-9a-f-]{36}\/places-photo-\d+\.[a-z0-9]{2,5}$/i.test(path)) {
+    return { ok: false, reason: `refusing to delete a key that is not a Places copy: ${path}` };
+  }
+  const { error } = await supabase.storage.from("media").remove([path]);
+  return error ? { ok: false, reason: error.message } : { ok: true };
 }

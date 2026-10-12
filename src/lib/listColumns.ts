@@ -80,6 +80,15 @@ export const HOTEL_LIST_COLUMNS =
   "address, affiliate_provider, affiliate_url, affiliate_url_updated_at, amenities, area, avg_nightly_rate, brand_parent, chain_name, check_in_time, check_out_time, city, created_at, description, email, google_place_id, hotel_type, id, image_url, is_active, is_featured, latitude, longitude, name, phone, price_range, short_description, slug, sort_order, star_rating, state, total_rooms, updated_at, website, zip";
 
 /**
+ * The Google Places photo credit for a hotel card (migration 20261020000002).
+ * Kept OUT of HOTEL_LIST_COLUMNS on purpose: FavoritesView selects that
+ * constant with no fallback, and a column the database does not have yet
+ * 42703s the whole select. useHotels appends this and retries without it on
+ * 42703. Fold it into HOTEL_LIST_COLUMNS once the migration is live.
+ */
+export const HOTEL_PLACES_PHOTO_COLUMNS = "places_photo_attribution";
+
+/**
  * Playgrounds (WEB-PERF-035 AC2). useAdvancedSearch carried the comment "No
  * playground LIST_COLUMNS constant exists" and fell back to select('*').
  *

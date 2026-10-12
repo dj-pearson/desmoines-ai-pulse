@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { Database } from "@/integrations/supabase/types";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
 import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { formatMiles } from "@/lib/venuePages";
 import { hotelsNearPath } from "@/lib/hotelsNear";
@@ -52,9 +53,12 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
       <CardContent className="p-4">
         <div className="flex gap-3">
           {/* Image or placeholder */}
-          <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+          <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
             {hotel.image_url ? (
-              <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+              <>
+                <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                <PlacesPhotoCredit imageUrl={hotel.image_url} attribution={hotel.places_photo_attribution} className="text-[8px]" />
+              </>
             ) : (
               <div className="w-full h-full bg-muted flex items-center justify-center" role="img" aria-label={`No image available for ${hotel.name}`}>
                 <SpriteIcon name="building-2" className="h-6 w-6 text-muted-foreground" />

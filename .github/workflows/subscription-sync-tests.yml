@@ -295,6 +295,11 @@ jobs:
       # 30-day rule (an undated copy reads as EXPIRED), and that the guard in
       # fetchAndStoreImage is wired and nothing opts out of it.
       - run: deno test --allow-read supabase/functions/_tests/places-photo-terms.test.ts
+      # Hotels (20261020000002). enrich-hotels-places stores a place id only
+      # when the street address and the name agree; the restaurant rule (first
+      # result, first word) would put most of a chain-heavy hotel list on the
+      # wrong building, and the id is stored indefinitely.
+      - run: deno test --allow-read supabase/functions/_tests/hotel-place-match.test.ts
       # WEB-BE-050. Only firecrawl-scraper set coordinates on an event, from a
       # known-venue match it held privately; ai-crawler set none at all, so
       # whether an event reached the map depended on which scraper found it -

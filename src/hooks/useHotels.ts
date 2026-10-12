@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { countOption, type CountMode } from '@/lib/listCount';
 import { queryKeys } from "@/lib/queryKeys";
-import { HOTEL_LIST_COLUMNS } from "@/lib/listColumns";
+import { HOTEL_LIST_COLUMNS, HOTEL_PLACES_PHOTO_COLUMNS } from "@/lib/listColumns";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
@@ -40,6 +40,11 @@ interface HotelFilters {
 }
 
 
+/** 42703 naming a places_photo column: 20261020000002 is not applied here yet. */
+function isMissingPlacesPhotoColumn(error: { code?: string; message?: string } | null): boolean {
+  return error?.code === "42703" && (error.message ?? "").includes("places_photo");
+}
+
 export function useHotels(filters: HotelFilters = {}) {
   const queryClient = useQueryClient();
 
@@ -65,9 +70,10 @@ export function useHotels(filters: HotelFilters = {}) {
       // WEB-PERF-028 AC3. Was select("*"), which pulled four SEO fields, three
       // GEO fields and the gallery array into every card payload for a list
       // that renders none of them.
+      const buildQuery = (columns: string) => {
       let query = supabase
         .from("hotels")
-        .select(HOTEL_LIST_COLUMNS, countOption(filters.countMode));
+        .select(columns, countOption(filters.countMode));
 
       // Default to active only
       if (filters.activeOnly !== false) {
@@ -168,7 +174,17 @@ export function useHotels(filters: HotelFilters = {}) {
         );
       }
 
-      const { data, error, count } = await query;
+      return query;
+      };
+
+      // The Google credit for a Places photo (HOTEL_PLACES_PHOTO_COLUMNS). If
+      // 20261020000002 has not reached this database the whole select 42703s,
+      // so retry once without it: the card then shows the generic Google line,
+      // which it derives from the image's file name, instead of a blank list.
+      let { data, error, count } = await buildQuery(`${HOTEL_LIST_COLUMNS}, ${HOTEL_PLACES_PHOTO_COLUMNS}`);
+      if (isMissingPlacesPhotoColumn(error)) {
+        ({ data, error, count } = await buildQuery(HOTEL_LIST_COLUMNS));
+      }
 
       if (error) {
         throw error;

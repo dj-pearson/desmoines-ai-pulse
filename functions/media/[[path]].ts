@@ -52,6 +52,21 @@ interface Ctx {
 const MAX_AGE = 31_536_000;
 
 /**
+ * A day, for Google Places photo copies (`.../places-photo-<ms>.<ext>`, written
+ * by backfill-images for hotels). Maps Platform terms allow caching Place
+ * content for 30 days and the job deletes each copy before then; a year of
+ * edge and browser cache would keep serving the bytes long after the delete.
+ * Mirrors PLACES_COPY_MAX_AGE_SECONDS in supabase/functions/_shared/placesPhoto.ts.
+ */
+const PLACES_COPY_MAX_AGE = 86_400;
+const PLACES_COPY = /\/places-photo-\d+\.[A-Za-z0-9]{2,5}$/;
+
+/** Cache lifetime, in seconds, for a storage key. */
+export function maxAgeFor(path: string): number {
+  return PLACES_COPY.test(path) ? PLACES_COPY_MAX_AGE : MAX_AGE;
+}
+
+/**
  * Storage keys this route will forward. imageStorage writes
  * `events/<uuid>/hero.jpg`; nothing else should reach here, and a path that
  * does not look like one is a probe rather than a miss.
@@ -208,7 +223,7 @@ export async function onRequest(context: Ctx): Promise<Response> {
   }
 
   const headers = new Headers(upstream.headers);
-  headers.set("Cache-Control", `public, max-age=${MAX_AGE}`);
+  headers.set("Cache-Control", `public, max-age=${maxAgeFor(path)}`);
   headers.set("Access-Control-Allow-Origin", "*");
   headers.delete("set-cookie");
   // Names the hop, so "is this actually being cached" is answerable from curl —
