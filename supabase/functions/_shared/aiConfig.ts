@@ -5,16 +5,20 @@
  * for all edge functions. Update settings in the Admin Dashboard AI Configuration
  * section and all modules will automatically use the new values.
  *
- * Supports two model modes:
- * - default_model: Full-powered model (Claude Sonnet) for complex tasks
- * - lightweight_model: Fast, cheap model (Claude Haiku) for simple queries like NLP search
+ * THE MODEL IS NOT READ FROM HERE. It comes from the DEFAULT_AI_MODEL /
+ * LIGHTWEIGHT_AI_MODEL secrets through ./aiModel.ts. The ai_configuration
+ * default_model and lightweight_model rows are no longer read by any edge
+ * function; this module still reads that table for the endpoint, API version,
+ * token limits and temperatures. Temperatures are dropped by
+ * shapeClaudeRequest() for models that reject them.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { defaultModel, lightweightModel, shapeClaudeRequest } from "./aiModel.ts";
+
+export { defaultModel, lightweightModel, shapeClaudeRequest, toolChoiceFor } from "./aiModel.ts";
 
 interface AIConfig {
-  default_model: string;
-  lightweight_model: string;
   api_endpoint: string;
   max_tokens_standard: number;
   max_tokens_large: number;
@@ -59,7 +63,7 @@ export function getAnthropicApiKey(): string | null {
 /** Discriminated result of {@link extractClaudeText}. */
 export type ClaudeTextResult =
   | { ok: true; text: string }
-  | { ok: false; reason: "empty" | "refused" | "overloaded" | "malformed"; detail: string };
+  | { ok: false; reason: "empty" | "refused" | "overloaded" | "malformed" | "max_tokens"; detail: string };
 
 /**
  * Safely extract the assistant text from a Claude Messages API response
@@ -96,13 +100,17 @@ export function extractClaudeText(aiResult: unknown): ClaudeTextResult {
   }
   // A refusal / non-text stop can still return content without a text block.
   const textBlock = r.content.find((b) => b?.type === "text" && typeof b.text === "string");
+  // Thinking blocks can come first (adaptive thinking is on by default on
+  // current models), so the text block is found by type, never by index.
   if (!textBlock || typeof textBlock.text !== "string" || textBlock.text.length === 0) {
-    const refused = r.stop_reason === "refusal";
-    return {
-      ok: false,
-      reason: refused ? "refused" : "empty",
-      detail: refused ? "model refused to respond" : "no text block in response content",
-    };
+    if (r.stop_reason === "refusal") {
+      return { ok: false, reason: "refused", detail: "model refused to respond" };
+    }
+    if (r.stop_reason === "max_tokens") {
+      // Thinking spends from max_tokens; the cap ran out before any text.
+      return { ok: false, reason: "max_tokens", detail: "max_tokens reached before any text (thinking used the budget)" };
+    }
+    return { ok: false, reason: "empty", detail: "no text block in response content" };
   }
   return { ok: true, text: textBlock.text };
 }
@@ -148,8 +156,6 @@ export async function getAIConfig(
 
     // Cache the config — DB stores all values as strings, so parse numerics
     configCache = {
-      default_model: String(config.default_model || "claude-sonnet-4-5-20250929"),
-      lightweight_model: String(config.lightweight_model || "claude-haiku-4-5-20251001"),
       api_endpoint: String(config.api_endpoint || "https://api.anthropic.com/v1/messages"),
       max_tokens_standard: parseInt(String(config.max_tokens_standard), 10) || 2000,
       max_tokens_large: parseInt(String(config.max_tokens_large), 10) || 8000,
@@ -161,7 +167,6 @@ export async function getAIConfig(
     cacheTimestamp = now;
 
     console.log("AI Config loaded from database:", {
-      model: config.default_model,
       endpoint: config.api_endpoint,
     });
 
@@ -169,11 +174,9 @@ export async function getAIConfig(
   } catch (error) {
     console.error("Failed to fetch AI config, using fallback:", error);
 
-    // Fallback to default values if database fetch fails
-    // Using Claude 4.5 Sonnet as the default model (most capable)
+    // Fallback to default values if database fetch fails. The model is not
+    // part of this: it comes from aiModel.ts either way.
     const fallbackConfig: AIConfig = {
-      default_model: "claude-sonnet-4-5-20250929",
-      lightweight_model: "claude-haiku-4-5-20251001",
       api_endpoint: "https://api.anthropic.com/v1/messages",
       max_tokens_standard: 2000,
       max_tokens_large: 8000,
@@ -188,8 +191,9 @@ export async function getAIConfig(
 }
 
 /**
- * Build Claude API request body for lightweight/fast queries
- * Uses the lightweight model (Haiku) for quick, cheap operations like NLP parsing
+ * Build Claude API request body for lightweight/fast queries.
+ * Uses lightweightModel() (LIGHTWEIGHT_AI_MODEL, else DEFAULT_AI_MODEL), shaped
+ * for that model by shapeClaudeRequest().
  */
 export async function buildLightweightClaudeRequest(
   messages: any[],
@@ -205,14 +209,15 @@ export async function buildLightweightClaudeRequest(
   const maxTokens = options.customMaxTokens ?? config.max_tokens_lightweight;
   const temperature = options.customTemperature ?? config.temperature_precise;
 
-  console.log("Building LIGHTWEIGHT request with model:", config.lightweight_model);
+  const model = lightweightModel();
+  console.log("Building LIGHTWEIGHT request with model:", model);
 
-  return {
-    model: config.lightweight_model,
+  return shapeClaudeRequest({
+    model,
     max_tokens: maxTokens,
     temperature,
     messages,
-  };
+  }, { lightweight: true });
 }
 
 /**
@@ -233,7 +238,8 @@ export async function getClaudeHeaders(
 }
 
 /**
- * Build Claude API request body with centralized configuration
+ * Build Claude API request body with centralized configuration.
+ * Uses defaultModel() (DEFAULT_AI_MODEL), shaped by shapeClaudeRequest().
  */
 export async function buildClaudeRequest(
   messages: any[],
@@ -260,10 +266,10 @@ export async function buildClaudeRequest(
       ? config.temperature_creative
       : config.temperature_precise);
 
-  return {
-    model: config.default_model,
+  return shapeClaudeRequest({
+    model: defaultModel(),
     max_tokens: maxTokens,
     temperature,
     messages,
-  };
+  });
 }

@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
+import { getAnthropicApiKey, extractClaudeText, defaultModel, shapeClaudeRequest } from '../_shared/aiConfig.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 
 const corsHeaders = {
@@ -120,14 +120,16 @@ Example format:
 }
 `;
 
-  const requestBody = {
-    model: 'claude-sonnet-4-20250514',
+  // The model comes from DEFAULT_AI_MODEL (aiModel.ts). This was the literal
+  // 'claude-sonnet-4-20250514', which is retired.
+  const requestBody = shapeClaudeRequest({
+    model: defaultModel(),
     max_tokens: 1000,
     messages: [{
       role: 'user',
       content: prompt
     }]
-  };
+  });
 
   console.log('Making Claude API request with model:', requestBody.model);
 

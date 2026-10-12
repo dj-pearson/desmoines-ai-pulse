@@ -28,7 +28,7 @@ import {
   SPORTS_CONTENT_BUDGET,
 } from "../_shared/htmlContentWindow.ts";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
@@ -986,12 +986,14 @@ Return empty array [] if no attractions found.`,
       // failure branch below never parses a body and has no usage to read.
       await recordAnthropicUsage(createClient(supabaseUrl, supabaseKey), {
         source: "ai-crawler",
-        model: String(requestBody.model ?? config.default_model),
+        model: String(requestBody.model),
         usage: claudeData?.usage ?? {},
         extra: { category, url },
       });
 
-      const responseText = claudeData.content?.[0]?.text?.trim();
+      // content[0] can be a thinking block; read the first text block.
+      const extracted = extractClaudeText(claudeData);
+      const responseText = extracted.ok ? extracted.text.trim() : undefined;
 
       console.log(`🔍 Claude API response status: ${claudeResponse.status}`);
       console.log(

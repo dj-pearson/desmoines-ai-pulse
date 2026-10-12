@@ -30,7 +30,7 @@ import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey, buildLightweightClaudeRequest } from '../_shared/aiConfig.ts';
+import { getAnthropicApiKey, buildLightweightClaudeRequest, extractClaudeText } from '../_shared/aiConfig.ts';
 
 type SupabaseClient = ReturnType<typeof createClient>;
 type ContentType = 'review' | 'contact';
@@ -101,7 +101,9 @@ async function scoreText(text: string, kind: ContentType): Promise<Scores> {
     }, 60_000);
     if (!res.ok) return { toxicity: 0, spam: 0, off_topic: 0, reasons: [], ok: false };
     const data = await res.json();
-    const raw = data?.content?.[0]?.text ?? '';
+    // content[0] can be a thinking block; read the first text block.
+    const ex = extractClaudeText(data);
+    const raw = ex.ok ? ex.text : '';
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return { toxicity: 0, spam: 0, off_topic: 0, reasons: [], ok: false };
     const parsed = JSON.parse(match[0]);

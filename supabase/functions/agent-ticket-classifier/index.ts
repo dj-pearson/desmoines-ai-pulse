@@ -19,7 +19,8 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
-import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey, lightweightModel, shapeClaudeRequest } from "../_shared/aiConfig.ts";
+import { anthropicCostUsd } from "../_shared/providerUsage.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { priorityForTier } from "../_shared/supportPriority.ts";
 import { resolveEntitledTiers } from "../_shared/entitlements.ts";
@@ -69,7 +70,7 @@ async function classify(supabaseUrl: string, supabaseKey: string, subject: strin
     const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
-      body: JSON.stringify({ model: config.lightweight_model, max_tokens: 200, temperature: 0, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify(shapeClaudeRequest({ model: lightweightModel(), max_tokens: 200, temperature: 0, messages: [{ role: "user", content: prompt }] }, { lightweight: true })),
       signal: AbortSignal.timeout(20_000),
     }, 60_000);
     if (!res.ok) return null;
@@ -77,7 +78,8 @@ async function classify(supabaseUrl: string, supabaseKey: string, subject: strin
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");
     const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const usage = data.usage ?? {};
-    const costUsd = (usage.input_tokens ?? 0) * (0.8 / 1_000_000) + (usage.output_tokens ?? 0) * (4 / 1_000_000);
+    // Priced for the model actually called, which the model secrets decide.
+    const costUsd = anthropicCostUsd(String(data.model ?? lightweightModel()), usage);
     const c: Classification = {
       sentiment: ["positive", "neutral", "negative"].includes(parsed.sentiment) ? parsed.sentiment : "neutral",
       urgency: ["low", "medium", "high", "critical"].includes(parsed.urgency) ? parsed.urgency : "low",

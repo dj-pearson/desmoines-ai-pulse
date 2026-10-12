@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText, defaultModel, shapeClaudeRequest } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
@@ -204,14 +204,14 @@ Generate diverse, engaging topics that would genuinely help Des Moines residents
     const response = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: config.default_model,
+      body: JSON.stringify(shapeClaudeRequest({
+        model: defaultModel(),
         max_tokens: 4000,
         messages: [{
           role: 'user',
           content: suggestionPrompt
         }]
-      })
+      }))
     }, 60_000);
 
     console.log('Claude API response status:', response.status);

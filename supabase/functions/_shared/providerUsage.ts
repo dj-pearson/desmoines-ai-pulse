@@ -54,10 +54,16 @@ export interface AnthropicUsage {
 export interface ModelPrice {
   inPerM: number;
   outPerM: number;
+  /**
+   * Long-prompt tier: when the prompt (input + cache read + cache write
+   * tokens) exceeds `aboveTokens`, the whole request bills at these rates.
+   */
+  longPrompt?: { aboveTokens: number; inPerM: number; outPerM: number };
 }
 
 /**
- * Published list prices, USD per 1M tokens, checked 2026-08-27.
+ * Published list prices, USD per 1M tokens, checked 2026-08-27; the 5.5 rows
+ * added 2026-10-12 (Haiku 5.5 is tiered on prompt length).
  *
  * Matched longest-prefix-first against the model id, so a dated id
  * (claude-haiku-4-5-20251001) hits the same row as the alias. Order matters:
@@ -69,12 +75,20 @@ export interface ModelPrice {
  */
 const MODEL_PRICES: Array<[prefix: string, price: ModelPrice]> = [
   ["claude-fable-5", { inPerM: 10, outPerM: 50 }],
+  // Before "claude-opus-5": Opus 5.5 is cheaper than Opus 5.
+  ["claude-opus-5-5", { inPerM: 4, outPerM: 20 }],
   ["claude-opus-5", { inPerM: 5, outPerM: 25 }],
   ["claude-opus-4-8", { inPerM: 5, outPerM: 25 }],
   ["claude-opus-4-7", { inPerM: 5, outPerM: 25 }],
   ["claude-opus-4-6", { inPerM: 5, outPerM: 25 }],
+  ["claude-sonnet-5-5", { inPerM: 2, outPerM: 10 }],
   ["claude-sonnet-5", { inPerM: 2, outPerM: 10 }],
   ["claude-sonnet-4-6", { inPerM: 3, outPerM: 15 }],
+  ["claude-haiku-5-5", {
+    inPerM: 0.1,
+    outPerM: 0.5,
+    longPrompt: { aboveTokens: 100_000, inPerM: 0.5, outPerM: 2.5 },
+  }],
   ["claude-haiku-4-5", { inPerM: 1, outPerM: 5 }],
 ];
 
@@ -119,11 +133,13 @@ export function priceForModel(model: string): ModelPrice {
  * 10x on the cached portion.
  */
 export function anthropicCostUsd(model: string, usage: AnthropicUsage): number {
-  const p = priceForModel(model);
+  const base = priceForModel(model);
   const input = usage.input_tokens ?? 0;
   const cacheRead = usage.cache_read_input_tokens ?? 0;
   const cacheWrite = usage.cache_creation_input_tokens ?? 0;
   const output = usage.output_tokens ?? 0;
+  const prompt = input + cacheRead + cacheWrite;
+  const p = base.longPrompt && prompt > base.longPrompt.aboveTokens ? base.longPrompt : base;
   return (
     (input / 1_000_000) * p.inPerM +
     (cacheRead / 1_000_000) * p.inPerM * CACHE_READ_MULTIPLIER +

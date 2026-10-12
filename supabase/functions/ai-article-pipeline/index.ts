@@ -24,7 +24,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
-import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, defaultModel, shapeClaudeRequest, extractClaudeText } from '../_shared/aiConfig.ts';
 import { publishBlockedReason, publishGuardProblem } from '../_shared/articlePublishGuard.ts';
 
 const PAUSE_FLAG = 'ai_article_pipeline_enabled';
@@ -236,8 +236,10 @@ Deno.serve(async (req) => {
         const safetyRes = await fetch(aiCfg.api_endpoint, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            model: aiCfg.default_model,
+          // A one-word verdict, but on a model that thinks first the cap also
+          // has to cover the thinking; shapeClaudeRequest raises it.
+          body: JSON.stringify(shapeClaudeRequest({
+            model: defaultModel(),
             max_tokens: 20,
             messages: [{
               role: 'user',
@@ -247,12 +249,14 @@ Deno.serve(async (req) => {
                 `Mark UNSAFE only for hate, explicit sexual content, graphic violence, harassment, or dangerous instructions.\n\n` +
                 `TITLE: ${article.title}\n\nARTICLE:\n${(article.content || '').slice(0, 6000)}`,
             }],
-          }),
+          })),
         });
         if (safetyRes.ok) {
           const sj = await safetyRes.json();
-          const verdict = (sj?.content?.[0]?.text || '').toUpperCase();
-          safetyChecked = true;
+          // content[0] can be a thinking block; read the first text block.
+          const ex = extractClaudeText(sj);
+          const verdict = (ex.ok ? ex.text : '').toUpperCase();
+          safetyChecked = ex.ok;
           if (verdict.includes('UNSAFE')) { safe = false; reasons.push('failed content-safety check'); }
         }
       }

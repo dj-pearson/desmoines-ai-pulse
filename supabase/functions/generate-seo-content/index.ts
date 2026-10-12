@@ -125,7 +125,7 @@ serve(async (req) => {
 
         const config = await getAIConfig(supabaseUrl, supabaseKey);
         const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
-        // Use lightweight model (Haiku) for SEO generation - faster and cheaper
+        // Lightweight model (LIGHTWEIGHT_AI_MODEL, else DEFAULT_AI_MODEL) - high volume
         const requestBody = await buildLightweightClaudeRequest(
           [{ role: 'user', content: prompt }],
           {
