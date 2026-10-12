@@ -454,6 +454,12 @@ jobs:
       # IOS-DD-MONETIZATION-02. One Apple subscription unlocked every account
       # that validated it. Pins the appAccountToken / explicit-Restore rules.
       - run: deno test supabase/functions/_shared/appleOwnership.test.ts
+      # The App Store notifications webhook checked only that the LAST x5c
+      # cert was Apple's root and verified the JWS with the FIRST, so a
+      # self-made leaf with Apple's public root appended passed and could
+      # rewrite user_subscriptions. Pins full leaf <- intermediate <- root
+      # verification against the pinned Apple Root CA - G3.
+      - run: deno test --allow-read supabase/functions/_shared/appleJws.test.ts
       # IOS-DD-MONETIZATION-19. Sponsored picks used a UTC flight date and could
       # point at past events and closed restaurants, with invented social proof.
       - run: deno test supabase/functions/_shared/sponsoredPickFilters.test.ts

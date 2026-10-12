@@ -11,10 +11,10 @@
  *
  * The JWS header carries an `x5c` certificate chain (leaf → intermediate →
  * Apple Root CA G3). We:
- *   1. Verify the leaf certificate chains up to a known Apple Root CA SHA-256
- *      fingerprint (defense-in-depth — TLS already terminated at the function
- *      edge, but Apple expects us to validate the JWS chain too).
- *   2. Verify the JWS signature using the leaf certificate's ES256 public key.
+ *   1-2. verifyAppleJWS (_shared/appleJws.ts) checks the whole chain against
+ *      a pinned Apple Root CA - G3: each certificate signed by the next,
+ *      validity at signedDate, the intermediate a CA, Apple's marker OIDs on
+ *      leaf and intermediate, then the ES256 signature with the leaf key.
  *   3. Decode notificationType, subtype, notificationUUID, and the embedded
  *      signedTransactionInfo + signedRenewalInfo JWSes (also Apple-signed).
  *   4. Resolve the matching `user_subscriptions` row by
@@ -33,6 +33,7 @@
 
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { verifyAppleJWS } from '../_shared/appleJws.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -44,19 +45,6 @@ const EXPECTED_BUNDLE_ID = 'com.desmoines.aipulse';
 const INSIDER_PRODUCT_IDS = new Set(['prod_U4oa7Cpn0bRnuo', 'prod_insider_annual']);
 const VIP_PRODUCT_IDS = new Set(['prod_U4oaGFEy12auTx', 'prod_vip_annual']);
 const ALL_PRODUCT_IDS = new Set([...INSIDER_PRODUCT_IDS, ...VIP_PRODUCT_IDS]);
-
-/**
- * SHA-256 fingerprints (hex, lowercase) of the Apple Root CA certificates that
- * are allowed to anchor the x5c chain. Validated against the last cert in the
- * chain that Apple sends.
- *
- * Apple Root CA - G3 (used to sign App Store Server Notifications v2)
- *   https://www.apple.com/certificateauthority/AppleRootCA-G3.cer
- */
-const APPLE_ROOT_CA_FINGERPRINTS = new Set<string>([
-  // Apple Root CA - G3
-  '63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179',
-]);
 
 // ---------------------------------------------------------------------------
 // Apple notification types we handle
@@ -106,212 +94,6 @@ interface AppleRenewalInfo {
   isInBillingRetryPeriod?: boolean;
   expirationIntent?: number;
   gracePeriodExpiresDate?: number;
-}
-
-// ---------------------------------------------------------------------------
-// JWS / certificate helpers
-// ---------------------------------------------------------------------------
-
-function base64UrlToBytes(b64url: string): Uint8Array {
-  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
-  const bin = atob(b64 + pad);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const hash = await crypto.subtle.digest('SHA-256', bytes);
-  return bytesToHex(new Uint8Array(hash));
-}
-
-/**
- * Convert a JWS-format raw r||s ECDSA signature (64 bytes for P-256) into the
- * DER form WebCrypto accepts on import-only platforms.
- *
- * NOTE: Deno's WebCrypto sub-spec for ECDSA verification accepts the raw
- * IEEE-P1363 (r||s) format directly. We keep a pass-through here for
- * documentation and future portability.
- */
-function jwsSignatureToWebCrypto(signature: Uint8Array): Uint8Array {
-  return signature;
-}
-
-/**
- * Decode the leaf certificate's SubjectPublicKeyInfo into a CryptoKey.
- *
- * The certs in `x5c` are base64-encoded DER X.509 certificates. WebCrypto can
- * import a SubjectPublicKeyInfo directly as `spki`, so we ask the runtime to
- * extract it for us by feeding the full cert bytes — which works because the
- * SPKI is a subtree of the cert, but only some runtimes accept the full cert.
- *
- * To stay portable, we extract the SPKI ourselves with a tiny ASN.1 walk.
- */
-async function importLeafPublicKey(certDer: Uint8Array): Promise<CryptoKey> {
-  const spki = extractSpkiFromCert(certDer);
-  return crypto.subtle.importKey(
-    'spki',
-    spki,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['verify'],
-  );
-}
-
-/**
- * Walk the X.509 ASN.1 tree to extract the SubjectPublicKeyInfo bytes.
- *
- * Certificate ::= SEQUENCE {
- *   tbsCertificate TBSCertificate,
- *   signatureAlgorithm AlgorithmIdentifier,
- *   signatureValue BIT STRING
- * }
- * TBSCertificate ::= SEQUENCE {
- *   [0] EXPLICIT version,
- *   serialNumber INTEGER,
- *   signature AlgorithmIdentifier,
- *   issuer Name,
- *   validity Validity,
- *   subject Name,
- *   subjectPublicKeyInfo SubjectPublicKeyInfo,
- *   ...
- * }
- *
- * We only need to skip into `tbsCertificate` and find the 7th SEQUENCE/SET
- * field. To avoid a full ASN.1 parser we do a minimal walk that handles the
- * tag/length pairs we care about.
- */
-function extractSpkiFromCert(cert: Uint8Array): Uint8Array {
-  // Outer SEQUENCE
-  let offset = readTag(cert, 0, 0x30).contentStart;
-
-  // tbsCertificate (SEQUENCE)
-  const tbs = readTag(cert, offset, 0x30);
-  let p = tbs.contentStart;
-  const tbsEnd = tbs.contentStart + tbs.contentLen;
-
-  // Optional [0] EXPLICIT version
-  if (cert[p] === 0xa0) {
-    p = skipTLV(cert, p);
-  }
-
-  // serialNumber (INTEGER)
-  p = skipTLV(cert, p);
-  // signature AlgorithmIdentifier (SEQUENCE)
-  p = skipTLV(cert, p);
-  // issuer Name (SEQUENCE)
-  p = skipTLV(cert, p);
-  // validity Validity (SEQUENCE)
-  p = skipTLV(cert, p);
-  // subject Name (SEQUENCE)
-  p = skipTLV(cert, p);
-
-  // subjectPublicKeyInfo (SEQUENCE) — what we want, including its tag+len.
-  if (p >= tbsEnd) throw new Error('Unable to locate SPKI in certificate');
-  const spkiTag = cert[p];
-  if (spkiTag !== 0x30) {
-    throw new Error(`Expected SPKI SEQUENCE tag, got 0x${spkiTag.toString(16)}`);
-  }
-
-  const spkiLen = readLength(cert, p + 1);
-  const spkiTotal = 1 + spkiLen.lenBytes + spkiLen.value;
-  return cert.slice(p, p + spkiTotal);
-}
-
-function readTag(buf: Uint8Array, offset: number, expectedTag: number) {
-  if (buf[offset] !== expectedTag) {
-    throw new Error(
-      `Expected tag 0x${expectedTag.toString(16)} at ${offset}, got 0x${buf[offset].toString(16)}`,
-    );
-  }
-  const lenInfo = readLength(buf, offset + 1);
-  return {
-    contentStart: offset + 1 + lenInfo.lenBytes,
-    contentLen: lenInfo.value,
-  };
-}
-
-function readLength(buf: Uint8Array, offset: number): { value: number; lenBytes: number } {
-  const first = buf[offset];
-  if ((first & 0x80) === 0) {
-    return { value: first, lenBytes: 1 };
-  }
-  const num = first & 0x7f;
-  if (num === 0 || num > 4) throw new Error(`Unsupported ASN.1 length encoding (${num} bytes)`);
-  let value = 0;
-  for (let i = 0; i < num; i++) {
-    value = (value << 8) | buf[offset + 1 + i];
-  }
-  return { value, lenBytes: 1 + num };
-}
-
-function skipTLV(buf: Uint8Array, offset: number): number {
-  const lenInfo = readLength(buf, offset + 1);
-  return offset + 1 + lenInfo.lenBytes + lenInfo.value;
-}
-
-/**
- * Verify the JWS signed by Apple. Returns the decoded payload on success,
- * throws otherwise.
- */
-async function verifyAppleJWS<T>(jws: string): Promise<T> {
-  const parts = jws.split('.');
-  if (parts.length !== 3) throw new Error('Invalid JWS format');
-
-  const [encodedHeader, encodedPayload, encodedSignature] = parts;
-  const header = JSON.parse(new TextDecoder().decode(base64UrlToBytes(encodedHeader)));
-
-  if (header.alg !== 'ES256') {
-    throw new Error(`Unsupported JWS algorithm: ${header.alg}`);
-  }
-  if (!Array.isArray(header.x5c) || header.x5c.length === 0) {
-    throw new Error('JWS header missing x5c certificate chain');
-  }
-
-  // 1. Validate root CA fingerprint
-  const rootCertB64 = header.x5c[header.x5c.length - 1];
-  const rootCertDer = base64ToBytes(rootCertB64);
-  const rootFingerprint = await sha256Hex(rootCertDer);
-
-  if (!APPLE_ROOT_CA_FINGERPRINTS.has(rootFingerprint)) {
-    throw new Error(
-      `JWS x5c root CA fingerprint not allow-listed: ${rootFingerprint}`,
-    );
-  }
-
-  // 2. Verify the JWS signature using the leaf certificate's public key
-  const leafCertDer = base64ToBytes(header.x5c[0]);
-  const leafKey = await importLeafPublicKey(leafCertDer);
-
-  const signingInput = new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`);
-  const signature = jwsSignatureToWebCrypto(base64UrlToBytes(encodedSignature));
-
-  const verified = await crypto.subtle.verify(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    leafKey,
-    signature,
-    signingInput,
-  );
-
-  if (!verified) {
-    throw new Error('JWS signature verification failed');
-  }
-
-  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(encodedPayload))) as T;
 }
 
 // ---------------------------------------------------------------------------

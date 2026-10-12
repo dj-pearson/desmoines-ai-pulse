@@ -74,6 +74,10 @@ const VERIFIES_CALLER = new RegExp(
     'verifySignature',
     'WEBHOOK_SECRET',
     'constructEvent',
+    // App Store Server Notifications: the x5c chain and JWS signature are
+    // checked in _shared/appleJws.ts, so the webhook's own source only names
+    // the helper.
+    'verifyAppleJWS',
     'signature',
   ].join('|'),
   'i',
