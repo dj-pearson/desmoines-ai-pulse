@@ -53,12 +53,12 @@ enum Config {
     static let siteURL = URL(string: "https://desmoinesinsider.com")!
     static let supportEmail = "support@desmoinesinsider.com"
 
-    /// The App Store id. TODO(REL): still the 0000000000 sentinel until the
-    /// app is listed; set it together with IOS_APP_STORE_ID in
-    /// supabase/functions/version-check/index.ts. The App Clip does not need
-    /// it: its SKOverlay.AppClipConfiguration always offers the parent app
-    /// (IOS-DD-PLATFORM-04 / -21).
-    static let appStoreId = "0000000000"
+    /// The App Store id ("Des Moines Insider - Events",
+    /// itunes.apple.com/lookup?id=6759137729). Keep it equal to
+    /// IOS_APP_STORE_ID in supabase/functions/version-check/index.ts. The App
+    /// Clip does not need it: its SKOverlay.AppClipConfiguration always offers
+    /// the parent app (IOS-DD-PLATFORM-04 / -21).
+    static let appStoreId = "6759137729"
 
     /// The unassigned-id sentinel; an App Store URL ending in it is a dead page.
     static let appStoreIdPlaceholder = "0000000000"

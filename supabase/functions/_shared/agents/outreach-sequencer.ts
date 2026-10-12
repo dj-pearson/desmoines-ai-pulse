@@ -124,7 +124,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     });
 
     // List-Unsubscribe goes on the message now; it used to be set on the
-    // HTTP request to Resend, which put it on nothing.
+    // HTTP request to the old provider, which put it on nothing.
     const res = await sendEmail(
       {
         to: email,

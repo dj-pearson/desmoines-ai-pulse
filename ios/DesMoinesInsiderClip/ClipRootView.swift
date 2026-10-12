@@ -10,8 +10,8 @@ struct ClipRootView: View {
     @State private var viewModel = ClipEventsViewModel()
     /// The system App Store overlay for the parent app (IOS-DD-PLATFORM-04).
     /// It needs no App Store id: an App Clip's overlay always offers its
-    /// parent. The numeric id (TODO(REL), still the 0000000000 sentinel) is
-    /// Config.appStoreId in the app target, which the Clip cannot see.
+    /// parent. The numeric id (6759137729) is Config.appStoreId in the app
+    /// target, which the Clip cannot see.
     @State private var showAppOverlay = false
     @State private var didOfferOverlay = false
 

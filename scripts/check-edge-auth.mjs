@@ -5,7 +5,7 @@
  * FOUND THE HARD WAY, 2026-08-28. dispatch-scheduled-newsletters had a
  * docstring promising an admin-bearer check and no code performing one, and
  * backfill-all-coordinates had no auth references at all. Both build a
- * service-role client; one dispatches mail through Resend, the other geocodes
+ * service-role client; one dispatches newsletter mail, the other geocodes
  * four tables at a cost per address.
  *
  * THE TRAP IS verify_jwt. Neither function has a config.toml entry, so
@@ -27,7 +27,7 @@
  *   requireAdminOrApiKey and friends   the shared helpers
  *   auth.getUser                       resolve the bearer to a user
  *   EDGE_FUNCTION_API_KEY / x-api-key  shared-secret callers
- *   a webhook signature check          Stripe, Resend, Play, App Store
+ *   a webhook signature check          Stripe, SES via SNS, Play, App Store
  *
  * A BASELINE, NOT A GATE ON WHAT EXISTS. The remaining entries are triage, not
  * 24 vulnerabilities - og-image renders a public card and log-error is a
@@ -74,6 +74,10 @@ const VERIFIES_CALLER = new RegExp(
     'verifySignature',
     'WEBHOOK_SECRET',
     'constructEvent',
+    // App Store Server Notifications: the x5c chain and JWS signature are
+    // checked in _shared/appleJws.ts, so the webhook's own source only names
+    // the helper.
+    'verifyAppleJWS',
     'signature',
   ].join('|'),
   'i',

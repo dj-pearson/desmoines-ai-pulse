@@ -78,7 +78,7 @@ an action only the owner can take.
 
 ### WP2 - Email on Amazon SES
 
-- [x] `_shared/awsSigV4.ts` + `_shared/email.ts` (SES v2 API), tested against AWS SigV4 vectors (get-vanilla, post-vanilla, query-order, IAM signing key). Falls back to Resend while SES secrets are unset
+- [x] `_shared/awsSigV4.ts` + `_shared/email.ts` (SES v2 API), tested against AWS SigV4 vectors (get-vanilla, post-vanilla, query-order, IAM signing key). The Resend fallback was removed 2026-10-12: SES or nothing
 - [x] `email_log` and `email_suppressions` tables (`20261002000001`); the unsubscribe RPC also writes a suppression, with a backfill (`20261002000002`)
 - [x] Repoint shared senders (nurture, campaign notifications without SendGrid, ops/job alerts, outreach) and fix List-Unsubscribe (on the message now, not the HTTP request)
 - [x] Repoint the remaining edge functions in scope. Newsletter campaigns now get the CAN-SPAM layout and a per-subscriber token; the weekly digest stores its bare body instead of one rendered for a placeholder recipient
@@ -87,7 +87,7 @@ an action only the owner can take.
 - [x] Missing transactional mail: stripe-webhook sends subscription started / cancelled and the admin paid-campaign alert (`_shared/billingEmails.ts`, never throws into the webhook)
 - [x] Campaign notices the database writes (`email_pending`) are mailed by `send-campaign-emails`, cron every 15 min (`20261003000007`)
 - [x] `agent-outreach` sends through `sendEmail` (matching its shared twin); `stripe-webhook` and `send-campaign-notification` pass the service client, so suppression and `email_log` apply
-- [ ] `send-seo-notification` still calls Resend directly; it has no caller, so retire it through the deprecation flow rather than port it
+- [x] `send-seo-notification` sends through `sendEmail` (`EMAIL_PROVIDER=ses`; the default `console` still only logs)
 - [ ] Outreach and nurture mail carry only the mailto List-Unsubscribe: those recipients have no `newsletter_subscribers` token for the one-click URL
 - [owner] SES setup: see "Owner steps" below
 
@@ -197,7 +197,7 @@ These need access this session does not have.
    subscription itself. Apply `20261002000001-2`, then deploy
    `email-unsubscribe`, `ses-events` and the repointed functions (without the
    tables they still send, but skip suppression and `email_log`). Once SES
-   sends, remove `RESEND_API_KEY` and retire `resend-webhook`.
+   sends, remove `RESEND_API_KEY` and delete the deployed `resend-webhook` (its source was removed 2026-10-12).
 2. **Supabase Auth SMTP.** Dashboard → Auth → SMTP: host
    `email-smtp.<region>.amazonaws.com`, port 587, the SES SMTP credentials.
    `config.toml` only applies locally.

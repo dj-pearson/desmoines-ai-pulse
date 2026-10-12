@@ -9,7 +9,7 @@ import Supabase
 /// push ... and registers for push" (IOS-AUDIT-FEAT-012). The job is
 /// supabase/functions/saved-search-alerts, whose own header reads "ONE
 /// consolidated email per user with deep links back to the filtered /events",
-/// sent through Resend. Nothing in this project can send a push at all: apns,
+/// sent through Amazon SES. Nothing in this project can send a push at all: apns,
 /// fcm and firebase messaging appear in none of the 157 edge functions.
 ///
 /// The same wrong claim is still live in PaywallView.swift:115, which sells

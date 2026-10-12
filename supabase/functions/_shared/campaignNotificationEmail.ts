@@ -124,14 +124,7 @@ export function buildCampaignEmailBodyText(content: CampaignEmailContent): strin
 export async function sendCampaignEmail(params: {
   to: string;
   content: CampaignEmailContent;
-  /**
-   * Ignored. The provider is chosen by _shared/email.ts from the environment
-   * (SES, else Resend). Still accepted so callers that pass it keep compiling;
-   * the SendGrid fallback is gone.
-   */
-  resendApiKey?: string;
-  /** Ignored, see resendApiKey. */
-  sendgridApiKey?: string;
+  /** Sends through _shared/email.ts (SES), which reads its credentials from the environment. */
   fromEmail?: string;
   /** Service-role client, for suppression and email_log. Optional. */
   // deno-lint-ignore no-explicit-any

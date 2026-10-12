@@ -94,19 +94,31 @@ VITE_SENTRY_DSN=https://...@sentry.io/...
 
 ### Email Notifications
 
+All edge-function mail goes through `supabase/functions/_shared/email.ts`,
+which sends with Amazon SES v2 in us-east-2 (the portfolio's SES account;
+`desmoinesinsider.com` is a verified identity with MAIL FROM
+`mail.desmoinesinsider.com`). There is no other provider. With any of the
+three `AWS_SES_*` values unset, nothing is sent and the function log names
+what is missing.
+
 ```bash
-# Choose one:
-EMAIL_PROVIDER=console  # Just logs to console (default)
-EMAIL_PROVIDER=resend   # Use Resend ($20/mo for 50k emails)
-EMAIL_PROVIDER=sendgrid # Use SendGrid
+# Edge-function secrets (Supabase), never VITE_*:
+AWS_SES_REGION=us-east-2
+AWS_SES_ACCESS_KEY_ID=AKIA...            # IAM user allowed ses:SendEmail
+AWS_SES_SECRET_ACCESS_KEY=...            # that user's secret access key, NOT an SES SMTP password
+SES_FROM_ADDRESS="Des Moines Insider <hello@desmoinesinsider.com>"   # default sender
+SES_CONFIGURATION_SET=...                # optional; event publishing to SNS
+SES_SNS_TOPIC_ARN=arn:aws:sns:us-east-2:...  # the topic ses-events accepts; unset refuses all
 
-# If using Resend (https://resend.com)
-RESEND_API_KEY=re_...your_key_here
-EMAIL_FROM=noreply@yourdomain.com
-
-# If using SendGrid
-SENDGRID_API_KEY=SG....your_key_here
+# send-seo-notification only:
+EMAIL_PROVIDER=console  # just logs the alert (default)
+EMAIL_PROVIDER=ses      # mails it through SES
+EMAIL_FROM=noreply@desmoinesinsider.com   # optional sender override for SEO alerts
 ```
+
+An SES SMTP password cannot be used as `AWS_SES_SECRET_ACCESS_KEY`. It is a
+value derived from an IAM secret key for SMTP AUTH, and SigV4 signing needs the
+key itself.
 
 ### Slack/Discord Notifications
 
@@ -217,9 +229,7 @@ VITE_SENTRY_DSN=https://...@sentry.io/...
 # Disable debug
 VITE_DEBUG=false
 
-# Email configuration
-EMAIL_PROVIDER=resend
-RESEND_API_KEY=re_...your_production_key
+# Email configuration: edge-function secrets, see "Email Notifications" above
 ```
 
 ---
@@ -237,8 +247,8 @@ supabase secrets set PAGESPEED_INSIGHTS_API_KEY=your_key_here
 # Set optional secrets (if using)
 supabase secrets set OPENAI_API_KEY=sk-...your_key
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...your_key
-supabase secrets set RESEND_API_KEY=re_...your_key
-supabase secrets set EMAIL_FROM=noreply@yourdomain.com
+supabase secrets set AWS_SES_REGION=us-east-2 AWS_SES_ACCESS_KEY_ID=... AWS_SES_SECRET_ACCESS_KEY=...
+supabase secrets set SES_FROM_ADDRESS="Des Moines Insider <hello@desmoinesinsider.com>" SES_SNS_TOPIC_ARN=...
 supabase secrets set SLACK_WEBHOOK_URL=https://hooks.slack.com/...
 supabase secrets set DISCORD_WEBHOOK_URL=https://discord.com/api/...
 
@@ -407,10 +417,13 @@ VITE_GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
 # Error tracking
 VITE_SENTRY_DSN=https://...@sentry.io/...
 
-# Email
-EMAIL_PROVIDER=resend
-RESEND_API_KEY=re_...
-EMAIL_FROM=noreply@desmoinesinsider.com
+# Email (edge-function secrets)
+AWS_SES_REGION=us-east-2
+AWS_SES_ACCESS_KEY_ID=...
+AWS_SES_SECRET_ACCESS_KEY=...
+SES_FROM_ADDRESS="Des Moines Insider <hello@desmoinesinsider.com>"
+SES_SNS_TOPIC_ARN=...
+EMAIL_PROVIDER=ses
 
 # Notifications
 SLACK_WEBHOOK_URL=https://hooks.slack.com/...

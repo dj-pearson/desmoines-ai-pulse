@@ -49,12 +49,15 @@ import { recordVersionCheck } from "../_shared/versionCheckLog.ts";
 const VALID_PLATFORMS: MobilePlatform[] = ["ios", "android"];
 
 /**
- * The App Store numeric id, or the sentinel while App Store Connect has not
- * assigned one. TODO(REL): set this and the copy in
- * ios/DesMoinesInsiderClip/ClipRootView.swift together - they hold the same
- * fact and there is no link between them.
+ * The App Store numeric id ("Des Moines Insider - Events",
+ * itunes.apple.com/lookup?id=6759137729). Keep it equal to Config.appStoreId in
+ * ios/DesMoinesInsider/Configuration/Config.swift - they hold the same fact and
+ * there is no link between them. The sentinel comparison below stays so that
+ * resetting the id can never ship a dead store link.
  */
-const IOS_APP_STORE_ID = "0000000000";
+// Widened to string so the sentinel comparison below still type-checks
+// (two distinct literal types have no overlap, TS2367).
+const IOS_APP_STORE_ID: string = "6759137729";
 const UNASSIGNED_APP_STORE_ID = "0000000000";
 const WEBSITE_URL = "https://desmoinesinsider.com";
 

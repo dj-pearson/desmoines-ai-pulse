@@ -30,7 +30,7 @@
  * The gate is where the opted-in run stops because scoreOutput fails closed
  * without an Anthropic key, and this file deletes those keys below. That is
  * deliberate on two counts: it makes `gated` a stable observable, and it means a
- * runner that happens to hold RESEND_API_KEY cannot turn this suite into real
+ * runner that happens to hold SES credentials cannot turn this suite into real
  * outbound mail.
  *
  * Offline: no credentials, no network. Uses node:assert rather than
@@ -39,9 +39,9 @@
 import { strict as assert } from "node:assert";
 import type { AgentRunContext } from "../_shared/agentRun.ts";
 
-// Before importing anything that reads them. sendNurtureEmail POSTs to SES or
-// Resend when their keys are set, and scoreOutput POSTs to Anthropic.
-for (const k of ["RESEND_API_KEY", "AWS_SES_ACCESS_KEY_ID", "AWS_SES_SECRET_ACCESS_KEY", "CLAUDE_API", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]) {
+// Before importing anything that reads them. sendNurtureEmail POSTs to SES
+// when its keys are set, and scoreOutput POSTs to Anthropic.
+for (const k of ["AWS_SES_ACCESS_KEY_ID", "AWS_SES_SECRET_ACCESS_KEY", "CLAUDE_API", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]) {
   try { Deno.env.delete(k); } catch { /* --allow-env not granted for this name */ }
 }
 
@@ -371,7 +371,7 @@ Deno.test("outreach: outreach-sequencer DOES reach the send path for an unsuppre
 // --- billing win-back: subscription-lifecycle ---------------------------------
 //
 // Not an agent and not a sendNurtureEmail caller, which is how it went
-// unchecked: it mails through its own Resend call. Its one marketing email is
+// unchecked: it mails through its own sendEmail call. Its one marketing email is
 // the win-back after a cancellation, and the decision to send it lives in
 // subscription-lifecycle/policy.ts, so that is what runs here. Paired like the
 // rest: opted out yields no win-back, opted in does.

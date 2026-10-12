@@ -447,7 +447,7 @@ export default function NewsletterCampaignsManager() {
           <DialogHeader>
             <DialogTitle>New newsletter campaign</DialogTitle>
             <DialogDescription>
-              Compose, preview, and dispatch via Resend. Test sends go only
+              Compose, preview, and dispatch via Amazon SES. Test sends go only
               to your own email.
             </DialogDescription>
           </DialogHeader>

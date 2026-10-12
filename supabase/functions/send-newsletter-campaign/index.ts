@@ -3,8 +3,8 @@
  *
  * Admin-only one-off newsletter dispatch. Resolves the chosen segment
  * against newsletter_subscribers (status='active'), sends each subscriber
- * their own copy through _shared/email.ts (SES, or Resend until SES is
- * configured) inside the CAN-SPAM layout with their own unsubscribe token,
+ * their own copy through _shared/email.ts (SES) inside the CAN-SPAM
+ * layout with their own unsubscribe token,
  * and writes a newsletter_campaigns row.
  *
  * Actions (POST body { action, ... }):
@@ -82,7 +82,7 @@ async function sendOne(
     { supabase },
   );
   if (!res.ok) throw new Error(res.error ?? "send failed");
-  // The provider's id, so ses-events / resend-webhook can correlate later
+  // The SES message id, so ses-events can correlate later
   // delivery and engagement events to this recipient.
   return { message_id: res.messageId ?? null };
 }
@@ -231,7 +231,7 @@ serve(async (req) => {
 
       // send_now — dispatch and tally outcomes. EMAIL-WEBHOOK-001: also
       // record one newsletter_deliveries row per recipient with the
-      // Resend message_id so the resend-webhook can correlate
+      // SES message id (column resend_message_id) so ses-events can correlate
       // subsequent engagement events back to this campaign.
       let delivered = 0;
       let failed = 0;
