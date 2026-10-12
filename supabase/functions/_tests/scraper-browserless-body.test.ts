@@ -66,6 +66,9 @@ const config = {
   backend: 'browserless' as const,
   browserlessApiKey: 'test-token',
   browserlessUrl: BASE,
+  // No backup account here: these tests are about the body, and a set
+  // BROWSERLESS_API_KEY_BACKUP in the environment must not add calls.
+  browserlessBackupApiKey: '',
   waitTime: WAIT,
 };
 

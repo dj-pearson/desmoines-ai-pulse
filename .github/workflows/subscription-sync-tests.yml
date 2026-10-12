@@ -644,3 +644,6 @@ jobs:
       # header only reaches Browserless. A self-hosted instance passes
       # HeadlessChrome through and Akamai sites answer it with Access Denied.
       - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-browserless-body.test.ts
+      # Primary -> backup Browserless (BROWSERLESS_API_KEY_BACKUP): one retry,
+      # on access-denied pages too, and no key ever sent to the other host.
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-browserless-backup.test.ts

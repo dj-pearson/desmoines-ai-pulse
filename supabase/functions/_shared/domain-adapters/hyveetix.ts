@@ -21,7 +21,12 @@
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
-import { browserlessUserAgent, getScraperConfig } from "../scraper.ts";
+import {
+  browserlessUserAgent,
+  getScraperConfig,
+  isAccessDeniedPage,
+  withBrowserlessFallback,
+} from "../scraper.ts";
 
 const BASE = "https://hyveetix.evenue.net";
 const MAX_PAGES = 25; // safety budget — 8 top groups + ~16 sub-groups
@@ -221,11 +226,10 @@ async function fetchGroupPage(code: string): Promise<
  * plain fetch with browser-like headers.
  */
 async function fetchHtml(url: string, code: string): Promise<string | null> {
-  const browserlessKey = Deno.env.get("BROWSERLESS_API") ||
-    Deno.env.get("BROWSERLESS_API_KEY");
+  const config = getScraperConfig();
 
-  if (browserlessKey) {
-    const html = await fetchViaBrowserless(url, browserlessKey, code);
+  if (config.browserlessApiKey || config.browserlessBackupApiKey) {
+    const html = await fetchViaBrowserless(url, config, code);
     if (html) return html;
     console.log(`  ↩ [hyveetix] ${code}: Browserless miss, trying plain fetch`);
   }
@@ -235,18 +239,16 @@ async function fetchHtml(url: string, code: string): Promise<string | null> {
 
 async function fetchViaBrowserless(
   url: string,
-  apiKey: string,
+  config: ReturnType<typeof getScraperConfig>,
   code: string,
 ): Promise<string | null> {
-  // The host comes from BROWSERLESS_URL like every other Browserless caller.
-  // It was pinned to production-sfo.browserless.io, so pointing the project at
-  // a self-hosted instance would have sent that instance's token to the hosted
-  // service. userAgent sets the browser's own UA; without it the page sees
-  // HeadlessChrome (the hosted service masks that, a self-hosted one does not).
-  const config = getScraperConfig();
-  const browserlessUrl =
-    `${config.browserlessUrl}/content?token=${apiKey}&stealth=true`;
-  try {
+  // Host and key come from the handed-in host, primary first and then once on
+  // BROWSERLESS_API_KEY_BACKUP's host (withBrowserlessFallback in scraper.ts),
+  // so each key only ever reaches its own host. userAgent sets the browser's
+  // own UA; without it the page sees HeadlessChrome.
+  const outcome = await withBrowserlessFallback<string>(config, async (host) => {
+    const browserlessUrl =
+      `${host.baseUrl}/content?token=${host.apiKey}&stealth=true`;
     const response = await globalThis.fetch(browserlessUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -260,25 +262,19 @@ async function fetchViaBrowserless(
 
     if (!response.ok) {
       const errBody = (await response.text()).substring(0, 200);
-      console.log(
-        `  ❌ [hyveetix] ${code}: Browserless HTTP ${response.status} — ${errBody}`,
-      );
-      return null;
+      return { ok: false, error: `HTTP ${response.status} - ${errBody}` };
     }
 
     const html = await response.text();
-    if (isBotChallenge(html)) {
-      console.log(
-        `  🚫 [hyveetix] ${code}: Browserless got bot-challenge page (${html.length} bytes)`,
-      );
-      return null;
+    if (isBotChallenge(html) || isAccessDeniedPage(html)) {
+      return { ok: false, error: `bot-challenge page (${html.length} bytes)` };
     }
-    return html;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.log(`  ❌ [hyveetix] ${code}: Browserless threw — ${msg}`);
-    return null;
-  }
+    return { ok: true, value: html };
+  }, `[hyveetix] ${code}`);
+
+  if (outcome.ok) return outcome.value;
+  console.log(`  ❌ [hyveetix] ${code}: Browserless failed - ${outcome.error}`);
+  return null;
 }
 
 async function fetchPlain(
