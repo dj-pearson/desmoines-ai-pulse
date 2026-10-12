@@ -20,9 +20,9 @@
  * JSON APIs (statsapi.mlb.com, api.seatgeek.com) with `Accept:
  * application/json` and no invented User-Agent. robots.txt governs crawling a
  * site's pages, not calling an API it publishes for the purpose, and neither
- * was pretending to be a browser. hyveetix:240 posts to browserless, which
- * drives its own headless Chrome - the story's notes already record that the
- * agent it presents cannot be set from this repo.
+ * was pretending to be a browser. hyveetix posts to Browserless, which drives
+ * its own headless Chrome; the UA that browser presents is set through the
+ * request body (browserlessUserAgent in scraper.ts), not through this helper.
  *
  * FAIL-OPEN, inherited from robots.ts: no robots.txt, a 404, a 5xx, a timeout
  * or an unparseable file all mean allowed. The other direction turns one flaky

@@ -634,3 +634,7 @@ jobs:
       - run: deno test --allow-read --allow-env supabase/functions/_tests/error-policy.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_tests/executive-digest.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-user-agent.test.ts
+      # The Browserless request body must set the browser's own User-Agent; the
+      # header only reaches Browserless. A self-hosted instance passes
+      # HeadlessChrome through and Akamai sites answer it with Access Denied.
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-browserless-body.test.ts
