@@ -10,7 +10,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, extractClaudeText, defaultModel, shapeClaudeRequest } from "../_shared/aiConfig.ts";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
@@ -157,8 +157,8 @@ Return ONLY a JSON object with this exact structure:
     const aiResponse = await fetch(aiConfig.api_endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: aiConfig.default_model,
+      body: JSON.stringify(shapeClaudeRequest({
+        model: defaultModel(),
         max_tokens: aiConfig.max_tokens_standard,
         temperature: aiConfig.temperature_creative,
         messages: [
@@ -167,7 +167,7 @@ Return ONLY a JSON object with this exact structure:
             content: prompt
           }
         ]
-      })
+      }))
     });
 
     if (!aiResponse.ok) {

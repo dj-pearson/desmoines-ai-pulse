@@ -33,7 +33,7 @@ import { conversationHasCrisisIntent, crisisPayload } from '../_shared/crisisSup
 import { isRestaurantOpenForBusiness } from '../_shared/sponsoredPickFilters.ts';
 import { centralWallClockFromUtc } from '../_shared/centralTime.ts';
 import { checkRateLimitPersistent, addRateLimitHeaders } from '../_shared/rateLimit.ts';
-import { getAIConfig, getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { getAIConfig, getAnthropicApiKey, defaultModel } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
 import { runToolLoop, type ToolSchema, type RunToolLoopResult } from '../_shared/agentRuntime.ts';
 import { resolveEntitledTier } from '../_shared/entitlements.ts';
@@ -475,12 +475,13 @@ serve(async (req) => {
   const remaining: number | 'unlimited' = quota.remaining ??
     (legacyCount !== null ? Math.max(0, DAILY_QUOTAS[tier] - legacyCount) : 'unlimited');
 
-  // Resolve model from centralized config
+  // The model comes from DEFAULT_AI_MODEL (aiModel.ts); the API version from
+  // the centralized config.
   const aiConfig = await getAIConfig(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   );
-  const model = aiConfig.default_model;
+  const model = defaultModel();
 
   // Append a location hint as a system-level user message if we have one.
   // The crisis check above saw the whole conversation; the model sees the

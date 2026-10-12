@@ -28,7 +28,7 @@
  */
 
 import { fetchWithTimeout } from "../fetchWithTimeout.ts";
-import { getAIConfig } from "../aiConfig.ts";
+import { getAIConfig, lightweightModel, shapeClaudeRequest, toolChoiceFor } from "../aiConfig.ts";
 import { DIETARY_TAGS } from "./types.ts";
 import type { MenuExtraction, MenuSection } from "./types.ts";
 import { mergeExtractions } from "./menuNormalize.ts";
@@ -68,11 +68,25 @@ Group items under the menu's OWN section headings ("Tacos", "On Tap", "From the 
 
 Ignore navigation links, hours, addresses, phone numbers, social media and marketing copy — those are not menu items. If the content contains no menu at all, return an empty sections array rather than inventing items.`;
 
+/**
+ * Names the tool for models that cannot be forced to call it (toolChoiceFor
+ * returns `auto` for them). Harmless on a model that is forced.
+ */
+const MENU_TOOL_INSTRUCTION =
+  "Reply only by calling the record_menu tool, once, with every section and item you found. " +
+  "Do not answer in prose. If there is no menu, call it with an empty sections array.";
+
 /** Tool definition that constrains the reply to the menu shape. */
 function menuTool() {
   return {
     name: "record_menu",
     description: "Record the complete menu extracted from the provided content.",
+    // Streams the argument as it is written. Without it the API sends a tool
+    // argument only once its whole value is written, and `sections` is one
+    // value: measured 2026-10-11, a 90s stream delivered 0 characters, so a
+    // reply cut off by the deadline had nothing to salvage. This replaces the
+    // fine-grained-tool-streaming-2025-05-14 beta header.
+    eager_input_streaming: true,
     input_schema: {
       type: "object",
       properties: {
@@ -150,6 +164,10 @@ async function requestMenu(
   onError?: (detail: string) => void,
 ): Promise<MenuReply> {
   const config = await getAIConfig(ctx.supabaseUrl, ctx.supabaseKey);
+  // Transcribing a menu is extraction, not reasoning; the lightweight model
+  // writes it several times faster, which is what decides whether a full menu
+  // fits inside the 150s idle limit. LIGHTWEIGHT_AI_MODEL, else DEFAULT_AI_MODEL.
+  const model = lightweightModel();
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (!canStartLlmAttempt(deadline, Date.now())) {
@@ -169,26 +187,21 @@ async function requestMenu(
           headers: {
             "x-api-key": ctx.apiKey,
             "anthropic-version": config.anthropic_version,
-            // Without this the API sends a tool argument only once its whole
-            // value is written, and `sections` is one value: measured
-            // 2026-10-11, a 90s stream delivered 0 characters, so a reply cut
-            // off by the deadline had nothing to salvage.
-            "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
             "content-type": "application/json",
           },
-          body: JSON.stringify({
-            // Transcribing a menu is extraction, not reasoning; the lightweight
-            // model writes it several times faster, which is what decides
-            // whether a full menu fits inside the 150s idle limit.
-            model: config.lightweight_model || config.default_model,
+          body: JSON.stringify(shapeClaudeRequest({
+            model,
             // Not config.max_tokens_large: see MENU_MAX_TOKENS.
             max_tokens: MENU_MAX_TOKENS,
             temperature: 0,
             stream: true,
             tools: [menuTool()],
-            tool_choice: { type: "tool", name: "record_menu" },
+            // Forcing the tool is a 400 on Sonnet 5.5 / Opus 5.5, so current
+            // models get `auto` and the system prompt names the tool.
+            tool_choice: toolChoiceFor(model, "record_menu"),
+            system: MENU_TOOL_INSTRUCTION,
             messages: [{ role: "user", content }],
-          }),
+          }, { lightweight: true })),
         },
         windowMs,
       );

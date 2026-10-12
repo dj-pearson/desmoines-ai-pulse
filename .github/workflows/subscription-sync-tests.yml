@@ -115,6 +115,12 @@ jobs:
       # SEO-057. The writers' copy of the model-label strip must match the web
       # app's; --allow-read is for the src/lib/aiText.ts comparison.
       - run: deno test --allow-read supabase/functions/_shared/aiText.test.ts
+      # The model resolver (DEFAULT_AI_MODEL / LIGHTWEIGHT_AI_MODEL) and the
+      # request shaper that keeps every body valid for the model it names.
+      # --allow-env: the suite sets and clears those variables.
+      - run: deno test --allow-env supabase/functions/_shared/aiModel.test.ts
+      # Written with versionCheckLog.ts and never added to a lane.
+      - run: deno test supabase/functions/_shared/versionCheckLog.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
       # XPLAT-011. Asserts docstring, implementation and all three clients agree
@@ -634,3 +640,7 @@ jobs:
       - run: deno test --allow-read --allow-env supabase/functions/_tests/error-policy.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_tests/executive-digest.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-user-agent.test.ts
+      # The Browserless request body must set the browser's own User-Agent; the
+      # header only reaches Browserless. A self-hosted instance passes
+      # HeadlessChrome through and Akamai sites answer it with Access Denied.
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-browserless-body.test.ts

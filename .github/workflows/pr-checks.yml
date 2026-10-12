@@ -113,9 +113,11 @@ jobs:
       # WEB-BE-041. restaurant-opening-scraper hardcoded the retired model
       # claude-3-5-sonnet-20241022 against api.anthropic.com, bypassing
       # _shared/aiConfig.ts - so every run 404'd and still reported success.
-      # Ratchets the remaining hardcoded ids (they can only shrink) and fails
-      # outright on a retired default inside aiConfig itself, which would break
-      # every caller at once.
+      # Now a gate: the model comes from the DEFAULT_AI_MODEL /
+      # LIGHTWEIGHT_AI_MODEL secrets via _shared/aiModel.ts, and a Claude model
+      # id anywhere else under supabase/functions fails (tests, comments and
+      # the price table excepted). Counter-test:
+      # scripts/__tests__/edge-model-pins.test.mjs (run by test:offline).
       - name: No edge function hardcodes a Claude model id
         run: npm run check-edge-models
 

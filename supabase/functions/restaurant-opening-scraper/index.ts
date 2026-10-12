@@ -10,7 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { getAnthropicApiKey, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAnthropicApiKey, buildClaudeRequest, getClaudeHeaders, extractClaudeText } from "../_shared/aiConfig.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { summarizeRun, type SourceOutcome } from "./summary.ts";
 import { sanitizeLikeInput } from '../_shared/validation.ts';
@@ -314,8 +314,8 @@ FORMAT AS JSON ARRAY ONLY - no other text:
         // its own headers, bypassing _shared/aiConfig.ts entirely. That model is
         // retired: the API answers not_found, so EVERY extraction failed - and
         // the handler below still returned success: true with HTTP 200. The
-        // model now comes from getAIConfig (one place, overridable from the
-        // ai_config row) and the version header from the same config.
+        // model now comes from DEFAULT_AI_MODEL via buildClaudeRequest, and the
+        // version header from getAIConfig.
         const [claudeHeaders, claudeBody] = await Promise.all([
           getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey),
           buildClaudeRequest(
@@ -342,7 +342,9 @@ FORMAT AS JSON ARRAY ONLY - no other text:
         }
 
         const claudeData = await claudeResponse.json();
-        const extractedText = claudeData.content?.[0]?.text || '[]';
+        // content[0] can be a thinking block; read the first text block.
+        const extracted = extractClaudeText(claudeData);
+        const extractedText = extracted.ok ? extracted.text : '[]';
         
         console.log(`🤖 Claude response: ${extractedText.substring(0, 500)}...`);
 

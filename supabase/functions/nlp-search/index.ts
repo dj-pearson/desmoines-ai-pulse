@@ -82,7 +82,7 @@ const deps: SearchDeps = {
     return {
       endpoint: config.api_endpoint,
       headers,
-      model: config.lightweight_model,
+      model: String(body.model),
       body,
       extractText: extractClaudeText,
     };

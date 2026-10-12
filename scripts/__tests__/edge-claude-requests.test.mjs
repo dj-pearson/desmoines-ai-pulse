@@ -65,5 +65,38 @@ console.log('\ntriage keeps its system prompt');
   ck('buildSafetyRequest still supplies it', code.includes('const { system, userContent }'));
 }
 
+console.log('\nevery Claude call is shaped for the model DEFAULT_AI_MODEL names');
+{
+  // Sonnet 5.5 / Haiku 5.5 reject temperature, budget thinking, prefill and
+  // forced tool_choice with a 400, and can put a thinking block first in
+  // `content`. A request body that skips the shaper, or a reply read by index,
+  // is a production failure once the secret names one of them.
+  const { readdirSync, statSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const walk = (dir, out = []) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) {
+        if (name === '_tests' || name === '_typecheck' || name === 'node_modules') continue;
+        walk(p, out);
+      } else if (name.endsWith('.ts') && !name.endsWith('.test.ts')) out.push(p.split('\\').join('/'));
+    }
+    return out;
+  };
+  const callers = walk('supabase/functions').filter((f) => {
+    const code = codeOnly(readFileSync(f, 'utf8'));
+    return /api\.anthropic\.com\/v1\/messages|\.api_endpoint\b/.test(code) && !f.endsWith('_shared/aiConfig.ts');
+  });
+  ck('found the Anthropic callers', callers.length >= 25, String(callers.length));
+  for (const f of callers) {
+    const code = codeOnly(readFileSync(f, 'utf8'));
+    ck(
+      `${f} shapes its request`,
+      /shapeClaudeRequest\(|buildClaudeRequest\(|buildLightweightClaudeRequest\(|runToolLoop\(/.test(code),
+    );
+    ck(`${f} does not read content[0]`, !/content\??\.?\[0\]\??\.text/.test(code), (code.match(/content\??\.?\[0\]\??\.text/) || [])[0]);
+  }
+}
+
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);

@@ -13,7 +13,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
 import { scrapeUrls } from "../_shared/scraper.ts";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
@@ -422,7 +422,9 @@ serve(async (req) => {
       }
 
       const claudeData = await claudeResponse.json();
-      const responseText = claudeData.content?.[0]?.text?.trim();
+      // content[0] can be a thinking block; read the first text block.
+      const extracted = extractClaudeText(claudeData);
+      const responseText = extracted.ok ? extracted.text.trim() : undefined;
 
       console.log(`🔍 Claude response length for ${currentUrl}: ${responseText?.length || 0}`);
 

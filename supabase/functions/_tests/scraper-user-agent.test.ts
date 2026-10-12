@@ -10,11 +10,11 @@
  *   fetch       sends config.userAgent to the site.                  Always did.
  *   firecrawl   sent NOTHING. Firecrawl's own agent reached the site,
  *               so SCRAPER_USER_AGENT was invisible on this path.    Fixed here.
- *   browserless the request carries the UA header to browserless.io, NOT to the
- *               crawled site -- browserless drives its own headless Chrome, and
- *               its REST API does not expose --user-agent outside enterprise
- *               plans. Nothing this repo can do reaches the site on that path,
- *               and browserless is the DEFAULT backend whenever a key is set.
+ *   browserless the UA header only reaches Browserless itself. The browser's
+ *               own UA is set by the `userAgent: { userAgent }` body field
+ *               (Browserless v2), sent on /scrape and /content since
+ *               2026-10-12 and pinned by scraper-browserless-body.test.ts.
+ *               Before that the crawled site saw HeadlessChrome.
  *
  * The default must stay byte-identical, which is what the negative control
  * below is for: an operator who has not chosen an identity gets exactly the

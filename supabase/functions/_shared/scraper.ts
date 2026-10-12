@@ -50,12 +50,25 @@ export function getScraperConfig(): ScraperConfig {
     waitTime: parseInt(Deno.env.get('SCRAPER_WAIT_TIME') || '5000'),
     timeout: parseInt(Deno.env.get('SCRAPER_TIMEOUT') || '30000'),
     userAgent: Deno.env.get('SCRAPER_USER_AGENT') || 
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
     userAgentDeclared: !!Deno.env.get('SCRAPER_USER_AGENT'),
     firecrawlApiKey: Deno.env.get('FIRECRAWL_API_KEY'),
     browserlessApiKey: browserlessKey,
     browserlessUrl: Deno.env.get('BROWSERLESS_URL') || 'https://production-sfo.browserless.io',
   };
+}
+
+/**
+ * The Browserless body field that sets the headless browser's own User-Agent
+ * (Browserless v2 REST API: `userAgent: { userAgent }`). Shared by /scrape,
+ * /content and the hyveetix adapter so they cannot drift. Empty when no UA is
+ * configured, which getScraperConfig() never produces but a Partial override
+ * could.
+ */
+export function browserlessUserAgent(
+  config: Pick<ScraperConfig, 'userAgent'>,
+): { userAgent?: { userAgent: string } } {
+  return config.userAgent ? { userAgent: { userAgent: config.userAgent } } : {};
 }
 
 /**
@@ -106,6 +119,13 @@ async function scrapeWithBrowserless(
       elements: [
         { selector: 'html' }
       ],
+      // The User-Agent the BROWSER presents to the crawled site. The
+      // 'User-Agent' request header below only reaches Browserless itself; the
+      // page still sees "HeadlessChrome" unless the body sets it. A self-hosted
+      // Browserless (ghcr.io/browserless/chromium) does no masking of its own,
+      // and Catch Des Moines (Akamai) answers HeadlessChrome with a 791-byte
+      // Access Denied page.
+      ...browserlessUserAgent(config),
     };
 
     console.log(`⏳ Browserless will wait ${config.waitTime || 5000}ms for dynamic content`);
@@ -194,6 +214,10 @@ async function scrapeWithBrowserlessContent(
           waitUntil: 'networkidle2',
           timeout: config.timeout || 30000,
         },
+        // Same wait as /scrape. Without it this fallback returned as soon as
+        // the network went idle, before JS-rendered listings were in the DOM.
+        waitForTimeout: config.waitTime || 5000,
+        ...browserlessUserAgent(config),
       }),
     });
 

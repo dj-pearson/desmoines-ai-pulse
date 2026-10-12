@@ -550,7 +550,7 @@ Return ONLY the JSON object, no additional text.`;
     //
     // settle() writes provider_usage as before, plus the ai_usage_daily subject
     // and global rows the daily budget is checked against.
-    const billedModel = String(requestBody.model ?? config.default_model);
+    const billedModel = String(requestBody.model);
     await quota.settle({
       costUsd: anthropicCostUsd(billedModel, aiResult?.usage ?? {}),
       model: billedModel,
@@ -710,7 +710,7 @@ Return ONLY the JSON object, no additional text.`;
       metadata: {
         numDays,
         numItems: sanitizedItems.length,
-        modelUsed: config.default_model,
+        modelUsed: billedModel,
         eventsAvailable: events?.length || 0,
         restaurantsAvailable: restaurants?.length || 0,
         attractionsAvailable: attractions?.length || 0,

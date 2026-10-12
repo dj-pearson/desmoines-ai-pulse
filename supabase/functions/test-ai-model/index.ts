@@ -18,7 +18,7 @@
  */
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { getAnthropicApiKey, extractClaudeText, defaultModel, shapeClaudeRequest } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
@@ -47,7 +47,9 @@ Deno.serve(async (req) => {
   if (denied) return denied;
 
   const body = await req.json().catch(() => ({}));
-  const model = typeof body.model === "string" ? body.model.trim() : "";
+  // No model named means "what the edge functions use": DEFAULT_AI_MODEL.
+  // A named one is still tested as given - this is a diagnostic.
+  const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : defaultModel();
   const testPrompt = typeof body.testPrompt === "string" ? body.testPrompt.trim() : "";
 
   if (!model) return json({ success: false, error: "A model is required." }, 400);
@@ -71,11 +73,11 @@ Deno.serve(async (req) => {
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
         },
-        body: JSON.stringify({
+        body: JSON.stringify(shapeClaudeRequest({
           model,
           max_tokens: MAX_TOKENS,
           messages: [{ role: "user", content: testPrompt }],
-        }),
+        })),
       },
       TIMEOUT_MS,
     );

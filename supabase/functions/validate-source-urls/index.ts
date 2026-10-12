@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { validateURLForSSRF } from '../_shared/validation.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { getAnthropicApiKey, defaultModel, shapeClaudeRequest, extractClaudeText } from '../_shared/aiConfig.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 
 // This function rewrites events.source_url with the service role and spends
@@ -229,14 +229,16 @@ URL:`;
         'x-api-key': claudeApiKey,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+      // The model comes from DEFAULT_AI_MODEL (aiModel.ts). This was the
+      // literal 'claude-sonnet-4-20250514', which is retired.
+      body: JSON.stringify(shapeClaudeRequest({
+        model: defaultModel(),
         max_tokens: 200,
         messages: [{
           role: 'user',
           content: prompt
         }]
-      })
+      }))
     }, 60_000);
 
     if (!response.ok) {
@@ -245,7 +247,9 @@ URL:`;
     }
 
     const data = await response.json();
-    const url = data.content?.[0]?.text?.trim();
+    // content[0] can be a thinking block; read the first text block.
+    const extracted = extractClaudeText(data);
+    const url = extracted.ok ? extracted.text.trim() : undefined;
 
     if (url && url !== 'NONE' && !url.includes('facebook.com')) {
       const urlCheck = validateURLForSSRF(url);

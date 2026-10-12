@@ -17,7 +17,7 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { retrieveKb } from "../_shared/kbRetrieve.ts";
-import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey, lightweightModel, shapeClaudeRequest } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { crisisMessageText, crisisPayload, detectCrisisIntent } from "../_shared/crisisSupport.ts";
 import { anthropicCostUsd } from "../_shared/providerUsage.ts";
@@ -45,11 +45,12 @@ async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], p
     `Answer USING ONLY the knowledge-base passages provided. If they don't clearly contain the answer, ` +
     `set "canAnswer" to false and offer to connect the user with a human. Cite sources you used. ` +
     `Return ONLY compact JSON: {"reply":"...","canAnswer":true|false,"sources":["label"...]}.\n\nKNOWLEDGE BASE:\n${context || "(none)"}`;
+  const model = lightweightModel();
   try {
     const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
-      body: JSON.stringify({ model: config.lightweight_model, max_tokens: 700, temperature: 0.2, system, messages: history.slice(-8) }),
+      body: JSON.stringify(shapeClaudeRequest({ model, max_tokens: 700, temperature: 0.2, system, messages: history.slice(-8) }, { lightweight: true })),
       signal: AbortSignal.timeout(30_000),
     }, 60_000);
     if (!res.ok) return null;
@@ -57,7 +58,7 @@ async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], p
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");
     const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const usage = data.usage ?? {};
-    const costUsd = anthropicCostUsd(config.lightweight_model, usage);
+    const costUsd = anthropicCostUsd(model, usage);
     return {
       reply: String(parsed.reply ?? "").slice(0, 4000),
       canAnswer: parsed.canAnswer === true,
