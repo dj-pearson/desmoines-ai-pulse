@@ -7,6 +7,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { createEventSEOPrompt, createRestaurantSEOPrompt } from './prompts.ts';
+import { claimSeoLock, normalizeContentType, releaseSeoLock, selectSeoCandidates, tableFor } from './selection.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
@@ -36,7 +37,14 @@ serve(async (req) => {
   try {
     console.log('SEO generation request received');
 
-    const { contentType, batchSize: rawBatchSize = 10 } = await req.json();
+    const { contentType: rawContentType, batchSize: rawBatchSize = 10 } = await req.json();
+    const contentType = normalizeContentType(rawContentType);
+    if (!contentType) {
+      return new Response(
+        JSON.stringify({ error: "contentType must be 'event' or 'restaurant'" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Validate batchSize bounds (SEC-029)
     const batchSize = Math.min(Math.max(Number(rawBatchSize) || 10, 1), 20);
@@ -65,25 +73,12 @@ serve(async (req) => {
     console.log('Claude API key found, length:', claudeApiKey.length);
     console.log(`Starting SEO content generation for ${contentType}`);
 
-    // Get items that need SEO content with locking to prevent duplicates
-    let query;
-    if (contentType === 'event') {
-      query = supabaseClient
-        .from('events')
-        .select('id, title, venue, location, date, category, ai_writeup')
-        .or('seo_title.is.null,seo_title.eq.""')
-        .limit(batchSize);
-    } else {
-      query = supabaseClient
-        .from('restaurants')
-        .select('id, name, description, cuisine, location, price_range, ai_writeup, opening_date, status')
-        .or('seo_title.is.null,seo_title.eq.""')
-        .limit(batchSize);
-    }
-
-    const { data: items, error: fetchError } = await query;
-    
-    if (fetchError) {
+    // Upcoming events (writeup first) or restaurants, skipping rows another
+    // run holds. See ./selection.ts.
+    let items;
+    try {
+      items = await selectSeoCandidates(supabaseClient, contentType, batchSize);
+    } catch (fetchError) {
       console.error('Database fetch error:', fetchError);
       throw new Error('Failed to fetch items');
     }
@@ -102,19 +97,8 @@ serve(async (req) => {
 
     for (const item of items) {
       try {
-        // Immediately mark item as processing to prevent duplicates
-        const lockData = {
-          seo_title: 'PROCESSING...',
-          seo_description: 'Processing SEO content...'
-        };
-        
-        const { error: lockError } = await supabaseClient
-          .from(contentType === 'event' ? 'events' : 'restaurants')
-          .update(lockData)
-          .eq('id', item.id)
-          .or('seo_title.is.null,seo_title.eq.""');
-        
-        if (lockError) {
+        // Claim the row; a lock older than 15 minutes is free (./selection.ts).
+        if (!(await claimSeoLock(supabaseClient, contentType, item.id))) {
           console.log(`Item ${item.id} already being processed, skipping`);
           continue;
         }
@@ -167,11 +151,12 @@ serve(async (req) => {
           seo_h1: seoData.h1,
           geo_summary: seoData.summary,
           geo_key_facts: seoData.keyFacts,
-          geo_faq: seoData.faq
+          geo_faq: seoData.faq,
+          seo_locked_at: null
         };
 
         const { error: updateError } = await supabaseClient
-          .from(contentType === 'event' ? 'events' : 'restaurants')
+          .from(tableFor(contentType))
           .update(updateData)
           .eq('id', item.id);
 
@@ -185,16 +170,10 @@ serve(async (req) => {
       } catch (error) {
         console.error(`Error processing ${contentType} ${item.id}:`, error);
         
-        // Reset the lock if processing failed
-        const resetData = {
-          seo_title: null,
-          seo_description: null
-        };
-        await supabaseClient
-          .from(contentType === 'event' ? 'events' : 'restaurants')
-          .update(resetData)
-          .eq('id', item.id);
-          
+        // Release the lock if processing failed. If this never runs (crash,
+        // timeout), the lock goes stale after 15 minutes instead of forever.
+        await releaseSeoLock(supabaseClient, contentType, item.id);
+
         errors.push(`${item.id}: ${error.message}`);
       }
     }

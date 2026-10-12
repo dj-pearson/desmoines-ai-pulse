@@ -351,6 +351,13 @@ jobs:
       # demonstrated five fabrications in six sentences. Pins that the prompt no
       # longer asks for any of it and that the example models omission.
       - run: deno test --allow-read supabase/functions/_tests/writeup-grounding.test.ts
+      # The writeup and SEO queues pg_cron drives every 15 minutes. Pins
+      # upcoming-only, soonest-first selection for both steps (generate-seo-content
+      # had no date filter and spent on past events), writeup-ready events first
+      # for SEO, and the seo_locked_at lock going stale after 15 minutes (the old
+      # 'PROCESSING...' string lock was cleared only on a caught error, so a crash
+      # locked a row forever).
+      - run: deno test --allow-read supabase/functions/_tests/event-enrichment-queue.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section
