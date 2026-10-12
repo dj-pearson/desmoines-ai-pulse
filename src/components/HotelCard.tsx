@@ -6,6 +6,7 @@ import { Database } from "@/integrations/supabase/types";
 import { STATUS_BADGE } from "@/lib/categoryStyles";
 import { hotelClassStars, hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -74,6 +75,9 @@ export default function HotelCard({
               <SpriteIcon name="building-2" className="h-12 w-12 text-muted-foreground" />
             </div>
           )}
+
+          {/* Google requires its credit wherever a Places photo is shown. */}
+          <PlacesPhotoCredit imageUrl={hotel.image_url} attribution={hotel.places_photo_attribution} />
 
           {hotel.price_range && (
             <Badge className="absolute top-3 right-3 bg-black/70 text-white border-0 text-xs">

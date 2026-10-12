@@ -110,7 +110,10 @@ Deno.test('the hotel og:image is absolute', async () => {
   // A relative og:image resolves against nothing for a social crawler, so the
   // preview simply has no image.
   const src = codeOnly(await read('src/pages/HotelDetails.tsx'));
-  assert(/property="og:image" content=\{getCanonicalUrl\(hotel\.image_url \|\| BRAND\.ogImage\)\}/.test(src));
+  // shareImage is hotel.image_url minus a Google Places photo copy, which may
+  // not be handed to share caches (20261020000002); absoluteness is unchanged.
+  assert(/property="og:image" content=\{getCanonicalUrl\(shareImage \|\| BRAND\.ogImage\)\}/.test(src));
+  assert(/const shareImage = isPlacesPhotoCopy\(hotel\.image_url\) \? null : hotel\.image_url;/.test(src));
   assertFalse(/content=\{hotel\.image_url \|\| '\/DMI-Logo\.png'\}/.test(src));
 });
 

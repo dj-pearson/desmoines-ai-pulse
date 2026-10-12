@@ -62,5 +62,16 @@ ck('one good param survives a junk sibling',
    m.mediaTransformFrom(q('width=640&quality=nope')).width === 640
      && m.mediaTransformFrom(q('width=640&quality=nope')).quality === undefined);
 
+// Hotels (20261020000002). A Places photo copy may be cached for 30 days at
+// most and backfill-images deletes it before then; a year of edge cache would
+// keep serving it after the delete.
+console.log('\nPlaces photo copies get a short cache');
+const COPY = 'hotels/0d3c1d2e-1111-4a2b-9c3d-123456789abc/places-photo-1760140800000.jpg';
+ck('a Places copy path is served', m.isSafeMediaPath(COPY));
+ck('a Places copy is cached for a day', m.maxAgeFor(COPY) === 86400);
+ck('a normal hero keeps the year', m.maxAgeFor('events/x/hero.jpg') === 31536000);
+ck('a name merely containing the words keeps the year',
+   m.maxAgeFor('events/x/places-photo-gallery.jpg') === 31536000);
+
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);

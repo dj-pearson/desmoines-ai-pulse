@@ -55,6 +55,8 @@ export interface SearchRow {
   name?: string | null;
   slug?: string | null;
   image_url?: string | null;
+  /** Hotels: the Google Places photo author, when the image is a Places copy. */
+  places_photo_attribution?: string | null;
   description?: string | null;
   enhanced_description?: string | null;
   original_description?: string | null;

@@ -117,16 +117,37 @@ To see what would happen without writing anything:
 
 ## Budgets
 
-Per restaurant: 18 fetches, 6 Claude calls, 110s wall clock. Per invocation:
-260s, after which the run returns `deadline_reached: true` and `remaining`
-rather than being killed mid-write. These exist so one pathological site cannot
-consume an entire invocation.
+Supabase drops a request that has sent nothing for 150s (HTTP 504
+`IDLE_TIMEOUT`), and this function answers with one JSON body at the end, so
+everything has to fit inside that. The numbers live in
+`_shared/menu/menuBudget.ts` and `menuBudget.test.ts` checks them against each
+other:
+
+- Per restaurant: 18 fetches, 6 Claude calls, 100s wall clock.
+- No fetch or Claude call runs past 125s from the request. Every timeout is
+  clamped to the time left, a Claude call is not started (or retried) with
+  under 20s left, and a JS render that overruns is abandoned.
+- Claude replies are streamed, so a call cut off at the deadline keeps the
+  complete items it had produced; the attempt is logged with
+  `reply incomplete: cut_off` (or `max_tokens`).
+- At 135s the handler answers regardless. A restaurant still running is
+  reported as `Response deadline reached mid-restaurant`, its attempts are
+  written to `menu_scrape_attempts` with a `deadline` row, and nothing is saved
+  for it afterwards.
+- The run returns `deadline_reached: true`, `remaining` and `elapsed_ms`.
+
+Menu extraction uses its own output cap (`MENU_MAX_TOKENS`, 16000), not
+`ai_configuration.max_tokens_large`, which other functions share. That row was
+80000 on 2026-10-11, over claude-sonnet-4-5's 64000 output limit, and every
+menu request failed with a 400 that surfaced as "empty".
 
 ## Tests
 
 ```bash
 deno test --allow-none supabase/functions/_shared/menu/menuNormalize.test.ts
 deno test --allow-none supabase/functions/_shared/menu/menuContent.test.ts
+deno test --allow-none supabase/functions/_shared/menu/menuBudget.test.ts
+deno test --allow-none supabase/functions/_shared/menu/menuStream.test.ts
 deno test --allow-none supabase/functions/_shared/menu/menuJsonLd.test.ts
 deno test --allow-none supabase/functions/_shared/menu/menuPlatforms.test.ts
 deno test --allow-none supabase/functions/_shared/menu/menuDiscovery.test.ts

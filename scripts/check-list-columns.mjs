@@ -35,6 +35,7 @@ const TABLE_FOR = {
   EVENT_LIST_COLUMNS: 'events',
   ATTRACTION_LIST_COLUMNS: 'attractions',
   HOTEL_LIST_COLUMNS: 'hotels',
+  HOTEL_PLACES_PHOTO_COLUMNS: 'hotels',
   PLAYGROUND_LIST_COLUMNS: 'playgrounds',
   EVENT_SLUG_COLUMNS: 'events',
   TONIGHT_EVENT_COLUMNS: 'events',
