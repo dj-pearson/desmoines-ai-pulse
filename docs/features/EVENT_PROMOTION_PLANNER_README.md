@@ -79,7 +79,7 @@ Each email includes CTAs to list events on DesMoinesInsider.com.
 - **PDF Generation:** jsPDF
 - **State Management:** React hooks + localStorage
 - **Database:** Supabase PostgreSQL
-- **Email:** Resend API (or SendGrid/Mailgun)
+- **Email:** Amazon SES, through the edge functions' `_shared/email.ts`
 - **Analytics:** Custom tracking + Google Analytics 4
 
 ### Project Structure
@@ -205,21 +205,16 @@ Or via Supabase Dashboard:
 
 Add to `.env`:
 ```
-VITE_RESEND_API_KEY=your_resend_api_key
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### 4. Email Service Setup
 
-**Option A: Resend (Recommended)**
-1. Sign up at https://resend.com
-2. Verify your domain
-3. Add API key to `.env`
-
-**Option B: SendGrid/Mailgun**
-1. Update `email-integration.ts` with your provider's API
-2. Configure SMTP or API credentials
+Mail is sent server-side by the edge functions through Amazon SES
+(`supabase/functions/_shared/email.ts`). No email key belongs in a `VITE_*`
+variable: anything with that prefix ships in the browser bundle. Set the
+`AWS_SES_*` secrets on the Supabase project instead (see `.env.example`).
 
 ### 5. Email Templates
 

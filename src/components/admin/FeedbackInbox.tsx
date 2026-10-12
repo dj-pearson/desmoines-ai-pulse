@@ -676,7 +676,7 @@ export default function FeedbackInbox() {
                       rows={5}
                       value={replyBody}
                       onChange={(e) => setReplyBody(e.target.value)}
-                      placeholder="Write a reply. Plain text or HTML — sent through Resend, recorded on the thread, and flips status to responded."
+                      placeholder="Write a reply. Plain text or HTML — sent through Amazon SES, recorded on the thread, and flips status to responded."
                     />
                     <Button
                       size="sm"

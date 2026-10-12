@@ -10,7 +10,7 @@
 - **Hosting/CI**: Cloudflare Pages, GitHub Actions
 - **Testing**: Playwright (E2E, a11y, performance)
 - **Tooling**: ESLint 9, TypeScript 5.5, npm
-- **Integrations**: Stripe (subscriptions/campaigns), OpenAI/Anthropic, Resend/SendGrid, Puppeteer
+- **Integrations**: Stripe (subscriptions/campaigns), OpenAI/Anthropic, Amazon SES (all mail, `_shared/email.ts`), Puppeteer
 
 ## Project Structure
 

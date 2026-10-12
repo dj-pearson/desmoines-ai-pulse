@@ -1,7 +1,7 @@
 /**
  * fetch() with a hard timeout (WEB-BE-001).
  *
- * ~34 edge functions call external upstreams (Claude, OpenAI, Resend, Google)
+ * ~34 edge functions call external upstreams (Claude, OpenAI, SES, Google)
  * with a bare fetch() and no AbortSignal, so a hung upstream ties up the whole
  * function invocation — burning cost and latency until the platform kills it.
  *

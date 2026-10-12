@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { errorResponse } from "../_shared/errorResponse.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,6 +38,8 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // "console" (the default) only logs the alert; any other value mails it
+    // through SES (_shared/email.ts).
     const emailProvider = Deno.env.get("EMAIL_PROVIDER") || "console";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -98,13 +101,10 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
           console.log(message);
           console.log("=".repeat(80));
           notificationsSent.push("email (console)");
-        } else if (emailProvider === "resend") {
-          const resendApiKey = Deno.env.get("RESEND_API_KEY");
-          const emailFrom = Deno.env.get("EMAIL_FROM") || "noreply@desmoinesinsider.com";
-
-          if (!resendApiKey) {
-            throw new Error("Resend API key not configured");
-          }
+        } else {
+          // Any other EMAIL_PROVIDER value ("ses") sends through the shared
+          // SES sender, which also applies email_suppressions and email_log.
+          const emailFrom = Deno.env.get("EMAIL_FROM") || undefined;
 
           // Get notification preferences for admins
           const { data: preferences } = await supabase
@@ -112,27 +112,26 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
             .select("*")
             .eq("email_enabled", true);
 
-          const recipients = preferences?.map((p) => p.email_address).filter(Boolean) || [];
+          const recipients: string[] = preferences?.map((p) => p.email_address).filter(Boolean) || [];
 
           if (recipients.length > 0) {
-            const emailResponse = await fetchWithTimeout("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${resendApiKey}`,
-              },
-              body: JSON.stringify({
-                from: emailFrom,
+            const sent = await sendEmail(
+              {
                 to: recipients,
                 subject,
                 text: message,
-              }),
-            });
+                category: "transactional",
+                template: "seo_alert",
+                from: emailFrom,
+                ref: { type: "seo_alert", id: String(alertId) },
+              },
+              { supabase },
+            );
 
-            if (emailResponse.ok) {
-              notificationsSent.push("email (resend)");
+            if (sent.ok) {
+              notificationsSent.push("email (ses)");
             } else {
-              throw new Error(`Resend API error: ${await emailResponse.text()}`);
+              throw new Error(`email not sent: ${sent.error}`);
             }
           }
         }

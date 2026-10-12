@@ -414,9 +414,9 @@ async function notifyAdvertiserOfRefund(
       notificationType: "campaign_refunded",
       siteUrl: getSiteUrl(),
     },
-    resendApiKey: Deno.env.get("RESEND_API_KEY") ?? undefined,
-    sendgridApiKey: Deno.env.get("SENDGRID_API_KEY") ?? undefined,
     fromEmail: Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com",
+    supabase,
+    userId: args.userId,
   });
   if (!sent) {
     console.error(`[process-stripe-refund] refund email was not accepted for campaign ${args.campaignId}.`);

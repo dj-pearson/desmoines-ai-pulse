@@ -71,7 +71,7 @@ const job = await runJob('my-job-name', async (ctx) => {
 
 `runJob` records start/finish, retries transient failures (2x, exponential
 backoff), writes the final status, and emails the admin on terminal failure.
-Set `ADMIN_ALERT_EMAIL` (or `ALERT_EMAIL`) + `RESEND_API_KEY` for alerts.
+Set `ADMIN_ALERT_EMAIL` (or `ALERT_EMAIL`) + the `AWS_SES_*` secrets for alerts.
 
 ## Recovery / manual re-run
 
@@ -162,8 +162,9 @@ writes + schedules the weekly digest with no human in the loop:
 5. **Schedule** — inserts a `newsletter_campaigns` row (`status = 'scheduled'`,
    `scheduled_for = now()`, `campaign_type = 'weekly_digest'`). The existing
    `dispatch-scheduled-newsletters` cron (every minute) sends it within ~1 minute
-   through the **identical Resend path**, so unsubscribe/compliance handling and
-   delivery webhooks (opens/bounces/complaints) behave exactly as for a manual send.
+   through the **identical SES path**, so unsubscribe/compliance handling and
+   delivery events (deliveries/bounces/complaints via `ses-events`) behave exactly
+   as for a manual send.
 
 Send results (delivered/failed per campaign) are recorded by
 `dispatch-scheduled-newsletters` through the jobRunner and show in **Admin → Job

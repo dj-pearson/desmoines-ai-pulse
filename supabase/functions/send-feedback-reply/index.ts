@@ -2,7 +2,7 @@
  * Send Feedback Reply
  *
  * Admin-only. Given a contact_submission id and HTML body, sends an
- * email to the submitter via Resend, records a feedback_replies row,
+ * email to the submitter via SES (_shared/email.ts), records a feedback_replies row,
  * and flips the parent submission to status='responded' (stamping
  * responded_at if blank).
  *

@@ -95,8 +95,8 @@ supabase secrets set GOOGLE_CLIENT_SECRET=your_client_secret
 supabase secrets set GOOGLE_REDIRECT_URI=https://your-domain.com/oauth/callback
 
 # Optional: Email Notifications
-supabase secrets set EMAIL_PROVIDER=resend
-supabase secrets set RESEND_API_KEY=your_resend_key
+supabase secrets set EMAIL_PROVIDER=ses
+supabase secrets set AWS_SES_REGION=us-east-2 AWS_SES_ACCESS_KEY_ID=your_key_id AWS_SES_SECRET_ACCESS_KEY=your_secret
 supabase secrets set EMAIL_FROM=noreply@yourdomain.com
 
 # Optional: Slack Notifications
@@ -492,8 +492,8 @@ Optional (nice to have):
 **With Optional Paid Features:**
 - Ahrefs: $99/month (backlinks)
 - SERPApi: $50/month (rankings)
-- Resend: $20/month (emails)
-- **Total: $169/month**
+- Amazon SES: about $0.10 per 1,000 emails
+- **Total: $149/month plus SES usage**
 
 **Commercial Equivalent:** $300+/month
 **Your Savings:** $130-300+/month

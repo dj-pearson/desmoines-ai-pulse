@@ -123,7 +123,7 @@ Deno.test("EVENT_AREAS slugs are the same set as src/lib/eventAreas.ts", async (
 // Delivery bookkeeping
 // ---------------------------------------------------------------------------
 
-Deno.test("a Resend 500 leaves that user's searches un-advanced", async () => {
+Deno.test("a provider 500 leaves that user's searches un-advanced", async () => {
   const searches = [
     { id: "s-failed", user_id: "u-failed" },
     { id: "s-failed-quiet", user_id: "u-failed" },

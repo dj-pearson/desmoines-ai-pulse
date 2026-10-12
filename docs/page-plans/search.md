@@ -161,7 +161,7 @@ Stage B merges after D2 is approved:
 
 **Acceptance:**
 - `savedSearchMatch.test.ts`: `location=west-des-moines` matches an event with city "West Des Moines". `downtown` matches by coordinates. An iOS row `{query:'jazz'}` doesn't match an event titled "Farmers Market". `preset=this-weekend` excludes an event 10 days out. `price=free` excludes a NULL price. An item link contains `/events/` and a date suffix.
-- A stubbed Resend 500 leaves `last_alerted_at` untouched for that user.
+- A stubbed SES 500 leaves `last_alerted_at` untouched for that user.
 - Both migrations are `CREATE OR REPLACE` with unchanged signatures: no DROP, no parameter change, no column removed.
 
 **Verify:** `deno test supabase/functions/_shared/savedSearchMatch.test.ts`, `deno check supabase/functions/saved-search-alerts/index.ts`, `npm run check-schema`. Apply the migrations only under D3.

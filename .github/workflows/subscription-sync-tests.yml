@@ -148,7 +148,7 @@ jobs:
       # nurture, re-engagement, churn, milestone, outreach - against an opted-out
       # profile and assert no send is attempted, each paired with an opted-in run
       # that proves the fixture drives the agent that far.
-      # --allow-env because the suite DELETES RESEND_API_KEY and the Anthropic
+      # --allow-env because the suite DELETES the AWS_SES_* and Anthropic
       # keys before importing anything: without that, a runner holding them would
       # turn this into real outbound mail.
       # --no-check=remote, and this step is why the whole job has been red.

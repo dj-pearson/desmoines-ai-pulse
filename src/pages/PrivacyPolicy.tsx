@@ -216,7 +216,7 @@ export default function PrivacyPolicy() {
               <li><strong>Supabase:</strong> Database hosting and user authentication</li>
               <li><strong>Cloudflare:</strong> Content delivery, hosting, and security</li>
               <li><strong>Stripe:</strong> Payment processing (PCI compliant)</li>
-              <li><strong>Resend / SendGrid:</strong> Transactional and marketing email delivery</li>
+              <li><strong>Amazon Web Services (Amazon SES):</strong> Transactional and marketing email delivery</li>
               <li><strong>OpenAI &amp; Anthropic:</strong> AI content and recommendation features (no personal data used for model training)</li>
               <li><strong>Google Analytics:</strong> Website analytics, where you have opted in (opt-out available)</li>
             </ul>

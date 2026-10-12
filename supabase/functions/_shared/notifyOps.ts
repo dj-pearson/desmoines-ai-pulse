@@ -2,8 +2,8 @@
  * notifyOps — the OS reaching out (AOS-CORE-010).
  *
  * One place agents send operational notifications: escalations, failures, and
- * the daily digest. Routes by severity over _shared/email.ts (SES, or Resend
- * until SES is configured) and an optional ops webhook (Slack-compatible), frequency-caps/coalesces so a
+ * the daily digest. Routes by severity over _shared/email.ts (SES)
+ * and an optional ops webhook (Slack-compatible), frequency-caps/coalesces so a
  * storm of tasks isn't a storm of emails, and is fully fail-safe — a delivery
  * failure is logged and NEVER blocks the originating agent.
  *

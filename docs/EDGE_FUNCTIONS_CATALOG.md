@@ -178,8 +178,8 @@ Functions for sending notifications and communications.
 | Function | Description | Provider |
 |----------|-------------|----------|
 | `publish-article-webhook` | Sends webhooks when articles are published | Webhooks |
-| `send-event-reminders` | Sends customized event reminder emails at scheduled intervals | Resend |
-| `send-weekly-digest` | Sends weekly digest emails with top events and content | Resend |
+| `send-event-reminders` | Sends customized event reminder emails at scheduled intervals | Amazon SES |
+| `send-weekly-digest` | Sends weekly digest emails with top events and content | Amazon SES |
 | `social-media-manager` | Manages social media posting and scheduling | Multi-platform |
 
 ---
@@ -246,7 +246,8 @@ supabase functions deploy
 supabase secrets set ANTHROPIC_API_KEY=<key>
 supabase secrets set STRIPE_SECRET_KEY=<key>
 supabase secrets set STRIPE_WEBHOOK_SECRET=<key>
-supabase secrets set RESEND_API_KEY=<key>
+supabase secrets set AWS_SES_REGION=us-east-2 AWS_SES_ACCESS_KEY_ID=<key-id> AWS_SES_SECRET_ACCESS_KEY=<secret>
+supabase secrets set SES_FROM_ADDRESS="Des Moines Insider <hello@desmoinesinsider.com>" SES_SNS_TOPIC_ARN=<arn>
 # ... other secrets
 ```
 
