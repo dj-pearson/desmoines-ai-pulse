@@ -619,6 +619,7 @@ jobs:
       - run: deno test --allow-read --allow-env supabase/functions/_shared/agentPolicy.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/eventSourceOwnership.test.ts
       - run: deno test --allow-net supabase/functions/_shared/fetchWithTimeout.test.ts
+      - run: deno test --allow-env supabase/functions/_shared/fetchGuard.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/postgrestErrors.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/prompts/prompts.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/validation.test.ts

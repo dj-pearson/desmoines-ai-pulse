@@ -8,7 +8,25 @@ import { Badge } from "@/components/ui/badge";
 import { Settings, Zap, DollarSign, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+/**
+ * The Supabase dashboard's edge-function settings page, derived from the
+ * configured backend. Only a Supabase Cloud project (<ref>.supabase.co) has
+ * one; on the self-hosted stack function secrets live in Coolify/Infisical and
+ * there is no page to link, so this returns null and the button is not shown.
+ */
+function edgeFunctionSettingsUrl(): string | null {
+  const raw = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (!raw) return null;
+  try {
+    const match = new URL(raw).hostname.match(/^([a-z0-9]+)\.supabase\.co$/);
+    return match ? `https://supabase.com/dashboard/project/${match[1]}/settings/functions` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function ScraperSettings() {
+  const functionSettingsUrl = edgeFunctionSettingsUrl();
   const [backend, setBackend] = useState<string>("browserless");
   const [waitTime, setWaitTime] = useState<string>("5000");
   const [timeout, setTimeout] = useState<string>("30000");
@@ -212,15 +230,17 @@ export function ScraperSettings() {
           <Button onClick={handleSaveSettings} className="flex-1">
             Save Configuration
           </Button>
-          <Button variant="outline" asChild>
-            <a 
-              href="https://supabase.com/dashboard/project/wtkhfqpmcegzcbngroui/settings/functions"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Edge Function Settings →
-            </a>
-          </Button>
+          {functionSettingsUrl && (
+            <Button variant="outline" asChild>
+              <a
+                href={functionSettingsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Edge Function Settings →
+              </a>
+            </Button>
+          )}
         </div>
 
         {/* Documentation Link.

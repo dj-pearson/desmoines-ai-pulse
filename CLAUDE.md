@@ -404,7 +404,7 @@ Define and maintain a `MIN_SUPPORTED_APP_VERSION` constant per platform (recomme
 
 **This is implemented** — `supabase/functions/_shared/minSupportedVersions.ts` (`MIN_SUPPORTED_APP_VERSION`, `LATEST_APP_VERSION`, `compareVersions`/`isBelowMinimum`/`isUpdateAvailable`) and `supabase/functions/version-check/index.ts`. iOS gates in `App/DesMoinesInsiderApp.swift` via `VersionCheckService` → `ForceUpdateView`; Android in `MainActivity.kt` → `ForceUpdateScreen`. Both fail open on error, which is deliberate — a version-check outage must not brick the apps. Covered in CI by `subscription-sync-tests.yml` (Deno) and `VersionCheckTests.swift`.
 
-Two known gaps: the iOS App Store id in `version-check/index.ts` is still the `0000000000` sentinel, so the force-upgrade button falls back to the website instead of the store listing (set it together with `ClipRootView.swift`); and `LATEST_APP_VERSION` is hand-maintained, though `npm run check-app-versions` now fails when its iOS value differs from `MARKETING_VERSION` in `ios/project.yml` (Android's gradle version is patched at release, so it is not checked).
+The iOS App Store id is `6759137729` in both `version-check/index.ts` (`IOS_APP_STORE_ID`) and `ios/DesMoinesInsider/Configuration/Config.swift` (`appStoreId`); keep them equal, since nothing links them. The `0000000000` sentinel checks stay, so resetting the id falls back to the website rather than a dead listing. One known gap: `LATEST_APP_VERSION` is hand-maintained, though `npm run check-app-versions` now fails when its iOS value differs from `MARKETING_VERSION` in `ios/project.yml` (Android's gradle version is patched at release, so it is not checked).
 
 ### 4. On-disk / client-stored state
 

@@ -80,6 +80,14 @@ jobs:
     name: Build & Submit to TestFlight
     runs-on: macos-15
     timeout-minutes: 45
+    # Self-hosted cutover (P8). An environment secret overrides the repo
+    # secret of the SAME name, so this build targets the self-hosted stack only
+    # once SUPABASE_URL and SUPABASE_ANON_KEY are set on the `selfhosted`
+    # environment. Until then both resolve to the repo secrets (Supabase Cloud).
+    # Set the plain names: `secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL`
+    # prefers SUPABASE_URL, so an environment-only VITE_SUPABASE_URL would lose
+    # to a repo-level SUPABASE_URL.
+    environment: selfhosted
 
     steps:
       # ==============================================================

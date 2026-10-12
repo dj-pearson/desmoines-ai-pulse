@@ -14,6 +14,22 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('CatchDesmoinUrlExtractor');
 
+/**
+ * The message the old fetch path showed for a non-2xx: the body's `error`
+ * field, else `HTTP <status>`. supabase-js keeps the Response on
+ * `error.context` for a FunctionsHttpError; relay and network errors carry
+ * no response, so their own message is used.
+ */
+async function readInvokeError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: Response } | null)?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    const body = (await ctx.json().catch(() => null)) as { error?: string } | null;
+    if (body?.error) return body.error;
+    if (typeof ctx.status === 'number') return `HTTP ${ctx.status}`;
+  }
+  return error instanceof Error && error.message ? error.message : 'Unknown error';
+}
+
 interface ExtractionResult {
   success: boolean;
   processed: number;
@@ -38,15 +54,14 @@ export default function CatchDesmoinUrlExtractor() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/extract-catchdesmoines-urls`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        }
-      });
+      // invoke() builds the function URL from the configured Supabase URL, so
+      // this works against the cloud project and the self-hosted stack alike.
+      const { data, error } = await supabase.functions.invoke<{ remaining: number }>(
+        'extract-catchdesmoines-urls',
+        { method: 'GET' }
+      );
 
-      if (response.ok) {
-        const data = await response.json();
+      if (!error && data) {
         setRemainingCount(data.remaining);
       }
     } catch (error) {
@@ -90,24 +105,20 @@ export default function CatchDesmoinUrlExtractor() {
         });
       }, 1000);
 
-      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/extract-catchdesmoines-urls`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ batchSize, dryRun })
-      });
+      const { data, error } = await supabase.functions.invoke<ExtractionResult>(
+        'extract-catchdesmoines-urls',
+        { body: { batchSize, dryRun } }
+      );
 
       clearInterval(progressInterval);
       setProgress(100);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
+      if (error) {
+        throw new Error(await readInvokeError(error));
       }
-
-      const data: ExtractionResult = await response.json();
+      if (!data) {
+        throw new Error('Empty response');
+      }
       
       if (dryRun) {
         setDryRunResult(data);
