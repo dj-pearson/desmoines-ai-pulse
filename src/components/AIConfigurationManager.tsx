@@ -454,11 +454,11 @@ export function AIConfigurationManager() {
                   Model Configuration Guide
                 </p>
                 <p className="text-amber-800 dark:text-amber-200 mb-2">
-                  Manage your AI model bank above. Add new models as they're released, test them individually, then select your models in the settings below.
+                  The edge functions do not read the Default Model and Lightweight Model settings on this page. They use the <code>DEFAULT_AI_MODEL</code> edge-function secret, and <code>LIGHTWEIGHT_AI_MODEL</code> for cheap, high-volume calls (falling back to <code>DEFAULT_AI_MODEL</code> when it is unset). Change the model by changing those secrets. The Test button still calls whichever model you pick here, so you can check an id before setting it.
                 </p>
                 <ul className="text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
-                  <li><strong>Default Model</strong>: Used for complex tasks like event extraction, article generation, and content crawling. Current: <strong>{currentModel}</strong></li>
-                  <li><strong>Lightweight Model</strong>: Used for fast, cost-effective tasks like SEO generation and NLP parsing. Current: <strong>{getSetting('lightweight_model', 'claude-haiku-4-5-20251001')}</strong></li>
+                  <li><strong>Default Model</strong> setting: not used by the edge functions. Stored value: <strong>{currentModel || '(none)'}</strong></li>
+                  <li><strong>Lightweight Model</strong> setting: not used by the edge functions. Stored value: <strong>{getSetting('lightweight_model', '') || '(none)'}</strong></li>
                 </ul>
               </div>
             </div>

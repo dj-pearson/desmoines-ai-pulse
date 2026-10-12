@@ -18,7 +18,8 @@ import { createAgentTask } from "../agentTasks.ts";
 import { writeAgentAudit } from "../auditLog.ts";
 import { scoreOutput } from "../scoreOutput.ts";
 import { retrieveKb, type KbPassage } from "../kbRetrieve.ts";
-import { getAIConfig } from "../aiConfig.ts";
+import { getAIConfig, defaultModel, shapeClaudeRequest } from "../aiConfig.ts";
+import { anthropicCostUsd } from "../providerUsage.ts";
 import { crisisMessageText, detectCrisisIntent } from "../crisisSupport.ts";
 import { fetchWithTimeout } from "../fetchWithTimeout.ts";
 import type { AgentRun } from "./types.ts";
@@ -70,7 +71,7 @@ async function draftAnswer(
     const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
-      body: JSON.stringify({ model: config.default_model, max_tokens: 700, temperature: 0.2, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify(shapeClaudeRequest({ model: defaultModel(), max_tokens: 700, temperature: 0.2, messages: [{ role: "user", content: prompt }] })),
       signal: AbortSignal.timeout(30_000),
     }, 60_000);
     if (!res.ok) return null;
@@ -78,8 +79,8 @@ async function draftAnswer(
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");
     const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const usage = data.usage ?? {};
-    // Sonnet ~ $3/M in, $15/M out.
-    const costUsd = (usage.input_tokens ?? 0) * (3 / 1_000_000) + (usage.output_tokens ?? 0) * (15 / 1_000_000);
+    // Priced for the model actually called, which DEFAULT_AI_MODEL decides.
+    const costUsd = anthropicCostUsd(String(data.model ?? defaultModel()), usage);
     return {
       draft: {
         answer: String(parsed.answer ?? "").slice(0, 4000),

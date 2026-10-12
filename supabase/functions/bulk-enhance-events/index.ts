@@ -264,8 +264,8 @@ serve(async (req) => {
       promptUsed,
       // WEB-BE-041. This was the literal "claude-sonnet-4-20250514" while the
       // call above went through buildClaudeRequest, so the audit field reported
-      // a model this function does not use - and would keep reporting it after
-      // an ai_config change. Report what was actually sent.
+      // a model this function does not use. Report what was actually sent,
+      // which DEFAULT_AI_MODEL decides.
       claudeModel: requestBody.model
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

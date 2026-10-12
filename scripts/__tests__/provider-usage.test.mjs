@@ -38,6 +38,17 @@ check('claude-haiku-4-5-20251001', priceForModel('claude-haiku-4-5-20251001').in
 check('claude-sonnet-4-5-20250929 falls back to the sonnet family',
   priceForModel('claude-sonnet-4-5-20250929').inPerM === 3);
 
+console.log('\nthe 5.5 models (what DEFAULT_AI_MODEL / LIGHTWEIGHT_AI_MODEL name)');
+check('sonnet 5.5', priceForModel('claude-sonnet-5-5').inPerM === 2 && priceForModel('claude-sonnet-5-5').outPerM === 10);
+check('opus 5.5 is not priced as opus 5', priceForModel('claude-opus-5-5').inPerM === 4 && priceForModel('claude-opus-5-5').outPerM === 20);
+check('haiku 5.5 is not priced as haiku 4.5', priceForModel('claude-haiku-5-5').inPerM === 0.1 && priceForModel('claude-haiku-5-5').outPerM === 0.5);
+check('haiku 5.5 at exactly 100k prompt tokens is the lower tier',
+  near(anthropicCostUsd('claude-haiku-5-5', { input_tokens: 100_000, output_tokens: 1_000_000 }), 0.01 + 0.5));
+check('haiku 5.5 above 100k bills the whole request at the upper tier',
+  near(anthropicCostUsd('claude-haiku-5-5', { input_tokens: 100_001, output_tokens: 1_000_000 }), (100_001 / 1e6) * 0.5 + 2.5));
+check('haiku 5.5 tier counts cached prompt tokens',
+  near(anthropicCostUsd('claude-haiku-5-5', { input_tokens: 10, cache_read_input_tokens: 200_000 }), (10 / 1e6) * 0.5 + 0.2 * 0.5 * 0.1));
+
 console.log('\nprefix order');
 // "claude-opus-4-8" must be tested before any shorter opus prefix, or a 4.8 id
 // would price as whatever the shorter row says.

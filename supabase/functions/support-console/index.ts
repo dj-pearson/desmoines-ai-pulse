@@ -13,7 +13,7 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { retrieveKb } from "../_shared/kbRetrieve.ts";
-import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey, defaultModel, shapeClaudeRequest } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const AGENT_KEY = "support-console";
@@ -38,7 +38,7 @@ async function suggest(supabaseUrl: string, supabaseKey: string, thread: { sende
     const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
-      body: JSON.stringify({ model: config.default_model, max_tokens: 600, temperature: 0.3, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify(shapeClaudeRequest({ model: defaultModel(), max_tokens: 600, temperature: 0.3, messages: [{ role: "user", content: prompt }] })),
       signal: AbortSignal.timeout(30_000),
     }, 60_000);
     if (!res.ok) return null;

@@ -21,7 +21,7 @@
  */
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig } from "./aiConfig.ts";
+import { getAIConfig, defaultModel, shapeClaudeRequest } from "./aiConfig.ts";
 import { getAgentConfig } from "./agentConfig.ts";
 import { runAgent as recordAgentRun } from "./agentRun.ts";
 import { requiresApproval, createApproval } from "./agentApprovals.ts";
@@ -173,13 +173,20 @@ export async function runToolLoop(p: RunToolLoopParams): Promise<RunToolLoopResu
       return done("cost_cap");
     }
 
-    const body = {
-      model,
-      max_tokens: maxTokensPerStep,
-      system: systemBlocks,
-      tools: toolsBody,
-      messages: conversation,
-    };
+    // Shaped for the model: a request shape the model rejects (prefill, a
+    // forced tool_choice) fails here with its reason instead of as a 400.
+    let body: Record<string, unknown>;
+    try {
+      body = shapeClaudeRequest({
+        model,
+        max_tokens: maxTokensPerStep,
+        system: systemBlocks,
+        tools: toolsBody,
+        messages: conversation,
+      });
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
 
     // Call with bounded retries on transient (429 / 5xx / network) failures.
     let reply: { content: ContentBlock[]; stop_reason?: string; usage?: Record<string, number> } | null = null;
@@ -468,11 +475,11 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
     return { status: "failure", error: "no Anthropic API key configured" };
   }
 
-  // Latest Claude model per CLAUDE.md: the DB-managed default, overridable.
+  // DEFAULT_AI_MODEL (aiModel.ts) unless the agent names one.
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const aiCfg = await getAIConfig(supabaseUrl, supabaseKey);
-  const model = config.model ?? aiCfg.default_model;
+  const model = config.model ?? defaultModel();
 
   const messages: ChatMessage[] = config.messages ??
     [{ role: "user", content: config.userMessage ?? "Begin." }];

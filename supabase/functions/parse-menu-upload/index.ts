@@ -8,7 +8,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey, defaultModel, shapeClaudeRequest, extractClaudeText } from "../_shared/aiConfig.ts";
 import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
@@ -133,8 +133,8 @@ async function extractMenuFromFile(
       'anthropic-version': aiConfig.anthropic_version,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      model: aiConfig.default_model,
+    body: JSON.stringify(shapeClaudeRequest({
+      model: defaultModel(),
       max_tokens: aiConfig.max_tokens_large,
       messages: [
         {
@@ -148,7 +148,7 @@ async function extractMenuFromFile(
           ],
         },
       ],
-    }),
+    })),
   }, 60_000);
 
   if (!response.ok) {
@@ -158,7 +158,9 @@ async function extractMenuFromFile(
   }
 
   const data = await response.json();
-  const extractedText = data.content?.[0]?.text || '{}';
+  // content[0] can be a thinking block; read the first text block.
+  const extracted = extractClaudeText(data);
+  const extractedText = extracted.ok ? extracted.text : '{}';
 
   try {
     const jsonMatch = extractedText.match(/\{[\s\S]*\}/);

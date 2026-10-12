@@ -9,7 +9,7 @@ import { isHubOwned } from "../_shared/eventSourceProfiles.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { acceptedJobStatuses, JOB_STATUS_IDLE } from "../_shared/scrapingJobStatus.ts";
 import { runJob } from "../_shared/jobRunner.ts";
@@ -419,7 +419,9 @@ Format your response as JSON:
       if (claudeResponse.ok) {
         const claudeData = await claudeResponse.json();
         console.log(`🔍 Claude response data:`, claudeData);
-        const analysisText = claudeData.content?.[0]?.text?.trim();
+        // content[0] can be a thinking block; read the first text block.
+        const extracted = extractClaudeText(claudeData);
+        const analysisText = extracted.ok ? extracted.text.trim() : undefined;
 
         if (analysisText) {
           console.log(`🔍 Claude analysis text length: ${analysisText.length}`);

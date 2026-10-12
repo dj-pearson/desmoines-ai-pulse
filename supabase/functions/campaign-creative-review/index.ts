@@ -28,7 +28,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { getAnthropicApiKey, lightweightModel, shapeClaudeRequest, extractClaudeText } from '../_shared/aiConfig.ts';
 import { autoReviewOutcome, brandSafetyFinding, type BrandSafetyResult } from './decision.ts';
 
 // Minimum pixel dimensions per placement.
@@ -118,8 +118,10 @@ async function brandSafe(text: string): Promise<BrandSafetyResult> {
         'x-api-key': key,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+      // The model comes from the model secrets (aiModel.ts); shapeClaudeRequest
+      // raises the 10-token cap on a model that thinks before it answers.
+      body: JSON.stringify(shapeClaudeRequest({
+        model: lightweightModel(),
         max_tokens: 10,
         messages: [
           {
@@ -129,11 +131,13 @@ async function brandSafe(text: string): Promise<BrandSafetyResult> {
               `Reply with exactly "SAFE" or "UNSAFE". Ad copy: """${text.slice(0, 1500)}"""`,
           },
         ],
-      }),
+      }, { lightweight: true })),
     }, 60_000);
     if (!res.ok) return { safe: false, checked: false, note: `claude error ${res.status}` };
     const data = await res.json();
-    const verdict = String(data?.content?.[0]?.text || '').toUpperCase();
+    // content[0] can be a thinking block; read the first text block.
+    const ex = extractClaudeText(data);
+    const verdict = (ex.ok ? ex.text : '').toUpperCase();
     // A reply that is neither SAFE nor UNSAFE is not a verdict. Reading "not
     // UNSAFE" as safe made an empty or truncated response an approval.
     if (!verdict.includes('SAFE') && !verdict.includes('UNSAFE')) {

@@ -14,6 +14,7 @@
 // deno-lint-ignore no-explicit-any
 type Client = any;
 import { buildLightweightClaudeRequest, getClaudeHeaders, getAIConfig } from "./aiConfig.ts";
+import { anthropicCostUsd } from "./providerUsage.ts";
 import { createAgentTask } from "./agentTasks.ts";
 
 /** Per-category pass threshold (0..100). */
@@ -69,11 +70,6 @@ function thresholdFor(category: string): number {
   return QUALITY_THRESHOLD[category] ?? DEFAULT_QUALITY_THRESHOLD;
 }
 
-/** Approximate Haiku cost from token counts (fail-safe: never zero for tokens). */
-function haikuCost(inTok: number, outTok: number): number {
-  return (inTok / 1_000_000) * 0.8 + (outTok / 1_000_000) * 4;
-}
-
 export async function scoreOutput(supabase: Client, args: ScoreOutputArgs): Promise<QualityScore> {
   const threshold = thresholdFor(args.category);
   const rubric = RUBRIC[args.category] ?? DEFAULT_RUBRIC;
@@ -120,7 +116,8 @@ export async function scoreOutput(supabase: Client, args: ScoreOutputArgs): Prom
     const data = await res.json();
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");
     const usage = data.usage ?? {};
-    const evalCostUsd = haikuCost(usage.input_tokens ?? 0, usage.output_tokens ?? 0);
+    // Priced for the model actually called, which the model secrets decide.
+    const evalCostUsd = anthropicCostUsd(String(body.model), usage);
 
     const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const score = Math.max(0, Math.min(100, Number(parsed.score) || 0));

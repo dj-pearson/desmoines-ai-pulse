@@ -17,7 +17,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, defaultModel, shapeClaudeRequest, extractClaudeText } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { countPlaces, coverageScope, coverageVerdict } from "../_shared/pseoCoverage.ts";
@@ -171,19 +171,20 @@ serve(async (req) => {
     const systemPrompt = buildSystemPrompt();
     const userPrompt = buildUserPrompt(pageTypeId, dimensions, currentDate, currentSeason);
 
-    // Call Claude
+    // Call Claude. The model comes from DEFAULT_AI_MODEL (aiModel.ts).
+    const model = defaultModel();
     const startTime = Date.now();
     const claudeHeaders = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
     const claudeResponse = await fetch(aiConfig.api_endpoint, {
       method: 'POST',
       headers: claudeHeaders,
-      body: JSON.stringify({
-        model: aiConfig.default_model,
+      body: JSON.stringify(shapeClaudeRequest({
+        model,
         max_tokens: aiConfig.max_tokens_large,
         temperature: aiConfig.temperature_precise,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
-      }),
+      })),
     });
 
     if (!claudeResponse.ok) {
@@ -196,7 +197,9 @@ serve(async (req) => {
     const generationTimeMs = Date.now() - startTime;
 
     // Parse AI response
-    const aiText = claudeData.content?.[0]?.text ?? '';
+    // content[0] can be a thinking block; read the first text block.
+    const extracted = extractClaudeText(claudeData);
+    const aiText = extracted.ok ? extracted.text : '';
     let parsedContent;
     try {
       // Extract JSON from the response (handle markdown code blocks)
@@ -240,7 +243,7 @@ serve(async (req) => {
         generatedAt: new Date().toISOString(),
         generatedBy: 'generate-pseo-page',
         promptVersion: '2.0',
-        modelUsed: aiConfig.default_model,
+        modelUsed: model,
         wordCount: aiText.split(/\s+/).length,
         refreshSchedule: getRefreshSchedule(dimensions),
       },
