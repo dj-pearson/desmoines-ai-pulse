@@ -87,8 +87,15 @@ async function extractShowsWithBrowserlessFunction(): Promise<ScrapedShow[]> {
   const browserlessUrl = `${config.browserlessUrl}/function?token=${config.browserlessApiKey}`;
 
   // JavaScript that runs in headless Chrome to extract event data from the DOM
+  // /function has no userAgent body field; the script sets it on the page.
+  // Without this the site sees HeadlessChrome on a self-hosted Browserless.
+  // JSON.stringify makes the configured string a safe JS literal.
+  const userAgentLine = config.userAgent
+    ? `await page.setUserAgent(${JSON.stringify(config.userAgent)});`
+    : "";
   const code = `
     module.exports = async ({ page }) => {
+      ${userAgentLine}
       await page.goto('${VIBRANT_URL}', {
         waitUntil: 'networkidle2',
         timeout: 30000,

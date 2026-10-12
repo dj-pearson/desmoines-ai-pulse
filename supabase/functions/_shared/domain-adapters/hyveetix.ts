@@ -21,6 +21,7 @@
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
+import { browserlessUserAgent, getScraperConfig } from "../scraper.ts";
 
 const BASE = "https://hyveetix.evenue.net";
 const MAX_PAGES = 25; // safety budget — 8 top groups + ~16 sub-groups
@@ -237,8 +238,14 @@ async function fetchViaBrowserless(
   apiKey: string,
   code: string,
 ): Promise<string | null> {
+  // The host comes from BROWSERLESS_URL like every other Browserless caller.
+  // It was pinned to production-sfo.browserless.io, so pointing the project at
+  // a self-hosted instance would have sent that instance's token to the hosted
+  // service. userAgent sets the browser's own UA; without it the page sees
+  // HeadlessChrome (the hosted service masks that, a self-hosted one does not).
+  const config = getScraperConfig();
   const browserlessUrl =
-    `https://production-sfo.browserless.io/content?token=${apiKey}&stealth=true`;
+    `${config.browserlessUrl}/content?token=${apiKey}&stealth=true`;
   try {
     const response = await globalThis.fetch(browserlessUrl, {
       method: "POST",
@@ -247,6 +254,7 @@ async function fetchViaBrowserless(
         url,
         gotoOptions: { waitUntil: "domcontentloaded", timeout: 20000 },
         waitForTimeout: 1500,
+        ...browserlessUserAgent(config),
       }),
     });
 
