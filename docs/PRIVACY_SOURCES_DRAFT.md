@@ -188,17 +188,16 @@ neither is load-bearing.
 
 ## 4. Sub-processor consistency (AC6)
 
-`DataProcessingAgreement.tsx` names: **Anthropic, Cloudflare, OpenAI, Resend, Stripe,
-Supabase.** The proposed section names Stripe, an email provider, and Google/Apple sign-in.
+`DataProcessingAgreement.tsx` names: **Amazon Web Services (SES), Anthropic, Cloudflare,
+OpenAI, Stripe, Supabase.** The proposed section names Stripe, an email provider, and Google/Apple sign-in.
 
 Two consistency items for review, both pre-existing rather than introduced here:
 
 1. **Google and Apple** appear as sign-in providers in the flow but not in the DPA's
    sub-processor list. Either they belong there, or the sources section should describe
    them as authentication providers rather than sub-processors.
-2. **SendGrid** — the July audit reportedly added "Resend/SendGrid" to both documents,
-   but the current DPA text mentions only Resend. Confirm which provider is live before
-   the sources section refers to "our email provider" generically.
+2. **Email provider** — settled 2026-10-12: all mail goes through Amazon SES, and both
+   the DPA and the privacy policy now name Amazon Web Services (SES) and nothing else.
 
 ---
 

@@ -188,7 +188,7 @@ bespoke loop is gone, its response is unchanged.
 
 The OS reaches out — operators don't watch the console. `notifyOps`
 (`supabase/functions/_shared/notifyOps.ts`) is the one place agents send
-operational notifications, routed by severity over Resend email and an optional
+operational notifications, routed by severity over SES email and an optional
 Slack-compatible webhook (`OPS_WEBHOOK_URL`):
 
 - **Immediate**: tier-2/3 escalations (from the router) and agent failures (from
@@ -517,7 +517,7 @@ Guardrails: a **7-day frequency cap**, the classifier's `messagingAllowed`
 consent flag, the **AOS-GOV-004** quality gate before send, and — critically — a
 user with **no relevant content is skipped**, never sent filler. Sends go through
 `sendNurtureEmail` (one-click unsubscribe) and land in `nurture_sends`;
-deliverability/opens/clicks flow back via `resend-webhook`. The digest reports
+deliveries/bounces/complaints flow back via `ses-events` (ses-events records no opens or clicks, so those counts stay empty). The digest reports
 7-day weekly-digest sent/opened/clicked.
 
 ## Churn-risk + win-back agent (AOS-NURTURE-003)
@@ -557,10 +557,10 @@ in lifecycle stage `new`/`onboarding`: **welcome → key features → personaliz
 - **Quality** — the step passes the **AOS-GOV-004** quality gate
   (`scoreOutput`, `nurture`) before send; a failing draft is held, not sent.
 
-Sends go through the shared `sendNurtureEmail` helper (existing Resend plumbing +
+Sends go through the shared `sendNurtureEmail` helper (`_shared/email.ts` over SES +
 `emailLayout` CAN-SPAM footer with one-click unsubscribe) and are recorded in the
-`nurture_sends` ledger. **Outcomes** — delivered/opened/clicked flow back via an
-extended `resend-webhook` (which now also matches `nurture_sends` by message id);
+`nurture_sends` ledger. **Outcomes** — delivered/bounced/complained flow back via
+`ses-events` (which matches `nurture_sends` by message id; it records no opens or clicks);
 **activation** is stamped when a user takes the first-value action (a favorite)
 after the send. The ops digest reports 7-day onboarding sent/opened/clicked/
 activated counts. `nurture_sends` is shared infrastructure for the rest of the
@@ -1105,7 +1105,7 @@ Two layers, extending WEB-SEC-008 hygiene:
 When a secret leak incident opens:
 
 1. **Rotate first, investigate second.** Immediately revoke/rotate the exposed
-   key at the provider (Supabase service key, Stripe, Anthropic, Resend, etc.).
+   key at the provider (Supabase service key, Stripe, Anthropic, AWS/SES, etc.).
 2. **Update the secret** in Supabase (`supabase secrets set KEY=…`) and any CI
    secret store — never in the repo.
 3. **Purge from the tree** and, if it was committed, from history

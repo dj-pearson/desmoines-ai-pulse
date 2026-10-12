@@ -7,7 +7,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   buildMessageHeaders,
-  buildResendPayload,
   buildSesPayload,
   resolveEmailProvider,
   sendEmail,
@@ -70,11 +69,14 @@ const marketing: SendEmailInput = {
   },
 };
 
-Deno.test("provider: SES when all three AWS values are set, Resend as the fallback, else none", () => {
+Deno.test("provider: SES when all three AWS values are set, else none naming what is missing", () => {
   assertEquals(resolveEmailProvider(envOf(SES_ENV)).kind, "ses");
-  assertEquals(resolveEmailProvider(envOf({ ...SES_ENV, RESEND_API_KEY: "re_x" })).kind, "ses");
-  assertEquals(resolveEmailProvider(envOf({ AWS_SES_REGION: "us-east-2", RESEND_API_KEY: "re_x" })).kind, "resend");
-  assertEquals(resolveEmailProvider(envOf({})).kind, "none");
+  // A leftover RESEND_API_KEY is not a provider any more.
+  const partial = resolveEmailProvider(envOf({ AWS_SES_REGION: "us-east-2", RESEND_API_KEY: "re_x" }));
+  assertEquals(partial, { kind: "none", from: SES_ENV.SES_FROM_ADDRESS, missing: ["AWS_SES_ACCESS_KEY_ID", "AWS_SES_SECRET_ACCESS_KEY"] });
+  const empty = resolveEmailProvider(envOf({}));
+  assertEquals(empty.kind, "none");
+  assertEquals(empty.kind === "none" ? empty.missing : [], ["AWS_SES_REGION", "AWS_SES_ACCESS_KEY_ID", "AWS_SES_SECRET_ACCESS_KEY"]);
 });
 
 Deno.test("headers: marketing always carries List-Unsubscribe; one-click only with an https target", () => {
@@ -98,11 +100,6 @@ Deno.test("SES payload: headers on the message, configuration set, tags", () => 
   assertEquals(p.ConfigurationSetName, "dmi-default");
   assertEquals(simple.Body.Text.Data, "hi");
   assertEquals((p.EmailTags as Array<{ Value: string }>)[0].Value, "weekly_digest");
-});
-
-Deno.test("Resend payload: List-Unsubscribe goes in the JSON body, which is where Resend reads it", () => {
-  const p = buildResendPayload(marketing, { from: "f@desmoinesinsider.com" }, ["reader@example.com"]);
-  assertEquals((p.headers as Record<string, string>)["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
 });
 
 Deno.test("sendEmail over SES: signed POST to the v2 endpoint, message id logged", async () => {
@@ -161,15 +158,17 @@ Deno.test("suppression read failure: marketing fails closed, transactional sends
   assertEquals((await sendEmail(marketing, { env: envOf(SES_ENV), fetch: p.f, supabase: stubDb([], { code: "PGRST205", message: "Could not find the table" }).client })).ok, true);
 });
 
-Deno.test("Resend fallback when SES is not configured", async () => {
+Deno.test("SES not configured: nothing goes on the network, even with a RESEND_API_KEY set, and the skip is logged", async () => {
   const { f, calls } = stubFetch(200, { id: "re_1" });
-  const res = await sendEmail(marketing, { env: envOf({ RESEND_API_KEY: "re_test" }), fetch: f });
-  assertEquals(res.provider, "resend");
-  assertEquals(res.messageId, "re_1");
-  assertEquals(calls[0].url, "https://api.resend.com/emails");
-  const body = JSON.parse(calls[0].init.body as string);
-  assert(body.headers["List-Unsubscribe"].includes("email-unsubscribe"));
-  assertEquals((calls[0].init.headers as Record<string, string>)["List-Unsubscribe"], undefined);
+  const { client, inserts } = stubDb([]);
+  const res = await sendEmail(marketing, { env: envOf({ RESEND_API_KEY: "re_test", AWS_SES_REGION: "us-east-2" }), fetch: f, supabase: client });
+  assertEquals(res.ok, false);
+  assertEquals(res.provider, "none");
+  assertEquals(res.error, "SES not configured: AWS_SES_ACCESS_KEY_ID, AWS_SES_SECRET_ACCESS_KEY unset");
+  assertEquals(calls.length, 0);
+  const log = inserts.find((i) => i.table === "email_log")!.rows[0];
+  assertEquals(log.status, "skipped");
+  assertEquals(log.provider, "none");
 });
 
 Deno.test("never throws: a network error and a 4xx both come back as ok:false", async () => {
@@ -182,7 +181,12 @@ Deno.test("never throws: a network error and a 4xx both come back as ok:false", 
   assertEquals(r2.ok, false);
   assert(r2.error!.startsWith("SES 400"));
   const r3 = await sendEmail(marketing, { env: envOf({}) });
-  assertEquals(r3, { ok: false, error: "no email provider configured", provider: "none", suppressed: [] });
+  assertEquals(r3, {
+    ok: false,
+    error: "SES not configured: AWS_SES_REGION, AWS_SES_ACCESS_KEY_ID, AWS_SES_SECRET_ACCESS_KEY unset",
+    provider: "none",
+    suppressed: [],
+  });
 });
 
 Deno.test("emailLayout: the one-click header points at email-unsubscribe, the footer at the page", () => {

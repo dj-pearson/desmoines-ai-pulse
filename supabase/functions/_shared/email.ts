@@ -3,17 +3,17 @@
  * docs/plans/NON_CORE_REVIEW_2026-09.md).
  *
  * Provider: Amazon SES v2 (`POST /v2/email/outbound-emails`, SigV4-signed by
- * ./awsSigV4.ts). While the owner finishes SES setup, a function with no SES
- * credentials but a RESEND_API_KEY still sends through Resend, so nothing stops
- * mailing on the day this ships. Delete the Resend branch once SES is live.
+ * ./awsSigV4.ts), and nothing else. With any AWS_SES_* credential unset, mail
+ * is not sent: the send is logged as skipped and the warning names the missing
+ * variables.
  *
  * What every caller gets without asking:
  *   - Suppression. Addresses in email_suppressions are dropped before the
  *     provider sees them. A bounce or complaint blocks everything; an
  *     unsubscribe blocks marketing only, so a password reset still arrives.
  *   - Message headers, not HTTP headers. List-Unsubscribe used to be set on the
- *     request to Resend's API, where it meant nothing, so no marketing mail
- *     carried it. Here it goes into the message. Marketing mail with no
+ *     HTTP request to the previous provider's API, where it meant nothing, so
+ *     no marketing mail carried it. Here it goes into the message. Marketing mail with no
  *     List-Unsubscribe from the caller gets the mailto form at least.
  *   - email_log. One row per recipient, keyed later by provider_message_id so
  *     ses-events can mark it delivered, bounced or complained.
@@ -25,8 +25,10 @@
  * in a Deno test with no network.
  *
  * Env: AWS_SES_REGION, AWS_SES_ACCESS_KEY_ID, AWS_SES_SECRET_ACCESS_KEY,
- *      SES_FROM_ADDRESS, SES_CONFIGURATION_SET (optional),
- *      RESEND_API_KEY (transitional fallback only).
+ *      SES_FROM_ADDRESS, SES_CONFIGURATION_SET (optional).
+ *      AWS_SES_SECRET_ACCESS_KEY is an IAM secret access key allowed
+ *      ses:SendEmail. An SES SMTP password is derived from such a key and is
+ *      not one; it fails SigV4 here.
  */
 import { signRequest } from "./awsSigV4.ts";
 import { fetchWithTimeout } from "./fetchWithTimeout.ts";
@@ -56,7 +58,7 @@ export interface SendEmailResult {
   ok: boolean;
   messageId?: string;
   error?: string;
-  provider?: "ses" | "resend" | "none";
+  provider?: "ses" | "none";
   /** Recipients dropped by email_suppressions. */
   suppressed?: string[];
 }
@@ -72,8 +74,7 @@ export type EmailProviderConfig =
     from: string;
     configurationSet?: string;
   }
-  | { kind: "resend"; apiKey: string; from: string }
-  | { kind: "none"; from: string };
+  | { kind: "none"; from: string; missing: string[] };
 
 export const DEFAULT_FROM = "Des Moines Insider <hello@desmoinesinsider.com>";
 
@@ -88,6 +89,8 @@ export const denoEnv: EnvReader = (key) => {
   }
 };
 
+export const SES_CREDENTIAL_VARS = ["AWS_SES_REGION", "AWS_SES_ACCESS_KEY_ID", "AWS_SES_SECRET_ACCESS_KEY"] as const;
+
 export function resolveEmailProvider(env: EnvReader = denoEnv): EmailProviderConfig {
   const from = env("SES_FROM_ADDRESS") || DEFAULT_FROM;
   const region = env("AWS_SES_REGION");
@@ -96,9 +99,7 @@ export function resolveEmailProvider(env: EnvReader = denoEnv): EmailProviderCon
   if (region && accessKeyId && secretAccessKey) {
     return { kind: "ses", region, accessKeyId, secretAccessKey, from, configurationSet: env("SES_CONFIGURATION_SET") };
   }
-  const apiKey = env("RESEND_API_KEY");
-  if (apiKey) return { kind: "resend", apiKey, from };
-  return { kind: "none", from };
+  return { kind: "none", from, missing: SES_CREDENTIAL_VARS.filter((k) => !env(k)) };
 }
 
 /**
@@ -185,30 +186,6 @@ export function buildSesPayload(
   const replyTo = asList(input.replyTo);
   if (replyTo.length) payload.ReplyToAddresses = replyTo;
   if (cfg.configurationSet) payload.ConfigurationSetName = cfg.configurationSet;
-  return payload;
-}
-
-export function buildResendPayload(
-  input: SendEmailInput,
-  cfg: { from: string },
-  recipients: string[],
-): Record<string, unknown> {
-  const headers = buildMessageHeaders(input);
-  const payload: Record<string, unknown> = {
-    from: input.from || cfg.from,
-    to: recipients,
-    subject: input.subject,
-    tags: [
-      { name: "template", value: tagValue(input.template) },
-      { name: "category", value: input.category },
-    ],
-  };
-  if (input.html) payload.html = input.html;
-  if (input.text) payload.text = input.text;
-  const replyTo = asList(input.replyTo);
-  if (replyTo.length) payload.reply_to = replyTo;
-  // In the JSON body, where Resend puts them on the message.
-  if (headers.length) payload.headers = Object.fromEntries(headers.map((h) => [h.name, h.value]));
   return payload;
 }
 
@@ -319,22 +296,6 @@ async function deliverSes(
   return { ok: true, messageId: json?.MessageId ?? undefined };
 }
 
-async function deliverResend(
-  input: SendEmailInput,
-  cfg: Extract<EmailProviderConfig, { kind: "resend" }>,
-  recipients: string[],
-  doFetch: typeof fetch,
-): Promise<{ ok: boolean; messageId?: string; error?: string }> {
-  const res = await doFetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(buildResendPayload(input, cfg, recipients)),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: `Resend ${res.status}: ${String(json?.message ?? "").slice(0, 200)}` };
-  return { ok: true, messageId: json?.id ?? undefined };
-}
-
 export async function sendEmail(input: SendEmailInput, deps: SendEmailDeps = {}): Promise<SendEmailResult> {
   const env = deps.env ?? denoEnv;
   const doFetch = deps.fetch ?? ((u: string | URL | Request, i?: RequestInit) => fetchWithTimeout(u, i ?? {}));
@@ -363,16 +324,15 @@ export async function sendEmail(input: SendEmailInput, deps: SendEmailDeps = {})
   }
 
   if (cfg.kind === "none") {
-    console.warn(`[email] ${input.template} not sent: no SES credentials and no RESEND_API_KEY`);
-    await writeLog(supabase, input, recipients, { provider: "none", status: "skipped", error: "no email provider configured" });
-    return { ok: false, error: "no email provider configured", provider: "none", suppressed };
+    const reason = `SES not configured: ${cfg.missing.join(", ")} unset`;
+    console.warn(`[email] ${input.template} not sent: ${reason}`);
+    await writeLog(supabase, input, recipients, { provider: "none", status: "skipped", error: reason });
+    return { ok: false, error: reason, provider: "none", suppressed };
   }
 
   let result: { ok: boolean; messageId?: string; error?: string };
   try {
-    result = cfg.kind === "ses"
-      ? await deliverSes(input, cfg, recipients, doFetch, deps.now)
-      : await deliverResend(input, cfg, recipients, doFetch);
+    result = await deliverSes(input, cfg, recipients, doFetch, deps.now);
   } catch (err) {
     result = { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

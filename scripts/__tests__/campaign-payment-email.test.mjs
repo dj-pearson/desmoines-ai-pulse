@@ -90,51 +90,65 @@ console.log('\nthe email body');
 }
 
 console.log('\nthe send itself');
-// The provider now comes from the environment (_shared/email.ts: SES, else
-// Resend), not from a resendApiKey argument. Under tsx there is no Deno global,
-// so these blocks install one that holds only RESEND_API_KEY, which is the
-// transitional state until the SES secrets are set.
-const withResendEnv = async (fn) => {
+// The provider comes from the environment (_shared/email.ts: SES only). Under
+// tsx there is no Deno global, so these blocks install one holding test SES
+// credentials. The values are placeholders; fetch is stubbed, nothing is sent.
+const SES_TEST_ENV = {
+  AWS_SES_REGION: 'us-east-2',
+  AWS_SES_ACCESS_KEY_ID: 'AKIDEXAMPLE',
+  AWS_SES_SECRET_ACCESS_KEY: 'secret-for-tests',
+};
+const withSesEnv = async (fn) => {
   const had = 'Deno' in globalThis;
   const prev = globalThis.Deno;
-  globalThis.Deno = { env: { get: (k) => (k === 'RESEND_API_KEY' ? 'rk-test' : undefined) } };
+  globalThis.Deno = { env: { get: (k) => SES_TEST_ENV[k] } };
   try { return await fn(); } finally { if (had) globalThis.Deno = prev; else delete globalThis.Deno; }
 };
-await withResendEnv(async () => {
+await withSesEnv(async () => {
   const calls = [];
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => { calls.push({ url: String(url), init }); return new Response('{}', { status: 200 }); };
+  globalThis.fetch = async (url, init) => { calls.push({ url: String(url), init }); return new Response('{"MessageId":"m-1"}', { status: 200 }); };
   try {
     const sent = await sendCampaignEmail({
       to: 'advertiser@example.com',
       content,
-      resendApiKey: 'rk-test',
       fromEmail: 'noreply@desmoinesinsider.com',
     });
     check('a 200 from the provider is a send', sent === true);
-    const resendHost = (() => {
+    const host = (() => {
       try { return calls[0]?.url ? new URL(calls[0].url).hostname : ''; } catch { return ''; }
     })();
-    check('it went to Resend', resendHost === 'api.resend.com', calls[0]?.url);
+    check('it went to SES in us-east-2', host === 'email.us-east-2.amazonaws.com', calls[0]?.url);
     const body = JSON.parse(calls[0].init.body);
-    check('addressed to the advertiser', Array.isArray(body.to) && body.to[0] === 'advertiser@example.com', JSON.stringify(body.to));
-    check('with the notification title as the subject', body.subject === content.title, body.subject);
-    check('and both parts present', typeof body.html === 'string' && typeof body.text === 'string');
+    const to = body.Destination?.ToAddresses;
+    check('addressed to the advertiser', Array.isArray(to) && to[0] === 'advertiser@example.com', JSON.stringify(to));
+    const simple = body.Content?.Simple ?? {};
+    check('with the notification title as the subject', simple.Subject?.Data === content.title, simple.Subject?.Data);
+    check('and both parts present', typeof simple.Body?.Html?.Data === 'string' && typeof simple.Body?.Text?.Data === 'string');
   } finally {
     globalThis.fetch = realFetch;
   }
 });
 {
-  // No key configured is the state this container and any un-provisioned
-  // environment is in. It must report false rather than claim a send.
-  const sent = await sendCampaignEmail({ to: 'a@b.test', content, fromEmail: 'noreply@x.test' });
-  check('no provider key means not sent, not "sent"', sent === false);
+  // No SES credentials is the state this container and any un-provisioned
+  // environment is in. It must report false rather than claim a send, and
+  // must not reach the network.
+  const realFetch = globalThis.fetch;
+  let fetched = 0;
+  globalThis.fetch = async () => { fetched++; return new Response('{}', { status: 200 }); };
+  try {
+    const sent = await sendCampaignEmail({ to: 'a@b.test', content, fromEmail: 'noreply@x.test' });
+    check('no SES credentials means not sent, not "sent"', sent === false);
+    check('and nothing went on the network', fetched === 0, String(fetched));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 }
-await withResendEnv(async () => {
+await withSesEnv(async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('network down'); };
   try {
-    const sent = await sendCampaignEmail({ to: 'a@b.test', content, resendApiKey: 'rk', fromEmail: 'n@x.test' });
+    const sent = await sendCampaignEmail({ to: 'a@b.test', content, fromEmail: 'n@x.test' });
     check('a provider outage returns false and does not throw', sent === false);
   } catch (err) {
     check('a provider outage returns false and does not throw', false, err.message);
@@ -143,7 +157,7 @@ await withResendEnv(async () => {
   }
 });
 {
-  const sent = await sendCampaignEmail({ to: '', content, resendApiKey: 'rk', fromEmail: 'n@x.test' });
+  const sent = await sendCampaignEmail({ to: '', content, fromEmail: 'n@x.test' });
   check('an advertiser with no address on file is not a send', sent === false);
 }
 

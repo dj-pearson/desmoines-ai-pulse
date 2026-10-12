@@ -651,28 +651,18 @@ async function sendNotifications(supabase: any, newRestaurantsCount: number): Pr
 
     if (!newRestaurants || newRestaurants.length === 0) return
 
-    // You can implement email notifications here using Resend, SendGrid, etc.
-    console.log(`Would send notification about ${newRestaurantsCount} new restaurants`)
-    
-    // Example with Resend (uncomment and configure)
-    /*
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    if (resendApiKey) {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: 'alerts@yourdomain.com',
-          to: 'admin@yourdomain.com',
-          subject: `${newRestaurantsCount} New Restaurant Openings Found in Des Moines`,
-          html: generateEmailHTML(newRestaurants)
-        })
-      })
-    }
-    */
+    // Mail goes through the shared SES sender (supabase/functions/_shared/email.ts),
+    // which never throws and reads the AWS_SES_* secrets itself.
+    await sendEmail(
+      {
+        to: adminAlertEmail() ?? 'admin@yourdomain.com',
+        subject: `${newRestaurantsCount} New Restaurant Openings Found in Des Moines`,
+        html: generateEmailHTML(newRestaurants),
+        category: 'transactional',
+        template: 'restaurant_openings',
+      },
+      { supabase },
+    )
   } catch (error) {
     console.error('Error sending notifications:', error)
   }
@@ -736,8 +726,8 @@ supabase secrets set FIRECRAWL_API_KEY=your_firecrawl_api_key_here
 # Set cron secret for authentication
 supabase secrets set CRON_SECRET=your_secure_random_string_here
 
-# Optional: Set Resend API key for notifications
-supabase secrets set RESEND_API_KEY=your_resend_api_key_here
+# Optional: SES credentials for notifications (see .env.example)
+supabase secrets set AWS_SES_REGION=us-east-2 AWS_SES_ACCESS_KEY_ID=... AWS_SES_SECRET_ACCESS_KEY=... ADMIN_ALERT_EMAIL=...
 ```
 
 ### Step 4: Deploy Edge Function

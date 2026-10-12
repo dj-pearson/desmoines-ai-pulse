@@ -65,7 +65,6 @@
     "supabase/functions/manage-subscription/index.ts": 1,
     "supabase/functions/outreach-reply/index.ts": 3,
     "supabase/functions/personalized-recommendations/index.ts": 4,
-    "supabase/functions/resend-webhook/index.ts": 1,
     "supabase/functions/restaurant-opening-scraper/index.ts": 1,
     "supabase/functions/run-scheduled-audit/index.ts": 3,
     "supabase/functions/send-campaign-notification/index.ts": 2,

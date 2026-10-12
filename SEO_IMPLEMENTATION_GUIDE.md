@@ -665,8 +665,8 @@ DATAFORSEO_LOGIN=your_dataforseo_login          # $30/month
 DATAFORSEO_PASSWORD=your_dataforseo_password
 
 # Optional: Email Notifications
-EMAIL_PROVIDER=console # Options: console, resend, sendgrid
-RESEND_API_KEY=your_resend_api_key
+EMAIL_PROVIDER=console # Options: console, ses (ses mails through the AWS_SES_* secrets)
+AWS_SES_REGION=us-east-2                        # with AWS_SES_ACCESS_KEY_ID / AWS_SES_SECRET_ACCESS_KEY
 EMAIL_FROM=noreply@yourdomain.com
 
 # Optional: Cron Secret
@@ -699,8 +699,8 @@ supabase secrets set DATAFORSEO_LOGIN=your_login
 supabase secrets set DATAFORSEO_PASSWORD=your_password
 
 # Optional: Email
-supabase secrets set EMAIL_PROVIDER=resend
-supabase secrets set RESEND_API_KEY=your_key
+supabase secrets set EMAIL_PROVIDER=ses
+supabase secrets set AWS_SES_REGION=us-east-2 AWS_SES_ACCESS_KEY_ID=your_key_id AWS_SES_SECRET_ACCESS_KEY=your_secret
 supabase secrets set EMAIL_FROM=noreply@yourdomain.com
 
 # Optional: Cron
@@ -1074,9 +1074,9 @@ const corsHeaders = {
 
 - **Ahrefs:** $99/month (backlink tracking)
 - **SERPApi:** $50/month (SERP position tracking)
-- **Resend:** $20/month (50,000 emails)
+- **Amazon SES:** about $0.10 per 1,000 emails
 
-**Total with all options: $169/month**
+**Total with all options: $149/month plus SES usage**
 
 Compare to equivalent commercial tools:
 - Screaming Frog: $259/year

@@ -210,7 +210,7 @@ ${POSTAL_ADDRESS.line1}
 
 /**
  * Wrap message body in a compliant HTML+text email layout. Returns both
- * rendered formats and — for marketing — the headers Resend/Gmail/Apple Mail
+ * rendered formats and — for marketing — the headers Gmail/Apple Mail
  * use to render the "Unsubscribe" chip at the top of the inbox.
  */
 export function renderEmail(opts: RenderEmailOptions): RenderedEmail {

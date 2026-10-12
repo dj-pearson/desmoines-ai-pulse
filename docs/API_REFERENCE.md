@@ -841,7 +841,12 @@ Required secrets for edge functions (set via `supabase secrets set`):
 | `ANTHROPIC_API_KEY` | AI functions | Claude API key |
 | `OPENAI_API_KEY` | AI functions | OpenAI API key |
 | `PAGESPEED_INSIGHTS_API_KEY` | SEO functions | Google PageSpeed API key |
-| `RESEND_API_KEY` | Notification functions | Resend email API key |
+| `AWS_SES_REGION` | All mail (`_shared/email.ts`) | SES region, `us-east-2` |
+| `AWS_SES_ACCESS_KEY_ID` | All mail (`_shared/email.ts`) | IAM access key allowed `ses:SendEmail` |
+| `AWS_SES_SECRET_ACCESS_KEY` | All mail (`_shared/email.ts`) | Its secret access key (not an SES SMTP password) |
+| `SES_FROM_ADDRESS` | All mail (`_shared/email.ts`) | Default sender, `Des Moines Insider <hello@desmoinesinsider.com>` |
+| `SES_CONFIGURATION_SET` | All mail (`_shared/email.ts`) | Optional SES configuration set |
+| `SES_SNS_TOPIC_ARN` | ses-events | SNS topic whose bounce/complaint/delivery events are accepted |
 | `APNS_KEY_ID` | Push notifications | Apple Push Notification key ID |
 | `APNS_TEAM_ID` | Push notifications | Apple Developer team ID |
 | `APNS_PRIVATE_KEY` | Push notifications | APNs auth key |

@@ -1,8 +1,8 @@
 /**
  * sendNurtureEmail — one place to send a marketing nurture email and record it
  * in the nurture_sends ledger (AOS-NURTURE-002+). Reused by onboarding, win-back,
- * and the weekly digest. Sends through _shared/email.ts (SES, or Resend until
- * SES is configured) with the emailLayout CAN-SPAM footer and one-click
+ * and the weekly digest. Sends through _shared/email.ts (SES)
+ * with the emailLayout CAN-SPAM footer and one-click
  * unsubscribe. Callers MUST have already checked consent/unsubscribe; this
  * records the send, it does not decide policy. sendEmail still drops
  * suppressed addresses, which is recorded here as `skipped`.
@@ -90,8 +90,8 @@ export async function sendNurtureEmail(
     return { ok: false, sendId: data?.id, error: res.error };
   }
 
-  // resend_message_id holds the provider's id whichever provider sent it;
-  // ses-events and resend-webhook both match on it.
+  // resend_message_id (named for a former provider) holds the SES message id;
+  // ses-events matches on it.
   const { data, error } = await supabase
     .from("nurture_sends")
     .insert({ ...ledger, resend_message_id: res.messageId ?? null, status: "queued" })

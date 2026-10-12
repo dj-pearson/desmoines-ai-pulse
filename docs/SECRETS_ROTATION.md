@@ -109,11 +109,18 @@ revoke the old key.
 ### Email
 | Secret | Where set |
 |---|---|
-| `RESEND_API_KEY` | Supabase function secrets |
-| `SENDGRID_API_KEY` | Supabase function secrets (if used) |
+| `AWS_SES_ACCESS_KEY_ID` | Supabase function secrets; Infisical `des-moines-insider-b-yvw`, env `prod`, folder `/edge-functions` |
+| `AWS_SES_SECRET_ACCESS_KEY` | same |
+| `AWS_SES_REGION` (`us-east-2`), `SES_FROM_ADDRESS`, `SES_CONFIGURATION_SET`, `SES_SNS_TOPIC_ARN` | same (config, not secret) |
 
-**Rotate:** Resend/SendGrid dashboard → create key → `supabase secrets set …` →
-delete old key.
+All mail goes through Amazon SES (`_shared/email.ts`). The key is an IAM access
+key allowed `ses:SendEmail`; an SES SMTP password is a derived value and does
+not work as `AWS_SES_SECRET_ACCESS_KEY`.
+
+**Rotate:** IAM console → the sending user → create a second access key →
+`supabase secrets set AWS_SES_ACCESS_KEY_ID=… AWS_SES_SECRET_ACCESS_KEY=…` and
+update Infisical → confirm a send lands in `email_log` as `sent` → deactivate,
+then delete, the old key.
 
 ### Google
 | Secret | Where set |

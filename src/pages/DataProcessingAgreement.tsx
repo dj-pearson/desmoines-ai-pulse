@@ -172,7 +172,7 @@ export default function DataProcessingAgreement() {
                 <li>Supabase (managed Postgres + Auth + Edge Functions)</li>
                 <li>Cloudflare (CDN, DDoS protection, hosting)</li>
                 <li>Stripe (payment processing)</li>
-                <li>Resend (transactional email delivery)</li>
+                <li>Amazon Web Services (Amazon SES, transactional and marketing email delivery)</li>
                 <li>OpenAI / Anthropic (AI features, only when enabled)</li>
               </ul>
               <p>
