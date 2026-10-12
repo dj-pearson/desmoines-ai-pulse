@@ -6,8 +6,10 @@ info:
   contact:
     email: info@desmoinesinsider.com
 servers:
+  - url: https://api.desmoinesinsider.com/functions/v1
+    description: Supabase Edge Functions API (self-hosted)
   - url: https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1
-    description: Supabase Edge Functions API
+    description: Supabase Edge Functions API (Supabase Cloud, until the self-hosted cutover)
 paths:
   /api-events:
     get:

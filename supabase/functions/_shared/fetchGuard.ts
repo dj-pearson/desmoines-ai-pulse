@@ -88,6 +88,8 @@ export const DEFAULT_IMAGE_HOST_ALLOWLIST: readonly string[] = [
   // Supabase storage (any project ref subdomain)
   'supabase.co',
   'supabase.in',
+  // Self-hosted Supabase storage (api.desmoinesinsider.com, suffix match)
+  'desmoinesinsider.com',
   // Google places / street view imagery
   'googleapis.com',
   'googleusercontent.com',

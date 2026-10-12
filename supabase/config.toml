@@ -377,6 +377,28 @@ verify_jwt = false
 [functions.ses-events]
 verify_jwt = false
 
+# Payment webhooks. Stripe and Google Pub/Sub never send a
+# Supabase JWT, so with the default verify_jwt = true the platform gate refused
+# every delivery with 401 before the function ran (measured on the cloud
+# project 2026-10-12). Each authenticates its caller itself and fails closed.
+#
+# Stripe: refused (500) without STRIPE_WEBHOOK_SECRET, 400 without a
+# stripe-signature header, 401 when constructEvent rejects the signature.
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Google Play RTDN via Pub/Sub push: 401 without a bearer, 500 when
+# PLAY_RTDN_AUDIENCE is unset, 401 unless the Google OIDC token's signature,
+# issuer, audience and expiry all verify.
+[functions.play-rtdn-webhook]
+verify_jwt = false
+
+# appstore-server-notifications-v2 is deliberately NOT listed. Its JWS check
+# compares the last x5c certificate's fingerprint to Apple's root and verifies
+# the signature with the first certificate's key, but never verifies that the
+# chain links them, so a payload signed by any key with Apple's public root
+# appended passes. Fix the chain check before opening it to anonymous callers.
+
 # ---------------------------------------------------------------------------
 # Supabase Auth mail through Amazon SES (WP2). Applies to `supabase start`, and
 # to the hosted project only if someone runs `supabase config push`; the
