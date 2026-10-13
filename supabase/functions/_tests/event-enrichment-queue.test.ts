@@ -98,6 +98,7 @@ class Query {
   private max = Infinity;
   private patch: Row | null = null;
   private returning = false;
+  private usedOr = false;
 
   constructor(private rows: Row[], private log: string[], private table: string) {}
 
@@ -133,6 +134,7 @@ class Query {
     return this;
   }
   or(expr: string) {
+    this.usedOr = true;
     this.preds.push(parseOr(expr));
     return this;
   }
@@ -146,6 +148,15 @@ class Query {
   }
 
   then<T>(resolve: (v: { data: Row[] | null; error: null }) => T) {
+    // Live PostgREST (2026-10-13) answers a PATCH whose filter uses or= on
+    // seo_locked_at with 42703, while the same or= on a GET works. The fake
+    // refuses the same way, so a claim written with .or() fails here too.
+    if (this.patch && this.usedOr) {
+      return Promise.resolve({
+        data: null,
+        error: { code: '42703', message: `column ${this.table}.seo_locked_at does not exist` },
+      } as any).then(resolve);
+    }
     let hit = this.rows.filter((r) => this.preds.every((p) => p(r)));
     if (this.patch) {
       for (const r of hit) {

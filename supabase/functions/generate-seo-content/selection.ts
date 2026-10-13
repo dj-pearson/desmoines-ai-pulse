@@ -131,13 +131,38 @@ export async function claimSeoLock(
   now: Date = new Date(),
 ): Promise<boolean> {
   const table = tableFor(type);
-  const { data, error } = await db
+  // Two single-condition attempts, not one .or(): PostgREST answers a PATCH
+  // whose filter is or=(seo_locked_at...) with 42703 "column
+  // events.seo_locked_at does not exist", while the same filter on a GET and a
+  // plain seo_locked_at=is.null PATCH both work (measured 2026-10-13 on the
+  // live project). The claim swallowed that error as "taken", so the first cron
+  // run selected 10 rows and processed none. Each attempt is still one atomic
+  // conditional UPDATE, so two runs cannot both win the same row.
+  const stamp = now.toISOString();
+  let claimed = await db
     .from(table)
-    .update({ seo_locked_at: now.toISOString() })
+    .update({ seo_locked_at: stamp })
     .eq('id', id)
-    .or(`seo_locked_at.is.null,seo_locked_at.lt."${staleLockCutoff(now)}"`)
+    .is('seo_locked_at', null)
     .select('id, seo_title');
-  if (error || !data || data.length === 0) return false;
+  if (claimed.error) {
+    console.error(`[seo-lock] claim failed for ${table} ${id}: ${claimed.error.message}`);
+    return false;
+  }
+  if (!claimed.data || claimed.data.length === 0) {
+    claimed = await db
+      .from(table)
+      .update({ seo_locked_at: stamp })
+      .eq('id', id)
+      .lt('seo_locked_at', staleLockCutoff(now))
+      .select('id, seo_title');
+    if (claimed.error) {
+      console.error(`[seo-lock] stale-lock claim failed for ${table} ${id}: ${claimed.error.message}`);
+      return false;
+    }
+  }
+  const data = claimed.data;
+  if (!data || data.length === 0) return false;
   const title = data[0].seo_title;
   if (typeof title === 'string' && title.trim() !== '') {
     await releaseSeoLock(db, type, id);

@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { buildEnhancePrompt } from "./prompt.ts";
 import { stripAiLabels } from "../_shared/aiText.ts";
 import { clampWriteupBatch, saveWriteup, selectEventsNeedingWriteup } from "./selection.ts";
@@ -111,6 +112,15 @@ serve(async (req) => {
     }
 
     const claudeData = await claudeResponse.json();
+    // The call is paid for once it returns; book it before anything can fail.
+    if (claudeData?.usage) {
+      await recordAnthropicUsage(supabase, {
+        source: "bulk-enhance-events",
+        model: String(claudeData.model ?? requestBody.model ?? "unknown"),
+        usage: claudeData.usage,
+        extra: { events: eventsToEnhance.length },
+      });
+    }
     const extracted = extractClaudeText(claudeData);
     if (!extracted.ok) {
       console.error("Claude response not usable:", extracted.reason, extracted.detail);

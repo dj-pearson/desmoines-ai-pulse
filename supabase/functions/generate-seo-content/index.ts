@@ -6,6 +6,7 @@
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { createEventSEOPrompt, createRestaurantSEOPrompt } from './prompts.ts';
 import { claimSeoLock, normalizeContentType, releaseSeoLock, selectSeoCandidates, tableFor } from './selection.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -133,6 +134,14 @@ serve(async (req) => {
         }
 
         const claudeData = await claudeResponse.json();
+        if (claudeData?.usage) {
+          await recordAnthropicUsage(supabaseClient, {
+            source: "generate-seo-content",
+            model: String(claudeData.model ?? requestBody.model ?? "unknown"),
+            usage: claudeData.usage,
+            extra: { contentType },
+          });
+        }
         const extracted = extractClaudeText(claudeData);
         if (!extracted.ok) {
           console.error("Claude response not usable:", extracted.reason, extracted.detail);
