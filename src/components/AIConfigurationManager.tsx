@@ -193,7 +193,7 @@ export function AIConfigurationManager() {
                         <Label htmlFor="model_id">Model ID</Label>
                         <Input
                           id="model_id"
-                          placeholder="claude-sonnet-4-5-20250929"
+                          placeholder="claude-sonnet-5-5"
                           value={newModel.model_id}
                           onChange={(e) => setNewModel({ ...newModel, model_id: e.target.value })}
                         />
