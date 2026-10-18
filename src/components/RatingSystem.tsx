@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { resizeImageFile } from "@/lib/imageResize";
 import { Database } from "@/integrations/supabase/types";
 import { format, formatDistanceToNow } from "date-fns";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const MAX_REVIEW_PHOTOS = 3;
 
@@ -544,7 +545,7 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, onReport
               className="h-24 w-24 overflow-hidden rounded-md border"
               aria-label="View review photo"
             >
-              <img src={url} alt="Review photo" loading="lazy" className="h-full w-full object-cover" />
+              <OptimizedImage src={url} alt="Review photo" containerClassName="h-full w-full" className="object-cover" sizes="96px" />
             </button>
           ))}
         </div>

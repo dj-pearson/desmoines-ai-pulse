@@ -13,6 +13,7 @@ import { Navigation, ZoomIn, ZoomOut, Maximize2, Minimize2, List, Star, Phone } 
 import { cn } from '@/lib/utils';
 import { getCategoryHex } from '@/lib/categoryColors';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 // Fix for default marker icon issue with bundlers. The prototype carries a
 // private _getIconUrl that Leaflet's own typings do not declare.
@@ -357,11 +358,12 @@ export function InteractiveMap({
           <Popup>
             <div className="min-w-[200px] max-w-[300px]">
               {location.image_url && (
-                <img
+                <OptimizedImage
                   src={location.image_url}
                   alt={`${location.name} - ${location.category || 'location'} in Des Moines`}
-                  className="w-full h-32 object-cover rounded-md mb-2"
-                  loading="lazy"
+                  containerClassName="w-full h-32 rounded-md mb-2"
+                  className="object-cover"
+                  sizes="300px"
                 />
               )}
               <div className="space-y-2">

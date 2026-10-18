@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { EventDiscussion } from '@/hooks/useEventSocial';
 import { Heart, MessageCircle, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface EventPhotoGalleryProps {
   eventId: string;
@@ -67,14 +68,13 @@ function PhotoThumbnail({ discussion, onLike }: PhotoThumbnailProps) {
       <DialogTrigger asChild>
         <div className="group cursor-pointer relative overflow-hidden rounded-lg border bg-card hover:shadow-md transition-all">
           <div className="aspect-square">
-            <img
+            <OptimizedImage
               src={discussion.media_url!}
               alt={discussion.message}
-              className="w-full h-full object-cover transition-transform group-hover:scale-105"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = '/placeholder.svg';
-              }}
+              containerClassName="w-full h-full"
+              className="object-cover transition-transform group-hover:scale-105"
+              fallbackSrc="/placeholder.svg"
+              sizes="(max-width: 768px) 50vw, 25vw"
             />
           </div>
           

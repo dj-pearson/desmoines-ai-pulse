@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Eye, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface SocialProofBadgeProps {
   type: "trending" | "popular" | "selling-fast" | "new" | "last-chance";
@@ -117,11 +118,12 @@ export function AttendeeAvatars({
             key={idx}
             className="h-8 w-8 rounded-full border-2 border-background bg-muted overflow-hidden"
           >
-            <img
+            <OptimizedImage
               src={url}
               alt={`Event attendee ${idx + 1}`}
-              className="h-full w-full object-cover"
-              loading="lazy"
+              containerClassName="h-full w-full"
+              className="object-cover"
+              sizes="32px"
             />
           </div>
         ))}
