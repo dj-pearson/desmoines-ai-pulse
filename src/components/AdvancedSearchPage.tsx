@@ -15,6 +15,7 @@ import { useAdvancedSearch, type SavedSearch, type SearchResult } from "@/hooks/
 import { useAuth } from "@/hooks/useAuth";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { createSlug } from "@/lib/slug";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 function contentTypeIcon(type: SearchResult['type']) {
   switch (type) {
@@ -233,11 +234,12 @@ export default function AdvancedSearchPage() {
                         <>
                           {result.imageUrl && (
                             <div className="relative h-48 overflow-hidden rounded-t-lg">
-                              <img
+                              <OptimizedImage
                                 src={result.imageUrl}
                                 alt=""
-                                loading="lazy"
-                                className="w-full h-full object-cover"
+                                containerClassName="w-full h-full"
+                                className="object-cover"
+                                sizes="(max-width: 768px) 100vw, 33vw"
                               />
                             </div>
                           )}
@@ -288,11 +290,12 @@ export default function AdvancedSearchPage() {
                           <div className="flex gap-4">
                             {result.imageUrl && (
                               <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
-                                <img
+                                <OptimizedImage
                                   src={result.imageUrl}
                                   alt=""
-                                  loading="lazy"
-                                  className="w-full h-full object-cover"
+                                  containerClassName="w-full h-full"
+                                  className="object-cover"
+                                  sizes="96px"
                                 />
                               </div>
                             )}

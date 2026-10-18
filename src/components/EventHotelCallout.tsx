@@ -11,6 +11,7 @@ import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
 import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { formatMiles } from "@/lib/venuePages";
 import { hotelsNearPath } from "@/lib/hotelsNear";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -56,7 +57,7 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
           <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
             {hotel.image_url ? (
               <>
-                <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                <OptimizedImage src={hotel.image_url} alt={hotel.name} containerClassName="w-full h-full" className="object-cover" sizes="80px" />
                 <PlacesPhotoCredit imageUrl={hotel.image_url} attribution={hotel.places_photo_attribution} className="text-[8px]" />
               </>
             ) : (

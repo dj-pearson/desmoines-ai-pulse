@@ -7,6 +7,7 @@ import { STATUS_BADGE } from "@/lib/categoryStyles";
 import { hotelClassStars, hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -57,14 +58,12 @@ export default function HotelCard({
       <Link to={`/stay/${hotel.slug}`} className="block">
         <div className={`relative ${imageHeight} overflow-hidden bg-muted`}>
           {hotel.image_url ? (
-            <img
+            <OptimizedImage
               src={hotel.image_url}
               alt={hotel.name}
-              width={640}
-              height={192}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              decoding="async"
+              containerClassName="w-full h-full"
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 33vw"
             />
           ) : (
             <div

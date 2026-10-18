@@ -4017,3 +4017,17 @@ Learnings for future iterations:
    exported type somewhere else, and buys nothing measurable; the duplication
    it was aimed at does not exist, because both surfaces already read
    src/lib/placementSpecs.ts.
+
+================================================================================
+2026-10-18 - WEB-PERF-041 batch five: six more images through OptimizedImage
+================================================================================
+
+23 -> 17 raw <img>. AdvancedSearchPage x2, DealCard, EventHotelCallout,
+HotelCard, PseoLiveListings. Same containerClassName="w-full h-full" shape as
+batch two. The raw-img baseline had drifted one above the tree; re-baselined.
+
+Learnings for future iterations:
+
+1. A RATCHET THAT PASSES "DOWN 1" IS STILL A STALE BASELINE. check-raw-img
+   reports a drop as OK, so a forgotten --write leaves headroom for the next
+   PR to add one back unnoticed. Re-baseline whenever it says "Down".

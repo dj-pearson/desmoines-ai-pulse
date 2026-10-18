@@ -18,6 +18,7 @@ import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { isVisitableStatus } from "@/lib/restaurantHours";
 import { attractionListingHref, eventListingHref, restaurantListingHref } from '../../listingHrefs';
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface PseoLiveListingsProps {
   dimensions: PseoDimensionRef[];
@@ -115,11 +116,12 @@ function ListingCard({ item }: { item: ListingItem }) {
       <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
         {item.image_url && (
           <div className="h-36 overflow-hidden rounded-t-lg">
-            <img
+            <OptimizedImage
               src={item.image_url}
               alt={item.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
+              containerClassName="h-full w-full"
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 33vw"
             />
           </div>
         )}

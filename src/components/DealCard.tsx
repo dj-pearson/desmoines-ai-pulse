@@ -14,6 +14,7 @@ import {
   dealTodayStatus,
 } from '@/hooks/useDeals';
 import type { Deal } from '@/hooks/useDeals';
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface DealCardProps {
   deal: Deal;
@@ -94,7 +95,7 @@ export function DealCard({ deal, onClaim, venueHref, now }: DealCardProps) {
     <Card className="h-full flex flex-col">
       {deal.image_url && (
         <div className="h-40 overflow-hidden rounded-t-lg">
-          <img src={deal.image_url} alt={deal.title} width={640} height={160} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <OptimizedImage src={deal.image_url} alt={deal.title} containerClassName="w-full h-full" className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
         </div>
       )}
       <CardContent className="p-5 flex flex-col flex-1">
