@@ -11,7 +11,6 @@ import { Users, Heart, Coffee, Utensils, Camera, Star, Umbrella, Sun, Snowflake 
 import OptimizedImage from "@/components/OptimizedImage";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 const guides = [
   {
@@ -21,7 +20,6 @@ const guides = [
     category: "Weather",
     icon: Umbrella,
     tags: ["Indoor", "Family-Friendly", "All Ages"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/rainy-day-des-moines"
   },
   {
@@ -31,7 +29,6 @@ const guides = [
     category: "Romance",
     icon: Heart,
     tags: ["Adults", "Evening", "Romantic"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/date-night-des-moines"
   },
   {
@@ -41,7 +38,6 @@ const guides = [
     category: "Seasonal",
     icon: Sun,
     tags: ["Outdoor", "Family", "Summer"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/summer-activities-des-moines"
   },
   {
@@ -51,7 +47,6 @@ const guides = [
     category: "Budget",
     icon: Star,
     tags: ["Free", "Budget", "All Ages"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/free-things-des-moines"
   },
   {
@@ -61,7 +56,6 @@ const guides = [
     category: "Family",
     icon: Users,
     tags: ["Kids", "Family", "Playgrounds"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/family-fun-des-moines"
   },
   {
@@ -71,7 +65,6 @@ const guides = [
     category: "Food",
     icon: Coffee,
     tags: ["Brunch", "Weekend", "Food"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/best-brunch-des-moines"
   },
   {
@@ -81,7 +74,6 @@ const guides = [
     category: "Photography",
     icon: Camera,
     tags: ["Photography", "Scenic", "Instagram"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/photography-spots-des-moines"
   },
   {
@@ -91,7 +83,6 @@ const guides = [
     category: "Seasonal",
     icon: Snowflake,
     tags: ["Winter", "Holiday", "Indoor"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/winter-activities-des-moines"
   }
 ];
@@ -222,24 +213,19 @@ export default function GuidesPage() {
 
         {/* Guides Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-          {guides.map((guide, index) => {
+          {guides.map((guide) => {
             const IconComponent = guide.icon;
             return (
               <Card key={guide.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                 <div className="aspect-video relative">
-                  <img
-                    src={guide.image}
-                    alt={guide.title}
-                    className="w-full h-full object-cover"
-                    // The first row of a three-column grid. Chrome does not start a lazy
-                    // image's fetch until layout has run, so the LCP candidate on a listing
-                    // page must not be lazy (WEB-SEO-032).
-                    loading={index < 3 ? "eager" : "lazy"}
-                    decoding="async"
-                    {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
-                  />
+                  {/* These cards pointed at /api/placeholder/400/250, a route this app
+                      does not have, so all eight were broken images in production. No
+                      guide has artwork yet; its icon stands in until one does. */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted" aria-hidden="true">
+                    <IconComponent className="h-12 w-12 text-muted-foreground" />
+                  </div>
                   <div className="absolute top-4 left-4">
-                    <Badge variant="secondary" className="bg-background/90 backdrop-blur">
+                    <Badge variant="secondary" className="bg-background/90 text-foreground backdrop-blur">
                       <IconComponent className="h-3 w-3 mr-1" />
                       {guide.category}
                     </Badge>

@@ -104,6 +104,10 @@ for (const file of HEROES) {
  * /events/near-me, which is geolocated and so cannot be - the LCP argument
  * holds for a live visitor either way.
  */
+//
+// /guides is not here: its cards carry no image (they pointed at a route that
+// does not exist, and now show the guide's icon), so there is no LCP image to
+// prioritise.
 const LISTING_PAGES = {
   '/events': 'src/pages/EventsPage.tsx',
   '/events/today': 'src/pages/EventsToday.tsx',
@@ -120,7 +124,6 @@ const LISTING_PAGES = {
   '/attractions': 'src/pages/Attractions.tsx',
   '/playgrounds': 'src/pages/Playgrounds.tsx',
   '/articles': 'src/pages/Articles.tsx',
-  '/guides': 'src/pages/GuidesPage.tsx',
   '/breweries': 'src/pages/BreweryTrail.tsx',
   '/itineraries': 'src/pages/Itineraries.tsx',
 };
