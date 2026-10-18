@@ -5,8 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Bell, BellOff } from "lucide-react";
 import { useEventReminders, type ReminderType } from '@/hooks/useEventReminders';
 import { Skeleton } from '@/components/ui/skeleton';
-import { scheduleEventReminder } from '@/hooks/usePushNotifications';
 import { isCapacitor } from '@/lib/capacitorUtils';
+import { handleError } from '@/lib/errorHandler';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventReminderSettingsProps {
@@ -107,14 +107,20 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
                 checked={enabled}
                 onCheckedChange={() => {
                   toggleReminder(option.type);
-                  // Also schedule a local notification on Capacitor
+                  // Also schedule a local notification inside the app shell.
+                  // Imported on demand so the push module stays out of the web
+                  // bundle, the same reason CapacitorRuntime is lazy.
                   if (!enabled && isCapacitor() && eventTitle && eventDate) {
-                    scheduleEventReminder({
-                      eventId,
-                      eventTitle,
-                      eventDate,
-                      reminderType: option.type,
-                    });
+                    void import('@/hooks/usePushNotifications').then(({ scheduleEventReminder }) =>
+                      scheduleEventReminder({
+                        eventId,
+                        eventTitle,
+                        eventDate,
+                        reminderType: option.type,
+                      }),
+                    ).catch((error) =>
+                      handleError(error, { component: 'EventReminderSettings', action: 'scheduleEventReminder' }),
+                    );
                   }
                 }}
                 disabled={isTogglingReminder}

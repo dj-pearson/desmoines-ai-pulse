@@ -8779,7 +8779,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container).\n\n2026-10-18 (claude/prd-p1-loop). AC3 DONE; AC2's decision is still the owner's, and is now the only thing left.\n\nRe-read against the tree. Much of the evidence has moved since filing: usePushNotifications is mounted only by CapacitorRuntime, which App.tsx lazy-loads behind isCapacitor() (WEB-PERF-020), so no web visitor runs it, and WEB-QUAL-014 removed the lazyInit teardown from src/lib/performance.ts. EventReminderSettings already offered EMAIL reminders only on the web - its push call sat behind isCapacitor() and its copy says \"We'll send you email reminders\". So the UI no longer offers push it cannot deliver.\n\nWhat was left of AC3 was the bundle: EventReminderSettings imported scheduleEventReminder statically, which pulled the push module onto every event detail page for web visitors. It is now a dynamic import inside the isCapacitor() branch, with handleError on the rejection. Built with placeholder env: LocalNotifications appears only in its own usePushNotifications-*.js chunk.\n\nAC2 STILL OPEN: Web Push (VAPID, a real service worker, a sender for web endpoints) or remove the hook from web for good. AC4 (rescope XPLAT-006) follows that decision.\n\nVerified: npm run validate exit 0; npx vitest run 2516/2516; vite build exit 0."
     },
     {
       "id": "WEB-FEAT-021",
