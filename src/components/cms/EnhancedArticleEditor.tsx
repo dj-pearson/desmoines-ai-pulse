@@ -9,60 +9,32 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
-import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag, User, Calendar as CalendarIcon, Send, Star } from "lucide-react";
+import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag, Send } from "lucide-react";
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
-import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
+import { ARTICLE_CATEGORIES } from "@/lib/articleCategories";
 
 const log = createLogger('EnhancedArticleEditor');
 
 // Lazy load the rich text editor
 const RichTextEditor = lazy(() => import('./RichTextEditor'));
 
-interface AuthorProfile {
-  id: string;
-  display_name: string;
-  avatar_url: string | null;
-}
-
-interface ArticleCategory {
-  id: string;
-  name: string;
-  slug: string;
-  color: string;
-}
-
-interface ArticleTag {
-  id: string;
-  name: string;
-  slug: string;
-  color: string;
-}
-
 interface ArticleData {
   title: string;
   content: string;
   excerpt: string;
   category: string;
-  category_id: string | null;
   tags: string[];
   featured_image_url: string;
   seo_title: string;
   seo_description: string;
   seo_keywords: string[];
   status: 'draft' | 'published' | 'scheduled' | 'archived';
-  author_profile_id: string | null;
-  scheduled_at: Date | null;
-  is_featured: boolean;
+  // Sent with a review submission (content_queue.content_data). Not an
+  // articles column.
   priority: number;
 }
 
@@ -79,47 +51,21 @@ export default function EnhancedArticleEditor() {
   const [newKeyword, setNewKeyword] = useState('');
   const [useWysiwyg, setUseWysiwyg] = useState(true);
 
-  // Data for dropdowns
-  const [authors, setAuthors] = useState<AuthorProfile[]>([]);
-  const [categories, setCategories] = useState<ArticleCategory[]>([]);
-  const [availableTags, setAvailableTags] = useState<ArticleTag[]>([]);
-
   const [articleData, setArticleData] = useState<ArticleData>({
     title: '',
     content: '',
     excerpt: '',
     category: 'General',
-    category_id: null,
     tags: [],
     featured_image_url: '',
     seo_title: '',
     seo_description: '',
     seo_keywords: [],
     status: 'draft',
-    author_profile_id: null,
-    scheduled_at: null,
-    is_featured: false,
     priority: 5,
   });
 
   const existingArticle = articles.find((a) => a.id === id);
-
-  // Load authors, categories, and tags
-  useEffect(() => {
-    const loadData = async () => {
-      const [authorsRes, categoriesRes, tagsRes] = await Promise.all([
-        fromUnknownTable('author_profiles').select('id, display_name, avatar_url').eq('is_active', true),
-        fromUnknownTable('article_categories').select('id, name, slug, color').eq('is_active', true).order('sort_order'),
-        fromUnknownTable('article_tags').select('id, name, slug, color').order('usage_count', { ascending: false }),
-      ]);
-
-      if (authorsRes.data) setAuthors(authorsRes.data);
-      if (categoriesRes.data) setCategories(categoriesRes.data);
-      if (tagsRes.data) setAvailableTags(tagsRes.data);
-    };
-
-    loadData();
-  }, []);
 
   useEffect(() => {
     if (id && existingArticle) {
@@ -128,17 +74,13 @@ export default function EnhancedArticleEditor() {
         content: existingArticle.content || '',
         excerpt: existingArticle.excerpt || '',
         category: existingArticle.category || 'General',
-        category_id: (existingArticle as any).category_id || null,
         tags: existingArticle.tags || [],
         featured_image_url: existingArticle.featured_image_url || '',
         seo_title: existingArticle.seo_title || '',
         seo_description: existingArticle.seo_description || '',
         seo_keywords: existingArticle.seo_keywords || [],
         status: existingArticle.status as 'draft' | 'published' | 'scheduled' | 'archived',
-        author_profile_id: (existingArticle as any).author_profile_id || null,
-        scheduled_at: (existingArticle as any).scheduled_at ? new Date((existingArticle as any).scheduled_at) : null,
-        is_featured: (existingArticle as any).is_featured || false,
-        priority: (existingArticle as any).priority || 5,
+        priority: 5,
       });
       setIsNewArticle(false);
     }
@@ -198,7 +140,11 @@ export default function EnhancedArticleEditor() {
         setIsSaving(true);
       }
 
-      const dataToSave: any = {
+      // Only columns `articles` has. This also sent author_profile_id,
+      // category_id, is_featured, priority and scheduled_at, none of which
+      // exist, so every edit of an existing article was rejected (PGRST204);
+      // createArticle picks its own fields, which is why new articles saved.
+      const dataToSave = {
         title: articleData.title,
         content: articleData.content,
         excerpt: articleData.excerpt,
@@ -209,11 +155,6 @@ export default function EnhancedArticleEditor() {
         seo_description: articleData.seo_description,
         seo_keywords: articleData.seo_keywords,
         status: shouldPublish ? 'published' : articleData.status,
-        author_profile_id: articleData.author_profile_id,
-        category_id: articleData.category_id,
-        is_featured: articleData.is_featured,
-        priority: articleData.priority,
-        scheduled_at: articleData.status === 'scheduled' ? articleData.scheduled_at?.toISOString() : null,
       };
 
       if (isNewArticle) {
@@ -223,7 +164,10 @@ export default function EnhancedArticleEditor() {
           navigate(`/admin/articles/edit/${newArticle.id}`);
         }
       } else {
-        await updateArticle({ id: id!, ...dataToSave });
+        // updateArticle reports its own failure and returns null; without
+        // this check a failed update still said "updated successfully".
+        const updated = await updateArticle({ id: id!, ...dataToSave });
+        if (!updated) return;
         if (shouldPublish && articleData.status !== 'published') {
           await publishArticle(id!);
         }
@@ -582,81 +526,21 @@ export default function EnhancedArticleEditor() {
                 </Select>
               </div>
 
-              {articleData.status === 'scheduled' && (
-                <div>
-                  <Label>Scheduled Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !articleData.scheduled_at && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {articleData.scheduled_at
-                          ? format(articleData.scheduled_at, 'PPP')
-                          : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={articleData.scheduled_at || undefined}
-                        onSelect={(date) => handleInputChange('scheduled_at', date)}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              )}
-
-              <div>
-                <Label>Author</Label>
-                <Select
-                  value={articleData.author_profile_id || 'none'}
-                  onValueChange={(value) =>
-                    handleInputChange('author_profile_id', value === 'none' ? null : value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select author" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No author</SelectItem>
-                    {authors.map((author) => (
-                      <SelectItem key={author.id} value={author.id}>
-                        {author.display_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div>
                 <Label htmlFor="category">Category</Label>
                 <Select
                   value={articleData.category}
-                  onValueChange={(value) => {
-                    const cat = categories.find((c) => c.name === value);
-                    handleInputChange('category', value);
-                    handleInputChange('category_id', cat?.id || null);
-                  }}
+                  onValueChange={(value) => handleInputChange('category', value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.name}>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: category.color }}
-                          />
-                          {category.name}
-                        </div>
+                    {/* An older article may carry a category no longer in the list;
+                        keep it selectable so opening the article does not blank it. */}
+                    {[...new Set<string>([...ARTICLE_CATEGORIES, articleData.category])].map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -681,18 +565,6 @@ export default function EnhancedArticleEditor() {
                     <SelectItem value="10">Critical (10)</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="is-featured"
-                  checked={articleData.is_featured}
-                  onCheckedChange={(checked) => handleInputChange('is_featured', checked)}
-                />
-                <Label htmlFor="is-featured" className="flex items-center gap-1">
-                  <Star className="h-4 w-4 text-yellow-500" />
-                  Featured Article
-                </Label>
               </div>
 
               <div>
@@ -727,31 +599,6 @@ export default function EnhancedArticleEditor() {
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
-
-              {/* Suggested tags from available tags */}
-              {availableTags.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Suggested Tags</Label>
-                  <div className="flex flex-wrap gap-1">
-                    {availableTags
-                      .filter((t) => !articleData.tags.includes(t.name))
-                      .slice(0, 10)
-                      .map((tag) => (
-                        <Button
-                          key={tag.id}
-                          variant="outline"
-                          size="sm"
-                          className="h-6 text-xs"
-                          onClick={() =>
-                            handleInputChange('tags', [...articleData.tags, tag.name])
-                          }
-                        >
-                          + {tag.name}
-                        </Button>
-                      ))}
-                  </div>
-                </div>
-              )}
 
               <div className="flex flex-wrap gap-2">
                 {articleData.tags.map((tag) => (

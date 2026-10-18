@@ -1,11 +1,9 @@
 {
-  "total": 10,
+  "total": 7,
   "files": {
     "src/components/ShareDialog.tsx": 1,
     "src/hooks/useProximitySearch.ts": 2,
     "src/lib/consentLog.ts": 1,
-    "src/lib/contentValidation.ts": 3,
-    "src/pages/Attractions.tsx": 1,
-    "src/pages/Restaurants.tsx": 2
+    "src/lib/contentValidation.ts": 3
   }
 }

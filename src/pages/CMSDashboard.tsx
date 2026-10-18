@@ -1,20 +1,16 @@
-import { useState } from 'react';
 import { useTabState } from '@/hooks/useTabState';
 import { Helmet } from 'react-helmet-async';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import ArticlesManager from '@/components/ArticlesManager';
 import AIArticleGenerator from '@/components/AIArticleGenerator';
-import { AuthorManager } from '@/components/cms/AuthorManager';
 import { ContentQueue } from '@/components/ContentQueue';
-import { CategoryTagManager } from '@/components/cms/CategoryTagManager';
-import { FileText, ClipboardList, Tags, Plus, LayoutDashboard, Settings, ArrowLeft } from "lucide-react";
+import { FileText, ClipboardList, Plus, LayoutDashboard, ArrowLeft } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function CMSDashboard() {
-  const [activeTab, setActiveTab] = useTabState('articles');
+  const [activeTab, setActiveTab] = useTabState('articles', { validTabs: ['articles', 'queue', 'ai'] });
 
   return (
     <>
@@ -38,7 +34,7 @@ export default function CMSDashboard() {
                     Content Management System
                   </h1>
                   <p className="text-sm text-muted-foreground">
-                    Manage articles, authors, categories, and editorial workflow
+                    Manage articles, the review queue and AI drafts
                   </p>
                 </div>
               </div>
@@ -57,7 +53,7 @@ export default function CMSDashboard() {
         {/* Main Content */}
         <div className="container mx-auto px-4 py-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-5 w-full max-w-3xl h-auto gap-0.5 sm:gap-1">
+            <TabsList className="grid grid-cols-3 w-full max-w-xl h-auto gap-0.5 sm:gap-1">
               <TabsTrigger value="articles" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
                 <FileText className="h-4 w-4 flex-shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Articles</span>
@@ -65,14 +61,6 @@ export default function CMSDashboard() {
               <TabsTrigger value="queue" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
                 <ClipboardList className="h-4 w-4 flex-shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Queue</span>
-              </TabsTrigger>
-              <TabsTrigger value="authors" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <SpriteIcon name="users" className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Authors</span>
-              </TabsTrigger>
-              <TabsTrigger value="taxonomy" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <Tags className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Tags</span>
               </TabsTrigger>
               <TabsTrigger value="ai" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
                 <SpriteIcon name="sparkles" className="h-4 w-4 flex-shrink-0" />
@@ -90,15 +78,11 @@ export default function CMSDashboard() {
               <ContentQueue />
             </TabsContent>
 
-            {/* Authors Tab */}
-            <TabsContent value="authors">
-              <AuthorManager />
-            </TabsContent>
-
-            {/* Categories & Tags Tab */}
-            <TabsContent value="taxonomy">
-              <CategoryTagManager />
-            </TabsContent>
+            {/* No Authors or Categories & Tags tabs: they edited author_profiles,
+                article_categories and article_tags, which were never created in
+                production, so both were empty screens whose saves failed. Deleted
+                rather than built (WEB-QA-018). An old ?tab=authors link falls back
+                to Articles. */}
 
             {/* AI Generator Tab */}
             <TabsContent value="ai">
