@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from dateutil import parser as date_parser
 from zoneinfo import ZoneInfo
@@ -242,6 +242,10 @@ DEFAULT_MAX_PAGES = 20
 DEFAULT_TIME_BUDGET_MINUTES = 30
 # Share of the budget the listing walk may spend before processing starts.
 LIST_BUDGET_SHARE = 0.5
+# The listing is sorted by date, so once a page starts past this many days out
+# every later page is too. Without it the walk spends its budget on events a
+# year away and defers the ones next month.
+DEFAULT_HORIZON_DAYS = 90
 
 DEFAULT_LIST_DELAY_SECONDS = 2.0
 DEFAULT_DETAIL_DELAY_SECONDS = 1.0
@@ -371,6 +375,31 @@ def page_adds_new_events(events: list, seen_detail_urls: set) -> bool:
     return added
 
 
+def page_is_past_horizon(events: list, horizon_date: str) -> bool:
+    """True when every dated event on the page is after horizon_date.
+
+    Dates are compared as their YYYY-MM-DD prefix, which is what extraction
+    returns. A page with no parseable date is not past the horizon: an
+    extraction that dropped the dates is not proof the walk is done.
+    """
+    days = [
+        d[:10]
+        for d in ((e.get("date") or "").strip() for e in events)
+        if re.match(r"^\d{4}-\d{2}-\d{2}", d)
+    ]
+    return bool(days) and min(days) > horizon_date
+
+
+def latest_event_date(events: list) -> Optional[str]:
+    """The latest YYYY-MM-DD among the events, or None when none is dated."""
+    days = [
+        d[:10]
+        for d in ((e.get("date") or "").strip() for e in events)
+        if re.match(r"^\d{4}-\d{2}-\d{2}", d)
+    ]
+    return max(days) if days else None
+
+
 class CatchDesMoinesCrawler:
     """Crawler for catchdesmoines.com events."""
 
@@ -379,10 +408,16 @@ class CatchDesMoinesCrawler:
         dry_run: bool = False,
         max_pages: int = DEFAULT_MAX_PAGES,
         time_budget_minutes: float = DEFAULT_TIME_BUDGET_MINUTES,
+        horizon_days: int = DEFAULT_HORIZON_DAYS,
     ):
         self.dry_run = dry_run
         self.max_pages = max_pages
         self.time_budget_seconds = time_budget_minutes * 60
+        self.horizon_days = horizon_days
+        # Why the listing walk stopped, and how far out it got. Recorded on the
+        # automation_job_runs row so coverage is a number, not a guess.
+        self.stop_reason: str = "max_pages"
+        self.latest_date_seen: Optional[str] = None
         # Events extracted but left for the next run because the budget ran out.
         self.events_deferred: int = 0
         self.supabase: Optional[Client] = None
@@ -925,6 +960,9 @@ Return ONLY the JSON array. No other text."""
                 "runner": "github-actions",
                 "maxPages": self.max_pages,
                 "deferred": self.events_deferred,
+                "horizonDays": self.horizon_days,
+                "latestEventDate": self.latest_date_seen,
+                "stopReason": self.stop_reason,
                 # The shape supabase/functions/_shared/ingestionHealth.ts reads.
                 "sources": {
                     "catchdesmoines.com": {
@@ -960,11 +998,15 @@ Return ONLY the JSON array. No other text."""
         run_start = time.monotonic()
         list_deadline = run_start + self.time_budget_seconds * LIST_BUDGET_SHARE
         run_deadline = run_start + self.time_budget_seconds
+        horizon_date = (
+            datetime.now(tz=CENTRAL_TZ) + timedelta(days=self.horizon_days)
+        ).strftime("%Y-%m-%d")
 
         # Crawl event listing pages
         for page in range(self.max_pages):
             if page > 0 and time.monotonic() > list_deadline:
                 logger.info(f"Listing budget spent after {page} page(s); processing what was found")
+                self.stop_reason = "list_budget"
                 break
 
             html = await self.crawl_events_list(page)
@@ -974,6 +1016,7 @@ Return ONLY the JSON array. No other text."""
                 if page == 0:
                     logger.error("First page failed, aborting")
                     return
+                self.stop_reason = "page_failed"
                 break
 
             # Extract events using Claude
@@ -987,6 +1030,7 @@ Return ONLY the JSON array. No other text."""
                     )
                 else:
                     logger.info(f"No more events found on page {page + 1}")
+                self.stop_reason = "extraction_failed" if self.extraction_errors else "end_of_listing"
                 break
 
             # Past the end of the calendar the listing repeats or empties. A
@@ -994,16 +1038,28 @@ Return ONLY the JSON array. No other text."""
             # the end, whatever max_pages says.
             if page > 0 and not page_adds_new_events(events, seen_detail_urls):
                 logger.info(f"Page {page + 1} added no new events; end of the listing")
+                self.stop_reason = "end_of_listing"
+                break
+
+            if page_is_past_horizon(events, horizon_date):
+                logger.info(f"Page {page + 1} starts after {horizon_date}; horizon reached")
+                self.stop_reason = "horizon"
                 break
 
             all_events.extend(events)
+            latest = latest_event_date(events)
+            if latest and (self.latest_date_seen is None or latest > self.latest_date_seen):
+                self.latest_date_seen = latest
             logger.info(f"Total events found so far: {len(all_events)}")
 
             # Delay between pages, at least what the site asks for
             if page < self.max_pages - 1:
                 await asyncio.sleep(robots_delay(EVENTS_LIST_URL, DEFAULT_LIST_DELAY_SECONDS))
 
-        logger.info(f"Extracted {len(all_events)} total events from {self.max_pages} pages")
+        logger.info(
+            f"Extracted {len(all_events)} total events; listing stopped on {self.stop_reason}, "
+            f"latest date {self.latest_date_seen}"
+        )
 
         # Process each event
         for i, event in enumerate(all_events):
@@ -1078,6 +1134,12 @@ async def main():
     parser.add_argument("--dry-run", action="store_true", help="Don't insert into database")
     parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES, help="Maximum pages to crawl")
     parser.add_argument(
+        "--horizon-days",
+        type=int,
+        default=DEFAULT_HORIZON_DAYS,
+        help="Stop the listing walk at the first page that starts this many days out",
+    )
+    parser.add_argument(
         "--time-budget-minutes",
         type=float,
         default=DEFAULT_TIME_BUDGET_MINUTES,
@@ -1095,6 +1157,7 @@ async def main():
     crawler = CatchDesMoinesCrawler(
         dry_run=args.dry_run,
         max_pages=args.max_pages,
+        horizon_days=args.horizon_days,
         time_budget_minutes=args.time_budget_minutes,
     )
     try:

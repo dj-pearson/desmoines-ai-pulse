@@ -4031,3 +4031,18 @@ Learnings for future iterations:
 1. A RATCHET THAT PASSES "DOWN 1" IS STILL A STALE BASELINE. check-raw-img
    reports a drop as OK, so a forgotten --write leaves headroom for the next
    PR to add one back unnoticed. Re-baseline whenever it says "Down".
+
+================================================================================
+2026-10-18 - WEB-BE-051: the Catch Des Moines walk stops at a 90-day horizon
+================================================================================
+
+crawlers/catchdesmoines_crawler.py stops at the first listing page that starts
+past today + 90 days, and the ledger row records how far it got and why it
+stopped. Tests in crawlers/test_crawl_horizon.py.
+
+Learnings for future iterations:
+
+1. "NO DATA" IS NOT A STOP SIGNAL. A page with no parseable dates must not end
+   the walk; otherwise one bad extraction looks like the end of the calendar.
+2. CHECK FOR UNRECORDED PROGRESS FIRST. Half this story had shipped with no
+   note on it. Read the code before trusting the notes, in both directions.

@@ -16,12 +16,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE = open(os.path.join(HERE, "catchdesmoines_crawler.py"), encoding="utf-8").read()
 
 
-def load_helper():
+def load_helpers():
     start = SOURCE.index("def page_adds_new_events(")
     end = SOURCE.index("\nclass CatchDesMoinesCrawler")
-    ns = {}
+    ns = {"re": re, "Optional": __import__("typing").Optional}
     exec(SOURCE[start:end], ns)  # noqa: S102
-    return ns["page_adds_new_events"]
+    return ns
 
 
 def constant(name):
@@ -37,7 +37,10 @@ def main():
         if not cond:
             failures.append(name)
 
-    page_adds_new_events = load_helper()
+    helpers = load_helpers()
+    page_adds_new_events = helpers["page_adds_new_events"]
+    past = helpers["page_is_past_horizon"]
+    latest = helpers["latest_event_date"]
     seen = set()
     p1 = [{"detail_url": "/event/a/1/"}, {"detail_url": "/event/b/2/"}]
     check("first page is new", page_adds_new_events(p1, seen))
@@ -47,6 +50,24 @@ def main():
     check("one new link is enough", page_adds_new_events(p1 + [{"detail_url": "/event/c/3/"}], seen))
     check("an event with no link is not proof of the end", page_adds_new_events([{"title": "x"}], seen))
     check("an empty page adds nothing", not page_adds_new_events([], seen))
+
+    h = "2027-01-15"
+    check("a page that starts after the horizon stops the walk",
+          past([{"date": "2027-01-16 19:00:00"}, {"date": "2027-01-20"}], h))
+    check("a page that straddles the horizon is kept",
+          not past([{"date": "2027-01-15 20:00:00"}, {"date": "2027-02-01"}], h))
+    check("the earliest date decides, not the first in the list",
+          not past([{"date": "2027-03-01"}, {"date": "2027-01-10 18:00:00"}], h))
+    check("a page with no dates is not past the horizon",
+          not past([{"title": "x"}, {"date": ""}, {"date": "TBD"}], h))
+    check("an empty page is not past the horizon", not past([], h))
+    check("latest date ignores undated events",
+          latest([{"date": "2027-01-02"}, {"date": "x"}, {"date": "2027-01-09 10:00:00"}]) == "2027-01-09")
+    check("latest date of an undated page is None", latest([{"title": "x"}]) is None)
+    check("the default horizon is 90 days", constant("DEFAULT_HORIZON_DAYS") == 90)
+    check("the walk checks the horizon", "page_is_past_horizon(events, horizon_date)" in SOURCE)
+    for key in ('"horizonDays"', '"latestEventDate"', '"stopReason"'):
+        check(f"the ledger row records {key}", key in SOURCE)
 
     check("default horizon is well past 5 pages", (constant("DEFAULT_MAX_PAGES") or 0) >= 15)
     check("a time budget exists", (constant("DEFAULT_TIME_BUDGET_MINUTES") or 0) > 0)
