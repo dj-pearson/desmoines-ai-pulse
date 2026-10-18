@@ -18,7 +18,10 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 
-const TABLES = ['events', 'restaurants', 'attractions'] as const;
+// hotels and playgrounds were one-shot seeds with nothing keeping them healthy
+// (WEB-BE-055). They need 20261020000007 for heal_attempts; until it is
+// applied they land in tableErrors and the other three still run.
+const TABLES = ['events', 'restaurants', 'attractions', 'hotels', 'playgrounds'] as const;
 const BATCH = 25;
 const MAX_HEAL_ATTEMPTS = 3;
 
@@ -30,14 +33,21 @@ const ADDR_COLS: Record<string, string[]> = {
   events: ['location', 'venue'],
   restaurants: ['location'],
   attractions: ['address', 'location'],
+  hotels: ['address'],
+  playgrounds: ['location'],
 };
 
-// SEO content-type slug expected by generate-seo-content.
-const SEO_TYPE: Record<string, string> = {
+// SEO content-type slug expected by generate-seo-content. It accepts events and
+// restaurants only (selection.ts normalizeContentType) and answers anything
+// else with a 400, so a table missing here skips the stage rather than calling
+// it to be refused. attractions was sent and refused every night.
+const SEO_TYPE: Partial<Record<string, string>> = {
   events: 'events',
   restaurants: 'restaurants',
-  attractions: 'attractions',
 };
+
+// playgrounds has no seo_title column, so its SEO KPI is not counted.
+const HAS_SEO_TITLE = new Set(['events', 'restaurants', 'attractions', 'hotels']);
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -64,9 +74,12 @@ Deno.serve(async (req) => {
     for (const table of TABLES) {
       try {
         // ---- KPI snapshot (counts of rows missing each field class) ----
+        const noCount = { count: 0, error: null };
         const [coordsMissing, seoMissing, imageMissing] = await Promise.all([
           supabase.from(table).select('id', { count: 'exact', head: true }).is('latitude', null),
-          supabase.from(table).select('id', { count: 'exact', head: true }).is('seo_title', null),
+          HAS_SEO_TITLE.has(table)
+            ? supabase.from(table).select('id', { count: 'exact', head: true }).is('seo_title', null)
+            : Promise.resolve(noCount),
           supabase.from(table).select('id', { count: 'exact', head: true }).is('image_url', null),
         ]);
         // A COUNT THAT FAILED IS NOT A COUNT OF ZERO, and on a data-quality job
@@ -134,15 +147,18 @@ Deno.serve(async (req) => {
         }
 
         // ---- Stage 2: SEO/GEO (delegate to generate-seo-content) ----
-        try {
-          const res = await fetch(`${url}/functions/v1/generate-seo-content`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-            body: JSON.stringify({ contentType: SEO_TYPE[table], batchSize: 20 }),
-          });
-          if (res.ok) stageCounts.seoBatches++;
-        } catch (e) {
-          console.error(`[data-quality-heal] SEO stage failed for ${table}:`, e);
+        const seoType = SEO_TYPE[table];
+        if (seoType) {
+          try {
+            const res = await fetch(`${url}/functions/v1/generate-seo-content`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+              body: JSON.stringify({ contentType: seoType, batchSize: 20 }),
+            });
+            if (res.ok) stageCounts.seoBatches++;
+          } catch (e) {
+            console.error(`[data-quality-heal] SEO stage failed for ${table}:`, e);
+          }
         }
 
         // ---- Stage 3: image backfill (delegate to backfill-images) ----
@@ -150,7 +166,10 @@ Deno.serve(async (req) => {
           const res = await fetch(`${url}/functions/v1/backfill-images`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-            body: JSON.stringify({ contentType: table, limit: BATCH }),
+            // backfill-images reads `category` and `batchSize`. This sent
+            // `contentType` and `limit`, which it ignored, so every table's
+            // image stage backfilled five EVENTS and none of its own rows.
+            body: JSON.stringify({ category: table, batchSize: BATCH }),
           });
           if (res.ok) stageCounts.imageBatches++;
         } catch (e) {

@@ -220,6 +220,29 @@ Deno.test('every ADDR_COLS column exists in the schema snapshot', async () => {
   }
 });
 
+Deno.test('heal talks to its delegates in the shape they read (WEB-BE-055)', async () => {
+  const src = codeOnly(await read('supabase/functions/data-quality-heal/index.ts'));
+  // backfill-images reads category + batchSize; contentType + limit were ignored
+  // and every table's image stage backfilled events.
+  assert.match(src, /JSON\.stringify\(\{ category: table, batchSize: BATCH \}\)/);
+  assert.doesNotMatch(src, /contentType: table/);
+  // generate-seo-content accepts events and restaurants only.
+  const seo = sliceBetween(src, 'const SEO_TYPE', '};');
+  const seoTables = [...seo.matchAll(/(\w+):\s*'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(seoTables, ['events', 'restaurants']);
+  assert.match(src, /if \(seoType\)/, 'a table with no SEO type skips the stage');
+});
+
+Deno.test('hotels and playgrounds are healed, and have the columns to be (WEB-BE-055)', async () => {
+  const src = codeOnly(await read('supabase/functions/data-quality-heal/index.ts'));
+  const tables = sliceBetween(src, 'const TABLES', 'as const');
+  for (const t of ['hotels', 'playgrounds']) assert.ok(tables.includes(`'${t}'`), `${t} must be in TABLES`);
+  const sql = await read('supabase/migrations/20261020000007_heal_hotels_playgrounds.sql');
+  assert.match(sql, /ARRAY\['hotels', 'playgrounds'\]/);
+  assert.match(sql, /heal_attempts INTEGER NOT NULL DEFAULT 0/);
+  assert.match(sql, /needs_manual_verification BOOLEAN NOT NULL DEFAULT false/);
+});
+
 Deno.test('one table failing does not end the heal run', async () => {
   const src = codeOnly(await read('supabase/functions/data-quality-heal/index.ts'));
   assert.match(src, /tableErrors\[table\] =/);

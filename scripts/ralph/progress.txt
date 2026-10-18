@@ -4046,3 +4046,19 @@ Learnings for future iterations:
    the walk; otherwise one bad extraction looks like the end of the calendar.
 2. CHECK FOR UNRECORDED PROGRESS FIRST. Half this story had shipped with no
    note on it. Read the code before trusting the notes, in both directions.
+
+================================================================================
+2026-10-18 - WEB-BE-055: hotels and playgrounds join data-quality-heal
+================================================================================
+
+TABLES += hotels, playgrounds; migration 20261020000007 adds the two heal
+columns they lacked. invoke-populate-playgrounds.cjs deleted.
+
+Learnings for future iterations:
+
+1. READ THE CALLEE'S REQUEST TYPE, NOT THE CALLER'S FIELD NAMES. heal sent
+   { contentType, limit } to a function that reads { category, batchSize };
+   both sides looked right in isolation and every image stage healed events.
+2. Deno is not installed, but `npx -y deno@2 test --allow-read <file>` works
+   for test files that import only node: or local modules. deno.land imports
+   fail through the proxy.
