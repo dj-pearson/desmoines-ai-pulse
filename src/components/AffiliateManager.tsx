@@ -29,7 +29,7 @@ import { createLogger } from '@/lib/logger';
  * the real table.
  */
 async function updateUrlColumn(
-  table: 'events' | 'restaurants' | 'attractions' | 'restaurant_openings',
+  table: 'events' | 'restaurants' | 'attractions',
   column: 'source_url' | 'website',
   id: string,
   url: string,
@@ -37,8 +37,6 @@ async function updateUrlColumn(
   switch (table) {
     case 'events':
       return supabase.from('events').update({ source_url: url }).eq('id', id);
-    case 'restaurant_openings':
-      return supabase.from('restaurant_openings').update({ source_url: url }).eq('id', id);
     case 'attractions':
       return supabase.from('attractions').update({ website: url }).eq('id', id);
     case 'restaurants':
@@ -97,7 +95,8 @@ export default function AffiliateManager() {
         { table: 'events' as const, urlColumns: ['source_url'] as const },
         { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] as const },
         { table: 'attractions' as const, urlColumns: ['website'] as const },
-        { table: 'restaurant_openings' as const, urlColumns: ['source_url'] as const }
+        // No restaurant_openings entry: openings are restaurants rows, so the
+        // restaurants entry above covers them (WEB-BE-054).
       ];
 
       for (const config of tableConfigs) {
@@ -224,7 +223,8 @@ export default function AffiliateManager() {
         { table: 'events' as const, urlColumns: ['source_url'] as const },
         { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] as const },
         { table: 'attractions' as const, urlColumns: ['website'] as const },
-        { table: 'restaurant_openings' as const, urlColumns: ['source_url'] as const }
+        // No restaurant_openings entry: openings are restaurants rows, so the
+        // restaurants entry above covers them (WEB-BE-054).
       ];
 
       for (const config of tableConfigs) {

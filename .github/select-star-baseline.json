@@ -1,5 +1,5 @@
 {
-  "count": 75,
+  "count": 74,
   "sites": [
     "src/hooks/useAIConfiguration.ts:24",
     "src/hooks/useAIModels.ts:30",
@@ -52,7 +52,6 @@
     "src/hooks/useProviderCosts.ts:40",
     "src/hooks/useRatings.ts:101",
     "src/hooks/useRatings.ts:351",
-    "src/hooks/useRestaurantOpenings.ts:46",
     "src/hooks/useSavedSearchAlerts.ts:51",
     "src/hooks/useScraping.ts:199",
     "src/hooks/useSeasonalGuides.ts:30",

@@ -255,7 +255,7 @@ export default function ContentEditDialog({
   };
 
   const getTableName = (type: ContentType):
-    "restaurants" | "events" | "attractions" | "playgrounds" | "restaurant_openings" | "hotels" => {
+    "restaurants" | "events" | "attractions" | "playgrounds" | "hotels" => {
     switch (type) {
       case 'restaurant': return 'restaurants';
       case 'event': return 'events';

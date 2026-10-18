@@ -92,16 +92,15 @@
       {
         "parameters": {
           "operation": "insert",
-          "tableId": "restaurant_openings",
+          "tableId": "restaurants",
           "columns": {
             "mappingMode": "defineBelow",
             "value": {
               "name": "={{ $json.name }}",
               "location": "={{ $json.location }}",
               "cuisine": "={{ $json.cuisine }}",
-              "status": "={{ $json.status }}",
-              "source_url": "={{ $json.source_url }}",
-              "source_type": "social_media"
+              "status": "={{ ['announced', 'opening_soon', 'newly_opened'].includes($json.status) ? $json.status : 'announced' }}",
+              "source_url": "={{ $json.source_url }}"
             }
           }
         },

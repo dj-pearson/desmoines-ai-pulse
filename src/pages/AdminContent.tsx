@@ -37,7 +37,6 @@ import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
-import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
 import { useHotels } from "@/hooks/useHotels";
 import { ContentItem, ContentType } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -176,9 +175,6 @@ export default function AdminContent() {
   // (WEB-PERF-033).
   const attractions = useAttractions({ search: searchTerms.attractions, countMode: "exact" });
   const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds, countMode: "exact" });
-  const restaurantOpenings = useRestaurantOpenings({
-    search: searchTerms.restaurantOpenings,
-  });
   const hotels = useHotels({ search: searchTerms.hotels, activeOnly: false, countMode: "exact" });
 
   const canManageContent = () =>
@@ -188,7 +184,7 @@ export default function AdminContent() {
     setEditDialog({ open: true, contentType, item });
   };
 
-  const handleCreate = (contentType: ContentType) => {
+  const handleCreate = (contentType: ContentType, overrides: Partial<ContentItem> = {}) => {
     if (contentType === "event") {
       setTemplateSelector({ open: true, contentType: 'event' });
       return;
@@ -211,6 +207,7 @@ export default function AdminContent() {
         opening_date: null,
         opening_timeframe: "",
         is_featured: false,
+        ...overrides,
       };
     } else if (contentType === "attraction") {
       emptyItem = {
@@ -327,7 +324,6 @@ export default function AdminContent() {
       else if (contentType === "attraction") attractions.refetch();
       else if (contentType === "playground") playgrounds.refetch();
       else if (contentType === "hotel") hotels.refetch();
-      restaurantOpenings.refetch();
     } catch (error) {
       log.error('handleDelete', 'Delete error', { error });
       toast.error("Failed to delete: " + (error as Error).message);
@@ -348,7 +344,6 @@ export default function AdminContent() {
       } else if (contentType === "restaurant") {
         await restaurants.refetch();
         await queryClient.invalidateQueries({ queryKey: ["restaurants"] });
-        await restaurantOpenings.refetch();
         await queryClient.invalidateQueries({});
       } else if (contentType === "attraction") {
         await attractions.refetch();
@@ -514,7 +509,9 @@ export default function AdminContent() {
               onDelete={(id) => handleDelete("restaurant", id)}
               onSearch={handleRestaurantOpeningsSearch}
               onFilter={(filter) => log.debug('filter', 'Filter restaurant openings', { filter })}
-              onCreate={() => log.debug('create', 'Create new restaurant opening')}
+              // An opening is a restaurants row that is not open yet
+              // (WEB-BE-054); this button used to do nothing.
+              onCreate={() => handleCreate("restaurant", { status: "announced" })}
             />
           )}
 

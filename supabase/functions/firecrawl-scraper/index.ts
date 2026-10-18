@@ -27,6 +27,7 @@ import {
   SPORTS_CONTENT_BUDGET,
 } from "../_shared/htmlContentWindow.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
+import { normalizeOpeningStatus, openingDateOnly, OPENING_TABLE } from "../_shared/restaurantOpening.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
 import { checkEventTitle } from "../_shared/scheduleTitleGuard.ts";
@@ -560,7 +561,9 @@ serve(async (req) => {
       events: 'events',
       restaurants: 'restaurants', 
       playgrounds: 'playgrounds',
-      restaurant_openings: 'restaurant_openings',
+      // WEB-BE-054: openings are restaurants rows. This pointed at a separate
+      // restaurant_openings table, which nothing on the site reads.
+      restaurant_openings: OPENING_TABLE,
       attractions: 'attractions',
       competitor_analysis: 'competitor_content'
     };
@@ -731,6 +734,29 @@ serve(async (req) => {
                 };
                 break;
                 
+              // WEB-BE-054. There was no case here, so every opening this
+              // function extracted fell through to `default: continue` and was
+              // dropped. Same shape ai-crawler writes.
+              case 'restaurant_openings': {
+                const openingName = item.name?.trim().substring(0, 200);
+                if (!openingName) continue;
+                transformedData = {
+                  name: openingName,
+                  cuisine: item.cuisine?.trim().substring(0, 100) || null,
+                  location: item.location?.trim().substring(0, 200) || null,
+                  description: item.description?.trim().substring(0, 500) || null,
+                  phone: item.phone?.substring(0, 20) || null,
+                  website: item.website?.substring(0, 200) || null,
+                  opening_date: openingDateOnly(item.opening_date),
+                  status: normalizeOpeningStatus(item.status),
+                  source_url: item.source_url || url,
+                  is_featured: false, // WEB-BE-040: never decided at ingest
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
+                break;
+              }
+
               case 'playgrounds':
                 transformedData = {
                   name: item.name?.substring(0, 200) || "Playground",

@@ -4,23 +4,17 @@
  *
  * WHY THIS IS WORTH A CHECK. A collision is invisible at every call site: the
  * import looks right, the name reads right, and which implementation you get is
- * decided by the import PATH. One exists in src/hooks today and is live, the
- * two halves reading different data. (useUserPreferences ended when the
- * unimported use-user-preferences.ts was deleted, 2026-09; useTrending ended
- * when useTrendingContent.ts's copy was renamed to useTrendingContent and
- * moved onto TanStack Query, 2026-10.)
+ * decided by the import PATH. None exist today. Three did, and each read
+ * different data from its twin: useUserPreferences (ended 2026-09 when the
+ * unimported use-user-preferences.ts was deleted), useTrending (ended 2026-10,
+ * renamed to useTrendingContent and moved onto TanStack Query) and
+ * useRestaurantOpenings (ended 2026-10 when openings were settled as
+ * restaurants rows, WEB-BE-054, and the admin hook over restaurant_openings
+ * was deleted). The last one cost most of an iteration to untangle, and the
+ * conclusion drawn before finding it was wrong.
  *
- *   useRestaurantOpenings  useSupabase.ts reads `restaurants` (and is what the
- *                          public RestaurantOpenings.tsx renders from);
- *                          useRestaurantOpenings.ts reads `restaurant_openings`
- *                          (and is what AdminContent.tsx manages). WEB-BE-054
- *                          is the decision about which table wins.
- *
- * That one needs a product decision, so it is ALLOWED here by name with the
- * reason attached. What this stops is a SECOND, which is cheap to add by
- * accident and expensive to find: the useRestaurantOpenings pair cost most of
- * an iteration to untangle, and the conclusion drawn before finding it was
- * wrong.
+ * ALLOWED is for a collision that needs a product decision, with the story
+ * that resolves it. It is empty, and the check fails on any collision.
  *
  * Usage: node scripts/check-hook-name-collisions.mjs
  */
@@ -28,9 +22,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Collisions that exist, each with the story that resolves it. */
-const ALLOWED = new Map([
-  ['useRestaurantOpenings', 'WEB-BE-054 decides which table openings live in'],
-]);
+const ALLOWED = new Map([]);
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {

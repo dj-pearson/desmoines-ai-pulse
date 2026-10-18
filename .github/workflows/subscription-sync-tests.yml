@@ -210,6 +210,11 @@ jobs:
       # fields a source never gave, no resurrection of a closed row, and no
       # anonymous caller spending the Places key.
       - run: deno test --allow-read supabase/functions/_tests/restaurant-ingest-honesty.test.ts
+      # WEB-BE-054. Openings are restaurants rows. firecrawl-scraper mapped the
+      # category to a restaurant_openings table and then had no case for it,
+      # so it dropped every opening; ai-crawler wrote restaurants. Pins both
+      # writers to one table and one status vocabulary.
+      - run: deno test --allow-read supabase/functions/_tests/restaurant-openings-table.test.ts
       # WEB-BE-042 AC3/AC5. The Catch Des Moines adapter parsed the site's own
       # ld+json @type and then discarded it, stamping category: "Community" on
       # every event - concerts, hockey games and theatre runs alike - while the

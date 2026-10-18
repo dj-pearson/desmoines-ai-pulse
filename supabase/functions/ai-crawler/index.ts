@@ -41,6 +41,7 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { sanitizeLikeInput } from "../_shared/validation.ts";
 import { runJob } from "../_shared/jobRunner.ts";
+import { normalizeOpeningStatus, OPENING_CATEGORY, OPENING_TABLE } from "../_shared/restaurantOpening.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
 import { findKnownVenue, ingestCoordinates } from "../_shared/knownVenues.ts";
 import type { SourceCounts } from "../_shared/ingestionHealth.ts";
@@ -1233,7 +1234,7 @@ async function checkForDuplicates(
   items: any[]
 ): Promise<{ newItems: any[]; duplicates: number; checkErrors: number }> {
   const tableName =
-    category === "restaurant_openings" ? "restaurants" : category;
+    category === OPENING_CATEGORY ? OPENING_TABLE : category;
   let duplicates = 0;
   // WEB-BE-048. An item skipped because its duplicate check failed is an
   // ERROR, not a duplicate: folding it into `duplicates` would make a run
@@ -1373,7 +1374,7 @@ async function insertData(
   items: any[]
 ): Promise<{ success: boolean; insertedCount: number; errors: any[] }> {
   const tableName =
-    category === "restaurant_openings" ? "restaurants" : category;
+    category === OPENING_CATEGORY ? OPENING_TABLE : category;
   const errors = [];
   let insertedCount = 0;
 
@@ -1522,13 +1523,9 @@ async function insertData(
                 console.warn(`⚠️ Skipping opening with no name from ${item.source_url || "source"}`);
                 return null;
               }
-              // The status column has a CHECK; a model-invented value would
-              // fail the whole batch insert, so anything else is "announced".
-              const openingStatus = ["announced", "opening_soon", "newly_opened"].includes(
-                String(item.status),
-              )
-                ? String(item.status)
-                : "announced";
+              // The status column has a CHECK; normalizeOpeningStatus maps a
+              // model-invented value to "announced" (shared with firecrawl).
+              const openingStatus = normalizeOpeningStatus(item.status);
               return {
                 ...baseItem,
                 name: openingName,
