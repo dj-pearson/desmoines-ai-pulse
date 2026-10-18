@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTrending } from '@/hooks/useTrendingContent';
+import { useTrendingContent } from '@/hooks/useTrendingContent';
 import { useSimplePersonalization } from '@/hooks/useSimplePersonalization';
 import { contentHref, isTrendingContentType } from '@/lib/trendingContent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,7 +35,7 @@ export default function TrendingContent({
     trendingItems,
     isLoading: trendingLoading,
     error: trendingError
-  } = useTrending({ contentType, timeWindow, limit: Math.ceil(limit / 2) });
+  } = useTrendingContent({ contentType, timeWindow, limit: Math.ceil(limit / 2) });
   
   const { 
     recommendations, 

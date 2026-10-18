@@ -4,26 +4,20 @@
  *
  * WHY THIS IS WORTH A CHECK. A collision is invisible at every call site: the
  * import looks right, the name reads right, and which implementation you get is
- * decided by the import PATH. Two exist in src/hooks today and both are live,
- * each pair reading different data. (A third, useUserPreferences, ended when
- * the unimported use-user-preferences.ts was deleted, 2026-09.)
+ * decided by the import PATH. One exists in src/hooks today and is live, the
+ * two halves reading different data. (useUserPreferences ended when the
+ * unimported use-user-preferences.ts was deleted, 2026-09; useTrending ended
+ * when useTrendingContent.ts's copy was renamed to useTrendingContent and
+ * moved onto TanStack Query, 2026-10.)
  *
  *   useRestaurantOpenings  useSupabase.ts reads `restaurants` (and is what the
  *                          public RestaurantOpenings.tsx renders from);
  *                          useRestaurantOpenings.ts reads `restaurant_openings`
  *                          (and is what AdminContent.tsx manages). WEB-BE-054
  *                          is the decision about which table wins.
- *   useTrending            useTrending.ts is a TanStack query over
- *                          trending_scores, used by MostSearched.tsx;
- *                          useTrendingContent.ts is a useState/useEffect fetch
- *                          used by TrendingContent.tsx. The second is invisible
- *                          to PrerenderSignal, which publishes
- *                          data-queries-settled from useIsFetching() - a count
- *                          of TanStack queries only - so a capture can land
- *                          before its rows arrive. Unfiled until now.
  *
- * Each of those needs a product decision, so they are ALLOWED here by name with
- * the reason attached. What this stops is a FOURTH, which is cheap to add by
+ * That one needs a product decision, so it is ALLOWED here by name with the
+ * reason attached. What this stops is a SECOND, which is cheap to add by
  * accident and expensive to find: the useRestaurantOpenings pair cost most of
  * an iteration to untangle, and the conclusion drawn before finding it was
  * wrong.
@@ -36,7 +30,6 @@ import { join } from 'node:path';
 /** Collisions that exist, each with the story that resolves it. */
 const ALLOWED = new Map([
   ['useRestaurantOpenings', 'WEB-BE-054 decides which table openings live in'],
-  ['useTrending', 'one TanStack, one useState/useEffect; the second is invisible to PrerenderSignal'],
 ]);
 
 function walk(dir, out = []) {
