@@ -404,7 +404,21 @@ jobs:
           echo "Signature verified"
 
       # ============================================================
-      # 8. UPLOAD ARTIFACT
+      # 8. ASSERT THE BUNDLE MANIFEST
+      # ============================================================
+      # The May 2026 rejection was an AAB with no geo.API_KEY meta-data, and
+      # nothing above reads the built artifact's manifest. This dumps it with
+      # a pinned bundletool and fails unless the Maps key is real (reported
+      # only as present/absent), versionCode is the one patched in step 2,
+      # targetSdk is at least 36 and AD_ID / ACCESS_ADSERVICES_* are gone.
+      # It also runs bundletool validate.
+      - name: Assert bundle manifest
+        if: github.event.inputs.buildType == 'bundle'
+        shell: bash
+        run: bash scripts/android/assert-aab-manifest.sh "$ARTIFACT_PATH" "$VERSION_CODE"
+
+      # ============================================================
+      # 9. UPLOAD ARTIFACT
       # ============================================================
       - name: Upload release artifact
         if: success()
@@ -425,7 +439,7 @@ jobs:
           if-no-files-found: warn
 
       # ============================================================
-      # 9. CLEANUP
+      # 10. CLEANUP
       # ============================================================
       - name: Clean up signing artifacts
         if: always()
@@ -436,7 +450,7 @@ jobs:
           echo "Signing artifacts cleaned"
 
       # ============================================================
-      # 10. SUMMARY
+      # 11. SUMMARY
       # ============================================================
       - name: Job summary
         if: success()
