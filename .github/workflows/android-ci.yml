@@ -140,6 +140,25 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease
 
+      # AND-OVH-001. firebase-analytics merges AD_ID and the AdServices
+      # permissions into the release manifest; AndroidManifest.xml strips them
+      # with tools:node="remove". ManifestPermissionAllowlistTest checks the
+      # source lines, but only the merged manifest shows what a new or upgraded
+      # dependency adds, so check the file that actually ships.
+      - name: Check merged release manifest has no advertising permissions
+        working-directory: android
+        run: |
+          manifest=app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+          if [ ! -f "$manifest" ]; then
+            echo "::error::merged release manifest not found at $manifest"
+            exit 1
+          fi
+          if grep -nE 'permission\.AD_ID|ACCESS_ADSERVICES' "$manifest"; then
+            echo "::error::advertising permissions are back in the merged release manifest (see lines above)"
+            exit 1
+          fi
+          echo "No AD_ID or ACCESS_ADSERVICES permission in $manifest"
+
       - name: Upload R8 mapping and usage reports
         if: always()
         uses: actions/upload-artifact@v4

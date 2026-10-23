@@ -1,0 +1,648 @@
+{
+  "branch": "fix/android-overhaul",
+  "play_failure_diagnosis": "Nobody has seen the Play Console rejection text: it isn't in the repo or in the gh run history. This ranking is built from code and dates, and the Console text outranks all of it.\n\nPAST failures, VERIFIED from the repo:\n(1) The May 14 build was rejected for Broken Functionality. The Map tab crashed because the packaged manifest had no com.google.android.geo.API_KEY (commit 4870127d; android/app/build.gradle.kts:24-28). The fix is on main at AndroidManifest.xml:156-158.\n(2) The May 18 resubmission was android-release run #12 at 2ad9a47b, the last release run (gh run list). Its in-app Delete Account POSTed an empty body (git show 2ad9a47b:.../ProfileViewModel.kt:192). The server's SEC-025 two-step flow had been rejecting that with a 400 since 0b701939 (2026-03-28). The legacy no-body branch at supabase/functions/delete-user-account/index.ts:430-447 only arrived on 2026-08-11. A reviewer checking account deletion would have seen it fail, so this is the most likely cause of the latest failure (SUSPECTED, confidence medium-high).\n(3) Second candidate: a User Data / Data safety mismatch. src/pages/PrivacyPolicy.tsx:98 says 'not precise GPS', but the May binary already declared ACCESS_FINE_LOCATION (2ad9a47b AndroidManifest.xml:7).\n(4) Third: 'Continue with Google' does nothing visible. AuthScreen.kt:619-639 only logs the error, and the historical google-services.json has oauth_client=0 (SUSPECTED).\n\nRULED OUT as the past cause: targetSdk 35 was compliant in May (the API 36 requirement started 2026-08-31, and main is already on 36 at build.gradle.kts:89). Ads, AD_ID and firebase-analytics all landed after the upload (aa90d236 on 2026-06-27, 2e8541756 on 2026-06-26). 16 KB alignment is fine (every PT_LOAD is 0x4000). There are no exact-alarm, foreground-service or photo/video permissions. The local app-release.aab is an unsigned May 14 build, not the run #12 artifact, so it isn't evidence of what Play received.\n\nNEXT-UPLOAD blockers, VERIFIED in code, which is where the loop works:\n- The declarations contradict the binary. docs/mobile/GOOGLE_PLAY_SUBMISSION.md:69-70 says 'no ads', but AdSlot, the interstitial and sponsored picks are mounted. The merged release manifest has AD_ID, ACCESS_ADSERVICES_AD_ID and ACCESS_ADSERVICES_ATTRIBUTION (:80-82), pulled in by firebase-analytics, and nothing first-party needs them. The privacy policy denies GPS.\n- Reviewer-path no-ops: a successful sign-up is shown as an error (AuthRemoteDataSource.kt:92-100 plus the trigger conflict at 20261004000001:66-82). Google Sign-In fails silently. Subscribe returns silently when there are no ProductDetails (SubscriptionViewModel.kt:65-71), and the screen falls back to hardcoded $4.99/$12.99 (SubscriptionScreen.kt:360,380). The auth-callback branch is empty (MainActivity.kt:333-338). Remind Me is dead (EventDetailScreen.kt:712-719).\n- Subscriptions policy gaps: no auto-renew/cancel disclosure, no manage link, VIP perks Android doesn't deliver (SubscriptionScreen.kt:386-391), and an upgrade path that can double-bill (no SubscriptionUpdateParams anywhere).\n- The release pipeline has never shipped from current main. Signature verification can't fail (android-release.yml:339; jarsigner exits 0 on an unsigned jar). The versionCode floor is the committed 6, not Play's maximum. A placeholder Google client ID only produces a warning.",
+  "rationale": "I'm chairing, and I accepted the corrections every reviewer agreed on. Past causes and next-upload blockers are kept apart. Adding pipefail alone is not a fix for the signature check. Assetlinks waits until the deep-link parser resolves slugs. The client profile insert stays and treats 23505 as success, because the trigger migration isn't verified live. The loop makes no MIN_SUPPORTED_APP_VERSION change, doesn't touch the delete-user-account legacy branch, and adds no new rejections in validate-android-receipt (the May 1.0.0 binary still depends on them). No annual SKUs until the server allowlist ships. No dependency bumps before the first bundleRelease on AGP 9.3.2.\n\nOrder follows the rules. Stories 1-17 clear Play-review blockers: the manifest and consent mismatch first, then the reviewer path in the order a reviewer taps, then paywall policy, then deletion, then the web compliance pages and the submission packet. Stories 18-20 harden the release pipeline (build health). Stories 21-23 are reliability. Stories 24-25 are the parity work the user asked for: the brand palette and launch polish, then the Home IA rebuild, split so each fits one sitting. Every story is client-only Android code, CI YAML, or an additive web route or text. Nothing changes an edge function, an RPC or a schema.\n\nBranch: fix/android-overhaul already exists and sits exactly at origin/develop (0/0), which fits CLAUDE.md's fix/* off develop rule. Work returns to develop by PR, and the Play build comes from a release/x.y.z cut, never develop -> main.\n\nVerification is memory-safe. Each iteration runs one Gradle invocation with --no-daemon, a single worker and an in-process Kotlin compiler, after gradlew --stop. android-ci.yml runs on the branch through workflow_dispatch, because the pull_request trigger was removed in PR #447. Things the loop can't decide (Console values, fingerprints, GCP, legal wording, prod accounts, the backend target) are human tasks. Stories that depend on them are written so they work without those values and read them from repo variables later.",
+  "stories": [
+    {
+      "id": "AND-OVH-001",
+      "title": "Remove AD_ID/AdServices permissions and default Firebase Analytics off until consent",
+      "priority": 1,
+      "description": "firebase-analytics merges com.google.android.gms.permission.AD_ID, ACCESS_ADSERVICES_ATTRIBUTION and ACCESS_ADSERVICES_AD_ID into the release manifest (merged manifest :80-82). Nothing first-party needs them, because ads are served by CampaignAdService. Strip them, stop analytics from collecting before consent is applied, and make sure CI catches it if they come back.",
+      "files": [
+        "android/app/src/main/AndroidManifest.xml",
+        "android/app/src/main/java/com/desmoines/aipulse/DesMoinesInsiderApp.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/AnalyticsService.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/util/ManifestPermissionAllowlistTest.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/util/AnalyticsServiceTest.kt",
+        ".github/workflows/android-ci.yml"
+      ],
+      "acceptance_criteria": [
+        "The source manifest declares xmlns:tools and has <uses-permission tools:node=\"remove\"> entries for com.google.android.gms.permission.AD_ID, android.permission.ACCESS_ADSERVICES_AD_ID and android.permission.ACCESS_ADSERVICES_ATTRIBUTION",
+        "The manifest has <meta-data> firebase_analytics_collection_enabled=false and google_analytics_adid_collection_enabled=false inside <application>",
+        "DesMoinesInsiderApp injects AnalyticsService (or calls an apply-consent method on it) in onCreate, so stored consent is applied at process start, not on first lazy construction",
+        "AnalyticsService only calls setAnalyticsCollectionEnabled(true) when consent is granted. The 'essential events bypass' comment is corrected, since disabled collection drops those events",
+        "A new JVM test, ManifestPermissionAllowlistTest, reads src/main/AndroidManifest.xml (same file-reading pattern as DeepLinkManifestParityTest) and fails if any of the three removals or two meta-data entries is missing. It also fails if a dangerous permission outside the allowlist (INTERNET, ACCESS_NETWORK_STATE, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, POST_NOTIFICATIONS, VIBRATE, RECEIVE_BOOT_COMPLETED, USE_BIOMETRIC and the others the source already declares) is added",
+        "android-ci.yml gets a step after 'assembleRelease' that greps android/app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml and exits 1 if AD_ID or ACCESS_ADSERVICES appears"
+      ],
+      "verification": "Run the baseline with --tests '*ManifestPermissionAllowlistTest*' --tests '*AnalyticsServiceTest*'. Then run, single-worker and no-daemon: cd android && ./gradlew --no-daemon --max-workers=1 -Pkotlin.compiler.execution.strategy=in-process :app:processReleaseMainManifest && ! grep -E 'permission.AD_ID|ACCESS_ADSERVICES' app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml. Then dispatch android-ci.yml on fix/android-overhaul and confirm the new merged-manifest step is green.",
+      "depends_on": [],
+      "passes": true
+    },
+    {
+      "id": "AND-OVH-002",
+      "title": "Gate location sent to discover-chat on ConsentService.locationConsent",
+      "priority": 2,
+      "description": "The Settings location toggle is decorative. AskPulseRepository.kt:144-149 sends lat/lng to discover-chat whenever a fix exists, and nothing outside Settings reads locationConsent. Data safety can't honestly describe location as optional until the toggle actually controls the payload.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/data/repository/AskPulseRepository.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/LocationService.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/ConsentService.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/data/repository/AskPulseLocationConsentTest.kt"
+      ],
+      "acceptance_criteria": [
+        "AskPulseRepository omits userLocation from the discover-chat body when locationConsent is false",
+        "LocationService (or its callers) doesn't request a location fix when locationConsent is false",
+        "The payload builder is a pure internal function taking (location, consent) so it can be tested on the JVM",
+        "Unit tests: consent off plus a non-null location gives a body with no userLocation key. Consent on gives a body with latitude/longitude",
+        "The request shape for the edge function stays additive: the field is only omitted, which the server already tolerates when location is null"
+      ],
+      "verification": "Run the baseline with --tests '*AskPulseLocationConsentTest*' --tests '*DiscoverChatResponseTest*'. Then: grep -rn 'locationConsent' android/app/src/main/java/com/desmoines/aipulse/data/repository/AskPulseRepository.kt must return at least one line.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-003",
+      "title": "Make email sign-up truthful: confirmation-required state, tolerant profile insert, real resend",
+      "priority": 3,
+      "description": "AuthRemoteDataSource.kt:92-100 throws NoUser when signUpWith returns no session, which is normal when email confirmation is on. The plain profiles INSERT at :145-157 can then collide with handle_new_user's row. Either way AuthViewModel.kt:276-279 shows an error for an account that was created. 'Resend verification' (AuthViewModel.kt:365) sends a password reset instead.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/AuthRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/repository/AuthRepository.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthViewModel.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/AuthErrorMapper.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/data/remote/SignUpOutcomeTest.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/screens/auth/AuthViewModelTest.kt"
+      ],
+      "acceptance_criteria": [
+        "Sign-up returns a sealed outcome: SignedIn or ConfirmationRequired(email). A null session after signUpWith maps to ConfirmationRequired, not failure",
+        "The client profile insert stays (the trigger migration 20261004000001 isn't verified live in prod), but a Postgres 23505 unique violation on it counts as success. The insert is never deleted",
+        "interests are included in the signUp user metadata, alongside the existing fields",
+        "AuthScreen shows a 'Check your email to confirm your account' state with a Resend button for ConfirmationRequired",
+        "Resend calls supabase-kt auth.resendEmail(OtpType.Email.SIGNUP, email), not resetPasswordForEmail",
+        "Unit tests cover: null session gives ConfirmationRequired, 23505 on the profile insert gives success, other insert errors give failure, and resend calls the signup resend path (AuthViewModelTest with the existing repository fake)"
+      ],
+      "verification": "Run the baseline with --tests '*SignUpOutcomeTest*' --tests '*AuthViewModelTest*'. Then: grep -n 'resetPassword' android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthViewModel.kt must not appear in the resend-verification function.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-004",
+      "title": "Google Sign-In: visible errors, hide when unconfigured, drop the baselined CredentialManagerMisuse",
+      "priority": 4,
+      "description": "AuthScreen.kt:619-639 catches every non-cancel exception and only logs it, so the button can do nothing visible on a Play-signed install. A placeholder or blank GOOGLE_WEB_CLIENT_ID still renders the button.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthViewModel.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/GoogleSignInConfig.kt",
+        "android/app/lint-baseline.xml",
+        "android/app/src/test/java/com/desmoines/aipulse/util/GoogleSignInConfigTest.kt"
+      ],
+      "acceptance_criteria": [
+        "A pure function isGoogleSignInConfigured(clientId) returns false for blank values, values containing 'placeholder', and values not ending in '.apps.googleusercontent.com'",
+        "The 'Continue with Google' button is not rendered when isGoogleSignInConfigured(BuildConfig.GOOGLE_WEB_CLIENT_ID) is false",
+        "NoCredentialException shows 'No Google account available on this device'. Any other GetCredentialException or exception shows a visible error through the existing auth error UI. GetCredentialCancellationException stays silent",
+        "The CredentialManagerMisuse entry is removed from app/lint-baseline.xml and lint passes without it",
+        "The text-'G' logo is replaced with a vector drawable of the Google 'G' mark (res/drawable/ic_google_logo.xml)",
+        "Unit tests cover the config predicate cases"
+      ],
+      "verification": "Run the baseline with --tests '*GoogleSignInConfigTest*' (the baseline's :app:lintDebug must pass with the baseline entry removed). Then: grep -c CredentialManagerMisuse android/app/lint-baseline.xml must print 0.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-005",
+      "title": "Hand auth-callback deep links to supabase-kt (email confirmation completes in-app)",
+      "priority": 5,
+      "description": "MainActivity.kt:333-338 matches auth-callback and does nothing. handleDeeplinks and exchangeCodeForSession appear nowhere in android/app/src, so PKCE confirmation links open the app and stop.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/SupabaseClient.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/AuthCallbackRouter.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/util/AuthCallbackRouterTest.kt"
+      ],
+      "acceptance_criteria": [
+        "MainActivity calls supabase.handleDeeplinks(intent) for com.desmoines.aipulse://auth-callback URIs in both onCreate and onNewIntent",
+        "A pure AuthCallbackRouter classifies a callback URI (from a string, so it's JVM-testable) as Confirmation, Recovery (query flow=recovery), Error (error_description present) or NotAuth",
+        "An error callback (expired link) shows a visible message instead of silently landing on Home",
+        "After a successful Confirmation the user lands on Home signed in, with a short confirmation snackbar",
+        "The intent data is cleared after handling, so a rotation doesn't re-run the exchange",
+        "Unit tests cover all four classifications"
+      ],
+      "verification": "Run the baseline with --tests '*AuthCallbackRouterTest*'. Then grep -rn 'handleDeeplinks' android/app/src/main/java must show the MainActivity call sites. Dispatch android-ci.yml on fix/android-overhaul; the pixel6api34DebugAndroidTest job must stay green.",
+      "depends_on": [
+        "AND-OVH-003"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-006",
+      "title": "Password reset finishes on device: recovery redirect plus SetNewPassword screen",
+      "priority": 6,
+      "description": "resetPasswordForEmail (AuthRemoteDataSource.kt:108-111) sends no redirect, and there's no screen that calls updateUser. Mirror iOS SetNewPasswordView (DesMoinesInsiderApp.swift:78-80).",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/AuthRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/SetNewPasswordScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/SetNewPasswordViewModel.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/navigation/NavGraph.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/screens/auth/SetNewPasswordViewModelTest.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/navigation/RouteRegistrationTest.kt"
+      ],
+      "acceptance_criteria": [
+        "resetPasswordForEmail passes redirectUrl = \"com.desmoines.aipulse://auth-callback?flow=recovery\"",
+        "When AuthCallbackRouter returns Recovery and the session is established, the app navigates to SetNewPassword and can't navigate away until the password is set or the user signs out",
+        "SetNewPasswordViewModel validates the password (min 8 chars, confirm match), calls auth.updateUser { password = ... }, and on success shows a confirmation and goes to Home",
+        "The route is registered, and RouteRegistrationTest is updated to include it",
+        "ViewModel unit tests cover a mismatch, too short, success and a server error"
+      ],
+      "verification": "Run the baseline with --tests '*SetNewPasswordViewModelTest*' --tests '*RouteRegistrationTest*'. Then grep -n 'flow=recovery' android/app/src/main/java/com/desmoines/aipulse/data/remote/AuthRemoteDataSource.kt must show one match.",
+      "depends_on": [
+        "AND-OVH-005"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-007",
+      "title": "Wire the 'Remind Me' button to LocalNotificationService",
+      "priority": 7,
+      "description": "EventDetailScreen.kt:712-719 hardcodes isReminderSet = false, and its onClick only fires a haptic. LocalNotificationService already has scheduleReminder, toggleReminder and isReminderSet (LocalNotificationService.kt:110,210,236), but nothing in ui/ uses it.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/eventdetail/EventDetailScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/eventdetail/EventDetailViewModel.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/LocalNotificationService.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/screens/eventdetail/EventDetailReminderTest.kt"
+      ],
+      "acceptance_criteria": [
+        "EventDetailViewModel exposes isReminderSet: StateFlow<Boolean>, seeded from LocalNotificationService.isReminderSet(eventId), plus toggleReminder()",
+        "The button reflects the state: 'Remind Me' vs 'Reminder set', with the accessibility label updated",
+        "On API 33+, POST_NOTIFICATIONS is requested before the first schedule. If it's denied, a snackbar explains why and nothing is scheduled",
+        "The button is hidden for events whose start time is in the past, matching iOS EventDetailActions.swift:62-64",
+        "The 'implemented in later story' comment is removed",
+        "Unit tests cover: toggle schedules then cancels, past events report the button hidden, and the initial state is read from the service"
+      ],
+      "verification": "Run the baseline with --tests '*EventDetailReminderTest*'. Then: grep -n 'isReminderSet = false' android/app/src/main/java/com/desmoines/aipulse/ui/screens/eventdetail/EventDetailScreen.kt must return nothing.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-008",
+      "title": "Paywall: no hardcoded prices, unavailable state, auto-renew disclosure, manage link, honest VIP list",
+      "priority": 8,
+      "description": "SubscriptionViewModel.kt:65-71 returns silently when ProductDetails is null. SubscriptionScreen.kt:360,380 fall back to $4.99/$12.99. There's no renewal or cancel disclosure and no Play manage link. The VIP rows at :386-391 and AppEnums.kt:230-233 advertise SMS alerts, reservation help, concierge and perks that Android doesn't implement. CLAUDE.md's money rule: the UI shows only Play's formattedPrice.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/subscription/SubscriptionScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/subscription/SubscriptionViewModel.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/model/AppEnums.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/PlaySubscriptionLinks.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/profile/SettingsScreen.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/screens/subscription/SubscriptionViewModelTest.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/util/PlaySubscriptionLinksTest.kt"
+      ],
+      "acceptance_criteria": [
+        "No price string literal (regex \\$[0-9]+\\.[0-9]{2}) remains in SubscriptionScreen.kt or SubscriptionViewModel.kt",
+        "When ProductDetails for a tier is null, that tier's card shows 'Subscriptions unavailable right now' and the Subscribe button is disabled. A load-in-progress state shows a progress indicator, not a price",
+        "SubscriptionViewModel emits a visible error message instead of returning silently when the product is missing at purchase time",
+        "Under the CTA: 'Renews monthly at {formattedPrice} until cancelled. Cancel anytime in Google Play.'",
+        "PlaySubscriptionLinks.manageUrl(sku, packageName) builds https://play.google.com/store/account/subscriptions?sku=<id>&package=com.desmoines.aipulse. A 'Manage subscription' button opens it for current subscribers, on the paywall and in Settings",
+        "VIP feature rows list only features that have an Android implementation (grep-backed). SMS alerts, reservation help, concierge support and monthly perks are removed from the Android list and enum descriptions. Remove 'VIP-exclusive events' too unless a VIP-gated events query exists",
+        "Unit tests cover the URL builder, the null-product unavailable state and the visible missing-product error"
+      ],
+      "verification": "Run the baseline with --tests '*SubscriptionViewModelTest*' --tests '*PlaySubscriptionLinksTest*'. Then: grep -nE '\\$[0-9]+\\.[0-9]{2}' android/app/src/main/java/com/desmoines/aipulse/ui/screens/subscription/*.kt must return nothing; grep -niE 'SMS alerts|Concierge|reservation help|local business perks' android/app/src/main/java -r must return nothing.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-009",
+      "title": "Billing: tier change uses SubscriptionUpdateParams, purchase launch checks connection and result",
+      "priority": 9,
+      "description": "BillingService.kt:230-262 never sets SubscriptionUpdateParams, so an Insider choosing VIP buys a second concurrent subscription. launchPurchaseFlow doesn't call ensureConnected and ignores the BillingResult that launchBillingFlow returns, which leaves the spinner up until the watchdog fires. Entitlement stays decided by validate-android-receipt, and no server change is made.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/BillingService.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/BillingFlowParamsBuilder.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/subscription/SubscriptionScreen.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/data/remote/BillingFlowParamsBuilderTest.kt"
+      ],
+      "acceptance_criteria": [
+        "A pure planner decides the purchase mode from (currentTier, currentPurchaseToken, targetTier): New, Upgrade(oldToken, ReplacementMode.CHARGE_PRORATED_PRICE), Downgrade(oldToken, ReplacementMode.DEFERRED), or NoOp when the tiers are equal",
+        "launchPurchaseFlow attaches setSubscriptionUpdateParams with the old purchase token for Upgrade and Downgrade",
+        "launchPurchaseFlow awaits ensureConnected() and, if it fails, surfaces an error and clears the purchasing state",
+        "A non-OK BillingResult from launchBillingFlow clears the purchasing state immediately and maps to a user-visible error",
+        "The offer is chosen by base-plan id when Config names one, otherwise the first offer, and the existing behaviour stays the default",
+        "Unit tests cover the planner for all four cases"
+      ],
+      "verification": "Run the baseline with --tests '*BillingFlowParamsBuilderTest*' --tests '*ValidationOutcomeTest*'. Then: grep -n 'setSubscriptionUpdateParams' android/app/src/main/java/com/desmoines/aipulse/data/remote/BillingService.kt must return a match.",
+      "depends_on": [
+        "AND-OVH-008"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-010",
+      "title": "Account deletion: handle store_subscriptions_still_active and warn about Play billing",
+      "priority": 10,
+      "description": "delete-user-account returns store_subscriptions_still_active for store subscriptions it can't cancel (index.ts:20-26,258). ProfileViewModel.kt:313-316 reads only 'success' and signs out, so a Play subscriber keeps getting billed with no warning. iOS handles it at AccountDeletionService.swift:154. Client-only. The legacy server branch at index.ts:430-447 must stay untouched.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/profile/ProfileViewModel.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/profile/ProfileScreen.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/screens/profile/ProfileViewModelDeletionTest.kt"
+      ],
+      "acceptance_criteria": [
+        "The deletion response is decoded with a field store_subscriptions_still_active (a list or boolean, matching the server shape, with ignoreUnknownKeys)",
+        "When it's non-empty or true and includes android/google, a blocking dialog appears after deletion: 'Your Google Play subscription is still active. Cancel it in Google Play to stop billing', with a button using PlaySubscriptionLinks.manageUrl, before sign-out completes",
+        "The confirmation dialog copy (ProfileScreen.kt:169 area) states that deleting the account doesn't cancel a Google Play subscription",
+        "Nothing under supabase/functions is modified",
+        "Unit tests cover decoding a response with and without the field, and the resulting UI state"
+      ],
+      "verification": "Run the baseline with --tests '*ProfileViewModelDeletionTest*' --tests '*ProfileViewModelPrivacyTest*'. Then: git diff --stat develop -- supabase/functions must be empty for this commit.",
+      "depends_on": [
+        "AND-OVH-008"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-011",
+      "title": "Trip Planner availability gate and hide the dead Share action",
+      "priority": 11,
+      "description": "Android always promotes Trip Planner (HomeScreen.kt:278-279) and has no 42P01/PGRST205 handling. iOS pauses it (TripPlannerAvailability.swift:1-9). TripPlannerRemoteDataSource.kt:187-199 shares ${SITE_URL}/trips/shared/<code>, a route web says doesn't exist (src/lib/tripPlannerStatus.ts:14-19). It has to work whether or not migration 20261014000001 is live in prod.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/TripPlannerRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/repository/TripPlannerRepository.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/repository/TripPlannerAvailability.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/HomeScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/subscription/SubscriptionScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/tripplanner/ItineraryDetailScreen.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/data/repository/TripPlannerAvailabilityTest.kt"
+      ],
+      "acceptance_criteria": [
+        "TripPlannerAvailability probes trip_plans once per process (select id, limit 0) and classifies 42P01, PGRST205, PGRST202 and a 404 as Paused, a success as Available, and other errors as Unknown (treated as Available, so the probe failing open doesn't hide a working feature)",
+        "While Paused: the Home Trip Planner card, the paywall 'AI Trip Planner' bullet and the Saved Trips entry are hidden, and a deep link into the planner shows the iOS paused copy",
+        "The Share action and the TRIP_SHARE_AVAILABLE-equivalent constant are hidden or false, matching web",
+        "No new RPC (get_trip_planner_usage, reorder_trip_items) is called. Those aren't in scripts/db-snapshot.json",
+        "Unit tests cover the error-code classification and the fail-open case"
+      ],
+      "verification": "Run the baseline with --tests '*TripPlannerAvailabilityTest*' --tests '*TripPlannerViewModelTest*' --tests '*SavedTripsViewModelTest*'. Then: grep -rn 'trips/shared' android/app/src/main/java must return nothing, or only lines behind the false share flag.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-012",
+      "title": "Web: public account-deletion page (additive route)",
+      "priority": 12,
+      "description": "Play's Data safety form needs a deletion URL that works without the app. PrivacyPolicy.tsx:261-265 points only at /profile (signed-in) or email, and src/App.tsx has no deletion route.",
+      "files": [
+        "src/pages/AccountDeletion.tsx",
+        "src/App.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "tests/account-deletion.spec.ts",
+        "playwright.smoke.config.ts",
+        ".github/e2e-lane-baseline.json"
+      ],
+      "acceptance_criteria": [
+        "A new lazy-loaded public route /account/delete renders AccountDeletion as a default-exported page. No existing route is removed or renamed",
+        "The page lists in-app steps for iOS and Android (Profile > Settings > Delete Account), a web path for signed-in users, an email fallback (the existing privacy contact address), what's deleted, what's retained and for how long (as the policy states), and a note that store subscriptions must be cancelled in the App Store or Google Play",
+        "It has a <title> and meta description through the project's SEO helper, and passes the axe checks used by the a11y lane",
+        "PrivacyPolicy.tsx links to /account/delete in its deletion section",
+        "tests/account-deletion.spec.ts asserts the heading, the email fallback and the store-cancel note render, and is added to playwright.smoke.config.ts testMatch so npm run check-e2e-lanes stays green"
+      ],
+      "verification": "npx eslint src/pages/AccountDeletion.tsx src/App.tsx src/pages/PrivacyPolicy.tsx && npm run check-e2e-lanes && npm run build && npx playwright test --config playwright.smoke.config.ts tests/account-deletion.spec.ts",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-013",
+      "title": "Web: privacy policy covers the mobile apps (draft for human sign-off)",
+      "priority": 13,
+      "description": "PrivacyPolicy.tsx:98 says 'General geographic location based on IP address (not precise GPS)', while the app declares ACCESS_FINE_LOCATION and sends lat/lng to discover-chat. The sub-processor list (:213-221) leaves out Firebase, Google Maps, Google Sign-In and Google Play Billing. Play compares Data safety against this page. The loop drafts the wording, and a human approves it before merge.",
+      "files": [
+        "src/pages/PrivacyPolicy.tsx"
+      ],
+      "acceptance_criteria": [
+        "The 'not precise GPS' claim is removed. A Mobile apps section states precise and approximate location (only when the user grants it and location consent is on; used to answer nearby questions; sent to our backend)",
+        "Firebase Analytics (app instance ID, collection off until consent, no Advertising ID), Firebase Cloud Messaging push tokens, crash diagnostics sent to our error log, Google Sign-In, Google Maps, Google Play Billing and Apple In-App Purchase are disclosed with purpose",
+        "The sub-processor list adds Google (Firebase, Maps, Play) and Apple",
+        "The deletion section links /account/delete",
+        "The 'Last updated' date is set to the commit date",
+        "The PR description flags the wording for human legal approval"
+      ],
+      "verification": "npx eslint src/pages/PrivacyPolicy.tsx && ! grep -n 'not precise GPS' src/pages/PrivacyPolicy.tsx && grep -nE 'Firebase|Google Play' src/pages/PrivacyPolicy.tsx && npm run build",
+      "depends_on": [
+        "AND-OVH-001",
+        "AND-OVH-002",
+        "AND-OVH-012"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-014",
+      "title": "Correct the Play submission packet to match the binary",
+      "priority": 14,
+      "description": "docs/mobile/GOOGLE_PLAY_SUBMISSION.md:69-70 says 'No ads' while AdSlot, the interstitial and sponsored picks ship. :64-66 leaves the reviewer credentials blank, :124-126 gives wrong Advertising ID purposes, the Data safety table at :105-117 leaves out ad interactions, and the header :5 says versionCode 1. ANDROID_SETUP_GUIDE.md section 8 (:597-650) skips Data safety and App access. This is docs only. A human enters the forms.",
+      "files": [
+        "docs/mobile/GOOGLE_PLAY_SUBMISSION.md",
+        "android/ANDROID_SETUP_GUIDE.md"
+      ],
+      "acceptance_criteria": [
+        "Ads = 'Yes, my app contains ads (first-party campaign ads, no ad SDK)', citing the mounted components",
+        "Advertising ID = 'No', with a note that it's valid only after the AND-OVH-001 CI merged-manifest check is green",
+        "The Data safety table covers precise and approximate location, app interactions and app instance ID (analytics), crash logs, purchase history, email and name, push token and ad interactions, each with collected/shared/optional/purpose",
+        "App access lists a reviewer account and an Insider-tier account as placeholders that point to where the credentials are stored, with no values",
+        "The account deletion URL is https://desmoinesinsider.com/account/delete",
+        "The versionCode line says 'set from Play max + 1 at release; see android-release.yml', with no hardcoded number",
+        "ANDROID_SETUP_GUIDE.md section 8 gains Data safety, Advertising ID, Ads, App access and Delete-account-URL steps"
+      ],
+      "verification": "grep -n 'does not contain ads' docs/mobile/GOOGLE_PLAY_SUBMISSION.md returns nothing; grep -n 'account/delete' docs/mobile/GOOGLE_PLAY_SUBMISSION.md returns a match; rg -n '[\\x{2018}\\x{2019}\\x{201C}\\x{201D}\\x{200B}-\\x{200F}\\x{FEFF}]' docs/mobile/GOOGLE_PLAY_SUBMISSION.md returns nothing.",
+      "depends_on": [
+        "AND-OVH-001",
+        "AND-OVH-012"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-015",
+      "title": "Release guard: require a real GOOGLE_WEB_CLIENT_ID for shippable builds and fix stale comments",
+      "priority": 15,
+      "description": "build.gradle.kts:39-55 only checks isBlank, for SUPABASE_URL, SUPABASE_ANON_KEY and GOOGLE_MAPS_API_KEY. android-release.yml:226-229 substitutes 'placeholder-client-id' with only a warning. That's the same Broken Functionality class Play has already rejected (build.gradle.kts:24-28). CI's unsigned assembleRelease uses placeholders on purpose, so the placeholder rejection applies only when a signing config is present.",
+      "files": [
+        "android/app/build.gradle.kts",
+        ".github/workflows/android-release.yml",
+        ".github/workflows/android-ci.yml"
+      ],
+      "acceptance_criteria": [
+        "GOOGLE_WEB_CLIENT_ID joins the required list for release code",
+        "When the build is shippable (RELEASE_KEYSTORE_FILE set, i.e. a signed bundleRelease), any required value that is blank or contains 'placeholder' fails configuration with a message naming the key",
+        "An unsigned assembleRelease with the CI placeholders still configures (android-ci.yml keeps working)",
+        "android-release.yml:226-229 exits 1 with ::error:: when GOOGLE_WEB_CLIENT_ID is missing, instead of substituting a placeholder",
+        "Stale comments are fixed: build.gradle.kts:32-35 (CI doesn't run on every PR), android-ci.yml:136-137 (the release APK is unsigned, not debug-signed), android-release.yml:5-10 header"
+      ],
+      "verification": "Run the baseline (debug and unit tests still configure). Then, single build: cd android && ./gradlew --no-daemon --max-workers=1 -Pkotlin.compiler.execution.strategy=in-process help -PRELEASE_KEYSTORE_FILE=/nonexistent -PGOOGLE_WEB_CLIENT_ID=placeholder-client-id must fail naming GOOGLE_WEB_CLIENT_ID (adapt to how build.gradle.kts reads the keystore property; if it reads only local.properties, temporarily override via env and restore afterwards). grep -n 'placeholder-client-id' .github/workflows/android-release.yml must return no substitution line. Dispatch android-ci.yml on the branch: green.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-016",
+      "title": "Release workflow: signature verification that can fail",
+      "priority": 16,
+      "description": "android-release.yml:339 pipes jarsigner -verify into tail with no pipefail, and jarsigner -verify exits 0 on an unsigned AAB anyway (verified on the local unsigned app-release.aab). :326-329 also exits 0 when build-tools are missing. Pipefail alone doesn't fix this.",
+      "files": [
+        "scripts/android/verify-aab-signature.sh",
+        ".github/workflows/android-release.yml"
+      ],
+      "acceptance_criteria": [
+        "A new script, scripts/android/verify-aab-signature.sh <aab>, uses set -euo pipefail, captures the jarsigner -verify -verbose -certs output, exits 1 if it contains 'jar is unsigned' or lacks 'jar verified.', and prints the signer certificate SHA-1 via keytool -printcert -jarfile",
+        "When EXPECTED_UPLOAD_SHA1 is provided as an argument or env and is non-empty, a mismatch exits 1",
+        "The workflow step calls the script with shell: bash. A missing jarsigner or build-tools fails the step instead of exit 0",
+        "No secrets are echoed"
+      ],
+      "verification": "bash scripts/android/verify-aab-signature.sh android/app/build/outputs/bundle/release/app-release.aab must exit non-zero with a message mentioning 'unsigned' (that local AAB is unsigned). Then grep -n 'verify-aab-signature.sh' .github/workflows/android-release.yml must return a match, and grep -n \"| tail -20 ||\" .github/workflows/android-release.yml must return nothing.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-017",
+      "title": "Release workflow: explicit versionCode above a Play floor, plus lintRelease before bundleRelease",
+      "priority": 17,
+      "description": "android-release.yml:119-140 falls back to run_number and floors on the committed versionCode (6), not on what Play has accepted (possibly up to 12). The release job never runs lint. The real Play max is a human value, so it's read from a repo variable.",
+      "files": [
+        ".github/workflows/android-release.yml"
+      ],
+      "acceptance_criteria": [
+        "The versionCode input is required. A blank value fails with ::error:: and there's no run_number fallback",
+        "The floor is max(committed versionCode in build.gradle.kts, vars.ANDROID_PLAY_MAX_VERSION_CODE when set). The input must be strictly greater than the floor. When the variable is unset, the step emits ::warning:: that the floor is only the committed value",
+        "./gradlew lintRelease runs before bundleRelease/assembleRelease in the release job",
+        "The workflow summary prints the chosen versionCode and versionName",
+        "build.gradle.kts versionCode isn't changed by this story (that needs the human Play value)"
+      ],
+      "verification": "grep -n 'run_number' .github/workflows/android-release.yml must not appear in versionCode logic; grep -n 'ANDROID_PLAY_MAX_VERSION_CODE' and grep -n 'lintRelease' .github/workflows/android-release.yml must each match. Extract the floor shell snippet to a temp script in the scratchpad and run it with VERSION_CODE=7 FLOOR_VAR=12 (must fail) and VERSION_CODE=13 FLOOR_VAR=12 (must pass).",
+      "depends_on": [
+        "AND-OVH-016"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-018",
+      "title": "Release workflow: assert the built AAB manifest with bundletool",
+      "priority": 18,
+      "description": "The May rejection was a manifest-content bug (geo.API_KEY missing) that a dump-and-assert would have caught. Add a post-build gate on the real artifact.",
+      "files": [
+        "scripts/android/assert-aab-manifest.sh",
+        ".github/workflows/android-release.yml"
+      ],
+      "acceptance_criteria": [
+        "scripts/android/assert-aab-manifest.sh <aab> <expectedVersionCode> downloads a pinned bundletool release jar (for example 1.17.2) to a temp dir if one isn't given, runs bundletool dump manifest, and exits 1 unless all of these hold: the com.google.android.geo.API_KEY meta-data has a non-empty value that isn't a placeholder; versionCode equals the expected value; targetSdkVersion >= 36; AD_ID and ACCESS_ADSERVICES_* are absent",
+        "The script also runs bundletool validate",
+        "The release workflow runs it after the build step for buildType=bundle and before uploading the artifact",
+        "No secret value is printed. The Maps key is reported only as present or absent"
+      ],
+      "verification": "bash scripts/android/assert-aab-manifest.sh android/app/build/outputs/bundle/release/app-release.aab 6 must exit non-zero and name the geo.API_KEY failure (the local May AAB has none). grep -n 'assert-aab-manifest.sh' .github/workflows/android-release.yml must match.",
+      "depends_on": [
+        "AND-OVH-001",
+        "AND-OVH-017"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-019",
+      "title": "NetworkMonitor uses the default network; events cache keeps pagination",
+      "priority": 19,
+      "description": "NetworkMonitor.kt:73 uses registerNetworkCallback, so onLost for any one network (a wifi to LTE handoff) reports offline, and onAvailable reports online before validation. EventsRepositoryImpl.kt:29-31,44 returns hasMore=false from cache, which ends infinite scroll after the first page within the 5-minute TTL.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/util/NetworkMonitor.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/repository/EventsRepositoryImpl.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/util/NetworkReconnectTest.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/data/repository/EventsRepositoryCacheTest.kt"
+      ],
+      "acceptance_criteria": [
+        "NetworkMonitor uses registerDefaultNetworkCallback. Connected is derived from onCapabilitiesChanged with NET_CAPABILITY_INTERNET and NET_CAPABILITY_VALIDATED, and onLost of the default network sets offline",
+        "The connectivity decision is a pure function, unit-tested for a default network lost while another stays up (still connected once the new default arrives) and for available but unvalidated (not connected)",
+        "The events cache stores totalCount and hasMore with the page, or bypasses the cache for offset > 0, so a cached first page reports hasMore=true when more rows exist",
+        "fetchEvent's cache read respects the TTL",
+        "Unit tests cover the cached page-one hasMore behaviour"
+      ],
+      "verification": "Run the baseline with --tests '*NetworkReconnectTest*' --tests '*EventsRepositoryCacheTest*' --tests '*PaginationGuardTest*'. Then grep -n 'registerDefaultNetworkCallback' android/app/src/main/java/com/desmoines/aipulse/util/NetworkMonitor.kt must match.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-020",
+      "title": "suspendRunCatching: stop logging coroutine cancellation as errors in the data layer",
+      "priority": 20,
+      "description": "There are 121 runCatching sites and only 7 handle CancellationException. EventsRepositoryImpl.kt:36-45 logs cancellation through AppLogger.network.error, which DesMoinesInsiderApp.kt:49-54 forwards to crash upload. That floods log-error and can set error UI state when the user navigates away. Scope this to data/repository and data/remote so it fits one sitting.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/util/SuspendRunCatching.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/repository/",
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/",
+        "android/app/src/test/java/com/desmoines/aipulse/util/SuspendRunCatchingTest.kt"
+      ],
+      "acceptance_criteria": [
+        "suspendRunCatching { } returns Result but rethrows CancellationException",
+        "Every runCatching in android/app/src/main/java/com/desmoines/aipulse/data/repository and data/remote that wraps a suspend call is replaced. Non-suspend runCatching (JSON parsing) may stay",
+        "Unit tests: a cancelled block rethrows; another exception becomes Result.failure",
+        "The ui/ layer is out of scope and left for a later story"
+      ],
+      "verification": "Run the baseline with --tests '*SuspendRunCatchingTest*' (the full unit suite in the baseline must stay at or above the 340 floor). Then: grep -rn 'runCatching' android/app/src/main/java/com/desmoines/aipulse/data/repository | grep -v suspendRunCatching should list only non-suspend sites, each justified in the commit message.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-021",
+      "title": "Deep-link parser: exact host match, web landing segments, /stay, /articles, /search; no re-apply on recreate",
+      "priority": 21,
+      "description": "DeepLinkHandler.kt:120 matches the host with contains (iOS fixed this as IOS-DD-PLATFORM-10). :136-144 turn /events/today into Event(\"today\"). Hotels are parsed at /hotels, but web serves /stay/:slug (src/App.tsx:559-560). /articles and /search?q= aren't claimed. MainActivity.kt:111 re-applies the URI on every onCreate. Port ios/DesMoinesInsider/Services/DeepLinkHandler.swift:198-295. assetlinks.json is NOT touched in this story.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/util/DeepLinkHandler.kt",
+        "android/app/src/main/AndroidManifest.xml",
+        "android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt",
+        "android/app/src/androidTest/java/com/desmoines/aipulse/util/DeepLinkHandlerTest.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/util/DeepLinkManifestParityTest.kt"
+      ],
+      "acceptance_criteria": [
+        "https hosts are compared with exact equality against desmoinesinsider.com and www.desmoinesinsider.com",
+        "/events/{today,tonight,this-weekend,free,kids,suburbs,...} (the web's SEO landing routes in src/App.tsx:502-521) and /restaurants/{open-now,new,...} map to the matching tab or list destination, never to a detail id",
+        "/stay/<slug> maps to Hotel, /articles/<slug> to Article, /search?q= to Search(query). Unknown paths fall back to an in-app WebView of the URL",
+        "Detail destinations carry a slug-or-id value object (isUuid flag) for AND-OVH-022 to resolve",
+        "The manifest intent filters add pathPrefix /stay, /articles and /search, and DeepLinkManifestParityTest still passes (extend it if it covers paths)",
+        "MainActivity skips handleDeepLinkIntent when savedInstanceState != null and clears intent.data after handling",
+        "DeepLinkHandlerTest is rewritten so the old Event(\"touch-a-truck-2026-05-22\")-as-id and Hotel(\"surety\") assertions become slug assertions. iOS cases for landing segments, /stay, /articles, /search and an evil host (desmoinesinsider.com.evil.io) are added"
+      ],
+      "verification": "Run the baseline with --tests '*DeepLinkManifestParityTest*'. Then dispatch android-ci.yml on fix/android-overhaul. The pixel6api34DebugAndroidTest step (which runs DeepLinkHandlerTest) must be green. grep -n 'host.contains\\|contains(\"desmoinesinsider' android/app/src/main/java/com/desmoines/aipulse/util/DeepLinkHandler.kt must return nothing.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-022",
+      "title": "Resolve web slugs to entities (events by title-date, restaurants/hotels/articles by slug column)",
+      "priority": 22,
+      "description": "EventsRemoteDataSource.kt:124, RestaurantsRemoteDataSource.kt:221-227, AttractionsRemoteDataSource.kt:146-152 and HotelsRemoteDataSource.kt:102-106 all filter eq(\"id\"). Web URLs carry slugs. VERIFIED in scripts/db-snapshot.json: restaurants.slug, hotels.slug and articles.slug exist. events.slug and attractions.slug do not. Event slugs are '<title-slug>-<YYYY-MM-DD>' in Central Time (src/hooks/useEventBySlug.ts:15-16).",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/EventsRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/RestaurantsRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/HotelsRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/ArticlesRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/data/remote/AttractionsRemoteDataSource.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/util/EventSlug.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/util/EventSlugTest.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/data/remote/EventsRemoteDataSourceTest.kt"
+      ],
+      "acceptance_criteria": [
+        "EventSlug.parse(slug) returns (titleSlug, LocalDate) and slugify(title) matches web createEventSlugWithCentralTime for the same inputs, with test vectors copied from the web implementation",
+        "fetchEventBySlug queries events within that Central-Time day (the same visibility filters as the list query) and picks the row whose slugified title matches",
+        "Restaurants, hotels and articles resolve via eq(\"slug\", value) when the value isn't a UUID, otherwise eq(\"id\")",
+        "Attractions: mirror whatever the web /attractions/:slug page does (read its hook first). If it's id-only, accept a UUID and otherwise show a not-found state with an Open on web action",
+        "No new table or column is referenced. Before merging, every column used is confirmed in scripts/db-snapshot.json",
+        "Unit tests: slug parse and slugify vectors, and the UUID vs slug branch selection"
+      ],
+      "verification": "Run the baseline with --tests '*EventSlugTest*' --tests '*EventsRemoteDataSourceTest*'. node -e checks against scripts/db-snapshot.json that every '<table>.slug' the diff queries is present in .columns. Then dispatch android-ci.yml on the branch: green.",
+      "depends_on": [
+        "AND-OVH-021"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-023",
+      "title": "Brand palette: pin colors to the iOS accent (dynamic color off, orange accent)",
+      "priority": 23,
+      "description": "Theme.kt:92 sets dynamicColor = true, and the only caller, ThemeCrossfade.kt:38, never overrides it, so every Android 12+ phone swaps the brand for wallpaper colors. Color.kt:32 makes primary BrandBlue, while iOS tints everything with AccentColor #FF6B35 light / #FF7A44 dark (Assets.xcassets/AccentColor.colorset, MainTabView.swift:163). Decision: primary = orange accent, and the existing gradient stays on primary CTAs.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/ui/theme/Theme.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/theme/Color.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/theme/ThemeCrossfade.kt",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/theme/BrandColorTest.kt"
+      ],
+      "acceptance_criteria": [
+        "dynamicColor defaults to false and no call site passes true",
+        "PrimaryLight = #FF6B35 and PrimaryDark = #FF7A44, with a comment citing ios/DesMoinesInsider/Resources/Assets.xcassets/AccentColor.colorset. onPrimary is chosen to pass 4.5:1 for labels on primary (use a dark onPrimary if white fails), and the contrast ratio is recorded in the comment",
+        "Blue moves to secondary. Tertiary and the container colors are updated consistently for light, dark and OLED schemes",
+        "BrandColorTest asserts the primary hex values and computes the WCAG contrast of onPrimary on primary as >= 4.5 for both schemes"
+      ],
+      "verification": "Run the baseline with --tests '*BrandColorTest*'. Then grep -n 'dynamicColor: Boolean = true' android/app/src/main/java/com/desmoines/aipulse/ui/theme/Theme.kt must return nothing.",
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-024",
+      "title": "Launch polish: dark launch window, SplashScreen theme, monochrome themed-icon layer",
+      "priority": 24,
+      "description": "res/values/themes.xml extends Theme.Material.Light.NoActionBar with windowLightStatusBar true and has no values-night, so dark-mode launches flash white. mipmap-anydpi-v26/ic_launcher.xml:5 uses the full-color foreground as the monochrome layer, so Android 13 themed icons render as a blob.",
+      "files": [
+        "android/app/src/main/res/values/themes.xml",
+        "android/app/src/main/res/values-night/themes.xml",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+        "android/app/src/main/res/drawable/ic_launcher_monochrome.xml",
+        "android/app/src/main/AndroidManifest.xml",
+        "android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt",
+        "android/gradle/libs.versions.toml",
+        "android/app/build.gradle.kts"
+      ],
+      "acceptance_criteria": [
+        "androidx.core:core-splashscreen is added through the version catalog (the only new dependency; no other version changes)",
+        "The launch theme extends Theme.SplashScreen with windowSplashScreenBackground set per light and night, then postSplashScreenTheme. MainActivity calls installSplashScreen() before super.onCreate",
+        "values-night/themes.xml sets a dark window background and windowLightStatusBar=false",
+        "ic_launcher_monochrome.xml is a single-path, single-color vector of the mark (no gradients or fills other than one color), referenced as <monochrome> in both adaptive icon XMLs",
+        "Lint passes with no new baseline entries"
+      ],
+      "verification": "Run the baseline (including :app:lintDebug). Then grep -n 'monochrome' android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml must reference @drawable/ic_launcher_monochrome; test -f android/app/src/main/res/values-night/themes.xml. Dispatch android-ci.yml: green.",
+      "depends_on": [
+        "AND-OVH-023"
+      ],
+      "passes": false
+    },
+    {
+      "id": "AND-OVH-025",
+      "title": "Home IA part 1: Explore hub screen and Ways-to-Explore row replace the eleven CTA cards",
+      "priority": 25,
+      "description": "HomeScreen.kt:278-309 stacks eleven identical CTA cards (duplicated at :452-483) above any content, which is the layout iOS removed in IOS-IA-001 (HomeView.swift:3-12,70-75). This story moves those destinations into an Explore hub, puts one horizontal Ways-to-Explore row and the availability-gated Trip Planner card on Home, and merges the duplicated grid/list item blocks. The Right Now weather ribbon and smart-preset rails are deferred to a later parity loop.",
+      "files": [
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/HomeScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/WaysToExploreRow.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/explore/ExploreHubScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/navigation/NavGraph.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/MainScreen.kt",
+        "android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/",
+        "android/app/src/test/java/com/desmoines/aipulse/ui/navigation/RouteRegistrationTest.kt"
+      ],
+      "acceptance_criteria": [
+        "Home order: header, WaysToExploreRow (Ask Pulse, Swipe/Discover, Surprise Me, Explore), the Trip Planner card only when TripPlannerAvailability != Paused (from AND-OVH-011), then the existing For You, Featured, ad slots and events list. No CTA-card stack remains",
+        "ExploreHubScreen lists Weekend, Neighborhoods, Content Hubs, Dashboard, Articles, Deals, Stay (Hotels) and Best Of, each navigating to its existing route, and is registered in NavGraph and RouteRegistrationTest",
+        "The grid and list layouts share one item-builder function. The duplicated card block at :452-483 is gone",
+        "The *HomeCard.kt files left unreferenced are deleted (grep shows no references)",
+        "The global Ask Pulse FAB (MainScreen.kt:306-318, rail :236-247) is removed, since Ask Pulse is in the row",
+        "Every existing ad slot placement on Home is kept (ad tracking contract unchanged)"
+      ],
+      "verification": "Run the baseline with --tests '*RouteRegistrationTest*' --tests '*AdSlotViewModelTest*'. Then: grep -c 'HomeCard(' android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/HomeScreen.kt must print 0 or 1 (Trip Planner only); grep -n 'FloatingActionButton' android/app/src/main/java/com/desmoines/aipulse/ui/screens/MainScreen.kt must return nothing. Dispatch android-ci.yml on the branch: green, including assembleRelease (the R8 minified build).",
+      "depends_on": [
+        "AND-OVH-011",
+        "AND-OVH-023"
+      ],
+      "passes": false
+    }
+  ],
+  "human_tasks": [
+    "Before the loop's first commit: confirm the target branch. fix/android-overhaul exists and equals origin/develop (0/0). Work PRs into develop, and the Play build comes from a release/x.y.z cut, never develop -> main (CLAUDE.md 'Branch first').",
+    "Play Console: copy the exact rejection or policy-status text for com.desmoines.aipulse from Inbox / Policy status into the PR description. The plan reorders if it names something else.",
+    "Play Console: record the highest versionCode on every track and set the repo variable ANDROID_PLAY_MAX_VERSION_CODE (read by AND-OVH-017). Bump committed versionCode in android/app/build.gradle.kts:90 to max + 1 in the release PR.",
+    "Play Console > App integrity: record the upload-key SHA-1 and the App signing SHA-1/SHA-256. Set the EXPECTED_UPLOAD_SHA1 repo secret and compare it with keytool -list -v -keystore android/keystore/release.jks locally (the password stays local). The loop never reads or rotates the keystore or the ANDROID_KEYSTORE_* secrets.",
+    "GCP/Firebase: create or confirm the Android OAuth client for com.desmoines.aipulse with both the upload and app-signing SHA-1s. Add the app-signing SHA-1 to the Maps API key restriction, regenerate google-services.json, and update GOOGLE_SERVICES_JSON_BASE64 and GOOGLE_WEB_CLIENT_ID (it must end in .apps.googleusercontent.com or AND-OVH-004 hides the button).",
+    "Supabase Auth: confirm the redirect allowlist accepts com.desmoines.aipulse://auth-callback with a query string (?flow=recovery, AND-OVH-006). Confirm whether production has email confirmation on.",
+    "Play Console: confirm insider_monthly and vip_monthly are Active with a base plan.",
+    "Play Console App content, after AND-OVH-001's CI merged-manifest check is green and AND-OVH-012/013 are live on the web: Ads = Yes; Advertising ID = No; redo Data safety from docs/mobile/GOOGLE_PLAY_SUBMISSION.md; Delete account URL = https://desmoinesinsider.com/account/delete; App access with a reviewer account and an Insider-tier account; Target audience; Content rating.",
+    "Create the reviewer test accounts (including the Insider entitlement) in production Supabase. That's a prod write, so it stays out of the loop.",
+    "Approve the privacy-policy wording from AND-OVH-013 before merge. Ship it and the /account/delete page through develop -> release/x.y.z -> main before the Android submission.",
+    "Create the GitHub 'selfhosted' environment referenced at android-release.yml:84, or decide the release keeps using repo secrets, and decide whether the AAB targets Supabase Cloud or api.desmoinesinsider.com. An AAB pointed at a backend that's later turned off is Broken Functionality.",
+    "Decide whether to restore a pull_request trigger on android-ci.yml (removed in PR #447 to save minutes). Until then the loop dispatches it by workflow_dispatch on the branch.",
+    "Dispatch android-release.yml from release/android-x.y.z with an explicit versionCode above ANDROID_PLAY_MAX_VERSION_CODE. Budget for a failing first run, since it's the first bundleRelease on AGP 9.3.2 / Gradle 9.5.0 / compileSdk 37. Upload the AAB to Internal testing and install it from Play on a real device. Walk the reviewer path: launch, Map, email sign-up and confirmation, password reset, Google sign-in, Subscribe/upgrade, Delete Account. Promote only on a clean Pre-launch report.",
+    "After AND-OVH-021/022 ship in a released build: replace SHA256_FINGERPRINT_HERE in public/.well-known/assetlinks.json with the Play App Signing SHA-256 (plus the upload-key SHA-256 for sideloaded internal builds), deploy the web, and check it with the Digital Asset Links API. Not before, or verified links open broken screens.",
+    "At release cut: set versionName to >= 1.2.0, or lower LATEST_APP_VERSION.android in supabase/functions/_shared/minSupportedVersions.ts to the version actually live. Never change MIN_SUPPORTED_APP_VERSION.android, since the May 1.0.0 binary depends on the delete-user-account legacy branch.",
+    "Capture fresh phone and tablet screenshots from the Internal-track build after AND-OVH-023/025 and upload them to the Play listing."
+  ],
+  "deferred": [
+    "validate-android-receipt purchase-token binding / obfuscatedExternalAccountId check: a tightening of a shipped edge-function contract. It needs a v2 or a log-only soft mode first (CLAUDE.md backward compat).",
+    "Annual plans and free-trial offers: the validate-android-receipt allowlist (index.ts:31-32,346-349) must ship first, then the Console products, then the client.",
+    "Sign in with Apple on Android: needs an Apple Services ID and Supabase provider configuration shared with iOS and web.",
+    "supabase-kt SessionManager on SecureStorage (needs one release of migrate-on-read), certificate-pinning enforcement decision and log-text fix, and dropping userId from BillingService warning logs: post-launch hardening.",
+    "Home IA part 2: weather-aware Right Now ribbon (WeatherService.kt), smart presets and data rails.",
+    "Saved parity on content_favorites for attractions, hotels and articles, with segments and the PT402 soft paywall.",
+    "Map clustering, category chips, time slider and the co-located pin sheet.",
+    "Shared ContentCard / ErrorStateView / EmptyStateView design-system layer and theme Shapes; typography adoption of AppText.",
+    "Second-wave parity: onboarding interests and paywall, Appearance picker (MainActivity.kt:116 TODO), swipe recap, deal detail sheet, Attractions list and Plan Visit, voice search, trip share text, Promote listing.",
+    "Trip planner D1 alignment (get_trip_planner_usage quota, reorder_trip_items): only after npm run check-schema:probe confirms those RPCs in production.",
+    "Doubled system-bar insets (unverified; check on device during the Internal-track walk first), and Event.title/date null-row decoding (unverified against production constraints).",
+    "suspendRunCatching sweep of the ui/ layer (AND-OVH-020 covers data/ only).",
+    "Reproducibility hygiene: wrapper distributionSha256Sum, Dependabot, lockfiles, firebaseBom/ktor/coroutines bumps, lint-baseline burn-down, R8 keep-rule narrowing, gradle.properties daemon tuning. Not before the first signed bundleRelease.",
+    "Extending scripts/check-mobile-schema-usage.mjs to RPCs and edge functions, and refreshing db-snapshot.json.",
+    "Reconciling prd.json / prd-android-parity.json / prd-android-audit.json status flags after the loop.",
+    "Committing store screenshots and a feature graphic under android/playstore/ (the Console holds listing assets)."
+  ],
+  "verification_baseline": "Run one Gradle process at a time. No parallel builds, and never two agents building at once. If android/app/google-services.json is absent, first write the placeholder the CI uses (android-ci.yml:54-82) to that gitignored path. Never overwrite a real file or android/local.properties.\n\nThen: cd android && ./gradlew --stop && ./gradlew --no-daemon --max-workers=1 -Pkotlin.compiler.execution.strategy=in-process -Dorg.gradle.jvmargs=\"-Xmx2g -XX:MaxMetaspaceSize=512m\" :app:testDebugUnitTest :app:lintDebug, adding a story's --tests filters to testDebugUnitTest where it names them. The unit-test floor at build.gradle.kts:300 must still hold.\n\nBefore each story is marked done: gh workflow run android-ci.yml --ref fix/android-overhaul, then gh run watch on that run. It must be green: full lint, test, the pixel6api34DebugAndroidTest managed device, assembleDebug and the R8 assembleRelease. Web stories (AND-OVH-012/013) instead run npx eslint on the touched files, npm run check-e2e-lanes and npm run build."
+}

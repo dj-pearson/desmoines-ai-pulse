@@ -9,6 +9,7 @@ import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.desmoines.aipulse.data.local.CacheManager
+import com.desmoines.aipulse.util.AnalyticsService
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.util.LoggedError
 import com.desmoines.aipulse.util.CrashReportingService
@@ -35,6 +36,7 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var queryCache: QueryCache
     @Inject lateinit var crashReportingService: CrashReportingService
     @Inject lateinit var crashUploader: CrashUploader
+    @Inject lateinit var analyticsService: AnalyticsService
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -52,6 +54,11 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
                 mapOf("source" to "AppLogger", "category" to category, "message" to message),
             )
         }
+        // AND-OVH-001: the manifest starts Firebase Analytics collection off.
+        // AnalyticsService was only constructed lazily, by whichever screen
+        // first injected it, so a user who had granted consent got nothing
+        // collected until then. Apply the stored choice at process start.
+        analyticsService.applyConsent()
         // Drain whatever the previous run recorded. Every crash the app has
         // ever captured stayed on the device until now (XPLAT-004 AC1).
         // Silent on failure, and records survive a failed attempt.
