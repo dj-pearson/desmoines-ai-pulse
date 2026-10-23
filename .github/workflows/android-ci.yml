@@ -133,8 +133,11 @@ jobs:
       # step compiles and shrinks the release variant so a broken keep rule
       # fails here instead of in a user's crash log.
       #
-      # The build is signed with the debug key (no release keystore in this
-      # workflow); android-release.yml is still the only path that produces a
+      # The APK is unsigned: this workflow has no release keystore, and the
+      # release build type falls back to no signing config rather than the
+      # debug key. It uses the placeholder credentials above, which
+      # app/build.gradle.kts allows only because nothing signs it.
+      # android-release.yml is still the only path that produces a
       # distributable artifact.
       - name: Build Release APK (exercises R8/ProGuard)
         working-directory: android

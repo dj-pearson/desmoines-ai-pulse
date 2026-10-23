@@ -17,40 +17,74 @@ val localProperties = Properties().apply {
     }
 }
 
+// One lookup for every credential and signing value, so the release guards
+// below check exactly what gets baked into BuildConfig and the signing config.
+// A -PKEY=value on the command line wins over local.properties; that is what
+// lets the guards be exercised without editing the gitignored file.
+fun configValue(key: String): String =
+    (findProperty(key) as String?) ?: localProperties.getProperty(key, "")
+
 // Fail fast if a RELEASE artifact is built without what it needs. Two
 // different requirements with two different scopes, so they are two checks.
 val requestedReleaseTasks = gradle.startParameter.taskNames.joinToString(" ").lowercase()
 
 // Tasks that compile release code. Anything here without working credentials
-// produces an app that installs and then does nothing: a blank
-// GOOGLE_MAPS_API_KEY crashes the Map tab, blank Supabase keys leave every
-// screen empty. Both got an AAB rejected by Google Play for Broken
-// Functionality — never let that artifact build again.
+// (requiredReleaseCredentials below) produces an app that installs and then
+// does nothing. A missing Maps key got an AAB rejected by Google Play for
+// Broken Functionality; never let that artifact build again.
 val buildsReleaseCode = listOf("bundlerelease", "assemblerelease", "publish")
     .any { requestedReleaseTasks.contains(it) }
 
 // Tasks that produce something you could actually ship. assembleRelease is
-// deliberately NOT in this list: android-ci.yml runs it on every PR with no
-// keystore at all, because its job is to exercise R8 and catch a ProGuard rule
-// that strips something the app needs. That APK is never published.
+// deliberately NOT in this list: android-ci.yml runs it (on pushes to main
+// that touch android/, and on manual dispatch) with no keystore at all,
+// because its job is to exercise R8 and catch a ProGuard rule that strips
+// something the app needs. That APK is unsigned and never published.
 val buildsShippableArtifact = listOf("bundlerelease", "publish")
     .any { requestedReleaseTasks.contains(it) }
 
-fun failForMissing(what: String, keys: List<String>) {
-    val missing = keys.filter { localProperties.getProperty(it, "").isBlank() }
+// A release build that will be signed is shippable whatever task produced it:
+// android-release.yml's apk option runs assembleRelease with the upload
+// keystore, and that APK installs like any other. Only the unsigned
+// assembleRelease above may carry CI's placeholder credentials.
+val signsReleaseArtifact = buildsReleaseCode &&
+    (buildsShippableArtifact || configValue("RELEASE_KEYSTORE_FILE").isNotBlank())
+
+// Without any of these, release code installs and then does nothing. A blank
+// GOOGLE_MAPS_API_KEY crashes the Map tab, blank Supabase keys leave every
+// screen empty, and a blank or placeholder GOOGLE_WEB_CLIENT_ID turns
+// "Continue with Google" into a button that does nothing a reviewer can see.
+val requiredReleaseCredentials = listOf(
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "GOOGLE_MAPS_API_KEY",
+    "GOOGLE_WEB_CLIENT_ID",
+)
+
+fun failForMissing(what: String, keys: List<String>, rejectPlaceholders: Boolean = false) {
+    val missing = keys.filter { key ->
+        val value = configValue(key)
+        value.isBlank() || (rejectPlaceholders && value.contains("placeholder", ignoreCase = true))
+    }
     if (missing.isNotEmpty()) {
+        val problem = if (rejectPlaceholders) "Missing or placeholder" else "Missing"
         throw GradleException(
-            "Release build aborted: $what. Missing from local.properties: " +
-                "${missing.joinToString()}. Populate them before building a release " +
-                "artifact (they are absent from the gitignored working copy)."
+            "Release build aborted: $what. $problem in local.properties (or -P): " +
+                "${missing.joinToString()}. Populate them with real values before " +
+                "building a release artifact (they are absent from the gitignored " +
+                "working copy)."
         )
     }
 }
 
 if (buildsReleaseCode) {
+    // Checked before the signing inputs, so a bad credential is named even when
+    // the keystore is also wrong. Placeholders are rejected only for a signed
+    // build; android-ci.yml's unsigned assembleRelease uses them on purpose.
     failForMissing(
         "the app cannot function without its backend credentials",
-        listOf("SUPABASE_URL", "SUPABASE_ANON_KEY", "GOOGLE_MAPS_API_KEY"),
+        requiredReleaseCredentials,
+        rejectPlaceholders = signsReleaseArtifact,
     )
 }
 
@@ -69,7 +103,7 @@ if (buildsShippableArtifact) {
             "RELEASE_KEY_PASSWORD",
         ),
     )
-    val keystore = file(localProperties.getProperty("RELEASE_KEYSTORE_FILE", ""))
+    val keystore = file(configValue("RELEASE_KEYSTORE_FILE"))
     if (!keystore.exists()) {
         throw GradleException(
             "Release build aborted: RELEASE_KEYSTORE_FILE points at " +
@@ -93,13 +127,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Supabase credentials from local.properties (never hardcoded)
-        buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("SUPABASE_URL", "")}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("SUPABASE_ANON_KEY", "")}\"")
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\"")
-        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"${localProperties.getProperty("GOOGLE_MAPS_API_KEY", "")}\"")
+        buildConfigField("String", "SUPABASE_URL", "\"${configValue("SUPABASE_URL")}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${configValue("SUPABASE_ANON_KEY")}\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${configValue("GOOGLE_WEB_CLIENT_ID")}\"")
+        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"${configValue("GOOGLE_MAPS_API_KEY")}\"")
 
         // Google Maps API key as manifest placeholder
-        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = localProperties.getProperty("GOOGLE_MAPS_API_KEY", "")
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = configValue("GOOGLE_MAPS_API_KEY")
 
         ndk {
             debugSymbolLevel = "SYMBOL_TABLE"
@@ -108,12 +142,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = localProperties.getProperty("RELEASE_KEYSTORE_FILE", "")
+            val keystorePath = configValue("RELEASE_KEYSTORE_FILE")
             if (keystorePath.isNotBlank()) {
                 storeFile = file(keystorePath)
-                storePassword = localProperties.getProperty("RELEASE_KEYSTORE_PASSWORD", "")
-                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS", "")
-                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD", "")
+                storePassword = configValue("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = configValue("RELEASE_KEY_ALIAS")
+                keyPassword = configValue("RELEASE_KEY_PASSWORD")
             }
         }
     }
@@ -126,7 +160,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            val releaseKeystore = localProperties.getProperty("RELEASE_KEYSTORE_FILE", "")
+            val releaseKeystore = configValue("RELEASE_KEYSTORE_FILE")
             if (releaseKeystore.isNotBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             } else if (buildsReleaseCode) {

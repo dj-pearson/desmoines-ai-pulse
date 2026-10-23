@@ -367,7 +367,7 @@
       ],
       "verification": "Run the baseline (debug and unit tests still configure). Then, single build: cd android && ./gradlew --no-daemon --max-workers=1 -Pkotlin.compiler.execution.strategy=in-process help -PRELEASE_KEYSTORE_FILE=/nonexistent -PGOOGLE_WEB_CLIENT_ID=placeholder-client-id must fail naming GOOGLE_WEB_CLIENT_ID (adapt to how build.gradle.kts reads the keystore property; if it reads only local.properties, temporarily override via env and restore afterwards). grep -n 'placeholder-client-id' .github/workflows/android-release.yml must return no substitution line. Dispatch android-ci.yml on the branch: green.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-016",

@@ -2,12 +2,11 @@
 # Android Release: Build Signed AAB for Google Play
 # ================================================================
 #
-# Builds a signed release Android App Bundle (.aab) and uploads it as
-# a workflow artifact. For the first-ever release, download the AAB
-# from the workflow run and upload it manually in Play Console under
-# Internal testing. Subsequent releases can be automated via the
-# Play Publishing API (r0adkll/upload-google-play) once the app
-# listing exists.
+# Builds a signed release Android App Bundle (.aab), or a signed APK
+# with buildType=apk, and uploads it as a workflow artifact. Nothing
+# here talks to Play: download the artifact from the workflow run and
+# upload it in Play Console by hand. Every release so far has gone that
+# way; there is no Play Publishing API step in this workflow.
 #
 # REQUIRED GITHUB SECRETS (signing):
 #   1. ANDROID_KEYSTORE_BASE64        - Base64-encoded upload keystore (.jks)
@@ -20,10 +19,16 @@
 #   6. SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY)  - Supabase anon key
 #   7. GOOGLE_SERVICES_JSON_BASE64    - Base64-encoded google-services.json
 #                                       from Firebase console
+#   8. GOOGLE_WEB_CLIENT_ID           - OAuth web client ID (Google Sign-In)
+#   9. GOOGLE_MAPS_API_KEY            - Android-restricted Maps SDK key
+#
+# 8 and 9 used to be optional. A build without either installs and then
+# has a feature that does nothing, which is the Broken Functionality
+# rejection Play has already issued once, so both now fail the run.
 #
 # OPTIONAL GITHUB SECRETS:
-#   8. GOOGLE_WEB_CLIENT_ID           - OAuth web client ID (Google Sign-In)
-#   9. GOOGLE_MAPS_API_KEY            - Google Maps API key
+#   EXPECTED_UPLOAD_SHA1              - Upload key SHA1 from Play Console;
+#                                       checked against the keystore
 #
 # FIRST-TIME SETUP:
 #   1. Generate an upload keystore locally:
@@ -224,8 +229,9 @@ jobs:
           : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD secret is required}"
 
           if [ -z "$GOOGLE_WEB_CLIENT_ID" ]; then
-            echo "::warning::GOOGLE_WEB_CLIENT_ID not set — Google Sign-In will be broken in this build."
-            GOOGLE_WEB_CLIENT_ID="placeholder-client-id"
+            echo "::error::GOOGLE_WEB_CLIENT_ID secret is required for release builds."
+            echo "::error::Without it 'Continue with Google' does nothing visible, which Play reviews as Broken Functionality. Set the GOOGLE_WEB_CLIENT_ID repo secret to the OAuth web client ID (the one ending in .apps.googleusercontent.com)."
+            exit 1
           fi
           if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
             echo "::error::GOOGLE_MAPS_API_KEY secret is required for release builds."
