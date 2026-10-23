@@ -60,8 +60,8 @@ on:
         required: true
         default: '1.0.0'
       versionCode:
-        description: 'Version code (monotonic integer, leave empty to use run_number)'
-        required: false
+        description: 'Version code: an integer above the highest Play has accepted (and above vars.ANDROID_PLAY_MAX_VERSION_CODE)'
+        required: true
       buildType:
         description: 'Build type'
         required: true
@@ -118,36 +118,72 @@ jobs:
       # ============================================================
       # 2. VERSION NUMBERS
       # ============================================================
+      # Play rejects an upload whose versionCode is not higher than the last
+      # one it accepted. This step used to fall back to the workflow run
+      # number, which is not tied to Play at all: it drifts (run 12 vs committed
+      # versionCode 6 as of Aug 2026) and resets to 1 if this file is renamed.
+      # The committed versionCode isn't a safe floor on its own either, since
+      # the workflow patches it at build time and never commits the bump back,
+      # so Play may already hold codes well above it. Only a human reading Play
+      # Console knows the real maximum; record it in the repo variable
+      # ANDROID_PLAY_MAX_VERSION_CODE after each upload.
       - name: Compute version name and code
+        env:
+          VERSION_NAME: ${{ github.event.inputs.versionName }}
+          VERSION_CODE: ${{ github.event.inputs.versionCode }}
+          FLOOR_VAR: ${{ vars.ANDROID_PLAY_MAX_VERSION_CODE }}
         run: |
-          VERSION_NAME="${{ github.event.inputs.versionName }}"
-          VERSION_CODE="${{ github.event.inputs.versionCode }}"
+          VERSION_CODE=$(echo "$VERSION_CODE" | tr -d '[:space:]')
+          FLOOR_VAR=$(echo "$FLOOR_VAR" | tr -d '[:space:]')
           if [ -z "$VERSION_CODE" ]; then
-            VERSION_CODE=${{ github.run_number }}
-            echo "::notice::versionCode input was blank; using run_number ($VERSION_CODE)."
+            echo "::error::versionCode input is required. Pass an integer above the highest versionCode Play Console has accepted."
+            exit 1
+          fi
+          if ! echo "$VERSION_CODE" | grep -qE '^[0-9]+$'; then
+            echo "::error::versionCode '$VERSION_CODE' is not a whole number."
+            exit 1
+          fi
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::versionName input is required."
+            exit 1
           fi
 
-          # Play rejects an upload whose versionCode is not higher than the
-          # last one it accepted, and run_number is not tied to that at all --
-          # it drifts above the shipped code (run 12 vs versionCode 6 as of
-          # Aug 2026) and resets to 1 if this workflow file is ever renamed.
-          # The committed versionCode is the best local proxy for what Play has
-          # already seen, so treat it as a floor rather than discovering the
-          # mismatch in Play Console after a five-minute build.
-          COMMITTED=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | grep -oE '[0-9]+')
+          COMMITTED=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | grep -oE '[0-9]+' | head -1)
           if [ -z "$COMMITTED" ]; then
             echo "::error::Could not read versionCode from android/app/build.gradle.kts"
             exit 1
           fi
-          if [ "$VERSION_CODE" -le "$COMMITTED" ]; then
-            echo "::error::versionCode $VERSION_CODE is not above the committed versionCode $COMMITTED."
-            echo "::error::Play will reject this upload. Pass an explicit versionCode input greater than $COMMITTED."
+
+          FLOOR=$COMMITTED
+          FLOOR_SOURCE="committed versionCode in build.gradle.kts"
+          if [ -n "$FLOOR_VAR" ]; then
+            if ! echo "$FLOOR_VAR" | grep -qE '^[0-9]+$'; then
+              echo "::error::Repo variable ANDROID_PLAY_MAX_VERSION_CODE is '$FLOOR_VAR', not a whole number."
+              exit 1
+            fi
+            if [ "$FLOOR_VAR" -gt "$FLOOR" ]; then
+              FLOOR=$FLOOR_VAR
+              FLOOR_SOURCE="vars.ANDROID_PLAY_MAX_VERSION_CODE"
+            fi
+          else
+            echo "::warning::Repo variable ANDROID_PLAY_MAX_VERSION_CODE is not set, so the floor is only the committed versionCode ($COMMITTED). Play may already have accepted higher codes; set the variable to the highest versionCode shown in Play Console."
+          fi
+
+          if [ "$VERSION_CODE" -le "$FLOOR" ]; then
+            echo "::error::versionCode $VERSION_CODE is not above the floor $FLOOR ($FLOOR_SOURCE)."
+            echo "::error::Play will reject this upload. Pass a versionCode greater than $FLOOR."
             exit 1
           fi
 
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-          echo "Version: $VERSION_NAME (code $VERSION_CODE, committed floor $COMMITTED)"
+          echo "Version: $VERSION_NAME (code $VERSION_CODE, floor $FLOOR from $FLOOR_SOURCE, committed $COMMITTED)"
+          {
+            echo "### Version"
+            echo ""
+            echo "- versionName: \`$VERSION_NAME\`"
+            echo "- versionCode: \`$VERSION_CODE\` (floor $FLOOR, from $FLOOR_SOURCE)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Patch versionCode and versionName in build.gradle.kts
         working-directory: android
@@ -296,6 +332,21 @@ jobs:
         with:
           name: android-release-test-results
           path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+
+      # The release variant was never linted: CI lints debug only, and R8 /
+      # release-only resources can carry errors debug doesn't. lintRelease
+      # fails on any error-severity issue before the five-minute bundle build.
+      - name: Lint release
+        working-directory: android
+        run: ./gradlew lintRelease --no-daemon
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-lint-report
+          path: android/app/build/reports/lint-results-release.*
           if-no-files-found: ignore
 
       - name: Build release ${{ github.event.inputs.buildType }}
