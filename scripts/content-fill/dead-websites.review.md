@@ -1,0 +1,59 @@
+# Restaurant websites that did not load (sweep 2026-10-11)
+
+Not changed. 403s are often bot protection, not a dead site; 404/410/DNS errors usually mean a moved or closed business.
+
+- 400 | Scoops by Beth | https://www.facebook.com/profile.php?id=61557841388494
+- 400 | Sushi a Go Go | https://facebook.com/sushiagogo/
+- 400 | Casa de Oro Restaurant | https://www.facebook.com/share/1EmHi77xnx/?mibextid=wwXIfr
+- 400 | China Dragon | https://www.facebook.com/pages/China-Dragon/152259258132158
+- 400 | East Side Eddie's Neighborhood Bar & Grill | https://www.facebook.com/East-Side-Eddies-Neighborhood-Bar-and-Grill-1424851281123753/
+- 400 | Fireside Grille | https://www.facebook.com/Fireside-Grille-181596431556/
+- 400 | La Fiesta Charra | https://www.facebook.com/pages/La-Fiesta-Charra/120914121256788
+- 400 | Much Yummy | https://www.facebook.com/profile.php?id=61554490456642&mibextid=hu50Ix
+- 400 | Now Or Later Restaurant | https://www.facebook.com/NowOrLaterRestaurant/
+- 400 | Rising Sun Cafe | https://www.facebook.com/risingsunpolkcity
+- 400 | Somewhere In The Middle Coffee Shop | https://www.facebook.com/somewhereinthemiddlecoffeeshopbondurant/
+- 400 | Toyo Ramen & Japanese Street Food | facebook.com/profile.php?id=61585587731972
+- 400 | Waters Edge Bar & Grill | https://facebook.com/pages/category/American-Restaurant/Waters-Edge-114037725295006/
+- 400 | Carl's Place | https://m.facebook.com/pages/Carls-Place/446280728717423
+- 400 | Deng's Garden | https://www.facebook.com/Dengs-Garden-of-Indianola-957145550997996/
+- 400 | La casa Hidalgo | https://www.facebook.com/share/16KZS2qm1A/
+- 403 | Jungle Tea | https://jungletea.cafe/
+- 403 | Scornovacca's Waukee | http://www.scornos.com/
+- 403 | Anchors Away | https://anchorsenterprise3.com/
+- 403 | Chix Chicken & Waffles | https://chixcw.com/
+- 403 | Franka Pizzeria | http://frankapizzeria.com/
+- 403 | Flying Mango | http://www.flyingmango.com/
+- 403 | Irina's Steak & Seafood | https://irinassteakandseafood.com/
+- 403 | Sunset Lounge | https://order.toasttab.com/online/sunsetloungenorwalk
+- 403 | Tito's Lounge | https://titosloungeia.com/
+- 403 | Tortilleria Luna | http://tortillerialuna.com/
+- 403 | HiFi Brew Lounge | http://hifibrewlounge.com/
+- 403 | Zaika | https://zaika-indianrestaurant.com/?utm_source=google
+- 403 | Cooper's Central Table & Cocktails | https://coopers-norwalk.com/
+- 403 | Jesse's Embers | http://theoriginaljessesembers.com/
+- 403 | Liberty's | https://www.hilton.com/en/hotels/dsmdnes-embassy-suites-des-moines-downtown/dining/
+- 403 | Main Street Cafe & Bakery | http://www.mainstreetcafeandbakery.com/
+- 404 | Bar Louie - Jordan Creek | https://www.barlouie.com/locations/us/ia/west-des-moines/jordan-creek-town-center?utm_source=google&utm_medium=gmb&utm_campaign=listings
+- 404 | The Bistro - Eat. Drink. Connect.® | https://www.marriott.com/hotels/hotel-information/restaurant/dsmch-courtyard-des-moines-west-clive/?scid=f2ae0541-1279-4f24-b197-a979c79310b0
+- 404 | Uncommon Grounds | http://uncommongroundsia.com/
+- 404 | Curbin' Cuisine | https://www.curbincuisine.com/
+- 404 | Coaches Kolaches | http://www.kolachetakeover.com/
+- 404 | Sports Page Bar & Grill | http://www.thesportspagegrill.com/indexindianola.html
+- 409 | Big Grove Brewery & Taproom | http://www.biggrove.com/
+- 409 | Putts & Pins | http://puttsandpins.co/
+- 429 | Cracker Barrel Old Country Store | https://www.crackerbarrel.com/Locations/States/ia/clive/144/?utm_source=google&utm_medium=maps&utm_campaign=crackerbarrelurl
+- 429 | Cheba Hut "Toasted" Subs | https://chebahut.com/locations/johnston-merlehay/
+- error ERR_TLS_CERT_ALTNAME_INVALID | 804 Main Bar & Grill | https://804main.com/
+- error ENOTFOUND | Cactus Bob's BBQ Corral | http://cactusbobsbbqcorral.com/
+- error ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR | Maid-Rite | https://maidritenorwalk.com/
+- error UND_ERR_SOCKET | Saints Pub + Patio Waukee | http://saintspubwaukee.com/
+- error ERR_TLS_CERT_ALTNAME_INVALID | Urban Taproom and Grille | https://urbantaproomandgrill.com/
+- error EAI_AGAIN | Maxie's Supper Club | http://www.maxieswdsm.com/
+- error ERR_TLS_CERT_ALTNAME_INVALID | Urban on the Square | https://urbanonthesquare.com/
+- error ENOTFOUND | B&B Grocery | http://bbgrocerymeatdeli.com/
+- error EAI_AGAIN | Kathmandu | https://www.ktmrestaurant.com/
+- error UND_ERR_SOCKET | Oceanside Grill | http://oceanside-grill.com/
+- error CERT_HAS_EXPIRED | Flip'N Jacks Pancake House & Eatery | http://www.flipnjackspancakehouseandeatery.com/
+- error ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR | Pico De Gallo | https://www.picodegallojohnston.com/
+- error UND_ERR_CONNECT_TIMEOUT | Proof | https://www.proofrestaurant.com/
