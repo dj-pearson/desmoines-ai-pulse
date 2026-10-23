@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -90,6 +91,15 @@ class BillingService internal constructor(
      */
     private val _serverRevokedProductIDs = MutableStateFlow<Set<String>>(emptySet())
     val serverRevokedProductIDs: StateFlow<Set<String>> = _serverRevokedProductIDs.asStateFlow()
+
+    /**
+     * The Google Play subscription this device holds, highest tier first, or
+     * null when it holds none. Kept apart from [currentTier], which also
+     * counts web and App Store entitlements: only a Play purchase has a token
+     * Play can replace on a tier change (AND-OVH-009).
+     */
+    private val _playSubscription = MutableStateFlow<PlaySubscription?>(null)
+    val playSubscription: StateFlow<PlaySubscription?> = _playSubscription.asStateFlow()
 
     private val _currentTier = MutableStateFlow(SubscriptionTier.FREE)
     val currentTier: StateFlow<SubscriptionTier> = _currentTier.asStateFlow()
@@ -220,7 +230,7 @@ class BillingService internal constructor(
         if (result.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
             val details = result.productDetailsList ?: emptyList()
             _products.value = details.sortedBy {
-                it.subscriptionOfferDetails?.firstOrNull()?.pricingPhases
+                selectedOffer(it)?.pricingPhases
                     ?.pricingPhaseList?.firstOrNull()?.priceAmountMicros ?: Long.MAX_VALUE
             }
             if (details.isEmpty()) {
@@ -240,20 +250,74 @@ class BillingService internal constructor(
 
     // region Purchase
 
-    fun launchPurchaseFlow(activity: Activity, productDetails: ProductDetails) {
+    /**
+     * Opens Play's purchase sheet for [productDetails].
+     *
+     * Suspends to connect first: the client can drop its connection at any
+     * time, and launching on a dead one returns SERVICE_DISCONNECTED, which
+     * used to be ignored and left the spinner up until the watchdog fired.
+     * Every early return clears [isLoading] and, where the user needs to know,
+     * sets [errorMessage].
+     *
+     * A tier change replaces the existing Play subscription instead of adding
+     * a second one; see [planPurchase]. Entitlement is still decided by
+     * validate-android-receipt once Play reports the purchase.
+     */
+    suspend fun launchPurchaseFlow(activity: Activity, productDetails: ProductDetails) {
         _isLoading.value = true
         _errorMessage.value = null
 
-        val offerToken = productDetails.subscriptionOfferDetails?.firstOrNull()?.offerToken
+        if (!ensureConnected()) {
+            AppLogger.billing.warning("Purchase not launched: billing client could not connect")
+            _errorMessage.value = BillingError.BILLING_UNAVAILABLE.message
+            _isLoading.value = false
+            return
+        }
+
+        // Read Play's purchases now instead of trusting the cached ones, so the
+        // token handed to Play for a replacement is the live one.
+        updatePurchasedProducts()
+
+        val offerToken = selectedOffer(productDetails)?.offerToken
         if (offerToken == null) {
             _errorMessage.value = BillingError.PURCHASE_FAILED.message
             _isLoading.value = false
             return
         }
 
+        val held = _playSubscription.value
+        val plan = planPurchase(
+            currentTier = held?.tier ?: SubscriptionTier.FREE,
+            currentPurchaseToken = held?.purchaseToken,
+            targetTier = resolveTier(setOf(productDetails.productId)),
+        )
+        if (plan == PurchasePlan.NoOp) {
+            AppLogger.billing.info("Purchase not launched: ${productDetails.productId} is already held")
+            _isLoading.value = false
+            return
+        }
+
+        // (old purchase token, replacement mode), present only for a tier
+        // change. planPurchase returns one only when held is non-null.
+        val replacement: Pair<String, Int>? = when (plan) {
+            is PurchasePlan.Upgrade -> plan.oldPurchaseToken to plan.replacementMode
+            is PurchasePlan.Downgrade -> plan.oldPurchaseToken to plan.replacementMode
+            else -> null
+        }
+
         val productDetailsParams = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(productDetails)
             .setOfferToken(offerToken)
+            .apply {
+                if (replacement != null && held != null) {
+                    setSubscriptionProductReplacementParams(
+                        BillingFlowParams.ProductDetailsParams.SubscriptionProductReplacementParams.newBuilder()
+                            .setOldProductId(held.productId)
+                            .setReplacementMode(replacement.second)
+                            .build()
+                    )
+                }
+            }
             .build()
 
         val billingFlowParams = BillingFlowParams.newBuilder()
@@ -265,13 +329,39 @@ class BillingService internal constructor(
                 // round-trip. Hashed, because Play requires this field to carry
                 // no personally identifiable information.
                 obfuscatedAccountId()?.let { setObfuscatedAccountId(it) }
+                // Without this an Insider choosing VIP bought a second,
+                // concurrent subscription and was billed for both.
+                if (replacement != null) {
+                    setSubscriptionUpdateParams(
+                        BillingFlowParams.SubscriptionUpdateParams.newBuilder()
+                            .setOldPurchaseToken(replacement.first)
+                            .build()
+                    )
+                }
             }
             .build()
+
+        AppLogger.billing.info("Launching purchase of ${productDetails.productId} as ${plan::class.simpleName}")
 
         // Armed before the sheet launches, not after, so there is no window in
         // which Play could report back before the watchdog exists.
         startPurchaseWatchdog()
-        billingClient.launchBillingFlow(activity, billingFlowParams)
+        // launchBillingFlow must be called on the UI thread.
+        val result = withContext(Dispatchers.Main.immediate) {
+            billingClient.launchBillingFlow(activity, billingFlowParams)
+        }
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            // Play answered synchronously and will not call
+            // onPurchasesUpdated, so nothing else would clear the spinner.
+            purchaseWatchdog?.cancel()
+            _isLoading.value = false
+            _errorMessage.value = launchFailureMessage(result.responseCode)
+            AppLogger.billing.warning("launchBillingFlow returned ${result.responseCode}: ${result.debugMessage}")
+            when (result.responseCode) {
+                BillingClient.BillingResponseCode.SERVICE_DISCONNECTED -> isConnected = false
+                BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> scope.launch { updatePurchasedProducts() }
+            }
+        }
     }
 
     /**
@@ -385,9 +475,17 @@ class BillingService internal constructor(
 
         if (result.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
             val purchased = mutableSetOf<String>()
+            var held: PlaySubscription? = null
             result.purchasesList.forEach { purchase ->
                 if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
                     purchased.addAll(purchase.products)
+                    purchase.products.forEach { productId ->
+                        val tier = resolveTier(setOf(productId))
+                        val best = held
+                        if (tier != SubscriptionTier.FREE && (best == null || tierRank(tier) > tierRank(best.tier))) {
+                            held = PlaySubscription(productId, purchase.purchaseToken, tier)
+                        }
+                    }
                     // Google Play auto-refunds and revokes any purchase left
                     // unacknowledged for three days. Acknowledgement used to
                     // happen only inside onPurchasesUpdated, so a purchase that
@@ -398,6 +496,7 @@ class BillingService internal constructor(
                 }
             }
             _purchasedProductIDs.value = purchased
+            _playSubscription.value = held
             recomputeCurrentTier()
             AppLogger.billing.info("Updated purchases: $purchased, tier: ${_currentTier.value}")
         }
@@ -443,12 +542,6 @@ class BillingService internal constructor(
         }
 
         return SubscriptionTier.FREE
-    }
-
-    private fun tierRank(tier: SubscriptionTier): Int = when (tier) {
-        SubscriptionTier.VIP -> 2
-        SubscriptionTier.INSIDER -> 1
-        SubscriptionTier.FREE -> 0
     }
 
     /** Resolves the highest tier across local Google Play and the backend. */
@@ -719,10 +812,21 @@ class BillingService internal constructor(
         _products.value.find { it.productId == Config.VIP_MONTHLY_PRODUCT_ID }
 
     fun getFormattedPrice(productDetails: ProductDetails): String {
-        return productDetails.subscriptionOfferDetails?.firstOrNull()
+        return selectedOffer(productDetails)
             ?.pricingPhases?.pricingPhaseList?.firstOrNull()
             ?.formattedPrice ?: ""
     }
+
+    /**
+     * The offer this app sells for [productDetails]: the base plan Config
+     * names, else the first offer. The price shown and the offer bought both
+     * come from here, so they cannot disagree.
+     */
+    private fun selectedOffer(productDetails: ProductDetails): ProductDetails.SubscriptionOfferDetails? =
+        chooseOffer(
+            offers = productDetails.subscriptionOfferDetails.orEmpty(),
+            basePlanId = Config.SUBSCRIPTION_BASE_PLAN_IDS[productDetails.productId],
+        ) { it.basePlanId }
 
     fun clearError() {
         _errorMessage.value = null
@@ -736,6 +840,7 @@ class BillingService internal constructor(
         PRODUCT_LOAD_FAILED("Unable to load subscription options. Please check your connection and try again."),
         PURCHASE_FAILED("Purchase could not be completed. Please try again."),
         RESTORE_FAILED("Unable to restore purchases. Please try again."),
+        BILLING_UNAVAILABLE("Google Play billing isn't available right now. Check your connection and try again."),
     }
 
     // endregion

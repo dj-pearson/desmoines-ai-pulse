@@ -551,6 +551,7 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
             vipOffer = state.vipOffer,
             selectedTier = state.selectedTier,
             manageSubscriptionUrl = state.manageSubscriptionUrl,
+            purchasePlan = state.purchasePlan,
             onSelectTier = { subscriptionViewModel.selectTier(it) },
             onPurchase = {
                 (context as? android.app.Activity)?.let { activity ->

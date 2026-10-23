@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.BillingService.CrossPlatformOrigin
 import com.desmoines.aipulse.data.remote.BillingService.CrossPlatformSubscription
+import com.desmoines.aipulse.data.remote.PurchasePlan
 import com.desmoines.aipulse.ui.components.BrandGhostButton
 import com.desmoines.aipulse.ui.components.BrandPrimaryButton
 import com.desmoines.aipulse.ui.components.BrandSecondaryButton
@@ -84,6 +85,7 @@ fun SubscriptionScreen(
     onNavigateToPrivacy: () -> Unit,
     crossPlatformSubscriptions: List<CrossPlatformSubscription> = emptyList(),
     manageSubscriptionUrl: String? = null,
+    purchasePlan: PurchasePlan? = null,
 ) {
     val context = LocalContext.current
     val selectedPrice = when (selectedTier) {
@@ -187,14 +189,14 @@ fun SubscriptionScreen(
                 onClick = onPurchase,
                 enabled = selectedTier != null && selectedTier != currentTier && selectedPrice != null,
                 isLoading = isLoading,
-                text = if (isLoading) "Processing..." else "Subscribe",
+                text = if (isLoading) "Processing..." else purchaseButtonLabel(purchasePlan, selectedTier),
             )
 
             // Auto-renew disclosure, always with the price Play will charge.
             selectedPrice?.let { price ->
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Renews monthly at $price until cancelled. Cancel anytime in Google Play.",
+                    text = renewalDisclosure(purchasePlan, selectedTier, price),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -490,3 +492,34 @@ private fun CrossPlatformSubscriptionsBanner(subs: List<CrossPlatformSubscriptio
 }
 
 // endregion
+
+/**
+ * Says what the tap does. A tier change replaces the Play subscription the
+ * user already has, so it is not labelled as a new subscription (AND-OVH-009).
+ */
+internal fun purchaseButtonLabel(plan: PurchasePlan?, target: SubscriptionTier?): String {
+    val name = target?.displayName ?: return "Subscribe"
+    return when (plan) {
+        is PurchasePlan.Upgrade -> "Upgrade to $name"
+        is PurchasePlan.Downgrade -> "Switch to $name"
+        else -> "Subscribe"
+    }
+}
+
+/**
+ * The auto-renew disclosure, always with the price Play will charge. An
+ * upgrade is prorated now (CHARGE_PRORATED_PRICE); a downgrade waits for the
+ * renewal date (DEFERRED). Each says so, because the charge differs.
+ */
+internal fun renewalDisclosure(plan: PurchasePlan?, target: SubscriptionTier?, price: String): String {
+    val name = target?.displayName ?: "your new plan"
+    return when (plan) {
+        is PurchasePlan.Upgrade ->
+            "Switches to $name now. Google Play charges the prorated difference today, then $price monthly " +
+                "from your current renewal date until cancelled. Cancel anytime in Google Play."
+        is PurchasePlan.Downgrade ->
+            "Your current plan stays active until it renews, then switches to $name at $price monthly " +
+                "until cancelled. Cancel anytime in Google Play."
+        else -> "Renews monthly at $price until cancelled. Cancel anytime in Google Play."
+    }
+}

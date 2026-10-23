@@ -5,9 +5,11 @@ import com.android.billingclient.api.ProductDetails
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.data.remote.PlaySubscription
+import com.desmoines.aipulse.data.remote.PurchasePlan
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +44,7 @@ class SubscriptionViewModelTest {
     private val isLoading = MutableStateFlow(false)
     private val errorMessage = MutableStateFlow<String?>(null)
     private val purchasedIds = MutableStateFlow<Set<String>>(emptySet())
+    private val playSubscription = MutableStateFlow<PlaySubscription?>(null)
 
     private var insiderProduct: ProductDetails? = null
     private var vipProduct: ProductDetails? = null
@@ -56,6 +59,7 @@ class SubscriptionViewModelTest {
         every { billingService.isLoading } returns isLoading
         every { billingService.errorMessage } returns errorMessage
         every { billingService.purchasedProductIDs } returns purchasedIds
+        every { billingService.playSubscription } returns playSubscription
         every { billingService.getInsiderProduct() } answers { insiderProduct }
         every { billingService.getVipProduct() } answers { vipProduct }
     }
@@ -145,7 +149,7 @@ class SubscriptionViewModelTest {
 
         assertEquals(SubscriptionViewModel.PRODUCT_MISSING_MESSAGE, viewModel.uiState.value.errorMessage)
         assertTrue(viewModel.uiState.value.errorMessage!!.startsWith("Subscriptions unavailable right now"))
-        verify(exactly = 0) { billingService.launchPurchaseFlow(any(), any()) }
+        coVerify(exactly = 0) { billingService.launchPurchaseFlow(any(), any()) }
 
         viewModel.clearError()
         advanceUntilIdle()
@@ -164,7 +168,7 @@ class SubscriptionViewModelTest {
         viewModel.purchase(activity)
         advanceUntilIdle()
 
-        verify(exactly = 1) { billingService.launchPurchaseFlow(activity, vip) }
+        coVerify(exactly = 1) { billingService.launchPurchaseFlow(activity, vip) }
         assertNull(viewModel.uiState.value.errorMessage)
     }
 
@@ -188,6 +192,27 @@ class SubscriptionViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.manageSubscriptionUrl)
+    }
+
+    @Test
+    fun `an Insider on Play choosing VIP is planned as an upgrade of that purchase`() = runTest(testDispatcher) {
+        currentTier.value = SubscriptionTier.INSIDER
+        playSubscription.value = PlaySubscription(Config.INSIDER_MONTHLY_PRODUCT_ID, "tok-insider", SubscriptionTier.INSIDER)
+        val viewModel = vm()
+        viewModel.selectTier(SubscriptionTier.VIP)
+        advanceUntilIdle()
+
+        assertEquals(PurchasePlan.Upgrade("tok-insider"), viewModel.uiState.value.purchasePlan)
+    }
+
+    @Test
+    fun `a web subscriber with no Play purchase is planned as a new purchase`() = runTest(testDispatcher) {
+        currentTier.value = SubscriptionTier.INSIDER
+        val viewModel = vm()
+        viewModel.selectTier(SubscriptionTier.VIP)
+        advanceUntilIdle()
+
+        assertEquals(PurchasePlan.New, viewModel.uiState.value.purchasePlan)
     }
 
     @Test

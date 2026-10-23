@@ -7,6 +7,8 @@ import com.android.billingclient.api.ProductDetails
 import com.desmoines.aipulse.BuildConfig
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.data.remote.PurchasePlan
+import com.desmoines.aipulse.data.remote.planPurchase
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.PlaySubscriptionLinks
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -56,6 +58,12 @@ data class SubscriptionScreenState(
     val vipOffer: TierOffer = TierOffer.Loading,
     /** Play's management page for the user's Google Play subscription; null when they have none. */
     val manageSubscriptionUrl: String? = null,
+    /**
+     * What a tap on Subscribe will do for [selectedTier]: a first purchase, a
+     * replacement of the user's Play subscription, or nothing. Drives the
+     * button label and the disclosure under it (AND-OVH-009).
+     */
+    val purchasePlan: PurchasePlan? = null,
 ) {
     fun offerFor(tier: SubscriptionTier): TierOffer? = when (tier) {
         SubscriptionTier.INSIDER -> insiderOffer
@@ -103,8 +111,8 @@ class SubscriptionViewModel @Inject constructor(
         billingService.purchasedProductIDs,
         combine(billingService.errorMessage, _localError) { billing, local -> local ?: billing },
         billingService.isLoading,
-        combine(offers, _selectedTier) { o, s -> o to s },
-    ) { currentTier, purchasedIds, errorMessage, isLoading, (offerPair, selectedTier) ->
+        combine(offers, _selectedTier, billingService.playSubscription) { o, s, p -> Triple(o, s, p) },
+    ) { currentTier, purchasedIds, errorMessage, isLoading, (offerPair, selectedTier, playSubscription) ->
         SubscriptionScreenState(
             currentTier = currentTier,
             selectedTier = selectedTier,
@@ -114,6 +122,13 @@ class SubscriptionViewModel @Inject constructor(
             vipOffer = offerPair.second,
             manageSubscriptionUrl = playSubscriptionSku(purchasedIds)?.let {
                 PlaySubscriptionLinks.manageUrl(it, BuildConfig.APPLICATION_ID)
+            },
+            purchasePlan = selectedTier?.let { target ->
+                planPurchase(
+                    currentTier = playSubscription?.tier ?: SubscriptionTier.FREE,
+                    currentPurchaseToken = playSubscription?.purchaseToken,
+                    targetTier = target,
+                )
             },
         )
     }.stateIn(
@@ -139,7 +154,9 @@ class SubscriptionViewModel @Inject constructor(
             return
         }
         _localError.value = null
-        billingService.launchPurchaseFlow(activity, productDetails)
+        viewModelScope.launch {
+            billingService.launchPurchaseFlow(activity, productDetails)
+        }
     }
 
     fun restorePurchases() {
