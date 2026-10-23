@@ -306,6 +306,15 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Credential Manager failed before there was an id token to send. Routed
+     * through the same error state as every other auth failure so the button
+     * never fails silently.
+     */
+    fun onGoogleSignInFailed(message: String) {
+        setError(message)
+    }
+
     // MARK: - Sign Out
 
     fun signOut() {

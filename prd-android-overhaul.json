@@ -98,7 +98,7 @@
       ],
       "verification": "Run the baseline with --tests '*GoogleSignInConfigTest*' (the baseline's :app:lintDebug must pass with the baseline entry removed). Then: grep -c CredentialManagerMisuse android/app/lint-baseline.xml must print 0.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-005",

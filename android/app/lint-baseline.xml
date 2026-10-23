@@ -46,17 +46,6 @@
     </issue>
 
     <issue
-        id="CredentialManagerMisuse"
-        message="Call to `CredentialManager.getCredential` without use of `NoCredentialException`"
-        errorLine1="                    val result = credentialManager.getCredential(activity, request)"
-        errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthScreen.kt"
-            line="631"
-            column="34"/>
-    </issue>
-
-    <issue
         id="IntentFilterUniqueDataAttributes"
         message="Consider splitting data tag into multiple tags with individual attributes to avoid confusion"
         errorLine1="                &lt;data android:scheme=&quot;com.desmoines.aipulse&quot; android:host=&quot;ask-pulse&quot; />"
