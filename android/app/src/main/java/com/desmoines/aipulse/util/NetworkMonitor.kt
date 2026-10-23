@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +18,8 @@ import javax.inject.Singleton
 
 /**
  * Real-time network connectivity monitor matching iOS NetworkMonitor.swift.
- * Uses ConnectivityManager.NetworkCallback for immediate status updates.
+ * Follows the system DEFAULT network (registerDefaultNetworkCallback) and counts it
+ * as connected only once it reports INTERNET and VALIDATED; see [reduceDefaultNetwork].
  * Exposes isConnected and showReconnected (5-second banner after regaining connection).
  */
 @Singleton
@@ -40,37 +40,58 @@ class NetworkMonitor @Inject constructor(
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
+    // Callbacks for one registration arrive serially on the ConnectivityManager
+    // thread; the lock covers the initial read in init, which runs elsewhere.
+    private val stateLock = Any()
+    private var defaultNetworkState = DefaultNetworkState<Network>()
+
+    private fun onDefaultNetworkEvent(event: DefaultNetworkEvent<Network>) {
+        val connected = synchronized(stateLock) {
+            defaultNetworkState = reduceDefaultNetwork(defaultNetworkState, event)
+            defaultNetworkState.connected
+        }
+        handleConnectivityChange(connected)
+    }
+
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            handleConnectivityChange(true)
+            onDefaultNetworkEvent(DefaultNetworkEvent.Available(network))
         }
 
         override fun onLost(network: Network) {
-            handleConnectivityChange(false)
+            onDefaultNetworkEvent(DefaultNetworkEvent.Lost(network))
         }
 
         override fun onCapabilitiesChanged(
             network: Network,
             networkCapabilities: NetworkCapabilities
         ) {
-            val hasInternet = networkCapabilities.hasCapability(
-                NetworkCapabilities.NET_CAPABILITY_INTERNET
-            ) && networkCapabilities.hasCapability(
-                NetworkCapabilities.NET_CAPABILITY_VALIDATED
+            onDefaultNetworkEvent(
+                DefaultNetworkEvent.CapabilitiesChanged(
+                    network = network,
+                    hasInternet = networkCapabilities.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_INTERNET
+                    ),
+                    isValidated = networkCapabilities.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_VALIDATED
+                    ),
+                )
             )
-            handleConnectivityChange(hasInternet)
         }
     }
 
     init {
         // Check initial state
-        _isConnected.value = isCurrentlyConnected()
+        val initial = DefaultNetworkState(
+            network = connectivityManager.activeNetwork,
+            connected = isCurrentlyConnected(),
+        )
+        synchronized(stateLock) { defaultNetworkState = initial }
+        _isConnected.value = initial.connected
 
-        // Register for real-time updates
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-        connectivityManager.registerNetworkCallback(request, networkCallback)
+        // Follow the default network only. registerNetworkCallback reported every
+        // internet network, so losing wifi during a handoff to LTE read as offline.
+        connectivityManager.registerDefaultNetworkCallback(networkCallback)
     }
 
     private fun isCurrentlyConnected(): Boolean {

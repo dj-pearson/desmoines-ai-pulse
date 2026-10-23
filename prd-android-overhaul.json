@@ -451,7 +451,7 @@
       ],
       "verification": "Run the baseline with --tests '*NetworkReconnectTest*' --tests '*EventsRepositoryCacheTest*' --tests '*PaginationGuardTest*'. Then grep -n 'registerDefaultNetworkCallback' android/app/src/main/java/com/desmoines/aipulse/util/NetworkMonitor.kt must match.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-020",

@@ -19,6 +19,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 private const val PRUNE_AGE_HOURS = 24L
 
+/** A cached events page; [totalCount] is null when the key was not cached as a page. */
+data class CachedEventsPage(
+    val events: List<Event>,
+    val totalCount: Int?,
+)
+
 /**
  * Manages offline cache for events, restaurants, and attractions.
  * Mirrors iOS QueryCache.swift behavior:
@@ -49,16 +55,49 @@ class CacheManager @Inject constructor(
         }
     }
 
-    suspend fun getCachedEvent(id: String): Event? {
+    /**
+     * A cached page of events with the server's row count, so the caller can
+     * work out hasMore instead of assuming the page was the last one.
+     */
+    suspend fun getCachedEventsPage(cacheKey: String, allowStale: Boolean = false): CachedEventsPage? {
+        val metadata = cacheMetadataDao.get(cacheKey) ?: return null
+        if (!allowStale && metadata.isExpired) return null
         return try {
-            eventDao.getById(id)?.let { json.decodeFromString<Event>(it.jsonData) }
+            CachedEventsPage(
+                events = eventDao.getAllByKey(cacheKey).map { json.decodeFromString<Event>(it.jsonData) },
+                totalCount = metadata.totalCount,
+            )
+        } catch (e: Exception) {
+            AppLogger.cache.warning("Failed to deserialize cached events for $cacheKey", e)
+            null
+        }
+    }
+
+    /**
+     * One event by id, honouring the TTL of whichever query cached it. This used
+     * to return the row at any age, so an event opened again within the 24-hour
+     * retention window was never refetched.
+     */
+    suspend fun getCachedEvent(id: String, allowStale: Boolean = false): Event? {
+        return try {
+            val row = eventDao.getById(id) ?: return null
+            if (!allowStale) {
+                val metadata = cacheMetadataDao.get(row.cacheKey) ?: return null
+                if (metadata.isExpired) return null
+            }
+            json.decodeFromString<Event>(row.jsonData)
         } catch (e: Exception) {
             AppLogger.cache.warning("Failed to deserialize cached event $id", e)
             null
         }
     }
 
-    suspend fun cacheEvents(cacheKey: String, events: List<Event>, ttlMinutes: Int = Config.CACHE_EXPIRATION_MINUTES) {
+    suspend fun cacheEvents(
+        cacheKey: String,
+        events: List<Event>,
+        ttlMinutes: Int = Config.CACHE_EXPIRATION_MINUTES,
+        totalCount: Int? = null,
+    ) {
         try {
             val now = System.currentTimeMillis()
             val entities = events.map { event ->
@@ -72,7 +111,13 @@ class CacheManager @Inject constructor(
             eventDao.deleteByKey(cacheKey)
             eventDao.insertAll(entities)
             cacheMetadataDao.upsert(
-                CacheMetadata(cacheKey = cacheKey, cachedAt = now, ttlMinutes = ttlMinutes, itemCount = events.size)
+                CacheMetadata(
+                    cacheKey = cacheKey,
+                    cachedAt = now,
+                    ttlMinutes = ttlMinutes,
+                    itemCount = events.size,
+                    totalCount = totalCount,
+                )
             )
         } catch (e: Exception) {
             AppLogger.cache.error("Failed to cache events for $cacheKey", e)
