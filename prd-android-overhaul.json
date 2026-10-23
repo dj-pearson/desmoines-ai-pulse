@@ -297,7 +297,7 @@
       ],
       "verification": "npx eslint src/pages/AccountDeletion.tsx src/App.tsx src/pages/PrivacyPolicy.tsx && npm run check-e2e-lanes && npm run build && npx playwright test --config playwright.smoke.config.ts tests/account-deletion.spec.ts",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-013",

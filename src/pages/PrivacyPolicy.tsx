@@ -267,6 +267,10 @@ export default function PrivacyPolicy() {
               you have the right to appeal by replying to our response, and to lodge a complaint with your local data protection
               authority.
             </p>
+            <p>
+              To delete your account without signing in, or from the iOS or Android app, follow the steps on our{" "}
+              <Link to="/account/delete" className="text-primary underline">account deletion page</Link>.
+            </p>
           </section>
 
           <section className="mb-8" id="do-not-sell">
