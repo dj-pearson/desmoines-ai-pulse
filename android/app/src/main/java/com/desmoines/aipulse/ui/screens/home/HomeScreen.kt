@@ -120,6 +120,7 @@ data class HomeScreenState(
  * @param onNavigateToEventDetail Navigate to event detail
  * @param onNavigateToRestaurantDetail Navigate to restaurant detail
  * @param onNavigateToSubscription Navigate to subscription screen
+ * @param showTripPlanner False while the Trip Planner is paused (AND-OVH-011); hides its card
  * @param onSelectCategory Select/deselect a category filter
  * @param onSelectDatePreset Select/deselect a date preset filter
  * @param onShowFilters Open the filter sheet
@@ -138,6 +139,7 @@ fun HomeScreen(
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
     onNavigateToTripPlanner: () -> Unit = {},
+    showTripPlanner: Boolean = true,
     onNavigateToDiscover: () -> Unit = {},
     onNavigateToSurpriseMe: () -> Unit = {},
     onNavigateToWeekend: () -> Unit = {},
@@ -275,8 +277,10 @@ fun HomeScreen(
                             }
                         )
                     }
-                    item(key = "tripPlanner", span = { GridItemSpan(maxLineSpan) }) {
-                        TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
+                    if (showTripPlanner) {
+                        item(key = "tripPlanner", span = { GridItemSpan(maxLineSpan) }) {
+                            TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
+                        }
                     }
                     item(key = "discover", span = { GridItemSpan(maxLineSpan) }) {
                         DiscoverHomeCard(onClick = onNavigateToDiscover)
@@ -449,8 +453,10 @@ fun HomeScreen(
                             }
                         )
                     }
-                    item(key = "tripPlanner") {
-                        TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
+                    if (showTripPlanner) {
+                        item(key = "tripPlanner") {
+                            TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
+                        }
                     }
                     item(key = "discover") {
                         DiscoverHomeCard(onClick = onNavigateToDiscover)

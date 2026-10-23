@@ -273,7 +273,7 @@
       ],
       "verification": "Run the baseline with --tests '*TripPlannerAvailabilityTest*' --tests '*TripPlannerViewModelTest*' --tests '*SavedTripsViewModelTest*'. Then: grep -rn 'trips/shared' android/app/src/main/java must return nothing, or only lines behind the false share flag.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-012",

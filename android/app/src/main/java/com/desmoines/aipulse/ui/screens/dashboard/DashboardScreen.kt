@@ -54,6 +54,8 @@ import com.desmoines.aipulse.ui.screens.search.SavedSearchSection
 @Composable
 fun DashboardScreen(
     state: DashboardUiState,
+    /** False while the Trip Planner is paused (AND-OVH-011): no trips section. */
+    showTrips: Boolean = true,
     savedSearches: List<SavedSearch>,
     onRerunSavedSearch: (SavedSearch) -> Unit,
     onToggleSavedSearchAlerts: (SavedSearch) -> Unit,
@@ -89,14 +91,16 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
-                        item(key = "tripsHeader") { SectionHeader("Your trips") }
-                        item(key = "trips") {
-                            if (state.trips.isEmpty()) {
-                                EmptyCta(message = "No saved itineraries yet.", action = "Plan a trip", onClick = onPlanTrip)
-                            } else {
-                                Column {
-                                    state.trips.forEach { trip ->
-                                        TripRow(trip = trip, onClick = { onOpenTrip(trip.id) })
+                        if (showTrips) {
+                            item(key = "tripsHeader") { SectionHeader("Your trips") }
+                            item(key = "trips") {
+                                if (state.trips.isEmpty()) {
+                                    EmptyCta(message = "No saved itineraries yet.", action = "Plan a trip", onClick = onPlanTrip)
+                                } else {
+                                    Column {
+                                        state.trips.forEach { trip ->
+                                            TripRow(trip = trip, onClick = { onOpenTrip(trip.id) })
+                                        }
                                     }
                                 }
                             }

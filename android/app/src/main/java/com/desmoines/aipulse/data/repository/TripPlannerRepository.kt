@@ -43,7 +43,16 @@ interface TripPlannerRepository {
 @Singleton
 class TripPlannerRepositoryImpl @Inject constructor(
     private val remote: TripPlannerRemoteDataSource,
+    private val availability: TripPlannerAvailabilityStore,
 ) : TripPlannerRepository {
+
+    /**
+     * Every trip_plans call reports its failure, so a table that disappears
+     * after the launch probe still pauses the planner (iOS does the same in
+     * TripPlannerService). Only missing-storage errors change anything.
+     */
+    private fun <T> Result<T>.reportingStorage(): Result<T> =
+        onFailure { availability.report(it) }
 
     override suspend fun generate(
         startDate: String,
@@ -58,18 +67,19 @@ class TripPlannerRepositoryImpl @Inject constructor(
                 response.error ?: "Couldn't build your itinerary. Adjust your dates or interests and try again.",
             )
         }
-    }
+    }.reportingStorage()
 
     override suspend fun monthlyTripCount(userId: String?): Int {
         if (userId == null) return 0
         return suspendRunCatching { remote.monthlyTripCount(userId) }
+            .reportingStorage()
             .onFailure { AppLogger.network.warning("monthlyTripCount failed: ${it.message}") }
             .getOrDefault(0)
     }
 
     override suspend fun fetchSavedTrips(userId: String?): Result<List<TripPlan>> {
         if (userId == null) return Result.success(emptyList())
-        return suspendRunCatching { remote.fetchSavedTrips(userId) }
+        return suspendRunCatching { remote.fetchSavedTrips(userId) }.reportingStorage()
     }
 
     override suspend fun shareTrip(tripId: String): Result<String> =
@@ -79,10 +89,10 @@ class TripPlannerRepositoryImpl @Inject constructor(
         suspendRunCatching { remote.deleteTrip(tripId) }
 
     override suspend fun fetchTrip(tripId: String): Result<TripPlan> =
-        suspendRunCatching { remote.fetchTrip(tripId) }
+        suspendRunCatching { remote.fetchTrip(tripId) }.reportingStorage()
 
     override suspend fun fetchItems(tripId: String): Result<List<TripPlanItem>> =
-        suspendRunCatching { remote.fetchItems(tripId) }
+        suspendRunCatching { remote.fetchItems(tripId) }.reportingStorage()
 
     override suspend fun persistOrder(items: List<TripPlanItem>): Boolean =
         suspendRunCatching { remote.persistOrder(items) }

@@ -27,6 +27,7 @@ import com.desmoines.aipulse.ui.screens.search.SearchViewModel
 import com.desmoines.aipulse.ui.screens.search.SearchTab
 import com.desmoines.aipulse.ui.screens.search.SavedSearchViewModel
 import com.desmoines.aipulse.ui.screens.subscription.SubscriptionViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerAvailabilityViewModel
 
 /**
  * The six bottom-tab destinations. Split out of MainNavHost.kt under AND-AUDIT-021;
@@ -45,6 +46,8 @@ internal fun NavGraphBuilder.addTabDestinations(
     composable(Route.Home.route) {
         val viewModel: EventsViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
         var showFilterSheet by remember { mutableStateOf(false) }
 
         // Filter state for the sheet
@@ -73,6 +76,7 @@ internal fun NavGraphBuilder.addTabDestinations(
             onNavigateToTripPlanner = {
                 navController.navigate(Route.TripPlanner.route)
             },
+            showTripPlanner = !tripAvailability.isPaused,
             onNavigateToDiscover = {
                 navController.navigate(Route.Discover.route)
             },

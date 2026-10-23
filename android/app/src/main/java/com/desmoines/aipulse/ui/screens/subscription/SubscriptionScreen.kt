@@ -86,6 +86,8 @@ fun SubscriptionScreen(
     crossPlatformSubscriptions: List<CrossPlatformSubscription> = emptyList(),
     manageSubscriptionUrl: String? = null,
     purchasePlan: PurchasePlan? = null,
+    // False while the Trip Planner is paused (AND-OVH-011): don't sell it.
+    showTripPlanner: Boolean = true,
 ) {
     val context = LocalContext.current
     val selectedPrice = when (selectedTier) {
@@ -235,13 +237,19 @@ fun SubscriptionScreen(
             Spacer(Modifier.height(24.dp))
 
             // Features list
-            InsiderFeaturesList(price = (insiderOffer as? TierOffer.Available)?.formattedPrice)
+            InsiderFeaturesList(
+                price = (insiderOffer as? TierOffer.Available)?.formattedPrice,
+                showTripPlanner = showTripPlanner,
+            )
 
             Spacer(Modifier.height(8.dp))
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            VipFeaturesList(price = (vipOffer as? TierOffer.Available)?.formattedPrice)
+            VipFeaturesList(
+                price = (vipOffer as? TierOffer.Available)?.formattedPrice,
+                showTripPlanner = showTripPlanner,
+            )
 
             Spacer(Modifier.height(24.dp))
 
@@ -402,7 +410,7 @@ private fun TierSelectionCard(
 }
 
 @Composable
-private fun InsiderFeaturesList(price: String?) {
+private fun InsiderFeaturesList(price: String?, showTripPlanner: Boolean) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = if (price != null) "Insider — $price/mo" else "Insider",
@@ -411,7 +419,9 @@ private fun InsiderFeaturesList(price: String?) {
             color = InsiderColor,
         )
         Spacer(Modifier.height(8.dp))
-        FeatureRow(icon = Icons.Filled.Map, color = InsiderColor, text = "AI Trip Planner (5 trips/month)")
+        if (showTripPlanner) {
+            FeatureRow(icon = Icons.Filled.Map, color = InsiderColor, text = "AI Trip Planner (5 trips/month)")
+        }
         FeatureRow(icon = Icons.Filled.FavoriteBorder, color = InsiderColor, text = "Unlimited favorites")
         FeatureRow(icon = Icons.Outlined.Tune, color = InsiderColor, text = "Advanced filters (distance, price, rating)")
         FeatureRow(icon = Icons.Filled.RateReview, color = InsiderColor, text = "Write reviews & ratings")
@@ -422,7 +432,7 @@ private fun InsiderFeaturesList(price: String?) {
 }
 
 @Composable
-private fun VipFeaturesList(price: String?) {
+private fun VipFeaturesList(price: String?, showTripPlanner: Boolean) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = if (price != null) "VIP — $price/mo" else "VIP",
@@ -436,7 +446,9 @@ private fun VipFeaturesList(price: String?) {
         // TripPlannerViewModel). Perks the web lists but this app doesn't
         // implement stay off until they ship here (AND-OVH-008).
         FeatureRow(icon = Icons.Filled.Star, color = VipColor, text = "Everything in Insider")
-        FeatureRow(icon = Icons.Filled.Map, color = VipColor, text = "Unlimited AI Trip Planner")
+        if (showTripPlanner) {
+            FeatureRow(icon = Icons.Filled.Map, color = VipColor, text = "Unlimited AI Trip Planner")
+        }
     }
 }
 

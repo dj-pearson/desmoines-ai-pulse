@@ -16,6 +16,8 @@ import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsViewModel
 import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerAvailabilityViewModel
+import com.desmoines.aipulse.data.repository.TripPlannerAvailability
 import com.desmoines.aipulse.ui.screens.discover.DiscoverScreen
 import com.desmoines.aipulse.ui.screens.discover.DiscoverViewModel
 import com.desmoines.aipulse.ui.screens.groupsession.GroupSessionScreen
@@ -342,9 +344,12 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val savedSearchViewModel: SavedSearchViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
         val savedSearchState by savedSearchViewModel.uiState.collectAsStateWithLifecycle()
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
 
         DashboardScreen(
             state = state,
+            showTrips = !tripAvailability.isPaused,
             savedSearches = savedSearchState.searches,
             onRerunSavedSearch = {
                 // Re-run lands on the Search tab (where the saved-search list fully applies).
@@ -462,6 +467,8 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
     composable(Route.TripPlanner.route) {
         val viewModel: TripPlannerViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
 
         // Hard paywall: VM requests the Subscription screen (free on cooldown, or quota exhausted).
         androidx.compose.runtime.LaunchedEffect(state.navigateToSubscription) {
@@ -473,6 +480,7 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
 
         TripPlannerScreen(
             state = state,
+            isPaused = tripAvailability.isPaused,
             allInterests = viewModel.allInterests,
             allAccessibilityNeeds = viewModel.allAccessibilityNeeds,
             allDietaryRestrictions = viewModel.allDietaryRestrictions,
@@ -501,7 +509,8 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
 
         SavedTripsScreen(
             state = state,
-            onShare = viewModel::share,
+            // Off with TRIP_SHARE_AVAILABLE: the web has no /trips/shared route.
+            onShare = if (TripPlannerAvailability.TRIP_SHARE_AVAILABLE) viewModel::share else null,
             onDelete = viewModel::delete,
             onOpenTrip = { id -> navController.navigate(Route.ItineraryDetail.createRoute(id)) },
             onConsumeShareUrl = viewModel::consumeShareUrl,
@@ -542,8 +551,11 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val subscriptionViewModel: SubscriptionViewModel = hiltViewModel()
         val state by subscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
 
         SubscriptionScreen(
+            showTripPlanner = !tripAvailability.isPaused,
             currentTier = state.currentTier,
             isLoading = state.isLoading,
             errorMessage = state.errorMessage,

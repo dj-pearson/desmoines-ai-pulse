@@ -233,6 +233,13 @@ enum class SubscriptionTier(val displayName: String) {
             )
         }
 
+    /**
+     * [features] without the Trip Planner rows, for while it is paused
+     * (AND-OVH-011). The paywall must not sell a feature that can't run.
+     */
+    fun features(showTripPlanner: Boolean): List<String> =
+        if (showTripPlanner) features else features.filterNot { it.contains("Trip Planner") }
+
     companion object {
         fun from(rawString: String?): SubscriptionTier =
             entries.firstOrNull { it.name.lowercase() == rawString?.lowercase() } ?: FREE
