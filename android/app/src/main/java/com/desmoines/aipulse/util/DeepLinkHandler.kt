@@ -23,7 +23,7 @@ import javax.inject.Singleton
  * - `com.desmoines.aipulse://search` -> Search tab
  * - `com.desmoines.aipulse://favorites` -> Saved tab
  * - `com.desmoines.aipulse://profile` -> Profile tab
- * - `com.desmoines.aipulse://auth-callback` -> Auth callback (handled by Supabase)
+ * - `com.desmoines.aipulse://auth-callback` -> Auth callback (MainActivity.handleAuthCallback, AND-OVH-005)
  *
  * Also handles notification tap intents with navigate_to + event_id/content_id extras.
  */

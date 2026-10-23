@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.ui.screens
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -18,6 +19,8 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,7 +30,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.ui.theme.LocalBackdropBlurState
@@ -53,9 +59,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.desmoines.aipulse.ui.navigation.BottomNavTab
 import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
+import com.desmoines.aipulse.util.AuthCallbackNotices
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.ShortcutDispatcher
+import kotlinx.coroutines.launch
 
 /**
  * Main screen with bottom navigation bar matching iOS MainTabView.swift.
@@ -68,6 +76,7 @@ fun MainScreen(
     networkMonitor: NetworkMonitor,
     deepLinkHandler: DeepLinkHandler,
     shortcutDispatcher: ShortcutDispatcher,
+    authCallbackNotices: AuthCallbackNotices,
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
 ) {
     val useNavRail = widthSizeClass != WindowWidthSizeClass.Compact
@@ -160,6 +169,42 @@ fun MainScreen(
                 }
             }
         }
+    }
+
+    // Auth-callback outcomes (AND-OVH-005). A confirmed link lands on Home with
+    // a snackbar; a refused one gets a dialog, because a snackbar over Home is
+    // easy to miss and the user's next step (sign in, resend) is not on Home.
+    // The snackbar runs on its own scope: consume() changes the key below and
+    // restarts the effect, which would cancel a snackbar shown from inside it.
+    // The failure text is saveable so the dialog survives a rotation.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
+    var authCallbackFailure by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingAuthNotice by authCallbackNotices.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingAuthNotice) {
+        when (val notice = authCallbackNotices.consume() ?: return@LaunchedEffect) {
+            is AuthCallbackNotices.Notice.SignedIn -> {
+                navController.navigate(Route.Home.route) {
+                    popUpTo(navController.graph.findStartDestination().id)
+                    launchSingleTop = true
+                }
+                snackbarScope.launch { snackbarHostState.showSnackbar(notice.message) }
+            }
+            is AuthCallbackNotices.Notice.Failed -> authCallbackFailure = notice.message
+        }
+    }
+
+    authCallbackFailure?.let { message ->
+        AlertDialog(
+            onDismissRequest = { authCallbackFailure = null },
+            title = { Text("Link didn't work") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { authCallbackFailure = null }) {
+                    Text("OK")
+                }
+            },
+        )
     }
 
     // App Shortcut / Assistant deep links (ANDP-015): route to the host screen.
@@ -283,19 +328,25 @@ fun MainScreen(
                     }
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                OfflineBanner(networkMonitor = networkMonitor)
-                SessionTimeoutBanner(
-                    minutesRemaining = sessionMinutesRemaining,
-                    onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
-                )
-                MainNavHost(
-                    navController = navController,
-                    scrollToTopTrigger = scrollToTopTrigger,
-                    useWideLayout = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .respondsToBackdropBlur()
+            Box(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    OfflineBanner(networkMonitor = networkMonitor)
+                    SessionTimeoutBanner(
+                        minutesRemaining = sessionMinutesRemaining,
+                        onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
+                    )
+                    MainNavHost(
+                        navController = navController,
+                        scrollToTopTrigger = scrollToTopTrigger,
+                        useWideLayout = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .respondsToBackdropBlur()
+                    )
+                }
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
         }
@@ -303,6 +354,7 @@ fun MainScreen(
         // Phone: standard bottom NavigationBar
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
                 if (showBottomBar) {
                     FloatingActionButton(
