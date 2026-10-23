@@ -173,7 +173,7 @@
       ],
       "verification": "Run the baseline with --tests '*EventDetailReminderTest*'. Then: grep -n 'isReminderSet = false' android/app/src/main/java/com/desmoines/aipulse/ui/screens/eventdetail/EventDetailScreen.kt must return nothing.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-008",

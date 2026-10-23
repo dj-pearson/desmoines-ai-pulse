@@ -52,6 +52,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -119,9 +121,22 @@ fun EventDetailScreen(
     onNavigateToEventDetail: (String) -> Unit,
     onOpenSourceUrl: (String) -> Unit,
     onNavigateToAuth: () -> Unit = {},
+    isReminderSet: Boolean = false,
+    showReminderButton: Boolean = false,
+    reminderMessage: String? = null,
+    onToggleReminder: () -> Unit = {},
+    onReminderMessageShown: () -> Unit = {},
 ) {
     var showImageViewer by remember { mutableStateOf(false) }
     val haptic = rememberHapticPerformer()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(reminderMessage) {
+        reminderMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            onReminderMessageShown()
+        }
+    }
 
     if (isLoading && event == null) {
         LoadingView(message = "Loading event...")
@@ -136,6 +151,7 @@ fun EventDetailScreen(
     val hasPremiumAccess = currentTier == SubscriptionTier.INSIDER || currentTier == SubscriptionTier.VIP
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { },
@@ -211,7 +227,10 @@ fun EventDetailScreen(
                 event = event,
                 hasPremiumAccess = hasPremiumAccess,
                 calendarAdded = calendarAdded,
+                isReminderSet = isReminderSet,
+                showReminderButton = showReminderButton,
                 onAddToCalendar = onAddToCalendar,
+                onToggleReminder = onToggleReminder,
                 onShowSubscription = onShowSubscription,
                 onOpenSourceUrl = onOpenSourceUrl,
             )
@@ -609,7 +628,10 @@ private fun EventDetailActions(
     event: Event,
     hasPremiumAccess: Boolean,
     calendarAdded: Boolean,
+    isReminderSet: Boolean,
+    showReminderButton: Boolean,
     onAddToCalendar: () -> Unit,
+    onToggleReminder: () -> Unit,
     onShowSubscription: () -> Unit,
     onOpenSourceUrl: (String) -> Unit,
 ) {
@@ -709,16 +731,22 @@ private fun EventDetailActions(
             }
         }
 
-        // Remind Me button
-        if (event.parsedDate != null) {
-            // Placeholder — reminder toggle will be wired when notification service is built
-            val isReminderSet = false
+        // Remind Me button. Hidden once the event has started, unless a reminder
+        // is still set and needs a way to be cancelled (matches iOS).
+        if (showReminderButton) {
+            val reminderLabel = if (isReminderSet) {
+                "Cancel reminder for ${event.title}"
+            } else {
+                "Remind me about ${event.title}"
+            }
             Button(
                 onClick = {
                     haptic.medium()
-                    // Reminder toggle implemented in later story
+                    onToggleReminder()
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = reminderLabel },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isReminderSet) BrandOrange else MaterialTheme.colorScheme.surfaceVariant
@@ -732,7 +760,7 @@ private fun EventDetailActions(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (isReminderSet) "Reminder Set" else "Remind Me",
+                    text = if (isReminderSet) "Reminder set" else "Remind Me",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium,
                     color = if (isReminderSet) Color.White else MaterialTheme.colorScheme.onSurface
@@ -970,6 +998,7 @@ private fun EventDetailScreenPreview() {
             isFavorited = false,
             calendarAdded = false,
             currentTier = SubscriptionTier.INSIDER,
+            showReminderButton = true,
             onNavigateBack = {},
             onShare = {},
             onToggleFavorite = {},
