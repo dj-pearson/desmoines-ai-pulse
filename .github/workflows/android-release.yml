@@ -28,7 +28,8 @@
 #
 # OPTIONAL GITHUB SECRETS:
 #   EXPECTED_UPLOAD_SHA1              - Upload key SHA1 from Play Console;
-#                                       checked against the keystore
+#                                       checked against the keystore and
+#                                       against the built AAB's signer
 #
 # FIRST-TIME SETUP:
 #   1. Generate an upload keystore locally:
@@ -325,27 +326,29 @@ jobs:
       # ============================================================
       # 7. VERIFY SIGNATURE
       # ============================================================
+      # jarsigner -verify exits 0 on an unsigned AAB, and this step used to pipe
+      # it into tail with no pipefail, so it could not fail. The AAB check lives
+      # in scripts/android/verify-aab-signature.sh, which reads jarsigner's
+      # output and matches the signer against EXPECTED_UPLOAD_SHA1 when set.
+      # A missing tool fails the step; nothing here exits 0 to skip a check.
       - name: Verify signature
-        working-directory: android
+        shell: bash
+        env:
+          EXPECTED_UPLOAD_SHA1: ${{ secrets.EXPECTED_UPLOAD_SHA1 }}
         run: |
-          BUILD_TOOLS_DIR=$(ls -d "$ANDROID_HOME/build-tools"/*/ 2>/dev/null | sort -V | tail -1)
-          if [ -z "$BUILD_TOOLS_DIR" ]; then
-            echo "::warning::build-tools not found, skipping signature verification"
-            exit 0
-          fi
-          APKSIGNER="${BUILD_TOOLS_DIR}apksigner"
-
+          set -euo pipefail
           if [ "${{ github.event.inputs.buildType }}" = "apk" ]; then
-            "$APKSIGNER" verify --print-certs "${ARTIFACT_PATH#android/}" || {
+            BUILD_TOOLS_DIR=$(ls -d "${ANDROID_HOME:-}/build-tools"/*/ 2>/dev/null | sort -V | tail -1 || true)
+            if [ -z "$BUILD_TOOLS_DIR" ] || [ ! -x "${BUILD_TOOLS_DIR}apksigner" ]; then
+              echo "::error::Android build-tools (apksigner) not found; cannot verify the APK signature."
+              exit 1
+            fi
+            "${BUILD_TOOLS_DIR}apksigner" verify --print-certs "$ARTIFACT_PATH" || {
               echo "::error::APK signature verification failed"
               exit 1
             }
           else
-            # AAB signature is verified by jarsigner, not apksigner
-            jarsigner -verify -verbose -certs "${ARTIFACT_PATH#android/}" | tail -20 || {
-              echo "::error::AAB signature verification failed"
-              exit 1
-            }
+            bash scripts/android/verify-aab-signature.sh "$ARTIFACT_PATH"
           fi
           echo "Signature verified"
 

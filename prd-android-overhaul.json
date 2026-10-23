@@ -386,7 +386,7 @@
       ],
       "verification": "bash scripts/android/verify-aab-signature.sh android/app/build/outputs/bundle/release/app-release.aab must exit non-zero with a message mentioning 'unsigned' (that local AAB is unsigned). Then grep -n 'verify-aab-signature.sh' .github/workflows/android-release.yml must return a match, and grep -n \"| tail -20 ||\" .github/workflows/android-release.yml must return nothing.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-017",
