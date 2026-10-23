@@ -223,15 +223,13 @@ enum class SubscriptionTier(val displayName: String) {
                 "Early access to events",
                 "2x XP earning rate",
             )
+            // Only VIP features Android implements (AND-OVH-008). Unlimited
+            // trips is TripPlannerViewModel's VIP branch. The web's other VIP
+            // perks and the XP multiplier have no Android code behind them,
+            // so they are not sold here until they ship.
             VIP -> listOf(
                 "Everything in Insider, plus:",
                 "Unlimited AI Trip Planner",
-                "VIP-exclusive events",
-                "Restaurant reservation help",
-                "SMS alerts",
-                "Monthly local business perks",
-                "Concierge support",
-                "3x XP earning rate",
             )
         }
 

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarRate
 import androidx.compose.material3.AlertDialog
@@ -57,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.BuildConfig
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.SafeLinkLauncher
 
 /**
  * Settings screen matching iOS SettingsView.swift.
@@ -67,6 +69,8 @@ import com.desmoines.aipulse.util.Config
 fun SettingsScreen(
     isAuthenticated: Boolean = false,
     currentTier: SubscriptionTier = SubscriptionTier.FREE,
+    /** Play's page for the user's Google Play subscription; null hides the row. */
+    manageSubscriptionUrl: String? = null,
     isDeleting: Boolean = false,
     showDeleteConfirmation: Boolean = false,
     errorMessage: String? = null,
@@ -125,6 +129,16 @@ fun SettingsScreen(
                     showChevron = true,
                     onClick = onNavigateToSubscription,
                 )
+
+                manageSubscriptionUrl?.let { url ->
+                    SettingsRow(
+                        icon = Icons.Default.ManageAccounts,
+                        title = "Manage subscription",
+                        subtitle = "Change or cancel in Google Play",
+                        showChevron = true,
+                        onClick = { SafeLinkLauncher.openUrl(context, url) },
+                    )
+                }
 
                 SettingsRow(
                     icon = Icons.Default.Refresh,

@@ -547,10 +547,10 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
             currentTier = state.currentTier,
             isLoading = state.isLoading,
             errorMessage = state.errorMessage,
-            insiderPrice = state.insiderPrice,
-            vipPrice = state.vipPrice,
-            hasProducts = state.hasProducts,
+            insiderOffer = state.insiderOffer,
+            vipOffer = state.vipOffer,
             selectedTier = state.selectedTier,
+            manageSubscriptionUrl = state.manageSubscriptionUrl,
             onSelectTier = { subscriptionViewModel.selectTier(it) },
             onPurchase = {
                 (context as? android.app.Activity)?.let { activity ->
@@ -584,6 +584,7 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         SettingsScreen(
             isAuthenticated = isAuthenticated,
             currentTier = subscriptionState.currentTier,
+            manageSubscriptionUrl = subscriptionState.manageSubscriptionUrl,
             isDeleting = isDeleting,
             showDeleteConfirmation = showDeleteConfirmation,
             errorMessage = errorMessage,

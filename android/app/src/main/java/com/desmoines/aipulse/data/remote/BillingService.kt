@@ -108,6 +108,16 @@ class BillingService internal constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    /**
+     * True once a product query has finished, successfully or not, or the
+     * billing connection it needs has failed. Before that, a missing
+     * [ProductDetails] means "still loading"; after it, "not available". The
+     * paywall needs the difference to show a spinner rather than a dead card,
+     * and a dead card rather than a spinner that never stops (AND-OVH-008).
+     */
+    private val _productsQueried = MutableStateFlow(false)
+    val productsQueried: StateFlow<Boolean> = _productsQueried.asStateFlow()
+
     // endregion
 
     // region BillingClient
@@ -147,6 +157,7 @@ class BillingService internal constructor(
                     scope.launch { updatePurchasedProducts() }
                 } else {
                     isConnected = false
+                    _productsQueried.value = true
                     AppLogger.billing.warning("Billing setup failed: ${result.debugMessage}")
                 }
             }
@@ -189,6 +200,7 @@ class BillingService internal constructor(
         if (!ensureConnected()) {
             _errorMessage.value = BillingError.PRODUCT_LOAD_FAILED.message
             _isLoading.value = false
+            _productsQueried.value = true
             return
         }
 
@@ -221,6 +233,7 @@ class BillingService internal constructor(
         }
 
         _isLoading.value = false
+        _productsQueried.value = true
     }
 
     // endregion
