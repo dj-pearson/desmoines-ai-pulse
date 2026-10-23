@@ -33,6 +33,7 @@ import com.desmoines.aipulse.ui.screens.hubs.ContentHubsListScreen
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubScreen
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubViewModel
 import com.desmoines.aipulse.ui.screens.dashboard.DashboardScreen
+import com.desmoines.aipulse.ui.screens.explore.ExploreHubScreen
 import com.desmoines.aipulse.ui.screens.dashboard.DashboardViewModel
 import com.desmoines.aipulse.ui.screens.articles.ArticlesScreen
 import com.desmoines.aipulse.ui.screens.articles.ArticlesViewModel
@@ -365,6 +366,13 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
             onOpenRestaurant = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
             onOpenAttraction = { id -> navController.navigate(Route.AttractionDetail.createRoute(id)) },
             onRefresh = viewModel::refresh,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Explore.route) {
+        ExploreHubScreen(
+            onOpenDestination = { destination -> navController.navigate(destination.route.route) },
             onNavigateBack = { navController.popBackStack() },
         )
     }

@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -285,12 +282,6 @@ fun MainScreen(
     val tabRoutes = BottomNavTab.entries.map { it.route }.toSet()
     val showBottomBar = currentDestination?.route in tabRoutes
 
-    // Launch the Ask Pulse AI discovery surface (single-top so re-taps don't stack).
-    val onAskPulseClick: () -> Unit = {
-        haptic.light()
-        navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
-    }
-
     // Full-screen interstitial (ANDP-044): counts the session on creation and is
     // offered only at a tab switch — a stable boundary, never mid-read/mid-flow.
     val interstitialViewModel: InterstitialAdViewModel = hiltViewModel()
@@ -331,18 +322,6 @@ fun MainScreen(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxHeight(),
-                    header = {
-                        FloatingActionButton(
-                            onClick = onAskPulseClick,
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.semantics {
-                                contentDescription = "Ask Pulse, AI discovery"
-                            },
-                        ) {
-                            Icon(Icons.Filled.AutoAwesome, contentDescription = null)
-                        }
-                    },
                 ) {
                     val tabs = BottomNavTab.entries
                     tabs.forEachIndexed { index, tab ->
@@ -408,20 +387,6 @@ fun MainScreen(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             snackbarHost = { SnackbarHost(snackbarHostState) },
-            floatingActionButton = {
-                if (showBottomBar) {
-                    FloatingActionButton(
-                        onClick = onAskPulseClick,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.semantics {
-                            contentDescription = "Ask Pulse, AI discovery"
-                        },
-                    ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
-                    }
-                }
-            },
             bottomBar = {
                 if (showBottomBar) {
                     NavigationBar(

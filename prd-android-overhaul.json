@@ -605,7 +605,7 @@
         "AND-OVH-011",
         "AND-OVH-023"
       ],
-      "passes": false
+      "passes": true
     }
   ],
   "human_tasks": [

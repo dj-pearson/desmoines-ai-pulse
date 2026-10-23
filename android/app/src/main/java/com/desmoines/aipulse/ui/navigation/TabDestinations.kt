@@ -77,35 +77,19 @@ internal fun NavGraphBuilder.addTabDestinations(
                 navController.navigate(Route.TripPlanner.route)
             },
             showTripPlanner = !tripAvailability.isPaused,
+            // Single-top, as the floating button this replaces was, so a
+            // double tap does not stack two Ask Pulse screens.
+            onNavigateToAskPulse = {
+                navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
+            },
             onNavigateToDiscover = {
                 navController.navigate(Route.Discover.route)
             },
             onNavigateToSurpriseMe = {
                 navController.navigate(Route.SurpriseMe.route)
             },
-            onNavigateToWeekend = {
-                navController.navigate(Route.Weekend.route)
-            },
-            onNavigateToNeighborhoods = {
-                navController.navigate(Route.Neighborhoods.route)
-            },
-            onNavigateToContentHubs = {
-                navController.navigate(Route.ContentHubs.route)
-            },
-            onNavigateToDashboard = {
-                navController.navigate(Route.Dashboard.route)
-            },
-            onNavigateToArticles = {
-                navController.navigate(Route.Articles.route)
-            },
-            onNavigateToDeals = {
-                navController.navigate(Route.Deals.route)
-            },
-            onNavigateToHotels = {
-                navController.navigate(Route.Hotels.route)
-            },
-            onNavigateToBestOf = {
-                navController.navigate(Route.BestOf.route)
+            onNavigateToExplore = {
+                navController.navigate(Route.Explore.route) { launchSingleTop = true }
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
