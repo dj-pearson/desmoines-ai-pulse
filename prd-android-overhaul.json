@@ -346,7 +346,7 @@
         "AND-OVH-001",
         "AND-OVH-012"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-015",

@@ -630,9 +630,40 @@ Navigate through the left sidebar and complete:
 ### 8.4 Target Audience & Content
 
 1. **Target audience**: 18+ (or appropriate)
-2. **Ads**: If your app shows ads, declare it here
 
-### 8.5 Set Up Internal Testing Track
+The answers for 8.5 to 8.9 are written out, with the code they come from, in `docs/mobile/GOOGLE_PLAY_SUBMISSION.md` section 3. Enter them from there; the steps below say where each one goes.
+
+### 8.5 Ads
+
+1. Go to **Policy > App content > Ads**
+2. Select **Yes, my app contains ads**. The free tier shows first-party campaign ads (`AdSlot` on Home, `InterstitialAdView` in `MainScreen`, `SponsoredPickSlot` in Ask Pulse and Surprise Me). There's no ad SDK, but Play still counts these as ads.
+
+### 8.6 Advertising ID
+
+1. Go to **Policy > App content > Advertising ID**
+2. Select **No**. The manifest removes `AD_ID` and the two AdServices permissions that firebase-analytics merges in.
+3. Only answer No once the AND-OVH-001 merged-manifest step in `.github/workflows/android-ci.yml` is green for the build being uploaded. If it's red, the AAB declares AD_ID and Play rejects the mismatch.
+
+### 8.7 Data Safety
+
+1. Go to **Policy > App content > Data safety**
+2. Answer **Yes** to collecting data and **Yes** to encryption in transit
+3. Declare each row of the table in `GOOGLE_PLAY_SUBMISSION.md` section 3.8: precise and approximate location, app interactions, search history, app instance ID, crash logs, purchase history, email, name, user IDs, push token and ad interactions, each with its collected / shared / optional / purpose answers
+4. In Firebase Console, check **Project settings > Data sharing**. The "Shared: No" answers on the analytics rows assume every toggle there is off.
+
+### 8.8 App Access
+
+1. Go to **Policy > App content > App access**
+2. Select **All or some functionality is restricted**
+3. Add two sets of instructions: a free-tier reviewer account and an Insider-tier account. Paste the email and password from Infisical (`prod`: `PLAY_REVIEWER_EMAIL` / `PLAY_REVIEWER_PASSWORD` and `PLAY_REVIEWER_INSIDER_EMAIL` / `PLAY_REVIEWER_INSIDER_PASSWORD`). Never put the values in the repo.
+4. Sign in with both on a release build first. An account that can't sign in, or an Insider account without an active entitlement, gets the review rejected.
+
+### 8.9 Delete Account URL
+
+1. In **Data safety**, at the data deletion question, enter `https://desmoinesinsider.com/account/delete`
+2. Open the URL signed out and confirm it loads. Play requires it to be reachable without the app.
+
+### 8.10 Set Up Internal Testing Track
 
 Before a production release, test via Internal Testing:
 
@@ -643,7 +674,7 @@ Before a production release, test via Internal Testing:
 5. Click **Review release > Start rollout**
 6. Add testers by email under **Testers** tab
 
-### 8.6 Create a Service Account (for CI/CD uploads)
+### 8.11 Create a Service Account (for CI/CD uploads)
 
 1. Go to **Settings > API access**
 2. Click **Create new service account**
