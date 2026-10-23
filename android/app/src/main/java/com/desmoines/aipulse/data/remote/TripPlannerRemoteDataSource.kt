@@ -3,6 +3,7 @@ package com.desmoines.aipulse.data.remote
 import com.desmoines.aipulse.data.model.TripPlan
 import com.desmoines.aipulse.data.model.TripPlanItem
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.suspendRunCatching
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
@@ -233,7 +234,7 @@ class TripPlannerRemoteDataSource @Inject constructor(
         var allSucceeded = true
         items.forEachIndexed { index, item ->
             val id = item.itemId ?: return@forEachIndexed
-            runCatching {
+            suspendRunCatching {
                 db().from("trip_plan_items").update(OrderUpdate(orderIndex = index)) {
                     filter { eq("id", id) }
                 }

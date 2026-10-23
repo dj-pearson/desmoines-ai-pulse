@@ -3,6 +3,7 @@ package com.desmoines.aipulse.data.repository
 import com.desmoines.aipulse.data.model.Deal
 import com.desmoines.aipulse.data.remote.DealsRemoteDataSource
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,10 +20,10 @@ class DealsRepositoryImpl @Inject constructor(
 ) : DealsRepository {
 
     override suspend fun fetchDeals(entityType: String?): Result<List<Deal>> =
-        runCatching { remote.fetchDeals(entityType) }
+        suspendRunCatching { remote.fetchDeals(entityType) }
 
     override suspend fun claimDeal(id: String) {
-        runCatching { remote.claimDeal(id) }
+        suspendRunCatching { remote.claimDeal(id) }
             .onFailure { AppLogger.network.warning("claimDeal failed: ${it.message}") }
     }
 }

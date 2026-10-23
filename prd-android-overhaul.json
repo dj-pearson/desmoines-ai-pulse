@@ -472,7 +472,7 @@
       ],
       "verification": "Run the baseline with --tests '*SuspendRunCatchingTest*' (the full unit suite in the baseline must stay at or above the 340 floor). Then: grep -rn 'runCatching' android/app/src/main/java/com/desmoines/aipulse/data/repository | grep -v suspendRunCatching should list only non-suspend sites, each justified in the commit message.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-021",

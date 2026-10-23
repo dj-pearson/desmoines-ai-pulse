@@ -7,6 +7,7 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.remote.EventsRemoteDataSource
 import com.desmoines.aipulse.data.remote.EventsResponse
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 /**
@@ -32,7 +33,7 @@ class EventsRepositoryImpl @Inject constructor(
         }
 
         // Fetch from remote
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchEvents(query).also { response ->
                 cacheManager.cacheEvents(cacheKey, response.events, totalCount = response.totalCount)
             }
@@ -50,7 +51,7 @@ class EventsRepositoryImpl @Inject constructor(
             return Result.success(cached)
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchEvent(id).also { event ->
                 cacheManager.cacheEvents(CacheManager.eventsKey("single", id), listOf(event))
             }
@@ -67,7 +68,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchFeaturedEvents(limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }
@@ -88,7 +89,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchRelatedEvents(eventId, category, limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }
@@ -105,7 +106,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fuzzySearchEvents(query, limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }
@@ -127,7 +128,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchNearbyEvents(latitude, longitude, radiusMiles, limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }

@@ -5,6 +5,7 @@ import com.desmoines.aipulse.data.remote.ArticlesQuery
 import com.desmoines.aipulse.data.remote.ArticlesRemoteDataSource
 import com.desmoines.aipulse.data.remote.ArticlesResponse
 import com.desmoines.aipulse.util.QueryCache
+import com.desmoines.aipulse.util.suspendRunCatching
 import kotlinx.serialization.builtins.ListSerializer
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,7 +27,7 @@ class ArticlesRepositoryImpl @Inject constructor(
 
     override suspend fun fetchArticles(query: ArticlesQuery): Result<ArticlesResponse> {
         val isFirstPage = query.offset == 0 && query.searchText.isNullOrBlank() && query.category.isNullOrBlank()
-        val fresh = runCatching { remote.fetchArticles(query) }.getOrNull()
+        val fresh = suspendRunCatching { remote.fetchArticles(query) }.getOrNull()
         if (fresh != null) {
             if (isFirstPage) queryCache.set(CACHE_KEY, fresh.articles, serializer)
             return Result.success(fresh)
@@ -41,10 +42,10 @@ class ArticlesRepositoryImpl @Inject constructor(
     }
 
     override suspend fun fetchById(id: String): Result<Article?> =
-        runCatching { remote.fetchById(id) }
+        suspendRunCatching { remote.fetchById(id) }
 
     override suspend fun fetchCategories(): Result<List<String>> =
-        runCatching { remote.fetchCategories() }
+        suspendRunCatching { remote.fetchCategories() }
 
     private companion object {
         const val CACHE_KEY = "articles-first-page"

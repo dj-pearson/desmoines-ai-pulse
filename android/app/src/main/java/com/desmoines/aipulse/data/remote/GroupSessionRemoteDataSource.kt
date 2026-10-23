@@ -3,6 +3,7 @@ package com.desmoines.aipulse.data.remote
 import com.desmoines.aipulse.data.model.SessionParticipant
 import com.desmoines.aipulse.data.model.SwipeSession
 import com.desmoines.aipulse.data.model.SwipeSessionMatch
+import com.desmoines.aipulse.util.suspendRunCatching
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -38,7 +39,7 @@ class GroupSessionRemoteDataSource @Inject constructor(
         var lastError: Throwable? = null
         repeat(MAX_CODE_ATTEMPTS) {
             val code = randomCode()
-            val inserted = runCatching {
+            val inserted = suspendRunCatching {
                 db().from("swipe_sessions").insert(SessionInsert(code, hostUserId, mode))
             }
             if (inserted.isSuccess) {
@@ -76,7 +77,7 @@ class GroupSessionRemoteDataSource @Inject constructor(
 
     /** Adds a participant; idempotent per (session, user) via the unique index. */
     suspend fun addParticipant(sessionId: String, userId: String, displayName: String?) {
-        runCatching {
+        suspendRunCatching {
             db().from("swipe_session_participants").insert(
                 ParticipantInsert(sessionId = sessionId, userId = userId, displayName = displayName),
             )
@@ -127,7 +128,7 @@ class GroupSessionRemoteDataSource @Inject constructor(
         val byType = rows.groupBy({ it.itemType }, { it.itemId })
         val enrich = mutableMapOf<String, EntityRow>()
         byType.forEach { (type, ids) ->
-            runCatching { fetchEntities(type, ids) }.getOrNull()?.forEach { enrich[it.id] = it }
+            suspendRunCatching { fetchEntities(type, ids) }.getOrNull()?.forEach { enrich[it.id] = it }
         }
 
         return rows.map { r ->

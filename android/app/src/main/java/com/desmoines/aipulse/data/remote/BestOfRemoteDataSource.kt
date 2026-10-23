@@ -4,6 +4,7 @@ import com.desmoines.aipulse.data.model.LeaderboardEntry
 import com.desmoines.aipulse.data.model.Nominee
 import com.desmoines.aipulse.data.model.Vote
 import com.desmoines.aipulse.data.model.VotingCategory
+import com.desmoines.aipulse.util.suspendRunCatching
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -93,7 +94,7 @@ class BestOfRemoteDataSource @Inject constructor(
         val byType = grouped.values.filter { it.entityId != null }.groupBy({ it.type }, { it.entityId!! })
         val enrich = mutableMapOf<String, EntityRow>()
         byType.forEach { (type, ids) ->
-            runCatching { fetchEntities(type, ids) }.getOrNull()?.forEach { enrich[it.id] = it }
+            suspendRunCatching { fetchEntities(type, ids) }.getOrNull()?.forEach { enrich[it.id] = it }
         }
 
         return grouped.entries.map { (key, acc) ->

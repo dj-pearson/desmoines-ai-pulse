@@ -4,6 +4,7 @@ import com.desmoines.aipulse.data.model.SavedSearch
 import com.desmoines.aipulse.data.model.SavedSearchFilters
 import com.desmoines.aipulse.data.remote.SavedSearchRemoteDataSource
 import com.desmoines.aipulse.util.QueryCache
+import com.desmoines.aipulse.util.suspendRunCatching
 import kotlinx.serialization.builtins.ListSerializer
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,7 +29,7 @@ class SavedSearchRepositoryImpl @Inject constructor(
     override suspend fun fetch(userId: String?): Result<List<SavedSearch>> {
         if (userId == null) return Result.success(emptyList())
         val key = cacheKey(userId)
-        val fresh = runCatching { remote.fetch(userId) }.getOrNull()
+        val fresh = suspendRunCatching { remote.fetch(userId) }.getOrNull()
         if (fresh != null) {
             queryCache.set(key, fresh, serializer)
             return Result.success(fresh)
@@ -40,13 +41,13 @@ class SavedSearchRepositoryImpl @Inject constructor(
     }
 
     override suspend fun create(userId: String, name: String, filters: SavedSearchFilters): Result<Unit> =
-        runCatching { remote.create(userId, name, filters) }
+        suspendRunCatching { remote.create(userId, name, filters) }
 
     override suspend fun update(id: String, filters: SavedSearchFilters): Result<Unit> =
-        runCatching { remote.update(id, filters) }
+        suspendRunCatching { remote.update(id, filters) }
 
     override suspend fun delete(id: String): Result<Unit> =
-        runCatching { remote.delete(id) }
+        suspendRunCatching { remote.delete(id) }
 
     private fun cacheKey(userId: String) = "saved-searches-$userId"
 }
