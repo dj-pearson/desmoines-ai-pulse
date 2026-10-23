@@ -23,10 +23,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -102,7 +102,7 @@ fun AuthScreen(
     val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
     val isSigningUp by viewModel.isSigningUp.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
-    val showVerificationAlert by viewModel.showVerificationAlert.collectAsStateWithLifecycle()
+    val pendingConfirmationEmail by viewModel.pendingConfirmationEmail.collectAsStateWithLifecycle()
     val lockoutSeconds by viewModel.lockoutSecondsRemaining.collectAsStateWithLifecycle()
     val recoveryAction by viewModel.recoveryAction.collectAsStateWithLifecycle()
 
@@ -154,6 +154,23 @@ fun AuthScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
+        // The account exists and waits on the emailed link; the form is done.
+        val pendingEmail = pendingConfirmationEmail
+        if (pendingEmail != null) {
+            ConfirmationPendingContent(
+                email = pendingEmail,
+                onResend = { viewModel.resendVerification(pendingEmail) },
+                onBackToSignIn = {
+                    viewModel.dismissConfirmationPending()
+                    password = ""
+                    confirmPassword = ""
+                    selectedTab = 0
+                },
+                modifier = Modifier.padding(paddingValues),
+            )
+            return@Scaffold
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -483,27 +500,61 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(Dimens.SpacingXxxl))
         }
     }
+}
 
-    // Verification email alert dialog
-    if (showVerificationAlert) {
-        AlertDialog(
-            onDismissRequest = {
-                viewModel.dismissVerificationAlert()
-                onNavigateBack()
-            },
-            title = { Text("Check Your Email") },
-            text = {
-                Text("We've sent a verification link to your email. Please verify your account to continue.")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.dismissVerificationAlert()
-                    onNavigateBack()
-                }) {
-                    Text("OK")
-                }
-            },
+// MARK: - Confirmation Pending
+
+/**
+ * Shown when sign-up created the account but returned no session: the user
+ * has to open the link before they can sign in. Resend asks GoTrue for the
+ * signup mail again.
+ */
+@Composable
+private fun ConfirmationPendingContent(
+    email: String,
+    onResend: () -> Unit,
+    onBackToSignIn: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = Dimens.SpacingLg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(modifier = Modifier.height(Dimens.SpacingXxxl))
+        Icon(
+            Icons.Filled.Email,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(48.dp),
         )
+        Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+        Text(
+            text = "Check your email to confirm your account",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        Spacer(modifier = Modifier.height(Dimens.SpacingSm))
+        Text(
+            text = "We sent a confirmation link to $email. Open it, then come back and sign in.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(Dimens.SpacingXl))
+        OutlinedButton(
+            onClick = onResend,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Resend confirmation email")
+        }
+        TextButton(onClick = onBackToSignIn) {
+            Text("Back to sign in")
+        }
     }
 }
 

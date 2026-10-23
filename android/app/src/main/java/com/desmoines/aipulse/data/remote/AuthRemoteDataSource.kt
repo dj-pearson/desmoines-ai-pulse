@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.remote
 
 import com.desmoines.aipulse.util.AppLogger
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -12,6 +13,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import io.github.jan.supabase.postgrest.query.Columns
@@ -77,27 +80,43 @@ class AuthRemoteDataSource @Inject constructor(
         firstName: String?,
         lastName: String?,
         interests: List<String>?,
-    ) {
+    ): SignUpOutcome {
         val client = supabaseClient ?: throw AuthException.NotConfigured
         client.auth.signUpWith(Email) {
             this.email = email
             this.password = password
+            // handle_new_user builds the profile from this metadata when no
+            // session comes back, so it carries everything the form collected.
             this.data = buildJsonObject {
                 firstName?.let { put("first_name", it) }
                 lastName?.let { put("last_name", it) }
+                interests?.let { list -> put("interests", JsonArray(list.map(::JsonPrimitive))) }
             }
         }
 
-        // Create profile after sign-up
-        val userId = client.auth.currentUserOrNull()?.id
-            ?: throw AuthException.NoUser
-        createProfile(
-            userId = userId,
+        // No session is what email confirmation looks like, not a failure.
+        return SignUpOutcome.resolve(
             email = email,
-            firstName = firstName,
-            lastName = lastName,
-            interests = interests,
-        )
+            sessionUserId = client.auth.currentUserOrNull()?.id,
+        ) { userId ->
+            createProfile(
+                userId = userId,
+                email = email,
+                firstName = firstName,
+                lastName = lastName,
+                interests = interests,
+            )
+        }
+    }
+
+    /**
+     * Resend the sign-up confirmation mail. This is GoTrue's /resend with
+     * type=signup; it used to call resetPasswordForEmail, which mailed a
+     * password reset to someone who had never confirmed the account.
+     */
+    suspend fun resendSignUpConfirmation(email: String) {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        client.auth.resendEmail(OtpType.Email.SIGNUP, email)
     }
 
     suspend fun signOut() {

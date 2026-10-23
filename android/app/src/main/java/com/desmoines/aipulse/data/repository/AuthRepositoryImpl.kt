@@ -4,6 +4,7 @@ import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.remote.AuthRemoteDataSource
 import com.desmoines.aipulse.data.remote.CommunicationPreferences
+import com.desmoines.aipulse.data.remote.SignUpOutcome
 import com.desmoines.aipulse.util.SignOutCleaner
 import dagger.Lazy
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -37,9 +38,13 @@ class AuthRepositoryImpl @Inject constructor(
         firstName: String?,
         lastName: String?,
         interests: List<String>?,
-    ): Result<Unit> =
+    ): Result<SignUpOutcome> =
         runCatching { remoteDataSource.signUp(email, password, firstName, lastName, interests) }
             .onFailure { AppLogger.auth.warning("Sign up failed: ${it.message}") }
+
+    override suspend fun resendSignUpConfirmation(email: String): Result<Unit> =
+        runCatching { remoteDataSource.resendSignUpConfirmation(email) }
+            .onFailure { AppLogger.auth.warning("Resend confirmation failed: ${it.message}") }
 
     override suspend fun signOut(): Result<Unit> =
         runCatching { remoteDataSource.signOut() }

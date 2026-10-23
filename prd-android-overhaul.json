@@ -74,7 +74,7 @@
       ],
       "verification": "Run the baseline with --tests '*SignUpOutcomeTest*' --tests '*AuthViewModelTest*'. Then: grep -n 'resetPassword' android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthViewModel.kt must not appear in the resend-verification function.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-004",

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.model.UserRole
 import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.data.remote.SignUpOutcome
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.util.AuthErrorMapper
 import com.desmoines.aipulse.util.BiometricAuthService
@@ -59,8 +60,12 @@ class AuthViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _showVerificationAlert = MutableStateFlow(false)
-    val showVerificationAlert: StateFlow<Boolean> = _showVerificationAlert.asStateFlow()
+    /**
+     * The address a confirmation link went to, while sign-up waits on it.
+     * Non-null means the account exists but has no session yet.
+     */
+    private val _pendingConfirmationEmail = MutableStateFlow<String?>(null)
+    val pendingConfirmationEmail: StateFlow<String?> = _pendingConfirmationEmail.asStateFlow()
 
     private val _recoveryAction = MutableStateFlow<AuthErrorMapper.RecoveryAction?>(null)
     val recoveryAction: StateFlow<AuthErrorMapper.RecoveryAction?> = _recoveryAction.asStateFlow()
@@ -269,9 +274,15 @@ class AuthViewModel @Inject constructor(
                 lastName = lastName.ifEmpty { null },
                 interests = if (selectedInterests.isEmpty()) null else selectedInterests.toList(),
             )
-                .onSuccess {
-                    _showVerificationAlert.value = true
+                .onSuccess { outcome ->
                     _recoveryAction.value = null
+                    when (outcome) {
+                        // The session listener sees the new session and the
+                        // screen navigates away; nothing to show here.
+                        SignUpOutcome.SignedIn -> _pendingConfirmationEmail.value = null
+                        is SignUpOutcome.ConfirmationRequired ->
+                            _pendingConfirmationEmail.value = outcome.email
+                    }
                 }
                 .onFailure { error ->
                     val mapped = AuthErrorMapper.map(error)
@@ -361,8 +372,7 @@ class AuthViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            // Supabase resend = calling signUp again with existing email triggers resend
-            authRepository.resetPassword(email)
+            authRepository.resendSignUpConfirmation(email)
                 .onSuccess {
                     setError("Verification email resent. Check your inbox.")
                     _recoveryAction.value = null
@@ -416,8 +426,9 @@ class AuthViewModel @Inject constructor(
         _errorMessage.value = null
     }
 
-    fun dismissVerificationAlert() {
-        _showVerificationAlert.value = false
+    /** Leave the check-your-email state, back to the sign-in form. */
+    fun dismissConfirmationPending() {
+        _pendingConfirmationEmail.value = null
     }
 
     private fun setError(message: String) {
