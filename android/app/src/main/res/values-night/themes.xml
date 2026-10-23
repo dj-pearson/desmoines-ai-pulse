@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        AND-OVH-024. Dark pair for values/themes.xml. BackgroundDark (#121316)
+        from ui/theme/Color.kt, and light status-bar icons, so a dark-mode
+        launch no longer opens on a white window with dark icons.
+    -->
+    <style name="Theme.DesMoinesInsider" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.DesMoinesInsider.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launch_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.DesMoinesInsider</item>
+    </style>
+
+    <color name="launch_background">#121316</color>
+</resources>
