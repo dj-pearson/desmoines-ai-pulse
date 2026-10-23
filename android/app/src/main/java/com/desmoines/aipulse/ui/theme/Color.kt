@@ -29,16 +29,27 @@ val CategoryGeneral = Color(0xFF2196F3)        // blue
 val CardShadow = Color(0x14000000) // black 8% opacity
 
 // Light Theme
-val PrimaryLight = BrandBlue
-val OnPrimaryLight = Color.White
-val PrimaryContainerLight = Color(0xFFD6E3FF)
-val OnPrimaryContainerLight = Color(0xFF001B3E)
-val SecondaryLight = Color(0xFF565F71)
+//
+// Primary is the iOS accent, not BrandBlue. iOS tints every control with
+// AccentColor, ios/DesMoinesInsider/Resources/Assets.xcassets/AccentColor.colorset:
+// #FF6B35 light (1.000, 0.420, 0.208) and #FF7A44 dark (1.000, 0.478, 0.267).
+// White on #FF6B35 is 2.83:1 and fails WCAG AA for labels, so onPrimary is a
+// dark brown, #2B0E00: 6.36:1 on #FF6B35 and 6.97:1 on #FF7A44.
+// BrandColorTest recomputes both ratios.
+val PrimaryLight = Color(0xFFFF6B35)
+val OnPrimaryLight = Color(0xFF2B0E00)
+val PrimaryContainerLight = Color(0xFFFFDBCC)
+val OnPrimaryContainerLight = Color(0xFF351000)
+// Blue moved from primary to secondary. White on #2563EB is 5.17:1.
+val SecondaryLight = BrandBlue
 val OnSecondaryLight = Color.White
-val SecondaryContainerLight = Color(0xFFDAE2F9)
-val OnSecondaryContainerLight = Color(0xFF131C2B)
-val TertiaryLight = BrandOrange
+val SecondaryContainerLight = Color(0xFFD6E3FF)
+val OnSecondaryContainerLight = Color(0xFF001B3E)
+// Tertiary takes the neutral slate that used to be secondary.
+val TertiaryLight = Color(0xFF565F71)
 val OnTertiaryLight = Color.White
+val TertiaryContainerLight = Color(0xFFDAE2F9)
+val OnTertiaryContainerLight = Color(0xFF131C2B)
 val BackgroundLight = Color(0xFFFAFAFA)
 val OnBackgroundLight = Color(0xFF1A1C20)
 val SurfaceLight = Color.White
@@ -49,17 +60,19 @@ val OutlineLight = Color(0xFF74777F)
 val ErrorLight = Color(0xFFBA1A1A)
 val OnErrorLight = Color.White
 
-// Dark Theme
-val PrimaryDark = Color(0xFFAAC7FF)
-val OnPrimaryDark = Color(0xFF002F65)
-val PrimaryContainerDark = Color(0xFF17458E)
-val OnPrimaryContainerDark = Color(0xFFD6E3FF)
-val SecondaryDark = Color(0xFFBEC6DC)
-val OnSecondaryDark = Color(0xFF283141)
-val SecondaryContainerDark = Color(0xFF3E4759)
-val OnSecondaryContainerDark = Color(0xFFDAE2F9)
-val TertiaryDark = Color(0xFFFFB787)
-val OnTertiaryDark = Color(0xFF4E2600)
+// Dark Theme (OLED copies these; see OledColorScheme in Theme.kt)
+val PrimaryDark = Color(0xFFFF7A44)
+val OnPrimaryDark = Color(0xFF2B0E00)
+val PrimaryContainerDark = Color(0xFF7A2E0E)
+val OnPrimaryContainerDark = Color(0xFFFFDBCC)
+val SecondaryDark = Color(0xFFAAC7FF)
+val OnSecondaryDark = Color(0xFF002F65)
+val SecondaryContainerDark = Color(0xFF17458E)
+val OnSecondaryContainerDark = Color(0xFFD6E3FF)
+val TertiaryDark = Color(0xFFBEC6DC)
+val OnTertiaryDark = Color(0xFF283141)
+val TertiaryContainerDark = Color(0xFF3E4759)
+val OnTertiaryContainerDark = Color(0xFFDAE2F9)
 val BackgroundDark = Color(0xFF121316)
 val OnBackgroundDark = Color(0xFFE2E2E6)
 val SurfaceDark = Color(0xFF1A1C20)

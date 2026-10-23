@@ -27,7 +27,7 @@ enum class ThemeMode {
     Oled,
 }
 
-private val LightColorScheme = lightColorScheme(
+internal val LightColorScheme = lightColorScheme(
     primary = PrimaryLight,
     onPrimary = OnPrimaryLight,
     primaryContainer = PrimaryContainerLight,
@@ -38,6 +38,8 @@ private val LightColorScheme = lightColorScheme(
     onSecondaryContainer = OnSecondaryContainerLight,
     tertiary = TertiaryLight,
     onTertiary = OnTertiaryLight,
+    tertiaryContainer = TertiaryContainerLight,
+    onTertiaryContainer = OnTertiaryContainerLight,
     background = BackgroundLight,
     onBackground = OnBackgroundLight,
     surface = SurfaceLight,
@@ -49,7 +51,7 @@ private val LightColorScheme = lightColorScheme(
     onError = OnErrorLight
 )
 
-private val DarkColorScheme = darkColorScheme(
+internal val DarkColorScheme = darkColorScheme(
     primary = PrimaryDark,
     onPrimary = OnPrimaryDark,
     primaryContainer = PrimaryContainerDark,
@@ -60,6 +62,8 @@ private val DarkColorScheme = darkColorScheme(
     onSecondaryContainer = OnSecondaryContainerDark,
     tertiary = TertiaryDark,
     onTertiary = OnTertiaryDark,
+    tertiaryContainer = TertiaryContainerDark,
+    onTertiaryContainer = OnTertiaryContainerDark,
     background = BackgroundDark,
     onBackground = OnBackgroundDark,
     surface = SurfaceDark,
@@ -75,8 +79,10 @@ private val DarkColorScheme = darkColorScheme(
  * OLED true-black color scheme for eye comfort on OLED devices.
  * Background is pure #000000 with elevated surface layers stepping
  * #0A0A0A → #141414 → #1C1C1C. Mirrors iOS OLED palette in PremiumTokens.swift.
+ * Primary, secondary, tertiary and their containers are inherited from the
+ * dark scheme, so the orange accent is the same in Dark and OLED.
  */
-private val OledColorScheme = DarkColorScheme.copy(
+internal val OledColorScheme = DarkColorScheme.copy(
     background = Color(0xFF000000),
     onBackground = Color(0xFFEDEDED),
     surface = Color(0xFF0A0A0A),
@@ -86,10 +92,15 @@ private val OledColorScheme = DarkColorScheme.copy(
     outline = Color(0xFF2A2A2A),
 )
 
+/**
+ * [dynamicColor] defaults to false: Material You would replace the brand
+ * accent with wallpaper colors on every Android 12+ phone, and iOS always
+ * shows the AccentColor. Leave it off unless a screen deliberately opts in.
+ */
 @Composable
 fun DesMoinesInsiderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     themeMode: ThemeMode = ThemeMode.System,
     content: @Composable () -> Unit
 ) {

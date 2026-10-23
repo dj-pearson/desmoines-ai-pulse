@@ -547,7 +547,7 @@
       ],
       "verification": "Run the baseline with --tests '*BrandColorTest*'. Then grep -n 'dynamicColor: Boolean = true' android/app/src/main/java/com/desmoines/aipulse/ui/theme/Theme.kt must return nothing.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-024",
