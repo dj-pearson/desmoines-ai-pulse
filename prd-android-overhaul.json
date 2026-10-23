@@ -48,7 +48,7 @@
       ],
       "verification": "Run the baseline with --tests '*AskPulseLocationConsentTest*' --tests '*DiscoverChatResponseTest*'. Then: grep -rn 'locationConsent' android/app/src/main/java/com/desmoines/aipulse/data/repository/AskPulseRepository.kt must return at least one line.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-003",
