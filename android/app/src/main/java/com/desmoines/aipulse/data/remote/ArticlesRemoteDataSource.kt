@@ -61,9 +61,10 @@ class ArticlesRemoteDataSource @Inject constructor(
         )
     }
 
+    /** By id, or by the `slug` column for an /articles/:slug web link (AND-OVH-022). */
     suspend fun fetchById(id: String): Article? =
         db().from("articles").select {
-            filter { eq("id", id) }
+            filter { eq(SlugLookup.column(id), id) }
             limit(1L)
         }.decodeSingleOrNull<Article>()
 

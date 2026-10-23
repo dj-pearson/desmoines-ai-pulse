@@ -229,6 +229,8 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
         val viewModel: AttractionDetailViewModel = hiltViewModel()
         val attraction by viewModel.attraction.collectAsStateWithLifecycle()
         val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+        val attractionError by viewModel.errorMessage.collectAsStateWithLifecycle()
+        val attractionNotFound by viewModel.isNotFound.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(attractionId) {
@@ -261,6 +263,16 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
             },
             onNavigateToSubscription = { navController.navigate(Route.Subscription.route) },
             onNavigateToAuth = { navController.navigate(Route.Auth.route) },
+            errorMessage = attractionError,
+            isNotFound = attractionNotFound,
+            onRetry = { viewModel.retry() },
+            // In the app's web view: an ACTION_VIEW on desmoinesinsider.com is
+            // an App Link and would bounce straight back to this screen.
+            onOpenOnWeb = {
+                viewModel.webUrl()?.let { url ->
+                    navController.navigate(Route.WebView.createRoute(url)) { launchSingleTop = true }
+                }
+            },
         )
     }
 }
