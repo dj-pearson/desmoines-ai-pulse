@@ -124,9 +124,24 @@ class AuthRemoteDataSource @Inject constructor(
         client.auth.signOut()
     }
 
+    /**
+     * Mail a reset link that comes back to this app (AND-OVH-006). Without a
+     * redirect GoTrue sent the link to the Site URL, so the reset finished on
+     * the website and the app never saw it. The redirect lands on
+     * AuthCallbackRouter as a Recovery callback; it must stay on the hosted
+     * project's redirect allowlist, which iOS shares (same scheme).
+     */
     suspend fun resetPassword(email: String) {
         val client = supabaseClient ?: throw AuthException.NotConfigured
-        client.auth.resetPasswordForEmail(email)
+        client.auth.resetPasswordForEmail(email, redirectUrl = RECOVERY_REDIRECT_URL)
+    }
+
+    /** Set a new password for the signed-in user, normally a recovery session. */
+    suspend fun updatePassword(newPassword: String) {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        client.auth.updateUser {
+            password = newPassword
+        }
     }
 
     // MARK: - Google Sign-In
@@ -295,6 +310,11 @@ class AuthRemoteDataSource @Inject constructor(
 
     @Serializable
     private data class RoleRow(val role: String)
+
+    companion object {
+        /** Where a password-reset email sends the user back to. */
+        const val RECOVERY_REDIRECT_URL = "com.desmoines.aipulse://auth-callback?flow=recovery"
+    }
 }
 
 /**

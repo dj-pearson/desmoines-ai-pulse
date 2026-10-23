@@ -113,6 +113,12 @@ class AuthCallbackNotices internal constructor(dispatcher: CoroutineDispatcher) 
 
         /** The link was refused: show [message] where it can't be missed. */
         data class Failed(val message: String) : Notice
+
+        /** A reset link signed the user in: hold them on SetNewPassword. */
+        data object PasswordRecovery : Notice
+
+        /** The new password was saved: show [message] in a snackbar. */
+        data class PasswordUpdated(val message: String) : Notice
     }
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -136,11 +142,15 @@ class AuthCallbackNotices internal constructor(dispatcher: CoroutineDispatcher) 
      * the link came from an older sign-up attempt) becomes a [Notice.Failed]
      * rather than an exception.
      */
-    fun exchange(code: String, successMessage: String, exchange: suspend (String) -> Unit) {
+    fun exchange(code: String, successMessage: String, exchange: suspend (String) -> Unit) =
+        this.exchange(code, Notice.SignedIn(successMessage), exchange)
+
+    /** As above, posting [onSuccess] when the exchange succeeds. */
+    fun exchange(code: String, onSuccess: Notice, exchange: suspend (String) -> Unit) {
         scope.launch {
             try {
                 exchange(code)
-                post(Notice.SignedIn(successMessage))
+                post(onSuccess)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -152,8 +162,7 @@ class AuthCallbackNotices internal constructor(dispatcher: CoroutineDispatcher) 
 
     companion object {
         const val CONFIRMED_MESSAGE = "Email confirmed. You're signed in."
-        const val RECOVERY_MESSAGE =
-            "You're signed in from your reset link. Set a new password on desmoinesinsider.com."
+        const val PASSWORD_UPDATED_MESSAGE = "Password updated. You're signed in."
         const val EXCHANGE_FAILED_MESSAGE =
             "We couldn't finish signing you in from that link. It may have expired or been " +
                 "opened on a different device. Sign in with your email and password instead."

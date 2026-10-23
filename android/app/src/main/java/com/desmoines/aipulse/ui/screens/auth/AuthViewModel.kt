@@ -176,22 +176,7 @@ class AuthViewModel @Inject constructor(
         return email.matches(Regex(pattern))
     }
 
-    fun passwordStrength(password: String): PasswordStrength {
-        if (password.isEmpty()) return PasswordStrength.NONE
-        var score = 0
-        if (password.length >= 8) score++
-        if (password.length >= 12) score++
-        if (password.contains(Regex("[A-Z]"))) score++
-        if (password.contains(Regex("[a-z]"))) score++
-        if (password.contains(Regex("[0-9]"))) score++
-        if (password.contains(Regex("[^A-Za-z0-9]"))) score++
-
-        return when {
-            score <= 2 -> PasswordStrength.WEAK
-            score <= 4 -> PasswordStrength.MEDIUM
-            else -> PasswordStrength.STRONG
-        }
-    }
+    fun passwordStrength(password: String): PasswordStrength = strengthOf(password)
 
     fun passwordsMatch(password: String, confirmPassword: String): Boolean {
         return confirmPassword.isEmpty() || password == confirmPassword
@@ -472,6 +457,24 @@ class AuthViewModel @Inject constructor(
     }
 
     companion object {
+        /** Shared with SetNewPasswordViewModel so both forms score alike. */
+        fun strengthOf(password: String): PasswordStrength {
+            if (password.isEmpty()) return PasswordStrength.NONE
+            var score = 0
+            if (password.length >= 8) score++
+            if (password.length >= 12) score++
+            if (password.contains(Regex("[A-Z]"))) score++
+            if (password.contains(Regex("[a-z]"))) score++
+            if (password.contains(Regex("[0-9]"))) score++
+            if (password.contains(Regex("[^A-Za-z0-9]"))) score++
+
+            return when {
+                score <= 2 -> PasswordStrength.WEAK
+                score <= 4 -> PasswordStrength.MEDIUM
+                else -> PasswordStrength.STRONG
+            }
+        }
+
         val availableInterests = listOf(
             "Food", "Music", "Sports", "Arts",
             "Nightlife", "Outdoor", "Family", "Business",

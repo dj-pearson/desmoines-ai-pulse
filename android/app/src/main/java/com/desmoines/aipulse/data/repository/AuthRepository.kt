@@ -41,6 +41,9 @@ interface AuthRepository {
     /** Send password reset email. */
     suspend fun resetPassword(email: String): Result<Unit>
 
+    /** Set a new password for the signed-in (recovery) session. */
+    suspend fun updatePassword(newPassword: String): Result<Unit>
+
     /** Sign in with Google ID token. */
     suspend fun signInWithGoogle(idToken: String): Result<Unit>
 

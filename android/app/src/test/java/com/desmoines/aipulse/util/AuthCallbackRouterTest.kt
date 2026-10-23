@@ -149,6 +149,17 @@ class AuthCallbackRouterTest {
     }
 
     @Test
+    fun `a successful recovery exchange posts PasswordRecovery, not SignedIn`() = runBlocking {
+        // AND-OVH-006: a reset link must land on SetNewPassword, not on Home.
+        val notices = AuthCallbackNotices(UnconfinedTestDispatcher())
+
+        notices.exchange("reset-code", AuthCallbackNotices.Notice.PasswordRecovery) {}
+
+        val notice = withTimeout(5_000) { notices.pending.filterNotNull().first() }
+        assertEquals(AuthCallbackNotices.Notice.PasswordRecovery, notice)
+    }
+
+    @Test
     fun `consume clears the pending notice`() {
         val notices = AuthCallbackNotices(UnconfinedTestDispatcher())
         notices.post(AuthCallbackNotices.Notice.Failed("x"))

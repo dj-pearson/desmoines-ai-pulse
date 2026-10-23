@@ -51,6 +51,7 @@ import com.desmoines.aipulse.util.AuthCallbackRouter
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.OnboardingPreferences
+import com.desmoines.aipulse.util.PasswordRecoveryGate
 import com.desmoines.aipulse.util.PushNotificationService
 import com.desmoines.aipulse.util.RootDetector
 import com.desmoines.aipulse.util.ShortcutDispatcher
@@ -92,6 +93,9 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var authCallbackNotices: AuthCallbackNotices
+
+    @Inject
+    lateinit var passwordRecoveryGate: PasswordRecoveryGate
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -292,6 +296,7 @@ class MainActivity : FragmentActivity() {
                             deepLinkHandler = deepLinkHandler,
                             shortcutDispatcher = shortcutDispatcher,
                             authCallbackNotices = authCallbackNotices,
+                            passwordRecoveryGate = passwordRecoveryGate,
                             widthSizeClass = windowSizeClass.widthSizeClass
                         )
                     }
@@ -366,13 +371,16 @@ class MainActivity : FragmentActivity() {
         intent.data = null
         if (isRestore) return true
 
-        val (code, successMessage) = when (callback) {
+        // A reset link (AND-OVH-006) does not go to Home: once its session is
+        // established MainScreen holds the user on SetNewPassword.
+        val (code, onSuccess) = when (callback) {
             is AuthCallback.Error -> {
                 authCallbackNotices.post(AuthCallbackNotices.Notice.Failed(callback.message))
                 return true
             }
-            is AuthCallback.Confirmation -> callback.code to AuthCallbackNotices.CONFIRMED_MESSAGE
-            is AuthCallback.Recovery -> callback.code to AuthCallbackNotices.RECOVERY_MESSAGE
+            is AuthCallback.Confirmation ->
+                callback.code to AuthCallbackNotices.Notice.SignedIn(AuthCallbackNotices.CONFIRMED_MESSAGE)
+            is AuthCallback.Recovery -> callback.code to AuthCallbackNotices.Notice.PasswordRecovery
             AuthCallback.NotAuth -> return false
         }
 
@@ -384,7 +392,7 @@ class MainActivity : FragmentActivity() {
             code == null -> authCallbackNotices.post(
                 AuthCallbackNotices.Notice.Failed(AuthCallbackNotices.MISSING_CODE_MESSAGE),
             )
-            else -> authCallbackNotices.exchange(code, successMessage) {
+            else -> authCallbackNotices.exchange(code, onSuccess) {
                 client.auth.exchangeCodeForSession(it)
             }
         }

@@ -48,6 +48,7 @@ sealed class Route(val route: String) {
 
     // Auth & flow routes
     data object Auth : Route("auth")
+    data object SetNewPassword : Route("set_new_password")
     data object Onboarding : Route("onboarding")
     data object Subscription : Route("subscription")
     data object Settings : Route("settings")

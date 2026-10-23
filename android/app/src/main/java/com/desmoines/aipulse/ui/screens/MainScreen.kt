@@ -62,6 +62,7 @@ import com.desmoines.aipulse.ui.navigation.Route
 import com.desmoines.aipulse.util.AuthCallbackNotices
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.PasswordRecoveryGate
 import com.desmoines.aipulse.util.ShortcutDispatcher
 import kotlinx.coroutines.launch
 
@@ -77,6 +78,7 @@ fun MainScreen(
     deepLinkHandler: DeepLinkHandler,
     shortcutDispatcher: ShortcutDispatcher,
     authCallbackNotices: AuthCallbackNotices,
+    passwordRecoveryGate: PasswordRecoveryGate,
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
 ) {
     val useNavRail = widthSizeClass != WindowWidthSizeClass.Compact
@@ -191,6 +193,26 @@ fun MainScreen(
                 snackbarScope.launch { snackbarHostState.showSnackbar(notice.message) }
             }
             is AuthCallbackNotices.Notice.Failed -> authCallbackFailure = notice.message
+            // The effect below does the navigating, so a deep link or a
+            // rotation can't strand the user off the screen.
+            AuthCallbackNotices.Notice.PasswordRecovery -> passwordRecoveryGate.require()
+            is AuthCallbackNotices.Notice.PasswordUpdated ->
+                snackbarScope.launch { snackbarHostState.showSnackbar(notice.message) }
+        }
+    }
+
+    // Password reset (AND-OVH-006). While a reset link's session is waiting on
+    // a new password, every destination bounces back to SetNewPassword with the
+    // back stack cleared, so neither Back nor a deep link nor a tab leads away
+    // from it. Saving the password or signing out clears the gate.
+    val passwordRecoveryRequired by passwordRecoveryGate.required.collectAsStateWithLifecycle()
+    val currentRoute = currentDestination?.route
+    LaunchedEffect(passwordRecoveryRequired, currentRoute) {
+        if (passwordRecoveryRequired && currentRoute != null && currentRoute != Route.SetNewPassword.route) {
+            navController.navigate(Route.SetNewPassword.route) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
         }
     }
 

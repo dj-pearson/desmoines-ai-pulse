@@ -47,6 +47,7 @@ import com.desmoines.aipulse.ui.screens.bestof.BestOfViewModel
 import com.desmoines.aipulse.ui.screens.bestof.BestOfCategoryScreen
 import com.desmoines.aipulse.ui.screens.bestof.BestOfCategoryViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
+import com.desmoines.aipulse.ui.screens.auth.SetNewPasswordScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.screens.profile.ProfileViewModel
 import com.desmoines.aipulse.ui.screens.profile.SettingsScreen
@@ -67,7 +68,29 @@ import com.desmoines.aipulse.ui.screens.subscription.SubscriptionViewModel
 internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostController) {
     composable(Route.Auth.route) {
         AuthScreen(
-            onNavigateBack = { navController.popBackStack() },
+            // Only while Auth is on top. A reset link signs the user in while
+            // this screen is open, and its "signed in, go back" would otherwise
+            // pop the SetNewPassword screen that just replaced it (AND-OVH-006).
+            onNavigateBack = {
+                if (navController.currentDestination?.route == Route.Auth.route) {
+                    navController.popBackStack()
+                }
+            },
+        )
+    }
+
+    // Reached only through PasswordRecoveryGate (MainScreen), never navigated
+    // to by a button. Both ways out replace it with Home so Back can't return.
+    composable(Route.SetNewPassword.route) {
+        val leaveToHome: () -> Unit = {
+            navController.navigate(Route.Home.route) {
+                popUpTo(Route.SetNewPassword.route) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+        SetNewPasswordScreen(
+            onPasswordSet = leaveToHome,
+            onSignedOut = leaveToHome,
         )
     }
 

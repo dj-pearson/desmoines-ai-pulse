@@ -5,6 +5,7 @@ import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.remote.AuthRemoteDataSource
 import com.desmoines.aipulse.data.remote.CommunicationPreferences
 import com.desmoines.aipulse.data.remote.SignUpOutcome
+import com.desmoines.aipulse.util.PasswordRecoveryGate
 import com.desmoines.aipulse.util.SignOutCleaner
 import dagger.Lazy
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -20,6 +21,7 @@ class AuthRepositoryImpl @Inject constructor(
     private val remoteDataSource: AuthRemoteDataSource,
     // Lazy breaks the DI cycle (cleaner → swipe/ad services → AuthRepository).
     private val signOutCleaner: Lazy<SignOutCleaner>,
+    private val passwordRecoveryGate: PasswordRecoveryGate,
 ) : AuthRepository {
 
     override val sessionStatus: Flow<SessionStatus>?
@@ -50,11 +52,19 @@ class AuthRepositoryImpl @Inject constructor(
         runCatching { remoteDataSource.signOut() }
             .onFailure { AppLogger.auth.warning("Sign out failed: ${it.message}") }
             // Always tear down local state, even if the remote sign-out failed.
-            .also { signOutCleaner.get().tearDown() }
+            .also {
+                signOutCleaner.get().tearDown()
+                // Signing out is the other way off the set-new-password screen.
+                passwordRecoveryGate.clear()
+            }
 
     override suspend fun resetPassword(email: String): Result<Unit> =
         runCatching { remoteDataSource.resetPassword(email) }
             .onFailure { AppLogger.auth.warning("Reset password failed: ${it.message}") }
+
+    override suspend fun updatePassword(newPassword: String): Result<Unit> =
+        runCatching { remoteDataSource.updatePassword(newPassword) }
+            .onFailure { AppLogger.auth.warning("Update password failed: ${it.message}") }
 
     override suspend fun signInWithGoogle(idToken: String): Result<Unit> =
         runCatching { remoteDataSource.signInWithGoogle(idToken) }

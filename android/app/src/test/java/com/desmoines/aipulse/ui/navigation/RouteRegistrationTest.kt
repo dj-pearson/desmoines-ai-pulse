@@ -149,6 +149,21 @@ class RouteRegistrationTest {
     }
 
     @Test
+    fun `the password-reset screen is declared and registered`() {
+        // AND-OVH-006. MainScreen navigates here from PasswordRecoveryGate, not
+        // from a button, so nothing else would notice it going missing until a
+        // reset link crashed on "destination cannot be found".
+        assertTrue(
+            declaredRoutes().any { it.name == "SetNewPassword" },
+            "Route.SetNewPassword is not declared in NavGraph.kt.",
+        )
+        assertTrue(
+            "SetNewPassword" in registeredRouteNames(),
+            "Route.SetNewPassword is declared but never passed to composable().",
+        )
+    }
+
+    @Test
     fun `navigation still goes through the sealed class`() {
         // Zero raw-string navigate() calls today. That is what makes route names
         // a compile-time concern, and it is worth keeping true.
