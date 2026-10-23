@@ -119,10 +119,14 @@ class MainActivity : FragmentActivity() {
             }
         })
 
-        // Handle deep link from the launch intent. A restored activity gets the
-        // launch intent back from the system, not the copy we cleared, so an
-        // auth callback is only acted on for a fresh launch.
-        handleDeepLinkIntent(intent, isRestore = savedInstanceState != null)
+        // Handle deep link from the launch intent, on a fresh launch only
+        // (AND-OVH-021). A recreated activity (rotation, process death) gets
+        // the launch intent back from the system, not the copy we cleared, so
+        // re-handling it here pushed the same detail screen again on every
+        // rotation and replayed an auth callback whose code was already spent.
+        if (savedInstanceState == null) {
+            handleDeepLinkIntent(intent)
+        }
 
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
@@ -336,7 +340,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun handleDeepLinkIntent(intent: Intent, isRestore: Boolean = false) {
+    private fun handleDeepLinkIntent(intent: Intent) {
         // App Shortcut / Assistant deep links take priority (ANDP-015). Clear the
         // data once handled so it isn't re-applied on configuration change.
         if (shortcutDispatcher.handleIntent(intent)) {
@@ -344,10 +348,14 @@ class MainActivity : FragmentActivity() {
             return
         }
 
-        if (handleAuthCallback(intent, isRestore)) return
+        if (handleAuthCallback(intent)) return
 
-        // Notification tap extras first, then URI deep link
-        deepLinkHandler.handleIntent(intent)
+        // Notification tap extras first, then URI deep link. Clear the data
+        // once handled, as above, so nothing that re-reads this intent applies
+        // the link twice.
+        if (deepLinkHandler.handleIntent(intent)) {
+            intent.data = null
+        }
     }
 
     /**
@@ -365,11 +373,10 @@ class MainActivity : FragmentActivity() {
      * The intent data is cleared afterwards so a rotation can't replay the
      * exchange with a code that has already been spent.
      */
-    private fun handleAuthCallback(intent: Intent, isRestore: Boolean): Boolean {
+    private fun handleAuthCallback(intent: Intent): Boolean {
         val callback = AuthCallbackRouter.classify(intent.data?.toString())
         if (callback == AuthCallback.NotAuth) return false
         intent.data = null
-        if (isRestore) return true
 
         // A reset link (AND-OVH-006) does not go to Home: once its session is
         // established MainScreen holds the user on SetNewPassword.

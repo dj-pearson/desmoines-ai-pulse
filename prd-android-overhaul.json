@@ -497,7 +497,7 @@
       ],
       "verification": "Run the baseline with --tests '*DeepLinkManifestParityTest*'. Then dispatch android-ci.yml on fix/android-overhaul. The pixel6api34DebugAndroidTest step (which runs DeepLinkHandlerTest) must be green. grep -n 'host.contains\\|contains(\"desmoinesinsider' android/app/src/main/java/com/desmoines/aipulse/util/DeepLinkHandler.kt must return nothing.",
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "AND-OVH-022",

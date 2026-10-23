@@ -11,6 +11,7 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.ShortcutDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -57,6 +58,7 @@ class SearchViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val attractionsRepository: AttractionsRepository,
     private val shortcutDispatcher: ShortcutDispatcher,
+    private val deepLinkHandler: DeepLinkHandler,
 ) : ViewModel() {
 
     private val _searchText = MutableStateFlow("")
@@ -92,6 +94,16 @@ class SearchViewModel @Inject constructor(
     private var searchJob: Job? = null
 
     init {
+        // A /search?q= link (AND-OVH-021): run its query once this screen
+        // exists, then consume it so returning to the tab does not re-run it.
+        viewModelScope.launch {
+            deepLinkHandler.pendingSearchQuery.collect { query ->
+                if (query != null) {
+                    deepLinkHandler.consumeSearchQuery()
+                    onSearchTextChanged(query)
+                }
+            }
+        }
         // App Shortcut / Assistant deep links (ANDP-015): apply pre-filled
         // restaurant/event searches once this screen exists, then consume so the
         // payload isn't re-applied.

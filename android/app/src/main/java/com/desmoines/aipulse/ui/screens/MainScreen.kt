@@ -133,24 +133,55 @@ fun MainScreen(
         val destination = deepLinkHandler.consumeDestination() ?: return@LaunchedEffect
 
         when (destination) {
+            // Ids may be web slugs (LinkId.isUuid false); the detail screens
+            // resolve them (AND-OVH-022).
             is DeepLinkHandler.Destination.Event -> {
-                navController.navigate(Route.EventDetail.createRoute(destination.id)) {
+                navController.navigate(Route.EventDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
                 }
             }
             is DeepLinkHandler.Destination.Restaurant -> {
-                navController.navigate(Route.RestaurantDetail.createRoute(destination.id)) {
+                navController.navigate(Route.RestaurantDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
                 }
             }
             is DeepLinkHandler.Destination.Attraction -> {
-                navController.navigate(Route.AttractionDetail.createRoute(destination.id)) {
+                navController.navigate(Route.AttractionDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
                 }
             }
             is DeepLinkHandler.Destination.Hotel -> {
-                navController.navigate(Route.HotelDetail.createRoute(destination.id)) {
+                navController.navigate(Route.HotelDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Article -> {
+                navController.navigate(Route.ArticleDetail.createRoute(destination.id.value)) {
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Screen -> {
+                val screenRoute = when (destination.screen) {
+                    DeepLinkHandler.ScreenDestination.WEEKEND -> Route.Weekend.route
+                    DeepLinkHandler.ScreenDestination.HOTELS -> Route.Hotels.route
+                    DeepLinkHandler.ScreenDestination.ARTICLES -> Route.Articles.route
+                }
+                navController.navigate(screenRoute) { launchSingleTop = true }
+            }
+            is DeepLinkHandler.Destination.Web -> {
+                navController.navigate(Route.WebView.createRoute(destination.url)) {
+                    launchSingleTop = true
+                }
+            }
+            // The query itself waits in DeepLinkHandler.pendingSearchQuery
+            // until SearchViewModel picks it up.
+            is DeepLinkHandler.Destination.Search -> {
+                navController.navigate(Route.Search.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
                 }
             }
             is DeepLinkHandler.Destination.Tab -> {
