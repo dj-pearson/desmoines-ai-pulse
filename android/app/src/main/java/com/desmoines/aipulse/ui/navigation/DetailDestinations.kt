@@ -4,6 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -53,6 +56,18 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
                 android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
                 viewModel.clearFavoriteError()
             }
+        }
+
+        // Reminders are local notifications, so on API 33+ they need
+        // POST_NOTIFICATIONS before the first one is scheduled. Asked here rather
+        // than in the ViewModel because only the UI can show the system dialog.
+        val isReminderSet by viewModel.isReminderSet.collectAsStateWithLifecycle()
+        val showReminderButton by viewModel.showReminderButton.collectAsStateWithLifecycle()
+        val reminderMessage by viewModel.reminderMessage.collectAsStateWithLifecycle()
+        val reminderPermission = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted) viewModel.toggleReminder() else viewModel.onNotificationPermissionDenied()
         }
 
         EventDetailScreen(
@@ -109,6 +124,20 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
                 com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, url)
             },
             onNavigateToAuth = { navController.navigate(Route.Auth.route) },
+            isReminderSet = isReminderSet,
+            showReminderButton = showReminderButton,
+            reminderMessage = reminderMessage,
+            onToggleReminder = {
+                val needsPermission = !isReminderSet &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    !com.desmoines.aipulse.util.PushNotificationService.hasNotificationPermission(context)
+                if (needsPermission) {
+                    reminderPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    viewModel.toggleReminder()
+                }
+            },
+            onReminderMessageShown = { viewModel.clearReminderMessage() },
         )
     }
 
@@ -200,6 +229,8 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
         val viewModel: AttractionDetailViewModel = hiltViewModel()
         val attraction by viewModel.attraction.collectAsStateWithLifecycle()
         val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+        val attractionError by viewModel.errorMessage.collectAsStateWithLifecycle()
+        val attractionNotFound by viewModel.isNotFound.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(attractionId) {
@@ -232,6 +263,16 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
             },
             onNavigateToSubscription = { navController.navigate(Route.Subscription.route) },
             onNavigateToAuth = { navController.navigate(Route.Auth.route) },
+            errorMessage = attractionError,
+            isNotFound = attractionNotFound,
+            onRetry = { viewModel.retry() },
+            // In the app's web view: an ACTION_VIEW on desmoinesinsider.com is
+            // an App Link and would bounce straight back to this screen.
+            onOpenOnWeb = {
+                viewModel.webUrl()?.let { url ->
+                    navController.navigate(Route.WebView.createRoute(url)) { launchSingleTop = true }
+                }
+            },
         )
     }
 }

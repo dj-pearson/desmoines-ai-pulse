@@ -4729,6 +4729,7 @@ export type Database = {
           seo_description: string | null
           seo_h1: string | null
           seo_keywords: string[] | null
+          seo_locked_at: string | null
           seo_title: string | null
           source: string | null
           source_url: string | null
@@ -4791,6 +4792,7 @@ export type Database = {
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
+          seo_locked_at?: string | null
           seo_title?: string | null
           source?: string | null
           source_url?: string | null
@@ -4853,6 +4855,7 @@ export type Database = {
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
+          seo_locked_at?: string | null
           seo_title?: string | null
           source?: string | null
           source_url?: string | null
@@ -7932,6 +7935,7 @@ export type Database = {
           seo_description: string | null
           seo_h1: string | null
           seo_keywords: string[] | null
+          seo_locked_at: string | null
           seo_title: string | null
           slug: string | null
           source_url: string | null
@@ -7986,6 +7990,7 @@ export type Database = {
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
+          seo_locked_at?: string | null
           seo_title?: string | null
           slug?: string | null
           source_url?: string | null
@@ -8040,6 +8045,7 @@ export type Database = {
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
+          seo_locked_at?: string | null
           seo_title?: string | null
           slug?: string | null
           source_url?: string | null

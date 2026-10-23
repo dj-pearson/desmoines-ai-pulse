@@ -2,11 +2,11 @@
 
 **App**: Des Moines Insider
 **Package**: `com.desmoines.aipulse`
-**Version**: 1.0.0 (versionCode 1)
+**Version**: versionName from `android/app/build.gradle.kts`; versionCode is set from Play max + 1 at release; see android-release.yml
 **AAB**: `android/app/release/app-release.aab`
 **Category**: Travel & Local
 **Target SDK**: 35 / Min SDK: 26
-**Last updated**: 2026-04-21
+**Last updated**: 2026-10-23
 
 ---
 
@@ -33,7 +33,7 @@ Items marked **[BLOCKING]** will stop Google review until completed.
 | Default language | English (United States) – en-US |
 | App or game | App |
 | Free or paid | Free (with in-app subscriptions) |
-| Declaration – contains ads | No |
+| Declaration - contains ads | Yes (first-party campaign ads, no ad SDK; see 3.3) |
 
 ---
 
@@ -60,14 +60,25 @@ Every row below must be completed before Google will review a production release
 
 ### 3.2 App access
 - Selection: **All or some functionality is restricted**
-- Reason: Login required for Favorites, Profile, and Subscriptions
-- **Reviewer credentials to provide**:
-  - Email: `_______________________` (create a dedicated test account)
-  - Password: `_______________________`
-  - Instructions: "Launch app → tap Profile tab → Sign in with the provided email and password. Favorites, subscription tier, and settings will be visible."
+- Reason: sign-in is required for Favorites, Profile, saved searches and Subscriptions; Insider-tier features (unlimited favorites, Trip Planner, advanced filters, ad-free) need an active Insider entitlement.
+- **Reviewer credentials.** Never write the values into this file, a commit, or a PR. They live in Infisical, `prod` environment, and are pasted from there into Play Console:
+
+| Account | Purpose | Where the credentials are stored |
+|---|---|---|
+| Reviewer (free tier) | Sign-in, Favorites, Profile, the free-tier ads | Infisical `prod`: `PLAY_REVIEWER_EMAIL`, `PLAY_REVIEWER_PASSWORD` (to create) |
+| Reviewer (Insider tier) | Insider features and the ad-free state | Infisical `prod`: `PLAY_REVIEWER_INSIDER_EMAIL`, `PLAY_REVIEWER_INSIDER_PASSWORD` (to create) |
+
+  Both are dedicated email/password Supabase accounts, not anyone's personal or Google account (a reviewer can't be handed a Google Sign-In). The Insider account needs an active Insider entitlement before submission; check it on the app's Subscription screen after signing in.
+- Instructions to paste: "Launch the app, tap the Profile tab, choose Sign in, and enter the email and password provided. The first account is free tier and shows first-party sponsored content. The second account is Insider tier: unlimited favorites and the Trip Planner, with no ads."
 
 ### 3.3 Ads
-- Selection: **No, my app does not contain ads**
+- Selection: **Yes, my app contains ads (first-party campaign ads, no ad SDK)**
+- The app serves its own advertisers' campaigns from the Supabase backend (`get_active_ads`, sponsored picks). There is no AdMob or other ad network SDK, and no Advertising ID is read (see 3.9). Free tier only: `CampaignAdService.fetchAd` and `InterstitialAdService` return nothing for Insider and VIP.
+- Where the ads are mounted in the binary (paths under `android/app/src/main/java/com/desmoines/aipulse/`):
+  - `AdSlot` (`ui/components/ads/AdSlot.kt`), mounted twice in `ui/screens/home/HomeScreen.kt` at the `below_fold` placement
+  - `InterstitialAdView` (`ui/components/ads/InterstitialAdView.kt`), mounted in `ui/screens/MainScreen.kt` and capped by `InterstitialFrequencyGate`
+  - `SponsoredPickSlot` (`ui/components/ads/SponsoredPickSlot.kt`), mounted in `ui/screens/askpulse/AskPulseScreen.kt` and `ui/screens/surpriseme/SurpriseMeScreen.kt`
+- Answering "No" while these ship is a mismatch the reviewer sees on the first launch of a free account.
 
 ### 3.4 Content rating (IARC questionnaire)
 Answers for the questionnaire — expect IARC to return **Everyone (3+)**:
@@ -97,33 +108,42 @@ Answers for the questionnaire — expect IARC to return **Everyone (3+)**:
 - **No**
 
 ### 3.8 Data safety form
-Complete this in Play Console. Declarations based on current dependencies (Supabase Auth, Google Sign-In, Google Play Billing, Google Maps, Firebase Messaging):
+Complete this in Play Console. The declarations follow what the binary sends: Supabase (Auth, Postgres, Edge Functions), Google Sign-In, Google Play Billing, Google Maps, Firebase Cloud Messaging and Firebase Analytics. There is no Crashlytics and no ad SDK.
+
+"Shared" uses Play's definition, under which data a service provider processes on our behalf (Supabase, Firebase, Google Play Billing) is not shared. That holds for Firebase Analytics only while every Firebase **Data sharing setting** (Google products and services, benchmarking, technical support, account specialists) is off; if any is on, answer Shared: Yes on the analytics rows. Advertisers get aggregate campaign reports only, which Play doesn't count as sharing.
+
+"Optional" means the user can avoid the collection and still use the app.
 
 **Data collected:**
 
-| Data type | Collected | Shared with 3rd parties | Linked to user | Optional/Required | Purpose |
-|---|---|---|---|---|---|
-| Email address | Yes | No | Yes | Required | Account management, App functionality |
-| Name (from Google Sign-In) | Yes | No | Yes | Optional | Account management |
-| User IDs (Supabase UID) | Yes | No | Yes | Required | Account management, App functionality |
-| Approximate location | Yes | No | No | Optional | App functionality (nearby results) |
-| Precise location | Yes | No | No | Optional | App functionality (distance, map) |
-| Purchase history | Yes | Yes (Google Play Billing) | Yes | Required | App functionality (subscription tier) |
-| App interactions | Yes | No | Yes | Optional | Analytics, App functionality (favorites) |
-| Search history (in-app) | Yes | No | Yes | Optional | App functionality |
-| Crash logs | Yes | Yes (Firebase) | No | Optional | Analytics, App performance |
-| Diagnostics | Yes | Yes (Firebase) | No | Optional | Analytics, App performance |
-| Device or other IDs (Advertising ID, FCM token) | Yes | Yes (Firebase) | Yes | Required | Analytics, Communications (push) |
+| Data type (Play category) | Collected | Shared | Linked to user | Optional / Required | Purpose | Source in the app |
+|---|---|---|---|---|---|---|
+| Precise location (Location) | Yes | No | No | Optional | App functionality (nearby results, distance, map) | Runtime permission; sent to the nearby RPCs, and to `discover-chat` only with location consent (AND-OVH-002) |
+| Approximate location (Location) | Yes | No | No | Optional | App functionality (nearby results) | The same paths when only coarse location is granted |
+| App interactions (App activity) | Yes | No | Yes | Optional | Analytics, App functionality (favorites, saved searches) | Firebase Analytics events, with collection off until analytics consent (AND-OVH-001); favorites and saved searches stored against the account |
+| In-app search history (App activity) | Yes | No | Yes | Optional | App functionality | Saved searches (`saved_searches`); recent searches stay on the device and aren't collected |
+| App instance ID (Device or other IDs) | Yes | No | No | Optional | Analytics | Firebase Analytics app instance ID, only once analytics consent is granted |
+| Crash logs (App info and performance) | Yes | No | No | Required | App functionality (stability), Analytics | `CrashUploader` posts captured crashes to the `log-error` function on the next launch; it isn't consent-gated, so the answer is Required |
+| Purchase history (Financial info) | Yes | No | Yes | Optional | App functionality (subscription tier) | The Google Play Billing purchase token, validated by `validate-android-purchase`; only for users who subscribe |
+| Email address (Personal info) | Yes | No | Yes | Optional | Account management, App functionality | Supabase Auth; browsing works without an account |
+| Name (Personal info) | Yes | No | Yes | Optional | Account management | Google Sign-In profile name, or the name typed at sign-up |
+| User IDs (Personal info) | Yes | No | Yes | Optional | Account management, App functionality | Supabase user id, created with the account |
+| Push token (Device or other IDs) | Yes | No | Yes | Optional | App functionality, Developer communications | FCM token registered through `register-device-token` |
+| Ad interactions (App activity, "Other actions") | Yes | No | Yes | Optional | Advertising or marketing, Analytics | `AdTrackingService` writes impressions and clicks to `ad_impressions` / `ad_clicks` with the user id, only with analytics consent; ads still render without it |
+
+Play's form has one "Device or other IDs" row for both the app instance ID and the push token. Declare it with the union of the two: Collected Yes, Shared No, Linked Yes, Optional, purposes Analytics, App functionality and Developer communications.
 
 **Security practices:**
-- Data is encrypted in transit: **Yes** (HTTPS everywhere — Supabase, Firebase, Google APIs)
-- Users can request data deletion: **Yes** (Profile → Settings → Delete Account)
+- Data is encrypted in transit: **Yes** (HTTPS to Supabase, Firebase and Google APIs)
+- Users can request data deletion: **Yes**, in the app (Profile, Settings, Delete Account) and on the web
+- **Delete account URL**: `https://desmoinesinsider.com/account/delete` (public, readable without signing in; AND-OVH-012)
 - Developer follows Google Play Families Policy: N/A (target is 18+)
 - Committed to Play's Data Safety standards: **Yes**
 
 ### 3.9 Advertising ID
-- Uses Advertising ID: **Yes**
-- Purposes: **Analytics** and **Communication (push notifications)** — NOT advertising or ad personalization
+- Uses Advertising ID: **No**
+- The release manifest strips `com.google.android.gms.permission.AD_ID`, `ACCESS_ADSERVICES_AD_ID` and `ACCESS_ADSERVICES_ATTRIBUTION` (`tools:node="remove"` in `android/app/src/main/AndroidManifest.xml`), which firebase-analytics would otherwise merge in. The campaign ads in 3.3 don't use the Advertising ID.
+- This answer is valid only after the AND-OVH-001 merged-manifest check in `.github/workflows/android-ci.yml` is green for the build being uploaded. If that step fails, the AAB declares AD_ID and "No" is a mismatch Play rejects.
 
 ### 3.10 Government apps
 - **No**
@@ -401,7 +421,9 @@ Before clicking "Send for review":
 - [ ] `validate-android-purchase` Edge Function deployed with service account key
 - [ ] Main store listing: name, short description, full description, app icon, feature graphic, 8 phone screenshots
 - [ ] Store settings: category, tags, support email, website
-- [ ] Reviewer login credentials provided in App access
+- [ ] Free and Insider reviewer credentials pasted into App access from Infisical (see 3.2)
+- [ ] Ads declared Yes, Advertising ID declared No, and the AND-OVH-001 merged-manifest check green on the uploaded build
+- [ ] Delete account URL `https://desmoinesinsider.com/account/delete` entered in Data safety
 - [ ] Internal testing release shipped, installed, and verified end-to-end on a real device
 - [ ] Pre-launch report is green (no crashes, no critical security findings)
 - [ ] Release notes written
@@ -420,7 +442,7 @@ Before clicking "Send for review":
 | 3 | 8 phone screenshots | Pixel 7 emulator, release build | |
 | 4 | 4–8 tablet screenshots (optional) | Pixel Tablet emulator | |
 | 5 | Subscription benefit screenshots (4 products × 2 each) | Emulator | |
-| 6 | Reviewer test account (email + password) | Create a real Supabase account | |
+| 6 | Reviewer accounts, one free and one Insider (credentials in Infisical, see 3.2) | Create real Supabase accounts | |
 | 7 | Service account JSON for `validate-android-purchase` | Google Cloud Console | |
 | 8 | DSA trader info (legal name, address, contact) — only if EU at launch | Business records | |
 

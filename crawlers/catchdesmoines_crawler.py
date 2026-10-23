@@ -179,8 +179,8 @@ CENTRAL_TZ = ZoneInfo("America/Chicago")
 # 19:00 Central on 2026-10-01 and the site printed "7:00 PM" on every one.
 NO_TIME_MARKER = "19:31:58"
 
-# Claude 4.5 Sonnet model
-CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
+# Claude Sonnet 5.5
+CLAUDE_MODEL = "claude-sonnet-5-5"
 
 # Event detail links on the listing page: /event/<slug>/<id>. Used both to build
 # the extraction window and to tell "the listing did not render" apart from

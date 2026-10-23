@@ -10,25 +10,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { buildEnhancePrompt } from "./prompt.ts";
 import { stripAiLabels } from "../_shared/aiText.ts";
+import { clampWriteupBatch, saveWriteup, selectEventsNeedingWriteup } from "./selection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-interface EventForEnhancement {
-  id: string;
-  title: string;
-  original_description?: string;
-  enhanced_description?: string;
-  location?: string;
-  venue?: string;
-  category?: string;
-  date: string;
-  source_url?: string;
-}
 
 interface EnhancementResult {
   eventId: string;
@@ -58,42 +48,14 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Get request parameters
-    const { batchSize = 10, triggerSource = "manual" } = await req.json();
-    
+    const body = await req.json().catch(() => ({}));
+    const batchSize = clampWriteupBatch(body.batchSize);
+    const triggerSource = typeof body.triggerSource === "string" ? body.triggerSource : "manual";
+
     console.log(`🚀 Starting bulk event enhancement - Batch size: ${batchSize}, Trigger: ${triggerSource}`);
 
-    // Get events that need AI enhancement (no ai_writeup yet)
-    // Use random offset to rotate through different batches instead of always starting with the same events
-    const { data: totalCount } = await supabase
-      .from('events')
-      .select('id', { count: 'exact', head: true })
-      .gte('date', new Date().toISOString())
-      .is('ai_writeup', null);
-    
-    const availableCount = totalCount?.length || 0;
-    console.log(`📊 Total events needing enhancement: ${availableCount}`);
-    
-    // Calculate a rotating offset based on time to avoid always processing the same events
-    const hourOfDay = new Date().getHours();
-    const rotationSeed = Math.floor(hourOfDay / 2); // Changes every 2 hours
-    const randomOffset = availableCount > batchSize 
-      ? Math.floor((rotationSeed * 37) % Math.max(1, availableCount - batchSize)) 
-      : 0;
-    
-    console.log(`🔄 Using offset ${randomOffset} to rotate through events (seed: ${rotationSeed})`);
-    
-    const { data: eventsToEnhance, error: fetchError } = await supabase
-      .from('events')
-      .select('id, title, original_description, enhanced_description, location, venue, category, date, source_url')
-      .gte('date', new Date().toISOString()) // Only future events
-      .is('ai_writeup', null) // Only events without AI writeup
-      .order('date', { ascending: true })
-      .range(randomOffset, randomOffset + batchSize - 1);
-
-    if (fetchError) {
-      console.error('Error fetching events:', fetchError);
-      throw new Error(`Failed to fetch events: ${fetchError.message}`);
-    }
+    // Upcoming events with no ai_writeup, soonest first (see ./selection.ts).
+    const eventsToEnhance = await selectEventsNeedingWriteup(supabase, batchSize);
 
     if (!eventsToEnhance || eventsToEnhance.length === 0) {
       console.log('✅ No events found that need AI enhancement');
@@ -139,7 +101,9 @@ serve(async (req) => {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody)
-    }, 60_000);
+      // Ten writeups of up to 250 words is several thousand output tokens; at
+      // 60s a full batch on the default model timed out before it finished.
+    }, 120_000);
 
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
@@ -148,6 +112,15 @@ serve(async (req) => {
     }
 
     const claudeData = await claudeResponse.json();
+    // The call is paid for once it returns; book it before anything can fail.
+    if (claudeData?.usage) {
+      await recordAnthropicUsage(supabase, {
+        source: "bulk-enhance-events",
+        model: String(claudeData.model ?? requestBody.model ?? "unknown"),
+        usage: claudeData.usage,
+        extra: { events: eventsToEnhance.length },
+      });
+    }
     const extracted = extractClaudeText(claudeData);
     if (!extracted.ok) {
       console.error("Claude response not usable:", extracted.reason, extracted.detail);
@@ -194,48 +167,19 @@ serve(async (req) => {
 
     // Update events with AI writeups
     const results: EnhancementResult[] = [];
-    const promptUsed = `Bulk enhancement for ${eventsToEnhance.length} events - Generated on ${new Date().toISOString()}`;
+    const promptUsed = `Bulk enhancement (${requestBody.model}) for ${eventsToEnhance.length} events - Generated on ${new Date().toISOString()}`;
+    const batchIds = new Set(eventsToEnhance.map((e) => e.id));
 
     for (const result of parsedResults.results) {
-      try {
-        const { data: updateData, error: updateError } = await supabase
-          .from('events')
-          .update({
-            // SEO-057: no model label or wrapper field in the stored text.
-            ai_writeup: typeof result.aiWriteup === 'string' ? stripAiLabels(result.aiWriteup) : result.aiWriteup,
-            writeup_generated_at: new Date().toISOString(),
-            writeup_prompt_used: promptUsed
-          })
-          .eq('id', result.eventId)
-          .select('id, title');
-
-        if (updateError) {
-          console.error(`Error updating event ${result.eventId}:`, updateError);
-          results.push({
-            eventId: result.eventId,
-            title: 'Unknown',
-            aiWriteup: '',
-            success: false,
-            error: updateError.message
-          });
-        } else {
-          console.log(`✅ Updated event: ${updateData[0]?.title}`);
-          results.push({
-            eventId: result.eventId,
-            title: updateData[0]?.title || 'Updated',
-            aiWriteup: result.aiWriteup,
-            success: true
-          });
-        }
-      } catch (error) {
-        console.error(`Error processing event ${result.eventId}:`, error);
-        results.push({
-          eventId: result.eventId,
-          title: 'Unknown',
-          aiWriteup: '',
-          success: false,
-          error: error.message
-        });
+      // SEO-057: no model label or wrapper field in the stored text.
+      const writeup = typeof result.aiWriteup === 'string' ? stripAiLabels(result.aiWriteup) : result.aiWriteup;
+      const saved = await saveWriteup(supabase, batchIds, result.eventId, writeup, promptUsed);
+      if (saved.ok) {
+        console.log(`✅ Updated event: ${saved.title}`);
+        results.push({ eventId: result.eventId, title: saved.title, aiWriteup: writeup, success: true });
+      } else {
+        console.error(`Not saved for event ${result.eventId}: ${saved.error}`);
+        results.push({ eventId: String(result.eventId), title: 'Unknown', aiWriteup: '', success: false, error: saved.error });
       }
     }
 

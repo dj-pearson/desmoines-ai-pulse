@@ -22,7 +22,9 @@ import com.desmoines.aipulse.data.local.entity.CachedRestaurant
         CachedAttraction::class,
         CacheMetadata::class,
     ],
-    version = 1,
+    // 2: cache_metadata.total_count (AND-OVH-019). This database is only a
+    // cache, so DatabaseModule's destructive fallback rebuilds it on upgrade.
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

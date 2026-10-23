@@ -133,12 +133,34 @@ jobs:
       # step compiles and shrinks the release variant so a broken keep rule
       # fails here instead of in a user's crash log.
       #
-      # The build is signed with the debug key (no release keystore in this
-      # workflow); android-release.yml is still the only path that produces a
+      # The APK is unsigned: this workflow has no release keystore, and the
+      # release build type falls back to no signing config rather than the
+      # debug key. It uses the placeholder credentials above, which
+      # app/build.gradle.kts allows only because nothing signs it.
+      # android-release.yml is still the only path that produces a
       # distributable artifact.
       - name: Build Release APK (exercises R8/ProGuard)
         working-directory: android
         run: ./gradlew assembleRelease
+
+      # AND-OVH-001. firebase-analytics merges AD_ID and the AdServices
+      # permissions into the release manifest; AndroidManifest.xml strips them
+      # with tools:node="remove". ManifestPermissionAllowlistTest checks the
+      # source lines, but only the merged manifest shows what a new or upgraded
+      # dependency adds, so check the file that actually ships.
+      - name: Check merged release manifest has no advertising permissions
+        working-directory: android
+        run: |
+          manifest=app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+          if [ ! -f "$manifest" ]; then
+            echo "::error::merged release manifest not found at $manifest"
+            exit 1
+          fi
+          if grep -nE 'permission\.AD_ID|ACCESS_ADSERVICES' "$manifest"; then
+            echo "::error::advertising permissions are back in the merged release manifest (see lines above)"
+            exit 1
+          fi
+          echo "No AD_ID or ACCESS_ADSERVICES permission in $manifest"
 
       - name: Upload R8 mapping and usage reports
         if: always()

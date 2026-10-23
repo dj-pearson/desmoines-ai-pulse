@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -43,15 +44,21 @@ import com.desmoines.aipulse.ui.theme.ThemeCrossfadeContainer
 import com.desmoines.aipulse.ui.theme.ThemeMode
 import com.desmoines.aipulse.util.BiometricAuthService
 import com.desmoines.aipulse.util.BiometricLockController
+import com.desmoines.aipulse.data.remote.SupabaseClientProvider
 import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.util.AuthCallback
+import com.desmoines.aipulse.util.AuthCallbackNotices
+import com.desmoines.aipulse.util.AuthCallbackRouter
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.OnboardingPreferences
+import com.desmoines.aipulse.util.PasswordRecoveryGate
 import com.desmoines.aipulse.util.PushNotificationService
 import com.desmoines.aipulse.util.RootDetector
 import com.desmoines.aipulse.util.ShortcutDispatcher
 import com.desmoines.aipulse.util.VersionCheckService
 import dagger.hilt.android.AndroidEntryPoint
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -85,8 +92,19 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var versionCheckService: VersionCheckService
 
+    @Inject
+    lateinit var authCallbackNotices: AuthCallbackNotices
+
+    @Inject
+    lateinit var passwordRecoveryGate: PasswordRecoveryGate
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        // AND-OVH-024. Must run before super.onCreate: it reads the
+        // Theme.DesMoinesInsider.Starting launch theme from the manifest and
+        // then applies postSplashScreenTheme, so the splash background matches
+        // light or dark instead of flashing white.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -107,8 +125,14 @@ class MainActivity : FragmentActivity() {
             }
         })
 
-        // Handle deep link from the launch intent
-        handleDeepLinkIntent(intent)
+        // Handle deep link from the launch intent, on a fresh launch only
+        // (AND-OVH-021). A recreated activity (rotation, process death) gets
+        // the launch intent back from the system, not the copy we cleared, so
+        // re-handling it here pushed the same detail screen again on every
+        // rotation and replayed an auth callback whose code was already spent.
+        if (savedInstanceState == null) {
+            handleDeepLinkIntent(intent)
+        }
 
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
@@ -281,6 +305,8 @@ class MainActivity : FragmentActivity() {
                             networkMonitor = networkMonitor,
                             deepLinkHandler = deepLinkHandler,
                             shortcutDispatcher = shortcutDispatcher,
+                            authCallbackNotices = authCallbackNotices,
+                            passwordRecoveryGate = passwordRecoveryGate,
                             widthSizeClass = windowSizeClass.widthSizeClass
                         )
                     }
@@ -328,15 +354,61 @@ class MainActivity : FragmentActivity() {
             return
         }
 
-        // Try notification tap extras first, then URI deep link
-        if (!deepLinkHandler.handleIntent(intent)) {
-            // If not handled as deep link, let Supabase handle auth callbacks
-            intent.data?.let { uri ->
-                if (uri.toString().contains("auth-callback")) {
-                    // Auth callback - Supabase client handles this via its own intent filter
-                    // No additional handling needed here
-                }
+        if (handleAuthCallback(intent)) return
+
+        // Notification tap extras first, then URI deep link. Clear the data
+        // once handled, as above, so nothing that re-reads this intent applies
+        // the link twice.
+        if (deepLinkHandler.handleIntent(intent)) {
+            intent.data = null
+        }
+    }
+
+    /**
+     * AND-OVH-005. Auth-callback links used to be matched here and dropped, so
+     * an email confirmation opened the app and stopped. The PKCE code is now
+     * exchanged for a session, and MainScreen is told the outcome (Home plus a
+     * snackbar, or a dialog for a refused link).
+     *
+     * The exchange deliberately does not go through supabase-kt's
+     * `handleDeeplinks`: in 3.1.1 it launches `exchangeCodeForSession` on the
+     * Auth plugin's scope, which has no exception handler, so an expired or
+     * already-used code would crash the app instead of reaching the user.
+     * [AuthCallbackNotices.exchange] makes the same call and catches the failure.
+     *
+     * The intent data is cleared afterwards so a rotation can't replay the
+     * exchange with a code that has already been spent.
+     */
+    private fun handleAuthCallback(intent: Intent): Boolean {
+        val callback = AuthCallbackRouter.classify(intent.data?.toString())
+        if (callback == AuthCallback.NotAuth) return false
+        intent.data = null
+
+        // A reset link (AND-OVH-006) does not go to Home: once its session is
+        // established MainScreen holds the user on SetNewPassword.
+        val (code, onSuccess) = when (callback) {
+            is AuthCallback.Error -> {
+                authCallbackNotices.post(AuthCallbackNotices.Notice.Failed(callback.message))
+                return true
+            }
+            is AuthCallback.Confirmation ->
+                callback.code to AuthCallbackNotices.Notice.SignedIn(AuthCallbackNotices.CONFIRMED_MESSAGE)
+            is AuthCallback.Recovery -> callback.code to AuthCallbackNotices.Notice.PasswordRecovery
+            AuthCallback.NotAuth -> return false
+        }
+
+        val client = SupabaseClientProvider.client
+        when {
+            client == null -> authCallbackNotices.post(
+                AuthCallbackNotices.Notice.Failed(AuthCallbackNotices.NOT_CONFIGURED_MESSAGE),
+            )
+            code == null -> authCallbackNotices.post(
+                AuthCallbackNotices.Notice.Failed(AuthCallbackNotices.MISSING_CODE_MESSAGE),
+            )
+            else -> authCallbackNotices.exchange(code, onSuccess) {
+                client.auth.exchangeCodeForSession(it)
             }
         }
+        return true
     }
 }

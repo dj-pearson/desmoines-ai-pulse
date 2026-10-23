@@ -6,6 +6,7 @@ import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.data.remote.AttractionsQuery
 import com.desmoines.aipulse.data.remote.AttractionsRemoteDataSource
 import com.desmoines.aipulse.data.remote.AttractionsResponse
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 /**
@@ -31,7 +32,7 @@ class AttractionsRepositoryImpl @Inject constructor(
             }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchAttractions(query).also { response ->
                 cacheManager.cacheAttractions(cacheKey, response.attractions)
             }
@@ -48,7 +49,7 @@ class AttractionsRepositoryImpl @Inject constructor(
             return Result.success(cached)
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchAttraction(id).also { attraction ->
                 cacheManager.cacheAttractions(CacheManager.attractionsKey("single", id), listOf(attraction))
             }
@@ -66,7 +67,7 @@ class AttractionsRepositoryImpl @Inject constructor(
             cacheManager.getCachedAttractions(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchNearbyAttractions(latitude, longitude, limit).also { attractions ->
                 cacheManager.cacheAttractions(cacheKey, attractions)
             }

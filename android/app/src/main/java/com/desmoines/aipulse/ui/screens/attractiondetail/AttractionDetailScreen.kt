@@ -62,6 +62,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.ui.components.EmptyStateView
 import com.desmoines.aipulse.ui.components.FullScreenImageViewer
 import com.desmoines.aipulse.ui.components.LoadingView
 import com.desmoines.aipulse.ui.components.reviews.ReviewsSection
@@ -89,6 +90,10 @@ fun AttractionDetailScreen(
     modifier: Modifier = Modifier,
     onNavigateToSubscription: () -> Unit = {},
     onNavigateToAuth: () -> Unit = {},
+    errorMessage: String? = null,
+    isNotFound: Boolean = false,
+    onRetry: () -> Unit = {},
+    onOpenOnWeb: (() -> Unit)? = null,
 ) {
     val haptic = rememberHapticPerformer()
     var showFullScreenImage by remember { mutableStateOf(false) }
@@ -122,6 +127,22 @@ fun AttractionDetailScreen(
         },
         modifier = modifier,
     ) { paddingValues ->
+        if (!isLoading && attraction == null && errorMessage != null) {
+            // A web slug the app can't resolve (AND-OVH-022) used to leave the
+            // loading spinner up forever; say so and offer the web page instead.
+            EmptyStateView(
+                icon = Icons.Filled.Place,
+                title = if (isNotFound) "Attraction not found" else "Couldn't load attraction",
+                message = errorMessage,
+                modifier = Modifier.padding(paddingValues),
+                actionTitle = if (onOpenOnWeb != null) "Open on web" else null,
+                onAction = onOpenOnWeb,
+                secondaryActionTitle = if (isNotFound) null else "Try again",
+                onSecondaryAction = if (isNotFound) null else onRetry,
+            )
+            return@Scaffold
+        }
+
         if (isLoading || attraction == null) {
             LoadingView(message = "Loading attraction…")
             return@Scaffold

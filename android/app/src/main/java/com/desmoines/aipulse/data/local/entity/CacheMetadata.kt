@@ -14,6 +14,12 @@ data class CacheMetadata(
     @ColumnInfo(name = "cached_at") val cachedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "ttl_minutes") val ttlMinutes: Int,
     @ColumnInfo(name = "item_count") val itemCount: Int = 0,
+    /**
+     * Server row count for a paginated query, so a cached page can still say
+     * whether more pages exist. Null for keys that are not a page (featured,
+     * related, single).
+     */
+    @ColumnInfo(name = "total_count") val totalCount: Int? = null,
 ) {
     val isExpired: Boolean
         get() = System.currentTimeMillis() - cachedAt > ttlMinutes * 60_000L

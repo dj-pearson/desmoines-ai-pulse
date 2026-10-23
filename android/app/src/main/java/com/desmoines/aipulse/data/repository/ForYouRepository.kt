@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.repository
 
 import com.desmoines.aipulse.data.model.Recommendation
 import com.desmoines.aipulse.data.remote.ForYouRemoteDataSource
+import com.desmoines.aipulse.util.suspendRunCatching
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
@@ -43,7 +44,7 @@ class ForYouRepositoryImpl @Inject constructor(
         userId: String?,
         lat: Double?,
         lon: Double?,
-    ): Result<ForYouResult> = runCatching {
+    ): Result<ForYouResult> = suspendRunCatching {
         val personalized = userId != null &&
             remote.countRecentSwipes(userId, windowStartIso()) >= ForYouRepository.SWIPE_THRESHOLD
 

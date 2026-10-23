@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.ui.screens.auth
 
 import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.data.remote.SignUpOutcome
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.ui.screens.auth.AuthViewModel.PasswordStrength
 import com.desmoines.aipulse.util.BiometricAuthService
@@ -22,6 +23,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -232,6 +234,85 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         coVerify { authRepository.signIn("user@test.com", "password123") }
+    }
+
+    @Nested
+    inner class SignUpOutcomes {
+
+        private fun signUp() = viewModel.signUp(
+            email = "new@example.com",
+            password = "Abcdefg1!",
+            confirmPassword = "Abcdefg1!",
+            firstName = "Ada",
+            lastName = "",
+            selectedInterests = setOf("Music"),
+        )
+
+        @Test
+        fun `confirmation required shows the check-your-email state, not an error`() = runTest {
+            coEvery { authRepository.signUp(any(), any(), any(), any(), any()) } returns
+                Result.success(SignUpOutcome.ConfirmationRequired("new@example.com"))
+
+            signUp()
+            advanceUntilIdle()
+
+            assertEquals("new@example.com", viewModel.pendingConfirmationEmail.value)
+            assertNull(viewModel.errorMessage.value)
+            coVerify {
+                authRepository.signUp("new@example.com", "Abcdefg1!", "Ada", null, listOf("Music"))
+            }
+        }
+
+        @Test
+        fun `signed in leaves no pending confirmation and no error`() = runTest {
+            coEvery { authRepository.signUp(any(), any(), any(), any(), any()) } returns
+                Result.success(SignUpOutcome.SignedIn)
+
+            signUp()
+            advanceUntilIdle()
+
+            assertNull(viewModel.pendingConfirmationEmail.value)
+            assertNull(viewModel.errorMessage.value)
+        }
+
+        @Test
+        fun `a failed sign-up shows an error and no pending state`() = runTest {
+            coEvery { authRepository.signUp(any(), any(), any(), any(), any()) } returns
+                Result.failure(RuntimeException("User already registered"))
+
+            signUp()
+            advanceUntilIdle()
+
+            assertNull(viewModel.pendingConfirmationEmail.value)
+            assertEquals(
+                "An account with this email already exists. Try signing in instead.",
+                viewModel.errorMessage.value,
+            )
+        }
+
+        @Test
+        fun `back to sign in clears the pending state`() = runTest {
+            coEvery { authRepository.signUp(any(), any(), any(), any(), any()) } returns
+                Result.success(SignUpOutcome.ConfirmationRequired("new@example.com"))
+            signUp()
+            advanceUntilIdle()
+
+            viewModel.dismissConfirmationPending()
+
+            assertNull(viewModel.pendingConfirmationEmail.value)
+        }
+    }
+
+    @Test
+    fun `resend verification asks for the signup mail, never a password reset`() = runTest {
+        coEvery { authRepository.resendSignUpConfirmation(any()) } returns Result.success(Unit)
+
+        viewModel.resendVerification("new@example.com")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { authRepository.resendSignUpConfirmation("new@example.com") }
+        coVerify(exactly = 0) { authRepository.resetPassword(any()) }
+        assertEquals("Verification email resent. Check your inbox.", viewModel.errorMessage.value)
     }
 
     @Test

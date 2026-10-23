@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.screens.subscription.SoftPaywallViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerAvailabilityViewModel
 
 /**
  * App-level host for the soft paywall. Observes the SoftPaywallService and shows a
@@ -37,12 +38,15 @@ import com.desmoines.aipulse.ui.screens.subscription.SoftPaywallViewModel
 fun PaywallHost(
     onNavigateToSubscription: () -> Unit,
     viewModel: SoftPaywallViewModel = hiltViewModel(),
+    tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel(),
 ) {
     val pending by viewModel.pending.collectAsStateWithLifecycle()
+    val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
 
     pending?.let { context ->
         PaywallSheet(
             context = context,
+            showTripPlanner = !tripAvailability.isPaused,
             onSubscribe = {
                 viewModel.onSubscribeClicked()
                 viewModel.dismiss()
@@ -59,6 +63,7 @@ fun PaywallSheet(
     context: PaywallContext,
     onSubscribe: () -> Unit,
     onDismiss: () -> Unit,
+    showTripPlanner: Boolean = true,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -93,7 +98,7 @@ fun PaywallSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SubscriptionTier.INSIDER.features.take(4).forEach { feature ->
+                SubscriptionTier.INSIDER.features(showTripPlanner).take(4).forEach { feature ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Filled.Check,

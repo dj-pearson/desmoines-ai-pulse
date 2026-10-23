@@ -24,6 +24,13 @@ export interface ScraperConfig {
   firecrawlApiKey?: string;
   browserlessApiKey?: string;
   browserlessUrl?: string;
+  /**
+   * A second Browserless account tried ONCE when the primary render fails
+   * (BROWSERLESS_API_KEY_BACKUP / BROWSERLESS_BACKUP_URL). Each key is only
+   * ever sent to its own host. See withBrowserlessFallback.
+   */
+  browserlessBackupApiKey?: string;
+  browserlessBackupUrl?: string;
 }
 
 export interface ScraperResult {
@@ -33,6 +40,8 @@ export interface ScraperResult {
   text?: string;
   error?: string;
   backend: ScraperBackend;
+  /** Which Browserless account produced this result, when one was used. */
+  browserlessHost?: BrowserlessHostLabel;
   duration: number;
 }
 
@@ -54,7 +63,147 @@ export function getScraperConfig(): ScraperConfig {
     userAgentDeclared: !!Deno.env.get('SCRAPER_USER_AGENT'),
     firecrawlApiKey: Deno.env.get('FIRECRAWL_API_KEY'),
     browserlessApiKey: browserlessKey,
-    browserlessUrl: Deno.env.get('BROWSERLESS_URL') || 'https://production-sfo.browserless.io',
+    browserlessUrl: Deno.env.get('BROWSERLESS_URL') || HOSTED_BROWSERLESS_URL,
+    browserlessBackupApiKey: Deno.env.get('BROWSERLESS_API_KEY_BACKUP') || undefined,
+    browserlessBackupUrl: Deno.env.get('BROWSERLESS_BACKUP_URL') || HOSTED_BROWSERLESS_URL,
+  };
+}
+
+/** Browserless.io's hosted endpoint: the default primary and the default backup. */
+export const HOSTED_BROWSERLESS_URL = 'https://production-sfo.browserless.io';
+
+export type BrowserlessHostLabel = 'primary' | 'backup';
+
+export interface BrowserlessHost {
+  label: BrowserlessHostLabel;
+  /** Base URL with no trailing slash and no credentials. */
+  baseUrl: string;
+  apiKey: string;
+}
+
+export type BrowserlessAttempt<T> = { ok: true; value: T } | { ok: false; error: string };
+
+export type BrowserlessOutcome<T> =
+  | { ok: true; value: T; host: BrowserlessHostLabel }
+  | { ok: false; error: string; host: BrowserlessHostLabel };
+
+/** The host part of a base URL, for logs. Never includes a token. */
+export function browserlessHostName(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return '(unparseable BROWSERLESS url)';
+  }
+}
+
+/**
+ * Remove a `token=` query value from a message. Deno's fetch errors quote the
+ * full request URL ("error sending request for url (https://...?token=...)"),
+ * and the token is in the query string, so any error text that reaches a log or
+ * a ScraperResult goes through here first.
+ */
+export function redactBrowserlessToken(message: string): string {
+  return message.replace(/token=[^&\s)"']+/gi, 'token=[redacted]');
+}
+
+/**
+ * True when HTML is a CDN access-denied page rather than the site.
+ *
+ * Catch Des Moines (Akamai) answers a blocked browser with HTTP 200 and a body
+ * of a few hundred bytes, so the status says nothing. Matching is on Akamai's
+ * own markers - the errors.edgesuite.net reference link, or "Access Denied" as
+ * the page's <title> or <h1> - AND a short body. Length alone never decides: a
+ * real small page has neither marker, and a real page that mentions "access
+ * denied" in its text is not short and has it nowhere near the title.
+ */
+export const ACCESS_DENIED_MAX_BYTES = 4096;
+
+export function isAccessDeniedPage(html: string): boolean {
+  if (!html || html.length > ACCESS_DENIED_MAX_BYTES) return false;
+  return (
+    /errors\.edgesuite\.net/i.test(html) ||
+    /<title[^>]*>\s*Access Denied\s*<\/title>/i.test(html) ||
+    /<h1[^>]*>\s*Access Denied\s*<\/h1>/i.test(html)
+  );
+}
+
+/**
+ * The Browserless accounts to try, in order. The backup is offered only when
+ * its key is set AND it is a different host from the primary (by default the
+ * backup is Browserless.io itself, so a primary already pointing there gets no
+ * second attempt). Each host carries only its own key, which is what keeps the
+ * primary token off the backup host and the backup key off the primary.
+ */
+export function browserlessHosts(
+  config: Pick<
+    ScraperConfig,
+    'browserlessApiKey' | 'browserlessUrl' | 'browserlessBackupApiKey' | 'browserlessBackupUrl'
+  >,
+): { primary: BrowserlessHost | null; backup: BrowserlessHost | null } {
+  const trim = (u: string) => u.replace(/\/+$/, '');
+  const primaryUrl = trim(config.browserlessUrl || HOSTED_BROWSERLESS_URL);
+  const backupUrl = trim(config.browserlessBackupUrl || HOSTED_BROWSERLESS_URL);
+  const primary = config.browserlessApiKey
+    ? { label: 'primary' as const, baseUrl: primaryUrl, apiKey: config.browserlessApiKey }
+    : null;
+  const sameHost = browserlessHostName(primaryUrl).toLowerCase() ===
+    browserlessHostName(backupUrl).toLowerCase();
+  const backup = config.browserlessBackupApiKey && !sameHost
+    ? { label: 'backup' as const, baseUrl: backupUrl, apiKey: config.browserlessBackupApiKey }
+    : null;
+  return { primary, backup };
+}
+
+/**
+ * Run one Browserless render on the primary account and, if it fails, ONCE on
+ * the backup. No loop. `attempt` decides what failure means for its caller
+ * (non-2xx, a thrown fetch, an access-denied page) and must build its request
+ * from the host it is handed, never from config, so a key cannot cross hosts.
+ * When both fail, the error names both.
+ */
+export async function withBrowserlessFallback<T>(
+  config: Parameters<typeof browserlessHosts>[0],
+  attempt: (host: BrowserlessHost) => Promise<BrowserlessAttempt<T>>,
+  logPrefix = 'Browserless',
+): Promise<BrowserlessOutcome<T>> {
+  const { primary, backup } = browserlessHosts(config);
+
+  const run = async (host: BrowserlessHost): Promise<BrowserlessAttempt<T>> => {
+    try {
+      const r = await attempt(host);
+      return r.ok ? r : { ok: false, error: redactBrowserlessToken(r.error) };
+    } catch (err) {
+      return {
+        ok: false,
+        error: redactBrowserlessToken(err instanceof Error ? err.message : String(err)),
+      };
+    }
+  };
+
+  const first: BrowserlessAttempt<T> = primary
+    ? await run(primary)
+    : { ok: false, error: 'primary Browserless key not configured' };
+  if (first.ok) {
+    console.log(`${logPrefix}: served by primary host ${browserlessHostName(primary!.baseUrl)}`);
+    return { ok: true, value: first.value, host: 'primary' };
+  }
+  if (!backup) {
+    return { ok: false, error: first.error, host: 'primary' };
+  }
+
+  console.log(
+    `${logPrefix}: primary failed (${first.error.slice(0, 200)}); ` +
+      `retrying once on backup host ${browserlessHostName(backup.baseUrl)}`,
+  );
+  const second = await run(backup);
+  if (second.ok) {
+    console.log(`${logPrefix}: served by backup host ${browserlessHostName(backup.baseUrl)}`);
+    return { ok: true, value: second.value, host: 'backup' };
+  }
+  return {
+    ok: false,
+    error: `primary: ${first.error} | backup: ${second.error}`,
+    host: 'backup',
   };
 }
 
@@ -72,24 +221,50 @@ export function browserlessUserAgent(
 }
 
 /**
- * Scrape a URL using Browserless.io (cloud Chrome automation)
+ * Scrape a URL through Browserless: the primary account, then once on the
+ * backup if the primary errors or renders an access-denied page.
  */
 async function scrapeWithBrowserless(
   url: string,
   config: ScraperConfig
 ): Promise<ScraperResult> {
   const startTime = Date.now();
+  const outcome = await withBrowserlessFallback(config, async (host) => {
+    const r = await scrapeOnBrowserlessHost(url, config, host, startTime);
+    if (!r.success) return { ok: false, error: r.error || 'unknown Browserless error' };
+    if (isAccessDeniedPage(r.html || '')) {
+      return { ok: false, error: `access-denied page (${(r.html || '').length} bytes)` };
+    }
+    return { ok: true, value: r };
+  });
+  if (outcome.ok) {
+    return { ...outcome.value, browserlessHost: outcome.host, duration: Date.now() - startTime };
+  }
+  return {
+    success: false,
+    error: outcome.error,
+    backend: 'browserless',
+    browserlessHost: outcome.host,
+    duration: Date.now() - startTime,
+  };
+}
 
+/**
+ * One Browserless account: /scrape, falling back to /content. Builds every
+ * request from `host`, never from config's key or URL.
+ */
+async function scrapeOnBrowserlessHost(
+  url: string,
+  config: ScraperConfig,
+  host: BrowserlessHost,
+  startTime: number,
+): Promise<ScraperResult> {
   try {
     console.log(`🌐 Using Browserless to scrape: ${url}`);
 
-    if (!config.browserlessApiKey) {
-      throw new Error('Browserless API key not configured');
-    }
-
     // Use the /scrape endpoint for more control over JavaScript execution
     // This allows us to wait for dynamic content to load
-    const browserlessUrl = `${config.browserlessUrl}/scrape?token=${config.browserlessApiKey}`;
+    const browserlessUrl = `${host.baseUrl}/scrape?token=${host.apiKey}`;
 
     // Build the scrape request with proper waiting for dynamic content
     const scrapeRequest = {
@@ -149,7 +324,7 @@ async function scrapeWithBrowserless(
       const errorText = await response.text();
       // If /scrape endpoint fails, fall back to /content endpoint
       console.log(`⚠️ Browserless /scrape failed (${response.status}), trying /content endpoint...`);
-      return await scrapeWithBrowserlessContent(url, config, startTime);
+      return await scrapeWithBrowserlessContent(url, config, startTime, host);
     }
 
     const data = await response.json();
@@ -159,7 +334,7 @@ async function scrapeWithBrowserless(
 
     if (!html || typeof html !== 'string') {
       console.log(`⚠️ Browserless /scrape returned unexpected format, trying /content endpoint...`);
-      return await scrapeWithBrowserlessContent(url, config, startTime);
+      return await scrapeWithBrowserlessContent(url, config, startTime, host);
     }
 
     // Extract text content from HTML
@@ -181,10 +356,11 @@ async function scrapeWithBrowserless(
     };
 
   } catch (error) {
-    console.error(`❌ Browserless error:`, error);
+    const message = redactBrowserlessToken(error instanceof Error ? error.message : String(error));
+    console.error(`❌ Browserless error: ${message}`);
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
       backend: 'browserless',
       duration: Date.now() - startTime,
     };
@@ -197,10 +373,11 @@ async function scrapeWithBrowserless(
 async function scrapeWithBrowserlessContent(
   url: string,
   config: ScraperConfig,
-  startTime: number
+  startTime: number,
+  host: BrowserlessHost,
 ): Promise<ScraperResult> {
   try {
-    const browserlessUrl = `${config.browserlessUrl}/content?token=${config.browserlessApiKey}`;
+    const browserlessUrl = `${host.baseUrl}/content?token=${host.apiKey}`;
 
     const response = await fetch(browserlessUrl, {
       method: 'POST',
@@ -247,10 +424,11 @@ async function scrapeWithBrowserlessContent(
     };
 
   } catch (error) {
-    console.error(`❌ Browserless /content error:`, error);
+    const message = redactBrowserlessToken(error instanceof Error ? error.message : String(error));
+    console.error(`❌ Browserless /content error: ${message}`);
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
       backend: 'browserless',
       duration: Date.now() - startTime,
     };
@@ -578,7 +756,7 @@ export async function scrapeUrl(
   }
   
   // If primary backend fails, try fallbacks sequentially
-  if (!result.success && config.backend !== 'browserless' && config.browserlessApiKey) {
+  if (!result.success && config.backend !== 'browserless' && (config.browserlessApiKey || config.browserlessBackupApiKey)) {
     console.log(`⚠️ Primary backend failed, falling back to Browserless...`);
     result = await scrapeWithBrowserless(url, config);
   }

@@ -6,6 +6,7 @@ import com.desmoines.aipulse.data.model.Vote
 import com.desmoines.aipulse.data.model.VotingCategory
 import com.desmoines.aipulse.data.remote.BestOfRemoteDataSource
 import com.desmoines.aipulse.util.QueryCache
+import com.desmoines.aipulse.util.suspendRunCatching
 import kotlinx.serialization.builtins.ListSerializer
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,7 +38,7 @@ class BestOfRepositoryImpl @Inject constructor(
     private val serializer = ListSerializer(VotingCategory.serializer())
 
     override suspend fun fetchCategories(): Result<List<VotingCategory>> {
-        val fresh = runCatching { remote.fetchCategories() }.getOrNull()
+        val fresh = suspendRunCatching { remote.fetchCategories() }.getOrNull()
         if (fresh != null) {
             queryCache.set(CACHE_KEY, fresh, serializer)
             return Result.success(fresh)
@@ -48,22 +49,22 @@ class BestOfRepositoryImpl @Inject constructor(
     }
 
     override suspend fun fetchCategory(categoryId: String): Result<VotingCategory?> =
-        runCatching { remote.fetchCategory(categoryId) }
+        suspendRunCatching { remote.fetchCategory(categoryId) }
 
     override suspend fun fetchUserVote(categoryId: String, userId: String): Result<Vote?> =
-        runCatching { remote.fetchUserVote(categoryId, userId) }
+        suspendRunCatching { remote.fetchUserVote(categoryId, userId) }
 
     override suspend fun searchNominees(query: String): Result<List<Nominee>> =
-        runCatching { remote.searchNominees(query) }
+        suspendRunCatching { remote.searchNominees(query) }
 
     override suspend fun resolveEntityName(entityType: String, entityId: String): String? =
-        runCatching { remote.fetchEntityName(entityType, entityId) }.getOrNull()
+        suspendRunCatching { remote.fetchEntityName(entityType, entityId) }.getOrNull()
 
     override suspend fun fetchResults(categoryId: String): Result<List<LeaderboardEntry>> =
-        runCatching { remote.fetchResults(categoryId) }
+        suspendRunCatching { remote.fetchResults(categoryId) }
 
     override suspend fun fetchWinners(): Map<String, String> =
-        runCatching { remote.fetchWinners() }.getOrDefault(emptyMap())
+        suspendRunCatching { remote.fetchWinners() }.getOrDefault(emptyMap())
 
     override suspend fun castVote(
         categoryId: String,
@@ -71,7 +72,7 @@ class BestOfRepositoryImpl @Inject constructor(
         entityType: String,
         entityId: String?,
         customEntry: String?,
-    ): Result<Unit> = runCatching {
+    ): Result<Unit> = suspendRunCatching {
         remote.castVote(categoryId, userId, entityType, entityId, customEntry)
     }
 

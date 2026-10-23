@@ -55,7 +55,16 @@ class ArticleDetailViewModel @Inject constructor(
                         _uiState.update { it.copy(isLoading = false, errorMessage = "This guide is no longer available.") }
                         return@onSuccess
                     }
-                    _uiState.update { it.copy(article = article, isLoading = false, errorMessage = null) }
+                    // A web link carries the slug; saves and retries key on the row id.
+                    articleId = article.id
+                    _uiState.update {
+                        it.copy(
+                            article = article,
+                            isLoading = false,
+                            errorMessage = null,
+                            isSaved = articleFavoritesStore.isSaved(article.id),
+                        )
+                    }
                     recentlyViewedService.record(
                         type = RecentItemType.ARTICLE,
                         id = article.id,

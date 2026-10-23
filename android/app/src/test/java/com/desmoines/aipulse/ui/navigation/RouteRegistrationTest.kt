@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.navigation
 
+import com.desmoines.aipulse.ui.screens.explore.ExploreDestination
 import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -146,6 +147,61 @@ class RouteRegistrationTest {
             "A route argument is not declared, or is declared under a different name, so the screen " +
                 "reads null for it:\n  " + failures.joinToString("\n  "),
         )
+    }
+
+    @Test
+    fun `the password-reset screen is declared and registered`() {
+        // AND-OVH-006. MainScreen navigates here from PasswordRecoveryGate, not
+        // from a button, so nothing else would notice it going missing until a
+        // reset link crashed on "destination cannot be found".
+        assertTrue(
+            declaredRoutes().any { it.name == "SetNewPassword" },
+            "Route.SetNewPassword is not declared in NavGraph.kt.",
+        )
+        assertTrue(
+            "SetNewPassword" in registeredRouteNames(),
+            "Route.SetNewPassword is declared but never passed to composable().",
+        )
+    }
+
+    @Test
+    fun `the Explore hub is declared and registered`() {
+        // AND-OVH-025. The Home CTA cards moved here, so a missing registration
+        // would strand eight destinations behind a tile that crashes on tap.
+        assertTrue(
+            declaredRoutes().any { it.name == "Explore" },
+            "Route.Explore is not declared in NavGraph.kt.",
+        )
+        assertTrue(
+            "Explore" in registeredRouteNames(),
+            "Route.Explore is declared but never passed to composable().",
+        )
+    }
+
+    @Test
+    fun `the Explore hub lists every destination the Home cards used to`() {
+        // The eight cards that left Home in AND-OVH-025. Dropping one from the
+        // hub leaves its screen registered and unreachable, which no other
+        // test would notice.
+        assertEquals(
+            listOf(
+                Route.Weekend,
+                Route.Neighborhoods,
+                Route.ContentHubs,
+                Route.Dashboard,
+                Route.Articles,
+                Route.Deals,
+                Route.Hotels,
+                Route.BestOf,
+            ),
+            ExploreDestination.entries.map { it.route },
+        )
+        val registered = registeredRouteNames()
+        val declaredByPattern = declaredRoutes().associate { it.pattern to it.name }
+        val unregistered = ExploreDestination.entries
+            .map { declaredByPattern[it.route.route] }
+            .filterNot { it != null && it in registered }
+        assertTrue(unregistered.isEmpty(), "Explore hub entries with no composable(): $unregistered")
     }
 
     @Test

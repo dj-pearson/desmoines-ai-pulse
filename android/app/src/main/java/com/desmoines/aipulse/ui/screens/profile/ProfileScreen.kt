@@ -82,6 +82,9 @@ fun ProfileScreen(
     showSaveSuccess: Boolean = false,
     showDeleteConfirmation: Boolean = false,
     errorMessage: String? = null,
+    storeSubscriptionNotice: StoreSubscriptionNotice? = null,
+    onOpenStoreSubscription: (String) -> Unit = {},
+    onAcknowledgeStoreSubscriptionNotice: () -> Unit = {},
     onFirstNameChanged: (String) -> Unit = {},
     onLastNameChanged: (String) -> Unit = {},
     onPhoneChanged: (String) -> Unit = {},
@@ -166,7 +169,7 @@ fun ProfileScreen(
             onDismissRequest = onDismissDelete,
             title = { Text("Delete Account?") },
             text = {
-                Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
+                Text(AccountDeletionResponse.CONFIRMATION_TEXT)
             },
             confirmButton = {
                 TextButton(
@@ -186,6 +189,16 @@ fun ProfileScreen(
         )
     }
 
+    // Store subscription still billing after deletion (AND-OVH-010). Shown
+    // before sign-out, and not dismissable by tapping outside.
+    storeSubscriptionNotice?.let { notice ->
+        StoreSubscriptionNoticeDialog(
+            notice = notice,
+            onOpenManage = onOpenStoreSubscription,
+            onAcknowledge = onAcknowledgeStoreSubscriptionNotice,
+        )
+    }
+
     // Error dialog
     if (errorMessage != null) {
         AlertDialog(
@@ -199,6 +212,43 @@ fun ProfileScreen(
             },
         )
     }
+}
+
+/**
+ * Tells a user whose account is gone that their store subscription is not
+ * (AND-OVH-010). Shared by Profile and Settings, the two places that delete.
+ * Both buttons finish the sign-out; opening the store does so too, because the
+ * account no longer exists whether or not they cancel.
+ */
+@Composable
+internal fun StoreSubscriptionNoticeDialog(
+    notice: StoreSubscriptionNotice,
+    onOpenManage: (String) -> Unit,
+    onAcknowledge: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Subscription Still Active") },
+        text = { Text(notice.message) },
+        confirmButton = {
+            val url = notice.manageUrl
+            if (url != null) {
+                TextButton(onClick = {
+                    onOpenManage(url)
+                    onAcknowledge()
+                }) {
+                    Text(notice.manageLabel)
+                }
+            } else {
+                TextButton(onClick = onAcknowledge) { Text("OK") }
+            }
+        },
+        dismissButton = if (notice.manageUrl != null) {
+            { TextButton(onClick = onAcknowledge) { Text("Not Now") } }
+        } else {
+            null
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

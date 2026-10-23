@@ -13,6 +13,7 @@ import com.desmoines.aipulse.util.AnalyticsService
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.util.ConsentService
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.suspendRunCatching
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
@@ -154,7 +155,7 @@ class AdTrackingService @Inject constructor(
 
         val remaining = mutableListOf<PendingAdEvent>()
         for (event in queue) {
-            val sent = runCatching {
+            val sent = suspendRunCatching {
                 when (event.type) {
                     TYPE_IMPRESSION -> client.from("ad_impressions").insert(
                         ImpressionInsert(

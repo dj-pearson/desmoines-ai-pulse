@@ -47,7 +47,8 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun SavedTripsScreen(
     state: SavedTripsUiState,
-    onShare: (String) -> Unit,
+    /** Null hides the Share action (TRIP_SHARE_AVAILABLE is false). */
+    onShare: ((String) -> Unit)?,
     onDelete: (String) -> Unit,
     onOpenTrip: (String) -> Unit,
     onConsumeShareUrl: () -> Unit,
@@ -98,7 +99,7 @@ fun SavedTripsScreen(
                         SavedTripRow(
                             trip = trip,
                             onOpen = { onOpenTrip(trip.id) },
-                            onShare = { onShare(trip.id) },
+                            onShare = onShare?.let { share -> { share(trip.id) } },
                             onDelete = { pendingDelete = trip.id },
                         )
                         HorizontalDivider()
@@ -127,7 +128,7 @@ fun SavedTripsScreen(
 }
 
 @Composable
-private fun SavedTripRow(trip: TripPlan, onOpen: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit) {
+private fun SavedTripRow(trip: TripPlan, onOpen: () -> Unit, onShare: (() -> Unit)?, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -147,8 +148,10 @@ private fun SavedTripRow(trip: TripPlan, onOpen: () -> Unit, onShare: () -> Unit
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = onShare) {
-            Icon(Icons.Filled.Share, contentDescription = "Share trip")
+        if (onShare != null) {
+            IconButton(onClick = onShare) {
+                Icon(Icons.Filled.Share, contentDescription = "Share trip")
+            }
         }
         IconButton(onClick = onDelete) {
             Icon(

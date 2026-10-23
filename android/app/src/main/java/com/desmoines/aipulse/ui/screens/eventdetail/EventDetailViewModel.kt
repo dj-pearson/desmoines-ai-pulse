@@ -15,6 +15,7 @@ import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
+import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +37,11 @@ class EventDetailViewModel @Inject constructor(
     private val favoritesRepository: FavoritesRepository,
     private val authRepository: AuthRepository,
     private val billingService: BillingService,
+    private val localNotificationService: LocalNotificationService,
 ) : ViewModel() {
+
+    /** Wall clock, swappable so tests can pin "now" relative to an event. */
+    internal var nowMillis: () -> Long = { System.currentTimeMillis() }
 
     private val _event = MutableStateFlow<Event?>(null)
     val event: StateFlow<Event?> = _event.asStateFlow()
@@ -67,6 +72,7 @@ class EventDetailViewModel @Inject constructor(
                 .onSuccess { event ->
                     _event.value = event
                     refreshFavoriteState(event.id)
+                    refreshReminderState(event)
                     loadRelatedEvents(event.id, event.category)
                 }
                 .onFailure { error ->
@@ -135,6 +141,86 @@ class EventDetailViewModel @Inject constructor(
 
     fun clearFavoriteError() {
         _favoriteError.value = null
+    }
+
+    // MARK: - Reminder
+
+    private val _isReminderSet = MutableStateFlow(false)
+    val isReminderSet: StateFlow<Boolean> = _isReminderSet.asStateFlow()
+
+    private val _showReminderButton = MutableStateFlow(false)
+    val showReminderButton: StateFlow<Boolean> = _showReminderButton.asStateFlow()
+
+    private val _reminderMessage = MutableStateFlow<String?>(null)
+    val reminderMessage: StateFlow<String?> = _reminderMessage.asStateFlow()
+
+    /**
+     * Reads the persisted reminder for [event] from [LocalNotificationService].
+     *
+     * The button used to hardcode "not set", so a reminder scheduled on an
+     * earlier visit showed as "Remind Me" and there was no way to cancel it.
+     */
+    private fun refreshReminderState(event: Event) {
+        val isSet = localNotificationService.isReminderSet(event.id)
+        _isReminderSet.value = isSet
+        _showReminderButton.value = isReminderButtonVisible(event, isSet, nowMillis())
+    }
+
+    /**
+     * Sets or cancels the reminder for the loaded event.
+     *
+     * The caller is responsible for POST_NOTIFICATIONS on API 33+: it asks before
+     * calling this, and calls [onNotificationPermissionDenied] instead when the
+     * user says no, so nothing is scheduled that could never be shown.
+     */
+    fun toggleReminder() {
+        val event = _event.value ?: return
+        val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return
+
+        val nowSet = localNotificationService.toggleReminder(
+            eventId = event.id,
+            title = event.title,
+            venue = event.venue,
+            eventTimeMillis = startMillis,
+        )
+        val wasSet = _isReminderSet.value
+        _isReminderSet.value = nowSet
+        _showReminderButton.value = isReminderButtonVisible(event, nowSet, nowMillis())
+
+        // Asked to set one and it did not take: say why instead of leaving the
+        // button looking like it ignored the tap.
+        if (!wasSet && !nowSet) {
+            _reminderMessage.value =
+                if (startMillis - LocalNotificationService.REMINDER_OFFSET_MILLIS <= nowMillis()) {
+                    "This event starts in under an hour, too soon for a reminder."
+                } else {
+                    "Couldn't set the reminder. Please try again."
+                }
+        }
+    }
+
+    /** The user declined POST_NOTIFICATIONS; nothing is scheduled. */
+    fun onNotificationPermissionDenied() {
+        _reminderMessage.value =
+            "Notifications are off for Des Moines Insider, so a reminder couldn't reach you. " +
+                "Turn them on in Settings to use reminders."
+    }
+
+    fun clearReminderMessage() {
+        _reminderMessage.value = null
+    }
+
+    companion object {
+        /**
+         * Whether the Remind Me button belongs on screen, matching iOS
+         * EventDetailActions.swift: hidden once the event has started, since
+         * there is nothing left to remind about, but kept while a reminder is
+         * set so it can still be cancelled.
+         */
+        internal fun isReminderButtonVisible(event: Event, isReminderSet: Boolean, nowMillis: Long): Boolean {
+            val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return false
+            return isReminderSet || startMillis >= nowMillis
+        }
     }
 
     /**

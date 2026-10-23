@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.remote
 
 import com.desmoines.aipulse.data.model.CampaignAd
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.suspendRunCatching
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
@@ -46,7 +47,7 @@ class CampaignAdService @Inject constructor(
             }
         }
 
-        val ad = runCatching {
+        val ad = suspendRunCatching {
             client.postgrest.rpc("get_active_ads", Params(placementType = placement))
                 .decodeList<CampaignAd>()
                 .firstOrNull { it.isRenderable }

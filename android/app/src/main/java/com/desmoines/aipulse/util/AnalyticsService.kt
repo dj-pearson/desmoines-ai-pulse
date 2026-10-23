@@ -31,9 +31,18 @@ class FirebaseAnalyticsSink(
 /**
  * Consent-gated analytics facade. Mirrors iOS AnalyticsService.swift.
  *
- * Non-essential events are dropped unless ConsentService.analyticsConsent is true.
- * Essential telemetry (crash/auth-error breadcrumbs) is never gated. No PII —
- * event names + structural parameters only.
+ * Firebase collection starts OFF: the manifest sets
+ * firebase_analytics_collection_enabled=false, and this class turns it on only
+ * once ConsentService.analyticsConsent is true. DesMoinesInsiderApp calls
+ * [applyConsent] in onCreate, so a stored grant takes effect at process start
+ * rather than whenever something first injects this class.
+ *
+ * Non-essential events are dropped here without consent. [logEvent]'s
+ * `essential` flag skips that check and hands the event to the sink, but it is
+ * NOT a bypass: while collection is disabled Firebase discards every logged
+ * event, essential or not. Crash and error reporting go through
+ * CrashReportingService, not this class. No PII - event names and structural
+ * parameters only.
  *
  * Event NAMES mirror iOS verbatim. The DATA does not: iOS AnalyticsService is
  * a stub whose every Firebase call is commented out, so it emits nothing at
@@ -47,21 +56,27 @@ class AnalyticsService @Inject constructor(
     private val sink: AnalyticsSink,
     private val consentService: ConsentService,
 ) {
-    init {
-        // Reflect the user's current choice in Firebase collection at startup.
-        sink.setCollectionEnabled(consentService.analyticsConsent.value)
-    }
-
     private val hasConsent: Boolean get() = consentService.analyticsConsent.value
 
-    /** Re-apply collection state after a consent change. */
+    init {
+        // Reflect the user's current choice in Firebase collection on construction.
+        applyConsent()
+    }
+
+    /**
+     * Apply the stored consent to Firebase collection. Called at app start and
+     * after every consent change. Collection is enabled only on a grant; without
+     * one it is (re)disabled, which is what a revocation needs and a no-op on a
+     * fresh install, where the manifest already starts it disabled.
+     */
     fun applyConsent() {
         sink.setCollectionEnabled(hasConsent)
     }
 
     /**
-     * Log [name] with [params]. Non-essential events are dropped without consent;
-     * [essential] events (breadcrumbs) always send.
+     * Log [name] with [params]. Non-essential events are dropped without consent.
+     * [essential] events skip that check, but Firebase still drops them while
+     * collection is disabled, so without consent they are not recorded either.
      */
     fun logEvent(name: String, params: Map<String, String> = emptyMap(), essential: Boolean = false) {
         if (!essential && !hasConsent) return

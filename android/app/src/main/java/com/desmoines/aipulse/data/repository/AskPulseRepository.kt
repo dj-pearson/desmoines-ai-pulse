@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.repository
 
 import com.desmoines.aipulse.data.model.LatLng
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.ConsentService
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
@@ -14,6 +15,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -110,6 +112,10 @@ class QuotaExceededException(message: String = "Daily Ask Pulse limit reached") 
 /**
  * Backs the Ask Pulse conversational discovery surface. Mirrors iOS AskPulseService.swift.
  * Calls the shared `discover-chat` edge function.
+ *
+ * [location] is dropped unless ConsentService.locationConsent is on. A caller
+ * that wants to pass one should check that flag before asking LocationService
+ * for a fix, so consent off means no fix is taken, not just none is sent.
  */
 interface AskPulseRepository {
     suspend fun discover(
@@ -118,10 +124,42 @@ interface AskPulseRepository {
     ): Result<DiscoverChatResponse>
 }
 
+/**
+ * The discover-chat request body.
+ *
+ * `userLocation` goes out only when the user has location consent on. Before
+ * this, any non-null fix was sent and nothing outside Settings read the toggle,
+ * so it controlled nothing (AND-OVH-002). Omitting the key is the same shape the
+ * function already gets when there is no fix, so the contract is unchanged.
+ *
+ * Built with buildJsonObject (proven, unambiguous - matches BillingService).
+ */
+internal fun buildDiscoverChatPayload(
+    messages: List<DiscoverChatMessage>,
+    location: LatLng?,
+    locationConsent: Boolean,
+): JsonObject = buildJsonObject {
+    putJsonArray("messages") {
+        messages.forEach { message ->
+            addJsonObject {
+                put("role", message.role)
+                put("content", message.content)
+            }
+        }
+    }
+    if (locationConsent && location != null) {
+        putJsonObject("userLocation") {
+            put("latitude", location.latitude)
+            put("longitude", location.longitude)
+        }
+    }
+}
+
 @Singleton
 class AskPulseRepositoryImpl @Inject constructor(
     private val supabaseClient: SupabaseClient?,
     private val json: Json,
+    private val consentService: ConsentService,
 ) : AskPulseRepository {
 
     override suspend fun discover(
@@ -131,23 +169,11 @@ class AskPulseRepositoryImpl @Inject constructor(
         val client = supabaseClient
             ?: return Result.failure(IllegalStateException("Supabase client is not configured."))
         return try {
-            // Build the request body with buildJsonObject (proven, unambiguous — matches BillingService).
-            val payload = buildJsonObject {
-                putJsonArray("messages") {
-                    messages.forEach { message ->
-                        addJsonObject {
-                            put("role", message.role)
-                            put("content", message.content)
-                        }
-                    }
-                }
-                location?.let {
-                    putJsonObject("userLocation") {
-                        put("latitude", it.latitude)
-                        put("longitude", it.longitude)
-                    }
-                }
-            }
+            val payload = buildDiscoverChatPayload(
+                messages = messages,
+                location = location,
+                locationConsent = consentService.locationConsent.value,
+            )
             val response = client.functions("discover-chat", body = payload)
             val status = response.status.value
             when {

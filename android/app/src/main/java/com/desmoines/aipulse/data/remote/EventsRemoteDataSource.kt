@@ -3,9 +3,11 @@ package com.desmoines.aipulse.data.remote
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.EventSlug
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.query.filter.TextSearchType
@@ -115,10 +117,11 @@ class EventsRemoteDataSource @Inject constructor(
     // region Fetch Single Event
 
     /**
-     * Fetch a single event by ID.
-     * Matches iOS fetchEvent(id:).
+     * Fetch a single event by ID, or by the web's slug when the value isn't a
+     * UUID (AND-OVH-022). Matches iOS fetchEvent(id:) for the id case.
      */
     suspend fun fetchEvent(id: String): Event {
+        if (!SlugLookup.isUuid(id)) return fetchEventBySlug(id)
         val client = db()
         return client.from("events").select {
             filter { eq("id", id) }
@@ -126,6 +129,65 @@ class EventsRemoteDataSource @Inject constructor(
             single()
         }.decodeAs<Event>()
     }
+
+    @Serializable
+    private data class SlugCandidateRow(
+        val id: String,
+        val title: String? = null,
+        val date: String? = null,
+        val event_start_utc: String? = null,
+    )
+
+    /**
+     * Resolve a web event slug, `<title-slug>-<YYYY-MM-DD>` in Central Time.
+     * events has no slug column, so this mirrors src/hooks/useEventBySlug.ts:
+     * read the slug-deriving columns for the day the slug names, pick the row
+     * whose slug matches ([EventSlug.pick]), then fetch that row whole.
+     *
+     * The window is the Central day widened by a day each side, because the
+     * slug's day comes from event_start_utc while the filter is on `date`, and
+     * the two can sit either side of midnight. The pick then holds the match to
+     * the exact Central day. An undated slug (reminder and digest emails build
+     * them) is narrowed by an ilike on the title among upcoming events.
+     *
+     * The visibility predicates are the web detail page's (applyEventVisibility),
+     * so a merged, hidden or archived event the site 404s doesn't open here.
+     */
+    suspend fun fetchEventBySlug(slug: String): Event {
+        val parsed = EventSlug.parse(slug)
+        val candidates = db().from("events").select(
+            Columns.list("id", "title", "date", "event_start_utc"),
+        ) {
+            filter {
+                neq("is_merged", true)
+                neq("is_hidden", true)
+                exact("archived_at", null)
+                if (parsed != null) {
+                    gte("date", centralDayStartIso(parsed.date.minusDays(1)))
+                    lt("date", centralDayStartIso(parsed.date.plusDays(2)))
+                } else {
+                    val words = slug.split('-').filter { it.isNotEmpty() }
+                    if (words.isEmpty()) throw EntityNotFoundException("No event for slug '$slug'")
+                    ilike("title", words.joinToString("%", prefix = "%", postfix = "%"))
+                    gte("date", todayIso())
+                }
+            }
+            if (parsed == null) {
+                order("date", Order.ASCENDING)
+                limit(20)
+            }
+        }.decodeList<SlugCandidateRow>()
+            .map { EventSlug.Candidate(it.id, it.title, it.date, it.event_start_utc) }
+
+        val match = EventSlug.pick(slug, candidates)
+            ?: throw EntityNotFoundException("No event for slug '$slug'")
+        AppLogger.network.debug("fetchEventBySlug: '$slug' -> ${match.id} (${candidates.size} candidates)")
+        return fetchEvent(match.id)
+    }
+
+    private fun centralDayStartIso(day: LocalDate): String =
+        day.atStartOfDay(EventSlug.CENTRAL).toOffsetDateTime()
+            .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     // endregion
 

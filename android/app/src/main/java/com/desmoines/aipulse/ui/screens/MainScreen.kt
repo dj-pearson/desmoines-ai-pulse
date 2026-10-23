@@ -1,14 +1,12 @@
 package com.desmoines.aipulse.ui.screens
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -18,6 +16,8 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,7 +27,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.ui.theme.LocalBackdropBlurState
@@ -53,9 +56,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.desmoines.aipulse.ui.navigation.BottomNavTab
 import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
+import com.desmoines.aipulse.util.AuthCallbackNotices
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.PasswordRecoveryGate
 import com.desmoines.aipulse.util.ShortcutDispatcher
+import kotlinx.coroutines.launch
 
 /**
  * Main screen with bottom navigation bar matching iOS MainTabView.swift.
@@ -68,6 +74,8 @@ fun MainScreen(
     networkMonitor: NetworkMonitor,
     deepLinkHandler: DeepLinkHandler,
     shortcutDispatcher: ShortcutDispatcher,
+    authCallbackNotices: AuthCallbackNotices,
+    passwordRecoveryGate: PasswordRecoveryGate,
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
 ) {
     val useNavRail = widthSizeClass != WindowWidthSizeClass.Compact
@@ -122,24 +130,55 @@ fun MainScreen(
         val destination = deepLinkHandler.consumeDestination() ?: return@LaunchedEffect
 
         when (destination) {
+            // Ids may be web slugs (LinkId.isUuid false); the detail screens
+            // resolve them (AND-OVH-022).
             is DeepLinkHandler.Destination.Event -> {
-                navController.navigate(Route.EventDetail.createRoute(destination.id)) {
+                navController.navigate(Route.EventDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
                 }
             }
             is DeepLinkHandler.Destination.Restaurant -> {
-                navController.navigate(Route.RestaurantDetail.createRoute(destination.id)) {
+                navController.navigate(Route.RestaurantDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
                 }
             }
             is DeepLinkHandler.Destination.Attraction -> {
-                navController.navigate(Route.AttractionDetail.createRoute(destination.id)) {
+                navController.navigate(Route.AttractionDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
                 }
             }
             is DeepLinkHandler.Destination.Hotel -> {
-                navController.navigate(Route.HotelDetail.createRoute(destination.id)) {
+                navController.navigate(Route.HotelDetail.createRoute(destination.id.value)) {
                     launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Article -> {
+                navController.navigate(Route.ArticleDetail.createRoute(destination.id.value)) {
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Screen -> {
+                val screenRoute = when (destination.screen) {
+                    DeepLinkHandler.ScreenDestination.WEEKEND -> Route.Weekend.route
+                    DeepLinkHandler.ScreenDestination.HOTELS -> Route.Hotels.route
+                    DeepLinkHandler.ScreenDestination.ARTICLES -> Route.Articles.route
+                }
+                navController.navigate(screenRoute) { launchSingleTop = true }
+            }
+            is DeepLinkHandler.Destination.Web -> {
+                navController.navigate(Route.WebView.createRoute(destination.url)) {
+                    launchSingleTop = true
+                }
+            }
+            // The query itself waits in DeepLinkHandler.pendingSearchQuery
+            // until SearchViewModel picks it up.
+            is DeepLinkHandler.Destination.Search -> {
+                navController.navigate(Route.Search.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
                 }
             }
             is DeepLinkHandler.Destination.Tab -> {
@@ -160,6 +199,62 @@ fun MainScreen(
                 }
             }
         }
+    }
+
+    // Auth-callback outcomes (AND-OVH-005). A confirmed link lands on Home with
+    // a snackbar; a refused one gets a dialog, because a snackbar over Home is
+    // easy to miss and the user's next step (sign in, resend) is not on Home.
+    // The snackbar runs on its own scope: consume() changes the key below and
+    // restarts the effect, which would cancel a snackbar shown from inside it.
+    // The failure text is saveable so the dialog survives a rotation.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
+    var authCallbackFailure by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingAuthNotice by authCallbackNotices.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingAuthNotice) {
+        when (val notice = authCallbackNotices.consume() ?: return@LaunchedEffect) {
+            is AuthCallbackNotices.Notice.SignedIn -> {
+                navController.navigate(Route.Home.route) {
+                    popUpTo(navController.graph.findStartDestination().id)
+                    launchSingleTop = true
+                }
+                snackbarScope.launch { snackbarHostState.showSnackbar(notice.message) }
+            }
+            is AuthCallbackNotices.Notice.Failed -> authCallbackFailure = notice.message
+            // The effect below does the navigating, so a deep link or a
+            // rotation can't strand the user off the screen.
+            AuthCallbackNotices.Notice.PasswordRecovery -> passwordRecoveryGate.require()
+            is AuthCallbackNotices.Notice.PasswordUpdated ->
+                snackbarScope.launch { snackbarHostState.showSnackbar(notice.message) }
+        }
+    }
+
+    // Password reset (AND-OVH-006). While a reset link's session is waiting on
+    // a new password, every destination bounces back to SetNewPassword with the
+    // back stack cleared, so neither Back nor a deep link nor a tab leads away
+    // from it. Saving the password or signing out clears the gate.
+    val passwordRecoveryRequired by passwordRecoveryGate.required.collectAsStateWithLifecycle()
+    val currentRoute = currentDestination?.route
+    LaunchedEffect(passwordRecoveryRequired, currentRoute) {
+        if (passwordRecoveryRequired && currentRoute != null && currentRoute != Route.SetNewPassword.route) {
+            navController.navigate(Route.SetNewPassword.route) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    authCallbackFailure?.let { message ->
+        AlertDialog(
+            onDismissRequest = { authCallbackFailure = null },
+            title = { Text("Link didn't work") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { authCallbackFailure = null }) {
+                    Text("OK")
+                }
+            },
+        )
     }
 
     // App Shortcut / Assistant deep links (ANDP-015): route to the host screen.
@@ -186,12 +281,6 @@ fun MainScreen(
     // Routes where the bottom bar should be visible (tab routes only)
     val tabRoutes = BottomNavTab.entries.map { it.route }.toSet()
     val showBottomBar = currentDestination?.route in tabRoutes
-
-    // Launch the Ask Pulse AI discovery surface (single-top so re-taps don't stack).
-    val onAskPulseClick: () -> Unit = {
-        haptic.light()
-        navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
-    }
 
     // Full-screen interstitial (ANDP-044): counts the session on creation and is
     // offered only at a tab switch — a stable boundary, never mid-read/mid-flow.
@@ -233,18 +322,6 @@ fun MainScreen(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxHeight(),
-                    header = {
-                        FloatingActionButton(
-                            onClick = onAskPulseClick,
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.semantics {
-                                contentDescription = "Ask Pulse, AI discovery"
-                            },
-                        ) {
-                            Icon(Icons.Filled.AutoAwesome, contentDescription = null)
-                        }
-                    },
                 ) {
                     val tabs = BottomNavTab.entries
                     tabs.forEachIndexed { index, tab ->
@@ -283,19 +360,25 @@ fun MainScreen(
                     }
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                OfflineBanner(networkMonitor = networkMonitor)
-                SessionTimeoutBanner(
-                    minutesRemaining = sessionMinutesRemaining,
-                    onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
-                )
-                MainNavHost(
-                    navController = navController,
-                    scrollToTopTrigger = scrollToTopTrigger,
-                    useWideLayout = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .respondsToBackdropBlur()
+            Box(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    OfflineBanner(networkMonitor = networkMonitor)
+                    SessionTimeoutBanner(
+                        minutesRemaining = sessionMinutesRemaining,
+                        onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
+                    )
+                    MainNavHost(
+                        navController = navController,
+                        scrollToTopTrigger = scrollToTopTrigger,
+                        useWideLayout = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .respondsToBackdropBlur()
+                    )
+                }
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
         }
@@ -303,20 +386,7 @@ fun MainScreen(
         // Phone: standard bottom NavigationBar
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            floatingActionButton = {
-                if (showBottomBar) {
-                    FloatingActionButton(
-                        onClick = onAskPulseClick,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.semantics {
-                            contentDescription = "Ask Pulse, AI discovery"
-                        },
-                    ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
-                    }
-                }
-            },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 if (showBottomBar) {
                     NavigationBar(

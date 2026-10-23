@@ -4,6 +4,7 @@ import com.desmoines.aipulse.data.model.SessionParticipant
 import com.desmoines.aipulse.data.model.SwipeSession
 import com.desmoines.aipulse.data.model.SwipeSessionMatch
 import com.desmoines.aipulse.data.remote.GroupSessionRemoteDataSource
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +24,7 @@ class GroupSessionRepositoryImpl @Inject constructor(
 ) : GroupSessionRepository {
 
     override suspend fun createSession(hostUserId: String, mode: String): Result<SwipeSession> =
-        runCatching {
+        suspendRunCatching {
             val session = remote.createSession(hostUserId, mode)
             // Host is also a participant.
             remote.addParticipant(session.id, hostUserId, displayName = null)
@@ -31,7 +32,7 @@ class GroupSessionRepositoryImpl @Inject constructor(
         }
 
     override suspend fun joinByCode(code: String, userId: String, displayName: String?): Result<SwipeSession> =
-        runCatching {
+        suspendRunCatching {
             val session = remote.fetchByCode(code)
                 ?: throw IllegalStateException("No session found for that code.")
             if (!session.isLive()) throw IllegalStateException("That session has ended or expired.")
@@ -40,14 +41,14 @@ class GroupSessionRepositoryImpl @Inject constructor(
         }
 
     override suspend fun fetchSession(sessionId: String): Result<SwipeSession?> =
-        runCatching { remote.fetchSession(sessionId) }
+        suspendRunCatching { remote.fetchSession(sessionId) }
 
     override suspend fun fetchParticipants(sessionId: String): Result<List<SessionParticipant>> =
-        runCatching { remote.fetchParticipants(sessionId) }
+        suspendRunCatching { remote.fetchParticipants(sessionId) }
 
     override suspend fun fetchMatches(sessionId: String): Result<List<SwipeSessionMatch>> =
-        runCatching { remote.fetchMatches(sessionId) }
+        suspendRunCatching { remote.fetchMatches(sessionId) }
 
     override suspend fun endSession(sessionId: String): Result<Unit> =
-        runCatching { remote.endSession(sessionId) }
+        suspendRunCatching { remote.endSession(sessionId) }
 }

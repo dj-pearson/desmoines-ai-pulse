@@ -6,6 +6,7 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.remote.RestaurantsRemoteDataSource
 import com.desmoines.aipulse.data.remote.RestaurantsResponse
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 /**
@@ -32,7 +33,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
             }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchRestaurants(query).also { response ->
                 cacheManager.cacheRestaurants(cacheKey, response.restaurants)
             }
@@ -49,7 +50,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
             return Result.success(cached)
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchRestaurant(id).also { restaurant ->
                 cacheManager.cacheRestaurants(CacheManager.restaurantsKey("single", id), listOf(restaurant))
             }
@@ -63,7 +64,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
             cacheManager.getCachedRestaurants(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fuzzySearchRestaurants(query, limit).also { restaurants ->
                 cacheManager.cacheRestaurants(cacheKey, restaurants)
             }
@@ -85,7 +86,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
             cacheManager.getCachedRestaurants(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchNearbyRestaurants(latitude, longitude, radiusMiles, limit).also { restaurants ->
                 cacheManager.cacheRestaurants(cacheKey, restaurants)
             }
@@ -97,7 +98,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
 
     override suspend fun fetchAvailableCuisines(): Result<List<String>> {
         // Cuisines are a simple list, cache with a fixed key
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchAvailableCuisines()
         }.onFailure { AppLogger.network.error("fetchAvailableCuisines failed: ${it.message}", it) }
     }
