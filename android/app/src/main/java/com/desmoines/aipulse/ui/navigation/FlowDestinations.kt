@@ -576,6 +576,7 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val isDeleting by profileViewModel.isDeleting.collectAsStateWithLifecycle()
         val showDeleteConfirmation by profileViewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
         val errorMessage by profileViewModel.errorMessage.collectAsStateWithLifecycle()
+        val storeSubscriptionNotice by profileViewModel.storeSubscriptionNotice.collectAsStateWithLifecycle()
         val subscriptionState by settingsSubscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val locationConsent by profileViewModel.locationConsent.collectAsStateWithLifecycle()
         val emailConsent by profileViewModel.emailConsent.collectAsStateWithLifecycle()
@@ -589,6 +590,11 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
             isDeleting = isDeleting,
             showDeleteConfirmation = showDeleteConfirmation,
             errorMessage = errorMessage,
+            // Prefer the sku-specific Play page when the billing state knows it.
+            storeSubscriptionNotice = storeSubscriptionNotice?.let { notice ->
+                if (notice.isGooglePlay) notice.copy(manageUrl = subscriptionState.manageSubscriptionUrl ?: notice.manageUrl) else notice
+            },
+            onAcknowledgeStoreSubscriptionNotice = { profileViewModel.acknowledgeStoreSubscriptionNotice() },
             locationConsent = locationConsent,
             emailConsent = emailConsent,
             emailConsentError = emailConsentError,

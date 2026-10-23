@@ -74,6 +74,8 @@ fun SettingsScreen(
     isDeleting: Boolean = false,
     showDeleteConfirmation: Boolean = false,
     errorMessage: String? = null,
+    storeSubscriptionNotice: StoreSubscriptionNotice? = null,
+    onAcknowledgeStoreSubscriptionNotice: () -> Unit = {},
     // Biometric auth
     isBiometricAvailable: Boolean = false,
     isBiometricEnabled: Boolean = false,
@@ -350,7 +352,7 @@ fun SettingsScreen(
             onDismissRequest = onDismissDelete,
             title = { Text("Delete Account?") },
             text = {
-                Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
+                Text(AccountDeletionResponse.CONFIRMATION_TEXT)
             },
             confirmButton = {
                 TextButton(
@@ -367,6 +369,16 @@ fun SettingsScreen(
                     Text("Cancel")
                 }
             },
+        )
+    }
+
+    // Store subscription still billing after deletion (AND-OVH-010). Shown
+    // before sign-out, and not dismissable by tapping outside.
+    storeSubscriptionNotice?.let { notice ->
+        StoreSubscriptionNoticeDialog(
+            notice = notice,
+            onOpenManage = { SafeLinkLauncher.openUrl(context, it) },
+            onAcknowledge = onAcknowledgeStoreSubscriptionNotice,
         )
     }
 

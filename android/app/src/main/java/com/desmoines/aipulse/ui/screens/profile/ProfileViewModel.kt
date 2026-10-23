@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -160,6 +159,10 @@ class ProfileViewModel @Inject constructor(
 
     private val _showDeleteConfirmation = MutableStateFlow(false)
     val showDeleteConfirmation: StateFlow<Boolean> = _showDeleteConfirmation.asStateFlow()
+
+    /** Set after a deletion that left a store subscription billing; blocks sign-out until acknowledged. */
+    private val _storeSubscriptionNotice = MutableStateFlow<StoreSubscriptionNotice?>(null)
+    val storeSubscriptionNotice: StateFlow<StoreSubscriptionNotice?> = _storeSubscriptionNotice.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -309,24 +312,50 @@ class ProfileViewModel @Inject constructor(
                     },
                 ).bodyAsText()
 
-                // The function only reports success once auth.users is gone.
-                // Anything else must not sign the user out of a live account.
-                val succeeded = Json.parseToJsonElement(confirmed)
-                    .jsonObject["success"]?.jsonPrimitive?.booleanOrNull == true
-                if (!succeeded) {
-                    throw Exception(
-                        "Your account was not deleted. " +
-                            "Please try again or contact privacy@desmoinesinsider.com."
-                    )
-                }
-
-                authRepository.signOut()
+                finishDeletion(confirmed)
             } catch (e: Exception) {
                 AppLogger.ui.error("Failed to delete account", e)
                 _errorMessage.value = e.message ?: "Failed to delete account."
             }
 
             _isDeleting.value = false
+        }
+    }
+
+    /**
+     * Acts on the `confirm` response (AND-OVH-010).
+     *
+     * The function only reports success once auth.users is gone, so anything
+     * else must not sign the user out of a live account. When a store
+     * subscription is still billing, the sign-out waits for the user to
+     * acknowledge [storeSubscriptionNotice]: signing out first would drop them
+     * on the guest screen with no idea that Google Play keeps charging.
+     */
+    internal suspend fun finishDeletion(confirmedBody: String) {
+        val result = AccountDeletionResponse.parse(confirmedBody)
+        if (!result.succeeded) {
+            throw Exception(
+                "Your account was not deleted. " +
+                    "Please try again or contact privacy@desmoinesinsider.com."
+            )
+        }
+        val notice = result.notice
+        if (notice != null) {
+            _storeSubscriptionNotice.value = notice
+        } else {
+            authRepository.signOut()
+        }
+    }
+
+    /**
+     * The user has seen the store-subscription warning. The account is already
+     * deleted, so this only finishes the local sign-out it was holding back.
+     */
+    fun acknowledgeStoreSubscriptionNotice() {
+        if (_storeSubscriptionNotice.value == null) return
+        _storeSubscriptionNotice.value = null
+        viewModelScope.launch {
+            authRepository.signOut()
         }
     }
 

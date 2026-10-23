@@ -310,6 +310,7 @@ internal fun NavGraphBuilder.addTabDestinations(
         val showSaveSuccess by viewModel.showSaveSuccess.collectAsStateWithLifecycle()
         val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
         val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+        val storeSubscriptionNotice by viewModel.storeSubscriptionNotice.collectAsStateWithLifecycle()
         val profileSubState by profileSubscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -329,6 +330,12 @@ internal fun NavGraphBuilder.addTabDestinations(
             showSaveSuccess = showSaveSuccess,
             showDeleteConfirmation = showDeleteConfirmation,
             errorMessage = errorMessage,
+            // Prefer the sku-specific Play page when the billing state knows it.
+            storeSubscriptionNotice = storeSubscriptionNotice?.let { notice ->
+                if (notice.isGooglePlay) notice.copy(manageUrl = profileSubState.manageSubscriptionUrl ?: notice.manageUrl) else notice
+            },
+            onOpenStoreSubscription = { url -> com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, url) },
+            onAcknowledgeStoreSubscriptionNotice = { viewModel.acknowledgeStoreSubscriptionNotice() },
             onFirstNameChanged = { viewModel.setFirstName(it) },
             onLastNameChanged = { viewModel.setLastName(it) },
             onPhoneChanged = { viewModel.setPhone(it) },
