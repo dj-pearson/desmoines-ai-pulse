@@ -8,6 +8,13 @@
  * wording is a good-faith draft, NOT legal advice — have counsel review before
  * relying on it, and fill in the bracketed placeholders (EU/UK representative,
  * registered postal address) with real values.
+ *
+ * The "Mobile Apps" section and the Google/Apple sub-processor entries were
+ * drafted in AND-OVH-013 from what the Android and iOS code does
+ * (AndroidManifest.xml, ConsentService, AnalyticsService, CrashUploader,
+ * PushNotificationService, BillingService, discover-chat). Google Play compares
+ * the Data safety form against this page, so the two must change together.
+ * This wording also needs human legal sign-off before merge.
  */
 import { Link } from "react-router-dom";
 import Header from "@/components/Header";
@@ -19,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 
 export default function PrivacyPolicy() {
-  const lastUpdated = "July 23, 2026";
+  const lastUpdated = "October 23, 2026";
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,8 +56,10 @@ export default function PrivacyPolicy() {
             <h2 className="text-2xl font-semibold mt-8 mb-4">Introduction</h2>
             <p>
               Welcome to Des Moines Insider ("we," "our," or "us"). We are committed to protecting your privacy and ensuring
-              you have a positive experience on our website at desmoinesinsider.com (the "Site"). This Privacy Policy explains
-              how we collect, use, disclose, and safeguard your information when you visit our Site or use our services.
+              you have a positive experience on our website at desmoinesinsider.com (the "Site") and in our iOS and Android
+              apps (the "Apps"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information
+              when you visit our Site, use our Apps, or use our services. What the Apps collect beyond the Site is described
+              under <strong>Mobile Apps</strong> below.
             </p>
             <p>
               Des Moines Insider is an AI-powered city guide platform that helps you discover events, restaurants, attractions,
@@ -95,7 +104,7 @@ export default function PrivacyPolicy() {
               <li><strong>Device Information:</strong> Device type (mobile, tablet, desktop), browser type, operating system</li>
               <li><strong>Usage Data:</strong> Pages visited, features used, search queries, time spent on pages</li>
               <li><strong>Log Data:</strong> IP address (hashed for privacy), access times, referring URLs</li>
-              <li><strong>Location Data:</strong> General geographic location based on IP address (not precise GPS)</li>
+              <li><strong>Location Data:</strong> On the Site, an approximate location derived from your IP address. The Apps can also use your device's precise or approximate location, but only with your permission (see <strong>Mobile Apps</strong> below)</li>
               <li><strong>Cookies and Similar Technologies:</strong> Session cookies, preference cookies, and analytics cookies</li>
             </ul>
             <p>
@@ -106,10 +115,11 @@ export default function PrivacyPolicy() {
 
             <h3 className="text-xl font-medium mt-6 mb-3">Sensitive Personal Information</h3>
             <p>
-              We do not intentionally collect "sensitive personal information" as defined by the California Privacy Rights Act
-              (CPRA) — such as precise geolocation, government identifiers, race, religion, health, or biometric data — for the
-              purpose of inferring characteristics about you. Account credentials are used solely to authenticate you and secure
-              your account.
+              We do not collect government identifiers, race, religion, health, or biometric data. Precise geolocation, which the
+              California Privacy Rights Act (CPRA) treats as "sensitive personal information," is collected only by the Apps, only
+              with your permission, and only to answer the request you made (see <strong>Mobile Apps</strong> below). We do not use
+              it, or any other sensitive personal information, to infer characteristics about you. Account credentials are used
+              solely to authenticate you and secure your account.
             </p>
 
             <h3 className="text-xl font-medium mt-6 mb-3">Information from Third-Party Services</h3>
@@ -118,6 +128,71 @@ export default function PrivacyPolicy() {
               <li>Basic profile information from social login providers (Google, Apple)</li>
               <li>Calendar availability if you use our calendar integration features</li>
             </ul>
+          </section>
+
+          <section className="mb-8" id="mobile-apps">
+            <h2 className="text-2xl font-semibold mt-8 mb-4">Mobile Apps</h2>
+            <p>
+              The Des Moines Insider apps for iOS and Android use the same account and backend as the Site, and everything above
+              applies to them. They also handle the following information, which the Site does not.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Location</h3>
+            <p>
+              The Apps can use your device's precise (GPS) or approximate location. They do so only when you have granted the
+              location permission in your device settings <em>and</em> location consent is turned on in the App's settings;
+              you can turn either one off at any time. Location is used to show where you are on the map and to answer
+              "near me" questions, such as nearby events or restaurants. When you ask the in-app assistant a question, your
+              coordinates are sent to our backend with the question, rounded to about 100 meters, and passed to our AI provider
+              to produce the answer. We do not use your location for advertising, and the Apps do not request background
+              location access.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Analytics (Firebase Analytics)</h3>
+            <p>
+              The Android app uses Google Firebase Analytics to see which features are used. Collection is
+              <strong> off until you grant analytics consent</strong> in the App, and stops again if you withdraw it. While it
+              is on, it records feature-usage events together with an app instance ID that Firebase generates for your
+              installation, and device details such as model, operating system and app version. Events carry no name, email
+              address or message content. The Apps do not collect your device's Advertising ID.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Push Notifications</h3>
+            <p>
+              If you allow notifications, the App registers for a push token, through Firebase Cloud Messaging (FCM) on Android
+              and the Apple Push Notification service on iOS. We store the token on our backend with your account and platform
+              so we can send the notifications you asked for, such as event reminders and alerts. You can turn notifications
+              off in your device settings at any time.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Crash Diagnostics</h3>
+            <p>
+              When an App crashes or hits an error, it saves a report on your device and sends it to our own error log the
+              next time it starts. A report contains the error type, a shortened error message, the app version and the
+              platform. Personal data is scrubbed from the message before it is stored. Crash reports go to no third-party
+              crash-reporting service and are used only to find and fix bugs.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Sign-In</h3>
+            <p>
+              You can sign in to the Apps with email and password, with Google Sign-In, or (on iOS) with Sign in with Apple.
+              When you use Google or Apple, we receive your name and email address (or Apple's private relay address) from that
+              provider to create or match your account.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Maps</h3>
+            <p>
+              The Android app draws its maps with Google Maps. Google receives the map area being viewed, your IP address and,
+              if you use "My Location," your device location, under Google's own privacy policy.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">In-App Subscriptions</h3>
+            <p>
+              Subscriptions bought in the Apps are processed by Google Play Billing on Android and Apple In-App Purchase on iOS.
+              Google or Apple handles your payment details and we never see your card number. We receive a purchase token or
+              transaction record, which our backend checks with Google or Apple to confirm your subscription tier. Deleting
+              your account does not cancel a store subscription; cancel it in Google Play or the App Store.
+            </p>
           </section>
 
           <section className="mb-8">
@@ -219,6 +294,8 @@ export default function PrivacyPolicy() {
               <li><strong>Amazon Web Services (Amazon SES):</strong> Transactional and marketing email delivery</li>
               <li><strong>OpenAI &amp; Anthropic:</strong> AI content and recommendation features (no personal data used for model training)</li>
               <li><strong>Google Analytics:</strong> Website analytics, where you have opted in (opt-out available)</li>
+              <li><strong>Google (Firebase, Maps, Sign-In, Play):</strong> In the Apps, Firebase Analytics (only with your consent), Firebase Cloud Messaging for push delivery, Google Maps for map display, Google Sign-In, and Google Play Billing for Android subscriptions</li>
+              <li><strong>Apple:</strong> In the iOS app, Sign in with Apple, the Apple Push Notification service, and Apple In-App Purchase for subscriptions</li>
             </ul>
             <p>
               A complete and current list of sub-processors, including the categories of data and safeguards, is maintained in
