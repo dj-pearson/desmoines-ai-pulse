@@ -3,6 +3,10 @@ package com.desmoines.aipulse.util
 import android.content.Intent
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.desmoines.aipulse.util.DeepLinkHandler.Destination
+import com.desmoines.aipulse.util.DeepLinkHandler.LinkId
+import com.desmoines.aipulse.util.DeepLinkHandler.ScreenDestination
+import com.desmoines.aipulse.util.DeepLinkHandler.TabDestination
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -38,7 +42,7 @@ class DeepLinkHandlerTest {
         handler = DeepLinkHandler()
     }
 
-    private fun parse(url: String): DeepLinkHandler.Destination? {
+    private fun parse(url: String): Destination? {
         assertTrue("handle() rejected $url", handler.handle(Uri.parse(url)))
         return handler.consumeDestination()
     }
@@ -46,43 +50,83 @@ class DeepLinkHandlerTest {
     // MARK: - Universal links
 
     @Test
-    fun universalLinkOpensAnEventDetail() {
-        assertEquals(
-            DeepLinkHandler.Destination.Event("touch-a-truck-2026-05-22"),
-            parse("https://desmoinesinsider.com/events/touch-a-truck-2026-05-22"),
-        )
+    fun universalLinkOpensAnEventDetailBySlug() {
+        // The web builds every event URL as <title>-<yyyy-mm-dd>, so this is a
+        // slug for AND-OVH-022 to resolve, not a row id.
+        val destination = parse("https://desmoinesinsider.com/events/touch-a-truck-2026-05-22")
+        assertEquals(Destination.Event(LinkId("touch-a-truck-2026-05-22")), destination)
+        assertFalse((destination as Destination.Event).id.isUuid)
+    }
+
+    @Test
+    fun universalLinkCarriesAUuidFlaggedAsOne() {
+        val id = "3f2a6c1e-9b7d-4e2a-8c1f-0a9b8c7d6e5f"
+        val destination = parse("https://desmoinesinsider.com/events/$id") as Destination.Event
+        assertTrue(destination.id.isUuid)
     }
 
     @Test
     fun universalLinkOpensEachEntityType() {
-        assertEquals(DeepLinkHandler.Destination.Restaurant("zombie-burger"), parse("https://desmoinesinsider.com/restaurants/zombie-burger"))
-        assertEquals(DeepLinkHandler.Destination.Attraction("pappajohn"), parse("https://desmoinesinsider.com/attractions/pappajohn"))
-        assertEquals(DeepLinkHandler.Destination.Hotel("surety"), parse("https://desmoinesinsider.com/hotels/surety"))
+        assertEquals(Destination.Restaurant(LinkId("zombie-burger")), parse("https://desmoinesinsider.com/restaurants/zombie-burger"))
+        assertEquals(Destination.Attraction(LinkId("pappajohn")), parse("https://desmoinesinsider.com/attractions/pappajohn"))
+        assertEquals(Destination.Hotel(LinkId("surety")), parse("https://desmoinesinsider.com/stay/surety"))
+        assertEquals(Destination.Article(LinkId("best-tacos-2026")), parse("https://desmoinesinsider.com/articles/best-tacos-2026"))
+    }
+
+    @Test
+    fun eventLandingPagesAreNotEvents() {
+        // iOS IOS-DD-PLATFORM-01: /events/today used to become Event("today").
+        assertEquals(Destination.Search("today"), parse("https://desmoinesinsider.com/events/today"))
+        assertEquals(Destination.Screen(ScreenDestination.WEEKEND), parse("https://desmoinesinsider.com/events/this-weekend"))
+        assertEquals(Destination.Search("free events"), parse("https://desmoinesinsider.com/events/free"))
+        assertEquals(Destination.Search("kids events"), parse("https://desmoinesinsider.com/events/kids"))
+        assertEquals(Destination.Search("events in ankeny"), parse("https://desmoinesinsider.com/events/ankeny"))
+        assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events/near-me"))
+        assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events/may-2026"))
+    }
+
+    @Test
+    fun restaurantLandingPagesLandOnDining() {
+        assertEquals(Destination.Tab(TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants/open-now"))
+        assertEquals(Destination.Tab(TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants/new"))
+    }
+
+    @Test
+    fun stayAndArticlesRootsOpenTheirLists() {
+        assertEquals(Destination.Screen(ScreenDestination.HOTELS), parse("https://desmoinesinsider.com/stay"))
+        assertEquals(Destination.Screen(ScreenDestination.ARTICLES), parse("https://desmoinesinsider.com/articles"))
+    }
+
+    @Test
+    fun aSearchLinkCarriesItsQuery() {
+        assertEquals(Destination.Search("tacos"), parse("https://desmoinesinsider.com/search?q=tacos"))
+        assertEquals("tacos", handler.consumeSearchQuery())
+        assertNull(handler.consumeSearchQuery())
+        assertEquals(Destination.Tab(TabDestination.SEARCH), parse("https://desmoinesinsider.com/search"))
     }
 
     @Test
     fun aWwwHostIsStillOurDomain() {
-        // The check is host.contains(), so this passes - asserted because a
-        // future tightening to an equality check would silently break every
-        // link shared from a browser that kept the www.
+        // Exact equality against both hosts: dropping www would silently break
+        // every link shared from a browser that kept it.
         assertEquals(
-            DeepLinkHandler.Destination.Event("abc"),
+            Destination.Event(LinkId("abc")),
             parse("https://www.desmoinesinsider.com/events/abc"),
         )
     }
 
     @Test
     fun singleSegmentPathsLandOnATab() {
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.HOME), parse("https://desmoinesinsider.com/events"))
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants"))
+        assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events"))
+        assertEquals(Destination.Tab(TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants"))
     }
 
     @Test
     fun anExtraPathSegmentStillResolvesToTheEntity() {
-        // pathSegments.size >= 2 takes the first two, so a tracking suffix does
-        // not lose the destination.
+        // The first two segments decide, so a tracking suffix does not lose
+        // the destination.
         assertEquals(
-            DeepLinkHandler.Destination.Event("abc"),
+            Destination.Event(LinkId("abc")),
             parse("https://desmoinesinsider.com/events/abc/share"),
         )
     }
@@ -94,9 +138,28 @@ class DeepLinkHandlerTest {
     }
 
     @Test
-    fun anUnknownSectionIsNotHandled() {
-        assertFalse(handler.handle(Uri.parse("https://desmoinesinsider.com/pricing/monthly")))
-        assertFalse(handler.handle(Uri.parse("https://desmoinesinsider.com/guides")))
+    fun aLookAlikeHostIsNotOurs() {
+        // iOS IOS-DD-PLATFORM-10: a substring host check accepted this.
+        assertFalse(handler.handle(Uri.parse("https://desmoinesinsider.com.evil.io/events/abc")))
+        assertFalse(handler.handle(Uri.parse("https://evildesmoinesinsider.com/events/abc")))
+        assertNull(handler.consumeDestination())
+    }
+
+    @Test
+    fun plainHttpIsNotOurs() {
+        assertFalse(handler.handle(Uri.parse("http://desmoinesinsider.com/events/abc")))
+    }
+
+    @Test
+    fun anUnknownSectionOpensInTheWebView() {
+        assertEquals(
+            Destination.Web("https://desmoinesinsider.com/pricing/monthly"),
+            parse("https://desmoinesinsider.com/pricing/monthly"),
+        )
+        assertEquals(
+            Destination.Web("https://desmoinesinsider.com/guides"),
+            parse("https://desmoinesinsider.com/guides"),
+        )
     }
 
     // MARK: - Custom scheme
@@ -107,16 +170,16 @@ class DeepLinkHandlerTest {
         // the manifest have to agree in both directions: a host here that the
         // manifest omits never reaches the process, and a host the manifest
         // declares that this drops opens the app and then does nothing.
-        assertEquals(DeepLinkHandler.Destination.Event("e1"), parse("com.desmoines.aipulse://event/e1"))
-        assertEquals(DeepLinkHandler.Destination.Restaurant("r1"), parse("com.desmoines.aipulse://restaurant/r1"))
-        assertEquals(DeepLinkHandler.Destination.Attraction("a1"), parse("com.desmoines.aipulse://attraction/a1"))
-        assertEquals(DeepLinkHandler.Destination.Hotel("h1"), parse("com.desmoines.aipulse://hotel/h1"))
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.HOME), parse("com.desmoines.aipulse://home"))
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.DINING), parse("com.desmoines.aipulse://dining"))
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.SEARCH), parse("com.desmoines.aipulse://search"))
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.MAP), parse("com.desmoines.aipulse://map"))
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.SAVED), parse("com.desmoines.aipulse://favorites"))
-        assertEquals(DeepLinkHandler.Destination.Tab(DeepLinkHandler.TabDestination.PROFILE), parse("com.desmoines.aipulse://profile"))
+        assertEquals(Destination.Event(LinkId("e1")), parse("com.desmoines.aipulse://event/e1"))
+        assertEquals(Destination.Restaurant(LinkId("r1")), parse("com.desmoines.aipulse://restaurant/r1"))
+        assertEquals(Destination.Attraction(LinkId("a1")), parse("com.desmoines.aipulse://attraction/a1"))
+        assertEquals(Destination.Hotel(LinkId("h1")), parse("com.desmoines.aipulse://hotel/h1"))
+        assertEquals(Destination.Tab(TabDestination.HOME), parse("com.desmoines.aipulse://home"))
+        assertEquals(Destination.Tab(TabDestination.DINING), parse("com.desmoines.aipulse://dining"))
+        assertEquals(Destination.Tab(TabDestination.SEARCH), parse("com.desmoines.aipulse://search"))
+        assertEquals(Destination.Tab(TabDestination.MAP), parse("com.desmoines.aipulse://map"))
+        assertEquals(Destination.Tab(TabDestination.SAVED), parse("com.desmoines.aipulse://favorites"))
+        assertEquals(Destination.Tab(TabDestination.PROFILE), parse("com.desmoines.aipulse://profile"))
     }
 
     @Test
@@ -154,7 +217,7 @@ class DeepLinkHandlerTest {
 
         assertTrue(handler.handleIntent(intent))
 
-        assertEquals(DeepLinkHandler.Destination.Event("e9"), handler.consumeDestination())
+        assertEquals(Destination.Event(LinkId("e9")), handler.consumeDestination())
     }
 
     @Test
@@ -163,7 +226,7 @@ class DeepLinkHandlerTest {
 
         assertTrue(handler.handleIntent(intent))
 
-        assertEquals(DeepLinkHandler.Destination.Restaurant("r9"), handler.consumeDestination())
+        assertEquals(Destination.Restaurant(LinkId("r9")), handler.consumeDestination())
     }
 
     @Test
@@ -191,7 +254,7 @@ class DeepLinkHandlerTest {
 
         assertTrue(handler.handleIntent(intent))
 
-        assertEquals(DeepLinkHandler.Destination.Restaurant("r2"), handler.consumeDestination())
+        assertEquals(Destination.Restaurant(LinkId("r2")), handler.consumeDestination())
     }
 
     @Test
@@ -205,7 +268,7 @@ class DeepLinkHandlerTest {
     fun consumingClearsThePendingDestination() {
         handler.handle(Uri.parse("com.desmoines.aipulse://event/e1"))
 
-        assertEquals(DeepLinkHandler.Destination.Event("e1"), handler.consumeDestination())
+        assertEquals(Destination.Event(LinkId("e1")), handler.consumeDestination())
         assertNull(handler.consumeDestination())
         assertNull(handler.pendingDestination.value)
     }
@@ -215,6 +278,6 @@ class DeepLinkHandlerTest {
         handler.handle(Uri.parse("com.desmoines.aipulse://event/e1"))
         handler.handle(Uri.parse("com.desmoines.aipulse://restaurant/r1"))
 
-        assertEquals(DeepLinkHandler.Destination.Restaurant("r1"), handler.consumeDestination())
+        assertEquals(Destination.Restaurant(LinkId("r1")), handler.consumeDestination())
     }
 }

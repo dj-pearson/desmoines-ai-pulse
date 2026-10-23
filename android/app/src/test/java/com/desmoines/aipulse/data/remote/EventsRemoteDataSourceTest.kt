@@ -108,4 +108,34 @@ class EventsRemoteDataSourceTest {
     }
 
     // endregion
+
+    // region Id vs slug lookup (AND-OVH-022)
+
+    @Test
+    fun `a UUID is looked up by id`() {
+        for (id in listOf(
+            "3f1c2a9e-8b7d-4e6f-9a01-23456789abcd",
+            "3F1C2A9E-8B7D-4E6F-9A01-23456789ABCD",
+        )) {
+            assertTrue(SlugLookup.isUuid(id), id)
+            assertEquals("id", SlugLookup.column(id), id)
+        }
+    }
+
+    @Test
+    fun `anything else is looked up by slug`() {
+        for (slug in listOf(
+            "zombie-burger-drink-lab",
+            "come-from-away-2026-10-03",
+            // A slug that happens to be hex and hyphens but not UUID-shaped.
+            "abcdef12-3456",
+            // One character short of a UUID.
+            "3f1c2a9e-8b7d-4e6f-9a01-23456789abc",
+        )) {
+            assertFalse(SlugLookup.isUuid(slug), slug)
+            assertEquals("slug", SlugLookup.column(slug), slug)
+        }
+    }
+
+    // endregion
 }

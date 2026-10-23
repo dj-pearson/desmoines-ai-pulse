@@ -215,13 +215,14 @@ class RestaurantsRemoteDataSource @Inject constructor(
     // region Fetch Single Restaurant
 
     /**
-     * Fetch a single restaurant by ID.
+     * Fetch a single restaurant by ID, or by its `slug` column when the value
+     * from a web link isn't a UUID (AND-OVH-022).
      * Matches iOS fetchRestaurant(id:).
      */
     suspend fun fetchRestaurant(id: String): Restaurant {
         val client = db()
         return client.from("restaurants").select {
-            filter { eq("id", id) }
+            filter { eq(SlugLookup.column(id), id) }
             limit(1)
             single()
         }.decodeAs<Restaurant>()

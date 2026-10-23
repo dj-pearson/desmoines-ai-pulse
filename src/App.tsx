@@ -198,6 +198,9 @@ const AccessibilityStatement = lazyWithRetry(() => import("./pages/Accessibility
 const CookiePolicy = lazyWithRetry(() => import("./pages/CookiePolicy"));
 const DMCAPolicy = lazyWithRetry(() => import("./pages/DMCAPolicy"));
 const AcceptableUsePolicy = lazyWithRetry(() => import("./pages/AcceptableUsePolicy"));
+// Public, signed-out deletion instructions: the URL Google Play's Data safety
+// form asks for (AND-OVH-012).
+const AccountDeletion = lazyWithRetry(() => import("./pages/AccountDeletion"));
 const AdvertisingPolicies = lazyWithRetry(() => import("./pages/AdvertisingPolicies"));
 const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
@@ -615,6 +618,7 @@ const App = () => (
             <Route path="/cookie-policy" element={<CookiePolicy />} />
             <Route path="/dmca" element={<DMCAPolicy />} />
             <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+            <Route path="/account/delete" element={<AccountDeletion />} />
             {/* WEB-ADS-014: three advertiser surfaces linked here and it was not a route. */}
             <Route path="/advertising-policies" element={<AdvertisingPolicies />} />
             <Route path="/dpa" element={<DataProcessingAgreement />} />

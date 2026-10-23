@@ -3,10 +3,13 @@ package com.desmoines.aipulse.data.remote
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.EventSlug
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 /**
@@ -140,16 +143,40 @@ class AttractionsRemoteDataSource @Inject constructor(
     // region Fetch Single Attraction
 
     /**
-     * Fetch a single attraction by ID.
-     * Matches iOS fetchAttraction(id:).
+     * Fetch a single attraction by ID, or by the web's slug when the value
+     * isn't a UUID (AND-OVH-022). Matches iOS fetchAttraction(id:) for the id case.
      */
     suspend fun fetchAttraction(id: String): Attraction {
+        if (!SlugLookup.isUuid(id)) return fetchAttractionBySlug(id)
         val client = db()
         return client.from("attractions").select {
             filter { eq("id", id) }
             limit(1)
             single()
         }.decodeAs<Attraction>()
+    }
+
+    @Serializable
+    private data class NameRow(val id: String, val name: String? = null)
+
+    /**
+     * Resolve /attractions/:slug. The web page (src/pages/AttractionDetails.tsx
+     * via src/lib/resolveBySlug.ts) reads a `slug` column from migration
+     * 20260919000008 and falls back to matching createSlug(name). That column
+     * is not in scripts/db-snapshot.json, so this takes the fallback only: the
+     * slug becomes an ilike on name to narrow the read, and the row whose name
+     * slugs to exactly the value wins. No match is an [EntityNotFoundException],
+     * which the detail screen shows as not-found with an Open on web action.
+     */
+    suspend fun fetchAttractionBySlug(slug: String): Attraction {
+        val words = slug.split('-').filter { it.isNotEmpty() }
+        if (words.isEmpty()) throw EntityNotFoundException("No attraction for slug '$slug'")
+        val match = db().from("attractions").select(Columns.list("id", "name")) {
+            filter { ilike("name", words.joinToString("%", prefix = "%", postfix = "%")) }
+        }.decodeList<NameRow>()
+            .firstOrNull { EventSlug.slugify(it.name) == slug }
+            ?: throw EntityNotFoundException("No attraction for slug '$slug'")
+        return fetchAttraction(match.id)
     }
 
     // endregion

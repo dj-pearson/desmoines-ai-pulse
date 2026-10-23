@@ -5,6 +5,7 @@ import com.desmoines.aipulse.data.remote.HotelsQuery
 import com.desmoines.aipulse.data.remote.HotelsRemoteDataSource
 import com.desmoines.aipulse.data.remote.HotelsResponse
 import com.desmoines.aipulse.util.QueryCache
+import com.desmoines.aipulse.util.suspendRunCatching
 import kotlinx.serialization.builtins.ListSerializer
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,7 +28,7 @@ class HotelsRepositoryImpl @Inject constructor(
     override suspend fun fetchHotels(query: HotelsQuery): Result<HotelsResponse> {
         val isFirstPage = query.offset == 0 && query.searchText.isNullOrBlank() &&
             query.areas.isEmpty() && query.priceRanges.isEmpty() && query.minRating == null
-        val fresh = runCatching { remote.fetchHotels(query) }.getOrNull()
+        val fresh = suspendRunCatching { remote.fetchHotels(query) }.getOrNull()
         if (fresh != null) {
             if (isFirstPage) queryCache.set(CACHE_KEY, fresh.hotels, serializer)
             return Result.success(fresh)
@@ -42,10 +43,10 @@ class HotelsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun fetchById(id: String): Result<Hotel?> =
-        runCatching { remote.fetchById(id) }
+        suspendRunCatching { remote.fetchById(id) }
 
     override suspend fun fetchAreas(): Result<List<String>> =
-        runCatching { remote.fetchAreas() }
+        suspendRunCatching { remote.fetchAreas() }
 
     private companion object {
         const val CACHE_KEY = "hotels-first-page"

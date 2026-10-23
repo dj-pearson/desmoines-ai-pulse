@@ -5,7 +5,9 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Attraction
+import com.desmoines.aipulse.data.remote.EntityNotFoundException
 import com.desmoines.aipulse.data.repository.AttractionsRepository
+import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,18 +36,43 @@ class AttractionDetailViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _isNotFound = MutableStateFlow(false)
+    /** True when the id or slug names no attraction, as opposed to a failed request. */
+    val isNotFound: StateFlow<Boolean> = _isNotFound.asStateFlow()
+
+    private var lastId: String? = null
+
     fun loadAttraction(id: String) {
+        lastId = id
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            _isNotFound.value = false
 
             attractionsRepository.fetchAttraction(id)
                 .onSuccess { _attraction.value = it }
-                .onFailure { _errorMessage.value = it.message }
+                .onFailure {
+                    _isNotFound.value = it is EntityNotFoundException
+                    _errorMessage.value = if (it is EntityNotFoundException) {
+                        "We couldn't find this attraction in the app."
+                    } else {
+                        "Couldn't load this attraction. Check your connection and try again."
+                    }
+                }
 
             _isLoading.value = false
         }
     }
+
+    fun retry() {
+        lastId?.let { loadAttraction(it) }
+    }
+
+    /**
+     * The page on the web for the id or slug this screen was opened with. A
+     * slug the app can't resolve may still open there (AND-OVH-022).
+     */
+    fun webUrl(): String? = lastId?.let { "${Config.SITE_URL}/attractions/${Uri.encode(it)}" }
 
     /**
      * Formatted distance from user's location to this attraction.

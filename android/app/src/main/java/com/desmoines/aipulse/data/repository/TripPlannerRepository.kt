@@ -5,6 +5,7 @@ import com.desmoines.aipulse.data.model.TripPlanItem
 import com.desmoines.aipulse.data.remote.TripPlannerRemoteDataSource
 import com.desmoines.aipulse.data.remote.TripPreferences
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,13 +43,22 @@ interface TripPlannerRepository {
 @Singleton
 class TripPlannerRepositoryImpl @Inject constructor(
     private val remote: TripPlannerRemoteDataSource,
+    private val availability: TripPlannerAvailabilityStore,
 ) : TripPlannerRepository {
+
+    /**
+     * Every trip_plans call reports its failure, so a table that disappears
+     * after the launch probe still pauses the planner (iOS does the same in
+     * TripPlannerService). Only missing-storage errors change anything.
+     */
+    private fun <T> Result<T>.reportingStorage(): Result<T> =
+        onFailure { availability.report(it) }
 
     override suspend fun generate(
         startDate: String,
         endDate: String,
         prefs: TripPreferences,
-    ): Result<TripPlan> = runCatching {
+    ): Result<TripPlan> = suspendRunCatching {
         val response = remote.generate(startDate, endDate, prefs)
         val plan = response.tripPlan
         when {
@@ -57,34 +67,35 @@ class TripPlannerRepositoryImpl @Inject constructor(
                 response.error ?: "Couldn't build your itinerary. Adjust your dates or interests and try again.",
             )
         }
-    }
+    }.reportingStorage()
 
     override suspend fun monthlyTripCount(userId: String?): Int {
         if (userId == null) return 0
-        return runCatching { remote.monthlyTripCount(userId) }
+        return suspendRunCatching { remote.monthlyTripCount(userId) }
+            .reportingStorage()
             .onFailure { AppLogger.network.warning("monthlyTripCount failed: ${it.message}") }
             .getOrDefault(0)
     }
 
     override suspend fun fetchSavedTrips(userId: String?): Result<List<TripPlan>> {
         if (userId == null) return Result.success(emptyList())
-        return runCatching { remote.fetchSavedTrips(userId) }
+        return suspendRunCatching { remote.fetchSavedTrips(userId) }.reportingStorage()
     }
 
     override suspend fun shareTrip(tripId: String): Result<String> =
-        runCatching { remote.shareTrip(tripId) }
+        suspendRunCatching { remote.shareTrip(tripId) }
 
     override suspend fun deleteTrip(tripId: String): Result<Unit> =
-        runCatching { remote.deleteTrip(tripId) }
+        suspendRunCatching { remote.deleteTrip(tripId) }
 
     override suspend fun fetchTrip(tripId: String): Result<TripPlan> =
-        runCatching { remote.fetchTrip(tripId) }
+        suspendRunCatching { remote.fetchTrip(tripId) }.reportingStorage()
 
     override suspend fun fetchItems(tripId: String): Result<List<TripPlanItem>> =
-        runCatching { remote.fetchItems(tripId) }
+        suspendRunCatching { remote.fetchItems(tripId) }.reportingStorage()
 
     override suspend fun persistOrder(items: List<TripPlanItem>): Boolean =
-        runCatching { remote.persistOrder(items) }
+        suspendRunCatching { remote.persistOrder(items) }
             .onFailure { AppLogger.network.warning("persistOrder failed: ${it.message}") }
             .getOrDefault(false)
 }

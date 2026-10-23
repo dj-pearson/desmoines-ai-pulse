@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.TripBudget
 import com.desmoines.aipulse.data.model.TripPace
 import com.desmoines.aipulse.data.model.TripPlan
+import com.desmoines.aipulse.data.repository.TripPlannerAvailability
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -62,6 +64,12 @@ fun TripPlannerScreen(
     onClearError: () -> Unit,
     onViewSavedTrips: () -> Unit,
     onNavigateBack: () -> Unit,
+    /**
+     * Trip storage is missing (AND-OVH-011). Reached by a deep link or a
+     * stale back stack, since Home hides the card; shows the iOS copy in
+     * place of the form so nothing is sent that can only fail.
+     */
+    isPaused: Boolean = false,
 ) {
     Scaffold(
         topBar = {
@@ -73,7 +81,9 @@ fun TripPlannerScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onViewSavedTrips) { Text("Saved") }
+                    if (!isPaused) {
+                        TextButton(onClick = onViewSavedTrips) { Text("Saved") }
+                    }
                 },
             )
         },
@@ -86,7 +96,9 @@ fun TripPlannerScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             val result = state.result
-            if (result != null) {
+            if (isPaused) {
+                PausedNotice()
+            } else if (result != null) {
                 ItineraryResult(plan = result, onReset = onReset)
             } else {
                 PlannerForm(
@@ -108,6 +120,28 @@ fun TripPlannerScreen(
                 )
             }
         }
+    }
+}
+
+/** The paused copy, worded as iOS TripPlannerView shows it. */
+@Composable
+private fun PausedNotice() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PauseCircle,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = TripPlannerAvailability.PAUSED_MESSAGE,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(start = 12.dp),
+        )
     }
 }
 

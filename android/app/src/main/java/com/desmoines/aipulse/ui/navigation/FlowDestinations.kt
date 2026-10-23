@@ -16,6 +16,8 @@ import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsViewModel
 import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerAvailabilityViewModel
+import com.desmoines.aipulse.data.repository.TripPlannerAvailability
 import com.desmoines.aipulse.ui.screens.discover.DiscoverScreen
 import com.desmoines.aipulse.ui.screens.discover.DiscoverViewModel
 import com.desmoines.aipulse.ui.screens.groupsession.GroupSessionScreen
@@ -31,6 +33,7 @@ import com.desmoines.aipulse.ui.screens.hubs.ContentHubsListScreen
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubScreen
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubViewModel
 import com.desmoines.aipulse.ui.screens.dashboard.DashboardScreen
+import com.desmoines.aipulse.ui.screens.explore.ExploreHubScreen
 import com.desmoines.aipulse.ui.screens.dashboard.DashboardViewModel
 import com.desmoines.aipulse.ui.screens.articles.ArticlesScreen
 import com.desmoines.aipulse.ui.screens.articles.ArticlesViewModel
@@ -47,6 +50,7 @@ import com.desmoines.aipulse.ui.screens.bestof.BestOfViewModel
 import com.desmoines.aipulse.ui.screens.bestof.BestOfCategoryScreen
 import com.desmoines.aipulse.ui.screens.bestof.BestOfCategoryViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
+import com.desmoines.aipulse.ui.screens.auth.SetNewPasswordScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.screens.profile.ProfileViewModel
 import com.desmoines.aipulse.ui.screens.profile.SettingsScreen
@@ -67,7 +71,29 @@ import com.desmoines.aipulse.ui.screens.subscription.SubscriptionViewModel
 internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostController) {
     composable(Route.Auth.route) {
         AuthScreen(
-            onNavigateBack = { navController.popBackStack() },
+            // Only while Auth is on top. A reset link signs the user in while
+            // this screen is open, and its "signed in, go back" would otherwise
+            // pop the SetNewPassword screen that just replaced it (AND-OVH-006).
+            onNavigateBack = {
+                if (navController.currentDestination?.route == Route.Auth.route) {
+                    navController.popBackStack()
+                }
+            },
+        )
+    }
+
+    // Reached only through PasswordRecoveryGate (MainScreen), never navigated
+    // to by a button. Both ways out replace it with Home so Back can't return.
+    composable(Route.SetNewPassword.route) {
+        val leaveToHome: () -> Unit = {
+            navController.navigate(Route.Home.route) {
+                popUpTo(Route.SetNewPassword.route) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+        SetNewPasswordScreen(
+            onPasswordSet = leaveToHome,
+            onSignedOut = leaveToHome,
         )
     }
 
@@ -319,9 +345,12 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val savedSearchViewModel: SavedSearchViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
         val savedSearchState by savedSearchViewModel.uiState.collectAsStateWithLifecycle()
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
 
         DashboardScreen(
             state = state,
+            showTrips = !tripAvailability.isPaused,
             savedSearches = savedSearchState.searches,
             onRerunSavedSearch = {
                 // Re-run lands on the Search tab (where the saved-search list fully applies).
@@ -337,6 +366,13 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
             onOpenRestaurant = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
             onOpenAttraction = { id -> navController.navigate(Route.AttractionDetail.createRoute(id)) },
             onRefresh = viewModel::refresh,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Explore.route) {
+        ExploreHubScreen(
+            onOpenDestination = { destination -> navController.navigate(destination.route.route) },
             onNavigateBack = { navController.popBackStack() },
         )
     }
@@ -439,6 +475,8 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
     composable(Route.TripPlanner.route) {
         val viewModel: TripPlannerViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
 
         // Hard paywall: VM requests the Subscription screen (free on cooldown, or quota exhausted).
         androidx.compose.runtime.LaunchedEffect(state.navigateToSubscription) {
@@ -450,6 +488,7 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
 
         TripPlannerScreen(
             state = state,
+            isPaused = tripAvailability.isPaused,
             allInterests = viewModel.allInterests,
             allAccessibilityNeeds = viewModel.allAccessibilityNeeds,
             allDietaryRestrictions = viewModel.allDietaryRestrictions,
@@ -478,7 +517,8 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
 
         SavedTripsScreen(
             state = state,
-            onShare = viewModel::share,
+            // Off with TRIP_SHARE_AVAILABLE: the web has no /trips/shared route.
+            onShare = if (TripPlannerAvailability.TRIP_SHARE_AVAILABLE) viewModel::share else null,
             onDelete = viewModel::delete,
             onOpenTrip = { id -> navController.navigate(Route.ItineraryDetail.createRoute(id)) },
             onConsumeShareUrl = viewModel::consumeShareUrl,
@@ -519,15 +559,19 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val subscriptionViewModel: SubscriptionViewModel = hiltViewModel()
         val state by subscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
 
         SubscriptionScreen(
+            showTripPlanner = !tripAvailability.isPaused,
             currentTier = state.currentTier,
             isLoading = state.isLoading,
             errorMessage = state.errorMessage,
-            insiderPrice = state.insiderPrice,
-            vipPrice = state.vipPrice,
-            hasProducts = state.hasProducts,
+            insiderOffer = state.insiderOffer,
+            vipOffer = state.vipOffer,
             selectedTier = state.selectedTier,
+            manageSubscriptionUrl = state.manageSubscriptionUrl,
+            purchasePlan = state.purchasePlan,
             onSelectTier = { subscriptionViewModel.selectTier(it) },
             onPurchase = {
                 (context as? android.app.Activity)?.let { activity ->
@@ -552,6 +596,7 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val isDeleting by profileViewModel.isDeleting.collectAsStateWithLifecycle()
         val showDeleteConfirmation by profileViewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
         val errorMessage by profileViewModel.errorMessage.collectAsStateWithLifecycle()
+        val storeSubscriptionNotice by profileViewModel.storeSubscriptionNotice.collectAsStateWithLifecycle()
         val subscriptionState by settingsSubscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val locationConsent by profileViewModel.locationConsent.collectAsStateWithLifecycle()
         val emailConsent by profileViewModel.emailConsent.collectAsStateWithLifecycle()
@@ -561,9 +606,15 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         SettingsScreen(
             isAuthenticated = isAuthenticated,
             currentTier = subscriptionState.currentTier,
+            manageSubscriptionUrl = subscriptionState.manageSubscriptionUrl,
             isDeleting = isDeleting,
             showDeleteConfirmation = showDeleteConfirmation,
             errorMessage = errorMessage,
+            // Prefer the sku-specific Play page when the billing state knows it.
+            storeSubscriptionNotice = storeSubscriptionNotice?.let { notice ->
+                if (notice.isGooglePlay) notice.copy(manageUrl = subscriptionState.manageSubscriptionUrl ?: notice.manageUrl) else notice
+            },
+            onAcknowledgeStoreSubscriptionNotice = { profileViewModel.acknowledgeStoreSubscriptionNotice() },
             locationConsent = locationConsent,
             emailConsent = emailConsent,
             emailConsentError = emailConsentError,

@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.data.repository
 
 import com.desmoines.aipulse.data.model.UserProfile
+import com.desmoines.aipulse.data.remote.SignUpOutcome
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.Flow
 
@@ -19,20 +20,29 @@ interface AuthRepository {
     /** Sign in with email and password. */
     suspend fun signIn(email: String, password: String): Result<Unit>
 
-    /** Sign up with email, password, and optional profile info. */
+    /**
+     * Sign up with email, password, and optional profile info. Success says
+     * whether the user is signed in or has to confirm their email first.
+     */
     suspend fun signUp(
         email: String,
         password: String,
         firstName: String?,
         lastName: String?,
         interests: List<String>?,
-    ): Result<Unit>
+    ): Result<SignUpOutcome>
+
+    /** Resend the sign-up confirmation email (not a password reset). */
+    suspend fun resendSignUpConfirmation(email: String): Result<Unit>
 
     /** Sign out the current user. */
     suspend fun signOut(): Result<Unit>
 
     /** Send password reset email. */
     suspend fun resetPassword(email: String): Result<Unit>
+
+    /** Set a new password for the signed-in (recovery) session. */
+    suspend fun updatePassword(newPassword: String): Result<Unit>
 
     /** Sign in with Google ID token. */
     suspend fun signInWithGoogle(idToken: String): Result<Unit>

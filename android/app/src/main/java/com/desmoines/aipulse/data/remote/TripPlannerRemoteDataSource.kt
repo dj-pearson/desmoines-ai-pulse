@@ -2,7 +2,9 @@ package com.desmoines.aipulse.data.remote
 
 import com.desmoines.aipulse.data.model.TripPlan
 import com.desmoines.aipulse.data.model.TripPlanItem
+import com.desmoines.aipulse.data.repository.TripPlannerAvailability
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.suspendRunCatching
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
@@ -158,6 +160,17 @@ class TripPlannerRemoteDataSource @Inject constructor(
         return json.decodeFromString(GenerateItineraryResponse.serializer(), body)
     }
 
+    /**
+     * Ask PostgREST whether trip_plans exists: select id, limit 0, which reads
+     * no rows. Throws the PostgREST error when it doesn't; the caller
+     * classifies it (TripPlannerAvailability).
+     */
+    suspend fun probeStorage() {
+        db().from("trip_plans").select(Columns.list("id")) {
+            limit(0L)
+        }
+    }
+
     /** Count trip_plans the user created in the current calendar month (for the quota meter). */
     suspend fun monthlyTripCount(userId: String): Int {
         val monthStart = YearMonth.now(ZoneOffset.UTC)
@@ -186,8 +199,17 @@ class TripPlannerRemoteDataSource @Inject constructor(
     @Serializable
     private data class ShareCodeRow(@SerialName("share_code") val shareCode: String? = null)
 
-    /** Make the trip public and return its public share URL. */
+    /**
+     * Make the trip public and return its public share URL.
+     *
+     * Off while TRIP_SHARE_AVAILABLE is false: the web has no /trips/shared
+     * route, so the link would open a 404. Refusing here, before the update,
+     * also keeps the trip from being flipped public for nothing.
+     */
     suspend fun shareTrip(tripId: String): String {
+        if (!TripPlannerAvailability.TRIP_SHARE_AVAILABLE) {
+            throw IllegalStateException("Sharing trips isn't available yet.")
+        }
         db().from("trip_plans").update(PublicUpdate(isPublic = true)) {
             filter { eq("id", tripId) }
         }
@@ -233,7 +255,7 @@ class TripPlannerRemoteDataSource @Inject constructor(
         var allSucceeded = true
         items.forEachIndexed { index, item ->
             val id = item.itemId ?: return@forEachIndexed
-            runCatching {
+            suspendRunCatching {
                 db().from("trip_plan_items").update(OrderUpdate(orderIndex = index)) {
                     filter { eq("id", id) }
                 }

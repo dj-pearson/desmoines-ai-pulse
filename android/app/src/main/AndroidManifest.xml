@@ -1,5 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        AND-OVH-001. firebase-analytics (via play-services-measurement) merges
+        AD_ID and the two AdServices permissions into the release manifest.
+        Nothing first-party reads the advertising ID: in-app ads are served by
+        CampaignAdService from our own campaigns, not an ad network. Declaring
+        AD_ID without a use is a Play Console advertising-ID declaration
+        mismatch, so strip all three from the merged manifest.
+        ManifestPermissionAllowlistTest fails if these lines go, and
+        android-ci.yml greps the merged release manifest for them.
+    -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_ADSERVICES_AD_ID"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION"
+        tools:node="remove" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -62,7 +83,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.DesMoinesInsider">
+            android:theme="@style/Theme.DesMoinesInsider.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -116,10 +137,11 @@
             </intent-filter>
 
             <!--
-                Android App Links for desmoinesinsider.com. DeepLinkHandler
-                already parses /events/:id, /restaurants/:id, /attractions/:id
-                and /hotels/:id, so without this filter every shared link
-                bounces to the browser instead of opening the app.
+                Android App Links for desmoinesinsider.com. Each pathPrefix is
+                a section DeepLinkHandler.webDestination parses (its
+                CLAIMED_WEB_SECTIONS; DeepLinkManifestParityTest holds the two
+                equal). Hotels are /stay on the web (src/App.tsx), so /hotels,
+                which the web never served, is no longer claimed.
 
                 autoVerify requires public/.well-known/assetlinks.json to carry
                 the release signing certificate SHA-256. It currently ships a
@@ -136,7 +158,9 @@
                 <data android:pathPrefix="/events" />
                 <data android:pathPrefix="/restaurants" />
                 <data android:pathPrefix="/attractions" />
-                <data android:pathPrefix="/hotels" />
+                <data android:pathPrefix="/stay" />
+                <data android:pathPrefix="/articles" />
+                <data android:pathPrefix="/search" />
             </intent-filter>
 
             <!-- Static App Shortcuts (launcher long-press / Assistant). -->
@@ -156,6 +180,20 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${GOOGLE_MAPS_API_KEY}" />
+
+        <!--
+            Firebase Analytics collects from the moment the process starts
+            unless told otherwise, which is before ConsentService has been read.
+            Start it off; AnalyticsService.applyConsent (called from
+            DesMoinesInsiderApp.onCreate) turns it on only for a user who
+            granted analytics consent. The advertising ID is never collected.
+        -->
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
 
         <!--
             Firebase Cloud Messaging entry point. FCM only dispatches to a

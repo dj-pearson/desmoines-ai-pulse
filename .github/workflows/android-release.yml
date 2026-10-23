@@ -2,12 +2,11 @@
 # Android Release: Build Signed AAB for Google Play
 # ================================================================
 #
-# Builds a signed release Android App Bundle (.aab) and uploads it as
-# a workflow artifact. For the first-ever release, download the AAB
-# from the workflow run and upload it manually in Play Console under
-# Internal testing. Subsequent releases can be automated via the
-# Play Publishing API (r0adkll/upload-google-play) once the app
-# listing exists.
+# Builds a signed release Android App Bundle (.aab), or a signed APK
+# with buildType=apk, and uploads it as a workflow artifact. Nothing
+# here talks to Play: download the artifact from the workflow run and
+# upload it in Play Console by hand. Every release so far has gone that
+# way; there is no Play Publishing API step in this workflow.
 #
 # REQUIRED GITHUB SECRETS (signing):
 #   1. ANDROID_KEYSTORE_BASE64        - Base64-encoded upload keystore (.jks)
@@ -20,10 +19,17 @@
 #   6. SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY)  - Supabase anon key
 #   7. GOOGLE_SERVICES_JSON_BASE64    - Base64-encoded google-services.json
 #                                       from Firebase console
+#   8. GOOGLE_WEB_CLIENT_ID           - OAuth web client ID (Google Sign-In)
+#   9. GOOGLE_MAPS_API_KEY            - Android-restricted Maps SDK key
+#
+# 8 and 9 used to be optional. A build without either installs and then
+# has a feature that does nothing, which is the Broken Functionality
+# rejection Play has already issued once, so both now fail the run.
 #
 # OPTIONAL GITHUB SECRETS:
-#   8. GOOGLE_WEB_CLIENT_ID           - OAuth web client ID (Google Sign-In)
-#   9. GOOGLE_MAPS_API_KEY            - Google Maps API key
+#   EXPECTED_UPLOAD_SHA1              - Upload key SHA1 from Play Console;
+#                                       checked against the keystore and
+#                                       against the built AAB's signer
 #
 # FIRST-TIME SETUP:
 #   1. Generate an upload keystore locally:
@@ -54,8 +60,8 @@ on:
         required: true
         default: '1.0.0'
       versionCode:
-        description: 'Version code (monotonic integer, leave empty to use run_number)'
-        required: false
+        description: 'Version code: an integer above the highest Play has accepted (and above vars.ANDROID_PLAY_MAX_VERSION_CODE)'
+        required: true
       buildType:
         description: 'Build type'
         required: true
@@ -112,36 +118,72 @@ jobs:
       # ============================================================
       # 2. VERSION NUMBERS
       # ============================================================
+      # Play rejects an upload whose versionCode is not higher than the last
+      # one it accepted. This step used to fall back to the workflow run
+      # number, which is not tied to Play at all: it drifts (run 12 vs committed
+      # versionCode 6 as of Aug 2026) and resets to 1 if this file is renamed.
+      # The committed versionCode isn't a safe floor on its own either, since
+      # the workflow patches it at build time and never commits the bump back,
+      # so Play may already hold codes well above it. Only a human reading Play
+      # Console knows the real maximum; record it in the repo variable
+      # ANDROID_PLAY_MAX_VERSION_CODE after each upload.
       - name: Compute version name and code
+        env:
+          VERSION_NAME: ${{ github.event.inputs.versionName }}
+          VERSION_CODE: ${{ github.event.inputs.versionCode }}
+          FLOOR_VAR: ${{ vars.ANDROID_PLAY_MAX_VERSION_CODE }}
         run: |
-          VERSION_NAME="${{ github.event.inputs.versionName }}"
-          VERSION_CODE="${{ github.event.inputs.versionCode }}"
+          VERSION_CODE=$(echo "$VERSION_CODE" | tr -d '[:space:]')
+          FLOOR_VAR=$(echo "$FLOOR_VAR" | tr -d '[:space:]')
           if [ -z "$VERSION_CODE" ]; then
-            VERSION_CODE=${{ github.run_number }}
-            echo "::notice::versionCode input was blank; using run_number ($VERSION_CODE)."
+            echo "::error::versionCode input is required. Pass an integer above the highest versionCode Play Console has accepted."
+            exit 1
+          fi
+          if ! echo "$VERSION_CODE" | grep -qE '^[0-9]+$'; then
+            echo "::error::versionCode '$VERSION_CODE' is not a whole number."
+            exit 1
+          fi
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::versionName input is required."
+            exit 1
           fi
 
-          # Play rejects an upload whose versionCode is not higher than the
-          # last one it accepted, and run_number is not tied to that at all --
-          # it drifts above the shipped code (run 12 vs versionCode 6 as of
-          # Aug 2026) and resets to 1 if this workflow file is ever renamed.
-          # The committed versionCode is the best local proxy for what Play has
-          # already seen, so treat it as a floor rather than discovering the
-          # mismatch in Play Console after a five-minute build.
-          COMMITTED=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | grep -oE '[0-9]+')
+          COMMITTED=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | grep -oE '[0-9]+' | head -1)
           if [ -z "$COMMITTED" ]; then
             echo "::error::Could not read versionCode from android/app/build.gradle.kts"
             exit 1
           fi
-          if [ "$VERSION_CODE" -le "$COMMITTED" ]; then
-            echo "::error::versionCode $VERSION_CODE is not above the committed versionCode $COMMITTED."
-            echo "::error::Play will reject this upload. Pass an explicit versionCode input greater than $COMMITTED."
+
+          FLOOR=$COMMITTED
+          FLOOR_SOURCE="committed versionCode in build.gradle.kts"
+          if [ -n "$FLOOR_VAR" ]; then
+            if ! echo "$FLOOR_VAR" | grep -qE '^[0-9]+$'; then
+              echo "::error::Repo variable ANDROID_PLAY_MAX_VERSION_CODE is '$FLOOR_VAR', not a whole number."
+              exit 1
+            fi
+            if [ "$FLOOR_VAR" -gt "$FLOOR" ]; then
+              FLOOR=$FLOOR_VAR
+              FLOOR_SOURCE="vars.ANDROID_PLAY_MAX_VERSION_CODE"
+            fi
+          else
+            echo "::warning::Repo variable ANDROID_PLAY_MAX_VERSION_CODE is not set, so the floor is only the committed versionCode ($COMMITTED). Play may already have accepted higher codes; set the variable to the highest versionCode shown in Play Console."
+          fi
+
+          if [ "$VERSION_CODE" -le "$FLOOR" ]; then
+            echo "::error::versionCode $VERSION_CODE is not above the floor $FLOOR ($FLOOR_SOURCE)."
+            echo "::error::Play will reject this upload. Pass a versionCode greater than $FLOOR."
             exit 1
           fi
 
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-          echo "Version: $VERSION_NAME (code $VERSION_CODE, committed floor $COMMITTED)"
+          echo "Version: $VERSION_NAME (code $VERSION_CODE, floor $FLOOR from $FLOOR_SOURCE, committed $COMMITTED)"
+          {
+            echo "### Version"
+            echo ""
+            echo "- versionName: \`$VERSION_NAME\`"
+            echo "- versionCode: \`$VERSION_CODE\` (floor $FLOOR, from $FLOOR_SOURCE)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Patch versionCode and versionName in build.gradle.kts
         working-directory: android
@@ -224,8 +266,9 @@ jobs:
           : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD secret is required}"
 
           if [ -z "$GOOGLE_WEB_CLIENT_ID" ]; then
-            echo "::warning::GOOGLE_WEB_CLIENT_ID not set — Google Sign-In will be broken in this build."
-            GOOGLE_WEB_CLIENT_ID="placeholder-client-id"
+            echo "::error::GOOGLE_WEB_CLIENT_ID secret is required for release builds."
+            echo "::error::Without it 'Continue with Google' does nothing visible, which Play reviews as Broken Functionality. Set the GOOGLE_WEB_CLIENT_ID repo secret to the OAuth web client ID (the one ending in .apps.googleusercontent.com)."
+            exit 1
           fi
           if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
             echo "::error::GOOGLE_MAPS_API_KEY secret is required for release builds."
@@ -291,6 +334,21 @@ jobs:
           path: android/app/build/reports/tests/
           if-no-files-found: ignore
 
+      # The release variant was never linted: CI lints debug only, and R8 /
+      # release-only resources can carry errors debug doesn't. lintRelease
+      # fails on any error-severity issue before the five-minute bundle build.
+      - name: Lint release
+        working-directory: android
+        run: ./gradlew lintRelease --no-daemon
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-lint-report
+          path: android/app/build/reports/lint-results-release.*
+          if-no-files-found: ignore
+
       - name: Build release ${{ github.event.inputs.buildType }}
         working-directory: android
         run: |
@@ -319,32 +377,48 @@ jobs:
       # ============================================================
       # 7. VERIFY SIGNATURE
       # ============================================================
+      # jarsigner -verify exits 0 on an unsigned AAB, and this step used to pipe
+      # it into tail with no pipefail, so it could not fail. The AAB check lives
+      # in scripts/android/verify-aab-signature.sh, which reads jarsigner's
+      # output and matches the signer against EXPECTED_UPLOAD_SHA1 when set.
+      # A missing tool fails the step; nothing here exits 0 to skip a check.
       - name: Verify signature
-        working-directory: android
+        shell: bash
+        env:
+          EXPECTED_UPLOAD_SHA1: ${{ secrets.EXPECTED_UPLOAD_SHA1 }}
         run: |
-          BUILD_TOOLS_DIR=$(ls -d "$ANDROID_HOME/build-tools"/*/ 2>/dev/null | sort -V | tail -1)
-          if [ -z "$BUILD_TOOLS_DIR" ]; then
-            echo "::warning::build-tools not found, skipping signature verification"
-            exit 0
-          fi
-          APKSIGNER="${BUILD_TOOLS_DIR}apksigner"
-
+          set -euo pipefail
           if [ "${{ github.event.inputs.buildType }}" = "apk" ]; then
-            "$APKSIGNER" verify --print-certs "${ARTIFACT_PATH#android/}" || {
+            BUILD_TOOLS_DIR=$(ls -d "${ANDROID_HOME:-}/build-tools"/*/ 2>/dev/null | sort -V | tail -1 || true)
+            if [ -z "$BUILD_TOOLS_DIR" ] || [ ! -x "${BUILD_TOOLS_DIR}apksigner" ]; then
+              echo "::error::Android build-tools (apksigner) not found; cannot verify the APK signature."
+              exit 1
+            fi
+            "${BUILD_TOOLS_DIR}apksigner" verify --print-certs "$ARTIFACT_PATH" || {
               echo "::error::APK signature verification failed"
               exit 1
             }
           else
-            # AAB signature is verified by jarsigner, not apksigner
-            jarsigner -verify -verbose -certs "${ARTIFACT_PATH#android/}" | tail -20 || {
-              echo "::error::AAB signature verification failed"
-              exit 1
-            }
+            bash scripts/android/verify-aab-signature.sh "$ARTIFACT_PATH"
           fi
           echo "Signature verified"
 
       # ============================================================
-      # 8. UPLOAD ARTIFACT
+      # 8. ASSERT THE BUNDLE MANIFEST
+      # ============================================================
+      # The May 2026 rejection was an AAB with no geo.API_KEY meta-data, and
+      # nothing above reads the built artifact's manifest. This dumps it with
+      # a pinned bundletool and fails unless the Maps key is real (reported
+      # only as present/absent), versionCode is the one patched in step 2,
+      # targetSdk is at least 36 and AD_ID / ACCESS_ADSERVICES_* are gone.
+      # It also runs bundletool validate.
+      - name: Assert bundle manifest
+        if: github.event.inputs.buildType == 'bundle'
+        shell: bash
+        run: bash scripts/android/assert-aab-manifest.sh "$ARTIFACT_PATH" "$VERSION_CODE"
+
+      # ============================================================
+      # 9. UPLOAD ARTIFACT
       # ============================================================
       - name: Upload release artifact
         if: success()
@@ -365,7 +439,7 @@ jobs:
           if-no-files-found: warn
 
       # ============================================================
-      # 9. CLEANUP
+      # 10. CLEANUP
       # ============================================================
       - name: Clean up signing artifacts
         if: always()
@@ -376,7 +450,7 @@ jobs:
           echo "Signing artifacts cleaned"
 
       # ============================================================
-      # 10. SUMMARY
+      # 11. SUMMARY
       # ============================================================
       - name: Job summary
         if: success()

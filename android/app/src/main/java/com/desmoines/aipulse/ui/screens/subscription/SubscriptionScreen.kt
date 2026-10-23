@@ -26,12 +26,9 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RateReview
-import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -60,8 +58,11 @@ import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.BillingService.CrossPlatformOrigin
 import com.desmoines.aipulse.data.remote.BillingService.CrossPlatformSubscription
+import com.desmoines.aipulse.data.remote.PurchasePlan
 import com.desmoines.aipulse.ui.components.BrandGhostButton
 import com.desmoines.aipulse.ui.components.BrandPrimaryButton
+import com.desmoines.aipulse.ui.components.BrandSecondaryButton
+import com.desmoines.aipulse.util.SafeLinkLauncher
 
 /**
  * Subscription screen matching iOS SubscriptionView.swift.
@@ -73,9 +74,8 @@ fun SubscriptionScreen(
     currentTier: SubscriptionTier,
     isLoading: Boolean,
     errorMessage: String?,
-    insiderPrice: String,
-    vipPrice: String,
-    hasProducts: Boolean,
+    insiderOffer: TierOffer,
+    vipOffer: TierOffer,
     selectedTier: SubscriptionTier?,
     onSelectTier: (SubscriptionTier) -> Unit,
     onPurchase: () -> Unit,
@@ -84,7 +84,18 @@ fun SubscriptionScreen(
     onNavigateToTerms: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
     crossPlatformSubscriptions: List<CrossPlatformSubscription> = emptyList(),
+    manageSubscriptionUrl: String? = null,
+    purchasePlan: PurchasePlan? = null,
+    // False while the Trip Planner is paused (AND-OVH-011): don't sell it.
+    showTripPlanner: Boolean = true,
 ) {
+    val context = LocalContext.current
+    val selectedPrice = when (selectedTier) {
+        SubscriptionTier.INSIDER -> insiderOffer
+        SubscriptionTier.VIP -> vipOffer
+        else -> null
+    }.let { (it as? TierOffer.Available)?.formattedPrice }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -149,39 +160,58 @@ fun SubscriptionScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Tier selection cards
-            if (hasProducts) {
-                TierSelectionCard(
-                    tierName = "Insider",
-                    price = insiderPrice,
-                    isSelected = selectedTier == SubscriptionTier.INSIDER,
-                    isCurrent = currentTier == SubscriptionTier.INSIDER,
-                    color = InsiderColor,
-                    onClick = { onSelectTier(SubscriptionTier.INSIDER) },
-                )
+            // Tier selection cards. Each shows Play's formattedPrice, a
+            // spinner while the query runs, or an unavailable notice; never a
+            // price the app wrote itself (AND-OVH-008).
+            TierSelectionCard(
+                tierName = "Insider",
+                offer = insiderOffer,
+                isSelected = selectedTier == SubscriptionTier.INSIDER,
+                isCurrent = currentTier == SubscriptionTier.INSIDER,
+                color = InsiderColor,
+                onClick = { onSelectTier(SubscriptionTier.INSIDER) },
+            )
 
+            Spacer(Modifier.height(12.dp))
+
+            TierSelectionCard(
+                tierName = "VIP",
+                offer = vipOffer,
+                isSelected = selectedTier == SubscriptionTier.VIP,
+                isCurrent = currentTier == SubscriptionTier.VIP,
+                color = VipColor,
+                onClick = { onSelectTier(SubscriptionTier.VIP) },
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            // Purchase button — migrated to BrandPrimaryButton. Disabled
+            // until the selected tier has a Play price to charge.
+            BrandPrimaryButton(
+                onClick = onPurchase,
+                enabled = selectedTier != null && selectedTier != currentTier && selectedPrice != null,
+                isLoading = isLoading,
+                text = if (isLoading) "Processing..." else purchaseButtonLabel(purchasePlan, selectedTier),
+            )
+
+            // Auto-renew disclosure, always with the price Play will charge.
+            selectedPrice?.let { price ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = renewalDisclosure(purchasePlan, selectedTier, price),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            // Google Play subscribers manage or cancel in Play itself.
+            manageSubscriptionUrl?.let { url ->
                 Spacer(Modifier.height(12.dp))
-
-                TierSelectionCard(
-                    tierName = "VIP",
-                    price = vipPrice,
-                    isSelected = selectedTier == SubscriptionTier.VIP,
-                    isCurrent = currentTier == SubscriptionTier.VIP,
-                    color = VipColor,
-                    onClick = { onSelectTier(SubscriptionTier.VIP) },
+                BrandSecondaryButton(
+                    onClick = { SafeLinkLauncher.openUrl(context, url) },
+                    text = "Manage subscription",
                 )
-
-                Spacer(Modifier.height(20.dp))
-
-                // Purchase button — migrated to BrandPrimaryButton
-                BrandPrimaryButton(
-                    onClick = onPurchase,
-                    enabled = selectedTier != null && selectedTier != currentTier,
-                    isLoading = isLoading,
-                    text = if (isLoading) "Processing..." else "Subscribe",
-                )
-            } else if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.padding(24.dp))
             }
 
             // Error message
@@ -207,13 +237,19 @@ fun SubscriptionScreen(
             Spacer(Modifier.height(24.dp))
 
             // Features list
-            InsiderFeaturesList(price = insiderPrice)
+            InsiderFeaturesList(
+                price = (insiderOffer as? TierOffer.Available)?.formattedPrice,
+                showTripPlanner = showTripPlanner,
+            )
 
             Spacer(Modifier.height(8.dp))
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            VipFeaturesList(price = vipPrice)
+            VipFeaturesList(
+                price = (vipOffer as? TierOffer.Available)?.formattedPrice,
+                showTripPlanner = showTripPlanner,
+            )
 
             Spacer(Modifier.height(24.dp))
 
@@ -242,6 +278,8 @@ fun SubscriptionScreen(
 }
 
 // region Sub-composables
+
+private const val UNAVAILABLE_TEXT = "Subscriptions unavailable right now"
 
 private val InsiderColor = Color(0xFFFF9800) // Orange
 private val VipColor = Color(0xFF9C27B0) // Purple
@@ -282,18 +320,24 @@ private fun CurrentTierBadge(tier: SubscriptionTier) {
 @Composable
 private fun TierSelectionCard(
     tierName: String,
-    price: String,
+    offer: TierOffer,
     isSelected: Boolean,
     isCurrent: Boolean,
     color: Color,
     onClick: () -> Unit,
 ) {
+    val priceDescription = when (offer) {
+        is TierOffer.Available -> "${offer.formattedPrice} per month"
+        TierOffer.Loading -> "loading price"
+        TierOffer.Unavailable -> UNAVAILABLE_TEXT
+    }
     Card(
         onClick = onClick,
+        enabled = offer is TierOffer.Available,
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
-                contentDescription = "$tierName plan, $price per month${if (isCurrent) ", current plan" else ""}"
+                contentDescription = "$tierName plan, $priceDescription${if (isCurrent) ", current plan" else ""}"
             },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -335,11 +379,23 @@ private fun TierSelectionCard(
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = if (price.isNotEmpty()) "$price/month" else "Loading...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                when (offer) {
+                    is TierOffer.Available -> Text(
+                        text = "${offer.formattedPrice}/month",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TierOffer.Loading -> CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = color,
+                    )
+                    TierOffer.Unavailable -> Text(
+                        text = UNAVAILABLE_TEXT,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (isSelected) {
                 Icon(
@@ -354,16 +410,18 @@ private fun TierSelectionCard(
 }
 
 @Composable
-private fun InsiderFeaturesList(price: String) {
+private fun InsiderFeaturesList(price: String?, showTripPlanner: Boolean) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Insider — ${price.ifEmpty { "$4.99" }}/mo",
+            text = if (price != null) "Insider — $price/mo" else "Insider",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = InsiderColor,
         )
         Spacer(Modifier.height(8.dp))
-        FeatureRow(icon = Icons.Filled.Map, color = InsiderColor, text = "AI Trip Planner (5 trips/month)")
+        if (showTripPlanner) {
+            FeatureRow(icon = Icons.Filled.Map, color = InsiderColor, text = "AI Trip Planner (5 trips/month)")
+        }
         FeatureRow(icon = Icons.Filled.FavoriteBorder, color = InsiderColor, text = "Unlimited favorites")
         FeatureRow(icon = Icons.Outlined.Tune, color = InsiderColor, text = "Advanced filters (distance, price, rating)")
         FeatureRow(icon = Icons.Filled.RateReview, color = InsiderColor, text = "Write reviews & ratings")
@@ -374,21 +432,23 @@ private fun InsiderFeaturesList(price: String) {
 }
 
 @Composable
-private fun VipFeaturesList(price: String) {
+private fun VipFeaturesList(price: String?, showTripPlanner: Boolean) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "VIP — ${price.ifEmpty { "$12.99" }}/mo",
+            text = if (price != null) "VIP — $price/mo" else "VIP",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = VipColor,
         )
         Spacer(Modifier.height(8.dp))
-        FeatureRow(icon = Icons.Filled.Map, color = VipColor, text = "Unlimited AI Trip Planner")
-        FeatureRow(icon = Icons.Filled.Star, color = VipColor, text = "VIP-exclusive events")
-        FeatureRow(icon = Icons.Filled.Restaurant, color = VipColor, text = "Restaurant reservation help")
-        FeatureRow(icon = Icons.Filled.Sms, color = VipColor, text = "SMS alerts for your interests")
-        FeatureRow(icon = Icons.Filled.CardGiftcard, color = VipColor, text = "Monthly local business perks")
-        FeatureRow(icon = Icons.Filled.Star, color = VipColor, text = "Concierge support")
+        // Only what Android actually does for VIP: every row must map to code
+        // that checks SubscriptionTier.VIP (unlimited trips are
+        // TripPlannerViewModel). Perks the web lists but this app doesn't
+        // implement stay off until they ship here (AND-OVH-008).
+        FeatureRow(icon = Icons.Filled.Star, color = VipColor, text = "Everything in Insider")
+        if (showTripPlanner) {
+            FeatureRow(icon = Icons.Filled.Map, color = VipColor, text = "Unlimited AI Trip Planner")
+        }
     }
 }
 
@@ -444,3 +504,34 @@ private fun CrossPlatformSubscriptionsBanner(subs: List<CrossPlatformSubscriptio
 }
 
 // endregion
+
+/**
+ * Says what the tap does. A tier change replaces the Play subscription the
+ * user already has, so it is not labelled as a new subscription (AND-OVH-009).
+ */
+internal fun purchaseButtonLabel(plan: PurchasePlan?, target: SubscriptionTier?): String {
+    val name = target?.displayName ?: return "Subscribe"
+    return when (plan) {
+        is PurchasePlan.Upgrade -> "Upgrade to $name"
+        is PurchasePlan.Downgrade -> "Switch to $name"
+        else -> "Subscribe"
+    }
+}
+
+/**
+ * The auto-renew disclosure, always with the price Play will charge. An
+ * upgrade is prorated now (CHARGE_PRORATED_PRICE); a downgrade waits for the
+ * renewal date (DEFERRED). Each says so, because the charge differs.
+ */
+internal fun renewalDisclosure(plan: PurchasePlan?, target: SubscriptionTier?, price: String): String {
+    val name = target?.displayName ?: "your new plan"
+    return when (plan) {
+        is PurchasePlan.Upgrade ->
+            "Switches to $name now. Google Play charges the prorated difference today, then $price monthly " +
+                "from your current renewal date until cancelled. Cancel anytime in Google Play."
+        is PurchasePlan.Downgrade ->
+            "Your current plan stays active until it renews, then switches to $name at $price monthly " +
+                "until cancelled. Cancel anytime in Google Play."
+        else -> "Renews monthly at $price until cancelled. Cancel anytime in Google Play."
+    }
+}

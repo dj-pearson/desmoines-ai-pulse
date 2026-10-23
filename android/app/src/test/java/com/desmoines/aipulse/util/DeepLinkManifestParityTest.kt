@@ -78,6 +78,47 @@ class DeepLinkManifestParityTest {
         )
     }
 
+    /** The intent-filter that declares the https App Links. */
+    private fun appLinksFilter(): String {
+        val xml = read("src/main/AndroidManifest.xml")
+        val filter = Regex("""<intent-filter[\s\S]*?</intent-filter>""").findAll(xml)
+            .map { it.value }
+            .firstOrNull { it.contains("""android:scheme="https"""") }
+        assertTrue(filter != null, "no intent-filter declares the https App Links")
+        return filter!!
+    }
+
+    @Test
+    fun `the App Links filter claims exactly the sections the parser handles`() {
+        // AND-OVH-021. A section claimed and unparsed opens the app on a
+        // WebView of a page we could have shown natively; a section parsed and
+        // unclaimed (the /stay hotel links before this) never reaches the app.
+        val prefixes = Regex("""android:pathPrefix="/([a-z0-9-]+)"""").findAll(appLinksFilter())
+            .map { it.groupValues[1] }
+            .toSet()
+        assertEquals(DeepLinkHandler.CLAIMED_WEB_SECTIONS, prefixes)
+        assertEquals(
+            setOf("events", "restaurants", "attractions", "stay", "articles", "search"),
+            prefixes,
+        )
+    }
+
+    @Test
+    fun `the App Links filter declares exactly the hosts the parser trusts`() {
+        val hosts = Regex("""android:host="([a-z0-9.-]+)"""").findAll(appLinksFilter())
+            .map { it.groupValues[1] }
+            .toSet()
+        assertEquals(DeepLinkHandler.FIRST_PARTY_HOSTS, hosts)
+    }
+
+    @Test
+    fun `the parser compares hosts by equality, not substring`() {
+        // IOS-DD-PLATFORM-10 on iOS: a contains() check accepted
+        // desmoinesinsider.com.evil.io.
+        val src = read("src/main/java/com/desmoines/aipulse/util/DeepLinkHandler.kt")
+        assertTrue(!src.contains("host.contains") && !src.contains("contains(\"desmoinesinsider"))
+    }
+
     @Test
     fun `the two lists are the ten hosts we expect`() {
         // A fixed expectation as well as the comparison: without it, deleting a

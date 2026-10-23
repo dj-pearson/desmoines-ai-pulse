@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.model.UserRole
 import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.data.remote.SignUpOutcome
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.util.AuthErrorMapper
 import com.desmoines.aipulse.util.BiometricAuthService
@@ -59,8 +60,12 @@ class AuthViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _showVerificationAlert = MutableStateFlow(false)
-    val showVerificationAlert: StateFlow<Boolean> = _showVerificationAlert.asStateFlow()
+    /**
+     * The address a confirmation link went to, while sign-up waits on it.
+     * Non-null means the account exists but has no session yet.
+     */
+    private val _pendingConfirmationEmail = MutableStateFlow<String?>(null)
+    val pendingConfirmationEmail: StateFlow<String?> = _pendingConfirmationEmail.asStateFlow()
 
     private val _recoveryAction = MutableStateFlow<AuthErrorMapper.RecoveryAction?>(null)
     val recoveryAction: StateFlow<AuthErrorMapper.RecoveryAction?> = _recoveryAction.asStateFlow()
@@ -171,22 +176,7 @@ class AuthViewModel @Inject constructor(
         return email.matches(Regex(pattern))
     }
 
-    fun passwordStrength(password: String): PasswordStrength {
-        if (password.isEmpty()) return PasswordStrength.NONE
-        var score = 0
-        if (password.length >= 8) score++
-        if (password.length >= 12) score++
-        if (password.contains(Regex("[A-Z]"))) score++
-        if (password.contains(Regex("[a-z]"))) score++
-        if (password.contains(Regex("[0-9]"))) score++
-        if (password.contains(Regex("[^A-Za-z0-9]"))) score++
-
-        return when {
-            score <= 2 -> PasswordStrength.WEAK
-            score <= 4 -> PasswordStrength.MEDIUM
-            else -> PasswordStrength.STRONG
-        }
-    }
+    fun passwordStrength(password: String): PasswordStrength = strengthOf(password)
 
     fun passwordsMatch(password: String, confirmPassword: String): Boolean {
         return confirmPassword.isEmpty() || password == confirmPassword
@@ -269,9 +259,15 @@ class AuthViewModel @Inject constructor(
                 lastName = lastName.ifEmpty { null },
                 interests = if (selectedInterests.isEmpty()) null else selectedInterests.toList(),
             )
-                .onSuccess {
-                    _showVerificationAlert.value = true
+                .onSuccess { outcome ->
                     _recoveryAction.value = null
+                    when (outcome) {
+                        // The session listener sees the new session and the
+                        // screen navigates away; nothing to show here.
+                        SignUpOutcome.SignedIn -> _pendingConfirmationEmail.value = null
+                        is SignUpOutcome.ConfirmationRequired ->
+                            _pendingConfirmationEmail.value = outcome.email
+                    }
                 }
                 .onFailure { error ->
                     val mapped = AuthErrorMapper.map(error)
@@ -293,6 +289,15 @@ class AuthViewModel @Inject constructor(
                 }
             _isSigningIn.value = false
         }
+    }
+
+    /**
+     * Credential Manager failed before there was an id token to send. Routed
+     * through the same error state as every other auth failure so the button
+     * never fails silently.
+     */
+    fun onGoogleSignInFailed(message: String) {
+        setError(message)
     }
 
     // MARK: - Sign Out
@@ -361,8 +366,7 @@ class AuthViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            // Supabase resend = calling signUp again with existing email triggers resend
-            authRepository.resetPassword(email)
+            authRepository.resendSignUpConfirmation(email)
                 .onSuccess {
                     setError("Verification email resent. Check your inbox.")
                     _recoveryAction.value = null
@@ -416,8 +420,9 @@ class AuthViewModel @Inject constructor(
         _errorMessage.value = null
     }
 
-    fun dismissVerificationAlert() {
-        _showVerificationAlert.value = false
+    /** Leave the check-your-email state, back to the sign-in form. */
+    fun dismissConfirmationPending() {
+        _pendingConfirmationEmail.value = null
     }
 
     private fun setError(message: String) {
@@ -452,6 +457,24 @@ class AuthViewModel @Inject constructor(
     }
 
     companion object {
+        /** Shared with SetNewPasswordViewModel so both forms score alike. */
+        fun strengthOf(password: String): PasswordStrength {
+            if (password.isEmpty()) return PasswordStrength.NONE
+            var score = 0
+            if (password.length >= 8) score++
+            if (password.length >= 12) score++
+            if (password.contains(Regex("[A-Z]"))) score++
+            if (password.contains(Regex("[a-z]"))) score++
+            if (password.contains(Regex("[0-9]"))) score++
+            if (password.contains(Regex("[^A-Za-z0-9]"))) score++
+
+            return when {
+                score <= 2 -> PasswordStrength.WEAK
+                score <= 4 -> PasswordStrength.MEDIUM
+                else -> PasswordStrength.STRONG
+            }
+        }
+
         val availableInterests = listOf(
             "Food", "Music", "Sports", "Arts",
             "Nightlife", "Outdoor", "Family", "Business",

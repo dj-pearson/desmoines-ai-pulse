@@ -3,6 +3,7 @@ package com.desmoines.aipulse.data.remote
 import com.desmoines.aipulse.data.model.SponsoredPick
 import com.desmoines.aipulse.data.model.SponsoredPickResponse
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.suspendRunCatching
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
@@ -36,13 +37,13 @@ class SponsoredPickService @Inject constructor(
         if (billingService.currentTier.value.isPremium) return null
         val client = supabaseClient ?: return null
 
-        return runCatching {
+        return suspendRunCatching {
             val payload = buildJsonObject {
                 put("surface", surface)
                 query?.trim()?.takeIf { it.isNotEmpty() }?.let { put("query", it) }
             }
             val response = client.functions("get-sponsored-pick", body = payload)
-            if (response.status.value !in 200..299) return@runCatching null
+            if (response.status.value !in 200..299) return@suspendRunCatching null
             json.decodeFromString(SponsoredPickResponse.serializer(), response.bodyAsText())
                 .pick
                 ?.takeIf { it.isRenderable }

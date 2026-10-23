@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.repository
 
 import com.desmoines.aipulse.data.model.ReviewsData
 import com.desmoines.aipulse.data.remote.ReviewsRemoteDataSource
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,11 +26,11 @@ class ReviewsRepositoryImpl @Inject constructor(
 ) : ReviewsRepository {
 
     override suspend fun fetchReviews(contentType: String, contentId: String): Result<ReviewsData> =
-        runCatching {
+        suspendRunCatching {
             // Raw rows; the ViewModel applies moderation visibility with author
             // awareness so the caller can still see/manage their own pending review.
             val reviews = remote.fetchReviews(contentType, contentId)
-            val aggregate = runCatching { remote.fetchAggregate(contentType, contentId) }.getOrNull()
+            val aggregate = suspendRunCatching { remote.fetchAggregate(contentType, contentId) }.getOrNull()
             ReviewsData(reviews = reviews, aggregate = aggregate)
         }
 
@@ -39,13 +40,13 @@ class ReviewsRepositoryImpl @Inject constructor(
         contentId: String,
         rating: Int,
         reviewText: String?,
-    ): Result<Unit> = runCatching {
+    ): Result<Unit> = suspendRunCatching {
         remote.upsertReview(userId, contentType, contentId, rating, reviewText)
     }
 
     override suspend fun deleteReview(id: String, userId: String): Result<Unit> =
-        runCatching { remote.deleteReview(id, userId) }
+        suspendRunCatching { remote.deleteReview(id, userId) }
 
     override suspend fun reportReview(ratingId: String): Result<Unit> =
-        runCatching { remote.reportReview(ratingId) }
+        suspendRunCatching { remote.reportReview(ratingId) }
 }

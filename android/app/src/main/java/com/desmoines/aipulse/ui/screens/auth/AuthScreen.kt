@@ -4,6 +4,7 @@ import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,10 +24,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,12 +60,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import com.desmoines.aipulse.ui.components.BrandPrimaryButton
 import androidx.compose.ui.semantics.contentDescription
@@ -80,10 +83,16 @@ import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.desmoines.aipulse.ui.theme.Dimens
 import com.desmoines.aipulse.util.AuthErrorMapper
+import com.desmoines.aipulse.R
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.GOOGLE_SIGN_IN_FAILED_MESSAGE
+import com.desmoines.aipulse.util.googleSignInErrorMessage
+import com.desmoines.aipulse.util.isGoogleSignInConfigured
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
@@ -102,7 +111,7 @@ fun AuthScreen(
     val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
     val isSigningUp by viewModel.isSigningUp.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
-    val showVerificationAlert by viewModel.showVerificationAlert.collectAsStateWithLifecycle()
+    val pendingConfirmationEmail by viewModel.pendingConfirmationEmail.collectAsStateWithLifecycle()
     val lockoutSeconds by viewModel.lockoutSecondsRemaining.collectAsStateWithLifecycle()
     val recoveryAction by viewModel.recoveryAction.collectAsStateWithLifecycle()
 
@@ -154,6 +163,23 @@ fun AuthScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
+        // The account exists and waits on the emailed link; the form is done.
+        val pendingEmail = pendingConfirmationEmail
+        if (pendingEmail != null) {
+            ConfirmationPendingContent(
+                email = pendingEmail,
+                onResend = { viewModel.resendVerification(pendingEmail) },
+                onBackToSignIn = {
+                    viewModel.dismissConfirmationPending()
+                    password = ""
+                    confirmPassword = ""
+                    selectedTab = 0
+                },
+                modifier = Modifier.padding(paddingValues),
+            )
+            return@Scaffold
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -450,60 +476,99 @@ fun AuthScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+            // Google Sign-In, only when the build carries a real web client
+            // id. Without one every tap fails, so the button and its "or"
+            // divider are left out rather than shown as a dead control.
+            if (isGoogleSignInConfigured(Config.GOOGLE_WEB_CLIENT_ID)) {
+                Spacer(modifier = Modifier.height(Dimens.SpacingLg))
 
-            // Divider with "or"
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Dimens.SpacingLg),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f))
-                Text(
-                    text = "or",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = Dimens.SpacingMd),
+                // Divider with "or"
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Dimens.SpacingLg),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "or",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = Dimens.SpacingMd),
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+
+                GoogleSignInButton(
+                    onIdToken = { idToken -> viewModel.signInWithGoogle(idToken) },
+                    onError = { message -> viewModel.onGoogleSignInFailed(message) },
+                    enabled = !isSigningIn && !isSigningUp && lockoutSeconds <= 0,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Dimens.SpacingLg),
                 )
-                HorizontalDivider(modifier = Modifier.weight(1f))
             }
-
-            Spacer(modifier = Modifier.height(Dimens.SpacingLg))
-
-            // Google Sign-In button
-            GoogleSignInButton(
-                onIdToken = { idToken -> viewModel.signInWithGoogle(idToken) },
-                enabled = !isSigningIn && !isSigningUp && lockoutSeconds <= 0,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Dimens.SpacingLg),
-            )
 
             Spacer(modifier = Modifier.height(Dimens.SpacingXxxl))
         }
     }
+}
 
-    // Verification email alert dialog
-    if (showVerificationAlert) {
-        AlertDialog(
-            onDismissRequest = {
-                viewModel.dismissVerificationAlert()
-                onNavigateBack()
-            },
-            title = { Text("Check Your Email") },
-            text = {
-                Text("We've sent a verification link to your email. Please verify your account to continue.")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.dismissVerificationAlert()
-                    onNavigateBack()
-                }) {
-                    Text("OK")
-                }
-            },
+// MARK: - Confirmation Pending
+
+/**
+ * Shown when sign-up created the account but returned no session: the user
+ * has to open the link before they can sign in. Resend asks GoTrue for the
+ * signup mail again.
+ */
+@Composable
+private fun ConfirmationPendingContent(
+    email: String,
+    onResend: () -> Unit,
+    onBackToSignIn: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = Dimens.SpacingLg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(modifier = Modifier.height(Dimens.SpacingXxxl))
+        Icon(
+            Icons.Filled.Email,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(48.dp),
         )
+        Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+        Text(
+            text = "Check your email to confirm your account",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        Spacer(modifier = Modifier.height(Dimens.SpacingSm))
+        Text(
+            text = "We sent a confirmation link to $email. Open it, then come back and sign in.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(Dimens.SpacingXl))
+        OutlinedButton(
+            onClick = onResend,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Resend confirmation email")
+        }
+        TextButton(onClick = onBackToSignIn) {
+            Text("Back to sign in")
+        }
     }
 }
 
@@ -609,6 +674,7 @@ private fun InterestsSection(
 @Composable
 private fun GoogleSignInButton(
     onIdToken: (String) -> Unit,
+    onError: (String) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -626,16 +692,27 @@ private fun GoogleSignInButton(
                 .addCredentialOption(googleIdOption)
                 .build()
 
-            val activity = context as? Activity ?: return@OutlinedButton
+            val activity = context as? Activity ?: run {
+                onError(GOOGLE_SIGN_IN_FAILED_MESSAGE)
+                return@OutlinedButton
+            }
             scope.launch {
                 try {
                     val result = credentialManager.getCredential(activity, request)
                     val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
                     onIdToken(googleIdTokenCredential.idToken)
                 } catch (_: GetCredentialCancellationException) {
-                    // User cancelled — no action needed
-                } catch (e: Exception) {
+                    // User dismissed the sheet; nothing to show.
+                } catch (e: NoCredentialException) {
+                    AppLogger.auth.error("Google Sign-In: no credential", e)
+                    googleSignInErrorMessage(e)?.let(onError)
+                } catch (e: GetCredentialException) {
                     AppLogger.auth.error("Google Sign-In failed", e)
+                    googleSignInErrorMessage(e)?.let(onError)
+                } catch (e: Exception) {
+                    // Includes GoogleIdTokenParsingException from createFrom.
+                    AppLogger.auth.error("Google Sign-In failed", e)
+                    googleSignInErrorMessage(e)?.let(onError)
                 }
             }
         },
@@ -646,12 +723,13 @@ private fun GoogleSignInButton(
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
     ) {
-        // Google "G" icon placeholder (text-based since we don't bundle the asset)
-        Text(
-            text = "G",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = if (enabled) Color(0xFF4285F4) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+        // Decorative: the button's text already says "Google".
+        Image(
+            painter = painterResource(id = R.drawable.ic_google_logo),
+            contentDescription = null,
+            modifier = Modifier
+                .size(20.dp)
+                .alpha(if (enabled) 1f else 0.38f),
         )
         Spacer(modifier = Modifier.width(Dimens.SpacingSm))
         Text(

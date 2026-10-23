@@ -3,6 +3,7 @@ package com.desmoines.aipulse.data.repository
 import com.desmoines.aipulse.data.model.SurprisePick
 import com.desmoines.aipulse.data.remote.SurpriseMeRemoteDataSource
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,13 +21,13 @@ class SurpriseMeRepositoryImpl @Inject constructor(
     private val remote: SurpriseMeRemoteDataSource,
 ) : SurpriseMeRepository {
 
-    override suspend fun surprise(lat: Double?, lon: Double?): Result<SurprisePick> = runCatching {
+    override suspend fun surprise(lat: Double?, lon: Double?): Result<SurprisePick> = suspendRunCatching {
         remote.surprise(lat, lon)
             ?: throw SurpriseMeException("No surprise pick available right now. Try again.")
     }
 
     override suspend fun track(pick: SurprisePick, outcome: String) {
-        runCatching { remote.track(pick, outcome) }
+        suspendRunCatching { remote.track(pick, outcome) }
             .onFailure { AppLogger.network.warning("surprise track($outcome) failed: ${it.message}") }
     }
 }

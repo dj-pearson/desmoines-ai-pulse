@@ -2,10 +2,12 @@ package com.desmoines.aipulse.data.repository
 
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.local.CacheManager
+import com.desmoines.aipulse.data.local.CachedEventsPage
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.remote.EventsRemoteDataSource
 import com.desmoines.aipulse.data.remote.EventsResponse
+import com.desmoines.aipulse.util.suspendRunCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 /**
@@ -26,36 +28,37 @@ class EventsRepositoryImpl @Inject constructor(
         )
 
         // Return fresh cache if available
-        if (cacheManager.isCacheFresh(cacheKey)) {
-            cacheManager.getCachedEvents(cacheKey)?.let { cached ->
-                return Result.success(EventsResponse(events = cached, totalCount = cached.size, hasMore = false))
-            }
+        cacheManager.getCachedEventsPage(cacheKey)?.let { page ->
+            return Result.success(cachedEventsResponse(page, query))
         }
 
         // Fetch from remote
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchEvents(query).also { response ->
-                cacheManager.cacheEvents(cacheKey, response.events)
+                cacheManager.cacheEvents(cacheKey, response.events, totalCount = response.totalCount)
             }
         }.recoverCatching { error ->
             AppLogger.network.error("fetchEvents failed, trying stale cache: ${error.message}", error)
-            val stale = cacheManager.getCachedEvents(cacheKey, allowStale = true)
+            val stale = cacheManager.getCachedEventsPage(cacheKey, allowStale = true)
                 ?: throw error
-            EventsResponse(events = stale, totalCount = stale.size, hasMore = false)
+            cachedEventsResponse(stale, query)
         }
     }
 
     override suspend fun fetchEvent(id: String): Result<Event> {
-        // Check cache first
+        // Fresh cache first; getCachedEvent applies the TTL of the query that cached it
         cacheManager.getCachedEvent(id)?.let { cached ->
             return Result.success(cached)
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchEvent(id).also { event ->
                 cacheManager.cacheEvents(CacheManager.eventsKey("single", id), listOf(event))
             }
-        }.onFailure { AppLogger.network.error("fetchEvent($id) failed: ${it.message}", it) }
+        }.recoverCatching { error ->
+            AppLogger.network.error("fetchEvent($id) failed, trying stale cache: ${error.message}", error)
+            cacheManager.getCachedEvent(id, allowStale = true) ?: throw error
+        }
     }
 
     override suspend fun fetchFeaturedEvents(limit: Int): Result<List<Event>> {
@@ -65,7 +68,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchFeaturedEvents(limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }
@@ -86,7 +89,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchRelatedEvents(eventId, category, limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }
@@ -103,7 +106,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fuzzySearchEvents(query, limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }
@@ -125,7 +128,7 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey)?.let { return Result.success(it) }
         }
 
-        return runCatching {
+        return suspendRunCatching {
             remoteDataSource.fetchNearbyEvents(latitude, longitude, radiusMiles, limit).also { events ->
                 cacheManager.cacheEvents(cacheKey, events)
             }
@@ -133,5 +136,31 @@ class EventsRepositoryImpl @Inject constructor(
             AppLogger.network.error("fetchNearbyEvents failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedEvents(cacheKey, allowStale = true) ?: throw error
         }
+    }
+}
+
+/**
+ * Rebuild a paginated response from a cached page. The cache used to answer
+ * hasMore = false, which ended infinite scroll after page one for as long as
+ * the 5-minute TTL held. hasMore follows the same rule as EventsRemoteDataSource.
+ *
+ * A page with no stored count can only be a row written before total_count
+ * existed; it falls back to "a full page may have more", which costs at most
+ * one empty fetch rather than hiding the rest of the list.
+ */
+internal fun cachedEventsResponse(page: CachedEventsPage, query: EventsQuery): EventsResponse {
+    val total = page.totalCount
+    return if (total != null) {
+        EventsResponse(
+            events = page.events,
+            totalCount = total,
+            hasMore = query.offset + query.limit < total,
+        )
+    } else {
+        EventsResponse(
+            events = page.events,
+            totalCount = query.offset + page.events.size,
+            hasMore = page.events.size >= query.limit,
+        )
     }
 }

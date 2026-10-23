@@ -48,6 +48,7 @@ sealed class Route(val route: String) {
 
     // Auth & flow routes
     data object Auth : Route("auth")
+    data object SetNewPassword : Route("set_new_password")
     data object Onboarding : Route("onboarding")
     data object Subscription : Route("subscription")
     data object Settings : Route("settings")
@@ -64,6 +65,8 @@ sealed class Route(val route: String) {
     }
 
     data object Dashboard : Route("dashboard")
+    /** The hub the Home CTA cards moved into (AND-OVH-025). */
+    data object Explore : Route("explore")
     data object ContentHubs : Route("content_hubs")
     data object Articles : Route("articles")
     data object Deals : Route("deals")

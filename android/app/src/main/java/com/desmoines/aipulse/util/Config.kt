@@ -44,6 +44,12 @@ object Config {
     const val VIP_MONTHLY_PRODUCT_ID = "vip_monthly"
     val SUBSCRIPTION_PRODUCT_IDS = listOf(INSIDER_MONTHLY_PRODUCT_ID, VIP_MONTHLY_PRODUCT_ID)
 
+    // Base plan to sell per product id, as named in Play Console. A product
+    // missing here sells its first offer, which is the behaviour every build
+    // before AND-OVH-009 had. Add an entry only once a product carries more
+    // than one base plan.
+    val SUBSCRIPTION_BASE_PLAN_IDS: Map<String, String> = emptyMap()
+
     // Search
     const val SEARCH_DEBOUNCE_MS = 300L
 

@@ -27,6 +27,7 @@ import com.desmoines.aipulse.ui.screens.search.SearchViewModel
 import com.desmoines.aipulse.ui.screens.search.SearchTab
 import com.desmoines.aipulse.ui.screens.search.SavedSearchViewModel
 import com.desmoines.aipulse.ui.screens.subscription.SubscriptionViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerAvailabilityViewModel
 
 /**
  * The six bottom-tab destinations. Split out of MainNavHost.kt under AND-AUDIT-021;
@@ -45,6 +46,8 @@ internal fun NavGraphBuilder.addTabDestinations(
     composable(Route.Home.route) {
         val viewModel: EventsViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val tripAvailabilityViewModel: TripPlannerAvailabilityViewModel = hiltViewModel()
+        val tripAvailability by tripAvailabilityViewModel.availability.collectAsStateWithLifecycle()
         var showFilterSheet by remember { mutableStateOf(false) }
 
         // Filter state for the sheet
@@ -73,35 +76,20 @@ internal fun NavGraphBuilder.addTabDestinations(
             onNavigateToTripPlanner = {
                 navController.navigate(Route.TripPlanner.route)
             },
+            showTripPlanner = !tripAvailability.isPaused,
+            // Single-top, as the floating button this replaces was, so a
+            // double tap does not stack two Ask Pulse screens.
+            onNavigateToAskPulse = {
+                navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
+            },
             onNavigateToDiscover = {
                 navController.navigate(Route.Discover.route)
             },
             onNavigateToSurpriseMe = {
                 navController.navigate(Route.SurpriseMe.route)
             },
-            onNavigateToWeekend = {
-                navController.navigate(Route.Weekend.route)
-            },
-            onNavigateToNeighborhoods = {
-                navController.navigate(Route.Neighborhoods.route)
-            },
-            onNavigateToContentHubs = {
-                navController.navigate(Route.ContentHubs.route)
-            },
-            onNavigateToDashboard = {
-                navController.navigate(Route.Dashboard.route)
-            },
-            onNavigateToArticles = {
-                navController.navigate(Route.Articles.route)
-            },
-            onNavigateToDeals = {
-                navController.navigate(Route.Deals.route)
-            },
-            onNavigateToHotels = {
-                navController.navigate(Route.Hotels.route)
-            },
-            onNavigateToBestOf = {
-                navController.navigate(Route.BestOf.route)
+            onNavigateToExplore = {
+                navController.navigate(Route.Explore.route) { launchSingleTop = true }
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -310,6 +298,7 @@ internal fun NavGraphBuilder.addTabDestinations(
         val showSaveSuccess by viewModel.showSaveSuccess.collectAsStateWithLifecycle()
         val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
         val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+        val storeSubscriptionNotice by viewModel.storeSubscriptionNotice.collectAsStateWithLifecycle()
         val profileSubState by profileSubscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -329,6 +318,12 @@ internal fun NavGraphBuilder.addTabDestinations(
             showSaveSuccess = showSaveSuccess,
             showDeleteConfirmation = showDeleteConfirmation,
             errorMessage = errorMessage,
+            // Prefer the sku-specific Play page when the billing state knows it.
+            storeSubscriptionNotice = storeSubscriptionNotice?.let { notice ->
+                if (notice.isGooglePlay) notice.copy(manageUrl = profileSubState.manageSubscriptionUrl ?: notice.manageUrl) else notice
+            },
+            onOpenStoreSubscription = { url -> com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, url) },
+            onAcknowledgeStoreSubscriptionNotice = { viewModel.acknowledgeStoreSubscriptionNotice() },
             onFirstNameChanged = { viewModel.setFirstName(it) },
             onLastNameChanged = { viewModel.setLastName(it) },
             onPhoneChanged = { viewModel.setPhone(it) },

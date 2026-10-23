@@ -1,0 +1,29 @@
+<!--
+    AND-OVH-024. Monochrome layer for Android 13+ themed icons. The system
+    reads only this layer's alpha and tints it, so it must be a flat
+    silhouette; pointing it at the full-colour foreground PNG rendered as a
+    solid blob.
+
+    One path, one colour, evenOdd: the pin, a ring cut out of its head, and
+    inside the ring the ticket (with its star punched through) and the wheel
+    hub with four gondolas. Nothing overlaps, so evenOdd never punches a hole
+    by accident. Drawn on the 108dp adaptive canvas inside the 66dp safe zone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M54,25C42.39,25 33,34.39 33,46c0,15.75 21,39 21,39s21,-23.25 21,-39c0,-11.61 -9.39,-21 -21,-21z
+            M39,46a15,15 0,1 0,30 0a15,15 0,1 0,-30 0z
+            M45.85,48.3L60.35,41.54L64.15,49.7L49.65,56.46z
+            M53.2,46.8L53.905,48.829L56.053,48.873L54.341,50.171L54.963,52.227L53.2,51L51.437,52.227L52.059,50.171L50.347,48.873L52.495,48.829z
+            M46.8,42a2.2,2.2 0,1 0,4.4 0a2.2,2.2 0,1 0,-4.4 0z
+            M42.6,42a1.4,1.4 0,1 0,2.8 0a1.4,1.4 0,1 0,-2.8 0z
+            M44.06,38.46a1.4,1.4 0,1 0,2.8 0a1.4,1.4 0,1 0,-2.8 0z
+            M47.6,37a1.4,1.4 0,1 0,2.8 0a1.4,1.4 0,1 0,-2.8 0z
+            M51.14,38.46a1.4,1.4 0,1 0,2.8 0a1.4,1.4 0,1 0,-2.8 0z" />
+</vector>

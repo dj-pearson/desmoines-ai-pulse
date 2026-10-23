@@ -7,6 +7,7 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.FavoritesException
 import com.desmoines.aipulse.data.remote.FavoritesRemoteDataSource
+import com.desmoines.aipulse.util.suspendRunCatching
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -42,7 +43,7 @@ class FavoritesRepositoryImpl @Inject constructor(
     private fun eventMutex(id: String): Mutex = eventMutexes.getOrPut(id) { Mutex() }
     private fun restaurantMutex(id: String): Mutex = restaurantMutexes.getOrPut(id) { Mutex() }
 
-    override suspend fun loadFavorites(userId: String): Result<FavoritesState> = runCatching {
+    override suspend fun loadFavorites(userId: String): Result<FavoritesState> = suspendRunCatching {
         // Load event favorites
         _favoriteEventIds = try {
             remoteDataSource.loadEventFavoriteIds(userId)
@@ -70,7 +71,7 @@ class FavoritesRepositoryImpl @Inject constructor(
         eventId: String,
         currentIds: Set<String>,
         tier: SubscriptionTier,
-    ): Result<Boolean> = runCatching {
+    ): Result<Boolean> = suspendRunCatching {
         eventMutex(eventId).withLock {
             // The caller's snapshot decides the intended direction; the authoritative
             // in-memory set decides whether that work is still needed. Rapid duplicate
@@ -87,12 +88,12 @@ class FavoritesRepositoryImpl @Inject constructor(
                 }
                 // Optimistic local update, rolled back if the remote write fails.
                 _favoriteEventIds = _favoriteEventIds + eventId
-                runCatching { remoteDataSource.addEventFavorite(userId, eventId) }
+                suspendRunCatching { remoteDataSource.addEventFavorite(userId, eventId) }
                     .onFailure { _favoriteEventIds = _favoriteEventIds - eventId; throw it }
                 true
             } else {
                 _favoriteEventIds = _favoriteEventIds - eventId
-                runCatching { remoteDataSource.removeEventFavorite(userId, eventId) }
+                suspendRunCatching { remoteDataSource.removeEventFavorite(userId, eventId) }
                     .onFailure { _favoriteEventIds = _favoriteEventIds + eventId; throw it }
                 false
             }
@@ -104,7 +105,7 @@ class FavoritesRepositoryImpl @Inject constructor(
         restaurantId: String,
         currentIds: Set<String>,
         tier: SubscriptionTier,
-    ): Result<Boolean> = runCatching {
+    ): Result<Boolean> = suspendRunCatching {
         restaurantMutex(restaurantId).withLock {
             val wantFavorite = !currentIds.contains(restaurantId)
             val isFavorite = restaurantId in _favoriteRestaurantIds
@@ -137,11 +138,11 @@ class FavoritesRepositoryImpl @Inject constructor(
     }.onFailure { AppLogger.network.error("Failed to toggle restaurant favorite", it) }
 
     override suspend fun fetchFavoriteEvents(eventIds: Set<String>): Result<List<Event>> =
-        runCatching { remoteDataSource.fetchFavoriteEvents(eventIds) }
+        suspendRunCatching { remoteDataSource.fetchFavoriteEvents(eventIds) }
             .onFailure { AppLogger.network.error("Failed to fetch favorite events", it) }
 
     override suspend fun fetchFavoriteRestaurants(restaurantIds: Set<String>): Result<List<Restaurant>> =
-        runCatching { remoteDataSource.fetchFavoriteRestaurants(restaurantIds) }
+        suspendRunCatching { remoteDataSource.fetchFavoriteRestaurants(restaurantIds) }
             .onFailure { AppLogger.network.error("Failed to fetch favorite restaurants", it) }
 
     override fun isEventFavorited(eventId: String): Boolean = eventId in _favoriteEventIds
