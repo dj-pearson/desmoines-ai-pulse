@@ -9698,6 +9698,250 @@
       "priority": 3,
       "passes": true,
       "notes": "FILED AND FIXED 2026-09-19 (claude/admiring-cori-ukwzcp), in the iteration that found it. It surfaced while closing WEB-SEO-043: a rule measuring `const pageTitle` reported four over-length titles and two were false, and the reason they were false was this.\n\nTWENTY PAGES did both. useDocumentTitle removed from all of them, with its now-unused import; the Helmet title stays. AcceptableUsePolicy, AccessibilityStatement, AdvertisingPolicies, AffiliateDisclosure, Attractions, CookiePolicy, DMCAPolicy, DataProcessingAgreement, DateNightEvents, DietaryRestaurants, EventsThisWeekend, EventsToday, FreeEvents, GuidesPage, Hotels, KidsEvents, NewsletterConfirm, OpenNowRestaurants, Playgrounds, Unsubscribe.\n\nTHE RACE WAS HIDING A TOO-LONG TITLE, which is why AC3 exists. /restaurants/dietary rendered 72 characters the moment its short imperative title stopped winning, and its description was 214. Both fixed. That is the argument for re-measuring everything rather than the pages the story names: a duplicate setter does not just make the title ambiguous, it masks the length of the one that reaches a crawler.\n\nVERIFIED by rendering 36 routes against a production build, sampling each title at 1.2s and 3.7s: 0 titles that change after mount, 0 over 60, 0 descriptions over 160. Before the fix, sampling twice was the only way to see the race at all. npm run validate passes, vitest 680/680, the required axe lane 48/48, and route-smoke is 95 passed / 13 failed - the same 13 backend-dependent failures as before the change.\n\nAC5's check is NOT built. The pattern is visible in source and would be a short script, but the twenty instances are gone and a check with no baseline to hold is better written when somebody re-introduces one. Recorded rather than built, deliberately."
+    },
+    {
+      "id": "WEB-SEC-036",
+      "title": "/media/*.svg ran script first-party",
+      "description": "The /media/* Pages Function served bucket files under the site origin with upstream headers, and _headers (so the CSP) does not apply to Function responses. Any signed-in user can upload an SVG to media.",
+      "acceptanceCriteria": [
+        "Every /media response has nosniff; SVG gets a default-src 'none' sandbox CSP; non-passive upstream types are served as an octet-stream attachment; cache hits are hardened too",
+        "npm run test:media-route covers svg, html upstream, missing type, 304 and a stale cached svg"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-SEC-037",
+      "title": "CSP script-src allowed unpkg and jsdelivr",
+      "description": "Nothing loads script from either host, but any HTML injection could pull an arbitrary npm package through them.",
+      "acceptanceCriteria": [
+        "Both hosts gone from script-src (jsdelivr from style-src, api.openai.com from connect-src)",
+        "check-csp-hashes fails on a package-CDN host, a wildcard over one, or a bare scheme/* in script-src"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-SEC-038",
+      "title": "Edge auth gaps: web-vitals-regression-check, fix-broken-event-urls, plain key compares",
+      "description": "web-vitals-regression-check had no caller check; fix-broken-event-urls accepted moderators; triage/notify-event-submission compared keys with ===.",
+      "acceptanceCriteria": [
+        "requireAdminOrApiKey on both functions",
+        "timingSafeEqual for the key compares",
+        "check-edge-auth no longer counts an x-api-key CORS string as a guard; baseline 5 -> 4"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-SEC-039",
+      "title": "og-image and image fetchers followed redirects past the SSRF check",
+      "description": "validateURLForSSRF checked only the first URL; fetch() followed 302s to internal addresses.",
+      "acceptanceCriteria": [
+        "safeFetch in _shared/fetchGuard.ts: manual redirects, every hop re-validated (resolved DNS), max 3 hops, auth headers dropped cross-origin",
+        "Used by og-image, image-transform, image-proxy (allowlist per hop), find-image-candidates, analyze-competitor, imageStorage",
+        "Deno tests: 302 to 169.254.169.254 refused, 4 hops refused"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-QA-035",
+      "title": "Rate-limit 429s carried no CORS headers",
+      "description": "The browser blocked the 429, so supabase-js saw a network error and pages could not show their rate-limit message.",
+      "acceptanceCriteria": [
+        "One 429 builder in _shared/rateLimitCore.ts adds CORS for allowed origins and exposes Retry-After/X-RateLimit-*",
+        "Deno suite in the subscription-sync lane"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-PERF-044",
+      "title": "Sentry chunk was 188 KB gz for every visitor",
+      "description": "A namespace import of @sentry/react kept replay, feedback and tracing.",
+      "acceptanceCriteria": [
+        "src/lib/sentryClient.ts re-exports init/captureException/captureMessage only; chunk 30 KB gz, no rrweb"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-PERF-045",
+      "title": "Event promotion planner loaded jsPDF and Recharts on first paint",
+      "description": "",
+      "acceptanceCriteria": [
+        "pdf-generator imported in the download handler, ChartsView lazy; page chunk 145 KB -> 15 KB gz",
+        "Also fixed: the post-email auto-download sent the 4-week preview instead of the unlocked playbook"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-PERF-046",
+      "title": "Every static asset invoked the Pages Function",
+      "description": "_routes.json included /* with no excludes.",
+      "acceptanceCriteria": [
+        "56 excludes covering /assets/*, /ads/* and the root files the middleware already passes through; /media/* and /.well-known/* stay routed",
+        "npm run test:routes-json derives the pass-through list from the middleware"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-LEGAL-013",
+      "title": "useAnalytics wrote without consent and double-counted views",
+      "description": "Mounted twice on /, each mount inserted a page view with its own session id and no consent check; rejected inserts dropped the queue.",
+      "acceptanceCriteria": [
+        "analyticsGranted() gates every write",
+        "No mount page view; one shared session id; user from useAuthState",
+        "{ error } re-queues the batch; useActiveAds no longer calls auth.getUser"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-UX-038",
+      "title": "Skip link landed on the logo; 404 had no nav or h1",
+      "description": "",
+      "acceptanceCriteria": [
+        "Skip link focuses a marker after the header",
+        "NotFound renders Header/Footer, an h1 and a /search link; page-headings spec covers both"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-SEO-046",
+      "title": "Attraction and playground pages showed 'not found' + noindex on a fetch error",
+      "description": "",
+      "acceptanceCriteria": [
+        "ErrorState with retry, no noindex, on error; playground not-found heading is an h1",
+        "Smoke specs cover the 500 case"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-UX-039",
+      "title": "Review form fields unlabeled, small targets; FavoriteButton name mismatch",
+      "description": "",
+      "acceptanceCriteria": [
+        "RatingSystem: labelled textarea, named photo picker, 44px star and remove targets, named lightbox",
+        "FavoriteButton: accessible name contains the visible text, state via aria-pressed only"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-UX-040",
+      "title": "Links wrapped Buttons in 14 places",
+      "description": "",
+      "acceptanceCriteria": [
+        "All use Button asChild",
+        "src/__tests__/link-wraps-button.test.ts guards it with an empty allowlist"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-QA-036",
+      "title": "Reader-timezone dates and unchecked submitter hrefs",
+      "description": "",
+      "acceptanceCriteria": [
+        "AIWriteup and FavoritesView format in America/Chicago",
+        "check-event-time-tz also catches date-fns format(new Date(x.date))",
+        "source_url / website hrefs go through safeWebUrl in FavoritesView, EventReviewSystem, EventSubmissionsManager and AttractionDetails"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-QA-037",
+      "title": "Search text with a comma broke PostgREST .or() filters",
+      "description": "10 hooks/components put raw input into ilike patterns.",
+      "acceptanceCriteria": [
+        "All sanitized with sanitizePostgrestPattern",
+        "npm run check-postgrest-filters runs in validate",
+        "Admin hook renamed useRestaurantOpeningsAdmin"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-25 on claude/15-loop-site-improvements-mk9w6d."
+    },
+    {
+      "id": "WEB-SEC-040",
+      "title": "Media bucket: any signed-in user can upload, and SVG is an allowed type",
+      "description": "WEB-SEC-036 neutralized SVG at the /media route, but the storage policy still lets any authenticated user write anywhere in media, and Supabase's own public URL serves the file.",
+      "acceptanceCriteria": [
+        "Migration: media INSERT limited to admins or the uploader's own auth.uid() folder; image/svg+xml dropped from allowed_mime_types",
+        "Check existing svg objects in the bucket before applying"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+    },
+    {
+      "id": "WEB-UX-041",
+      "title": "<header>/<footer> sit inside <main>, so there is no banner or contentinfo landmark",
+      "description": "App.tsx wraps every route in <main>; 75 pages render Header/Footer inside it.",
+      "acceptanceCriteria": [
+        "App renders Header before <main> and Footer after it, with an opt-out for admin/auth routes",
+        "Remove the per-page Header/Footer in one sweep and the skip-link marker span",
+        "getByRole('banner') count is 1 on hub and detail pages"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+    },
+    {
+      "id": "WEB-QA-038",
+      "title": "useAnalytics retries a rejected batch every 10s with no backoff",
+      "description": "If user_interactions_enhanced rejects every insert, a consenting visitor's tab retries forever up to the 500-event cap.",
+      "acceptanceCriteria": [
+        "npm run check-schema:probe confirms the table accepts the insert",
+        "Add exponential backoff or give up after N failures"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+    },
+    {
+      "id": "WEB-SEC-041",
+      "title": "notify-event-submission mails the decision to whatever contact_email the submitter typed",
+      "description": "An attacker can make the site mail any address with an attacker-chosen title.",
+      "acceptanceCriteria": [
+        "Send decision mail only to the owner's verified auth email (or require contact_email to match)",
+        "Deno unit test on recipient selection"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+    },
+    {
+      "id": "WEB-OPS-024",
+      "title": "docs/security-config-baseline.json cspHash is stale",
+      "description": "It was stale before WEB-SEC-037 and the CSP has changed again.",
+      "acceptanceCriteria": [
+        "Regenerate with tsx scripts/security-config-snapshot.ts"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
     }
   ]
 }
