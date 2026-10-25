@@ -203,6 +203,7 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
   const dietary = resolveDietarySelections(filters);
   if (dietary.length > 0) {
     const orClauses = dietary.flatMap((diet) =>
+      // postgrest-safe: resolveDietarySelections keeps only DIETARY_KEYWORDS keys, so kw is a fixed keyword
       (DIETARY_KEYWORDS[diet] || [diet]).flatMap((kw) => [
         `description.ilike.%${kw}%`,
         `cuisine.ilike.%${kw}%`,

@@ -72,6 +72,7 @@ import { handleError } from "@/lib/errorHandler";
 import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 const log = createLogger("EventSubmissionsManager");
 
@@ -233,9 +234,12 @@ export default function EventSubmissionsManager() {
       let q = supabase
         .from("user_submitted_events")
         .select("*", { count: "exact" });
-      if (search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = search ? sanitizePostgrestPattern(search) : "";
+      if (safeSearch) {
         q = q.or(
-          `title.ilike.%${search}%,venue.ilike.%${search}%,description.ilike.%${search}%,location.ilike.%${search}%`,
+          `title.ilike.%${safeSearch}%,venue.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`,
         );
       }
       if (statusFilter !== "all") q = q.eq("status", statusFilter);

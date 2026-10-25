@@ -7,6 +7,7 @@ import { HOTEL_LIST_COLUMNS, HOTEL_PLACES_PHOTO_COLUMNS } from "@/lib/listColumn
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 const logger = createLogger("useHotels");
 
@@ -81,9 +82,12 @@ export function useHotels(filters: HotelFilters = {}) {
       }
 
       // Search by name, description, area, chain
-      if (filters.search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = filters.search ? sanitizePostgrestPattern(filters.search) : "";
+      if (safeSearch) {
         query = query.or(
-          `name.ilike.%${filters.search}%,description.ilike.%${filters.search}%,area.ilike.%${filters.search}%,chain_name.ilike.%${filters.search}%`
+          `name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,area.ilike.%${safeSearch}%,chain_name.ilike.%${safeSearch}%`
         );
       }
 
