@@ -5,11 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Heart, Loader2, Trash2, UtensilsCrossed, Landmark, Play, Hotel as HotelIcon } from "lucide-react";
-import { format } from "date-fns";
 import { useFavorites } from "@/hooks/useFavorites";
 import { Badge } from "@/components/ui/badge";
 import { createSlug } from "@/lib/slug";
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart } from "@/lib/timezone";
+import { safeWebUrl } from "@/lib/reservations";
 import { useFavoritedRows } from "@/hooks/useFavoritedRows";
 import {
   EVENT_LIST_COLUMNS,
@@ -187,10 +187,12 @@ export function FavoritesView() {
                     </Button>
                   </div>
 
-                  {event.date && (
+                  {formatEventPart(event, "MMM d, yyyy") && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                       <SpriteIcon name="calendar" className="h-4 w-4" />
-                      <span>{format(new Date(event.date), "MMM d, yyyy")}</span>
+                      {/* Central, not the reader's zone: an 11:30 PM show is
+                          the next UTC day (WEB-QA-029). */}
+                      <span>{formatEventPart(event, "MMM d, yyyy")}</span>
                       {/* No `at {time}` span here: public.events has no `time`
                           column, so it had never rendered. The times live in
                           event_start_local / event_start_utc, and rendering one
@@ -224,9 +226,11 @@ export function FavoritesView() {
                     </Button>
                     {/* `source_url`, not `url`: there is no url column, so
                         this button had never appeared for any event. */}
-                    {event.source_url && (
+                    {/* source_url can be a submitter's website_url (copied by
+                        publish_submission), so only http(s) gets a link. */}
+                    {safeWebUrl(event.source_url) && (
                       <Button asChild size="sm" variant="outline">
-                        <a href={event.source_url} target="_blank" rel="noopener noreferrer">
+                        <a href={safeWebUrl(event.source_url) ?? undefined} target="_blank" rel="noopener noreferrer">
                           <SpriteIcon name="external-link" className="h-4 w-4" />
                         </a>
                       </Button>
