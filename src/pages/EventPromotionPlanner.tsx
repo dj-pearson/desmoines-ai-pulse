@@ -3,26 +3,25 @@
  * Free lead magnet mini-tool for DesMoinesInsider.com
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { createLogger } from '@/lib/logger';
 import { Helmet } from 'react-helmet-async';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventPromotionPlanner');
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Download, Zap } from "lucide-react";
+import { Download, Loader2, Zap } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { WizardForm } from '@/components/event-promotion-planner/WizardForm';
 import { TimelineView } from '@/components/event-promotion-planner/TimelineView';
-import { ChartsView } from '@/components/event-promotion-planner/ChartsView';
 import { EmailCaptureModal } from '@/components/event-promotion-planner/EmailCaptureModal';
 import { SocialShare } from '@/components/event-promotion-planner/SocialShare';
 import { generatePromotionTimeline } from '@/lib/timeline-generator';
-import { generatePDFPlaybook, generatePreviewPDF } from '@/lib/pdf-generator';
 import {
   trackToolStarted,
   trackTimelineGenerated,
@@ -39,6 +38,14 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import type { EventFormData, PromotionTimeline, EmailCaptureData } from '@/types/event-promotion';
 import { saveEmailCapture } from '@/lib/email-integration';
 import { logConsent } from '@/lib/consentLog';
+import { handleError } from '@/lib/errorHandler';
+
+// Recharts (~96 KB gz) only renders on the Charts tab and jsPDF only runs when
+// someone asks for a PDF. Neither belongs in the first paint of a public
+// lead-magnet page, so both load on demand.
+const ChartsView = lazy(() =>
+  import('@/components/event-promotion-planner/ChartsView').then((m) => ({ default: m.ChartsView }))
+);
 
 export default function EventPromotionPlanner() {
   const [searchParams] = useSearchParams();
@@ -50,6 +57,7 @@ export default function EventPromotionPlanner() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState('timeline');
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Track tool start
   useEffect(() => {
@@ -114,8 +122,10 @@ export default function EventPromotionPlanner() {
       trackReferralGenerated(code);
 
       // Unlock full timeline
-      if (timeline) {
-        const unlockedTimeline = generatePromotionTimeline(timeline.eventData, true);
+      const unlockedTimeline = timeline
+        ? generatePromotionTimeline(timeline.eventData, true)
+        : null;
+      if (unlockedTimeline) {
         setTimeline(unlockedTimeline);
       }
 
@@ -127,10 +137,13 @@ export default function EventPromotionPlanner() {
       // does not exist. It now describes what the next second actually does.
       toast.success('Full timeline unlocked. Your PDF playbook is downloading.');
 
-      // Auto-download PDF
-      if (timeline) {
+      // Auto-download PDF. The timeline and the unlocked flag are passed in:
+      // handleDownloadPDF as captured by this closure still sees userEmail as
+      // null, so calling it here produced the 4-week preview and reopened the
+      // email modal on the visitor who had just filled it in.
+      if (unlockedTimeline) {
         setTimeout(() => {
-          handleDownloadPDF();
+          void downloadPDF(unlockedTimeline, true);
         }, 1000);
       }
     } catch (error) {
@@ -139,24 +152,31 @@ export default function EventPromotionPlanner() {
     }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!timeline) return;
-
+  const downloadPDF = async (target: PromotionTimeline, full: boolean) => {
+    setIsGeneratingPDF(true);
     try {
-      if (userEmail) {
-        await generatePDFPlaybook(timeline);
+      const { generatePDFPlaybook, generatePreviewPDF } = await import('@/lib/pdf-generator');
+      if (full) {
+        await generatePDFPlaybook(target);
         trackPDFDownloaded(true);
         toast.success('PDF playbook downloaded!');
       } else {
-        await generatePreviewPDF(timeline);
+        await generatePreviewPDF(target);
         trackPDFDownloaded(false);
         toast.success('Preview PDF downloaded. Enter your email to get the full version!');
         setShowEmailModal(true);
       }
     } catch (error) {
-      log.error('handleDownloadPDF', 'Failed to generate PDF', { error });
+      handleError(error, { component: 'EventPromotionPlanner', action: 'downloadPDF' });
       toast.error('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
     }
+  };
+
+  const handleDownloadPDF = () => {
+    if (!timeline) return;
+    void downloadPDF(timeline, Boolean(userEmail));
   };
 
   const handleTaskToggle = (taskId: string) => {
@@ -352,9 +372,18 @@ export default function EventPromotionPlanner() {
                   </p>
                 </div>
                 <div className="flex gap-2 mt-4 md:mt-0">
-                  <Button onClick={handleDownloadPDF} variant="outline">
-                    <Download className="mr-2 h-4 w-4" />
-                    Download PDF
+                  <Button
+                    onClick={handleDownloadPDF}
+                    variant="outline"
+                    disabled={isGeneratingPDF}
+                    aria-busy={isGeneratingPDF}
+                  >
+                    {isGeneratingPDF ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                    )}
+                    {isGeneratingPDF ? 'Preparing PDF...' : 'Download PDF'}
                   </Button>
                   {!userEmail && (
                     <Button onClick={() => setShowEmailModal(true)}>
@@ -390,7 +419,9 @@ export default function EventPromotionPlanner() {
               </TabsContent>
 
               <TabsContent value="charts">
-                <ChartsView timeline={timeline} />
+                <Suspense fallback={<ChartsFallback />}>
+                  <ChartsView timeline={timeline} />
+                </Suspense>
               </TabsContent>
 
               <TabsContent value="share">
@@ -460,6 +491,25 @@ export default function EventPromotionPlanner() {
 }
 
 // Helper Components
+/**
+ * Holds the Charts tab at roughly ChartsView's rendered height (two 300px
+ * charts in cards, then a row of 250px charts) while Recharts loads, so the
+ * tab does not collapse and then jump.
+ */
+function ChartsFallback() {
+  return (
+    <div className="space-y-6" role="status" aria-live="polite">
+      <span className="sr-only">Loading charts...</span>
+      <Skeleton className="h-[420px] w-full rounded-lg" />
+      <Skeleton className="h-[420px] w-full rounded-lg" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Skeleton className="h-[380px] w-full rounded-lg" />
+        <Skeleton className="h-[380px] w-full rounded-lg" />
+      </div>
+    </div>
+  );
+}
+
 function ProblemCard({ icon, title, description }: { icon: string; title: string; description: string }) {
   return (
     <div className="text-center p-4">
