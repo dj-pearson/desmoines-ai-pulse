@@ -16,6 +16,7 @@ import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { adminAlertEmail, sendEmail } from "../_shared/email.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
+import { timingSafeEqual } from "../_shared/callerKind.ts";
 
 const NOTIFICATION_TYPES = [
   "event_submitted",
@@ -125,8 +126,8 @@ serve(async (req) => {
     const apiKey = req.headers.get("X-API-Key") || req.headers.get("x-api-key");
     const edgeApiKey = Deno.env.get("EDGE_FUNCTION_API_KEY");
     const isService =
-      (!!serviceKey && bearer === serviceKey) ||
-      (!!edgeApiKey && !!apiKey && apiKey === edgeApiKey);
+      (!!serviceKey && !!bearer && timingSafeEqual(bearer, serviceKey)) ||
+      (!!edgeApiKey && !!apiKey && timingSafeEqual(apiKey, edgeApiKey));
 
     let callerId: string | null = null;
     let callerIsAdmin = false;

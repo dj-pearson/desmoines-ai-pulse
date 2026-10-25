@@ -106,7 +106,15 @@ for (const name of names) {
   // function whose docstring promises a check it does not perform is exactly
   // the defect this exists for: dispatch-scheduled-newsletters documented an
   // admin-bearer check and had none.
-  const src = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+  //
+  // THE CORS ALLOW-HEADERS LIST IS STRIPPED TOO. web-vitals-regression-check
+  // ran two service-role scans and mailed ops for any anon-key caller, and this
+  // sweep counted it as guarded because its CORS header string lists
+  // "x-api-key". Permitting a header in a preflight checks nothing.
+  const src = raw
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^\s*\/\/.*$/gm, ' ')
+    .replace(/(['"`])Access-Control-Allow-Headers\1\s*:\s*(['"`])[^'"`]*\2/gi, ' ');
   if (!PRIVILEGED.test(src)) continue;
   privileged++;
   if (!VERIFIES_CALLER.test(src)) unguarded.push(name);
