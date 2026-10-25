@@ -73,6 +73,7 @@ import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
+import { safeWebUrl } from "@/lib/reservations";
 
 const log = createLogger("EventSubmissionsManager");
 
@@ -769,14 +770,19 @@ export default function EventSubmissionsManager() {
                   {detail.website_url && (
                     <div>
                       Website:{" "}
-                      <a
-                        href={detail.website_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        {detail.website_url}
-                      </a>
+                      {/* Submitter-typed: link it only when it is http(s), show anything else as text. */}
+                      {safeWebUrl(detail.website_url) ? (
+                        <a
+                          href={safeWebUrl(detail.website_url) ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {detail.website_url}
+                        </a>
+                      ) : (
+                        <span>{detail.website_url}</span>
+                      )}
                     </div>
                   )}
                 </div>
