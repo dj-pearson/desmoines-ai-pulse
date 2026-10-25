@@ -49,7 +49,7 @@ describe("skip link", () => {
       "/",
       <main id="main-content" tabIndex={-1}>
         <Header />
-        <a href="/first">First content link</a>
+        <a href="/events">First content link</a>
       </main>,
     );
 
