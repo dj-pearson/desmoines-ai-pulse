@@ -41,6 +41,7 @@
     "generate-llms-txt": "tsx scripts/generate-llms-txt.ts",
     "indexnow-ping": "tsx scripts/indexnow-ping.ts",
     "generate-sitemaps:infisical": "infisical run --env=dev -- npm run generate-sitemaps",
+    "test:routes-json": "tsx functions/__tests__/routes-json.test.mjs",
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
     "test:unit:watch": "vitest",
