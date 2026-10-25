@@ -774,12 +774,12 @@ export default function AccessibilityStatement() {
             </Card>
 
             <div className="mt-6">
-              <Link to="/contact">
-                <Button variant="outline" className="gap-2">
+              <Button asChild variant="outline" className="gap-2">
+                <Link to="/contact">
                   <Mail className="h-4 w-4" aria-hidden="true" />
                   Contact Us
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </section>
 

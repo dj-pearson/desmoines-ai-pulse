@@ -208,22 +208,23 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
           <div className="flex gap-2 flex-wrap">
             <Button
               onClick={handleViewDetails}
-              className="bg-primary hover:bg-blue-700 text-white"
+              className="bg-primary hover:bg-primary/90 text-white"
             >
               View Details
             </Button>
 
-            <Link
-              to={`/events/${createEventSlugWithCentralTime(
-                event.title,
-                event
-              )}`}
-            >
-              <Button variant="outline" size="sm" aria-label={`View full page for ${event.title}`}>
+            <Button asChild variant="outline" size="sm">
+              <Link
+                to={`/events/${createEventSlugWithCentralTime(
+                  event.title,
+                  event
+                )}`}
+                aria-label={`View full page for ${event.title}`}
+              >
                 <SpriteIcon name="external-link" className="h-4 w-4 mr-1" aria-hidden="true" />
                 Full Page
-              </Button>
-            </Link>
+              </Link>
+            </Button>
 
             <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
 

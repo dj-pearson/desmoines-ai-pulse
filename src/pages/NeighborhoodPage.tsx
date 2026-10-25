@@ -64,9 +64,9 @@ export default function NeighborhoodPage() {
           <p className="text-muted-foreground mb-6">
             Eight Des Moines metro neighborhoods have guides. Pick one from the list.
           </p>
-          <Link to="/neighborhoods">
-            <Button>All neighborhoods</Button>
-          </Link>
+          <Button asChild>
+            <Link to="/neighborhoods">All neighborhoods</Link>
+          </Button>
         </div>
         <Footer />
       </div>
@@ -114,12 +114,12 @@ export default function NeighborhoodPage() {
         />
 
         <div className="mb-6">
-          <Link to="/neighborhoods">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/neighborhoods">
               <ArrowLeft className="h-4 w-4 mr-2" />
               All Neighborhoods
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         {error ? (

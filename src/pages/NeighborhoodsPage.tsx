@@ -94,11 +94,11 @@ export default function NeighborhoodsPage() {
                 </div>
 
                 {/* Action Button */}
-                <Link to={neighborhoodHref(neighborhood)}>
-                  <Button className="w-full" size="sm">
+                <Button asChild className="w-full" size="sm">
+                  <Link to={neighborhoodHref(neighborhood)}>
                     Explore {neighborhood.name}
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           ))}

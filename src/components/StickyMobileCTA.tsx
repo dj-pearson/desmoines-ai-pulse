@@ -58,24 +58,24 @@ export function StickyMobileCTA({
 
     if (action.href) {
       return (
-        <a
-          href={action.href}
-          target={action.isExternal ? "_blank" : undefined}
-          rel={action.rel ?? (action.isExternal ? "noopener noreferrer" : undefined)}
-          className={isPrimary ? "flex-1" : "flex-1"}
+        <Button
+          asChild
+          className={
+            isPrimary
+              ? "flex-1 bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white"
+              : "flex-1"
+          }
+          variant={isPrimary ? "default" : "outline"}
+          size="sm"
         >
-          <Button
-            className={
-              isPrimary
-                ? "w-full bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white"
-                : "w-full"
-            }
-            variant={isPrimary ? "default" : "outline"}
-            size="sm"
+          <a
+            href={action.href}
+            target={action.isExternal ? "_blank" : undefined}
+            rel={action.rel ?? (action.isExternal ? "noopener noreferrer" : undefined)}
           >
             {buttonContent}
-          </Button>
-        </a>
+          </a>
+        </Button>
       );
     }
 
