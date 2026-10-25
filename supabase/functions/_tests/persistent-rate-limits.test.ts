@@ -33,7 +33,8 @@ for (const [name, max] of ENDPOINTS) {
 
 Deno.test('the persistent 429 carries the caller message', async () => {
   const src = code(await read('supabase/functions/_shared/rateLimit.ts'));
-  assert(/checkRateLimitDB\(clientId, endpoint, windowMs, max, message\)/.test(src));
+  assert(/checkRateLimitDB\(req, clientId, endpoint, windowMs, max, message\)/.test(src));
+  assert(/tooManyRequestsResponse\(req, \{\s*message,/.test(src), 'the 429 is built from the caller message');
   assert(!/'Too many requests, please try again later\.',\s*retryAfter/.test(src));
 });
 
