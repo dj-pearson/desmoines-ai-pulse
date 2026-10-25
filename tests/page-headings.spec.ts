@@ -72,3 +72,39 @@ test.describe('with the backend unreachable', () => {
     });
   }
 });
+
+// The catch-all 404 rendered a CardTitle (an h3) as its only heading, with no
+// header or footer, so a dead link stranded the reader with no nav or search.
+test('/this-does-not-exist has exactly one h1 and the site nav', async ({ page }) => {
+  await page.goto('/this-does-not-exist', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#root')).not.toBeEmpty({ timeout: 30_000 });
+  await expect(page.locator('h1')).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator('h1')).toContainText('Page not found');
+  await expect(page.locator('header')).toHaveCount(1);
+  await expect(page.locator('footer')).toHaveCount(1);
+  await expect(page.getByRole('link', { name: /search the site/i })).toHaveAttribute('href', '/search');
+});
+
+// WCAG 2.4.1. App.tsx's <main id="main-content"> wraps the whole route, Header
+// included, so a skip link aimed at it landed in front of the logo again.
+test('the skip link moves keyboard focus past the header', async ({ page }) => {
+  await page.goto('/events', { waitUntil: 'domcontentloaded' });
+  const skip = page.getByRole('link', { name: 'Skip to main content' });
+  await expect(skip).toHaveCount(1, { timeout: 30_000 });
+
+  // focus() rather than a first Tab: the cookie banner and accessibility
+  // widget can sit ahead of it in tab order depending on consent state.
+  await skip.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#main-content-start')).toBeFocused();
+  await page.keyboard.press('Tab');
+
+  // The site header is the marker's previous sibling; a page hero may be a
+  // <header> of its own, so closest('header') would over-match.
+  const inHeader = await page.evaluate(() => {
+    const siteHeader = document.getElementById('main-content-start')?.previousElementSibling;
+    const active = document.activeElement;
+    return !siteHeader || !active || active === document.body || siteHeader.contains(active);
+  });
+  expect(inHeader, 'Tab after the skip link did not land in page content').toBe(false);
+});
