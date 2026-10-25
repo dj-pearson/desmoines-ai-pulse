@@ -16,6 +16,8 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *  4. "Happening here and nearby" lists an event within two miles.
  *  5. The nearby side query is bounded, explicit, and not rating-ordered
  *     (item 10), and the page renders no "Playground Not Found".
+ *  6. A failed fetch is a Retry with no noindex (WEB-SEO-040); a missing row
+ *     is "Playground Not Found" as the page's one h1, with noindex.
  *
  * The fixture backend does not filter; playgrounds and events are answered
  * here with page.route AFTER installFixtureBackend, which wins the match.
@@ -247,5 +249,43 @@ test.describe('/playgrounds/:slug (explore pass 2 WP4)', () => {
     await expect(page.locator('[data-playground-side-card]').first()).toBeVisible();
     await expect(page.getByText('Playground Not Found')).toHaveCount(0);
     await expect(page.getByText(/dawn to dusk/i)).toHaveCount(0);
+  });
+
+  test('a failed fetch offers Retry and sets no noindex', async ({ page }) => {
+    // A 500 with no PostgREST code is retried twice by shouldRetry, so the
+    // error state arrives after about three seconds of backoff.
+    let failing = true;
+    await installFixtureBackend(page);
+    await installPlayground(page, DOWNTOWN);
+    await page.route('**/rest/v1/playgrounds**', (route) => {
+      if (!failing) return route.fallback();
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        headers: CORS,
+        body: JSON.stringify({ message: 'fixture: upstream failure' }),
+      });
+    });
+
+    await page.goto('/playgrounds/fixture-downtown-playground');
+    const retry = page.getByRole('button', { name: 'Try again' });
+    await expect(retry).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Playground Not Found')).toHaveCount(0);
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
+
+    failing = false;
+    await retry.click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Fixture Downtown Playground' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  });
+
+  test('a missing row is "Playground Not Found" as the one h1, with noindex', async ({ page }) => {
+    await installFixtureBackend(page);
+    await page.route('**/rest/v1/playgrounds**', (route) => fulfil(route, []));
+    await page.goto('/playgrounds/no-such-playground');
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Playground Not Found' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1);
   });
 });

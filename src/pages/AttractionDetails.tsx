@@ -23,6 +23,7 @@ import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ErrorState } from "@/components/ui/error-state";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
 import { BRAND } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Landmark } from "lucide-react";
@@ -142,6 +143,7 @@ export default function AttractionDetails() {
     data: attraction,
     isLoading,
     error,
+    refetch,
   } = useQuery({
     queryKey: detailQueryKey("attraction", slug ?? ""),
     // attractions now has a slug column (migration 20260919000008), so this is
@@ -269,7 +271,25 @@ export default function AttractionDetails() {
   // off the site stayed reachable by its own URL and kept its indexable page.
   const inactive = Boolean(attraction) && attraction?.is_active === false;
 
-  if (error || !attraction || inactive) {
+  // WEB-SEO-040, as on HotelDetails. A failed fetch is not a missing row: it
+  // gets a retry and no robots meta, so a transient PostgREST error on a live
+  // attraction does not ask Google to drop the page.
+  if (error) {
+    return (
+      <>
+        <RouteCanonical path={`/attractions/${slug}`} />
+        <Header />
+        <div className="min-h-screen bg-background">
+          <div className="container mx-auto px-4 py-16">
+            <ErrorState error={error} onRetry={() => void refetch()} />
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
+  }
+
+  if (!attraction || inactive) {
     return (
       <>
         <Helmet>
