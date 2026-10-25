@@ -24,6 +24,18 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
+/** Skip-link target, rendered as the header's next sibling. */
+const MAIN_CONTENT_START_ID = "main-content-start";
+
+function skipToContent(event: React.MouseEvent<HTMLAnchorElement>) {
+  const target = document.getElementById(MAIN_CONTENT_START_ID);
+  if (!target) return; // no marker: let the browser follow the href
+  event.preventDefault();
+  // Plain focus() scrolls only if the marker is off-screen, which keeps the
+  // first line of content out from under the sticky header.
+  target.focus();
+}
+
 export default function Header() {
   // Flags + actions only (no user/session) so the header doesn't re-render on
   // token-refresh ticks. (WEB-PERF-005)
@@ -102,10 +114,16 @@ export default function Header() {
   };
 
   return (
+    <>
     <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50 safe-area-top">
-      {/* Skip Navigation Link for Accessibility */}
+      {/* Skip link (WCAG 2.4.1). App.tsx's <main id="main-content"> wraps the
+          whole route, this header included, so targeting it put focus back in
+          front of the logo. It targets the marker rendered right after
+          </header> instead, and the handler focuses that directly so the skip
+          does not push a #hash onto the router's history. */}
       <a
-        href="#main-content"
+        href={`#${MAIN_CONTENT_START_ID}`}
+        onClick={skipToContent}
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
       >
         Skip to main content
@@ -179,5 +197,9 @@ export default function Header() {
         </div>
       </div>
     </header>
+    {/* Start of the page's own content: the skip link's target. sr-only takes
+        it out of flow, so a flex or gap parent lays out exactly as before. */}
+    <span id={MAIN_CONTENT_START_ID} tabIndex={-1} className="sr-only" />
+    </>
   );
 }
