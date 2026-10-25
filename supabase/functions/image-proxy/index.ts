@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { validateURLForSSRF } from "../_shared/validation.ts"
 import { checkRateLimit } from "../_shared/rateLimit.ts"
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts"
+import { safeFetch } from "../_shared/fetchGuard.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -103,11 +104,12 @@ serve(async (req) => {
     }
 
     // SSRF Protection: Validate URL before fetching
-    const validation = validateURLForSSRF(imageUrl, {
+    const ssrfOptions = {
       allowedDomains: ALLOWED_IMAGE_DOMAINS,
       allowedProtocols: ['https:'],
       blockPrivateIPs: true,
-    })
+    }
+    const validation = validateURLForSSRF(imageUrl, ssrfOptions)
 
     if (!validation.valid) {
       console.error('SSRF validation failed:', validation.error)
@@ -117,12 +119,14 @@ serve(async (req) => {
       })
     }
 
-    // Fetch the image from validated URL
-    const response = await fetchWithTimeout(imageUrl, {
+    // Fetch the image from validated URL. Every redirect hop must pass the
+    // same allowlist (Places photo URLs 302 to lh*.googleusercontent.com, which
+    // is on it); a hop that fails throws into the 500 path below.
+    const response = await safeFetch(imageUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
-    })
+    }, { ssrf: ssrfOptions, fetchFn: (u, i) => fetchWithTimeout(u, i) })
 
     if (!response.ok) {
       throw new Error(`Image fetch failed: ${response.status}`)
