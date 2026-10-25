@@ -51,6 +51,7 @@ import { handleError } from "@/lib/errorHandler";
 import { formatMiles, nearby } from "@/lib/venuePages";
 import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { safeWebUrl } from "@/lib/reservations";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
@@ -368,6 +369,9 @@ export default function AttractionDetails() {
 
   // Rows for "Plan your visit". Each renders only with data behind it. The
   // site's own wording first; the is_free flag only when there is none.
+  // The website comes from scraped and owner-edited data; only an http(s) URL
+  // may become a link.
+  const websiteUrl = safeWebUrl(attraction.website);
   const admission =
     attraction.admission_summary ||
     (attraction.is_free === true
@@ -697,10 +701,10 @@ export default function AttractionDetails() {
                       </span>
                     </VisitRow>
                   )}
-                  {attraction.website && (
+                  {websiteUrl && (
                     <VisitRow term="Website">
                       <a
-                        href={attraction.website}
+                        href={websiteUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex min-h-11 items-center gap-1 font-medium text-primary hover:underline"
@@ -859,10 +863,10 @@ export default function AttractionDetails() {
             : undefined
         }
         secondaryAction={
-          attraction.website
+          websiteUrl
             ? {
                 label: "Visit Website",
-                href: attraction.website,
+                href: websiteUrl,
                 icon: "website",
                 isExternal: true,
               }
