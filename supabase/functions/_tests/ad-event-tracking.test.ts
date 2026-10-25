@@ -121,7 +121,9 @@ Deno.test('the frequency cap that never capped is deleted, and the real one is s
     /p_session_id: getOrCreateSessionId\(\)/.test(ads),
     'get_active_ads needs the session id or its cap is skipped',
   );
-  assert(/p_user_id: authData\?\.user\?\.id \?\? null/.test(ads), 'and the user id for the daily cap');
+  // From the auth context the query is keyed on, not a getUser() round trip.
+  assert(/p_user_id: user\?\.id \?\? null/.test(ads), 'and the user id for the daily cap');
+  assertFalse(/auth\.getUser\(/.test(ads), 'the user is already in hand; no second auth call');
   assertFalse(/p_session_id: null/.test(ads), 'the null that disabled the cap must be gone');
 });
 

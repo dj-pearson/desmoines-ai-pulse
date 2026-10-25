@@ -106,23 +106,15 @@ export function useActiveAds(placementType: AdPlacement) {
       // seeing it more than ten times a day. Passing the real session and user
       // is what turns them on. Still NULL rather than undefined when unknown,
       // for the PGRST203 reason described above.
-      // WEB-CI-032: `error` was discarded, and this call decides whether the
-      // per-account frequency caps run. A failed getUser() looks exactly like
-      // a signed-out visitor, so the caps silently fall back to session-only -
-      // the WEB-ADS-002 failure mode, arrived at from the other direction.
-      // Treating it as anonymous is still the right behaviour (an ad must
-      // render), but it is now visible rather than assumed.
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) {
-        log.warn('fetchActiveAd', 'getUser failed; serving as anonymous', {
-          placementType,
-          message: authError.message,
-        });
-      }
+      // The user comes from the auth context the query is already keyed on.
+      // This used to ask the auth server for the user again here: a network
+      // round trip per placement per fetch for an id the hook already held, and
+      // one that could disagree with the key it was cached under (WEB-CI-032
+      // logged its failures; there is nothing left to fail).
       const args = {
         p_placement_type: placementType as ServablePlacement,
         p_session_id: getOrCreateSessionId(),
-        p_user_id: authData?.user?.id ?? null,
+        p_user_id: user?.id ?? null,
       } as unknown as Parameters<typeof supabase.rpc<'get_active_ads'>>[1];
       const { data, error } = await supabase.rpc('get_active_ads', args);
       if (error) {
