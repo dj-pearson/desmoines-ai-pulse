@@ -73,15 +73,14 @@ function FavoriteButtonView({
   showText = false,
   itemName,
 }: ViewProps) {
-  const ariaLabel = isToggling
-    ? "Updating favorite..."
-    : favorited
-    ? itemName
-      ? `Remove ${itemName} from favorites`
-      : "Remove from favorites"
-    : itemName
-    ? `Save ${itemName}`
-    : "Add to favorites";
+  // One name for both states, with the state carried by aria-pressed alone.
+  // The old label flipped to "Remove X from favorites" while aria-pressed also
+  // flipped, so a screen reader heard the state twice, and with showText the
+  // visible "Saved" was not in the name, so a voice-control user saying
+  // "click Saved" hit nothing (WCAG 2.5.3). With showText the name now comes
+  // from the visible word plus a visually hidden item name; icon-only keeps an
+  // aria-label that never changes.
+  const iconOnlyLabel = itemName ? `Save ${itemName}` : "Save to favorites";
 
   return (
     <Button
@@ -99,13 +98,15 @@ function FavoriteButtonView({
       // shift the badges around it. The overlay only applies on touch
       // pointers (WEB-QA-009).
       className={cn("tap-area-44", className)}
-      aria-label={ariaLabel}
+      aria-label={showText ? undefined : iconOnlyLabel}
       aria-pressed={favorited}
+      aria-busy={isToggling || undefined}
     >
       {isToggling ? (
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-muted-foreground" />
       ) : (
         <Heart
+          aria-hidden="true"
           className={cn(
             "h-5 w-5 transition-all",
             favorited
@@ -114,7 +115,19 @@ function FavoriteButtonView({
           )}
         />
       )}
-      {showText && <span className="ml-2">{favorited ? "Saved" : "Save"}</span>}
+      {showText && (
+        <span className="ml-2">
+          {favorited ? "Saved" : "Save"}
+          {/* The space sits outside the span: name computation trims a
+              child element's own text, which glued "Save" to the name. */}
+          {itemName && (
+            <>
+              {" "}
+              <span className="sr-only">{itemName}</span>
+            </>
+          )}
+        </span>
+      )}
     </Button>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useId } from "react";
 import { Link } from "react-router-dom";
 import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2, ImagePlus, X, Loader2 } from "lucide-react";
 import { hapticTap } from "@/lib/capacitorUtils";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useRatings, useUserReputation } from "@/hooks/useRatings";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -33,13 +33,16 @@ interface StarRatingProps {
   onRatingChange?: (rating: RatingValue) => void;
   readonly?: boolean;
   size?: "sm" | "md" | "lg";
+  /** id of a visible label for the interactive radiogroup. */
+  labelledBy?: string;
 }
 
 const StarRating: React.FC<StarRatingProps> = ({
   rating,
   onRatingChange,
   readonly = false,
-  size = "md"
+  size = "md",
+  labelledBy,
 }) => {
   const [hoverRating, setHoverRating] = useState(0);
   const starRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -98,8 +101,17 @@ const StarRating: React.FC<StarRatingProps> = ({
   };
 
   // Interactive: a radiogroup with roving tabindex + arrow/Home/End/Enter/Space.
+  // No gap between stars: each button carries its own padding to a 44px box
+  // (h-5 glyph + p-3), so the stars stay the same size and the hit areas
+  // touch without overlapping. An ::after overlay here would let neighbouring
+  // stars steal each other's taps.
   return (
-    <div className="flex gap-1" role="radiogroup" aria-label="Your rating">
+    <div
+      className="flex"
+      role="radiogroup"
+      aria-labelledby={labelledBy}
+      aria-label={labelledBy ? undefined : "Your rating"}
+    >
       {[1, 2, 3, 4, 5].map((star) => {
         const isFilled = star <= display;
         return (
@@ -111,7 +123,7 @@ const StarRating: React.FC<StarRatingProps> = ({
             aria-checked={rating === star}
             aria-label={`${star} ${star === 1 ? "star" : "stars"}`}
             tabIndex={star === (rating || 1) ? 0 : -1}
-            className="rounded p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400"
             onClick={() => select(star)}
             onKeyDown={(e) => handleKey(e, star)}
             onMouseEnter={() => setHoverRating(star)}
@@ -177,6 +189,10 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const formId = useId();
+  const ratingLabelId = `${formId}-rating`;
+  const reviewTextId = `${formId}-review`;
+  const photosLabelId = `${formId}-photos`;
 
   const handleAddPhotos = async (files: FileList | null) => {
     if (!files || !user) return;
@@ -366,16 +382,22 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                   ) : (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Your Rating</label>
+                        <span id={ratingLabelId} className="block text-sm font-medium">
+                          Your Rating
+                        </span>
                         <StarRating
                           rating={Number(selectedRating)}
                           onRatingChange={setSelectedRating}
+                          labelledBy={ratingLabelId}
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Review (Optional)</label>
+                        <label htmlFor={reviewTextId} className="text-sm font-medium">
+                          Review (Optional)
+                        </label>
                         <Textarea
+                          id={reviewTextId}
                           placeholder={`Share your thoughts about this ${contentType}...`}
                           value={reviewText}
                           onChange={(e) => setReviewText(e.target.value)}
@@ -385,10 +407,10 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
 
                       {/* Photos (up to 3, client-resized) */}
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">
+                        <span id={photosLabelId} className="block text-sm font-medium">
                           Photos (optional, up to {MAX_REVIEW_PHOTOS})
-                        </label>
-                        <div className="flex flex-wrap gap-2">
+                        </span>
+                        <div className="flex flex-wrap gap-2" role="group" aria-labelledby={photosLabelId}>
                           {photoUrls.map((url) => (
                             <div key={url} className="relative h-20 w-20 overflow-hidden rounded-md border">
                               <img src={url} alt="Review upload" className="h-full w-full object-cover" />
@@ -396,19 +418,25 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                                 type="button"
                                 onClick={() => removePhoto(url)}
                                 aria-label="Remove photo"
-                                className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                                // 24px visible, 44px on touch via tap-area-44: the
+                                // thumbnail is only 80px, so a real 44px button
+                                // would cover half the photo it removes.
+                                className="tap-area-44 absolute right-0.5 top-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" aria-hidden="true" />
                               </button>
                             </div>
                           ))}
                           {photoUrls.length < MAX_REVIEW_PHOTOS && (
                             <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-md border border-dashed text-muted-foreground hover:bg-muted">
                               {uploadingPhoto ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
+                                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                               ) : (
-                                <ImagePlus className="h-5 w-5" />
+                                <ImagePlus className="h-5 w-5" aria-hidden="true" />
                               )}
+                              <span className="sr-only">
+                                {uploadingPhoto ? "Uploading photo" : "Add photos"}
+                              </span>
                               <input
                                 type="file"
                                 accept="image/*"
@@ -551,7 +579,9 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, onReport
       )}
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="max-w-3xl p-2">
+        <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
+          {/* Names the dialog for screen readers (Radix warns without one). */}
+          <DialogTitle className="sr-only">Review photo</DialogTitle>
           {/* WEB-PERF-041: `w-full` alone left the height unbounded, so the
               dialog resized under the reader's cursor when the photo arrived.
               A viewport-relative cap plus object-contain bounds the box before
