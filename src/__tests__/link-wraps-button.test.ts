@@ -5,10 +5,10 @@ import { join, relative } from 'node:path';
 /**
  * No <Link>/<a> whose first child is a plain <Button>.
  *
- * `<Link to="/x"><Button>Go</Button></Link>` renders <a><button></a>: an
+ * `<Link to="/events"><Button>Go</Button></Link>` renders <a><button></a>: an
  * interactive element inside another, which HTML forbids. Keyboard users get
  * two tab stops for one action and screen readers announce "link, button".
- * The fix is `<Button asChild><Link to="/x">Go</Link></Button>`, which renders
+ * The fix is `<Button asChild><Link to="/events">Go</Link></Button>`, which renders
  * a single <a> with the button styles.
  *
  * axe only sees the pages e2e happens to load, so this reads the source.
@@ -82,7 +82,7 @@ function tsxFiles(dir: string): string[] {
 
 describe('findLinkWrappedButtons', () => {
   it('flags a Link wrapping a Button', () => {
-    expect(findLinkWrappedButtons('<Link to="/x"><Button>Go</Button></Link>')).toEqual([1]);
+    expect(findLinkWrappedButtons('<Link to="/events"><Button>Go</Button></Link>')).toEqual([1]);
   });
 
   it('flags multiline JSX with arrow functions and comments in between', () => {
@@ -106,26 +106,26 @@ describe('findLinkWrappedButtons', () => {
 
   it('flags an anchor and NavLink wrapping a Button', () => {
     expect(findLinkWrappedButtons('<a href="https://x.test" rel="noopener"><Button size="sm">X</Button></a>')).toEqual([1]);
-    expect(findLinkWrappedButtons('<NavLink to="/x">\n<Button>X</Button></NavLink>')).toEqual([1]);
+    expect(findLinkWrappedButtons('<NavLink to="/events">\n<Button>X</Button></NavLink>')).toEqual([1]);
   });
 
   it('flags asChild={false}', () => {
-    expect(findLinkWrappedButtons('<Link to="/x"><Button asChild={false}>Go</Button></Link>')).toEqual([1]);
+    expect(findLinkWrappedButtons('<Link to="/events"><Button asChild={false}>Go</Button></Link>')).toEqual([1]);
   });
 
   it('passes the asChild form', () => {
-    expect(findLinkWrappedButtons('<Button asChild><Link to="/x">Go</Link></Button>')).toEqual([]);
+    expect(findLinkWrappedButtons('<Button asChild><Link to="/events">Go</Link></Button>')).toEqual([]);
     expect(
       findLinkWrappedButtons('<Button\n  variant="outline"\n  asChild\n>\n  <a href="https://x.test" target="_blank" rel="noopener noreferrer">X</a>\n</Button>'),
     ).toEqual([]);
   });
 
   it('passes a Link whose Button is not its first child, and unrelated tags', () => {
-    expect(findLinkWrappedButtons('<Link to="/x"><span>Go</span><Button>Y</Button></Link>')).toEqual([]);
+    expect(findLinkWrappedButtons('<Link to="/events"><span>Go</span><Button>Y</Button></Link>')).toEqual([]);
     expect(findLinkWrappedButtons('<article><Button>Y</Button></article>')).toEqual([]);
     expect(findLinkWrappedButtons('<abbr title="x"><Button>Y</Button></abbr>')).toEqual([]);
-    expect(findLinkWrappedButtons('<Link to="/x" /><Button>Y</Button>')).toEqual([]);
-    expect(findLinkWrappedButtons('<a href="/x"><ButtonGroup>Y</ButtonGroup></a>')).toEqual([]);
+    expect(findLinkWrappedButtons('<Link to="/events" /><Button>Y</Button>')).toEqual([]);
+    expect(findLinkWrappedButtons('<a href="/events"><ButtonGroup>Y</ButtonGroup></a>')).toEqual([]);
   });
 });
 

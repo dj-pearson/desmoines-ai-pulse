@@ -81,7 +81,7 @@ describe("the detail pages refuse what the hub hides", () => {
   it("PlaygroundDetails treats an out-of-metro row as not found", () => {
     const page = readFileSync("src/pages/PlaygroundDetails.tsx", "utf8");
     expect(page).toMatch(/const outsideMetro = .*isInMetro\(/s);
-    expect(page).toContain("error || !playground || outsideMetro");
+    expect(page).toContain("if (!playground || outsideMetro)");
   });
 
   it("AttractionDetails treats an inactive row as not found", () => {
@@ -90,6 +90,6 @@ describe("the detail pages refuse what the hub hides", () => {
     // indexable URL.
     const page = readFileSync("src/pages/AttractionDetails.tsx", "utf8");
     expect(page).toContain("attraction?.is_active === false");
-    expect(page).toContain("error || !attraction || inactive");
+    expect(page).toContain("if (!attraction || inactive)");
   });
 });
