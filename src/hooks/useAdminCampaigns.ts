@@ -6,6 +6,7 @@ import { Campaign, CampaignCreative } from "./useCampaigns";
 import { createLogger } from '@/lib/logger';
 import { notifyAdvertiser } from "./useCampaignNotifications";
 import { publishCreative, discardReviewCopy } from "@/lib/adCreativeStorage";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 /** Shape returned by the approve_campaign_creative RPC (WEB-ADS-004). */
 interface ApproveCreativeResult {
@@ -98,9 +99,12 @@ export function useAdminCampaigns() {
         query = query.lte("created_at", filters.dateTo);
       }
 
-      if (filters?.searchQuery) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = filters?.searchQuery ? sanitizePostgrestPattern(filters.searchQuery) : "";
+      if (safeSearch) {
         query = query.or(
-          `name.ilike.%${filters.searchQuery}%,id.ilike.%${filters.searchQuery}%`
+          `name.ilike.%${safeSearch}%,id.ilike.%${safeSearch}%`
         );
       }
 

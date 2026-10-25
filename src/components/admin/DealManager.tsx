@@ -74,6 +74,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { MoreVertical } from "lucide-react";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 interface Deal {
   id: string;
@@ -473,9 +474,12 @@ export default function DealManager() {
           "id, title, description, business_name, entity_type, entity_id, deal_type, discount_value, code, terms, start_date, end_date, image_url, is_verified, is_featured, redemption_count, created_at, days_of_week, start_time, end_time",
           { count: "exact" },
         );
-      if (search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = search ? sanitizePostgrestPattern(search) : "";
+      if (safeSearch) {
         q = q.or(
-          `title.ilike.%${search}%,business_name.ilike.%${search}%,description.ilike.%${search}%`,
+          `title.ilike.%${safeSearch}%,business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`,
         );
       }
       if (entity !== "all") q = q.eq("entity_type", entity);

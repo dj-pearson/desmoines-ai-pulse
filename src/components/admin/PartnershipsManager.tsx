@@ -65,6 +65,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 type Application = Database["public"]["Tables"]["partnership_applications"]["Row"];
 
@@ -254,9 +255,12 @@ export default function PartnershipsManager() {
         .from("partnership_applications")
         .select("*")
         .order("created_at", { ascending: false });
-      if (search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = search ? sanitizePostgrestPattern(search) : "";
+      if (safeSearch) {
         q = q.or(
-          `business_name.ilike.%${search}%,contact_email.ilike.%${search}%,business_type.ilike.%${search}%`,
+          `business_name.ilike.%${safeSearch}%,contact_email.ilike.%${safeSearch}%,business_type.ilike.%${safeSearch}%`,
         );
       }
       if (statusFilter !== "all") q = q.eq("status", statusFilter);

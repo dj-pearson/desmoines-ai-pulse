@@ -439,6 +439,7 @@ export async function fetchRestaurantList(
     if (dietarySelections.length > 0) {
       const orClauses = dietarySelections.flatMap((diet) => {
         const keywords = DIETARY_KEYWORDS[diet] || [diet];
+        // postgrest-safe: resolveDietarySelections keeps only DIETARY_KEYWORDS keys, so kw is a fixed keyword
         return keywords.flatMap((kw) => [
           `description.ilike.%${kw}%`,
           `cuisine.ilike.%${kw}%`,
