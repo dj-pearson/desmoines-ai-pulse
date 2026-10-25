@@ -4,6 +4,7 @@
  */
 
 import { validateURLForSSRF } from "./validation.ts";
+import { safeFetch } from "./fetchGuard.ts";
 import {
   isPlacesMediaUrl,
   redactPlacesKey,
@@ -604,7 +605,9 @@ export async function fetchAndStoreImage(
     }
 
     // ── Otherwise download ───────────────────────────────────────────────────
-    const response = await fetch(sourceImageUrl, {
+    // safeFetch re-validates each redirect hop; a refused hop throws into the
+    // catch at the bottom, which returns null like any failed download.
+    const response = await safeFetch(sourceImageUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
