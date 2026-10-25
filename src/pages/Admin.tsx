@@ -165,26 +165,24 @@ export default function Admin() {
                 </CardHeader>
                 <CardContent className="pt-0 space-y-2">
                   {canManageContent() && (
-                    <Link to="/admin/content">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-start"
-                      >
-                        Manage events
-                      </Button>
-                    </Link>
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                    >
+                      <Link to="/admin/content">Manage events</Link>
+                    </Button>
                   )}
                   {canManageUsers() && (
-                    <Link to="/admin/system">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-start"
-                      >
-                        Manage users
-                      </Button>
-                    </Link>
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                    >
+                      <Link to="/admin/system">Manage users</Link>
+                    </Button>
                   )}
                   <Button
                     variant="ghost"

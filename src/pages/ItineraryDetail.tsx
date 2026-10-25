@@ -129,9 +129,9 @@ export default function ItineraryDetail() {
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Itinerary Not Found</h1>
           <p className="text-muted-foreground mb-6">The itinerary you are looking for does not exist.</p>
-          <Link to="/itineraries">
-            <Button><ArrowLeft className="h-4 w-4 mr-2" /> Back to Itineraries</Button>
-          </Link>
+          <Button asChild>
+            <Link to="/itineraries"><ArrowLeft className="h-4 w-4 mr-2" /> Back to Itineraries</Link>
+          </Button>
         </div>
         <Footer />
       </div>

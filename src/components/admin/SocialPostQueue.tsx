@@ -542,15 +542,16 @@ export default function SocialPostQueue() {
                             </>
                           )}
                           {p.content_url && tone === "posted" && (
-                            <a
-                              href={p.content_url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                            >
-                              <Button size="sm" variant="outline">
-                                <ExternalLink className="h-3 w-3" />
-                              </Button>
-                            </a>
+                            <Button asChild size="sm" variant="outline">
+                              <a
+                                href={p.content_url}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                aria-label="Open posted content"
+                              >
+                                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                              </a>
+                            </Button>
                           )}
                         </div>
                       </TableCell>

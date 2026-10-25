@@ -155,11 +155,11 @@ export default function NeighborhoodGuide({
                     )}
                     <div className="flex justify-between items-center">
                       <Badge variant="outline">{event.category}</Badge>
-                      <Link to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
-                        <Button size="sm" variant="outline">
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
                           Details
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -208,11 +208,11 @@ export default function NeighborhoodGuide({
                             <Badge variant="outline">{restaurant.price_range}</Badge>
                           )}
                         </div>
-                        <Link to={href}>
-                          <Button size="sm" variant="outline">
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={href}>
                             View
-                          </Button>
-                        </Link>
+                          </Link>
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -259,12 +259,12 @@ export default function NeighborhoodGuide({
                     <CardContent>
                       <div className="flex justify-between items-center">
                         {attraction.type ? <Badge variant="outline">{attraction.type}</Badge> : <span />}
-                        <Link to={href}>
-                          <Button size="sm" variant="outline">
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={href}>
                             <span aria-hidden="true">Learn more</span>
                             <span className="sr-only">Learn more about {attraction.name}</span>
-                          </Button>
-                        </Link>
+                          </Link>
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
