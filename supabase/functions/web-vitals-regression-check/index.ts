@@ -7,6 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { runJob, sendJobAlert } from "../_shared/jobRunner.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,6 +46,13 @@ function p75ByGroup(rows: Row[]): Map<string, number> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // Two unbounded service-role scans of web_vitals plus an ops alert email per
+  // call: cron, CI or an admin only. Nothing schedules this function today (no
+  // cron.schedule, script or workflow names it); web-vitals-weekly is the
+  // scheduled twin and is guarded the same way.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   const result = await runJob("web-vitals-regression-check", async (ctx) => {
     const supabase = createClient(

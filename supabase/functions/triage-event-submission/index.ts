@@ -18,6 +18,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { timingSafeEqual } from '../_shared/callerKind.ts';
 import { getAnthropicApiKey, extractClaudeText, buildLightweightClaudeRequest } from '../_shared/aiConfig.ts';
 // decideTriage is the tested copy in logic.ts. This file used to declare its
 // own as well, and `deno run --no-check` ran the local one, so logic.test.ts
@@ -116,9 +117,11 @@ Deno.serve(async (req) => {
   // AuthZ: service/API key, OR the submission owner, OR an admin.
   const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const apiKey = req.headers.get('X-API-Key') || req.headers.get('x-api-key');
+  const edgeApiKey = Deno.env.get('EDGE_FUNCTION_API_KEY');
+  // Timing-safe, and an unset secret never matches.
   const isInternal =
-    (apiKey && apiKey === Deno.env.get('EDGE_FUNCTION_API_KEY')) ||
-    (bearer && bearer === serviceKey);
+    (!!edgeApiKey && !!apiKey && timingSafeEqual(apiKey, edgeApiKey)) ||
+    (!!serviceKey && !!bearer && timingSafeEqual(bearer, serviceKey));
 
   const { data: submission, error: subErr } = await supabase
     .from('user_submitted_events')
