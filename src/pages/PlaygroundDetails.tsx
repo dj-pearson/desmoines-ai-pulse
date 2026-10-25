@@ -1,6 +1,7 @@
 import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ErrorState } from "@/components/ui/error-state";
 import { createSlug } from "@/lib/slug";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import type { Database } from "@/integrations/supabase/types";
@@ -58,6 +59,7 @@ export default function PlaygroundDetails() {
     data: playground,
     isLoading,
     error,
+    refetch,
   } = useQuery({
     queryKey: detailQueryKey("playground", slug ?? ""),
     // One row by slug, not the whole table (WEB-PERF-031). fetchBySlug keeps
@@ -109,7 +111,25 @@ export default function PlaygroundDetails() {
   // noindex below then says about it.
   const outsideMetro = Boolean(playground) && !isInMetro(playground?.latitude, playground?.longitude);
 
-  if (error || !playground || outsideMetro) {
+  // WEB-SEO-040, as on HotelDetails. A failed fetch is not a missing row: it
+  // gets a retry and no robots meta, so a transient PostgREST error on a live
+  // playground does not ask Google to drop the page.
+  if (error) {
+    return (
+      <>
+        <RouteCanonical path={`/playgrounds/${slug}`} />
+        <Header />
+        <div className="min-h-screen bg-background">
+          <div className="container mx-auto px-4 py-16">
+            <ErrorState error={error} onRetry={() => void refetch()} />
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
+  }
+
+  if (!playground || outsideMetro) {
     return (
       <>
         <Helmet>
@@ -120,10 +140,10 @@ export default function PlaygroundDetails() {
         <div className="min-h-screen bg-background flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center rounded-2xl">
             <CardContent className="p-8">
-              <TreePine className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-foreground mb-2">
+              <TreePine className="h-16 w-16 text-muted-foreground mx-auto mb-4" aria-hidden="true" />
+              <h1 className="text-2xl font-bold text-foreground mb-2">
                 Playground Not Found
-              </h2>
+              </h1>
               <p className="text-muted-foreground mb-6">
                 The playground you're looking for doesn't exist or has been removed.
               </p>
