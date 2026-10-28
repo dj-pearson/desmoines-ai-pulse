@@ -6,7 +6,8 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useSeasonalGuides, getSeasonLabel, getSeasonColor } from "@/hooks/useSeasonalGuides";
+import { ErrorState } from "@/components/ui/error-state";
+import { useSeasonalGuideCards, getSeasonLabel, getSeasonColor } from "@/hooks/useSeasonalGuides";
 import { Users, Heart, Coffee, Utensils, Camera, Star, Umbrella, Sun, Snowflake } from "lucide-react";
 import OptimizedImage from "@/components/OptimizedImage";
 import { getCanonicalUrl } from "@/lib/brandConfig";
@@ -118,7 +119,12 @@ const faqData = [
 ];
 
 export default function GuidesPage() {
-  const { data: seasonalGuides } = useSeasonalGuides();
+  const {
+    data: seasonalGuides,
+    isError: isGuidesError,
+    error: guidesError,
+    refetch: refetchGuides,
+  } = useSeasonalGuideCards();
   // 63 chars, over Google's ~60 truncation point (WEB-SEO-043).
   const pageTitle = "Des Moines Guides - Activities, Dining & Attractions";
   const pageDescription = "Guides to the best of Des Moines: seasonal activities, dining, family fun, date nights and local tips for the city and its suburbs.";
@@ -194,32 +200,6 @@ export default function GuidesPage() {
           ))}
         </div>
 
-        {/* Seasonal Guides (dynamic from database) */}
-        {seasonalGuides && seasonalGuides.length > 0 && (
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold mb-6 text-center">Seasonal &amp; Holiday Guides</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {seasonalGuides.map((guide) => (
-                <Link key={guide.id} to={`/guides/${guide.slug}`}>
-                  <Card className="hover:border-primary transition-colors h-full">
-                    <CardContent className="p-5">
-                      {guide.season && (
-                        <Badge className={`${getSeasonColor(guide.season)} mb-2`}>
-                          {getSeasonLabel(guide.season)}
-                        </Badge>
-                      )}
-                      <h3 className="font-semibold mb-1">{guide.title}</h3>
-                      {guide.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">{guide.description}</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Guides Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {guides.map((guide, index) => {
@@ -271,6 +251,48 @@ export default function GuidesPage() {
             );
           })}
         </div>
+
+        {/* Seasonal Guides (dynamic from database). Below the static grid on
+            purpose: that grid's first image is the LCP element, and this
+            section arrives after a fetch with anywhere from zero to a dozen
+            cards. A skeleton above it would have to guess a height, and a
+            wrong guess (or a guess for zero rows) shifts the LCP image anyway.
+            Down here it only pushes content that is not on screen yet. */}
+        {isGuidesError ? (
+          <section aria-labelledby="seasonal-guides-heading" className="mb-12">
+            <h2 id="seasonal-guides-heading" className="text-2xl font-bold mb-2 text-center">Seasonal &amp; Holiday Guides</h2>
+            <ErrorState
+              compact
+              error={guidesError}
+              onRetry={() => void refetchGuides()}
+              title="Seasonal guides didn't load"
+              description="The guides above are unaffected. Try again to load the seasonal ones."
+            />
+          </section>
+        ) : seasonalGuides && seasonalGuides.length > 0 ? (
+          <section aria-labelledby="seasonal-guides-heading" className="mb-12">
+            <h2 id="seasonal-guides-heading" className="text-2xl font-bold mb-6 text-center">Seasonal &amp; Holiday Guides</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {seasonalGuides.map((guide) => (
+                <Link key={guide.id} to={`/guides/${guide.slug}`}>
+                  <Card className="hover:border-primary transition-colors h-full">
+                    <CardContent className="p-5">
+                      {guide.season && (
+                        <Badge className={`${getSeasonColor(guide.season)} mb-2`}>
+                          {getSeasonLabel(guide.season)}
+                        </Badge>
+                      )}
+                      <h3 className="font-semibold mb-1">{guide.title}</h3>
+                      {guide.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">{guide.description}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {/* Popular Links */}
         <Card className="mb-12">

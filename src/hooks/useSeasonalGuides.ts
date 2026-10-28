@@ -21,23 +21,6 @@ export interface SeasonalGuide {
   created_at: string;
 }
 
-export function useSeasonalGuides() {
-  return useQuery({
-    queryKey: ['seasonal-guides'],
-    queryFn: async (): Promise<SeasonalGuide[]> => {
-      const { data, error } = await supabase
-        .from('seasonal_guides')
-        .select('*')
-        .eq('is_published', true)
-        .order('publish_date', { ascending: false });
-
-      if (error) throw error;
-      return (data ?? []) as unknown as SeasonalGuide[];
-    },
-    staleTime: 10 * 60 * 1000,
-  });
-}
-
 export interface SeasonalGuideSlug {
   slug: string;
   season: string;
@@ -46,7 +29,7 @@ export interface SeasonalGuideSlug {
 
 /**
  * Just enough of each published guide to pick a season link (explore pass 2
- * WP1 item 10). The /things-to-do hub used useSeasonalGuides, which ships
+ * WP1 item 10). The /things-to-do hub used useSeasonalGuides, which shipped
  * every guide's full `content` to read two columns. Its own key, so it never
  * hands a partial row to a page expecting the full one.
  */
@@ -62,6 +45,33 @@ export function useSeasonalGuideSlugs() {
 
       if (error) throw error;
       return (data ?? []) as unknown as SeasonalGuideSlug[];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export type SeasonalGuideCard = Pick<
+  SeasonalGuide,
+  'id' | 'slug' | 'season' | 'title' | 'description' | 'publish_date'
+>;
+
+/**
+ * The columns a /guides card renders. The page read a select(`*`) hook, which
+ * shipped every guide's `content` jsonb to draw a title and two lines. Own key,
+ * for the same reason as useSeasonalGuideSlugs.
+ */
+export function useSeasonalGuideCards() {
+  return useQuery({
+    queryKey: ['seasonal-guides', 'cards'],
+    queryFn: async (): Promise<SeasonalGuideCard[]> => {
+      const { data, error } = await supabase
+        .from('seasonal_guides')
+        .select('id, slug, season, title, description, publish_date')
+        .eq('is_published', true)
+        .order('publish_date', { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as unknown as SeasonalGuideCard[];
     },
     staleTime: 10 * 60 * 1000,
   });
