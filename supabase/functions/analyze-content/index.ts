@@ -10,6 +10,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 import { errorResponse } from "../_shared/errorResponse.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { safeFetch } from "../_shared/fetchGuard.ts";
+import { validateURLForSSRFResolved } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,8 +59,22 @@ serve(async (req) => {
     console.log(`Analyzing content for: ${url}`);
     const startTime = Date.now();
 
+    // The caller is an admin, but the URL is still arbitrary: a raw fetch()
+    // would reach 169.254.169.254 or a LAN host, directly or via a 302.
+    // Resolve the host first, then let safeFetch re-check every redirect hop.
+    const ssrfCheck = await validateURLForSSRFResolved(url);
+    if (!ssrfCheck.valid) {
+      return new Response(
+        JSON.stringify({ error: `URL not allowed: ${ssrfCheck.error}` }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // Fetch the page
-    const response = await fetch(url);
+    const response = await safeFetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch URL: ${response.status}`);
     }

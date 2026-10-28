@@ -1,6 +1,6 @@
 /**
  * fetchGuard image allowlist tests.
- * Run with: `deno test --allow-env supabase/functions/_shared/fetchGuard.test.ts`
+ * Run with: `deno test --allow-read --allow-env supabase/functions/_shared/fetchGuard.test.ts`
  *
  * The image-transform proxy must accept storage URLs from both backends while
  * Des Moines Insider moves off Supabase Cloud: the cloud project's
@@ -186,3 +186,25 @@ Deno.test('fetchArrayBufferWithSizeCap does not follow a redirect to an internal
     },
   );
 });
+
+// Callers that fetch a caller- or page-supplied URL. Each one used fetch()
+// directly, so a public URL answering 302 Location: http://169.254.169.254/
+// was followed. They must go through safeFetch; this fails if one drifts back.
+const SAFE_FETCH_CALLERS = [
+  'analyze-content',
+  'analyze-images',
+  'seo-audit',
+  'publish-article-webhook',
+  'test-article-webhook',
+  'agent-link-monitor',
+];
+
+for (const fn of SAFE_FETCH_CALLERS) {
+  Deno.test(`${fn} fetches its target through safeFetch`, async () => {
+    const src = await Deno.readTextFile(new URL(`../${fn}/index.ts`, import.meta.url));
+    assert(/import \{[^}]*\bsafeFetch\b[^}]*\} from "\.\.\/_shared\/fetchGuard\.ts"/.test(src), `${fn} does not import safeFetch`);
+    assert(/\bsafeFetch\(/.test(src), `${fn} never calls safeFetch`);
+    assert(!/redirect:\s*["']follow["']/.test(src), `${fn} still follows redirects with fetch()`);
+    assert(/validateURLForSSRFResolved\(/.test(src), `${fn} does not resolve the first host`);
+  });
+}

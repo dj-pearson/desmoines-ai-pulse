@@ -29,12 +29,18 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
+import { safeFetch } from "../_shared/fetchGuard.ts";
+import { validateURLForSSRFResolved } from "../_shared/validation.ts";
 
 const AGENT_KEY = "link-content-monitor";
 const ARCHIVE_LIMIT = 100; // max past events auto-archived per run
 const LINK_BUDGET = 50; // max link probes per run
 const FAIL_THRESHOLD = 3; // consecutive hard failures before marking dead
 const PROBE_TIMEOUT_MS = 8000;
+// fetch() followed up to 20 hops; real sites rarely need more than 2 or 3
+// (http -> https -> www -> canonical path). A longer chain is reported as a
+// probe error, which accumulates like a timeout and never marks a link dead.
+const PROBE_MAX_REDIRECTS = 5;
 const RECUR_RE = /\b(weekly|monthly|annual|annually|every\s+\w+day|recurring|series|each\s+\w+day)\b/i;
 
 // deno-lint-ignore no-explicit-any
@@ -65,11 +71,19 @@ async function probeLink(url: string): Promise<LinkProbe> {
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   const origHost = hostOf(url);
   try {
-    let res = await fetch(url, { method: "HEAD", redirect: "follow", signal: controller.signal });
+    // These URLs were scraped or typed into content rows, so they are not
+    // ours. Resolve the host, then let safeFetch re-check every redirect hop:
+    // following redirects natively walked a public link's 302 onto internal hosts.
+    const check = await validateURLForSSRFResolved(url);
+    if (!check.valid) throw new Error(`URL not allowed: ${check.error}`);
+    const probeOpts = { maxRedirects: PROBE_MAX_REDIRECTS };
+    let res = await safeFetch(url, { method: "HEAD", signal: controller.signal }, probeOpts);
     // Some servers reject HEAD — fall back to a light GET.
     if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, { method: "GET", redirect: "follow", signal: controller.signal });
+      res = await safeFetch(url, { method: "GET", signal: controller.signal }, probeOpts);
     }
+    // safeFetch sends each hop as its own request, so res.url is the last
+    // hop's URL, which is what redirectHost compares against.
     const finalHost = hostOf(res.url || url);
     const redirectHost = finalHost && origHost && finalHost !== origHost ? finalHost : null;
     return {
