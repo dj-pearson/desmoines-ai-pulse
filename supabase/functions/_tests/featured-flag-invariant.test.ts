@@ -8,9 +8,9 @@
  *
  * This test walks every edge function and fails on any is_featured value that
  * is not a literal false (or a value copied from an existing row). It also
- * pins the two things that make clearing the random flags safe: the cleanup
- * migration, and the homepage rail's deterministic fallback so an empty
- * featured set does not mean an empty rail.
+ * pins the cleanup migration that cleared the random flags. It used to pin the
+ * fallback in useFeaturedEvents as well; that hook and FeaturedEvents.tsx were
+ * imported by nothing and were deleted.
  */
 
 import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
@@ -78,14 +78,4 @@ Deno.test('the cleanup migration dry-runs its counts before clearing', async () 
   assert(/is_sponsored IS NOT TRUE/.test(sql), 'sponsored rows must be exempt');
   assert(/sponsored_listing_links/.test(sql), 'rows with a campaign link must be exempt');
   assert(!/UPDATE public\.attractions/.test(sql), 'attractions carry an admin bulk-feature action and no origin marker; they are counted, not cleared');
-});
-
-Deno.test('the homepage featured rail falls back to a deterministic ranking', async () => {
-  const hook = await Deno.readTextFile(new URL('src/hooks/useSupabase.ts', REPO));
-  const fn = hook.slice(hook.indexOf('export function useFeaturedEvents'), hook.indexOf('export function useEvents('));
-  assert(fn.length > 0, 'useFeaturedEvents must exist ahead of useEvents');
-  assert(/Pass 3/.test(fn), 'a third pass must fill the rail when featured rows run out');
-  assert(/\.order\('popularity_score', \{ ascending: false, nullsFirst: false \}\)/.test(fn), 'fallback ranks by popularity_score');
-  assert(/\.order\('date', \{ ascending: true \}\)/.test(fn), 'then by soonest date');
-  assert(/\.not\('id', 'in'/.test(fn) || /chosenIds/.test(fn), 'fallback must exclude rows already on the rail');
 });
