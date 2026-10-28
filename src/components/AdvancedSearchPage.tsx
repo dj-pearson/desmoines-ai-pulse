@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/ui/error-state";
 import { Search, Star, DollarSign, Grid, List, Navigation2 } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { AdvancedSearchFilters } from "./AdvancedSearchFilters";
@@ -63,36 +64,32 @@ function formatPrice(price: string | undefined) {
 export default function AdvancedSearchPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const initialQuery = (searchParams.get('q') ?? '').trim();
 
+  // The submitted search lives in the URL (?q=, category, location, rating,
+  // from, to, sort, featured), so arriving with ?q= runs it and Back/refresh
+  // restore it. useAdvancedSearch reads and writes those params.
   const {
     filters,
     setFilters,
     results,
     savedSearches,
     loading,
+    isError,
+    error,
+    refetch,
     hasSearched,
     performSearch,
     saveSearch,
     loadSearch,
     deleteSearch,
     resetFilters
-  } = useAdvancedSearch({ initialQuery });
+  } = useAdvancedSearch();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Arriving with ?q= means someone already asked; run it once.
-  const ranInitial = useRef(false);
-  useEffect(() => {
-    if (ranInitial.current || !initialQuery) return;
-    ranInitial.current = true;
-    void performSearch(filters);
-  }, [initialQuery, filters, performSearch]);
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void performSearch(filters);
+    performSearch(filters);
   };
 
   /** Rows /events or the iOS app wrote can't fill these controls; /search can read their words. */
@@ -219,6 +216,20 @@ export default function AdvancedSearchPage() {
                     <p className="text-muted-foreground max-w-prose mx-auto">
                       Type a name, a venue or a kind of food above and press Search. Leave it blank to browse everything the filters allow.
                     </p>
+                  </CardContent>
+                </Card>
+              ) : isError && results.length === 0 ? (
+                // Ahead of the empty state: a search that failed has not
+                // found out whether anything matches. (A failed background
+                // refetch with results already on screen keeps showing them.)
+                <Card>
+                  <CardContent className="p-0">
+                    <ErrorState
+                      error={error}
+                      onRetry={() => void refetch()}
+                      title="Search didn't finish"
+                      description="We couldn't run this search, so we can't say whether anything matches. Your filters are kept; try again."
+                    />
                   </CardContent>
                 </Card>
               ) : results.length > 0 ? (

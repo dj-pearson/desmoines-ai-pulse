@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { errorResponse } from "../_shared/errorResponse.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { validateURLForSSRFResolved } from "../_shared/validation.ts";
+import { safeFetch } from "../_shared/fetchGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,13 +118,19 @@ serve(async (req) => {
       recommendations: [],
     };
 
-    // Fetch the page
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; SEOBot/1.0; +https://desmoines-ai-pulse.com)",
+    // Fetch the page. safeFetch, not fetch: the check above covers this host
+    // only, and fetch() would follow a 302 from it to an internal address.
+    // Each hop is resolved and re-checked with the same options.
+    const response = await safeFetch(
+      url,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; SEOBot/1.0; +https://desmoines-ai-pulse.com)",
+        },
       },
-    });
+      { ssrf: { allowedProtocols: ["http:", "https:"], blockPrivateIPs: true } },
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);

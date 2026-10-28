@@ -86,6 +86,17 @@ Deno.test('nothing is recorded against a campaign nobody is paying for', async (
   assertFalse(/reason: 'not_billable' \}, 4\d\d\)/.test(src));
 });
 
+Deno.test('the event flood limit is persistent, per IP and campaign, at the same 120', async () => {
+  const src = await read(FN);
+  // The in-memory count reset on every cold start and never saw other isolates.
+  assertFalse(/\bcheckRateLimit\(/.test(src), 'the in-memory limiter must not come back');
+  const call = src.match(/await checkRateLimitPersistent\(req, \{([\s\S]*?)\}\);/);
+  assert(call, 'track-ad-event must await checkRateLimitPersistent');
+  assert(/endpoint: `track-ad-event:\$\{limitKey\}`/.test(call[1]), 'keyed by campaign on top of the IP');
+  assert(/max: 120,/.test(call[1]), 'the limit stays 120; tightening it is a compat break');
+  assert(/if \(!limited\.success && limited\.response\) return limited\.response;/.test(src), 'the 429 (with CORS) is returned as built');
+});
+
 Deno.test('the browser no longer writes the tables directly', async () => {
   const tracking = await read('src/lib/tracking.ts');
 

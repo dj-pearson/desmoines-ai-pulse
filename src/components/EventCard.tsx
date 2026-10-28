@@ -22,7 +22,7 @@ import EventFeedback from "@/components/EventFeedback";
 import ShareDialog from "@/components/ShareDialog";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
-import { useFeedback } from "@/hooks/useFeedback";
+import { useTrackInteraction } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewTracking } from "@/hooks/useViewTracking";
 import { recordView } from "@/lib/recentlyViewed";
@@ -65,7 +65,7 @@ interface EventCardProps {
 
 function EventCardComponent({ event, onViewDetails, priority = false }: EventCardProps) {
   const { isAuthenticated } = useAuth();
-  const { trackInteraction } = useFeedback();
+  const trackInteraction = useTrackInteraction();
   const { trackView } = useViewTracking(event.id);
   const [isNew, setIsNew] = useState(false);
   const [imageError, setImageError] = useState(false);

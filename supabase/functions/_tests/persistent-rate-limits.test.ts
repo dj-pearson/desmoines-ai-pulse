@@ -44,3 +44,18 @@ Deno.test('rate_limit_entries is cleaned on a schedule', async () => {
   assert(/DELETE FROM public\.rate_limit_entries WHERE created_at < now\(\) - interval '1 day'/.test(sql));
   assert(!/net\.http_post/.test(sql), 'plain SQL, no HTTP hop');
 });
+
+// support-chat's "talk to a human" never calls the model, so the AI quota does
+// not meter it, and every call inserted a support_tickets row.
+Deno.test('support-chat caps anonymous tickets per day, persistently', async () => {
+  const src = code(await read('supabase/functions/support-chat/index.ts'));
+  const limit = src.match(/const ANON_TICKET_LIMIT = \{([\s\S]*?)\};/);
+  assert(limit, 'ANON_TICKET_LIMIT is defined');
+  assert(/endpoint: "support-chat-ticket"/.test(limit[1]), 'its own bucket, not the request limit');
+  assert(/windowMs: 24 \* 60 \* 60 \* 1000/.test(limit[1]), 'a one-day window');
+  assert(/max: 5,/.test(limit[1]), 'five a day');
+  assert(/if \(userId\) return null;\s*const rl = await checkRateLimitPersistent\(req, ANON_TICKET_LIMIT\)/.test(src), 'signed-in users are not counted');
+  const calls = (src.match(/await openTicket\(\s*supabase/g) ?? []).length;
+  const guards = src.split('anonTicketDenied(req, userId)').length - 1;
+  assert(calls === 2 && guards === 2, `each openTicket call is preceded by the cap (${calls} calls, ${guards} checks)`);
+});

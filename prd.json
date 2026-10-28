@@ -9942,6 +9942,228 @@
       "priority": 3,
       "passes": false,
       "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+    },
+    {
+      "id": "WEB-SEC-042",
+      "title": "event-photos bucket had no MIME or size limit and any user could upload to any path",
+      "description": "Bucket was public with no allowed_mime_types; a broad insert policy ORed away the folder-scoped one.",
+      "acceptanceCriteria": [
+        "Migration 20261028000001 sets 10MB and jpeg/png/webp/avif/gif",
+        "Broad 'Authenticated users can upload event photos' policy dropped; folder-scoped policy kept"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-SEC-043",
+      "title": "videos bucket accepted 100MB uploads from any user at any path",
+      "description": "INSERT policy checked only bucket_id.",
+      "acceptanceCriteria": [
+        "Migration 20261028000002 limits INSERT to the uploader's folder or admin"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-SEC-044",
+      "title": "Six admin/cron URL fetchers bypassed safeFetch",
+      "description": "analyze-content, analyze-images, seo-audit, both article webhooks and agent-link-monitor followed redirects without SSRF checks.",
+      "acceptanceCriteria": [
+        "All six use validateURLForSSRFResolved + safeFetch",
+        "fetchGuard.test.ts asserts it"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-SEC-045",
+      "title": "support-chat: unlimited anonymous tickets and client-forged agent lines",
+      "description": "talkToHuman skipped guardAi; client assistant turns were stored as sender agent.",
+      "acceptanceCriteria": [
+        "Anonymous ticket cap 5/day/IP via persistent limiter",
+        "Client-supplied assistant turns are not persisted"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-SEC-046",
+      "title": "moderate-content key compare not timing-safe; track-ad-event limiter in-memory only",
+      "description": "Same pattern WEB-SEC-038 fixed elsewhere.",
+      "acceptanceCriteria": [
+        "moderate-content uses isMachineCaller(classifyCaller())",
+        "track-ad-event uses checkRateLimitPersistent keyed by IP+campaign"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-PERF-047",
+      "title": "EventCard fired two uncached feedback queries per card",
+      "description": "useFeedback used useEffect+useState, called twice per card.",
+      "acceptanceCriteria": [
+        "One useQuery per user, keyed ['user-event-feedback', userId]",
+        "useTrackInteraction gives EventCard a stable function"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-PERF-048",
+      "title": "Event hotel callout ran a request waterfall and over-fetched",
+      "description": "NearbyHotels started only after useEventHotels; hotels(*) filtered in JS.",
+      "acceptanceCriteria": [
+        "Both queries start together",
+        "hotels!inner with list columns and is_active filter",
+        "List callout inside LazySection"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-PERF-049",
+      "title": "Restaurant detail and hover prefetch used select('*')",
+      "description": "Row carries search_vector, geom, writeup_prompt_used.",
+      "acceptanceCriteria": [
+        "RESTAURANT_DETAIL_COLUMNS shared by page and prefetch via fetchRestaurantDetail",
+        "Optional columns dropped on 42703 and retried"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-PERF-050",
+      "title": "/guides fetched full guide bodies and shifted the LCP grid",
+      "description": "useSeasonalGuides selected content jsonb; section mounted above the static grid.",
+      "acceptanceCriteria": [
+        "useSeasonalGuideCards selects card columns only",
+        "Seasonal section below the static grid",
+        "ErrorState with retry"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-UX-042",
+      "title": "Advanced search showed 'Nothing matched' on failure and lost filters on Back",
+      "description": "Query swallowed errors; filters lived in useState.",
+      "acceptanceCriteria": [
+        "isError renders ErrorState with retry",
+        "Submitted filters live in the URL; ?q= still works",
+        "Smoke spec covers both"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-UX-043",
+      "title": "/itineraries went blank on error or no rows and dropped unknown themes",
+      "description": "Only isLoading was read.",
+      "acceptanceCriteria": [
+        "ErrorState with retry and an empty state",
+        "Unknown themes appended after THEME_ORDER"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-QA-039",
+      "title": "Trending rails used the UTC date, so past events showed as upcoming",
+      "description": "usePersonalizedRecommendations and useTrendingContent bounded on new Date().toISOString().",
+      "acceptanceCriteria": [
+        "Central-date bounds",
+        "useTrending on useQuery with ErrorState retry; cards are real links",
+        "Dead InternalLinking, FeaturedEvents, PersonalizedContent, usePersonalizedRecommendations deleted"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-SEO-047",
+      "title": "Iowa State Fair Event JSON-LD missing fields and carried an invented price",
+      "description": "Hardcoded offers 15.00 InStock.",
+      "acceptanceCriteria": [
+        "eventStatus, eventAttendanceMode, image added",
+        "offers removed until a verified price exists"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-UX-044",
+      "title": "Event page content slid under the header when the hero image failed",
+      "description": "-mt-32 applied whenever image_url was set.",
+      "acceptanceCriteria": [
+        "Overlap requires image_url && !heroFailed",
+        "Explore links coarse:min-h-[44px]"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-UX-045",
+      "title": "Sheet close 16px, password toggle not keyboard reachable, attraction cards read names twice",
+      "description": "",
+      "acceptanceCriteria": [
+        "Sheet close 44x44 like Dialog",
+        "PasswordInput toggle tabbable with aria-pressed",
+        "Attraction alt empty, fallback aria-hidden",
+        "Restaurants clear button 44px at all widths"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-10-28 on claude/15-loop-site-improvements-ki7nlm."
+    },
+    {
+      "id": "WEB-UX-046",
+      "title": "AdBanner: whole-card click on a div, CSS background creative, duplicate complementary landmarks",
+      "description": "AdBanner.tsx:103-148. CTA should be a sponsored link, creative an img with alt, landmark named per placement.",
+      "acceptanceCriteria": [
+        "CTA is <a rel='noopener sponsored'>",
+        "Creative is <img alt>",
+        "No duplicate unnamed landmarks"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found in the 2026-10-28 audit, not done in that pass."
+    },
+    {
+      "id": "WEB-PERF-051",
+      "title": "AuthContext role check makes three sequential calls (one an RPC write) on every load",
+      "description": "AuthContext.tsx:268-305; cache is an in-memory Map.",
+      "acceptanceCriteria": [
+        "Resolved role cached in session storage per user with TTL",
+        "sync_oauth_user_role only on SIGNED_IN"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found in the 2026-10-28 audit, not done in that pass."
+    },
+    {
+      "id": "WEB-PERF-052",
+      "title": "Home For-You rail makes three sequential requests for signed-in users",
+      "description": "useForYouRail.ts:99-160.",
+      "acceptanceCriteria": [
+        "Swipe check is its own cached query without count exact",
+        "RPC returns sponsored flags"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found in the 2026-10-28 audit, not done in that pass."
     }
   ]
 }

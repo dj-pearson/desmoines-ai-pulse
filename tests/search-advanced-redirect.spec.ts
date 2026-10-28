@@ -209,6 +209,44 @@ test.describe('/search/advanced Stage A (search plan WP4)', () => {
     await expect(page.getByText(/no results found|nothing matched/i)).toHaveCount(0);
   });
 
+  test('a failed search says so, not "Nothing matched"', async ({ page }) => {
+    await instrument(page);
+    await installFixtureBackend(page);
+    // A permanent PostgREST code, so shouldRetry gives up at once.
+    await page.route('**/rest/v1/events**', (route) =>
+      json(route, { code: 'PGRST000', message: 'boom', details: null, hint: null }, 503),
+    );
+
+    await page.goto('/search/advanced?q=jazz', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.getByText("Search didn't finish")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+    await expect(page.getByText(/nothing matched/i)).toHaveCount(0);
+  });
+
+  test('the submitted search lives in the URL, so Back restores it', async ({ page }) => {
+    await instrument(page);
+    await installFixtureBackend(page);
+
+    await page.goto('/search/advanced?q=jazz', { waitUntil: 'domcontentloaded' });
+    const box = page.getByRole('searchbox', { name: 'Search' });
+    await expect(box).toHaveValue('jazz', { timeout: 15_000 });
+    // The submit button is disabled while a search runs, and a disabled default
+    // button blocks Enter, so wait for the first search to land.
+    await expect(page.getByRole('link', { name: 'Jazz Night at the Fixture' })).toBeVisible({ timeout: 15_000 });
+
+    await box.fill('tacos');
+    await box.press('Enter');
+    await page.waitForURL(/\/search\/advanced\?q=tacos$/);
+
+    await page.goBack();
+    await page.waitForURL(/\/search\/advanced\?q=jazz$/);
+    await expect(box).toHaveValue('jazz');
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('searchbox', { name: 'Search' })).toHaveValue('jazz', { timeout: 15_000 });
+  });
+
   test('Insider with /events and iOS saved rows: no crash, only live controls', async ({ page }) => {
     await instrument(page);
     await installFixtureBackend(page);

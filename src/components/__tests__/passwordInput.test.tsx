@@ -18,7 +18,26 @@ describe("PasswordInput", () => {
     await user.click(screen.getByRole("button", { name: /show password/i }));
     expect(field.type).toBe("text");
 
-    await user.click(screen.getByRole("button", { name: /hide password/i }));
+    await user.click(screen.getByRole("button", { name: /show password/i }));
+    expect(field.type).toBe("password");
+  });
+
+  it("is reachable and operable from the keyboard", async () => {
+    // It carried tabIndex={-1}, so a keyboard-only user could not reveal the
+    // password at all (WCAG 2.1.1).
+    const user = userEvent.setup();
+    render(<PasswordInput id="password" defaultValue="hunter2" />);
+    const field = document.getElementById("password") as HTMLInputElement;
+
+    await user.tab();
+    expect(document.activeElement).toBe(field);
+    await user.tab();
+    const toggle = screen.getByRole("button", { name: /show password/i });
+    expect(document.activeElement).toBe(toggle);
+
+    await user.keyboard("{Enter}");
+    expect(field.type).toBe("text");
+    await user.keyboard(" ");
     expect(field.type).toBe("password");
   });
 
@@ -30,9 +49,9 @@ describe("PasswordInput", () => {
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
 
     await user.click(toggle);
-    expect(
-      screen.getByRole("button", { name: /hide password/i }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    // One fixed name; the state is aria-pressed alone.
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle.getAttribute("aria-label")).toBe("Show password");
   });
 
   it("is type=button so revealing does not submit the form", async () => {

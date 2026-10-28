@@ -13,9 +13,16 @@ import { cn } from "@/lib/utils";
  *
  * The toggle is a real <button type="button">: inside a form, a button with no
  * explicit type submits it, so revealing your password would attempt a sign-in.
- * It carries aria-pressed so a screen reader announces the state rather than
- * just the label, and it is excluded from the tab order deliberately - see
- * below.
+ * It is a toggle button: one fixed name, "Show password", and aria-pressed for
+ * the state, so a screen reader says "Show password, toggle button, pressed"
+ * when the text is visible. A name that flipped to "Hide password" as well as
+ * pressed=true said the state twice and contradicted itself ("Hide password,
+ * pressed").
+ *
+ * It is in the tab order. It used to carry tabIndex={-1} so Tab would go
+ * straight from the field to Sign In, which left keyboard-only users with no
+ * way to reveal the password at all: WCAG 2.1.1 requires every function to be
+ * operable from the keyboard, and a mouse click is not a keyboard.
  */
 type PasswordInputProps = Omit<React.ComponentProps<typeof Input>, "type"> & {
   /** Label for the toggle, for forms where "password" is ambiguous. */
@@ -36,15 +43,9 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
         />
         <button
           type="button"
-          // tabIndex -1 on purpose: the toggle sits between the password field
-          // and the submit button, and a keyboard user filling the form wants
-          // Tab to go to Sign In. It stays reachable by click and by screen
-          // reader, which is who it is for. (WCAG 2.1 AA does not require every
-          // control in the tab order, and 2.4.3 is about ORDER, not inclusion.)
-          tabIndex={-1}
           onClick={() => setVisible((v) => !v)}
           aria-pressed={visible}
-          aria-label={visible ? `Hide ${toggleLabel}` : `Show ${toggleLabel}`}
+          aria-label={`Show ${toggleLabel}`}
           className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-r-md"
         >
           {visible ? (

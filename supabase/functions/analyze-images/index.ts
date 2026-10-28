@@ -10,6 +10,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 import { errorResponse } from "../_shared/errorResponse.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { safeFetch } from "../_shared/fetchGuard.ts";
+import { validateURLForSSRFResolved } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,8 +57,22 @@ serve(async (req) => {
     console.log(`Analyzing images for: ${url}`);
     const startTime = Date.now();
 
+    // The caller is an admin, but the URL is still arbitrary: a raw fetch()
+    // would reach 169.254.169.254 or a LAN host, directly or via a 302.
+    // Resolve the host first, then let safeFetch re-check every redirect hop.
+    const ssrfCheck = await validateURLForSSRFResolved(url);
+    if (!ssrfCheck.valid) {
+      return new Response(
+        JSON.stringify({ error: `URL not allowed: ${ssrfCheck.error}` }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // Fetch the page
-    const response = await fetch(url);
+    const response = await safeFetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch URL: ${response.status}`);
     }
@@ -154,7 +170,12 @@ serve(async (req) => {
       let potentialSavingsPercentage: number | null = null;
 
       try {
-        const imgResponse = await fetch(imageUrl, { method: "HEAD" });
+        // Every <img src> comes from the fetched page, so whoever controls
+        // that page chooses these hosts. Same check as the page URL; a
+        // refused one throws and is reported like any unreachable image.
+        const imgCheck = await validateURLForSSRFResolved(imageUrl);
+        if (!imgCheck.valid) throw new Error(`URL not allowed: ${imgCheck.error}`);
+        const imgResponse = await safeFetch(imageUrl, { method: "HEAD" });
         const contentLength = imgResponse.headers.get("content-length");
         if (contentLength) {
           fileSizeBytes = parseInt(contentLength);

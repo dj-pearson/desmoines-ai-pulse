@@ -40,6 +40,7 @@ const TABLE_FOR = {
   EVENT_SLUG_COLUMNS: 'events',
   TONIGHT_EVENT_COLUMNS: 'events',
   TONIGHT_RESTAURANT_COLUMNS: 'restaurants',
+  RESTAURANT_DETAIL_EXTRA_COLUMNS: 'restaurants',
 };
 
 const src = readFileSync(COLUMNS_FILE, 'utf8');

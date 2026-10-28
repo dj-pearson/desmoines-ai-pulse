@@ -20,8 +20,9 @@
  */
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { validateURLForSSRF } from "../_shared/validation.ts";
+import { validateURLForSSRFResolved, type SSRFValidationOptions } from "../_shared/validation.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { safeFetch } from "../_shared/fetchGuard.ts";
 
 const TIMEOUT_MS = 10_000;
 
@@ -48,10 +49,13 @@ Deno.serve(async (req) => {
 
   // https only: a webhook carries article content to a third party, and this
   // runs server-side where a plaintext hop is invisible to whoever configured it.
-  const ssrf = validateURLForSSRF(webhookUrl, {
+  // Resolved, not literal: the literal check passes any hostname, including
+  // one whose A record is 10.0.0.5 or 169.254.169.254.
+  const ssrfOptions: SSRFValidationOptions = {
     allowedProtocols: ["https:"],
     blockPrivateIPs: true,
-  });
+  };
+  const ssrf = await validateURLForSSRFResolved(webhookUrl, ssrfOptions);
   if (!ssrf.valid) {
     return json({ success: false, error: `Refusing that URL: ${ssrf.error}` }, 400);
   }
@@ -75,14 +79,20 @@ Deno.serve(async (req) => {
 
   const startedAt = Date.now();
   try {
-    const response = await fetchWithTimeout(
+    // safeFetch re-checks every redirect hop with the same options (so a 307
+    // to http:// or to an internal host is refused); fetchWithTimeout keeps
+    // the per-request timeout.
+    const response = await safeFetch(
       webhookUrl,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       },
-      TIMEOUT_MS,
+      {
+        ssrf: ssrfOptions,
+        fetchFn: (u, init) => fetchWithTimeout(u, init, TIMEOUT_MS),
+      },
     );
     const elapsedMs = Date.now() - startedAt;
 

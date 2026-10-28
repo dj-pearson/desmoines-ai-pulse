@@ -454,7 +454,9 @@ export default function EventDetails() {
 
         <div className="container mx-auto px-4">
           {/* Content starts overlapping hero image */}
-          <div className={event.image_url ? '-mt-32 relative z-10' : 'pt-8'}>
+          {/* Only overlap when the hero actually rendered; a failed image hides
+              the hero, and -mt-32 then pulled this under the sticky header. */}
+          <div className={event.image_url && !heroFailed ? '-mt-32 relative z-10' : 'pt-8'}>
             <Breadcrumbs
               items={[
                 { label: "Home", href: "/" },
@@ -784,7 +786,7 @@ export default function EventDetails() {
                   <CardContent className="space-y-1 p-4 pt-0">
                     <Link
                       to="/events/today"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <SpriteIcon name="clock" className="h-4 w-4 text-muted-foreground" />
@@ -794,7 +796,7 @@ export default function EventDetails() {
                     </Link>
                     <Link
                       to="/events/this-weekend"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
@@ -804,7 +806,7 @@ export default function EventDetails() {
                     </Link>
                     <Link
                       to="/events/free"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <SpriteIcon name="ticket" className="h-4 w-4 text-muted-foreground" />
@@ -815,7 +817,7 @@ export default function EventDetails() {
                     {category && (
                       <Link
                         to={`/events?category=${encodeURIComponent(category)}`}
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                        className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                       >
                         <span className="flex items-center gap-2">
                           <Tag className="h-4 w-4 text-muted-foreground" />
@@ -826,7 +828,7 @@ export default function EventDetails() {
                     )}
                     <Link
                       to="/events"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <ArrowLeft className="h-4 w-4 text-muted-foreground" />
@@ -841,15 +843,27 @@ export default function EventDetails() {
 
             {/* One hotel section, upcoming events only: linked hotels, else
                 NearbyHotels by distance (WP8 item 9). */}
-            {isUpcoming && (
+            {isUpcoming && !showHotelList && (
               <EventHotelCallout
                 eventId={event.id}
-                latitude={latitude}
-                longitude={longitude}
                 placeName={event.venue || "this event"}
                 nearSlug={venuePage?.slug ?? null}
-                showList={showHotelList}
+                showList={false}
               />
+            )}
+            {/* The list makes two hotel reads; defer them until the reader is
+                near. 280 and mt-8 match the callout's own loading reserve. */}
+            {isUpcoming && showHotelList && (
+              <LazySection minHeight={280} className="mt-8" label="Hotels nearby">
+                <EventHotelCallout
+                  eventId={event.id}
+                  latitude={latitude}
+                  longitude={longitude}
+                  placeName={event.venue || "this event"}
+                  nearSlug={venuePage?.slug ?? null}
+                  showList
+                />
+              </LazySection>
             )}
 
             {/* Same category, upcoming, its own bounded query (WP8 item 7). */}

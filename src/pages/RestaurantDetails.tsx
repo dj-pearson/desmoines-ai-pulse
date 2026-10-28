@@ -66,6 +66,7 @@ import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { fetchRestaurantDetail } from "@/lib/restaurantDetail";
 import { isRestaurantPseoSlug } from "@/pseo/restaurantAreaSlugs";
 
 // SEO-065: the pSEO renderer, loaded only for an area slug no restaurant owns.
@@ -81,8 +82,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *    reading RestaurantCard gives it. The legacy spellings are for rows
  *    written before the CHECK.
  *  - `business_status`, Google's CLOSED_PERMANENTLY / CLOSED_TEMPORARILY. It
- *    is read off the select("*") row the way hours_json is, so it is undefined
- *    until migration 20260919000009 is applied, and no select names it.
+ *    is one of RESTAURANT_DETAIL_OPTIONAL_COLUMNS, like hours_json, so it is
+ *    undefined on a database without migration 20260919000009.
  */
 type Lifecycle = RestaurantLifecycle;
 
@@ -104,7 +105,7 @@ function formatOpeningDate(value: string | null | undefined): string | null {
 /**
  * Open/closed for this page, from one evaluation on the shared minute clock,
  * so the hero badge and the hours block cannot disagree (WP8 item 5).
- * hours_json is used when select("*") returns it; nothing adds the column.
+ * hours_json is an optional detail column, so it may be undefined.
  */
 function useRestaurantOpenStatus(
   hoursJson: StoredOpeningHours | null | undefined,
@@ -140,29 +141,8 @@ function hoursCheckedAt(hoursJson: StoredOpeningHours | null | undefined): strin
 function useRestaurantDetail(slug: string | undefined) {
   return useQuery({
     queryKey: detailQueryKey("restaurant", slug ?? ""),
-    queryFn: async () => {
-      let { data, error } = await supabase
-        .from("restaurants")
-        .select("*")
-        .eq("slug", slug)
-        .maybeSingle();
-
-      // Fall back to the id only when the param IS a uuid. Comparing a uuid
-      // column with a slug raises 22P02, which surfaced as the error page for
-      // any unknown slug instead of not-found.
-      if (!data && !error && UUID_RE.test(slug ?? "")) {
-        const result = await supabase
-          .from("restaurants")
-          .select("*")
-          .eq("id", slug)
-          .maybeSingle();
-        data = result.data;
-        error = result.error;
-      }
-
-      if (error) throw error;
-      return data;
-    },
+    // RESTAURANT_DETAIL_COLUMNS, not select("*"); shared with the hover prefetch.
+    queryFn: () => fetchRestaurantDetail(slug ?? ""),
     staleTime: DETAIL_STALE_TIME,
   });
 }
@@ -422,7 +402,7 @@ export default function RestaurantDetails() {
   // Pre-opening copy on a place that has opened is left out everywhere (WP3.4).
   const aboutText = currentDescription(restaurant);
   const hoursSpec = resolveOpeningHoursSpecification(hoursJson, restaurant.opening);
-  // Columns select("*") returns that types.ts does not list yet (Places
+  // Optional detail columns types.ts does not list yet (Places
   // enrichment and SEO-060). Each is optional and read defensively.
   const placeExtras = restaurant as {
     google_maps_uri?: string | null;
