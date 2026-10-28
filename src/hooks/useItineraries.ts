@@ -83,8 +83,29 @@ const DURATION_LABELS: Record<string, string> = {
   '3-day': '3-Day Trip',
 };
 
+const THEME_ORDER = ['general', 'romance', 'family', 'food-drink', 'arts-culture', 'adventure', 'sports'];
+
+/**
+ * The /itineraries section order: THEME_ORDER first, then any theme it does
+ * not list (one added in the CMS since), in the order given. Filtering to
+ * THEME_ORDER alone dropped those itineraries from the page without a trace.
+ */
+export function orderThemes(themes: string[]): string[] {
+  const present = new Set(themes);
+  return [
+    ...THEME_ORDER.filter((t) => present.has(t)),
+    ...themes.filter((t) => !THEME_ORDER.includes(t)),
+  ];
+}
+
+/** A theme with no label (added in the CMS since) reads as words, not as a slug. */
 export function getThemeLabel(theme: string): string {
-  return THEME_LABELS[theme] || theme;
+  if (THEME_LABELS[theme]) return THEME_LABELS[theme];
+  return (theme ?? '')
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
 
 export function getDurationLabel(duration: string): string {

@@ -2,10 +2,12 @@ import { Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
-import { useItineraries, getThemeLabel, getDurationLabel } from '@/hooks/useItineraries';
+import { useItineraries, getThemeLabel, getDurationLabel, orderThemes } from '@/hooks/useItineraries';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorState } from '@/components/ui/error-state';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Heart, Users, Palette, Dumbbell, Utensils, Compass } from "lucide-react";
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { toJsonLd } from '@/lib/jsonLd';
@@ -23,10 +25,8 @@ const THEME_ICONS: Record<string, typeof Heart> = {
   general: Compass,
 };
 
-const THEME_ORDER = ['general', 'romance', 'family', 'food-drink', 'arts-culture', 'adventure', 'sports'];
-
 export default function Itineraries() {
-  const { data: itineraries, isLoading } = useItineraries();
+  const { data: itineraries, isLoading, isError, error, refetch } = useItineraries();
 
   const groupedByTheme = itineraries?.reduce<Record<string, typeof itineraries>>((acc, it) => {
     if (!acc[it.theme]) acc[it.theme] = [];
@@ -34,9 +34,7 @@ export default function Itineraries() {
     return acc;
   }, {});
 
-  const sortedThemes = groupedByTheme
-    ? THEME_ORDER.filter((t) => groupedByTheme[t])
-    : [];
+  const sortedThemes = groupedByTheme ? orderThemes(Object.keys(groupedByTheme)) : [];
 
   return (
     <>
@@ -89,6 +87,26 @@ export default function Itineraries() {
                 <Skeleton key={i} className="h-48 rounded-lg" />
               ))}
             </div>
+          ) : isError && !itineraries ? (
+            <ErrorState
+              error={error}
+              onRetry={() => void refetch()}
+              title="Itineraries didn't load"
+              description="We couldn't reach the list of trip plans. This is usually temporary; try again."
+            />
+          ) : sortedThemes.length === 0 ? (
+            <EmptyState
+              icon={Compass}
+              title="No itineraries published yet"
+              description="The curated trip plans aren't up yet. The trip planner can build one around your dates in the meantime."
+            >
+              <Link
+                to="/trip-planner"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Plan a trip
+              </Link>
+            </EmptyState>
           ) : (
             sortedThemes.map((theme, themeIndex) => {
               const items = groupedByTheme![theme];
