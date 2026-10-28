@@ -843,15 +843,27 @@ export default function EventDetails() {
 
             {/* One hotel section, upcoming events only: linked hotels, else
                 NearbyHotels by distance (WP8 item 9). */}
-            {isUpcoming && (
+            {isUpcoming && !showHotelList && (
               <EventHotelCallout
                 eventId={event.id}
-                latitude={latitude}
-                longitude={longitude}
                 placeName={event.venue || "this event"}
                 nearSlug={venuePage?.slug ?? null}
-                showList={showHotelList}
+                showList={false}
               />
+            )}
+            {/* The list makes two hotel reads; defer them until the reader is
+                near. 280 and mt-8 match the callout's own loading reserve. */}
+            {isUpcoming && showHotelList && (
+              <LazySection minHeight={280} className="mt-8" label="Hotels nearby">
+                <EventHotelCallout
+                  eventId={event.id}
+                  latitude={latitude}
+                  longitude={longitude}
+                  placeName={event.venue || "this event"}
+                  nearSlug={venuePage?.slug ?? null}
+                  showList
+                />
+              </LazySection>
             )}
 
             {/* Same category, upcoming, its own bounded query (WP8 item 7). */}

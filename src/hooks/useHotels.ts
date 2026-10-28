@@ -339,23 +339,36 @@ export function useEventHotels(eventId: string | undefined) {
     staleTime: STALE_TIME.CONTENT_LIST,
     gcTime: GC_TIME,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("event_hotels")
-        .select("*, hotels(*)")
-        .eq("event_id", eventId ?? "")
-        .order("sort_order", { ascending: true });
+      // hotels!inner plus the is_active filter lets PostgREST drop inactive
+      // and dangling links. This used to fetch "*, hotels(*)" (the embed's
+      // search_vector and geom included) and filter here.
+      const buildQuery = (hotelColumns: string) =>
+        supabase
+          .from("event_hotels")
+          .select(`distance_miles, notes, hotels!inner(${hotelColumns})`)
+          .eq("event_id", eventId ?? "")
+          .eq("hotels.is_active", true)
+          .order("sort_order", { ascending: true });
+
+      // Same 42703 fallback as useHotels: the card reads the Places credit,
+      // and a database without 20261020000002 rejects the whole select.
+      let { data, error } = await buildQuery(`${HOTEL_LIST_COLUMNS}, ${HOTEL_PLACES_PHOTO_COLUMNS}`);
+      if (isMissingPlacesPhotoColumn(error)) {
+        ({ data, error } = await buildQuery(HOTEL_LIST_COLUMNS));
+      }
 
       if (error) {
         logger.error('useEventHotels', 'Error fetching event hotels', { error });
         throw error;
       }
 
-      return (data || [])
-        .filter((eh: any) => eh.hotels && eh.hotels.is_active)
-        .map((eh: any) => ({
+      type LinkRow = { distance_miles: number | null; notes: string | null; hotels: Hotel | null };
+      return ((data ?? []) as unknown as LinkRow[])
+        .filter((eh) => eh.hotels)
+        .map((eh) => ({
           ...eh.hotels,
-          distance_miles: eh.distance_miles,
-          notes: eh.notes,
+          distance_miles: eh.distance_miles ?? undefined,
+          notes: eh.notes ?? undefined,
         })) as LinkedHotel[];
     },
   });
