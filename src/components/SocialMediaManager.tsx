@@ -46,6 +46,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('SocialMediaManager');
 
@@ -331,7 +332,8 @@ const SocialMediaManager = () => {
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
                         <div className="flex items-center space-x-4">
                           {post.content_url && (
-                            <a
+                            <SafeExternalLink
+                              fallback={null}
                               href={post.content_url}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -339,7 +341,7 @@ const SocialMediaManager = () => {
                             >
                               <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
                               View Content
-                            </a>
+                            </SafeExternalLink>
                           )}
                           {post.scheduled_for && (
                             <div className="flex items-center">

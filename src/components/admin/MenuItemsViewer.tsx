@@ -33,6 +33,7 @@ import {
   Hash,
 } from "lucide-react";
 import type { MenuVersion, MenuSection, MenuItemRow } from "@/hooks/useRestaurantMenu";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 interface MenuItemsViewerProps {
   restaurantId: string;
@@ -166,7 +167,8 @@ export function MenuItemsViewer({
                 </span>
                 <span>{totalItems} items</span>
                 {menu.source_url && (
-                  <a
+                  <SafeExternalLink
+                    fallback={null}
                     href={menu.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -174,7 +176,7 @@ export function MenuItemsViewer({
                   >
                     <ExternalLink className="h-3 w-3" />
                     Source
-                  </a>
+                  </SafeExternalLink>
                 )}
               </span>
             ) : (

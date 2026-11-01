@@ -66,6 +66,7 @@ import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 type Application = Database["public"]["Tables"]["partnership_applications"]["Row"];
 
@@ -515,7 +516,7 @@ export default function PartnershipsManager() {
                           {app.business_name}
                         </div>
                         {app.website && (
-                          <a
+                          <SafeExternalLink
                             href={app.website}
                             target="_blank"
                             rel="noreferrer"
@@ -524,7 +525,7 @@ export default function PartnershipsManager() {
                           >
                             {app.website}
                             <ExternalLink className="h-3 w-3" />
-                          </a>
+                          </SafeExternalLink>
                         )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm">
@@ -642,14 +643,14 @@ export default function PartnershipsManager() {
                   {detail.website && (
                     <div className="flex items-center gap-2">
                       <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                      <a
+                      <SafeExternalLink
                         href={detail.website}
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary hover:underline truncate"
                       >
                         {detail.website}
-                      </a>
+                      </SafeExternalLink>
                     </div>
                   )}
                 </div>

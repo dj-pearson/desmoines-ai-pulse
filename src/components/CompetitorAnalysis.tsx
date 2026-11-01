@@ -13,6 +13,7 @@ import { useArticles } from '@/hooks/useArticles';
 import GenerateArticleButton from '@/components/GenerateArticleButton';
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('CompetitorAnalysis');
 
@@ -304,7 +305,8 @@ const CompetitorAnalysis = () => {
                 <h3 className="font-semibold">{competitor.name}</h3>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="outline">{competitor.primary_focus}</Badge>
-                  <a 
+                  <SafeExternalLink
+                    fallback={null}
                     href={competitor.website_url} 
                     target="_blank" 
                     rel="noopener noreferrer"
@@ -312,7 +314,7 @@ const CompetitorAnalysis = () => {
                   >
                     <Globe className="h-3 w-3" />
                     Visit Website
-                  </a>
+                  </SafeExternalLink>
                 </div>
               </div>
             </div>
@@ -433,9 +435,9 @@ const CompetitorAnalysis = () => {
                         <div className="flex items-center gap-2">
                           <Badge variant="outline">{content.category || 'General'}</Badge>
                           {content.url && (
-                            <a href={content.url} target="_blank" rel="noopener noreferrer">
+                            <SafeExternalLink fallback={null} href={content.url} target="_blank" rel="noopener noreferrer">
                               <SpriteIcon name="external-link" className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                            </a>
+                            </SafeExternalLink>
                           )}
                         </div>
                       </div>

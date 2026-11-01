@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { createLogger } from "@/lib/logger";
 import { Loader2, ImageIcon, Check } from "lucide-react";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger("ImagePickerDialog");
 
@@ -148,14 +149,14 @@ export default function ImagePickerDialog({
             {record?.sourceUrl ? (
               <>
                 Pulled from{" "}
-                <a
+                <SafeExternalLink
                   href={record.sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline"
                 >
                   source page
-                </a>
+                </SafeExternalLink>
                 {record.venue ? `, venue ${record.venue}` : ""}, and Google Places.
               </>
             ) : (

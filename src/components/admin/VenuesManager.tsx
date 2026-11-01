@@ -51,6 +51,7 @@ import {
   VenueFormData,
 } from "@/hooks/useKnownVenues";
 import { createLogger } from '@/lib/logger';
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('VenuesManager');
 
@@ -1081,13 +1082,14 @@ export default function VenuesManager() {
                               variant="outline"
                               asChild
                             >
-                              <a
+                              <SafeExternalLink
+                                fallback={null}
                                 href={venue.website}
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
                                 <Globe className="h-4 w-4" />
-                              </a>
+                              </SafeExternalLink>
                             </Button>
                           )}
                           <Button

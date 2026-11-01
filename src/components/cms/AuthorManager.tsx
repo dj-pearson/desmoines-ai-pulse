@@ -16,6 +16,7 @@ import { Users, Plus, Edit, Trash2, FileText, Globe, Twitter, Linkedin, Search, 
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('AuthorManager');
 
@@ -410,7 +411,7 @@ export function AuthorManager() {
                       <div className="text-sm">
                         {author.email && <div>{author.email}</div>}
                         {author.website && (
-                          <a
+                          <SafeExternalLink
                             href={author.website}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -418,7 +419,7 @@ export function AuthorManager() {
                           >
                             <Globe className="h-3 w-3" />
                             Website
-                          </a>
+                          </SafeExternalLink>
                         )}
                       </div>
                     </TableCell>
@@ -435,14 +436,15 @@ export function AuthorManager() {
                           </a>
                         )}
                         {author.linkedin_url && (
-                          <a
+                          <SafeExternalLink
+                            fallback={null}
                             href={author.linkedin_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-muted-foreground hover:text-primary"
                           >
                             <Linkedin className="h-4 w-4" />
-                          </a>
+                          </SafeExternalLink>
                         )}
                       </div>
                     </TableCell>
