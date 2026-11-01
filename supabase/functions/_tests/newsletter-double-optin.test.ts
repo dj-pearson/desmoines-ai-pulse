@@ -182,3 +182,25 @@ Deno.test('the weekly digest reads status and refuses anything but active', () =
 Deno.test('a failed subscriber read stops the send rather than assuming consent', () => {
   assert(/newsletter_subscribers read failed/.test(DIGEST));
 });
+
+// --------------------------------------------------------------------------
+// the bypass: a direct REST insert skipped all of the above
+// --------------------------------------------------------------------------
+
+Deno.test('the anon INSERT policy that skipped confirmation is dropped', async () => {
+  // 20251126000000 created this policy WITH CHECK (true) for PUBLIC, and the
+  // status column defaults to 'active', so a POST with the anon key made an
+  // active subscriber for any address without the confirm email.
+  const drop = (await read('supabase/migrations/20261101000001_newsletter_drop_anon_insert.sql'))
+    .replace(/^\s*--.*$/gm, ' ');
+  assert(
+    /DROP POLICY IF EXISTS "Anyone can subscribe to newsletter" ON public\.newsletter_subscribers;/.test(drop),
+  );
+  // Nothing else on the table changes in the same release.
+  assertFalse(/CREATE POLICY/i.test(drop), 'no replacement INSERT policy for anon');
+  assertFalse(/DROP (TABLE|COLUMN|FUNCTION)/i.test(drop));
+
+  // The browser path stays on the edge function, which writes with the
+  // service role; a client-side insert would now be refused by RLS.
+  assertFalse(/\.from\(['"]newsletter_subscribers['"]\)/.test(stripComments(HOOK)));
+});
