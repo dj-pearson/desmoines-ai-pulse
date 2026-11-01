@@ -1,5 +1,5 @@
 import React, { useState, useRef, useId } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2, ImagePlus, X, Loader2 } from "lucide-react";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { useRatings, useUserReputation } from "@/hooks/useRatings";
+import { useRatings, type RatingWithProfile, type ReviewerReputation } from "@/hooks/useRatings";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { PremiumGate } from "@/components/PremiumGate";
+import { ErrorState } from "@/components/ui/error-state";
+import { signInHref } from "@/components/header/navigationConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { resizeImageFile } from "@/lib/imageResize";
 import { Database } from "@/integrations/supabase/types";
@@ -172,11 +174,15 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { pathname, search } = useLocation();
   const {
     ratings,
     userRating,
     aggregate,
+    reputations,
     isLoading,
+    error,
+    refetch,
     submitRating,
     deleteRating,
     voteHelpful,
@@ -268,6 +274,28 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
       <Card className="w-full">
         <CardContent className="flex items-center justify-center py-8">
           <div className="animate-pulse">Loading ratings...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // A failed load is not "No ratings yet": saying so invited the reader to be
+  // the first to rate something that may have dozens of reviews.
+  if (error) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">
+            {compact ? "Rating" : "User Ratings"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ErrorState
+            compact
+            error={error}
+            onRetry={() => void refetch()}
+            title="Ratings didn't load"
+          />
         </CardContent>
       </Card>
     );
@@ -483,7 +511,7 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                 Sign in to rate and review this {contentType}.
               </p>
               <Button asChild size="sm">
-                <Link to="/auth">Sign in to review</Link>
+                <Link to={signInHref(pathname, search)}>Sign in to review</Link>
               </Button>
             </div>
           )}
@@ -504,6 +532,7 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                   <ReviewCard
                     key={rating.id}
                     rating={rating}
+                    reputation={reputations[rating.user_id]}
                     onVoteHelpful={voteHelpful}
                     onReport={reportReview}
                     currentUserId={user?.id}
@@ -518,14 +547,15 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
 };
 
 interface ReviewCardProps {
-  rating: any;
+  rating: RatingWithProfile;
+  /** Batched by useRatings; undefined when the reviewer has no reputation row. */
+  reputation?: ReviewerReputation;
   onVoteHelpful: (ratingId: string, isHelpful: boolean) => Promise<boolean>;
   onReport: (ratingId: string) => Promise<boolean>;
   currentUserId?: string;
 }
 
-const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, onReport, currentUserId }) => {
-  const { reputation } = useUserReputation(rating.user_id);
+const ReviewCard: React.FC<ReviewCardProps> = ({ rating, reputation, onVoteHelpful, onReport, currentUserId }) => {
   const isOwnReview = currentUserId === rating.user_id;
   const [lightbox, setLightbox] = useState<string | null>(null);
   const photos: string[] = Array.isArray(rating.photo_urls) ? rating.photo_urls : [];

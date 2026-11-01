@@ -35,7 +35,7 @@ import {
 } from "@/lib/restaurantMeta";
 import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
 import { Phone, Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
-import { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense, type ReactNode } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import {
@@ -61,7 +61,7 @@ import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { isSponsoredActive } from "@/lib/sponsored";
 import { NearbyContent, TonightNearRestaurant } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
-import { RatingSystem } from "@/components/RatingSystem";
+import { LazySection } from "@/components/LazySection";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -71,6 +71,29 @@ import { isRestaurantPseoSlug } from "@/pseo/restaurantAreaSlugs";
 
 // SEO-065: the pSEO renderer, loaded only for an area slug no restaurant owns.
 const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPseoPage"));
+
+// Ratings sit below the fold and fire their own requests on mount. React.lazy
+// defers the chunk; LazySection defers the mount until the reader scrolls near
+// it. Same pattern as EventDetails.
+const RatingSystem = lazy(() =>
+  import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
+);
+
+interface DeferredWidgetProps {
+  minHeight: number;
+  label: string;
+  children: ReactNode;
+}
+
+/** Fixed-height box until mounted, so the deferred widget adds no layout shift. */
+function DeferredWidget({ minHeight, label, children }: DeferredWidgetProps) {
+  const reserve = <div style={{ minHeight }} aria-hidden="true" />;
+  return (
+    <LazySection minHeight={minHeight} label={label} placeholder={reserve}>
+      <Suspense fallback={reserve}>{children}</Suspense>
+    </LazySection>
+  );
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1096,7 +1119,9 @@ export default function RestaurantDetails() {
 
           {/* Ratings & Reviews (WEB-FEAT-010) */}
           <div id="reviews" className="mb-8 scroll-mt-20">
-            <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+            <DeferredWidget minHeight={240} label="Ratings and reviews">
+              <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+            </DeferredWidget>
           </div>
 
           {/* Restaurant-Specific FAQ. FAQSection draws its own card. */}

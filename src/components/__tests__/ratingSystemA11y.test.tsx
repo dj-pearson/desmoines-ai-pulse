@@ -6,22 +6,28 @@ import { MemoryRouter } from "react-router-dom";
 
 const ratingsState = {
   ratings: [] as Array<Record<string, unknown>>,
+  reputations: {} as Record<string, { level: string; points: number }>,
+  error: null as string | null,
+  refetch: vi.fn(),
 };
+const authState = { user: { id: "u1" } as { id: string } | null };
 
 vi.mock("@/hooks/useRatings", () => ({
   useRatings: () => ({
     ratings: ratingsState.ratings,
     userRating: null,
     aggregate: null,
+    reputations: ratingsState.reputations,
     isLoading: false,
+    error: ratingsState.error,
+    refetch: ratingsState.refetch,
     submitRating: async () => true,
     deleteRating: async () => true,
     voteHelpful: async () => true,
     reportReview: async () => true,
   }),
-  useUserReputation: () => ({ reputation: null }),
 }));
-vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: authState.user }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => {} }) }));
 vi.mock("@/components/PremiumGate", () => ({
   PremiumGate: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -31,9 +37,9 @@ vi.mock("@/lib/capacitorUtils", () => ({ hapticTap: () => {} }));
 
 import { RatingSystem } from "@/components/RatingSystem";
 
-function renderSystem() {
+function renderSystem(path = "/") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <RatingSystem contentType="restaurant" contentId="r1" />
     </MemoryRouter>,
   );
@@ -76,5 +82,41 @@ describe("RatingSystem form accessibility", () => {
     await user.click(screen.getByRole("button", { name: "View review photo" }));
     expect(await screen.findByRole("dialog", { name: "Review photo" })).toBeInTheDocument();
     ratingsState.ratings = [];
+  });
+});
+
+describe("RatingSystem load states", () => {
+  it("shows an error with a retry instead of 'No ratings yet' when the load fails", async () => {
+    const user = userEvent.setup();
+    ratingsState.error = "Failed to fetch";
+    renderSystem();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText("No ratings yet")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /try again|retry/i }));
+    expect(ratingsState.refetch).toHaveBeenCalled();
+    ratingsState.error = null;
+  });
+
+  it("shows each reviewer's badge from the batched reputations", () => {
+    ratingsState.ratings = [
+      { id: "rv1", user_id: "u2", rating: "4", review_text: "Good", photo_urls: [], created_at: "2026-10-01T12:00:00Z", profiles: null },
+      { id: "rv2", user_id: "u3", rating: "5", review_text: "Great", photo_urls: [], created_at: "2026-10-02T12:00:00Z", profiles: null },
+    ];
+    ratingsState.reputations = { u2: { level: "expert", points: 120 } };
+    renderSystem();
+    expect(screen.getByText("EXPERT (120 pts)")).toBeInTheDocument();
+    expect(screen.getAllByText(/pts\)/)).toHaveLength(1);
+    ratingsState.ratings = [];
+    ratingsState.reputations = {};
+  });
+
+  it("sends a guest to sign in with a redirect back to this page", () => {
+    authState.user = null;
+    renderSystem("/restaurants/some-place?tab=menu");
+    expect(screen.getByRole("link", { name: "Sign in to review" })).toHaveAttribute(
+      "href",
+      `/auth?redirect=${encodeURIComponent("/restaurants/some-place?tab=menu")}`,
+    );
+    authState.user = { id: "u1" };
   });
 });
