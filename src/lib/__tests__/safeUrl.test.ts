@@ -11,6 +11,15 @@ describe('safeHttpUrl', () => {
     expect(safeHttpUrl('file:///etc/passwd')).toBeNull();
     expect(safeHttpUrl('mailto:owner@example.com')).toBeNull();
     expect(safeHttpUrl('tel:5155550100')).toBeNull();
+    expect(safeHttpUrl('vbscript:msgbox(1)')).toBeNull();
+    expect(safeHttpUrl('java\tscript:alert(1)')).toBeNull();
+    expect(safeHttpUrl('DATA:image/svg+xml;base64,PHN2Zz4=')).toBeNull();
+  });
+
+  it('refuses protocol-relative URLs, which would inherit our scheme and go anywhere', () => {
+    expect(safeHttpUrl('//evil.example/x')).toBeNull();
+    expect(safeHttpUrl('  //evil.example')).toBeNull();
+    expect(safeHttpUrl('\\\\evil.example')).toBeNull();
   });
 
   it('prefixes https:// on a bare host', () => {
