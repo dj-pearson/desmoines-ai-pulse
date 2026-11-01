@@ -17,6 +17,7 @@ import { adminAlertEmail, sendEmail } from "../_shared/email.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
 import { timingSafeEqual } from "../_shared/callerKind.ts";
+import { chooseDecisionRecipient, type SubmissionOwner } from "./recipient.ts";
 
 const NOTIFICATION_TYPES = [
   "event_submitted",
@@ -205,17 +206,28 @@ serve(async (req) => {
     const eventVenue: string | undefined = submission.venue ?? undefined;
     const eventCategory: string | undefined = submission.category ?? undefined;
 
-    // contact_email is optional on the form, and it is the address printed on
-    // the public listing. When it is empty, status mail goes to the account
-    // that submitted, which is the address EventSubmissionForm says it uses.
-    let submitterAddress: string | null = submission.contact_email?.trim() || null;
-    if (!submitterAddress && submission.user_id) {
+    // The submitting account. Its confirmed address is the only one a decision
+    // is ever mailed to (WEB-SEC-041, see recipient.ts): contact_email is free
+    // text the submitter typed, so mailing it let anyone have the site send
+    // "Update on your event <their title>" to an address of their choosing.
+    let ownerUser: SubmissionOwner | null = null;
+    if (submission.user_id) {
       const { data: owner, error: ownerError } = await supabase.auth.admin.getUserById(submission.user_id);
       if (ownerError) {
         console.error("[notify-event-submission] owner email lookup failed:", ownerError.message);
       }
-      submitterAddress = owner?.user?.email ?? null;
+      ownerUser = owner?.user ?? null;
     }
+    const decisionRecipient = chooseDecisionRecipient({
+      ownerId: submission.user_id,
+      owner: ownerUser,
+      contactEmail: submission.contact_email,
+    });
+
+    // Shown to the admin only (event_submitted), never used as a decision
+    // recipient: the listing's contact address, or the account's when empty.
+    const submitterAddress: string | null =
+      submission.contact_email?.trim() || ownerUser?.email || null;
 
     const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com";
     const adminEmail = adminAlertEmail() || "admin@desmoinesinsider.com";
@@ -244,7 +256,7 @@ serve(async (req) => {
       }
 
       case "event_approved": {
-        recipientEmail = submitterAddress ?? "";
+        recipientEmail = decisionRecipient.to ?? "";
         emailSubject = plainSubject(`Your event "${verifiedTitle}" has been approved`);
 
         // WEB-ADS-008 AC4: the live URL, resolved from the events row
@@ -293,7 +305,7 @@ serve(async (req) => {
       }
 
       case "event_rejected": {
-        recipientEmail = submitterAddress ?? "";
+        recipientEmail = decisionRecipient.to ?? "";
         emailSubject = plainSubject(`Update on your event "${verifiedTitle}"`);
         emailHtml = buildSubmitterEmail({
           eventTitle: verifiedTitle,
@@ -306,7 +318,7 @@ serve(async (req) => {
       }
 
       case "event_needs_revision": {
-        recipientEmail = submitterAddress ?? "";
+        recipientEmail = decisionRecipient.to ?? "";
         emailSubject = plainSubject(`Action needed: your event "${verifiedTitle}" needs changes`);
         emailHtml = buildSubmitterEmail({
           eventTitle: verifiedTitle,
@@ -326,6 +338,12 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
+    }
+
+    if (notificationType !== "event_submitted" && !decisionRecipient.to) {
+      // Not an error: an anonymous or unconfirmed submitter has no address we
+      // can vouch for. The response shape is unchanged; emailSent says false.
+      console.warn(`[notify-event-submission] ${notificationType} not sent: ${decisionRecipient.reason}`);
     }
 
     // Send email
