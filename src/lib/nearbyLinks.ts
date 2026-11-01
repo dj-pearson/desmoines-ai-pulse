@@ -124,3 +124,36 @@ export function selectNearbyEvents<T extends NearbyEventRow>(
     (x) => x.item,
   );
 }
+
+/**
+ * What the nearby scan selects: the columns the selectors above read, and
+ * nothing a card renders (WEB-PERF, loop 9). The scan pulls up to 60 rows in
+ * a bounding box to keep 3 or 4, so it used to carry the full list projection
+ * (description included) for rows nobody saw. useNearbyListings now scans with
+ * these, then fetches the card columns for the survivors only.
+ *
+ * Every name is a column of the table in src/integrations/supabase/types.ts,
+ * and every one was already selected or filtered on by the scan this
+ * replaces, so none of them is new to production. cuisine is here for
+ * `preferCuisine`; the event visibility flags are here because
+ * isLinkableUpcomingEvent re-checks them.
+ */
+export const NEARBY_RESTAURANT_SCAN_COLUMNS =
+  "id, latitude, longitude, status, business_status, is_merged, cuisine";
+export const NEARBY_EVENT_SCAN_COLUMNS = "id, latitude, longitude, date, is_merged, is_hidden, archived_at";
+
+/**
+ * `rows` in the order of `ids`, dropping any id with no row (deleted between
+ * the scan and the card fetch) and any row whose id was not asked for. A
+ * PostgREST `in.(...)` filter returns rows in no particular order, and the
+ * order here is the selector's: nearest first, same cuisine first.
+ */
+export function orderByIds<T extends { id: string }>(rows: readonly T[], ids: readonly string[]): T[] {
+  const byId = new Map(rows.map((r) => [r.id, r] as const));
+  const out: T[] = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (row) out.push(row);
+  }
+  return out;
+}
