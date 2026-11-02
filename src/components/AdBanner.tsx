@@ -2,50 +2,58 @@ import { useActiveAds } from "@/hooks/useActiveAds";
 import { useAdTracking } from "@/hooks/useAdTracking";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAffiliateAd } from "@/hooks/useAffiliateAd";
+import { useAuthFlags } from "@/contexts/AuthContext";
 import { AffiliateAdBanner } from "@/components/AffiliateAdBanner";
 import { HouseAd } from "@/components/HouseAd";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  PLACEMENT_CREATIVE_SIZE,
+  PLACEMENT_LABELS,
+  PLACEMENT_RESERVE_CLASSES,
+  PLACEMENT_SIZE_CLASSES,
+  type AdSlotPlacement,
+} from "@/components/adSlotSizes";
 
-import { openExternalUrl, toSafeExternalUrl } from "@/lib/capacitorUtils";
+import { isCapacitor, openExternalUrl, toSafeExternalUrl } from "@/lib/capacitorUtils";
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AdBannerProps {
-  placement: 'top_banner' | 'featured_spot' | 'below_fold';
+  placement: AdSlotPlacement;
   className?: string;
   /** Optional fallback content when no ads are available */
   fallback?: React.ReactNode;
 }
 
-/**
- * Height each placement reserves. Used both for the rendered ad and for the
- * placeholder shown while the subscription and ad queries resolve, so the slot
- * doesn't grow from 0 to 80-112px under the reader once an ad arrives.
- */
-const PLACEMENT_SIZE_CLASSES: Record<AdBannerProps['placement'], string> = {
-  top_banner: "h-20 md:h-28",
-  featured_spot: "min-h-[220px] md:min-h-[250px]",
-  below_fold: "h-20 md:h-28",
-};
-
-const PLACEMENT_RESERVE_CLASSES: Record<AdBannerProps['placement'], string> = {
-  top_banner: "min-h-20 md:min-h-28",
-  featured_spot: "min-h-[220px] md:min-h-[250px]",
-  below_fold: "min-h-20 md:min-h-28",
-};
-
-/**
- * Builds a CSS `url("...")` value. The advertiser controls `image_url`, and an
- * unquoted `url(${x})` lets a `)` or `;` in it end the value early. Quotes,
- * backslashes and line breaks are escaped so the string stays one token.
- */
-function cssUrl(value: string): string {
-  const escaped = value.replace(/[\\"]/g, "\\$&").replace(/[\n\r\f]/g, "");
-  return `url("${escaped}")`;
+interface AdSlotProps extends AdBannerProps {
+  /** Insider/VIP: no ad and no empty band. */
+  adFree: boolean;
+  /** Whether the visitor's tier is still unknown. */
+  tierLoading: boolean;
 }
 
-export function AdBanner({ placement, className = "", fallback }: AdBannerProps) {
-  const { hasFeature, isLoading: subscriptionLoading } = useSubscription();
+/**
+ * A signed-out visitor is always free tier, so the slot no longer waits on
+ * useSubscription (subscription_plans select("*") plus user_subscriptions)
+ * before it can show the above-the-fold top_banner. Only signed-in visitors pay
+ * for the tier lookup, through MemberAdSlot, the same split as PaidTierCheck in
+ * header/UserMenu.tsx. useSubscription itself is unchanged for other callers.
+ */
+export function AdBanner(props: AdBannerProps) {
+  const { isLoading: authLoading, isAuthenticated } = useAuthFlags();
+  if (isAuthenticated) return <MemberAdSlot {...props} />;
+  return <AdSlot {...props} adFree={false} tierLoading={authLoading} />;
+}
+
+/** Split out so useSubscription only runs for signed-in visitors. */
+function MemberAdSlot(props: AdBannerProps) {
+  const { hasFeature, isLoading } = useSubscription();
+  return <AdSlot {...props} adFree={hasFeature('ad_free')} tierLoading={isLoading} />;
+}
+
+function AdSlot({ placement, className = "", fallback, adFree, tierLoading }: AdSlotProps) {
+  // The ad queries run alongside the tier lookup, not after it.
   const { ad, isLoading: adLoading } = useActiveAds(placement);
   // Affiliate availability for the fill chain (campaign -> affiliate -> house).
   const { partner, imageUrl, affiliateUrl } = useAffiliateAd(placement);
@@ -61,11 +69,11 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
   });
 
   // Insider and VIP members get an ad-free experience: no ad and no empty band.
-  if (hasFeature('ad_free')) {
+  if (adFree) {
     return fallback ? <>{fallback}</> : null;
   }
 
-  if (subscriptionLoading || adLoading) {
+  if (tierLoading || adLoading) {
     // Hold the slot's height while we find out what fills it.
     return (
       <div
@@ -89,20 +97,50 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
   // An advertiser link that isn't http(s) renders as a plain, non-clickable
   // ad rather than a javascript:/data: link in our origin.
   const safeLinkUrl = toSafeExternalUrl(ad.link_url);
+  const hasImage = !!ad.image_url;
+  const isAboveFold = placement === 'top_banner';
+  const { width, height } = PLACEMENT_CREATIVE_SIZE[placement];
 
-  const handleAdClick = async () => {
-    if (!safeLinkUrl) return;
-    await trackClick();
-    await openExternalUrl(safeLinkUrl);
+  // WEB-UX-046: the click lives on a real link, so it is focusable, announces
+  // as a link, and middle-click/open-in-new-tab work. On the web the browser
+  // follows the href and the click is logged alongside; inside the native app
+  // the in-app browser opens it instead.
+  const handleAdClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isCapacitor()) {
+      e.preventDefault();
+      void trackClick().then(() => (safeLinkUrl ? openExternalUrl(safeLinkUrl) : false));
+      return;
+    }
+    void trackClick();
   };
 
   return (
     <Card
       ref={adRef}
-      className={`${PLACEMENT_SIZE_CLASSES[placement]} overflow-hidden relative group ${safeLinkUrl ? "cursor-pointer hover:shadow-lg transition-shadow" : ""} ${className}`}
+      className={`${PLACEMENT_SIZE_CLASSES[placement]} overflow-hidden relative group ${safeLinkUrl ? "hover:shadow-lg transition-shadow" : ""} ${className}`}
       role="complementary"
-      aria-label="Sponsored advertisement"
+      aria-label={`Advertisement, ${PLACEMENT_LABELS[placement]}`}
     >
+      {/* The creative is an <img> rather than a CSS background, so it has
+          alternative text, an intrinsic size and a loading priority. */}
+      {hasImage && (
+        <img
+          src={ad.image_url}
+          alt={ad.title || ad.description || "Advertisement"}
+          width={width}
+          height={height}
+          className="absolute inset-0 w-full h-full object-cover"
+          loading={isAboveFold ? 'eager' : 'lazy'}
+          decoding="async"
+          {...fetchPriorityAttr(isAboveFold ? 'high' : undefined)}
+        />
+      )}
+
+      {/* Gradient overlay for text readability */}
+      {hasImage && (
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/30 to-transparent" />
+      )}
+
       {/* FTC-compliant Sponsored label */}
       <div className="absolute top-1.5 left-1.5 z-20">
         <span className="text-[10px] font-medium bg-black/60 text-white/90 px-1.5 py-0.5 rounded tracking-wide uppercase">
@@ -110,51 +148,47 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
         </span>
       </div>
 
-      <div
-        onClick={safeLinkUrl ? handleAdClick : undefined}
-        className="w-full h-full relative flex items-center"
-        style={{
-          backgroundImage: ad.image_url ? cssUrl(ad.image_url) : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        {/* Gradient overlay for text readability */}
-        {ad.image_url && (
-          <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/30 to-transparent" />
-        )}
+      {/* Content wrapper.
+          Left padding clears the absolutely-positioned "Ad" badge above
+          (WEB-QA-006). With a uniform p-3 the headline started at 12px while
+          the badge occupies roughly 6-38px, so on short banner units the badge
+          sat on top of the first characters of the title. The badge is FTC
+          disclosure and must stay legible, so the text yields to it. */}
+      <div className="absolute inset-0 z-10 flex items-center justify-between py-3 pr-3 pl-12 md:py-4 md:pr-4 md:pl-14">
+        <div className="flex-1 min-w-0 mr-3 md:mr-4">
+          {ad.title && (
+            <h3 className={`font-semibold mb-0.5 line-clamp-1 ${hasImage ? 'text-white drop-shadow-lg' : 'text-foreground'} ${placement === 'featured_spot' ? 'text-base md:text-lg' : 'text-sm md:text-base'}`}>
+              {ad.title}
+            </h3>
+          )}
+          {ad.description && (
+            <p className={`text-xs md:text-sm line-clamp-2 ${hasImage ? 'text-white/90 drop-shadow-md' : 'text-muted-foreground'}`}>
+              {ad.description}
+            </p>
+          )}
+        </div>
 
-        {/* Content wrapper.
-            Left padding clears the absolutely-positioned "Ad" badge above
-            (WEB-QA-006). With a uniform p-3 the headline started at 12px while
-            the badge occupies roughly 6-38px, so on short banner units the badge
-            sat on top of the first characters of the title. The badge is FTC
-            disclosure and must stay legible, so the text yields to it. */}
-        <div className="relative z-10 flex items-center justify-between w-full py-3 pr-3 pl-12 md:py-4 md:pr-4 md:pl-14">
-          <div className="flex-1 min-w-0 mr-3 md:mr-4">
-            {ad.title && (
-              <h3 className={`font-semibold mb-0.5 line-clamp-1 ${ad.image_url ? 'text-white drop-shadow-lg' : 'text-foreground'} ${placement === 'featured_spot' ? 'text-base md:text-lg' : 'text-sm md:text-base'}`}>
-                {ad.title}
-              </h3>
-            )}
-            {ad.description && (
-              <p className={`text-xs md:text-sm line-clamp-2 ${ad.image_url ? 'text-white/90 drop-shadow-md' : 'text-muted-foreground'}`}>
-                {ad.description}
-              </p>
-            )}
-          </div>
-
-          {safeLinkUrl && (
-            <Button
-              size="sm"
-              className="flex-shrink-0 bg-white/90 text-primary hover:bg-white shadow-md group-hover:shadow-lg transition-shadow text-xs md:text-sm h-8 md:h-9 px-2.5 md:px-3"
+        {safeLinkUrl && (
+          <Button
+            asChild
+            size="sm"
+            // The after: layer stretches this one link over the whole card, so
+            // a mouse click anywhere on the ad still lands, without a second
+            // click target or a clickable div.
+            className="flex-shrink-0 bg-white/90 text-primary hover:bg-white shadow-md group-hover:shadow-lg transition-shadow text-xs md:text-sm h-8 md:h-9 px-2.5 md:px-3 after:absolute after:inset-0 after:content-['']"
+          >
+            <a
+              href={safeLinkUrl}
+              target="_blank"
+              rel="noopener sponsored"
+              onClick={handleAdClick}
               aria-label={ad.title ? `${ad.cta_text || 'Learn more'} - ${ad.title}` : "Learn more about this advertisement"}
             >
               {ad.cta_text || "Learn More"}
               <SpriteIcon name="external-link" className="ml-1 md:ml-1.5 h-3 w-3" />
-            </Button>
-          )}
-        </div>
+            </a>
+          </Button>
+        )}
       </div>
     </Card>
   );

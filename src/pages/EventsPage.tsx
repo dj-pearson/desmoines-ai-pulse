@@ -9,7 +9,7 @@ import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { HubArticles } from "@/components/seo/HubArticles";
 import { EventsHubDirectory } from "@/components/seo/EventsHubDirectory";
-import { AdBanner } from "@/components/AdBanner";
+import { AdBanner } from "@/components/LazyAdBanner";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { ListFreshness } from "@/components/ListFreshness";

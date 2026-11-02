@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { UpgradeModal } from "@/components/UpgradeModal";
 import { createViewabilityObserver } from "@/lib/tracking";
 import { logAdImpression, logAdClick } from "@/lib/adAnalytics";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PLACEMENT_LABELS } from "@/components/adSlotSizes";
+
+// Loaded on first click. Mounted up front, UpgradeModal shipped its 484 lines
+// with every ad slot and ran useSubscription (a subscription_plans read) for
+// a dialog most visitors never open.
+const UpgradeModal = lazy(() =>
+  import("@/components/UpgradeModal").then((m) => ({ default: m.UpgradeModal }))
+);
 
 /**
  * House ad - fills an ad slot when no paid campaign or affiliate creative is
@@ -40,6 +47,8 @@ interface HouseAdProps {
 
 export function HouseAd({ placement, className = "" }: HouseAdProps) {
   const [showUpgrade, setShowUpgrade] = useState(false);
+  // Stays true after the first open so the dialog keeps its close animation.
+  const [upgradeMounted, setUpgradeMounted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   // Rotate per mount so repeated views cycle messaging.
   const message = useMemo(
@@ -65,7 +74,9 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
       <Card
         ref={ref}
         role="complementary"
-        aria-label="Des Moines Insider promotion"
+        // Named per placement: a page with two house-filled slots had two
+        // landmarks called "Des Moines Insider promotion" (WEB-UX-046).
+        aria-label={`Des Moines Insider promotion, ${PLACEMENT_LABELS[placement]}`}
         className={`${sizeClasses} overflow-hidden relative bg-muted/60 ${className}`}
       >
         <div className="absolute top-1.5 left-1.5 z-20">
@@ -91,6 +102,7 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
             aria-label={`${message.cta} - ${message.title}`}
             onClick={() => {
               logAdClick("house", placement);
+              setUpgradeMounted(true);
               setShowUpgrade(true);
             }}
           >
@@ -98,11 +110,15 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
           </Button>
         </div>
       </Card>
-      <UpgradeModal
-        open={showUpgrade}
-        onOpenChange={setShowUpgrade}
-        feature="ad_free"
-      />
+      {upgradeMounted && (
+        <Suspense fallback={null}>
+          <UpgradeModal
+            open={showUpgrade}
+            onOpenChange={setShowUpgrade}
+            feature="ad_free"
+          />
+        </Suspense>
+      )}
     </>
   );
 }
