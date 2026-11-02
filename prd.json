@@ -9917,8 +9917,8 @@
         "Add exponential backoff or give up after N failures"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+      "passes": true,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d). Fixed 2026-11-02 on claude/15-loop-site-improvements-nambs4: backoff 10s doubling to 5 min, batch dropped after 3 non-network refusals. check-schema:probe not run (no credentials)."
     },
     {
       "id": "WEB-SEC-041",
@@ -10162,8 +10162,8 @@
         "RPC returns sponsored flags"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found in the 2026-10-28 audit, not done in that pass."
+      "passes": true,
+      "notes": "Found in the 2026-10-28 audit, not done in that pass. Fixed 2026-11-02 on claude/15-loop-site-improvements-nambs4 via get_personalized_recommendations_v2 (20261102000002); v1 kept for the apps. Web falls back to v1 until the migration is applied."
     },
     {
       "id": "WEB-SEC-047",
@@ -10321,8 +10321,8 @@
         "409 once the log is quiet"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
+      "passes": true,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done. Fixed 2026-11-02 on claude/15-loop-site-improvements-nambs4, log-only. Enforce with secret ANDROID_OWNERSHIP_ENFORCE=true on validate-android-receipt after reading android_ownership_conflict logs and checking the app's 409 handling."
     },
     {
       "id": "WEB-SEC-051",
@@ -10332,8 +10332,8 @@
         "Sandbox writes only for an allowlist, or cap current_period_end"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
+      "passes": true,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done. Fixed 2026-11-02 on claude/15-loop-site-improvements-nambs4, log-only. Apply 20261102000001, set IOS_SANDBOX_ALLOWED_EMAILS (include the App Review demo account), then IOS_SANDBOX_ENFORCE=true."
     },
     {
       "id": "WEB-QA-040",
@@ -10343,8 +10343,8 @@
         "Triage each against CI; fix or re-date fixtures"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
+      "passes": true,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done. Fixed 2026-11-02 on claude/15-loop-site-improvements-nambs4. One app bug (PreferredSourceButton 42px at 375px); the rest were stale tests: SEO-045 pin and URL, SEO-054 hours_json, SEO-036 time_tbd and Top picks list, a fixed CDT offset after DST ended, and fixture events dated 2026-10-01."
     },
     {
       "id": "WEB-PERF-057",
@@ -10356,8 +10356,30 @@
         "Placement label"
       ],
       "priority": 3,
+      "passes": true,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done. Fixed 2026-11-02 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-QA-041",
+      "title": "Shared fixture events are dated 2026-10-01, so specs that expect upcoming events break as the date passes",
+      "description": "tests/support/fixtureBackend.ts hardcodes date and event_start_utc. restaurant-detail.spec now pins the clock; other specs will hit the same thing.",
+      "acceptanceCriteria": [
+        "Fixture dates computed relative to a pinned clock, or every consuming spec pins the clock"
+      ],
+      "priority": 3,
       "passes": false,
-      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
+      "notes": "Found 2026-11-02 on claude/15-loop-site-improvements-nambs4, not done."
+    },
+    {
+      "id": "WEB-FEAT-034",
+      "title": "Move the iOS and Android For You calls to get_personalized_recommendations_v2",
+      "description": "v2 adds is_sponsored and sponsored_until; v1 stays until MIN_SUPPORTED_APP_VERSION passes the binaries that call it.",
+      "acceptanceCriteria": [
+        "ForYouService.swift and ForYouRemoteDataSource.kt call v2 with v1 fallback"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Found 2026-11-02 on claude/15-loop-site-improvements-nambs4, not done."
     }
   ]
 }
