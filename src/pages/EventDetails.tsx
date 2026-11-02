@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate, Navigate } from "react-router-dom";
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, useEffect, useMemo, useState, type ReactNode } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useEventBySlug } from "@/hooks/useEventBySlug";
@@ -14,6 +14,7 @@ import AIWriteup from "@/components/AIWriteup";
 import EventCard from "@/components/EventCard";
 import EventHotelCallout from "@/components/EventHotelCallout";
 import { LazySection } from "@/components/LazySection";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import {
   centralDateOf,
   centralHour,
@@ -112,22 +113,6 @@ function isCityOnly(location: string | null | undefined, city: string | null | u
 function withArticle(category: string | null): string {
   if (!category) return "an event";
   return `${/^[aeiou]/i.test(category) ? "an" : "a"} ${category} event`;
-}
-
-interface DeferredWidgetProps {
-  minHeight: number;
-  label: string;
-  children: ReactNode;
-}
-
-/** Fixed-height box until mounted, so the deferred widgets add no layout shift. */
-function DeferredWidget({ minHeight, label, children }: DeferredWidgetProps) {
-  const reserve = <div style={{ minHeight }} aria-hidden="true" />;
-  return (
-    <LazySection minHeight={minHeight} label={label} placeholder={reserve}>
-      <Suspense fallback={reserve}>{children}</Suspense>
-    </LazySection>
-  );
 }
 
 interface FactRowProps {

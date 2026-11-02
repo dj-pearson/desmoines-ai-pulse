@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { AdBanner } from "@/components/LazyAdBanner";
 import { BackToTop } from "@/components/BackToTop";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { FAQSection } from "@/components/FAQSection";
@@ -37,10 +38,6 @@ import {
 // Lazy chunks for everything below the rails. React.lazy defers the download
 // only; LazySection (below) is what defers the MOUNT, and with it each
 // section's queries, until the visitor is within 400px of it.
-//
-// AdBanner is lazy too (home-pass2 WP1 item 10): as a static import it pulled
-// HouseAd and UpgradeModal into the first view for a slot below the rails.
-const AdBanner = lazy(() => import("@/components/AdBanner").then(m => ({ default: m.AdBanner })));
 const AllInclusiveDashboard = lazy(() => import("@/components/AllInclusiveDashboard"));
 const MostSearched = lazy(() => import("@/components/MostSearched"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
@@ -260,11 +257,11 @@ export default function Index() {
 
         {/* AdBanner renders its own sized wrapper (WP4); no py band here. The
             below-the-fold slot is gone: on a day with no paid ad it showed a
-            second trip-planner upsell. */}
+            second trip-planner upsell. LazyAdBanner keeps it out of the first
+            view's chunk (home-pass2 WP1 item 10), and its fallback is the same
+            reserve AdBanner holds while loading, so nothing jumps between. */}
         <LazySection minHeight={80} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Suspense fallback={<SectionPlaceholder height={80} />}>
-            <AdBanner placement="top_banner" />
-          </Suspense>
+          <AdBanner placement="top_banner" />
         </LazySection>
 
         {/* Neighbourhood strip. Static and outside LazySection: it renders

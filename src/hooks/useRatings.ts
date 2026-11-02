@@ -46,6 +46,16 @@ export type RatingWithProfile = Rating & { profiles: RaterProfile | null };
 /** The two reputation fields a review card shows. */
 export type ReviewerReputation = Pick<UserReputation, "level" | "points">;
 
+/**
+ * The columns UserReputationDisplay reads (user_reputation in types.ts,
+ * 2026-11-02). The row has twelve more; select("*") pulled them all.
+ */
+const REPUTATION_SUMMARY_COLUMNS = "user_id, level, points, total_ratings, helpful_votes";
+export type ReputationSummary = Pick<
+  UserReputation,
+  "user_id" | "level" | "points" | "total_ratings" | "helpful_votes"
+>;
+
 interface RatingsData {
   ratings: RatingWithProfile[];
   aggregate: RatingAggregate | null;
@@ -400,7 +410,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
  * Review lists get reputations batched from useRatings instead.
  */
 export function useUserReputation(userId?: string) {
-  const [reputation, setReputation] = useState<UserReputation | null>(null);
+  const [reputation, setReputation] = useState<ReputationSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -416,7 +426,7 @@ export function useUserReputation(userId?: string) {
         setIsLoading(true);
         const { data, error } = await supabase
           .from("user_reputation")
-          .select("*")
+          .select(REPUTATION_SUMMARY_COLUMNS)
           .eq("user_id", userId)
           .single();
 

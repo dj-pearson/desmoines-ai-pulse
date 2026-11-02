@@ -15,7 +15,7 @@ import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
-import { RatingSystem } from "@/components/RatingSystem";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
@@ -25,7 +25,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
 import { BRAND } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Landmark } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { lazy, useState, type ReactNode } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
@@ -51,6 +51,13 @@ import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { safeWebUrl } from "@/lib/reservations";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+
+// Ratings sit below the fold and fire their own requests on mount. React.lazy
+// defers the chunk; DeferredWidget defers the mount until the reader scrolls
+// near it. Same pattern as EventDetails and RestaurantDetails.
+const RatingSystem = lazy(() =>
+  import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
+);
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 
@@ -755,8 +762,10 @@ export default function AttractionDetails() {
           />
 
           {/* Ratings & Reviews (WEB-FEAT-010) */}
-          <div id="reviews" className="mb-8">
-            <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
+          <div id="reviews" className="mb-8 scroll-mt-20">
+            <DeferredWidget minHeight={240} label="Ratings and reviews">
+              <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
+            </DeferredWidget>
           </div>
 
           {/* Attraction-Specific FAQ */}
