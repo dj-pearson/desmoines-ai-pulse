@@ -88,9 +88,11 @@ test('links on to hotels, venues, tonight\'s events and the planner', async ({ p
   await page.goto('/getting-around');
   await expect(page.getByRole('link', { name: /Parking for tonight's events/ })).toHaveAttribute('href', '/events/today');
   // Current name on the link, old slug in the URL (plan-stay-pass2 WP3 item 5).
+  // SEO-045 (cae4777) moved the link to the indexable /stay/near/:slug page;
+  // /stay?near= still works for shared links but is no longer what we link.
   await expect(page.getByRole('link', { name: /Hotels near Casey's Center/ })).toHaveAttribute(
     'href',
-    '/stay?near=wells-fargo-arena',
+    '/stay/near/wells-fargo-arena',
   );
   await expect(page.getByRole('link', { name: /Events at Casey's Center/ })).toHaveAttribute(
     'href',
