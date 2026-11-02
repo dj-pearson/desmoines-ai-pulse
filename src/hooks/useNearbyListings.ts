@@ -6,7 +6,6 @@ import {
   isLocated,
   NEARBY_EVENT_SCAN_COLUMNS,
   NEARBY_RESTAURANT_SCAN_COLUMNS,
-  orderByIds,
   selectNearbyEvents,
   selectNearbyRestaurants,
   type NearbyEventRow,
@@ -39,12 +38,14 @@ import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantHours";
  * `preferCuisine` moves same-cuisine rows ahead of the rest, each group
  * still nearest first, for the "Also within 2 miles" rail on a restaurant page.
  *
- * TWO REQUESTS, NOT ONE. The scan reads up to 60 rows to keep 3 or 4, so it
- * selects only what the selectors read (NEARBY_*_SCAN_COLUMNS in
- * src/lib/nearbyLinks.ts). The survivors' card columns come from a second
- * query by id, put back in the selector's order. Both are cached: the scan by
- * kind and rounded point (no limit in the key, so NearbyContent and
- * useDinnerBeforeShow share one scan), the cards by kind and id list.
+ * ONE REQUEST, NO DESCRIPTIONS. The scan reads up to 60 rows to keep 3 or 4.
+ * It selects the list card columns minus the description fields, which are
+ * most of each row's weight and which no nearby card renders. An earlier
+ * version scanned ids only and fetched the survivors' cards by id, which cut
+ * the bytes the same way but added a request per rail: two rails on an event
+ * page took its first view from 7 requests to 9 (events-request-budget).
+ * Cached by kind and rounded point (no limit in the key, so NearbyContent and
+ * useDinnerBeforeShow share one scan).
  */
 const LAT_PAD = 0.03;
 const LNG_PAD = 0.04;
@@ -52,15 +53,28 @@ const LNG_PAD = 0.04;
 type Kind = "restaurants" | "events";
 type NearbyRow = NearbyRestaurantRow & NearbyEventRow;
 
-const NO_ROWS: NearbyRow[] = [];
-const NO_ROWS_IDS: string[] = [];
+
+const DESCRIPTION_COLUMNS = new Set(["description", "enhanced_description", "original_description"]);
+
+/** Card columns without descriptions, plus whatever the selectors read. */
+function nearbyColumns(listColumns: string, scanColumns: string): string {
+  const cols = new Set<string>();
+  for (const c of `${listColumns}, ${scanColumns}`.split(",")) {
+    const name = c.trim();
+    if (name && !DESCRIPTION_COLUMNS.has(name)) cols.add(name);
+  }
+  return [...cols].join(", ");
+}
+
+export const NEARBY_RESTAURANT_COLUMNS = nearbyColumns(RESTAURANT_LIST_COLUMNS, NEARBY_RESTAURANT_SCAN_COLUMNS);
+export const NEARBY_EVENT_COLUMNS = nearbyColumns(EVENT_LIST_COLUMNS, NEARBY_EVENT_SCAN_COLUMNS);
 
 async function scanNearby(kind: Kind, lat: number, lng: number): Promise<NearbyRow[]> {
   const { data, error } =
     kind === "restaurants"
       ? await supabase
           .from("restaurants")
-          .select(NEARBY_RESTAURANT_SCAN_COLUMNS)
+          .select(NEARBY_RESTAURANT_COLUMNS)
           .neq("is_merged", true)
           .or(NOT_CLOSED_RESTAURANT_FILTER)
           .gte("latitude", lat - LAT_PAD)
@@ -71,7 +85,7 @@ async function scanNearby(kind: Kind, lat: number, lng: number): Promise<NearbyR
       : await applyEventVisibility(
           supabase
             .from("events")
-            .select(NEARBY_EVENT_SCAN_COLUMNS)
+            .select(NEARBY_EVENT_COLUMNS)
             .gte("date", new Date().toISOString()),
         )
           .gte("latitude", lat - LAT_PAD)
@@ -83,18 +97,6 @@ async function scanNearby(kind: Kind, lat: number, lng: number): Promise<NearbyR
           .limit(60);
   if (error) throw error;
   return (data ?? []) as unknown as NearbyRow[];
-}
-
-async function fetchCards(kind: Kind, ids: readonly string[]): Promise<NearbyRow[]> {
-  const { data, error } =
-    kind === "restaurants"
-      ? await supabase
-          .from("restaurants")
-          .select(`${RESTAURANT_LIST_COLUMNS}, business_status`)
-          .in("id", [...ids])
-      : await applyEventVisibility(supabase.from("events").select(EVENT_LIST_COLUMNS)).in("id", [...ids]);
-  if (error) throw error;
-  return orderByIds((data ?? []) as unknown as NearbyRow[], ids);
 }
 
 export function useNearbyListings(
@@ -113,43 +115,25 @@ export function useNearbyListings(
     enabled: located,
     staleTime: STALE_TIME.CONTENT_LIST,
     queryFn: () => scanNearby(kind, lat, lng),
-    select: (rows): string[] => {
+    select: (rows): NearbyRow[] => {
       const limit = opts.limit ?? 3;
       if (kind === "restaurants") {
         return selectNearbyRestaurants(origin, rows, {
           excludeId: opts.excludeId,
           limit,
           preferCuisine: opts.preferCuisine,
-        }).map((r) => r.id);
+        }) as NearbyRow[];
       }
       const excludeIds = [...(opts.excludeIds ?? []), ...(opts.excludeId ? [opts.excludeId] : [])];
-      return selectNearbyEvents(origin, rows, { excludeIds, limit }).map((r) => r.id);
+      return selectNearbyEvents(origin, rows, { excludeIds, limit }) as NearbyRow[];
     },
   });
 
-  const ids = scan.data ?? NO_ROWS_IDS;
-  const cards = useQuery({
-    queryKey: ["nearby-cards", kind, ids],
-    enabled: located && ids.length > 0,
-    staleTime: STALE_TIME.CONTENT_LIST,
-    queryFn: () => fetchCards(kind, ids),
-  });
-
-  // A disabled scan (no coordinates) is idle, not loading. A scan that kept
-  // nothing is done: an empty list, with no second request.
-  const isLoading = scan.isLoading || (ids.length > 0 && cards.isPending);
-  const data: NearbyRow[] | undefined = !located || scan.data === undefined
-    ? undefined
-    : ids.length === 0
-      ? NO_ROWS
-      : cards.data;
-  const fetchStatus = scan.fetchStatus !== "idle" ? scan.fetchStatus : ids.length > 0 ? cards.fetchStatus : "idle";
-
   return {
-    data,
-    isLoading,
-    fetchStatus,
-    error: scan.error ?? cards.error,
-    isError: scan.isError || cards.isError,
+    data: located ? scan.data : undefined,
+    isLoading: scan.isLoading,
+    fetchStatus: scan.fetchStatus,
+    error: scan.error,
+    isError: scan.isError,
   };
 }

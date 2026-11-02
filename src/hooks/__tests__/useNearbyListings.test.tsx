@@ -4,7 +4,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /**
- * The nearby rail scans narrow and fetches cards for the survivors only.
+ * The nearby rail is one request per rail, without description columns
+ * (a second by-id request pushed event detail past its request budget).
  * Every request is recorded: table, select string, and any in.(id) list.
  */
 interface Call {
@@ -14,7 +15,6 @@ interface Call {
 }
 const calls: Call[] = [];
 let scanRows: Record<string, unknown>[] = [];
-let cardRows: Record<string, unknown>[] = [];
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -32,7 +32,7 @@ vi.mock("@/integrations/supabase/client", () => ({
         return c;
       };
       c.then = (resolve: (v: unknown) => unknown) =>
-        resolve({ data: call.inIds ? cardRows : scanRows, error: null });
+        resolve({ data: scanRows, error: null });
       return c;
     },
   },
@@ -56,18 +56,13 @@ beforeEach(() => {
 });
 
 describe("useNearbyListings", () => {
-  it("scans narrow, then fetches card columns for the nearest survivors in order", async () => {
+  it("one request without descriptions, nearest survivors in order", async () => {
     scanRows = [
-      { id: "far", latitude: LAT + 0.02, longitude: LNG, status: "open" },
-      { id: "near", latitude: LAT + 0.001, longitude: LNG, status: "open" },
-      { id: "mid", latitude: LAT + 0.01, longitude: LNG, status: "open" },
-      { id: "closed", latitude: LAT, longitude: LNG, status: "closed" },
-      { id: "self", latitude: LAT, longitude: LNG, status: "open" },
-    ];
-    // The in.() response comes back in another order, with full card fields.
-    cardRows = [
-      { id: "mid", name: "Mid", description: "d", latitude: LAT + 0.01, longitude: LNG },
-      { id: "near", name: "Near", description: "d", latitude: LAT + 0.001, longitude: LNG },
+      { id: "far", name: "Far", latitude: LAT + 0.02, longitude: LNG, status: "open" },
+      { id: "near", name: "Near", latitude: LAT + 0.001, longitude: LNG, status: "open" },
+      { id: "mid", name: "Mid", latitude: LAT + 0.01, longitude: LNG, status: "open" },
+      { id: "closed", name: "Closed", latitude: LAT, longitude: LNG, status: "closed" },
+      { id: "self", name: "Self", latitude: LAT, longitude: LNG, status: "open" },
     ];
 
     const { result } = renderHook(
@@ -77,23 +72,24 @@ describe("useNearbyListings", () => {
 
     await waitFor(() => expect(result.current.data?.length).toBe(2));
     expect(result.current.data?.map((r) => r.id)).toEqual(["near", "mid"]);
+    expect((result.current.data?.[0] as { name?: string } | undefined)?.name).toBe("Near");
     expect(result.current.isLoading).toBe(false);
 
-    expect(calls).toHaveLength(2);
-    const [scan, cards] = calls;
-    expect(scan.select).not.toMatch(/description|name/);
-    expect(scan.inIds).toBeUndefined();
-    expect(cards.select).toMatch(/description/);
-    expect(cards.inIds).toEqual(["near", "mid"]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].select).not.toMatch(/description/);
+    expect(calls[0].select).toMatch(/\bname\b/);
+    expect(calls[0].select).toMatch(/business_status/);
+    expect(calls[0].inIds).toBeUndefined();
   });
 
-  it("an empty scan is an empty list with no card request", async () => {
+  it("an empty scan is an empty list from one request", async () => {
     scanRows = [];
     const { result } = renderHook(() => useNearbyListings("events", LAT, LNG), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.data).toEqual([]));
     expect(result.current.isLoading).toBe(false);
     expect(calls).toHaveLength(1);
-    expect(calls[0].select).not.toMatch(/description|title/);
+    expect(calls[0].select).not.toMatch(/description/);
+    expect(calls[0].select).toMatch(/\btitle\b/);
   });
 
   it("no coordinates, no request and not loading", () => {

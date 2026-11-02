@@ -317,6 +317,9 @@ test.describe('Paywall (pricing plan WP4)', () => {
     await page.goto(`/restaurants/${restaurant.slug}`);
     await expect(page.getByRole('heading', { level: 1, name: restaurant.name })).toBeVisible({ timeout: 30_000 });
 
+    // Ratings mount when scrolled near (LazySection), so bring them in first.
+    await page.locator('#reviews').scrollIntoViewIfNeeded();
+
     const retry = page.getByRole('button', { name: 'Retry' });
     await expect(retry).toBeVisible({ timeout: 45_000 });
     await expect(page.getByText("Couldn't check your plan.")).toBeVisible();
