@@ -3,7 +3,7 @@ import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { useState, useMemo, useEffect, lazy, Suspense, useRef, startTransition } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { AdBanner } from "@/components/AdBanner";
+import { AdBanner } from "@/components/LazyAdBanner";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
