@@ -622,6 +622,7 @@ export default function RestaurantDetails() {
             <div className="flex gap-2">
               <ShareDialog
                 title={restaurant.name}
+                itemName={restaurant.name}
                 description={
                   aboutText ||
                   `${restaurant.name}${restaurant.cuisine ? `, ${restaurant.cuisine}` : ""} in ${cityName}`

@@ -230,6 +230,7 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
 
             <ShareDialog
               title={event.title}
+              itemName={event.title}
               description={markdownToPlainText(event.enhanced_description || event.original_description) || `Join us for ${event.title}`}
               url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`}
             />

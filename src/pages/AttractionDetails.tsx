@@ -515,6 +515,7 @@ export default function AttractionDetails() {
             <div className="flex gap-2">
               <ShareDialog
                 title={attraction.name}
+                itemName={attraction.name}
                 description={attraction.description || `${attraction.name}, a ${typeLabel} in the ${BRAND.city} area`}
                 url={typeof window !== "undefined" ? window.location.href : ""}
                 onShare={trackShare}

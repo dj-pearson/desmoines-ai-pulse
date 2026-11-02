@@ -601,6 +601,7 @@ export default function EventDetails() {
                       <FavoriteButton eventId={event.id} size="sm" variant="outline" />
                       <ShareDialog
                         title={event.title}
+                        itemName={event.title}
                         description={
                           markdownToPlainText(event.enhanced_description || event.original_description) ||
                           `Check out ${event.title} in Des Moines`
