@@ -196,6 +196,10 @@ const PENDING_MIGRATIONS = [
   // until the same migration has created trip_plans, so the pending window is
   // the one where the endpoint already refuses with trip_storage_unavailable.
   { table: 'trip_plan_generations', migration: '20261014000001' },
+  // Which Apple environment an iOS row came from (WEB-SEC-051).
+  // validate-ios-receipt writes it in its own best-effort UPDATE that logs
+  // PGRST204 until applied, so the entitlement write never depends on it.
+  { table: 'user_subscriptions', column: 'apple_environment', migration: '20261102000001' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

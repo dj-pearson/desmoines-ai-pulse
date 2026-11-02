@@ -474,6 +474,9 @@ jobs:
       # WEB-SEC-050. One Google Play purchase token unlocked every account
       # that sent it. Pins the obfuscatedExternalAccountId / first-holder rules.
       - run: deno test supabase/functions/_shared/googleOwnership.test.ts
+      # WEB-SEC-051. Sandbox (TestFlight) purchases wrote the same premium row
+      # as paid ones. Pins the allowlist + IOS_SANDBOX_ENFORCE rules.
+      - run: deno test supabase/functions/_shared/appleSandboxPolicy.test.ts
       # The App Store notifications webhook checked only that the LAST x5c
       # cert was Apple's root and verified the JWS with the FIRST, so a
       # self-made leaf with Apple's public root appended passed and could
