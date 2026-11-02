@@ -1,3 +1,4 @@
+import { forwardRef, useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type ElementRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,6 +12,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  useFormField,
 } from "@/components/ui/form";
 import { SecurityUtils } from "@/lib/securityUtils";
 
@@ -35,9 +37,23 @@ const signInSchema = z.object({
 
 export type SignInValues = z.infer<typeof signInSchema>;
 
+/**
+ * A failed sign-in, as the form shows it. It used to be a toast that was gone
+ * in five seconds, before most people had finished reading it; now it sits
+ * above the button until they edit a field, the way sign-up's server errors
+ * do. `credentials` is the one kind that marks both fields invalid: the copy
+ * never says which of the two was wrong, so neither does the markup.
+ */
+export interface SignInError {
+  kind: "credentials" | "rate_limited" | "other";
+  title: string;
+  message: string;
+}
+
 interface SignInFormProps {
   defaultEmail?: string;
-  onSubmit: (values: SignInValues) => Promise<void>;
+  /** Resolves with an error to show inline, or nothing on success / MFA. */
+  onSubmit: (values: SignInValues) => Promise<SignInError | void>;
   /** Receives whatever is in the email field, so the reset form starts filled. */
   onForgotPassword: (email: string) => void;
   /**
@@ -51,6 +67,24 @@ interface SignInFormProps {
   onResendConfirmation: (email: string) => Promise<void>;
   isResending: boolean;
 }
+
+/**
+ * FormControl that also points at the sign-in error. FormControl sets its own
+ * aria-describedby and aria-invalid, and a prop passed to it replaces them, so
+ * the zod message id has to be read here and joined rather than overwritten.
+ */
+const CredentialsControl = forwardRef<
+  ElementRef<typeof FormControl>,
+  ComponentPropsWithoutRef<typeof FormControl> & { credentialsErrorId: string | null }
+>(({ credentialsErrorId, ...props }, ref) => {
+  const { error, formDescriptionId, formMessageId } = useFormField();
+  if (!credentialsErrorId) return <FormControl ref={ref} {...props} />;
+  const describedBy = [formDescriptionId, error ? formMessageId : null, credentialsErrorId]
+    .filter(Boolean)
+    .join(" ");
+  return <FormControl ref={ref} aria-describedby={describedBy} aria-invalid {...props} />;
+});
+CredentialsControl.displayName = "CredentialsControl";
 
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -77,16 +111,45 @@ export function SignInForm({
   const isSubmitting = form.formState.isSubmitting;
   const lockedOut = lockoutSecondsLeft > 0;
 
+  const [serverError, setServerError] = useState<SignInError | null>(null);
+  const errorId = useId();
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const credentialsErrorId = serverError?.kind === "credentials" ? errorId : null;
+
+  // Editing either field means they are acting on the message, so it goes.
+  // watch() only fires on changes, not on a resubmit of the same values.
+  useEffect(() => {
+    const subscription = form.watch((_values, { name }) => {
+      if (name === "email" || name === "password") setServerError(null);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const submit = form.handleSubmit(async (values) => {
+    setServerError(null);
+    const error = await onSubmit(values);
+    if (!error) return;
+    setServerError(error);
+    if (error.kind !== "credentials") return;
+    // Wrong password: put them back in the password field to retype it. Only
+    // when focus is on the button or nowhere; someone who has already gone
+    // back to the email field while the request ran keeps their place.
+    const active = document.activeElement;
+    if (!active || active === document.body || active === submitRef.current) {
+      form.setFocus("password", { shouldSelect: true });
+    }
+  });
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      <form onSubmit={submit} className="space-y-4" noValidate>
         <FormField
           control={form.control}
           name="email"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Email</FormLabel>
-              <FormControl>
+              <CredentialsControl credentialsErrorId={credentialsErrorId}>
                 <Input
                   type="email"
                   inputMode="email"
@@ -95,7 +158,7 @@ export function SignInForm({
                   aria-required="true"
                   {...field}
                 />
-              </FormControl>
+              </CredentialsControl>
               <FormMessage />
             </FormItem>
           )}
@@ -116,19 +179,30 @@ export function SignInForm({
                   Forgot password?
                 </button>
               </div>
-              <FormControl>
+              <CredentialsControl credentialsErrorId={credentialsErrorId}>
                 <PasswordInput
                   autoComplete="current-password"
                   aria-required="true"
                   {...field}
                 />
-              </FormControl>
+              </CredentialsControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <Button type="submit" className="w-full" disabled={isSubmitting || lockedOut}>
+        {/* Always mounted, so screen readers have a live region before the
+            first failure lands in it. */}
+        <div id={errorId} role="alert" aria-atomic="true">
+          {serverError && (
+            <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm text-foreground">
+              <p className="font-medium">{serverError.title}</p>
+              <p>{serverError.message}</p>
+            </div>
+          )}
+        </div>
+
+        <Button ref={submitRef} type="submit" className="w-full" disabled={isSubmitting || lockedOut}>
           {lockedOut
             ? `Try again in ${formatCountdown(lockoutSecondsLeft)}`
             : isSubmitting
