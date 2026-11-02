@@ -1,6 +1,4 @@
 import { Link } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
@@ -142,9 +140,6 @@ export default function GuidesPage() {
         pageType="website"
         breadcrumbs={breadcrumbs}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -347,8 +342,6 @@ export default function GuidesPage() {
           description="Common questions about our Des Moines local guides and recommendations"
         />
       </div>
-
-      <Footer />
     </div>
   );
 }

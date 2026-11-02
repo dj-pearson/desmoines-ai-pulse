@@ -1,8 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { ErrorState } from "@/components/ui/error-state";
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useItinerary, getDurationLabel, getThemeLabel } from '@/hooks/useItineraries';
 import type { ItineraryStop } from '@/hooks/useItineraries';
@@ -82,7 +80,6 @@ export default function ItineraryDetail() {
       <div className="min-h-screen bg-background">
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/itineraries/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-8 space-y-4">
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-6 w-96" />
@@ -90,7 +87,6 @@ export default function ItineraryDetail() {
             <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
         </div>
-        <Footer />
       </div>
     );
   }
@@ -109,11 +105,9 @@ export default function ItineraryDetail() {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={`/itineraries/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <ErrorState error={error} onRetry={() => refetch()} />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -125,7 +119,6 @@ export default function ItineraryDetail() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Itinerary Not Found</h1>
           <p className="text-muted-foreground mb-6">The itinerary you are looking for does not exist.</p>
@@ -133,7 +126,6 @@ export default function ItineraryDetail() {
             <Link to="/itineraries"><ArrowLeft className="h-4 w-4 mr-2" /> Back to Itineraries</Link>
           </Button>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -169,11 +161,6 @@ export default function ItineraryDetail() {
       />
 
       <div className="min-h-screen bg-background">
-        {/* Hide header/footer in print */}
-        <div className="print:hidden">
-          <Header />
-        </div>
-
         <div className="container mx-auto px-4 py-8">
           {/* Back link (screen only) */}
           <div className="print:hidden mb-6">
@@ -257,10 +244,6 @@ export default function ItineraryDetail() {
                 </Card>
               ))}
           </div>
-        </div>
-
-        <div className="print:hidden">
-          <Footer />
         </div>
       </div>
 

@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Gift } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
@@ -148,9 +146,6 @@ export default function FreeEvents() {
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/free')}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -331,8 +326,6 @@ export default function FreeEvents() {
           title="Discover More Des Moines Activities"
         />
       </div>
-
-      <Footer />
     </div>
   );
 }

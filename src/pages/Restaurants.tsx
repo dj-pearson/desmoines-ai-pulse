@@ -1,7 +1,5 @@
 import { HubArticles } from "@/components/seo/HubArticles";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/LazyAdBanner";
 import SEOHead from "@/components/SEOHead";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
@@ -677,8 +675,6 @@ export default function Restaurants() {
           dark:text-gray-100 section headings below rendered near-white on
           near-white (3.0:1 at best). */}
       <div className="min-h-screen bg-gray-50 dark:bg-background">
-        <Header />
-
         {/* Hero. One flat brand surface (WP1 item 13): the gradient and three
             blurred orbs cost paint time and said nothing. Compact on a phone
             so the first card is in the first viewport (item 6). */}
@@ -1194,8 +1190,6 @@ export default function Restaurants() {
         <div {...regionProps}>{announcement}</div>
 
         <RestaurantsHubFaq restaurantCount={hubTotal} cuisineCount={cuisineCounts.length} />
-
-        <Footer />
         <BackToTop />
       </div>
     </>

@@ -1,6 +1,4 @@
 import { useSearchParams } from 'react-router-dom';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { SceneUpdateCard } from '@/components/SceneUpdateCard';
 import { Button } from '@/components/ui/button';
@@ -96,7 +94,6 @@ export default function WhatsNew() {
         structuredData={itemList}
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div data-whats-new className="container mx-auto px-4 py-8 max-w-3xl">
           <div className="mb-8">
             <h1 className="text-3xl md:text-4xl font-bold mb-2">What's New in Des Moines</h1>
@@ -192,7 +189,6 @@ export default function WhatsNew() {
             </>
           )}
         </div>
-        <Footer />
       </div>
     </>
   );

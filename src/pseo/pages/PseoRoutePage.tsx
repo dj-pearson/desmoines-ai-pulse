@@ -12,8 +12,6 @@ import { PseoPage } from '../components/PseoPage';
 import { usePseoPage } from '../hooks/usePseoPage';
 import { allDimensions } from '../taxonomy';
 import { Skeleton } from '@/components/ui/skeleton';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import NotFound from '@/pages/NotFound';
 
 // Every slug across all taxonomy dimensions (content_type, location, audience,
@@ -63,7 +61,6 @@ export default function PseoRoutePage() {
 function PseoPageSkeleton() {
   return (
     <>
-      <Header />
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8 space-y-8">
           <Skeleton className="h-4 w-48" />
@@ -76,7 +73,6 @@ function PseoPageSkeleton() {
           </div>
         </div>
       </div>
-      <Footer />
     </>
   );
 }

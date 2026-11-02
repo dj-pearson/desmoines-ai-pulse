@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { NewsletterSignup } from '@/components/NewsletterSignup';
 import { Button } from '@/components/ui/button';
@@ -309,7 +307,6 @@ export default function VisitorsGuide() {
         ]}
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8 max-w-4xl">
           <div className="mb-10">
             <h1 className="text-4xl md:text-5xl font-bold mb-3">Des Moines Visitor Guide</h1>
@@ -355,7 +352,6 @@ export default function VisitorsGuide() {
             <NewsletterSignup variant="compact" source="website" />
           </section>
         </div>
-        <Footer />
       </div>
     </>
   );

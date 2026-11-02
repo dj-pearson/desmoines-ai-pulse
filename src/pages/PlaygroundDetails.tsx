@@ -12,8 +12,6 @@ import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
@@ -87,7 +85,6 @@ export default function PlaygroundDetails() {
       <>
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/playgrounds/${slug}`} />
-        <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
             <div className="animate-pulse space-y-6">
@@ -98,7 +95,6 @@ export default function PlaygroundDetails() {
             </div>
           </div>
         </div>
-        <Footer />
       </>
     );
   }
@@ -118,13 +114,11 @@ export default function PlaygroundDetails() {
     return (
       <>
         <RouteCanonical path={`/playgrounds/${slug}`} />
-        <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-16">
             <ErrorState error={error} onRetry={() => void refetch()} />
           </div>
         </div>
-        <Footer />
       </>
     );
   }
@@ -136,7 +130,6 @@ export default function PlaygroundDetails() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="min-h-screen bg-background flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center rounded-2xl">
             <CardContent className="p-8">
@@ -156,7 +149,6 @@ export default function PlaygroundDetails() {
             </CardContent>
           </Card>
         </div>
-        <Footer />
       </>
     );
   }
@@ -215,7 +207,6 @@ export default function PlaygroundDetails() {
 
   return (
     <>
-      <Header />
       <EnhancedPlaygroundSEO
         playground={playground}
         slug={playgroundSlug}
@@ -549,7 +540,6 @@ export default function PlaygroundDetails() {
           </div>
         </div>
       </div>
-      <Footer />
       <BackToTop />
       <StickyMobileCTA
         variant="playground"

@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, lazy, Suspense, useRef, useMemo } fro
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AlertCircle, Calendar, ChevronDown, RefreshCw, SearchX, Tag, X } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
@@ -703,8 +701,6 @@ export default function EventsPage() {
       />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         <EventsHubHero
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -998,8 +994,6 @@ export default function EventsPage() {
             </div>
           </div>
         </section>
-
-        <Footer />
         <BackToTop />
       </div>
     </>

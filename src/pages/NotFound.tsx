@@ -1,8 +1,6 @@
 import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Home, Search } from "lucide-react";
@@ -33,7 +31,6 @@ const NotFound = () => {
         <meta name="robots" content="noindex, follow" />
         <meta name="googlebot" content="noindex, follow" />
       </Helmet>
-      <Header />
       <div className="flex-1 flex items-center justify-center p-4 py-12">
       <Card className="max-w-2xl w-full text-center">
         <CardHeader>
@@ -99,7 +96,6 @@ const NotFound = () => {
         </CardContent>
       </Card>
       </div>
-      <Footer />
     </div>
   );
 };

@@ -1,14 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 
 /**
- * App.tsx's <main id="main-content"> wraps every route, Header included, so a
- * skip link aimed at #main-content put focus back in front of the logo. The
- * link now targets a marker Header renders as its next sibling.
+ * SiteLayout renders Header before <main id="main-content"> and Footer after
+ * it (WEB-UX-041), so the skip link targets <main> itself: it no longer
+ * contains the header, so focusing it cannot land in front of the logo.
  *
- * NotFound had no header, no footer and no h1 (CardTitle is an h3).
+ * NotFound had no header, no footer and no h1 (CardTitle is an h3). The
+ * header and footer now come from the layout, so it is rendered inside one.
  */
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -32,7 +33,7 @@ vi.mock("@/components/header/MobileNav", () => ({ MobileNav: () => null }));
 vi.mock("@/components/header/UserMenu", () => ({ UserMenu: () => null }));
 vi.mock("@/components/Footer", () => ({ default: () => <footer>footer</footer> }));
 
-import Header from "@/components/Header";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import NotFound from "@/pages/NotFound";
 
 function renderAt(path: string, ui: React.ReactElement) {
@@ -43,32 +44,55 @@ function renderAt(path: string, ui: React.ReactElement) {
   );
 }
 
+/** A route rendered inside SiteLayout, as App.tsx does. */
+function inLayout(path: string, page: React.ReactElement) {
+  return renderAt(
+    path,
+    <Routes>
+      <Route element={<SiteLayout />}>
+        <Route path="*" element={page} />
+      </Route>
+    </Routes>,
+  );
+}
+
+describe("site layout landmarks", () => {
+  it("puts the header before <main> and the footer after it, neither inside", async () => {
+    const { container } = inLayout("/", <a href="/events">First content link</a>);
+    await screen.findByText("footer");
+
+    const main = container.querySelector("main#main-content")!;
+    const header = container.querySelector("header")!;
+    const footer = container.querySelector("footer")!;
+    expect(container.querySelectorAll("header")).toHaveLength(1);
+    expect(container.querySelectorAll("footer")).toHaveLength(1);
+    expect(main.querySelector("header, footer")).toBeNull();
+    expect(header.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(main.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe("skip link", () => {
-  it("moves focus to the content start after the header, not into it", () => {
-    const { container } = renderAt(
-      "/",
-      <main id="main-content" tabIndex={-1}>
-        <Header />
-        <a href="/events">First content link</a>
-      </main>,
-    );
+  it("moves focus to <main>, past the header", () => {
+    const { container } = inLayout("/", <a href="/events">First content link</a>);
 
     const skip = screen.getByRole("link", { name: "Skip to main content" });
-    expect(skip.getAttribute("href")).toBe("#main-content-start");
+    expect(skip.getAttribute("href")).toBe("#main-content");
 
     fireEvent.click(skip);
 
     const focused = document.activeElement as HTMLElement;
-    expect(focused.id).toBe("main-content-start");
+    expect(focused.id).toBe("main-content");
     expect(container.querySelector("header")?.contains(focused)).toBe(false);
-    // The next tab stop in document order is page content, not the logo.
-    expect(focused.nextElementSibling?.textContent).toBe("First content link");
+    // The marker span it used to target is gone.
+    expect(container.querySelector("#main-content-start")).toBeNull();
   });
 });
 
 describe("NotFound", () => {
-  it("has exactly one h1, plus the site header, footer and a search link", () => {
-    const { container } = renderAt("/this-does-not-exist", <NotFound />);
+  it("has exactly one h1, plus the site header, footer and a search link", async () => {
+    const { container } = inLayout("/this-does-not-exist", <NotFound />);
+    await screen.findByText("footer");
 
     const h1s = container.querySelectorAll("h1");
     expect(h1s).toHaveLength(1);

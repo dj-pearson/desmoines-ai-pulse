@@ -13,8 +13,6 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { ogImageUrl } from "@/lib/ogImage";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { AIWriteup } from "@/components/AIWriteup";
 import { RestaurantStatus } from "@/components/RestaurantStatus";
 import ShareDialog from "@/components/ShareDialog";
@@ -68,6 +66,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { fetchRestaurantDetail } from "@/lib/restaurantDetail";
 import { isRestaurantPseoSlug } from "@/pseo/restaurantAreaSlugs";
+import { useSiteFooter } from "@/hooks/useSiteFooter";
 
 // SEO-065: the pSEO renderer, loaded only for an area slug no restaurant owns.
 const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPseoPage"));
@@ -204,6 +203,8 @@ function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hours
 }
 
 export default function RestaurantDetails() {
+  // SEO-037: the footer's preferred-source button stays off on this page.
+  useSiteFooter({ preferredSource: false });
   const { slug } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -298,7 +299,6 @@ export default function RestaurantDetails() {
       <>
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/restaurants/${slug}`} />
-        <Header />
         <div className="min-h-screen bg-gray-50 dark:bg-background" role="status" aria-live="polite" aria-busy="true">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
             <div className="animate-pulse space-y-6 motion-reduce:animate-none">
@@ -320,7 +320,6 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer preferredSource={false} />
       </>
     );
   }
@@ -332,7 +331,6 @@ export default function RestaurantDetails() {
     return (
       <>
         <RouteCanonical path={`/restaurants/${slug}`} />
-        <Header />
         {/* A div: App.tsx already provides the one <main>. */}
         <div className="min-h-screen bg-gray-50 dark:bg-background flex items-center justify-center px-4">
           <div className="max-w-md text-center" role="alert">
@@ -360,7 +358,6 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer preferredSource={false} />
       </>
     );
   }
@@ -371,7 +368,6 @@ export default function RestaurantDetails() {
         <Helmet>
           <meta name="robots" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="min-h-screen bg-gray-50 dark:bg-background flex items-center justify-center px-4">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
@@ -391,7 +387,6 @@ export default function RestaurantDetails() {
             </CardContent>
           </Card>
         </div>
-        <Footer preferredSource={false} />
       </>
     );
     // SEO-065: no restaurant has this slug, and it is a taxonomy location, so
@@ -565,7 +560,6 @@ export default function RestaurantDetails() {
 
   return (
     <>
-      <Header />
       <SEOHead
         title={seoTitle}
         description={seoDescription}
@@ -1205,7 +1199,6 @@ export default function RestaurantDetails() {
           hoursCheckedOn={lifecycle !== "closed" ? hoursCheckedAt(hoursJson) : null}
         />
       </div>
-      <Footer preferredSource={false} />
       <BackToTop />
 
       {/* No sticky actions for a closed place: every one of them (reserve,

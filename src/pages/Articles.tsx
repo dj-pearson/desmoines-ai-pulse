@@ -10,8 +10,6 @@ import { Eye, Search, Filter, Tag, BookOpen, Grid, List } from "lucide-react";
 import { CardsGridSkeleton } from '@/components/ui/loading-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { FAQSection } from '@/components/FAQSection';
 import { BackToTop } from '@/components/BackToTop';
@@ -134,7 +132,6 @@ const Articles: React.FC = () => {
         description="Articles about Des Moines events, attractions, dining and local things to do, each linked to what's on now."
         keywords={['Des Moines articles', 'local insights', 'events guide', 'attractions', 'dining']}
       />
-      <Header />
       <div className="min-h-screen bg-background">
         {/* Plain header: the gradient band and the three stat tiles (article
             count, category count, average views) are gone (WP4 item 9). */}
@@ -506,8 +503,6 @@ const Articles: React.FC = () => {
           />
         </div>
       </section>
-
-      <Footer />
       <BackToTop />
     </>
   );

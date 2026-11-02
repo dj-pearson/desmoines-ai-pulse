@@ -5,7 +5,6 @@ import { BackToTop } from "@/components/BackToTop";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { FAQSection } from "@/components/FAQSection";
 import { ForYouRail } from "@/components/ForYouRail";
-import Header from "@/components/Header";
 import { LazySection } from "@/components/LazySection";
 import { RecentlyViewedRail } from "@/components/RecentlyViewedRail";
 import SEOHead from "@/components/SEOHead";
@@ -16,6 +15,7 @@ import { TonightRail } from "@/components/TonightRail";
 import { DashboardGridSkeleton } from "@/components/ui/loading-skeleton";
 import { useHomeSnapshotAsOfDate } from "@/hooks/useHomeSnapshot";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
+import { useSiteFooter } from "@/hooks/useSiteFooter";
 import { supabase } from "@/integrations/supabase/client";
 import { BRAND } from "@/lib/brandConfig";
 import { ErrorSeverity, handleError } from "@/lib/errorHandler";
@@ -41,7 +41,6 @@ import {
 // AdBanner is lazy too (home-pass2 WP1 item 10): as a static import it pulled
 // HouseAd and UpgradeModal into the first view for a slot below the rails.
 const AdBanner = lazy(() => import("@/components/AdBanner").then(m => ({ default: m.AdBanner })));
-const Footer = lazy(() => import("@/components/Footer"));
 const AllInclusiveDashboard = lazy(() => import("@/components/AllInclusiveDashboard"));
 const MostSearched = lazy(() => import("@/components/MostSearched"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
@@ -167,6 +166,9 @@ function useQuickViewParam() {
 }
 
 export default function Index() {
+  // SiteLayout's footer holds the page's one newsletter signup (WP7). Its
+  // preferred-source button is off here: the section above has one (SEO-037).
+  useSiteFooter({ preferredSource: false });
   const quickView = useQuickViewParam();
   const { eventsToday, mode: countMode, isLoading: statsLoading } = useHomepageStats();
   const snapshotAsOf = useHomeSnapshotAsOfDate();
@@ -226,8 +228,6 @@ export default function Index() {
           structured SearchSection (a second search), and <Newsletter/> (the
           footer form is the one signup). */}
       <div>
-        <Header />
-
         {/* Hero: H1, a one-line live context, the page's one search box, and
             the quick-pick chips. */}
         <EnhancedHero
@@ -320,13 +320,6 @@ export default function Index() {
             <PreferredSourceButton description="Add Des Moines Insider as a preferred source and Google will show more of our weekend picks and local stories in Top Stories." />
           </div>
         </section>
-
-        {/* The footer holds the page's one newsletter signup (WP7). Not in a
-            LazySection: it makes no queries until submit, and its links are
-            the site's crawl paths. */}
-        <Suspense fallback={<SectionPlaceholder height={400} />}>
-          <Footer preferredSource={false} />
-        </Suspense>
       </div>
 
       {/* Event quick view - lazy, mounted only once an event is selected.

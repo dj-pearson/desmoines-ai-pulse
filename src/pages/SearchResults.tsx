@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -346,7 +344,6 @@ export default function SearchResults() {
         robots="noindex, follow"
       />
       <div className="flex min-h-screen flex-col">
-        <Header />
         {/* Plain <div>, not <main>: App.tsx already provides the single
             top-level <main id="main-content"> landmark. */}
         <div className="container mx-auto flex-1 px-4 py-8">
@@ -423,7 +420,6 @@ export default function SearchResults() {
 
           {searchable && <ResultsView state={state} navigate={navigate} />}
         </div>
-        <Footer />
       </div>
     </>
   );

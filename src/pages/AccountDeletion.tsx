@@ -11,8 +11,6 @@
  * retention periods is worse than one.
  */
 import { Link } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
@@ -27,9 +25,6 @@ export default function AccountDeletion() {
         url="https://desmoinesinsider.com/account/delete"
         type="website"
       />
-
-      <Header />
-
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <Breadcrumbs
           className="mb-4"
@@ -137,8 +132,6 @@ export default function AccountDeletion() {
           </section>
         </article>
       </div>
-
-      <Footer />
     </div>
   );
 }

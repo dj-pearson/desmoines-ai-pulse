@@ -39,9 +39,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useToast } from "@/hooks/use-toast";
@@ -153,11 +150,9 @@ export default function ResetPassword() {
 
   const shell = (children: React.ReactNode) => (
     <div className="min-h-screen bg-background flex flex-col">
-      <Header />
       <div className="flex-1 flex items-center justify-center px-4 py-10">
         <Card className="w-full max-w-md rounded-2xl">{children}</Card>
       </div>
-      <Footer />
     </div>
   );
 

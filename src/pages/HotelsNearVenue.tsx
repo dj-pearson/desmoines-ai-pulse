@@ -1,7 +1,5 @@
 import { Link, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
@@ -45,13 +43,11 @@ export default function HotelsNearVenue() {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={path} />
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="mb-4 h-9 w-72" />
           <Skeleton className="mb-8 h-5 w-full max-w-2xl" />
           <Skeleton className="h-64 w-full max-w-3xl" />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -60,11 +56,9 @@ export default function HotelsNearVenue() {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={path} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <ErrorState error={venueError} onRetry={() => refetchVenue()} />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -76,12 +70,10 @@ export default function HotelsNearVenue() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="mb-4 text-2xl font-bold">Venue not found</h1>
           <Link to="/stay" className="text-primary hover:underline">All hotels</Link>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -132,7 +124,6 @@ export default function HotelsNearVenue() {
         {itemList && <script type="application/ld+json">{toJsonLd(itemList)}</script>}
       </Helmet>
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <nav aria-label="Breadcrumb" className="mb-6 text-sm text-muted-foreground">
             <Link to="/stay" className="hover:text-primary">Stay</Link>
@@ -214,7 +205,6 @@ export default function HotelsNearVenue() {
             </aside>
           </div>
         </div>
-        <Footer />
       </div>
     </>
   );

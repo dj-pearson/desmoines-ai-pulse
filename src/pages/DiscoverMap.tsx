@@ -1,7 +1,6 @@
-import { useState, useMemo, lazy, Suspense, useRef, useEffect, useCallback } from 'react';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import { useState, useMemo, lazy, Suspense, useRef, useEffect, useLayoutEffect, useCallback, type CSSProperties } from 'react';
 import { Helmet } from 'react-helmet-async';
+import { useSiteFooter } from '@/hooks/useSiteFooter';
 import { Link, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQueries, type UseQueryResult } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -575,6 +574,23 @@ const VISIBLE_RESULTS = 60;
 const MOBILE_PEEK = 2;
 
 export default function DiscoverMap() {
+  // The map is the phone page; the footer would push it off screen.
+  useSiteFooter({ className: "hidden md:block" });
+  // The site header sits above <main> since WEB-UX-041, outside the
+  // one-screen box below, so the box subtracts its measured height. Measured
+  // rather than hard-coded: it carries the safe-area inset outside the app and
+  // none inside it. A layout effect, so the first paint is already the right size.
+  const [siteHeaderHeight, setSiteHeaderHeight] = useState(0);
+  useLayoutEffect(() => {
+    const header = document.querySelector<HTMLElement>('header:not(main header)');
+    if (!header) return;
+    const measure = () => setSiteHeaderHeight(header.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const updateParams = useCallback(
@@ -1099,12 +1115,14 @@ export default function DiscoverMap() {
           title, so the h1 is screen-reader only. */}
       <h1 className="sr-only">Explore Des Moines on a Map - Events, Restaurants, Attractions, Playgrounds and Trails</h1>
       {/* Below md the page is exactly one screen: header, controls, map. The
-          app's <main> pads for the bottom nav with .pb-bottom-nav, 4rem plus
-          max(1rem, safe-area inset); this subtracts the same sum, so a notched
-          phone does not scroll under the map (WP2 item 10). */}
-      <div className="h-[calc(100dvh-4rem-max(1rem,env(safe-area-inset-bottom)))] md:h-auto md:min-h-screen bg-background flex flex-col">
-        <Header />
-
+          shell pads for the bottom nav with .pb-bottom-nav, 4rem plus
+          max(1rem, safe-area inset); this subtracts the same sum, and the
+          site header's height, so a notched phone does not scroll under the
+          map (WP2 item 10). */}
+      <div
+        className="h-[calc(100dvh-4rem-max(1rem,env(safe-area-inset-bottom))-var(--site-header-h,0px))] md:h-auto md:min-h-screen bg-background flex flex-col"
+        style={{ '--site-header-h': `${siteHeaderHeight}px` } as CSSProperties}
+      >
         {/* Controls: one horizontally scrolling row on phones */}
         <div className="border-b bg-card px-4 py-2">
           <div className="container mx-auto px-0 flex items-center gap-2 overflow-x-auto md:flex-wrap">
@@ -1262,11 +1280,6 @@ export default function DiscoverMap() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* The map is the phone page; the footer would push it off screen. */}
-        <div className="hidden md:block">
-          <Footer />
         </div>
       </div>
     </>
