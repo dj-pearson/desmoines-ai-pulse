@@ -92,7 +92,7 @@ async function fetchCards(kind: Kind, ids: readonly string[]): Promise<NearbyRow
           .from("restaurants")
           .select(`${RESTAURANT_LIST_COLUMNS}, business_status`)
           .in("id", [...ids])
-      : await supabase.from("events").select(EVENT_LIST_COLUMNS).in("id", [...ids]);
+      : await applyEventVisibility(supabase.from("events").select(EVENT_LIST_COLUMNS)).in("id", [...ids]);
   if (error) throw error;
   return orderByIds((data ?? []) as unknown as NearbyRow[], ids);
 }
