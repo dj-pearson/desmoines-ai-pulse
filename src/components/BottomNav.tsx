@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useAuthFlags } from "@/contexts/AuthContext";
 import { prefetchRoute } from "@/lib/prefetch";
 import { hapticTap } from "@/lib/capacitorUtils";
-import { signInHref } from "@/components/header/navigationConfig";
+import { signInHref } from "@/lib/signInLinks";
 
 interface NavItem {
   href: string;

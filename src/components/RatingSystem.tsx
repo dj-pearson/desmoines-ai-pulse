@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { PremiumGate } from "@/components/PremiumGate";
 import { ErrorState } from "@/components/ui/error-state";
-import { signInHref } from "@/components/header/navigationConfig";
+import { signInHref } from "@/lib/signInLinks";
 import { supabase } from "@/integrations/supabase/client";
 import { resizeImageFile } from "@/lib/imageResize";
 import { Database } from "@/integrations/supabase/types";
