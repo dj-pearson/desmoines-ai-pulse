@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useAuthFlags } from "@/contexts/AuthContext";
 import { prefetchRoute } from "@/lib/prefetch";
 import { hapticTap } from "@/lib/capacitorUtils";
+import { signInHref } from "@/components/header/navigationConfig";
 
 interface NavItem {
   href: string;
@@ -53,7 +54,11 @@ export default function BottomNav() {
       icon: Map,
     },
     {
-      href: isAuthenticated ? "/dashboard" : "/auth",
+      // Sign-in comes back to this page, as UserMenu and MobileNav already do;
+      // a bare /auth dropped visitors on / after signing in.
+      href: isAuthenticated
+        ? "/dashboard"
+        : signInHref(location.pathname, location.search),
       label: isAuthenticated ? "Account" : "Sign In",
       icon: User,
       alsoActiveOn: isAuthenticated ? ACCOUNT_PATHS : undefined,
@@ -95,6 +100,8 @@ export default function BottomNav() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = isActivePath(item.href);
+          // The prefetch map is keyed by path; Sign In's href carries ?redirect=.
+          const routePath = item.href.split("?")[0];
 
           return (
             <Link
@@ -108,9 +115,9 @@ export default function BottomNav() {
               )}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
-              onMouseEnter={() => prefetchRoute(item.href)}
-              onTouchStart={() => prefetchRoute(item.href)}
-              onFocus={() => prefetchRoute(item.href)}
+              onMouseEnter={() => prefetchRoute(routePath)}
+              onTouchStart={() => prefetchRoute(routePath)}
+              onFocus={() => prefetchRoute(routePath)}
               onClick={() => {
                 // Native haptic feedback (Capacitor) with web fallback
                 hapticTap();
