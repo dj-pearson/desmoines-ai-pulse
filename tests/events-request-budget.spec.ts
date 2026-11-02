@@ -30,6 +30,13 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * upcoming row with an exact count, plus a free-count HEAD). /events/today
  * 4 -> 5: the newest weekly article, for the top-picks link (articles x1).
  *
+ * Loop 8 (2026-11-01): the request count did not move, but /events counted
+ * `events` exactly three times per visit - page 1, the hero's latest-row read
+ * over the same unfiltered rows, and the free HEAD. The hero now takes its
+ * total from page 1, so the latest-row read carries no count. EVENTS_EXACT_COUNTS
+ * holds the number of exact counts per route, since that, not the request
+ * count, is what costs a scan.
+ *
  * Each ceiling is the measured count, not the count plus headroom. A new read
  * on first view should be a decision somebody makes in this file, not
  * something that fits under slack. Run with EVENTS_BUDGET_REPORT=1 to print
@@ -47,6 +54,12 @@ const CEILINGS: Record<string, number> = {
   '/events/today': 5,
   '/events/jazz-night-at-the-fixture-2026-10-01': 7,
 };
+
+/**
+ * Requests that ask PostgREST for `count=exact` on the unfiltered /events
+ * first view: page 1 of the list and the free-count HEAD. Was 3.
+ */
+const EVENTS_EXACT_COUNTS = 2;
 
 /** Fri 2026-09-25 12:00 CDT. The fixture events (Oct 1) are upcoming. */
 const NOW = new Date('2026-09-25T17:00:00Z');
@@ -158,12 +171,14 @@ function answerEvents(page: Page) {
 
 async function countFirstView(page: Page, path: string) {
   const counts = new Map<string, number>();
+  const exact = { events: 0 };
   page.on('request', (req) => {
     if (req.method() === 'OPTIONS') return;
     const m = req.url().match(/\/(rest|functions)\/v1\/(rpc\/)?([^?/]+)/);
     if (!m) return;
     const key = `${m[1] === 'functions' ? 'fn:' : m[2] ? 'rpc:' : ''}${m[3]}${req.method() === 'HEAD' ? ' (HEAD)' : ''}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (m[3] === 'events' && /count=exact/.test(req.headers()['prefer'] ?? '')) exact.events += 1;
   });
 
   if (process.env.EVENTS_BUDGET_REPORT) {
@@ -184,7 +199,7 @@ async function countFirstView(page: Page, path: string) {
   await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 });
   // Long enough for every first-view query to have fired; no scrolling.
   await page.waitForTimeout(6_000);
-  return counts;
+  return { counts, exactEventCounts: exact.events };
 }
 
 test.describe('events first-view request budget', () => {
@@ -192,19 +207,26 @@ test.describe('events first-view request budget', () => {
 
   for (const [path, ceiling] of Object.entries(CEILINGS)) {
     test(`${path} makes at most ${ceiling} Supabase requests before a scroll`, async ({ page }) => {
-      const counts = await countFirstView(page, path);
+      const { counts, exactEventCounts } = await countFirstView(page, path);
       const total = [...counts.values()].reduce((a, b) => a + b, 0);
       const detail = [...counts.entries()]
         .sort(([a], [b]) => (a < b ? -1 : 1))
         .map(([k, n]) => `${k} x${n}`)
         .join(', ');
 
-      if (process.env.EVENTS_BUDGET_REPORT) console.log(`[events-budget] ${path}: ${total} -> ${detail}`);
+      if (process.env.EVENTS_BUDGET_REPORT) console.log(`[events-budget] ${path}: ${total} -> ${detail}; exact counts of events: ${exactEventCounts}`);
 
       expect(counts.get('fn:nlp-search') ?? 0, `nlp-search called on first view of ${path}: ${detail}`).toBe(0);
       // One RPC per card whose result could never render. Must not come back.
       expect(counts.get('rpc:get_content_view_stats') ?? 0, `per-card view stats on ${path}: ${detail}`).toBe(0);
       expect(total, `first view of ${path} made ${total} Supabase requests: ${detail}`).toBeLessThanOrEqual(ceiling);
+
+      if (path === '/events') {
+        expect(exactEventCounts, `exact counts of events on /events: ${detail}`).toBeLessThanOrEqual(EVENTS_EXACT_COUNTS);
+        // The hero's total now comes from page 1; it must still print, and
+        // the same number (12 fixture rows, 12 from the free HEAD).
+        await expect(page.getByText(/^12 upcoming events from .*, 12 free\.$/)).toBeVisible();
+      }
     });
   }
 });

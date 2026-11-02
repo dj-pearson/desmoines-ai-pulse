@@ -367,14 +367,45 @@ export interface HubCalendarSummary {
 }
 
 /**
- * SEO-036: the counts and the range for /events' first sentence, from the
- * same filters the unfiltered list uses. Two requests: the latest row with an
- * exact count (the total and the last date in one read), and a count-only
- * HEAD for the free rows. tests/events-request-budget.spec.ts counts both.
+ * True when these filters select the same rows as UNFILTERED_HUB, by the
+ * same tests applyHubFilters makes. Sort is ignored: it orders the rows, it
+ * does not change how many there are.
  */
-export async function fetchHubCalendarSummary(now: Date): Promise<HubCalendarSummary> {
+export function isUnfilteredHub(filters: HubFilters): boolean {
+  return (
+    !hubSearchQuery(filters.search) &&
+    (!filters.category || filters.category === "all") &&
+    !filters.window &&
+    !filters.area &&
+    !filters.freeOnly
+  );
+}
+
+export interface HubCalendarSummaryOptions {
+  /**
+   * Ask for the exact total. Pass false when the caller already has it: the
+   * unfiltered list's first page counts exactly the same rows, so a second
+   * exact count over `events` is a scan for a number already in hand
+   * (Loop 8). total then comes back null and the caller supplies it.
+   */
+  withTotal?: boolean;
+}
+
+/**
+ * SEO-036: the counts and the range for /events' first sentence, from the
+ * same filters the unfiltered list uses. Two requests: the latest row (with
+ * an exact count only when withTotal), and a count-only HEAD for the free
+ * rows. tests/events-request-budget.spec.ts counts both. The free count stays
+ * exact: the sentence prints it.
+ */
+export async function fetchHubCalendarSummary(
+  now: Date,
+  { withTotal = true }: HubCalendarSummaryOptions = {}
+): Promise<HubCalendarSummary> {
   const lastQuery = applyHubFilters(
-    supabase.from("events").select("date, event_start_utc", { count: "exact" }),
+    supabase
+      .from("events")
+      .select("date, event_start_utc", withTotal ? { count: "exact" } : undefined),
     UNFILTERED_HUB,
     now
   )
@@ -388,9 +419,9 @@ export async function fetchHubCalendarSummary(now: Date): Promise<HubCalendarSum
   const row = (last.data ?? [])[0] as { date: string | null; event_start_utc: string | null } | undefined;
   const instant = row ? row.event_start_utc || row.date : null;
   return {
-    // null when the count header did not come back; the page then says nothing
-    // rather than "no upcoming events".
-    total: last.count ?? null,
+    // null when not asked for or the count header did not come back; the
+    // page then says nothing rather than "no upcoming events".
+    total: withTotal ? last.count ?? null : null,
     free,
     lastDay: instant ? centralDateOf(new Date(instant)) : null,
   };

@@ -59,6 +59,7 @@ import {
   fetchNearMe,
   fetchSponsoredLead,
   flattenPages,
+  isUnfilteredHub,
   nearMeCountLabel,
   parseHubSort,
   pickedDay,
@@ -433,15 +434,26 @@ export default function EventsPage() {
    * whatever the filters are, keyed by the Central day so it rolls over at
    * midnight. Dates are absolute (eventHubSummary.ts says why).
    */
+  // Loop 8: on the unfiltered list, page 1's exact count is already the
+  // sentence's total (same filters, same `now` rule), so the summary skips a
+  // second exact count over `events`. It is remembered for when a filter goes
+  // on later; a visitor who lands filtered gets the summary's own count.
+  const listIsUnfiltered = !nearParam && isUnfilteredHub(hubFilters);
+  const listTotal = listIsUnfiltered && !isUpdating && firstPage ? firstPage.total : null;
+  const [knownTotal, setKnownTotal] = useState<number | null>(null);
+  useEffect(() => {
+    if (listTotal !== null) setKnownTotal(listTotal);
+  }, [listTotal]);
   const calendarQuery = useQuery({
     queryKey: queryKeys.events.list({ hub: "calendar-summary", day: today }),
-    queryFn: () => fetchHubCalendarSummary(new Date()),
+    queryFn: () => fetchHubCalendarSummary(new Date(), { withTotal: !listIsUnfiltered }),
     staleTime: 5 * 60 * 1000,
   });
   const calendar = calendarQuery.data;
+  const calendarTotal = listTotal ?? calendar?.total ?? knownTotal;
   const calendarSummary =
-    calendar && calendar.total !== null
-      ? hubSummary(today, calendar.lastDay, { total: calendar.total, free: calendar.free })
+    calendar && calendarTotal !== null
+      ? hubSummary(today, calendar.lastDay, { total: calendarTotal, free: calendar.free })
       : null;
   // No top-picks block here (SEO-036 puts it on /events/today and
   // /events/this-weekend): on a phone it pushed the first card to 817px,

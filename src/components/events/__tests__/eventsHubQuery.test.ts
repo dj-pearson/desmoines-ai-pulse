@@ -9,11 +9,13 @@ import {
   applyHubSort,
   countLabel,
   dayHeading,
+  fetchHubCalendarSummary,
   fetchNearMe,
   flattenPages,
   groupByCentralDay,
   hubSearchQuery,
   inHubWindow,
+  isUnfilteredHub,
   isNotOver,
   nearMeCountLabel,
   notOverFilter,
@@ -368,5 +370,68 @@ describe("fetchNearMe", () => {
     expect(page.events[1].is_sponsored).toBe(true);
     expect(page.capped).toBe(true);
     expect(page.complete).toBe(false);
+  });
+});
+
+describe("isUnfilteredHub", () => {
+  it("counts the same rows as UNFILTERED_HUB whatever the sort", () => {
+    expect(isUnfilteredHub(BASE)).toBe(true);
+    expect(isUnfilteredHub({ ...BASE, sort: "title_asc" })).toBe(true);
+    expect(isUnfilteredHub({ ...BASE, search: "   " })).toBe(true);
+  });
+
+  it("any filter applyHubFilters would send is filtered", () => {
+    expect(isUnfilteredHub({ ...BASE, search: "jazz" })).toBe(false);
+    expect(isUnfilteredHub({ ...BASE, category: "Music" })).toBe(false);
+    expect(isUnfilteredHub({ ...BASE, freeOnly: true })).toBe(false);
+    expect(isUnfilteredHub({ ...BASE, area: findEventArea("ankeny") })).toBe(false);
+    const today = resolveHubDate("today", null, null, THU_9PM);
+    expect(isUnfilteredHub({ ...BASE, window: today?.window ?? null })).toBe(false);
+  });
+});
+
+describe("fetchHubCalendarSummary", () => {
+  /** Every from("events") call's select() arguments, in order. */
+  function install(lastRow: unknown, count: number) {
+    const selects: unknown[][] = [];
+    mockSupabase.from = vi.fn(() => {
+      const builder: Record<string, unknown> = {};
+      for (const m of ["neq", "is", "or", "eq", "lte", "gte", "order", "limit"]) {
+        builder[m] = () => builder;
+      }
+      builder.select = (...args: unknown[]) => {
+        selects.push(args);
+        return builder;
+      };
+      builder.then = (resolve: (v: unknown) => unknown) =>
+        resolve({ data: [lastRow], error: null, count });
+      return builder;
+    });
+    return selects;
+  }
+
+  const LAST = { date: "2026-12-31", event_start_utc: "2026-12-31T19:00:00Z" };
+  const exactCounts = (selects: unknown[][]) =>
+    selects.filter(([, opts]) => (opts as { count?: string } | undefined)?.count === "exact");
+
+  it("asks for the exact total by default", async () => {
+    const selects = install(LAST, 40);
+    const summary = await fetchHubCalendarSummary(FRI25_8PM);
+    expect(selects).toContainEqual(["date, event_start_utc", { count: "exact" }]);
+    expect(exactCounts(selects)).toHaveLength(2);
+    expect(summary.total).toBe(40);
+    expect(summary.lastDay).toBe("2026-12-31");
+  });
+
+  it("withTotal false leaves the exact total to the list's first page (Loop 8)", async () => {
+    const selects = install(LAST, 40);
+    const summary = await fetchHubCalendarSummary(FRI25_8PM, { withTotal: false });
+    expect(selects).toContainEqual(["date, event_start_utc", undefined]);
+    // The free count is printed in the sentence, so it stays exact.
+    expect(selects).toContainEqual(["id", { count: "exact", head: true }]);
+    expect(exactCounts(selects)).toHaveLength(1);
+    expect(summary.total).toBeNull();
+    expect(summary.free).toBe(40);
+    expect(summary.lastDay).toBe("2026-12-31");
   });
 });
