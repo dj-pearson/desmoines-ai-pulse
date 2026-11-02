@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { GroupEventPlanner } from "@/components/GroupEventPlannerSimple";
 import { CommunityForums } from "@/components/CommunityForums";
@@ -71,7 +69,6 @@ export default function Social() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <Breadcrumbs
             className="mb-4 text-left"
@@ -91,15 +88,12 @@ export default function Social() {
             <a href="/auth">Sign In to Get Started</a>
           </Button>
         </div>
-        <Footer />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -446,8 +440,6 @@ export default function Social() {
           </TabsContent>
         </Tabs>
       </div>
-
-      <Footer />
     </div>
   );
 }

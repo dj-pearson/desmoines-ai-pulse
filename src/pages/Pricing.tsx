@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import FAQSchema from "@/components/schema/FAQSchema";
 import { Badge } from "@/components/ui/badge";
@@ -432,8 +430,6 @@ export default function Pricing() {
       <FAQSchema faqItems={faqSchemaItems} />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         <div id="pricing-content">
           <div className="container mx-auto px-4">
             <Breadcrumbs className="mb-4 pt-4" items={[{ label: "Home", href: "/" }, { label: "Pricing" }]} />
@@ -592,8 +588,6 @@ export default function Pricing() {
             </div>
           </section>
         </div>
-
-        <Footer />
       </div>
 
       <Dialog open={changePlanTarget !== null} onOpenChange={(open) => !open && setChangePlanTarget(null)}>

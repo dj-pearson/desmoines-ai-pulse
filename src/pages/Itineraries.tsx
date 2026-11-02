@@ -1,6 +1,4 @@
 import { Link } from 'react-router-dom';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useItineraries, getThemeLabel, getDurationLabel, orderThemes } from '@/hooks/useItineraries';
 import { Card, CardContent } from '@/components/ui/card';
@@ -64,7 +62,6 @@ export default function Itineraries() {
         </script>
       </Helmet>
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           {/* Hero */}
           <div className="text-center mb-10">
@@ -164,7 +161,6 @@ export default function Itineraries() {
             })
           )}
         </div>
-        <Footer />
       </div>
     </>
   );

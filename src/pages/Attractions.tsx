@@ -1,8 +1,6 @@
 import { HubArticles } from "@/components/seo/HubArticles";
 import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { useState, useMemo, useEffect, lazy, Suspense, useRef, startTransition } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/LazyAdBanner";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
@@ -401,9 +399,6 @@ export default function Attractions() {
           "Des Moines sightseeing",
         ]}
       />
-
-      <Header />
-
       {/* Hero: one solid brand surface at about half the old height
           (Explore plan WP3 item 11). */}
       <section className="bg-[#2D1B69]">
@@ -1134,9 +1129,6 @@ export default function Attractions() {
           />
         </div>
       </section>
-
-      <Footer />
-
       {/* Back to Top Button */}
       <BackToTop />
     </div>

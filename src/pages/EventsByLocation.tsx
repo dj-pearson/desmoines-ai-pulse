@@ -6,8 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventsByLocation');
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
@@ -216,7 +214,6 @@ export default function EventsByLocation() {
   if (!suburbInfo) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <Card>
             <CardContent className="pt-6 text-center">
@@ -230,7 +227,6 @@ export default function EventsByLocation() {
             </CardContent>
           </Card>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -306,9 +302,6 @@ export default function EventsByLocation() {
         listDescription={pageDescription}
         listUrl={`${BRAND.baseUrl}/events/${slug}`}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -484,8 +477,6 @@ export default function EventsByLocation() {
             pages about Ankeny and neither linked to the other. */}
         <PlaceCrossLinks slug={slug ?? ""} from="events" />
       </div>
-
-      <Footer />
     </div>
   );
 }

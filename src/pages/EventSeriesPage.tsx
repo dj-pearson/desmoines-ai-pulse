@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
@@ -103,7 +101,6 @@ function SeriesNotFound() {
   return (
     <div className="min-h-screen bg-background">
       <NoIndexMeta />
-      <Header />
       <div className="container mx-auto px-4 py-16 max-w-2xl text-center">
         <h1 className="text-2xl font-bold mb-3">No annual event by that name</h1>
         <p className="text-muted-foreground mb-6">The events calendar lists everything coming up in Des Moines.</p>
@@ -111,7 +108,6 @@ function SeriesNotFound() {
           <Link to="/events">Browse events</Link>
         </Button>
       </div>
-      <Footer />
     </div>
   );
 }
@@ -137,14 +133,12 @@ export default function EventSeriesPage() {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={path} />
-        <Header />
         <div className="container mx-auto px-4 py-8 max-w-3xl" role="status" aria-busy="true">
           <p className="sr-only">Loading annual event dates...</p>
           <Skeleton className="h-10 w-2/3 mb-4" />
           <Skeleton className="h-6 w-full mb-2" />
           <Skeleton className="h-40 w-full" />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -154,11 +148,9 @@ export default function EventSeriesPage() {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={path} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <ErrorState error={error} onRetry={() => void refetch()} />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -200,7 +192,6 @@ export default function EventSeriesPage() {
       <BreadcrumbListSchema items={breadcrumbSchema} />
 
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8 max-w-3xl">
           <Breadcrumbs
             className="mb-4"
@@ -286,7 +277,6 @@ export default function EventSeriesPage() {
 
           <OtherSeries current={def} />
         </div>
-        <Footer />
       </div>
     </>
   );

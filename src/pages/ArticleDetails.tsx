@@ -14,8 +14,6 @@ import { Card } from '@/components/ui/card';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { LoadingSpinner } from '@/components/ui/loading-skeleton';
 import { ErrorState } from '@/components/ui/error-state';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { RouteCanonical } from '@/components/RouteCanonical';
 import ShareDialog from '@/components/ShareDialog';
@@ -44,6 +42,7 @@ import { ogImageUrl } from '@/lib/ogImage';
 import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
 import { handleError } from '@/lib/errorHandler';
 import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
+import { useSiteFooter } from '@/hooks/useSiteFooter';
 
 /**
  * Dates in Central time (pass 2 WP4 item 11). toLocaleDateString used the
@@ -81,6 +80,8 @@ const markdownComponents: Components = {
 };
 
 const ArticleDetails: React.FC = () => {
+  // SEO-037: the footer's preferred-source button stays off on this page.
+  useSiteFooter({ preferredSource: false });
   const { slug } = useParams();
   // The canonical URL, not the browser's current address (WEB-BE-056 AC4).
   // scripts/prerender.mjs captures these pages from a headless browser pointed
@@ -102,7 +103,6 @@ const ArticleDetails: React.FC = () => {
         {/* SEO-028: the canonical comes from the route, so a prerender capture
             that lands mid-fetch still has one (pass 2 WP4 item 1). */}
         <RouteCanonical path={`/articles/${slug ?? ''}`} />
-        <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
             <h1 className="sr-only">Loading article</h1>
@@ -111,7 +111,6 @@ const ArticleDetails: React.FC = () => {
             </div>
           </div>
         </div>
-        <Footer />
       </>
     );
   }
@@ -120,7 +119,6 @@ const ArticleDetails: React.FC = () => {
     return (
       <>
         <NoIndexMeta />
-        <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-16">
             <h1 className="sr-only">Article unavailable</h1>
@@ -131,7 +129,6 @@ const ArticleDetails: React.FC = () => {
             />
           </div>
         </div>
-        <Footer />
       </>
     );
   }
@@ -140,7 +137,6 @@ const ArticleDetails: React.FC = () => {
     return (
       <>
         <NoIndexMeta />
-        <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-16 text-center">
             <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -156,7 +152,6 @@ const ArticleDetails: React.FC = () => {
             </Button>
           </div>
         </div>
-        <Footer />
       </>
     );
   }
@@ -205,8 +200,6 @@ const ArticleDetails: React.FC = () => {
         dateModified={article.updated_at}
         speakableCssSelectors={["[data-speakable]", "h1", "article > p:first-of-type", ".article-content > p:first-of-type"]}
       />
-      <Header />
-      
       <div className="min-h-screen bg-background">
         {/* Hero Section */}
         <div className="relative">
@@ -480,8 +473,6 @@ const ArticleDetails: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <Footer preferredSource={false} />
     </>
   );
 };

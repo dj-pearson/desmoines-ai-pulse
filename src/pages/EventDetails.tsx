@@ -3,8 +3,6 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "re
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useEventBySlug } from "@/hooks/useEventBySlug";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import ShareDialog from "@/components/ShareDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +60,7 @@ import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
 import { EventProvenance } from "@/components/events/EventProvenance";
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { PlainTextBlocks } from "@/components/PlainTextBlocks";
+import { useSiteFooter } from "@/hooks/useSiteFooter";
 
 // Below-the-fold widgets that each fire their own requests on mount. React.lazy
 // defers the chunk; LazySection defers the mount until the reader scrolls near
@@ -150,7 +149,6 @@ function EventLoadingState({ slug }: { slug: string | undefined }) {
     <div className="min-h-screen bg-background">
       {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
       <RouteCanonical path={`/events/${slug}`} />
-      <Header />
       <div className="container mx-auto px-4 py-8">
         <div className="animate-pulse space-y-6">
           <div className="h-6 bg-muted rounded w-1/4" />
@@ -172,12 +170,13 @@ function EventLoadingState({ slug }: { slug: string | undefined }) {
           </div>
         </div>
       </div>
-      <Footer preferredSource={false} />
     </div>
   );
 }
 
 export default function EventDetails() {
+  // SEO-037: the footer's preferred-source button stays off on this page.
+  useSiteFooter({ preferredSource: false });
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   // The hero is dropped entirely when its image fails, rather than hidden by
@@ -267,7 +266,6 @@ export default function EventDetails() {
         {/* No robots meta. The event may exist; a noindex here would drop a
             live page from the index because the backend blinked. */}
         <RouteCanonical path={`/events/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <div className="text-center space-y-4 max-w-md mx-auto" role="alert">
             <h1 className="text-2xl font-bold">We couldn't load this event</h1>
@@ -285,7 +283,6 @@ export default function EventDetails() {
             </div>
           </div>
         </div>
-        <Footer preferredSource={false} />
       </div>
     );
   }
@@ -310,7 +307,6 @@ export default function EventDetails() {
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
         <div className="min-h-screen bg-background">
-          <Header />
           <div className="container mx-auto px-4 py-16">
             <div className="text-center space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
@@ -341,7 +337,6 @@ export default function EventDetails() {
               </div>
             </div>
           </div>
-          <Footer preferredSource={false} />
         </div>
       </>
     );
@@ -433,8 +428,6 @@ export default function EventDetails() {
       />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         {/* Hero Image Section */}
         {event.image_url && !heroFailed && (
           <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
@@ -946,8 +939,6 @@ export default function EventDetails() {
 
           <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
         </div>
-
-        <Footer preferredSource={false} />
       </div>
 
       {/* The sticky bar's link takes no onClick, so outbound clicks are

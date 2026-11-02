@@ -1,7 +1,5 @@
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { BRAND } from "@/lib/brandConfig";
@@ -68,8 +66,6 @@ export default function About() {
       </Helmet>
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         <div className="container mx-auto px-4 py-8 md:py-12">
           <div className="max-w-prose mx-auto">
             <Breadcrumbs
@@ -163,8 +159,6 @@ export default function About() {
             </section>
           </div>
         </div>
-
-        <Footer />
       </div>
     </>
   );

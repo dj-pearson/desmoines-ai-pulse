@@ -1,5 +1,3 @@
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { FAQSection } from "@/components/FAQSection";
 import SEOHead from '@/components/SEOHead';
 import { getCanonicalUrl } from '@/lib/brandConfig';
@@ -74,7 +72,6 @@ export default function GettingAround() {
         ]}
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8" data-page-body="getting-around">
           {/* Hero */}
           <div className="text-center mb-10">
@@ -319,7 +316,6 @@ export default function GettingAround() {
             <FAQSection faqs={FAQ_ITEMS} />
           </section>
         </div>
-        <Footer />
       </div>
     </>
   );

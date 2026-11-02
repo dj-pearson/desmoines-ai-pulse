@@ -1,5 +1,3 @@
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import SeasonalContent from "@/components/SeasonalContent";
 import { FAQSection } from "@/components/FAQSection";
@@ -144,9 +142,6 @@ export default function IowaStateFairPage() {
         structuredData={[stateFairSchema, businessDirectorySchema]}
         type="event"
       />
-      
-      <Header />
-
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-yellow-600 via-orange-600 to-red-600 overflow-hidden min-h-[400px]">
         <div className="absolute inset-0 bg-black/20"></div>
@@ -445,8 +440,6 @@ export default function IowaStateFairPage() {
           />
         </div>
       </section>
-
-      <Footer />
     </div>
   );
 }

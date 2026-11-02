@@ -1,8 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { ErrorState } from "@/components/ui/error-state";
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useSeasonalGuide, getSeasonLabel, getSeasonColor } from '@/hooks/useSeasonalGuides';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,13 +18,11 @@ export default function SeasonalGuide() {
       <div className="min-h-screen bg-background">
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/guides/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-8 w-64 mb-4" />
           <Skeleton className="h-48 w-full mb-4" />
           <Skeleton className="h-32 w-full" />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -45,11 +41,9 @@ export default function SeasonalGuide() {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={`/guides/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <ErrorState error={error} onRetry={() => refetch()} />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -61,12 +55,10 @@ export default function SeasonalGuide() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Guide Not Found</h1>
           <Link to="/guides" className="text-primary hover:underline">Back to Guides</Link>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -99,7 +91,6 @@ export default function SeasonalGuide() {
         </script>
       </Helmet>
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8 max-w-3xl">
           {/* Breadcrumb */}
           <nav className="text-sm text-muted-foreground mb-6">
@@ -140,7 +131,6 @@ export default function SeasonalGuide() {
             ))}
           </div>
         </div>
-        <Footer />
       </div>
     </>
   );

@@ -1,6 +1,4 @@
 import { Link } from 'react-router-dom';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import ItemListSchema from '@/components/schema/ItemListSchema';
 import { getCanonicalUrl } from '@/lib/brandConfig';
@@ -117,7 +115,6 @@ export default function BestOf() {
         items={schemaItems}
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8" data-best-of-index>
           {/* Hero */}
           <div className="text-center mb-10">
@@ -203,7 +200,6 @@ export default function BestOf() {
             </div>
           )}
         </div>
-        <Footer />
       </div>
     </>
   );

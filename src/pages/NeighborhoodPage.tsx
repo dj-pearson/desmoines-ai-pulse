@@ -1,7 +1,5 @@
 import { useParams, Link, Navigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import NeighborhoodGuide from "@/components/NeighborhoodGuide";
 import LocalSEO from "@/components/LocalSEO";
 import { Button } from "@/components/ui/button";
@@ -58,7 +56,6 @@ export default function NeighborhoodPage() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-semibold mb-3">We don't have a guide for that neighborhood</h1>
           <p className="text-muted-foreground mb-6">
@@ -68,7 +65,6 @@ export default function NeighborhoodPage() {
             <Link to="/neighborhoods">All neighborhoods</Link>
           </Button>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -100,9 +96,6 @@ export default function NeighborhoodPage() {
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
       )}
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -158,8 +151,6 @@ export default function NeighborhoodPage() {
           className="mt-12 border-t pt-8"
         />
       </div>
-
-      <Footer />
     </div>
   );
 }

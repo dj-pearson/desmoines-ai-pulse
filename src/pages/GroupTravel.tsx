@@ -1,7 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -283,7 +281,6 @@ export default function GroupTravel() {
         ]}
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           {/* Hero */}
           <div className="text-center mb-10">
@@ -509,7 +506,6 @@ export default function GroupTravel() {
             </Card>
           </section>
         </div>
-        <Footer />
       </div>
     </>
   );

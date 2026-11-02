@@ -2,8 +2,6 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -46,9 +44,6 @@ export default function NeighborhoodsPage() {
           { name: "Neighborhoods", url: "/neighborhoods" }
         ]}
       />
-      
-      <Header />
-      
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -178,8 +173,6 @@ export default function NeighborhoodsPage() {
           />
         </div>
       </section>
-
-      <Footer />
     </div>
   );
 }

@@ -5,8 +5,6 @@ import { CheckCircle, Crown, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { PlanStatusLine } from "@/components/subscription/PlanStatusLine";
 import { useAuth } from "@/hooks/useAuth";
@@ -76,12 +74,10 @@ function RobotsNoindex({ title }: { title: string }) {
 function PageShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
-      <Header />
       {/* App.tsx already renders the page's <main>; this is its content column. */}
       <div className="container mx-auto px-4 py-12 md:py-16" id="subscription-success">
         <div className="mx-auto max-w-2xl">{children}</div>
       </div>
-      <Footer />
     </div>
   );
 }

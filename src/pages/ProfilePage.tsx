@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Bell, CalendarCheck, Heart, History } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { FavoritesView } from "@/components/FavoritesView";
@@ -90,8 +88,6 @@ function MyEventsContent() {
         noindex
       />
       <div className="min-h-screen bg-background">
-        <Header />
-
         <div className="container mx-auto max-w-3xl px-4 py-6 md:py-8">
           <Breadcrumbs
             className="mb-4"
@@ -195,8 +191,6 @@ function MyEventsContent() {
             </TabsContent>
           </Tabs>
         </div>
-
-        <Footer />
       </div>
     </>
   );

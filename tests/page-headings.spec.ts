@@ -85,8 +85,8 @@ test('/this-does-not-exist has exactly one h1 and the site nav', async ({ page }
   await expect(page.getByRole('link', { name: /search the site/i })).toHaveAttribute('href', '/search');
 });
 
-// WCAG 2.4.1. App.tsx's <main id="main-content"> wraps the whole route, Header
-// included, so a skip link aimed at it landed in front of the logo again.
+// WCAG 2.4.1. The skip link targets <main>, which since WEB-UX-041 follows the
+// header instead of wrapping it, so focusing it cannot land on the logo.
 test('the skip link moves keyboard focus past the header', async ({ page }) => {
   await page.goto('/events', { waitUntil: 'domcontentloaded' });
   const skip = page.getByRole('link', { name: 'Skip to main content' });
@@ -96,15 +96,60 @@ test('the skip link moves keyboard focus past the header', async ({ page }) => {
   // widget can sit ahead of it in tab order depending on consent state.
   await skip.focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('#main-content-start')).toBeFocused();
+  await expect(page.locator('main#main-content')).toBeFocused();
   await page.keyboard.press('Tab');
 
-  // The site header is the marker's previous sibling; a page hero may be a
-  // <header> of its own, so closest('header') would over-match.
+  // The site header is the banner landmark; a page hero may be a <header> of
+  // its own inside <main>, so closest('header') would over-match.
   const inHeader = await page.evaluate(() => {
-    const siteHeader = document.getElementById('main-content-start')?.previousElementSibling;
+    const siteHeader = document.querySelector('body header:not(main header)');
     const active = document.activeElement;
     return !siteHeader || !active || active === document.body || siteHeader.contains(active);
   });
   expect(inHeader, 'Tab after the skip link did not land in page content').toBe(false);
+});
+
+// WEB-UX-041. Pages rendered <Header>/<Footer> inside App's <main>, and a
+// <header> or <footer> inside <main> is not a banner or contentinfo landmark,
+// so the site had neither. SiteLayout now renders them as siblings of <main>.
+// The detail slugs do not exist: the not-found branch still gets the chrome.
+const LANDMARK_ROUTES = [
+  '/', '/events', '/restaurants', '/music', '/advertise',
+  '/events/no-such-event', '/restaurants/no-such-restaurant', '/this-does-not-exist',
+];
+
+for (const route of LANDMARK_ROUTES) {
+  test(`${route} has one banner and one contentinfo, both outside <main>`, async ({ page }) => {
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#root')).not.toBeEmpty({ timeout: 30_000 });
+
+    await expect(page.getByRole('banner')).toHaveCount(1, { timeout: 15_000 });
+    // The footer is lazy; wait for it rather than reading the count once.
+    await expect(page.getByRole('contentinfo')).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByRole('main')).toHaveCount(1);
+
+    const inMain = await page.evaluate(() => {
+      const main = document.querySelector('main');
+      const banner = document.querySelector('body header:not(main header)');
+      const footer = document.querySelector('body footer:not(main footer)');
+      return {
+        banner: !banner || !!main?.contains(banner),
+        footer: !footer || !!main?.contains(footer),
+        headerInMain: !!main?.querySelector(':scope header[class~="sticky"]'),
+        footerInMain: !!main?.querySelector('footer[aria-labelledby="site-footer-heading"]'),
+      };
+    });
+    expect(inMain, `${route}: site header or footer is inside <main>`).toEqual({
+      banner: false, footer: false, headerInMain: false, footerInMain: false,
+    });
+  });
+}
+
+// The opt-out: routes that rendered no site chrome before the move still do not.
+test('/auth renders no site header or footer', async ({ page }) => {
+  await page.goto('/auth', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('h1')).toHaveCount(1, { timeout: 30_000 });
+  await expect(page.getByRole('main')).toHaveCount(1);
+  await expect(page.getByRole('banner')).toHaveCount(0);
+  await expect(page.getByRole('contentinfo')).toHaveCount(0);
 });

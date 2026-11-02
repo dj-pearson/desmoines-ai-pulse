@@ -2,8 +2,6 @@ import { useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertCircle, Check, CreditCard, Crown, Receipt, RefreshCw, Sparkles } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import {
   Card,
   CardContent,
@@ -181,7 +179,6 @@ export default function SubscriptionPortal() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
       {/* App.tsx already renders the page's <main>; this is its content column. */}
       <div className="container mx-auto px-4 py-6 md:py-10" id="subscription-portal">
         <div className="mx-auto max-w-3xl">
@@ -412,8 +409,6 @@ export default function SubscriptionPortal() {
           )}
         </div>
       </div>
-      <Footer />
-
       <AlertDialog open={dialog === "cancel"} onOpenChange={closeDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

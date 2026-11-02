@@ -5,8 +5,6 @@ import { CheckCircle, MailQuestion, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useToast } from "@/hooks/use-toast";
@@ -64,7 +62,6 @@ export default function AuthVerified() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Header />
       <div className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-lg rounded-2xl border bg-card p-6 sm:p-8">
           {state === "error" && authError && (
@@ -108,7 +105,6 @@ export default function AuthVerified() {
           )}
         </div>
       </div>
-      <Footer />
     </div>
   );
 }

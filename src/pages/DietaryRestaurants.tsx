@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Leaf, Wheat, Beef, UtensilsCrossed, type LucideIcon } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { FAQSection, type FAQItem } from "@/components/FAQSection";
 import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
@@ -197,9 +195,6 @@ export default function DietaryRestaurants() {
           "dietary restrictions Des Moines",
         ]}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           items={[
@@ -363,8 +358,6 @@ export default function DietaryRestaurants() {
 
         <RelatedContent currentPath="/restaurants/dietary" title="Explore More Des Moines Dining" />
       </div>
-
-      <Footer />
     </div>
   );
 }

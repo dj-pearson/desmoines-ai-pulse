@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
@@ -181,9 +179,6 @@ export default function DateNightEvents() {
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/date-night')}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -403,8 +398,6 @@ export default function DateNightEvents() {
           title="More Des Moines Experiences"
         />
       </div>
-
-      <Footer />
     </div>
   );
 }

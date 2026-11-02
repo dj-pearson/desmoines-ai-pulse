@@ -1,8 +1,6 @@
 import { useId, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatInTimeZone } from "date-fns-tz";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { FAQSection, type FAQItem } from "@/components/FAQSection";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
@@ -423,9 +421,6 @@ export default function OpenNowRestaurants() {
           "breakfast open now Des Moines",
         ]}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           items={[
@@ -707,8 +702,6 @@ export default function OpenNowRestaurants() {
 
         <RelatedContent currentPath="/restaurants/open-now" title="More Des Moines Dining & Activities" />
       </div>
-
-      <Footer />
     </div>
   );
 }

@@ -13,8 +13,6 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, ChevronRight, Clock, Heart, Leaf, Snowflake, Sun, Flower2, FerrisWheel } from 'lucide-react';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { upcomingMonths } from '@/components/seo/MonthLinks';
 import { ExploreSectionLinks } from '@/components/explore/ExploreSectionLinks';
@@ -287,9 +285,6 @@ export default function ThingsToDoHub() {
           { name: 'Things to Do', url: '/things-to-do' },
         ]}
       />
-
-      <Header />
-
       {/* Plain <div>, not <main>: App.tsx already provides the single
           top-level <main id="main-content"> landmark (WCAG 1.3.1). */}
       <div className="min-h-screen bg-background" data-hub-body="">
@@ -468,8 +463,6 @@ export default function ThingsToDoHub() {
           )}
         </div>
       </div>
-
-      <Footer />
     </>
   );
 }

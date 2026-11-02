@@ -1,5 +1,3 @@
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -194,7 +192,6 @@ export default function Deals() {
         )}
       </Helmet>
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-6 sm:py-8">
           <Breadcrumbs
             className="mb-4"
@@ -315,7 +312,6 @@ export default function Deals() {
 
           <ExploreSectionLinks current="/deals" className="mt-8 border-t pt-6" />
         </div>
-        <Footer />
       </div>
     </>
   );

@@ -6,8 +6,6 @@
  */
 
 import { lazy, Suspense } from 'react';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
 import type { PseoPageContent, PseoSection as PseoSectionType } from '../schemas';
@@ -53,9 +51,6 @@ export function PseoPage({ page: storedPage }: PseoPageProps) {
         breadcrumbs={structuredData.breadcrumb}
         structuredData={schemaData}
       />
-
-      <Header />
-
       <div className="min-h-screen bg-background">
         {/* Breadcrumbs */}
         <div className="container mx-auto px-4 pt-4">
@@ -85,8 +80,6 @@ export function PseoPage({ page: storedPage }: PseoPageProps) {
           )}
         </div>
       </div>
-
-      <Footer />
     </>
   );
 }

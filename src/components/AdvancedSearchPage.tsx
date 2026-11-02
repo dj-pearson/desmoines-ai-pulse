@@ -9,8 +9,6 @@ import { Search, Star, DollarSign, Grid, List, Navigation2 } from "lucide-react"
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { AdvancedSearchFilters } from "./AdvancedSearchFilters";
 import { SavedSearches } from "./SavedSearches";
-import Header from "./Header";
-import Footer from "./Footer";
 import SEOHead from "./SEOHead";
 import { useAdvancedSearch, type SavedSearch, type SearchResult } from "@/hooks/useAdvancedSearch";
 import { useAuth } from "@/hooks/useAuth";
@@ -111,8 +109,6 @@ export default function AdvancedSearchPage() {
       />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         <div className="container mx-auto px-4 py-8 space-y-8">
           <div className="space-y-3 max-w-3xl">
             <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">Advanced search</h1>
@@ -371,8 +367,6 @@ export default function AdvancedSearchPage() {
             </div>
           </div>
         </div>
-
-        <Footer />
       </div>
     </>
   );

@@ -725,8 +725,16 @@ const duplicateJsonLdRoutes = [];
             if (!m) return false;
             const text = (m.textContent || '').trim();
             if (text.length <= 40) return false;
+            // WEB-UX-041 moved the site footer out of <main>. It is lazy, so
+            // wait for it on routes that have one (data-chrome="full") or the
+            // capture can ship without its crawl links. The 2000 below was set
+            // with the footer inside <main> (about 2000 characters on its own),
+            // so it is still counted.
+            const footer = document.querySelector('footer[aria-labelledby="site-footer-heading"]');
+            if (m.dataset.chrome === 'full' && !footer) return false;
+            const total = text.length + (footer?.textContent || '').trim().length;
             const stillLoading = /Loading [a-z][a-z ]{2,24}\.\.\./i.test(document.body.innerHTML);
-            return !stillLoading || text.length >= 2000;
+            return !stillLoading || total >= 2000;
           },
           { timeout: 20000 },
         )
@@ -923,7 +931,10 @@ const duplicateJsonLdRoutes = [];
         const skeleton = /<[^>]*>Loading [a-z][a-z ]{2,24}\.\.\.</i.exec(html)?.[0];
         if (skeleton) {
           const main = /id="main-content"([\s\S]*?)<\/main>/.exec(html)?.[1] ?? '';
-          const textLength = main.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().length;
+          // The site footer sits after </main> since WEB-UX-041; counted as
+          // before, when it was inside it (see the wait above).
+          const footer = /aria-labelledby="site-footer-heading"([\s\S]*?)<\/footer>/.exec(html)?.[1] ?? '';
+          const textLength = (main + ' ' + footer).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().length;
           // Below this, the skeleton IS the page rather than one section of it.
           // Fully-rendered hub pages measure several thousand characters.
           if (textLength < 2000) {
