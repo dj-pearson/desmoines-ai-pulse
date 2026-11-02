@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAuthSecurity } from "@/hooks/useAuthSecurity";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
-import { SignInForm, type SignInValues, EMAIL_FORMAT_MESSAGE } from "@/components/auth/SignInForm";
+import { SignInForm, type SignInValues, type SignInError, EMAIL_FORMAT_MESSAGE } from "@/components/auth/SignInForm";
 import { SignUpForm, type SignUpValues, type SignUpFieldError } from "@/components/auth/SignUpForm";
 import { ForgotPasswordForm, type ForgotPasswordValues } from "@/components/auth/ForgotPasswordForm";
 import { EmailSentPanel } from "@/components/auth/EmailSentPanel";
@@ -193,7 +193,7 @@ export default function Auth() {
     setView("forgot");
   };
 
-  const handleLogin = async ({ email, password }: SignInValues) => {
+  const handleLogin = async ({ email, password }: SignInValues): Promise<SignInError | void> => {
     const address = email.trim();
     setEmailDraft(address);
 
@@ -201,8 +201,7 @@ export default function Auth() {
     // this; the handler repeats it because it is the last stop before the
     // network, and a format problem must never read as "Too Many Attempts".
     if (!SecurityUtils.validateEmail(address).isValid) {
-      toast({ title: "Check your email address", description: EMAIL_FORMAT_MESSAGE, variant: "destructive" });
-      return;
+      return { kind: "other", title: "Check your email address", message: EMAIL_FORMAT_MESSAGE };
     }
 
     const captcha = takeCaptchaToken();
@@ -243,11 +242,21 @@ export default function Auth() {
       if (!result.errorCode && result.error && /too many/i.test(result.error)) {
         // The local throttle's sentence is ours, not Supabase's, so it can be
         // shown as written.
-        toast({ title: "Too many attempts", description: result.error, variant: "destructive" });
-        return;
+        return { kind: "rate_limited", title: "Too many attempts", message: result.error };
       }
 
-      toast({ title: copy.title, description: copy.description, variant: "destructive" });
+      // An unconfirmed address has its own inline note with the resend button
+      // (WEB-AUTH-008), so it needs no second message here.
+      if (copy.action === "resend_confirmation") return;
+
+      // Failures sit inline above the button, like sign-up's (see
+      // handleSignup), instead of a toast gone in five seconds. The copy is
+      // authErrorCopy's, which never says whether the address has an account.
+      return {
+        kind: copy === authErrorCopy("invalid_credentials", null) ? "credentials" : copy.action === "wait" ? "rate_limited" : "other",
+        title: copy.title,
+        message: copy.description,
+      };
     } catch (error) {
       handleError(error, { component: "Auth", action: "login" });
     } finally {
