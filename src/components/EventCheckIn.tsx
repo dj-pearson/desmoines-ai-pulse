@@ -7,7 +7,7 @@ import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
 import { Check, Heart, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { signInHref } from "@/components/header/navigationConfig";
+import { signInHref } from "@/lib/signInLinks";
 import { CHECK_IN_LABELS, CHECK_IN_STATUSES, type CheckInStatus } from "@/lib/checkInStatus";
 
 const STATUS_ICONS: Record<CheckInStatus, () => JSX.Element> = {

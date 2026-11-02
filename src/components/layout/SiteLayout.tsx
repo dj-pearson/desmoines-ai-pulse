@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState } from "react";
 import { Outlet } from "react-router-dom";
-import Header from "@/components/Header";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { SiteFooterContext, type SiteFooterOptions } from "@/contexts/SiteFooterContext";
 import { cn } from "@/lib/utils";
@@ -9,6 +8,27 @@ import { cn } from "@/lib/utils";
 // page and its newsletter form and link columns have no business in the entry
 // chunk. Fallback null: nothing above it moves when it arrives.
 const Footer = lazy(() => import("@/components/Footer"));
+
+// Lazy too, but started at module load so it downloads alongside the route's
+// own chunk. Imported statically it put about 48 KB gz on the critical path of
+// every page (check-bundle-budget: 183 -> 231 KB), where before WEB-UX-041 it
+// rode in each page's lazy chunk.
+const headerImport = import("@/components/Header");
+const Header = lazy(() => headerImport);
+
+/**
+ * Holds the header's measured height (69px below md, 77.5px md, 86px lg and
+ * up) until the chunk arrives, so nothing below it shifts. Not a <header>: a
+ * second, empty banner would be worse than none for a moment.
+ */
+function HeaderPlaceholder() {
+  return (
+    <div
+      aria-hidden="true"
+      className="sticky top-0 z-50 h-[69px] md:h-[77.5px] lg:h-[86px] border-b border-border bg-background safe-area-top print:hidden"
+    />
+  );
+}
 
 /**
  * Which parts of the site chrome a group of routes gets.
@@ -57,7 +77,11 @@ export function SiteLayout({ chrome = "full" }: SiteLayoutProps) {
 
   return (
     <SiteFooterContext.Provider value={setFooterOptions}>
-      {chrome !== "none" && <Header />}
+      {chrome !== "none" && (
+        <Suspense fallback={<HeaderPlaceholder />}>
+          <Header />
+        </Suspense>
+      )}
       {/* Room for the fixed BottomNav goes at the very end of the page: on
           <main> when nothing follows it, after the footer when one does.
           data-chrome: scripts/prerender.mjs waits for the lazy footer when it
