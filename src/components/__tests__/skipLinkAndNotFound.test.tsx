@@ -8,6 +8,9 @@ import { HelmetProvider } from "react-helmet-async";
  * it (WEB-UX-041), so the skip link targets <main> itself: it no longer
  * contains the header, so focusing it cannot land in front of the logo.
  *
+ * Header is lazy in SiteLayout (kept off the critical path), so each test
+ * waits for the skip link, which lives in the header, before asserting.
+ *
  * NotFound had no header, no footer and no h1 (CardTitle is an h3). The
  * header and footer now come from the layout, so it is rendered inside one.
  */
@@ -60,6 +63,7 @@ describe("site layout landmarks", () => {
   it("puts the header before <main> and the footer after it, neither inside", async () => {
     const { container } = inLayout("/", <a href="/events">First content link</a>);
     await screen.findByText("footer");
+    await screen.findByRole("link", { name: "Skip to main content" });
 
     const main = container.querySelector("main#main-content")!;
     const header = container.querySelector("header")!;
@@ -73,10 +77,10 @@ describe("site layout landmarks", () => {
 });
 
 describe("skip link", () => {
-  it("moves focus to <main>, past the header", () => {
+  it("moves focus to <main>, past the header", async () => {
     const { container } = inLayout("/", <a href="/events">First content link</a>);
 
-    const skip = screen.getByRole("link", { name: "Skip to main content" });
+    const skip = await screen.findByRole("link", { name: "Skip to main content" });
     expect(skip.getAttribute("href")).toBe("#main-content");
 
     fireEvent.click(skip);
@@ -93,6 +97,7 @@ describe("NotFound", () => {
   it("has exactly one h1, plus the site header, footer and a search link", async () => {
     const { container } = inLayout("/this-does-not-exist", <NotFound />);
     await screen.findByText("footer");
+    await screen.findByRole("link", { name: "Skip to main content" });
 
     const h1s = container.querySelectorAll("h1");
     expect(h1s).toHaveLength(1);
