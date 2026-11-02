@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
 import { Check, Heart, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { signInHref } from "@/components/header/navigationConfig";
+import { CHECK_IN_LABELS, CHECK_IN_STATUSES, type CheckInStatus } from "@/lib/checkInStatus";
+
+const STATUS_ICONS: Record<CheckInStatus, () => JSX.Element> = {
+  going: () => <Check className="w-4 h-4" aria-hidden="true" />,
+  interested: () => <Heart className="w-4 h-4" aria-hidden="true" />,
+  maybe: () => <SpriteIcon name="clock" className="w-4 h-4" />,
+  not_going: () => <X className="w-4 h-4" aria-hidden="true" />,
+};
 
 interface EventCheckInProps {
   eventId: string;
@@ -16,6 +26,7 @@ const EMPTY_COUNTS = { going: 0, interested: 0, maybe: 0, not_going: 0, total: 0
 
 export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
   const { user } = useAuth();
+  const location = useLocation();
   const { updateEventCheckIn, getEventCheckIns, getUserEventCheckIn } = useCommunityFeatures();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
@@ -39,7 +50,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
   const userStatus = data?.status ?? null;
   const checkInCounts = data?.counts ?? EMPTY_COUNTS;
 
-  const handleCheckIn = async (status: 'interested' | 'going' | 'maybe' | 'not_going') => {
+  const handleCheckIn = async (status: CheckInStatus) => {
     if (!user) return;
 
     setLoading(true);
@@ -67,7 +78,15 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
       <Card>
         <CardContent className="p-6 text-center">
           <SpriteIcon name="users" className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-muted-foreground">Sign in to say whether you're going to {eventTitle}</p>
+          <p className="text-muted-foreground">
+            <Link
+              to={signInHref(location.pathname, location.search)}
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              Sign in
+            </Link>{" "}
+            to say whether you're going to {eventTitle}
+          </p>
         </CardContent>
       </Card>
     );
@@ -85,43 +104,26 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
         {/* User's Status */}
         <div className="space-y-3">
           <p className="text-sm font-medium">Your status for this event:</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              onClick={() => handleCheckIn('going')}
-              disabled={loading}
-              variant={userStatus === 'going' ? 'default' : 'outline'}
-              className={`gap-2 ${userStatus === 'going' ? getStatusColor('going') : ''}`}
-            >
-              <Check className="w-4 h-4" />
-              Going
-            </Button>
-            <Button
-              onClick={() => handleCheckIn('interested')}
-              disabled={loading}
-              variant={userStatus === 'interested' ? 'default' : 'outline'}
-              className={`gap-2 ${userStatus === 'interested' ? getStatusColor('interested') : ''}`}
-            >
-              <Heart className="w-4 h-4" />
-              Interested
-            </Button>
-            <Button
-              onClick={() => handleCheckIn('maybe')}
-              disabled={loading}
-              variant={userStatus === 'maybe' ? 'default' : 'outline'}
-              className={`gap-2 ${userStatus === 'maybe' ? getStatusColor('maybe') : ''}`}
-            >
-              <SpriteIcon name="clock" className="w-4 h-4" />
-              Maybe
-            </Button>
-            <Button
-              onClick={() => handleCheckIn('not_going')}
-              disabled={loading}
-              variant={userStatus === 'not_going' ? 'default' : 'outline'}
-              className={`gap-2 ${userStatus === 'not_going' ? getStatusColor('not_going') : ''}`}
-            >
-              <X className="w-4 h-4" />
-              Not Going
-            </Button>
+          {/* aria-pressed carries the selected answer; before it only the
+              fill colour did, which a screen reader cannot see. */}
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Your status for this event">
+            {CHECK_IN_STATUSES.map((status) => {
+              const Icon = STATUS_ICONS[status];
+              const selected = userStatus === status;
+              return (
+                <Button
+                  key={status}
+                  onClick={() => handleCheckIn(status)}
+                  disabled={loading}
+                  aria-pressed={selected}
+                  variant={selected ? 'default' : 'outline'}
+                  className={`gap-2 min-h-[44px] ${selected ? getStatusColor(status) : ''}`}
+                >
+                  <Icon />
+                  {CHECK_IN_LABELS[status]}
+                </Button>
+              );
+            })}
           </div>
         </div>
 
