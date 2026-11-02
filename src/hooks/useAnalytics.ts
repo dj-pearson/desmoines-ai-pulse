@@ -19,6 +19,47 @@ const MAX_QUEUED_EVENTS = 500;
 const FLUSH_DELAY_MS = 10000;
 
 /**
+ * Retry backoff for a batch user_interactions_enhanced did not store
+ * (WEB-QA-038). The retry used to come every 10s for as long as the tab was
+ * open, so a table that rejected every insert drew six requests a minute from
+ * each consenting visitor. Now each consecutive failure doubles the wait, from
+ * FLUSH_DELAY_MS up to this cap.
+ */
+const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
+
+/**
+ * A batch the database refused this many times in a row (a 4xx, or a
+ * PostgREST/Postgres code like 42P01, 42703 or PGRST204) is dropped. Sending
+ * the same rows again will not change the answer. Network failures and 5xx
+ * do not count toward this: those batches are kept and retried on the backoff.
+ */
+const MAX_REJECTED_ATTEMPTS = 3;
+
+/** The wait before the next flush after `failures` consecutive failed flushes. */
+export function retryDelayMs(failures: number): number {
+  if (failures <= 0) return FLUSH_DELAY_MS;
+  return Math.min(FLUSH_DELAY_MS * 2 ** (failures - 1), MAX_RETRY_DELAY_MS);
+}
+
+/**
+ * Whether an insert error means "these rows will never be accepted" rather
+ * than "try later". supabase-js reports a failed fetch as status 0, so a
+ * status settles it when there is one; 408 and 429 are the 4xx worth
+ * retrying. Without a status, a Postgres/PostgREST error code (42xxx schema
+ * and permission, 23xxx constraint, 22xxx data, PGRSTxxx) is a rejection.
+ */
+export function isPermanentRejection(
+  error: { code?: string | null } | null | undefined,
+  status?: number | null,
+): boolean {
+  if (typeof status === 'number' && status > 0) {
+    return status >= 400 && status < 500 && status !== 408 && status !== 429;
+  }
+  if (status === 0) return false;
+  return /^(PGRST|42|23|22)/.test(error?.code ?? '');
+}
+
+/**
  * One session id per page load, shared by every mounted instance of the hook.
  * It is mounted three times on some routes (AllInclusiveDashboard, MostSearched,
  * SearchResults), and a per-instance id split one visit into that many
@@ -87,6 +128,11 @@ export function useAnalytics() {
   const eventQueue = useRef<InteractionInsert[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmounted = useRef(false);
+  // Consecutive failed flushes of any kind (sets the backoff), and consecutive
+  // rejections of the batch now queued (decides when it is dropped). Both
+  // reset when a batch lands.
+  const failedFlushes = useRef(0);
+  const rejectedAttempts = useRef(0);
 
   // Flush queued events to enhanced analytics table
   const flushEventQueue = useCallback(async () => {
@@ -112,33 +158,53 @@ export function useAnalytics() {
     // every event to user_analytics directly, so copying a failed batch there
     // recorded each of those events twice.
     let failed = false;
+    let rejected = false;
     try {
-      const { error } = await supabase.from('user_interactions_enhanced').insert(eventsToFlush);
+      const { error, status } = await supabase.from('user_interactions_enhanced').insert(eventsToFlush);
       if (error) {
         failed = true;
-        log.warn('flushEventQueue', 'user_interactions_enhanced insert rejected; re-queueing', {
+        rejected = isPermanentRejection(error, status);
+        log.warn('flushEventQueue', 'user_interactions_enhanced insert rejected', {
           count: eventsToFlush.length,
           message: error.message,
           code: error.code,
+          status,
         });
       }
     } catch (error) {
+      // A throw is a network or client failure, never the database's answer.
       failed = true;
       log.error('flushEventQueue', 'Error flushing analytics queue', { error });
     }
 
     if (failed) {
-      // Re-queue the events that failed, ahead of anything enqueued while the
-      // flush was in flight. Bounded so a persistent outage cannot grow the
-      // queue without limit; dropping the oldest analytics events is strictly
-      // better than pinning the tab's memory.
-      const requeued = [...eventsToFlush, ...eventQueue.current];
-      eventQueue.current = requeued.slice(-MAX_QUEUED_EVENTS);
+      failedFlushes.current += 1;
+      if (rejected) rejectedAttempts.current += 1;
+
+      if (rejectedAttempts.current >= MAX_REJECTED_ATTEMPTS) {
+        // The database has refused these rows MAX_REJECTED_ATTEMPTS times.
+        // Drop them. Anything queued during the flush stays and goes out on
+        // the backoff, which is not reset because nothing has landed yet.
+        log.warn('flushEventQueue', 'Dropping an analytics batch the database keeps rejecting', {
+          count: eventsToFlush.length,
+          attempts: rejectedAttempts.current,
+        });
+        rejectedAttempts.current = 0;
+      } else {
+        // Re-queue the events that failed, ahead of anything enqueued while
+        // the flush was in flight. Bounded so a persistent outage cannot grow
+        // the queue without limit; dropping the oldest analytics events is
+        // strictly better than pinning the tab's memory.
+        const requeued = [...eventsToFlush, ...eventQueue.current];
+        eventQueue.current = requeued.slice(-MAX_QUEUED_EVENTS);
+      }
       scheduleFlush();
       // Content metrics go out only for a batch that was stored, so a retried
       // batch is not counted twice.
       return;
     }
+    failedFlushes.current = 0;
+    rejectedAttempts.current = 0;
     log.debug('flushEventQueue', `Flushed ${eventsToFlush.length} enhanced analytics events`);
 
     // Batch content metrics to Edge Function (reduces overhead)
@@ -173,15 +239,16 @@ export function useAnalytics() {
 
   // Arm one delayed flush when something is waiting, instead of a standing
   // 10s interval per instance that ran whether or not anything was queued.
-  // After unmount the cleanup has already done the final flush, so nothing new
-  // is armed.
+  // The delay is FLUSH_DELAY_MS while flushes succeed and backs off while they
+  // fail (retryDelayMs). After unmount the cleanup has already done the final
+  // flush, so nothing new is armed.
   function scheduleFlush() {
     if (flushTimer.current || unmounted.current) return;
     if (eventQueue.current.length === 0) return;
     flushTimer.current = setTimeout(() => {
       flushTimer.current = null;
       void flushEventQueue();
-    }, FLUSH_DELAY_MS);
+    }, retryDelayMs(failedFlushes.current));
   }
 
   // No page view on mount. usePageTracking (App.tsx) already records the real
