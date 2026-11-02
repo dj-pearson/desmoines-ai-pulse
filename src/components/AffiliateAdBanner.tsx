@@ -5,6 +5,7 @@ import { isCapacitor, openExternalUrl } from '@/lib/capacitorUtils';
 import type { AffiliatePlacement } from '@/lib/affiliateAds';
 import { createViewabilityObserver } from '@/lib/tracking';
 import { logAdImpression, logAdClick } from '@/lib/adAnalytics';
+import { PLACEMENT_LABELS } from '@/components/adSlotSizes';
 
 interface AffiliateAdBannerProps {
   placement: AffiliatePlacement;
@@ -54,7 +55,10 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
       ref={ref}
       className={`relative cursor-pointer group ${sizeClasses} ${className}`}
       role="complementary"
-      aria-label={`${partner.name} affiliate advertisement`}
+      // Named by where it sits, like AdBanner (WEB-UX-046): the partner name
+      // is already in the creative's alt text, and two slots on one page need
+      // two different landmark names.
+      aria-label={`Advertisement, ${PLACEMENT_LABELS[placement]}`}
     >
       {/* FTC-compliant Ad label.
           Rendered ABOVE the creative rather than overlaid on it (WEB-QA-006).

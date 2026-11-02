@@ -3,8 +3,8 @@ import { PLACEMENT_RESERVE_CLASSES, type AdSlotPlacement } from "@/components/ad
 
 // AdBanner statically imports HouseAd, which imports UpgradeModal. As a static
 // import on /events, /restaurants and /attractions that put all three in each
-// hub's chunk. Index.tsx already lazy-loads it; this does the same for the
-// hubs, with a fallback the size of the slot so nothing shifts when it lands.
+// hub's chunk. This lazy-loads it for the hubs and Home, with a fallback the
+// size of the slot so nothing shifts when it lands.
 const AdBannerImpl = lazy(() =>
   import("@/components/AdBanner").then((m) => ({ default: m.AdBanner }))
 );

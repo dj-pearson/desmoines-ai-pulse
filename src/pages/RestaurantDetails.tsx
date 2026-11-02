@@ -33,7 +33,7 @@ import {
 } from "@/lib/restaurantMeta";
 import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
 import { Phone, Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
-import { useState, useMemo, useEffect, lazy, Suspense, type ReactNode } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import {
@@ -59,7 +59,7 @@ import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { isSponsoredActive } from "@/lib/sponsored";
 import { NearbyContent, TonightNearRestaurant } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
-import { LazySection } from "@/components/LazySection";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -77,22 +77,6 @@ const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPse
 const RatingSystem = lazy(() =>
   import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
 );
-
-interface DeferredWidgetProps {
-  minHeight: number;
-  label: string;
-  children: ReactNode;
-}
-
-/** Fixed-height box until mounted, so the deferred widget adds no layout shift. */
-function DeferredWidget({ minHeight, label, children }: DeferredWidgetProps) {
-  const reserve = <div style={{ minHeight }} aria-hidden="true" />;
-  return (
-    <LazySection minHeight={minHeight} label={label} placeholder={reserve}>
-      <Suspense fallback={reserve}>{children}</Suspense>
-    </LazySection>
-  );
-}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
