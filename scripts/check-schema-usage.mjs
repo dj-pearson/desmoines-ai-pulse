@@ -200,6 +200,10 @@ const PENDING_MIGRATIONS = [
   // validate-ios-receipt writes it in its own best-effort UPDATE that logs
   // PGRST204 until applied, so the entitlement write never depends on it.
   { table: 'user_subscriptions', column: 'apple_environment', migration: '20261102000001' },
+  // The For You RPC with is_sponsored / sponsored_until (WEB-PERF-052). The
+  // pending window is safe: useForYouRail falls back to v1 plus the follow-up
+  // events read on PGRST202 and stops asking for v2 for the session.
+  { rpc: 'get_personalized_recommendations_v2', migration: '20261102000002' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];
