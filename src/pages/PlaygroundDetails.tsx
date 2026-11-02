@@ -251,6 +251,7 @@ export default function PlaygroundDetails() {
             <div className="flex gap-2">
               <ShareDialog
                 title={playground.name}
+                itemName={playground.name}
                 description={playground.description || `${playground.name}, a playground in ${locality ?? "the Des Moines metro"}`}
                 url={typeof window !== "undefined" ? window.location.href : ""}
                 trigger={

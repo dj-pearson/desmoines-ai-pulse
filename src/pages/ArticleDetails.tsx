@@ -345,6 +345,7 @@ const ArticleDetails: React.FC = () => {
                   <ShareDialog
                     kind="article"
                     title={article.title}
+                    itemName={article.title}
                     description={article.excerpt || article.title}
                     url={canonicalUrl}
                     trigger={
@@ -424,6 +425,7 @@ const ArticleDetails: React.FC = () => {
                   <ShareDialog
                     kind="article"
                     title={article.title}
+                    itemName={article.title}
                     description={article.excerpt || article.title}
                     url={canonicalUrl}
                     trigger={
