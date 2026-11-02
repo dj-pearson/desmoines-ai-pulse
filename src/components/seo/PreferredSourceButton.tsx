@@ -173,8 +173,10 @@ export function PreferredSourceButton({
           {description}
         </p>
       )}
-      {/* Fixed-height slot so swapping link for button does not shift layout. */}
-      <div className="flex min-h-10 items-center">
+      {/* Fixed-height slot so swapping link for button does not shift layout.
+          44px, the project's tap minimum: at 375px the link text wraps to two
+          lines and min-h-10 measured 42px (tests/touch-targets.spec.ts). */}
+      <div className="flex min-h-11 items-center">
         {showGoogleButton && (
           <div
             key={theme}
@@ -191,7 +193,7 @@ export function PreferredSourceButton({
             rel="noopener noreferrer"
             data-preferred-source-link=""
             className={cn(
-              "inline-flex min-h-10 items-center rounded-full border px-4 text-sm font-medium transition-colors",
+              "inline-flex min-h-11 items-center rounded-full border px-4 py-1 text-sm font-medium transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               surface === "dark"
                 ? "border-neutral-600 text-white hover:bg-neutral-800 focus-visible:ring-offset-neutral-900"
