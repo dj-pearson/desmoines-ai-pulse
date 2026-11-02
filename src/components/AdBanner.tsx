@@ -1,3 +1,4 @@
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { useActiveAds } from "@/hooks/useActiveAds";
 import { useAdTracking } from "@/hooks/useAdTracking";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -16,7 +17,6 @@ import {
 } from "@/components/adSlotSizes";
 
 import { isCapacitor, openExternalUrl, toSafeExternalUrl } from "@/lib/capacitorUtils";
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AdBannerProps {
@@ -124,15 +124,16 @@ function AdSlot({ placement, className = "", fallback, adFree, tierLoading }: Ad
       {/* The creative is an <img> rather than a CSS background, so it has
           alternative text, an intrinsic size and a loading priority. */}
       {hasImage && (
-        <img
+        <OptimizedImage
           src={ad.image_url}
           alt={ad.title || ad.description || "Advertisement"}
           width={width}
           height={height}
-          className="absolute inset-0 w-full h-full object-cover"
-          loading={isAboveFold ? 'eager' : 'lazy'}
-          decoding="async"
-          {...fetchPriorityAttr(isAboveFold ? 'high' : undefined)}
+          containerClassName="absolute inset-0"
+          className="w-full h-full"
+          objectFit="cover"
+          priority={isAboveFold}
+          fetchPriority={isAboveFold ? 'high' : undefined}
         />
       )}
 
