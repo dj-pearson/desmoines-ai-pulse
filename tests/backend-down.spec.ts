@@ -47,6 +47,9 @@ const STATES_ABSENCE = [
   'No events are currently scheduled for this month',
   'No updates yet',
   'No trails match the selected filters',
+  // Home's MostSearched (useTrending). Its fallback reads logged their errors
+  // and returned empty lists as a success, so an outage rendered this.
+  'No rated places to show right now',
 ];
 
 /** Any of these means the page owned up to the failure. */
@@ -91,6 +94,37 @@ for (const route of ROUTES) {
     expect(text, `${route} showed neither content nor a failure state`).toMatch(ADMITS_FAILURE);
   });
 }
+
+/*
+ * Home's MostSearched sits in a LazySection far below the fold, so the "/"
+ * test above never mounts it and its STATES_ABSENCE entry asserts nothing
+ * there. This scrolls it into view. useTrending's fallback reads used to log
+ * their errors and return empty lists as a success, and the section told the
+ * visitor "No rated places to show right now" during an outage.
+ */
+test('home MostSearched admits a backend failure instead of "No rated places"', async ({ page }) => {
+  await cutTheBackend(page);
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  const section = page.locator('#most-searched');
+  // Each scroll can mount another LazySection and grow the page, so keep
+  // going to the bottom until this one has mounted.
+  await expect
+    .poll(
+      async () => {
+        await page.mouse.wheel(0, 4000);
+        return section.count();
+      },
+      { timeout: 30_000, message: 'MostSearched never mounted' },
+    )
+    .toBeGreaterThan(0);
+  await section.scrollIntoViewIfNeeded();
+
+  // The error lands after TanStack's retries.
+  await expect(section.getByRole('alert')).toBeVisible({ timeout: 45_000 });
+  await expect(section.getByRole('button', { name: /try again|retry/i })).toBeVisible();
+  await expect(section).not.toContainText('No rated places to show right now');
+});
 
 /*
  * Events pass 2 WP6 item 8. A landing whose first query failed has not

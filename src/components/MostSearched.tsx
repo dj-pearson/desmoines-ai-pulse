@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Baby, Search, Star, Utensils, type LucideIcon } from "lucide-react";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useAnalytics } from "@/hooks/useAnalytics";
@@ -198,6 +199,9 @@ export default function MostSearched() {
   const {
     trending,
     isLoading,
+    isError,
+    error,
+    refetch,
     hasRealData: hasRealTrendingData,
   } = useTrending({ types: TYPES, readScores: isAdmin });
   const { trackEvent } = useAnalytics();
@@ -272,7 +276,19 @@ export default function MostSearched() {
             ))}
           </Column>
 
-          {noPlaces && (
+          {/* A failed read has not found out whether anything is rated, so it
+              gets the error card, not the "no rated places" sentence. A failed
+              refetch over rows already on screen keeps the rows. */}
+          {noPlaces && isError && (
+            <ErrorState
+              error={error}
+              onRetry={() => void refetch()}
+              compact
+              className="md:col-span-1 lg:col-span-3"
+            />
+          )}
+
+          {noPlaces && !isError && (
             <p className="text-sm text-muted-foreground md:col-span-1 lg:col-span-3">
               No rated places to show right now.{" "}
               <Link to="/restaurants" className="font-medium text-foreground underline underline-offset-4">
