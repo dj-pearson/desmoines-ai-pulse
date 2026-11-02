@@ -9892,8 +9892,8 @@
         "Check existing svg objects in the bucket before applying"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+      "passes": true,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d). Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4. Run the svg check in the migration header against production before applying; existing svg objects are still served."
     },
     {
       "id": "WEB-UX-041",
@@ -9905,8 +9905,8 @@
         "getByRole('banner') count is 1 on hub and detail pages"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+      "passes": true,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d). Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
     },
     {
       "id": "WEB-QA-038",
@@ -9929,8 +9929,8 @@
         "Deno unit test on recipient selection"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+      "passes": true,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d). Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
     },
     {
       "id": "WEB-OPS-024",
@@ -9940,8 +9940,8 @@
         "Regenerate with tsx scripts/security-config-snapshot.ts"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d)."
+      "passes": true,
+      "notes": "Filed 2026-10-25 by the 15-loop pass (branch claude/15-loop-site-improvements-mk9w6d). Regenerated 2026-11-01 on claude/15-loop-site-improvements-nambs4; the verify_jwt=false list also caught up with config.toml."
     },
     {
       "id": "WEB-SEC-042",
@@ -10138,8 +10138,8 @@
         "No duplicate unnamed landmarks"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found in the 2026-10-28 audit, not done in that pass."
+      "passes": true,
+      "notes": "Found in the 2026-10-28 audit, not done in that pass. Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
     },
     {
       "id": "WEB-PERF-051",
@@ -10150,8 +10150,8 @@
         "sync_oauth_user_role only on SIGNED_IN"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found in the 2026-10-28 audit, not done in that pass."
+      "passes": true,
+      "notes": "Found in the 2026-10-28 audit, not done in that pass. Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
     },
     {
       "id": "WEB-PERF-052",
@@ -10164,6 +10164,200 @@
       "priority": 3,
       "passes": false,
       "notes": "Found in the 2026-10-28 audit, not done in that pass."
+    },
+    {
+      "id": "WEB-SEC-047",
+      "title": "Anyone with the anon key could add an active newsletter subscriber, skipping double opt-in",
+      "description": "Policy \"Anyone can subscribe to newsletter\" was FOR INSERT WITH CHECK (true) and status defaulted to active.",
+      "acceptanceCriteria": [
+        "Migration 20261101000001 drops the policy; writers are the service-role edge functions",
+        "Deno test in newsletter-double-optin.test.ts"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4. Check production for active rows with confirmed_at null since double opt-in shipped."
+    },
+    {
+      "id": "WEB-SEC-048",
+      "title": "contact_submissions accepted any user_id, filing a forged ticket in the victim's Support inbox",
+      "description": "mirror_contact_to_support copied NEW.user_id; support-console then treated it as authenticated.",
+      "acceptanceCriteria": [
+        "Insert policy WITH CHECK (user_id IS NULL OR user_id = auth.uid())",
+        "psql test supabase/tests/contact_submissions_user_id_check.sql"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4. Check production for submissions whose email differs from the linked account's. docs/RLS_AUDIT.md:231 still shows the old check."
+    },
+    {
+      "id": "WEB-SEC-049",
+      "title": "DB-sourced URLs rendered as hrefs with no scheme check",
+      "description": "Partner, author, menu, venue and admin tool links took any scheme; CSP was the only guard against javascript:.",
+      "acceptanceCriteria": [
+        "SafeExternalLink routes through safeHttpUrl and renders text otherwise",
+        "24 hrefs converted; vitest covers javascript:, data:, protocol-relative"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-PERF-053",
+      "title": "Ratings: three sequential uncached requests, refetched on every token refresh, plus one reputation request per review",
+      "description": "useRatings ran in a raw useEffect keyed on the user object; RatingSystem called useUserReputation per card and showed \"No ratings yet\" on error.",
+      "acceptanceCriteria": [
+        "TanStack Query keyed on content and user id; aggregate in parallel; limit 50",
+        "Reputations in one .in() call",
+        "ErrorState with retry; sign-in link keeps the return path",
+        "RestaurantDetails lazy-mounts RatingSystem"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-PERF-054",
+      "title": "AdBanner was a static import on the three hubs and waited on useSubscription for signed-out visitors",
+      "description": "Pulled HouseAd and UpgradeModal into each hub chunk.",
+      "acceptanceCriteria": [
+        "LazyAdBanner with a sized fallback",
+        "Signed-out path skips the plan lookup",
+        "tests/ad-slot.spec.ts in the smoke lane"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-PERF-055",
+      "title": "/events counted the same rows twice on every unfiltered visit",
+      "description": "Page 1 had an exact count and fetchHubCalendarSummary ran another over the same filter.",
+      "acceptanceCriteria": [
+        "Unfiltered total comes from page 1",
+        "events-request-budget pins exact counts at 2"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-PERF-056",
+      "title": "Nearby rails downloaded 60 full rows, descriptions included, to show 3 or 4",
+      "description": "useNearbyListings used the full list projections.",
+      "acceptanceCriteria": [
+        "One request per rail without description columns (a two-request version broke the event-detail budget of 7)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-UX-047",
+      "title": "ShareDialog: mailto body cut at \"&\", three fills under 4.5:1, about 30 identical \"Share\" buttons on /events",
+      "description": "ShareDialog.tsx.",
+      "acceptanceCriteria": [
+        "Subject and body encoded",
+        "Facebook 5.55, WhatsApp 7.67, Email 5.80 against white",
+        "Trigger named \"Share {item}\""
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-UX-048",
+      "title": "Home \"Most searched\" said \"No rated places\" during an outage",
+      "description": "useTrending swallowed fallback read errors and returned [].",
+      "acceptanceCriteria": [
+        "Hook throws when nothing came back; MostSearched renders ErrorState",
+        "String added to STATES_ABSENCE plus a scrolling backend-down test"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-UX-049",
+      "title": "Mobile sign-in and two \"Sign in to...\" prompts lost the page; check-in state was colour only",
+      "description": "BottomNav linked to bare /auth; EventCheckIn and EventReminderSettings had no link; toast said \"Marked as not_going!\".",
+      "acceptanceCriteria": [
+        "signInHref everywhere (now in lib/signInLinks)",
+        "aria-pressed and 44px targets",
+        "Shared status label map"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-UX-050",
+      "title": "A wrong password was a 5-second toast",
+      "description": "Auth.tsx handleLogin toasted; fields never marked invalid.",
+      "acceptanceCriteria": [
+        "Persistent role=alert slot in SignInForm",
+        "aria-invalid and aria-describedby on credentials errors; cleared on edit"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-UX-051",
+      "title": "Home search input carried aria-expanded as a plain searchbox",
+      "description": "axe aria-allowed-attr; hidden until WEB-UX-041 changed load timing so the scan saw the home page.",
+      "acceptanceCriteria": [
+        "role=combobox, aria-haspopup=dialog; panel is a non-modal dialog"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed 2026-11-01 on claude/15-loop-site-improvements-nambs4."
+    },
+    {
+      "id": "WEB-SEC-050",
+      "title": "Android receipts are not bound to one account",
+      "description": "validate-android-receipt upserts by user_id and never checks whether google_purchase_token is held by another user or compares obfuscatedExternalAccountId. iOS has this (decideAppleOwnership).",
+      "acceptanceCriteria": [
+        "Port the ownership check, log-only first as prd-android-overhaul.json notes",
+        "409 once the log is quiet"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
+    },
+    {
+      "id": "WEB-SEC-051",
+      "title": "Sandbox iOS purchases unlock production premium",
+      "description": "validate-ios-receipt falls back to sandbox and stores the same entitlement; only logged.",
+      "acceptanceCriteria": [
+        "Sandbox writes only for an allowlist, or cap current_period_end"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
+    },
+    {
+      "id": "WEB-QA-040",
+      "title": "Sixteen smoke specs fail on the pre-pass commit too",
+      "description": "touch-targets x6 (footer \"preferred source\" link 42px), weather-aware-events x4, getting-around, stay ?near=, restaurant-detail nearby events, restaurants-hub-pass2, things-to-do-hub weekend line, events-card-honesty untimed row. Reproduced on 21b1d56 locally on 2026-11-02; several look date-dependent.",
+      "acceptanceCriteria": [
+        "Triage each against CI; fix or re-date fixtures"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
+    },
+    {
+      "id": "WEB-PERF-057",
+      "title": "Leftovers from the ratings and ad loops",
+      "description": "AttractionDetails still imports RatingSystem statically; useUserReputation still selects *; AffiliateAdBanner labels its landmark with the partner name; Index.tsx keeps its own lazy AdBanner import.",
+      "acceptanceCriteria": [
+        "Copy the RestaurantDetails DeferredWidget pattern",
+        "Explicit columns",
+        "Placement label"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-11-01 in the 15-loop pass on claude/15-loop-site-improvements-nambs4, not done."
     }
   ]
 }
