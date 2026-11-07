@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useReferralStats } from "@/hooks/useReferralStats";
 import { BRAND } from "@/lib/brandConfig";
+import { shareWithOutcome } from "@/lib/capacitorUtils";
 import { ErrorSeverity, handleError } from "@/lib/errorHandler";
 import { referralCountLabel } from "@/lib/referralCode";
 
@@ -18,6 +19,12 @@ import { referralCountLabel } from "@/lib/referralCode";
  *
  * Hidden while loading and whenever the stats RPC is unavailable, so a
  * database without 20261006000002 shows no card rather than a broken one.
+ *
+ * Share (WEB-ADS-020): on a phone an invite goes out through a messaging app,
+ * and "copy, switch app, paste" is three steps where the share sheet is one.
+ * The button appears only where navigator.share exists. A closed sheet is the
+ * member's answer and changes nothing (their clipboard included); a sheet that
+ * cannot open falls back to copying, so the press still does something.
  */
 export function InviteFriendsCard() {
   const { data } = useReferralStats();
@@ -27,6 +34,7 @@ export function InviteFriendsCard() {
   if (!data) return null;
 
   const link = `${BRAND.baseUrl}/?ref=${data.referralCode}`;
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   const copy = async () => {
     try {
@@ -39,6 +47,15 @@ export function InviteFriendsCard() {
     }
   };
 
+  const share = async () => {
+    const outcome = await shareWithOutcome({
+      title: BRAND.name,
+      text: `Find things to do in ${BRAND.city} on ${BRAND.name}.`,
+      url: link,
+    });
+    if (outcome === "unavailable") await copy();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -48,11 +65,18 @@ export function InviteFriendsCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex gap-2">
-          <Input value={link} readOnly aria-label="Your invite link" className="flex-1" />
-          <Button type="button" onClick={copy} className="min-h-11">
-            {copied ? "Copied" : "Copy link"}
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <Input value={link} readOnly aria-label="Your invite link" className="min-w-0 flex-1 basis-48" />
+          <div className="flex gap-2">
+            {canShare && (
+              <Button type="button" onClick={share} className="min-h-11">
+                Share
+              </Button>
+            )}
+            <Button type="button" variant={canShare ? "outline" : "default"} onClick={copy} className="min-h-11">
+              {copied ? "Copied" : "Copy link"}
+            </Button>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">{referralCountLabel(data)}</p>
       </CardContent>
