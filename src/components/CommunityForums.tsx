@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,15 @@ export function CommunityForums() {
   const [newReply, setNewReply] = useState('');
   const [isCreateForumOpen, setIsCreateForumOpen] = useState(false);
   const [isCreateThreadOpen, setIsCreateThreadOpen] = useState(false);
+
+  // WEB-UX-053: every field is named by a Label tied to its id. A bare <label>
+  // beside the input left screen readers announcing only the placeholder.
+  const fieldId = useId();
+  const forumTitleId = `${fieldId}-forum-title`;
+  const forumDescriptionId = `${fieldId}-forum-description`;
+  const threadTitleId = `${fieldId}-thread-title`;
+  const threadContentId = `${fieldId}-thread-content`;
+  const replyId = `${fieldId}-reply`;
 
   // WEB-UX-052: opening a forum or thread swaps the whole card, so the control
   // that had focus unmounts and keyboard/screen-reader users land on <body>.
@@ -199,7 +209,9 @@ export function CommunityForums() {
           {/* New Reply */}
           {!selectedThread.is_locked && (
             <div className="space-y-2">
+              <Label htmlFor={replyId}>Your reply</Label>
               <Textarea
+                id={replyId}
                 placeholder="Write your reply..."
                 value={newReply}
                 onChange={(e) => setNewReply(e.target.value)}
@@ -247,8 +259,9 @@ export function CommunityForums() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium">Title</label>
+                    <Label htmlFor={threadTitleId}>Title</Label>
                     <Input
+                      id={threadTitleId}
                       placeholder="Thread title..."
                       value={newThreadData.title}
                       onChange={(e) => setNewThreadData(prev => ({
@@ -258,8 +271,9 @@ export function CommunityForums() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Content</label>
+                    <Label htmlFor={threadContentId}>Content</Label>
                     <Textarea
+                      id={threadContentId}
                       placeholder="What would you like to discuss?"
                       value={newThreadData.content}
                       onChange={(e) => setNewThreadData(prev => ({
@@ -363,8 +377,9 @@ export function CommunityForums() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Title</label>
+                  <Label htmlFor={forumTitleId}>Title</Label>
                   <Input
+                    id={forumTitleId}
                     placeholder="Forum title..."
                     value={newForumData.title}
                     onChange={(e) => setNewForumData(prev => ({
@@ -374,8 +389,9 @@ export function CommunityForums() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Description</label>
+                  <Label htmlFor={forumDescriptionId}>Description</Label>
                   <Textarea
+                    id={forumDescriptionId}
                     placeholder="What is this forum about?"
                     value={newForumData.description}
                     onChange={(e) => setNewForumData(prev => ({
