@@ -10,7 +10,6 @@ const RANGES = [7, 30, 90] as const;
 interface ListingStatsPanelProps {
   listingType: StatsListingType;
   listingId: string;
-  listingName: string;
 }
 
 /**
@@ -58,7 +57,7 @@ function ViewsBars({ series, label }: { series: StatDay[]; label: string }) {
  * counts only include visitors who allowed analytics cookies, because that is
  * true and an owner comparing this to their own foot traffic should know it.
  */
-export function ListingStatsPanel({ listingType, listingId, listingName }: ListingStatsPanelProps) {
+export function ListingStatsPanel({ listingType, listingId }: ListingStatsPanelProps) {
   const [days, setDays] = useState<number>(30);
   const headingId = useId();
   const { data, isLoading, error, refetch } = useListingOwnerStats(listingType, listingId, days, true);
@@ -79,7 +78,9 @@ export function ListingStatsPanel({ listingType, listingId, listingName }: Listi
     <section aria-labelledby={headingId} className="space-y-4 rounded-xl border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h4 id={headingId} className="text-sm font-semibold">
-          How {listingName} is doing
+          {/* No listing name here: the claim row's own heading already names it,
+              and repeating it made two headings match the same name. */}
+          Visitor numbers
         </h4>
         <div role="group" aria-label="Date range" className="inline-flex rounded-lg border p-0.5">
           {RANGES.map((r) => (
