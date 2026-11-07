@@ -236,8 +236,8 @@ export default function ArticleEditor() {
           {!isNewArticle && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4" />
+                <Button variant="destructive" size="sm" aria-label="Delete article">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -365,16 +365,20 @@ export default function ArticleEditor() {
                     placeholder="Add SEO keyword..."
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
                   />
-                  <Button onClick={handleAddKeyword} size="sm">
-                    <Plus className="h-4 w-4" />
+                  <Button onClick={handleAddKeyword} size="sm" aria-label="Add keyword">
+                    <Plus className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {articleData.seo_keywords.map((keyword) => (
                     <Badge key={keyword} variant="secondary" className="gap-1">
                       {keyword}
-                      <button onClick={() => handleRemoveKeyword(keyword)}>
-                        <X className="h-3 w-3" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveKeyword(keyword)}
+                        aria-label={`Remove keyword ${keyword}`}
+                      >
+                        <X className="h-3 w-3" aria-hidden="true" />
                       </button>
                     </Badge>
                   ))}
@@ -451,16 +455,20 @@ export default function ArticleEditor() {
                   placeholder="Add tag..."
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                 />
-                <Button onClick={handleAddTag} size="sm">
-                  <Plus className="h-4 w-4" />
+                <Button onClick={handleAddTag} size="sm" aria-label="Add tag">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {articleData.tags.map((tag) => (
                   <Badge key={tag} variant="outline" className="gap-1">
                     {tag}
-                    <button onClick={() => handleRemoveTag(tag)}>
-                      <X className="h-3 w-3" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      aria-label={`Remove tag ${tag}`}
+                    >
+                      <X className="h-3 w-3" aria-hidden="true" />
                     </button>
                   </Badge>
                 ))}

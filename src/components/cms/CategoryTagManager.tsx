@@ -398,13 +398,14 @@ export function CategoryTagManager() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleOpenCategoryDialog(category)}
+                        aria-label={`Edit category ${category.name}`}
                       >
-                        <Edit className="h-3 w-3" />
+                        <Edit className="h-3 w-3" aria-hidden="true" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                          <Button variant="ghost" size="sm" aria-label={`Delete category ${category.name}`}>
+                            <Trash2 className="h-3 w-3 text-destructive" aria-hidden="true" />
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -477,19 +478,25 @@ export function CategoryTagManager() {
                   <Badge variant="secondary" className="text-xs">
                     {tag.usage_count} uses
                   </Badge>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0"
                       onClick={() => handleOpenTagDialog(tag)}
+                      aria-label={`Edit tag ${tag.name}`}
                     >
-                      <Edit className="h-3 w-3" />
+                      <Edit className="h-3 w-3" aria-hidden="true" />
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <Trash2 className="h-3 w-3 text-destructive" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          aria-label={`Delete tag ${tag.name}`}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" aria-hidden="true" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>

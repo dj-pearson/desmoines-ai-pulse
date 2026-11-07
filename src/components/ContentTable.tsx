@@ -854,16 +854,20 @@ export default function ContentTable({
               size="sm"
               onClick={() => setViewMode("table")}
               className="rounded-r-none"
+              aria-label="Table view"
+              aria-pressed={viewMode === "table"}
             >
-              <List className="h-4 w-4" />
+              <List className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant={viewMode === "card" ? "default" : "ghost"}
               size="sm"
               onClick={() => setViewMode("card")}
               className="rounded-l-none"
+              aria-label="Card view"
+              aria-pressed={viewMode === "card"}
             >
-              <LayoutGrid className="h-4 w-4" />
+              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
           {type === "event" && viewMode === "table" && (
@@ -1158,8 +1162,9 @@ export default function ContentTable({
                           variant="outline"
                           onClick={() => handleEnhanceContent(item)}
                           disabled={enhancingId === item.id}
+                          aria-label={`Enhance ${itemTitle} with AI`}
                         >
-                          <SpriteIcon name="sparkles" className="h-3 w-3" />
+                          <SpriteIcon name="sparkles" className="h-3 w-3" aria-hidden="true" />
                         </Button>
                         {(type === "event" || type === "restaurant") && (
                           <Button
@@ -1202,8 +1207,9 @@ export default function ContentTable({
                               onDelete(item.id);
                             }
                           }}
+                          aria-label={`Delete ${itemTitle}`}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-3 w-3" aria-hidden="true" />
                         </Button>
                       </div>
                     </CardContent>
@@ -1376,16 +1382,18 @@ export default function ContentTable({
                                   size="sm"
                                   variant="outline"
                                   onClick={() => onEdit(item)}
+                                  aria-label={`Edit ${item.title || item.name || "Untitled"}`}
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Edit className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleEnhanceContent(item)}
                                   disabled={enhancingId === item.id}
+                                  aria-label={`Enhance ${item.title || item.name || "Untitled"} with AI`}
                                 >
-                                  <SpriteIcon name="sparkles" className="h-4 w-4" />
+                                  <SpriteIcon name="sparkles" className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                                 {(type === "event" || type === "restaurant") && (
                                   <Button
@@ -1428,8 +1436,9 @@ export default function ContentTable({
                                       onDelete(item.id);
                                     }
                                   }}
+                                  aria-label={`Delete ${item.title || item.name || "Untitled"}`}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                               </div>
                             </TableCell>

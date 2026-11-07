@@ -280,8 +280,9 @@ export function RestaurantFilters({
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsExpanded(false)}
+                aria-label="Close advanced filters"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </CardTitle>
           </CardHeader>
