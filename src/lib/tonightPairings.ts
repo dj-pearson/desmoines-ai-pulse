@@ -25,6 +25,7 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { haversineDistance } from "@/lib/geo";
 import {
   hoursTextOf,
+  isServingToday,
   resolveOpenStatus,
   type RestaurantOpenResult,
   type StoredOpeningHours,
@@ -118,6 +119,8 @@ export interface TonightRestaurant {
   hours_json?: StoredOpeningHours | null;
   opening_date?: string | null;
   status?: string | null;
+  /** Google's business_status: the only place a temporary closure is recorded. */
+  business_status?: string | null;
 }
 
 export interface TonightDinner {
@@ -442,6 +445,7 @@ export function isOpenForDinner(
   now: Date,
 ): RestaurantOpenResult | null {
   if (restaurant.status && NOT_SERVING.has(restaurant.status)) return null;
+  if (!isServingToday(restaurant)) return null;
   if (restaurant.opening_date) {
     const opens = Date.parse(restaurant.opening_date);
     if (Number.isFinite(opens) && opens > now.getTime()) return null;

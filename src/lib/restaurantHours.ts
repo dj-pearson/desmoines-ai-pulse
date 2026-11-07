@@ -805,6 +805,47 @@ export function isPermanentlyClosedRestaurant(
 }
 
 /**
+ * Google's business_status values that mean nobody is serving there today.
+ * The CHECK on restaurants.status has no temporarily-closed value, so a
+ * temporary closure is recorded ONLY here, and Google keeps publishing the
+ * regular weekly hours of a temporarily closed place.
+ */
+const NOT_SERVING_BUSINESS_STATUSES: ReadonlySet<string> = new Set([
+  'CLOSED_TEMPORARILY',
+  'CLOSED_PERMANENTLY',
+]);
+
+/**
+ * Can someone eat here today? isVisitableStatus plus Google's business_status.
+ * Every surface that prints "Open now" or "open until 10 PM" from hours has to
+ * ask this rather than isVisitableStatus alone: hours_json still says open on
+ * a CLOSED_TEMPORARILY row, and the evaluator would believe it.
+ */
+export function isServingToday(
+  row: { status?: string | null; business_status?: string | null } | null | undefined,
+): boolean {
+  if (!row) return false;
+  if (!isVisitableStatus(row.status)) return false;
+  const google = row.business_status?.trim().toUpperCase();
+  return !google || !NOT_SERVING_BUSINESS_STATUSES.has(google);
+}
+
+/**
+ * The card label for Google's business_status, or undefined when it says
+ * nothing that overrides the hours.
+ */
+export function businessStatusLabel(businessStatus: string | null | undefined): string | undefined {
+  switch (businessStatus?.trim().toUpperCase()) {
+    case 'CLOSED_PERMANENTLY':
+      return 'Permanently closed';
+    case 'CLOSED_TEMPORARILY':
+      return 'Temporarily closed';
+    default:
+      return undefined;
+  }
+}
+
+/**
  * PostgREST `or` filter that keeps every restaurant that has not closed for
  * good. status is nullable and `.neq('status','closed')` would also drop the
  * NULL rows, hence the OR. Repeated `or` params are ANDed by PostgREST

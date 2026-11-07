@@ -156,9 +156,10 @@ export const TONIGHT_EVENT_COLUMNS =
 /**
  * Every column pickDinner and the Tonight card read, and nothing else.
  * hours_json (SEO-054): the only hours production carries; `opening` is a date.
+ * business_status: a temporary closure is recorded only there (WEB-FEAT-037).
  */
 export const TONIGHT_RESTAURANT_COLUMNS =
-  "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status";
+  "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status, business_status";
 
 /**
  * The four columns needed to DERIVE an event slug, and nothing else
