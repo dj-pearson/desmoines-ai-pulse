@@ -158,3 +158,13 @@ Deno.test("a reader-plan checkout leaves an open Business Pro checkout alone", a
   assert.match(src, /if \(other\.metadata\?\.kind === "business_pro"\) continue;/);
   assert.match(src, /stripe\.checkout\.sessions\.expire\(other\.id\)/);
 });
+
+Deno.test("deleting an account cancels Business Pro billing before anything is erased", async () => {
+  const src = await read("supabase/functions/delete-user-account/index.ts");
+  const read_ = src.indexOf('.from("business_subscriptions")');
+  const cancel = src.indexOf("await cancelBillingBeforeErasure(");
+  const purge = src.indexOf("PURGE_TABLES", cancel);
+  assert.ok(read_ > 0 && cancel > 0 && purge > 0, "the read, the cancel and the purge exist");
+  assert.ok(read_ < cancel && cancel < purge, "Business Pro rows are read and cancelled before the purge");
+  assert.match(src.slice(cancel, purge), /businessRows/);
+});
