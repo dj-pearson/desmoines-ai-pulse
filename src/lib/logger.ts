@@ -18,8 +18,15 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 3,
 };
 
+// import.meta.env is Vite's. functions/calendar/[[path]].ts reaches this file
+// through timezone.ts, and the Pages Functions bundle has no env object, so a
+// bare `import.meta.env.PROD` would throw inside the very catch blocks that
+// call the logger. Absent means production.
+const viteEnv = (import.meta as { env?: { PROD?: boolean } }).env;
+const IS_PROD = viteEnv ? Boolean(viteEnv.PROD) : true;
+
 function shouldLog(level: LogLevel): boolean {
-  if (import.meta.env.PROD) {
+  if (IS_PROD) {
     // In production, only warn and error are logged
     return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY.warn;
   }

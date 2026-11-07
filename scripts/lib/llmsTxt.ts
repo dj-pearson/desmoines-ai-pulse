@@ -124,5 +124,8 @@ ${months.join('\n')}${months.length ? '\n' : ''}
 ## Feeds
 - [Sitemap index](${base}/sitemap.xml)
 - [RSS](${base}/rss.xml): new articles and upcoming events
+- [Calendar feed, all events](${base}/calendar/all.ics): iCalendar, next 60 days, refreshed hourly
+- [Calendar feed, free events](${base}/calendar/free.ics): iCalendar, events listed as free
+- Per-category calendar feeds: ${base}/calendar/<category>.ics, e.g. music, sports, arts, family, food
 `;
 }

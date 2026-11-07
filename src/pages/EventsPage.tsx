@@ -44,6 +44,7 @@ import { arrangeSponsored, isSponsoredActive, SPONSORED_CAP } from "@/lib/sponso
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { buildEventItemList } from "@/lib/eventSchema";
 import { EVENT_CATEGORIES, isCanonicalCategory } from "@/lib/eventCategories";
+import { feedForCategory } from "@/lib/calendarFeeds";
 import { findEventArea } from "@/lib/eventAreas";
 import { isPrerender } from "@/lib/isPrerender";
 import { centralDateOf, createEventSlugWithCentralTime } from "@/lib/timezone";
@@ -714,6 +715,11 @@ export default function EventsPage() {
           isLocating={isLoadingLocation}
           onToggleNearMe={handleNearMe}
           summary={calendarSummary}
+          subscribeFeedSlug={
+            priceRange === "free"
+              ? "free"
+              : feedForCategory(selectedCategory === "all" ? null : selectedCategory).slug
+          }
         />
 
         <EventFiltersSheet
