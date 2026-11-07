@@ -14,3 +14,4 @@ None. (When a loop splits work, write here: story id, what's done, what's next, 
 
 | Date | Story | Commit | Result |
 |---|---|---|---|
+| 2026-11-07 | IOS-AUDIT-FEAT-038 | this commit | `/neighborhoods/<slug>` links open that guide natively (were the hub); 5 new unit tests; not compiled (no Xcode here) |

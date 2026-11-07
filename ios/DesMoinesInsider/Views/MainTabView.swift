@@ -127,6 +127,9 @@ struct MainTabView: View {
         /// UUID or slug (IOS-DD-GUIDES-22).
         case article(String)
         case discover(DiscoverDestination)
+        /// One neighborhood guide (IOS-AUDIT-FEAT-038). Static content, so
+        /// nothing to fetch; the guide loads its own rails.
+        case neighborhood(Neighborhood)
         /// A first-party page with no native screen, in SafariView
         /// (IOS-DD-PLATFORM-02).
         case web(URL)
@@ -139,6 +142,7 @@ struct MainTabView: View {
             case .hotel(let id): return "hotel-\(id)"
             case .article(let id): return "article-\(id)"
             case .discover(let d): return "discover-\(d.rawValue)"
+            case .neighborhood(let n): return "neighborhood-\(n.slug)"
             case .web(let url): return "web-\(url.absoluteString)"
             }
         }
@@ -290,6 +294,14 @@ struct MainTabView: View {
         case .hotel(let id): present(.hotel(id))
         case .article(let id): present(.article(id))
         case .discover(let d): present(.discover(d))
+        case .neighborhood(let slug):
+            // DeepLinkHandler only emits a slug bySlug knows; the hub is the
+            // fallback should that ever drift.
+            if let n = Neighborhood.bySlug(slug) {
+                present(.neighborhood(n))
+            } else {
+                present(.discover(.neighborhoods))
+            }
         case .web(let url): present(.web(url))
         case .search(let query):
             // Through the intent path, so Search applies it the way it
@@ -610,6 +622,8 @@ struct DeepLinkResolverView: View {
         switch presentation {
         case .discover(let destination):
             destination.destinationView
+        case .neighborhood(let neighborhood):
+            NeighborhoodDetailView(neighborhood: neighborhood)
         case .web(let url):
             SafariView(url: url).ignoresSafeArea()
         case .event, .restaurant, .attraction, .hotel, .article:
@@ -682,7 +696,7 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): path = "attractions/\(id)"
         case .hotel(let id): path = "stay/\(id)"
         case .article(let id): path = "articles/\(id)"
-        case .discover, .web: return nil
+        case .discover, .neighborhood, .web: return nil
         }
         return URL(string: path, relativeTo: Config.siteURL)?.absoluteURL
     }
@@ -695,13 +709,13 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): return "attraction-\(id)"
         case .hotel(let id): return "hotel-\(id)"
         case .article(let id): return "article-\(id)"
-        case .discover, .web: return nil
+        case .discover, .neighborhood, .web: return nil
         }
     }
 
     private func resolve() async {
         switch presentation {
-        case .discover, .web:
+        case .discover, .neighborhood, .web:
             return // rendered directly
         case .event, .restaurant, .attraction, .hotel, .article:
             break
@@ -742,7 +756,7 @@ struct DeepLinkResolverView: View {
                 return .article(try await ArticlesService.shared.fetchArticle(id: id))
             }
             return .article(try await ArticlesService.shared.fetchArticle(slug: id))
-        case .discover, .web:
+        case .discover, .neighborhood, .web:
             return .loading
         }
     }

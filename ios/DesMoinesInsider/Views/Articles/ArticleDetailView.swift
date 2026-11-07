@@ -266,6 +266,11 @@ struct ArticleDetailView: View {
         case .hotel(let id): return .hotel(id)
         case .article(let id): return .article(id)
         case .discover(let d): return .discover(d)
+        case .neighborhood(let slug):
+            // A guide linking a neighborhood opens it natively
+            // (IOS-AUDIT-FEAT-038); an unknown slug falls back to the web.
+            guard let neighborhood = Neighborhood.bySlug(slug) else { return nil }
+            return .neighborhood(neighborhood)
         // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
         case .tab, .search, .web: return nil
         }

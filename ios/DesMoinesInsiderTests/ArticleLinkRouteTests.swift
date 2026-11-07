@@ -44,4 +44,11 @@ final class ArticleLinkRouteTests: XCTestCase {
         XCTAssertNil(ArticleDetailView.nativePresentation(for: .tab(.home)))
         XCTAssertNil(ArticleDetailView.nativePresentation(for: nil))
     }
+
+    func testNeighborhoodLinkOpensTheNativeGuide() {
+        // IOS-AUDIT-FEAT-038: a guide that links /neighborhoods/<slug>.
+        let presentation = ArticleDetailView.nativePresentation(for: .neighborhood(slug: "ankeny"))
+        XCTAssertEqual(presentation?.id, "neighborhood-ankeny")
+        XCTAssertNil(ArticleDetailView.nativePresentation(for: .neighborhood(slug: "not-a-place")))
+    }
 }

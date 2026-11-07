@@ -10,6 +10,8 @@ import os
 /// - `desmoinesinsider.com/attractions/:id-or-slug` → Attraction detail
 /// - `desmoinesinsider.com/stay/:id-or-slug` → Hotel detail
 /// - `desmoinesinsider.com/articles/:id-or-slug` → Article reader
+/// - `desmoinesinsider.com/neighborhoods/:slug` → Neighborhood guide, or the
+///   Neighborhoods hub for a slug the app has no guide for
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
 /// - `com.desmoines.aipulse://auth-callback` → Auth callback (handled by Supabase)
@@ -31,6 +33,9 @@ final class DeepLinkHandler {
         case tab(MainTabView.Tab)
         /// A Discover-hub parity surface (IOS-IA-002), e.g. trip planner, deals.
         case discover(DiscoverDestination)
+        /// One curated neighborhood guide, by its `Neighborhood.slug`
+        /// (IOS-AUDIT-FEAT-038). Only ever a slug `Neighborhood.bySlug` knows.
+        case neighborhood(slug: String)
         /// The Search tab with this text (IOS-DD-PLATFORM-02).
         case search(query: String)
         /// A first-party page with no native screen, shown in SafariView so a
@@ -232,6 +237,16 @@ final class DeepLinkHandler {
         return .tab(.home)
     }
 
+    /// /neighborhoods/<slug> (IOS-AUDIT-FEAT-038). Every slug the web builds
+    /// (src/lib/neighborhoods.ts) is in Neighborhood.all, so a shared guide
+    /// opens that guide; it used to open the hub and leave the user to find
+    /// it again. A slug the app has no guide for still lands on the hub, never
+    /// on nothing. Exact match against the curated list is the validation.
+    static func neighborhoodDestination(_ raw: String) -> Destination {
+        if let match = Neighborhood.bySlug(raw) { return .neighborhood(slug: match.slug) }
+        return .discover(.neighborhoods)
+    }
+
     private func parseUniversalLink(_ url: URL) -> Destination? {
         guard Self.isFirstPartyWebURL(url) else { return nil }
 
@@ -285,6 +300,8 @@ final class DeepLinkHandler {
             if let id = Self.slugOrUUID(rawId) { return .article(id: id) }
             AppLogger.nav.warning("Rejected invalid article link: \(rawId.prefix(50))")
             return .discover(.articles)
+        case "neighborhoods":
+            return Self.neighborhoodDestination(rawId)
         default:
             // Discover-hub parity surfaces (IOS-IA-002): the path's first
             // component is itself the slug, e.g. /trip-planner, /deals.

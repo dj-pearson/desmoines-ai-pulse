@@ -231,6 +231,38 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/Bad%20Slug"), .tab(.home))
     }
 
+    // MARK: - Neighborhood guides (IOS-AUDIT-FEAT-038)
+
+    func testNeighborhoodLinkOpensThatGuide() {
+        XCTAssertEqual(dest("/neighborhoods/ankeny"), .neighborhood(slug: "ankeny"))
+        XCTAssertEqual(dest("/neighborhoods/west-des-moines"), .neighborhood(slug: "west-des-moines"))
+        // The web 301s these two to /things-to-do/..., but the app claims
+        // /neighborhoods/* and has a native guide for both.
+        XCTAssertEqual(dest("/neighborhoods/east-village"), .neighborhood(slug: "east-village"))
+        XCTAssertEqual(dest("/neighborhoods/downtown"), .neighborhood(slug: "downtown"))
+    }
+
+    func testEveryWebNeighborhoodSlugHasANativeGuide() {
+        // src/lib/neighborhoods.ts NEIGHBORHOODS, the slugs the web links to.
+        let webSlugs = ["east-village", "west-des-moines", "ankeny", "urbandale",
+                        "johnston", "clive", "waukee", "altoona"]
+        for slug in webSlugs {
+            XCTAssertEqual(dest("/neighborhoods/\(slug)"), .neighborhood(slug: slug), slug)
+        }
+    }
+
+    func testUnknownOrMalformedNeighborhoodFallsBackToTheHub() {
+        XCTAssertEqual(dest("/neighborhoods/beaverdale"), .discover(.neighborhoods))
+        XCTAssertEqual(dest("/neighborhoods/Ankeny"), .discover(.neighborhoods))
+        XCTAssertEqual(dest("/neighborhoods/ankeny%20"), .discover(.neighborhoods))
+        XCTAssertEqual(dest("/neighborhoods"), .discover(.neighborhoods))
+    }
+
+    func testNeighborhoodLinkIsRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/neighborhoods/clive")!))
+        XCTAssertEqual(handler.consumeDestination(), .neighborhood(slug: "clive"))
+    }
+
     // MARK: - Nothing claimed strands the user (IOS-DD-PLATFORM-02)
 
     func testEveryClaimedPathRoutes() {
