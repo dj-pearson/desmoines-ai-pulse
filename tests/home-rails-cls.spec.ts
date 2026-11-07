@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { installFixtureBackend } from './support/fixtureBackend';
+import { centralDay } from './support/fixtureClock';
 
 /**
  * Home plan WP2 and pass-2 WP3: the For You and recently viewed rails, and the
@@ -120,7 +121,9 @@ const OPENINGS = [0, 1, 2].map((i) => ({
   merged_at: null,
   merged_into: null,
   opening: true,
-  opening_date: '2026-11-01',
+  // Upcoming relative to today: this spec does not pin the clock, and the
+  // literal '2026-11-01' that stood here went stale on 2026-11-02 (WEB-QA-041).
+  opening_date: centralDay(30),
   opening_timeframe: null,
   phone: null,
   popularity_score: 0,

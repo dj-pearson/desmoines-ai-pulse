@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { installFixtureBackend } from './support/fixtureBackend';
+import { centralDay, shortDay } from './support/fixtureClock';
 
 /**
  * WP3 (docs/page-plans/home.md, home-pass2.md): the "Explore Des Moines" block.
@@ -20,6 +21,15 @@ import { installFixtureBackend } from './support/fixtureBackend';
  */
 
 const ISO = '2026-01-01T00:00:00Z';
+
+/**
+ * Relative to today, because this spec does not pin the clock. These were
+ * literals ('2026-11-01' upcoming, '2026-09-12' just opened) and the upcoming
+ * one went stale on 2026-11-02: the dashboard rightly dropped the openings and
+ * the slug test failed in the required lane (WEB-QA-041).
+ */
+const UPCOMING_DAY = centralDay(30);
+const JUST_OPENED_DAY = centralDay(-14);
 
 function opening(i: number, name: string, slug: string) {
   return {
@@ -47,7 +57,7 @@ function opening(i: number, name: string, slug: string) {
     merged_at: null,
     merged_into: null,
     opening: true,
-    opening_date: '2026-11-01',
+    opening_date: UPCOMING_DAY,
     opening_timeframe: null,
     phone: null,
     popularity_score: 0,
@@ -66,7 +76,7 @@ const OPENINGS = [
   // Still marked upcoming, dated last year: must not be shown at all.
   { ...opening(3, 'Stale Promise Cafe', 'stale-promise-cafe'), opening_date: '2025-03-03' },
   // Opened recently.
-  { ...opening(4, 'Just Opened Deli', 'just-opened-deli'), status: 'newly_opened', opening_date: '2026-09-12' },
+  { ...opening(4, 'Just Opened Deli', 'just-opened-deli'), status: 'newly_opened', opening_date: JUST_OPENED_DAY },
 ];
 
 const PLAYGROUNDS = [
@@ -191,7 +201,7 @@ test('openings never print a date that has passed, and recent ones say Opened', 
   await dashboard.getByRole('tab', { name: 'New openings' }).click();
 
   await expect(dashboard.locator('a[href="/restaurants/just-opened-deli"]')).toHaveCount(1);
-  await expect(dashboard.locator('article', { hasText: 'Just Opened Deli' })).toContainText(/Opened Sep 12/);
+  await expect(dashboard.locator('article', { hasText: 'Just Opened Deli' })).toContainText(`Opened ${shortDay(JUST_OPENED_DAY)}`);
   await expect(dashboard.getByText('Stale Promise Cafe')).toHaveCount(0);
   await expect(dashboard.getByText(/Open(s|ing) Mar 3, 2025/)).toHaveCount(0);
 });
