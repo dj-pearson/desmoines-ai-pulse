@@ -9711,7 +9711,7 @@
         "/advertise (src/pages/Advertise.tsx, which today states no subscriber figure at all) shows the newsletter unit with the measured count of active, confirmed newsletter_subscribers; when the count is unreadable (activeSubscriberCount returns -1 since WEB-BE-032) the page says the figure is unavailable rather than printing 0 or a round number.",
         "The sponsor block carries a visible 'Sponsored' label linking to /advertising-policies, and the creative passes campaign-creative-review before the issue sends; an unreviewed creative blocks the block, not the issue."
       ],
-      "priority": 77,
+      "priority": 0.05,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Axios Des Moines runs a daily ad-backed newsletter (https://www.axios.com/local/des-moines/2026/02/09/1-fun-thing-we-re-5-years-old); 6AM City reports most of its revenue from local-business advertising across ~400 newsletters (https://www.amediaoperator.com/news/6am-citys-secret-weapon-400-newsletters-with-no-staff/). Neither is shown to target sponsors by issue content. CRITIC FIXES: the draft told the builder to remove a hardcoded '15K+ Newsletter Subscribers' claim from Advertise.tsx; no such string exists there, so that AC was replaced with adding the measured figure. The draft also said 'priced per issue' as if the pricing authority supported it; it is per day. DEPENDS ON: WEB-OPS-007 (the digest send is a pg_cron job, and 57 of 61 jobs had never succeeded), WEB-ADS-006 (creative auto-review never runs), WEB-ADS-010/011 and GM card a222e9bf (purchase path proven by one real purchase). SIZE: M. SUCCESS METRIC: first paid issue within 60 days of launch; then share of issues sold per month and revenue per issue, reported against the measured subscriber count."
     },
@@ -9727,7 +9727,7 @@
         "A monthly report per Verified listing (page views, directions taps, website and phone clicks, saves) is generated and emailed; a metric with no recorded source renders as unavailable with the reason, never as 0.",
         "An admin view reads Verified MRR, active count and churn from Stripe, not from a local counter."
       ],
-      "priority": 78,
+      "priority": 0.1,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Yelp sells paid business-page upgrades and is moving listings into an action product (https://www.yelp-ir.com/news/press-releases/news-release-details/2026/Yelp-Launches-the-New-Yelp-Assistant-Transforming-Local-Discovery-from-Search-to-Answers-and-Actions/default.aspx), but has no Des Moines event graph; Catch Des Moines lists businesses with no owner tooling (https://www.catchdesmoines.com). NOT A DUPLICATE: WEB-ADS-009 is the free claim; this is the paid tier on top. DEPENDS ON WEB-QA-013/026 (page views now recorded) for the report, WEB-ADS-009 AC5 (admin claim queue screen) for claim throughput. SIZE: L. SUCCESS METRIC: claim-to-Verified conversion and Verified MRR; target 10 paying Verified businesses within one quarter of launch."
     },
@@ -9743,7 +9743,7 @@
         "Each organizer gets a per-event share kit from the dashboard: OG image via og-image, short link, prewritten caption.",
         "Admin sees the count of active embeds and referral sessions from them."
       ],
-      "priority": 79,
+      "priority": 0.14,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: 80/35 cancelled (https://littlevillagemag.com/80-35-officially-canceled-after-nearly-20-years-in-des-moines/); Catch Des Moines offers 'Submit Your Event' with no embed (https://www.catchdesmoines.com/events/). Owning the organizer relationship completes the event graph, which Google Ask Maps lacks for small and suburban events. CRITIC FIX: dropped the draft's 'Do515 may have stopped resolving', which was unverified. This is the supply side LEAP-004 (ticketing) and LEAP-012 (white-label calendars) build on. SIZE: L. SUCCESS METRIC: active organizer accounts, active embeds, referral sessions per month, and share of weekend events that arrived by direct organizer submission."
     },
@@ -9759,7 +9759,7 @@
         "The fee shown to organizers is the real computed fee, with an example ticket breakdown, and the public event page shows the all-in buyer price before checkout.",
         "Admin sees gross ticket volume, application-fee revenue and refund rate from Stripe data; the organizer sees sales per ticket type and an exportable attendee list of buyers who opted in to organizer contact."
       ],
-      "priority": 80,
+      "priority": 0.19,
       "passes": false,
       "notes": "NEW STORY (replaces the draft's LEAP-003, which was already built: send-weekly-digest is a personalized per-user digest and agent-weekly-digest, AOS-NURTURE-004 passes=true, sends interest- and saved-search-matched issues on a Thursday cron). COMPETITIVE RATIONALE: Eventbrite charges organizers a percentage plus a per-ticket fixed fee on top of payment processing (check current US rates at https://www.eventbrite.com/organizer/pricing/ before setting ours); a metro-only platform with a lower fee and a built-in local audience is a real wedge for the long tail of small organizers. Eventbrite also sells sponsored listings in US markets (https://www.businesswire.com/news/home/20251118599275/en), so it competes for the same organizer dollar. OWNER DECISIONS: fee level; whether paid tickets are allowed for events not run by the organizer account. DEPENDS ON LEAP-003 and WEB-ADS-008. SIZE: L. SUCCESS METRIC: events selling tickets per month, gross ticket volume, application-fee revenue, and repeat organizers (sold tickets in 2+ months)."
     },
@@ -9775,7 +9775,7 @@
         "Featured items respect the existing cap of 2 per list and carry a 'Featured' or 'Sponsored' label on every surface, including the weekly digest deals section.",
         "The buyer's report shows impressions and clicks (sponsored inventory class) and, for deals, redemptions from deal_redemptions; any metric with no recorded source renders as unavailable."
       ],
-      "priority": 81,
+      "priority": 0.24,
       "passes": false,
       "notes": "MERGED: the draft's LEAP-006 (featured events) and LEAP-019 (featured deals). On its own, LEAP-019 was mostly built: redemption counting shipped in WEB-SEC-033 and deals.is_featured already orders the list (src/hooks/useDeals.ts:79); what remained was one new placement row. Together they are one product: low-priced placement sold where intent is. COMPETITIVE RATIONALE: 6AM City widened its advertiser base with low-priced listing products (https://pressgazette.co.uk/news/6am-city-ryan-heafy-interview/); Eventbrite sells sponsored event listings (https://www.businesswire.com/news/home/20251118599275/en). DEPENDS ON WEB-ADS-008, WEB-ADS-010/011, and LEAP-002's deal-insert widening for claimed owners. SIZE: M. SUCCESS METRIC: share of submissions choosing a paid option, monthly event-feature plus featured-deal revenue, redemption rate per featured deal."
     },
@@ -9791,7 +9791,7 @@
         "A contract test fails if a documented tool field disappears, so assistants depending on the schema do not silently break.",
         "Signed-in Insider users can connect their account (OAuth) so the assistant can save events or create a standing alert (LEAP-008); without a connection the tools stay read-only."
       ],
-      "priority": 82,
+      "priority": 0.29,
       "passes": false,
       "notes": "NEW STORY (fills a slot freed by merging the draft's featured events and featured deals). COMPETITIVE RATIONALE: Google Ask Maps answers itinerary questions from its places index (https://www.seroundtable.com/ask-maps-google-gemini-41068.html) and Yelp Assistant answers and books in chat (https://macrumors.com/2026/04/21/yelp-ai-assistant/); OpenAI's Apps SDK (announced October 2025, with travel launch partners such as Booking.com and Expedia) lets a source appear inside ChatGPT. Neither Catch Des Moines nor Axios Des Moines is known to ship one; verify before claiming it publicly. RELATION: LEAP-015 sells the same data to B2B buyers; this is the consumer distribution channel, free and attributed. SEO-049 (AI citation baseline) is the before measure. SIZE: M. SUCCESS METRIC: weekly tool calls, click-throughs to Des Moines Insider from assistants, and accounts connected through an assistant."
     },
@@ -9807,7 +9807,7 @@
         "Stops whose date has passed are marked past; a past event is never presented as upcoming.",
         "TRIP_SHARE_AVAILABLE is removed rather than left as a dead flag, and the URL format matches what Android already emits so ANDP-012 can re-enable Share without a client change."
       ],
-      "priority": 83,
+      "priority": 0.33,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Google Ask Maps builds itineraries from its places index (https://www.droid-life.com/2026/03/12/google-gets-new-ai-powered-ask-maps-feature/) but cannot see small and suburban Des Moines events. CRITIC NOTES: WEB-FEAT-011 is marked passes=true and lists 'Share generates the public /trips/shared/<code> link', which the live flag contradicts; this story is the real build, not a duplicate. The planner itself only came back after the D1 migration recreated trip_plans, so confirm generate-itinerary is healthy in production first. SIZE: M. SUCCESS METRIC: plans published per week, visits per shared plan, signups attributed to share codes."
     },
@@ -9823,7 +9823,7 @@
         "Insider (10 saved searches) and VIP limits apply unchanged; a free user can create one standing alert as a trial.",
         "Alerts created, alert email clicks and distinct feed tokens fetched in the last 7 days are counted, so a delivery failure is distinguishable from no matches."
       ],
-      "priority": 84,
+      "priority": 0.38,
       "passes": false,
       "notes": "MERGED: the draft's LEAP-011 (natural-language alerts) and LEAP-012 (calendar feeds, self-sized S, which failed the 'big move' test alone). Both are delivery surfaces for the same saved-search object. COMPETITIVE RATIONALE: Ask Maps (https://www.techspot.com/news/111670-google-maps-gets-conversational-gemini-powered-ask-maps.html) and Yelp Assistant (https://ppc.land/yelp-assistant-goes-full-service-book-order-and-schedule-in-one-chat/) are question-and-answer tools; Catch Des Moines' events page has no feed (https://www.catchdesmoines.com/events/). DEPENDS ON IOS-AUDIT-FEAT-012 (alert delivery unverified) and WEB-OPS-007: saved-search-alerts runs from pg_cron and the job fails until app.settings.service_role_key is set. SIZE: M. SUCCESS METRIC: standing alerts and active feeds per week, alert click rate, 30-day retention of users with an alert or feed vs without."
     },
@@ -9839,7 +9839,7 @@
         "Playground structured data is built only from verified attributes; filtered combinations with measured demand (e.g. 'splash pads in Ankeny') are generated through the existing pSEO system and its inventory gate.",
         "A coverage report shows the share of playgrounds with each attribute verified in the last 12 months."
       ],
-      "priority": 85,
+      "priority": 0.43,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Des Moines Parent and desmoinesmom.com publish roundups, not filterable data (https://outdoorfun.desmoinesparent.com/?p=4430, https://desmoinesmom.com/des-moines-parks/). NOT A DUPLICATE of prd-seo-q4 SEO-042 (playground titles and hub conversion): this is the data model and contribution loop those pages need. CRITIC FIX: the draft said the table 'gains typed attributes'; six already exist, so the story now adds provenance and only the missing columns. SIZE: L. SUCCESS METRIC: playgrounds with 5+ verified attributes, parent confirmations per month, organic clicks to playground and kids pages."
     },
@@ -9855,7 +9855,7 @@
         "New accounts created from the ballot page are attributed to the season.",
         "A sponsor or kit purchase for a business that did not win, or a category already sponsored, is refused before payment."
       ],
-      "priority": 86,
+      "priority": 0.48,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: CITYVIEW publishes editorial guides (https://www.dmcityview.com/feature-1/2026/05/06/summer-arts-entertainment-guide-9/); the Register's print base keeps shrinking (Sunday print 19,571 reported to 2026-03-31, https://ground.news/article/register-woes-congressional-stock-trades-ai-legislation-iowas-most-common-criminal-offenses-and-ankeny-is-a-top-5-place-to-live, secondary source). CRITIC FIX: the draft cited 'SEC-029', which does not exist; the bot-protection story is WEB-SEC-029. SIZE: L. SUCCESS METRIC: ballot-driven signups per season, badges embedded, sponsor plus kit revenue per season."
     },
@@ -9871,7 +9871,7 @@
         "Per-edition subscribers, sends and clicks are reported separately.",
         "A suburb chamber or city can be given a partner login that submits events into that edition's queue."
       ],
-      "priority": 87,
+      "priority": 0.52,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: 6AM City runs about 400 local newsletters with most revenue from local-business ads (https://www.amediaoperator.com/news/6am-citys-secret-weapon-400-newsletters-with-no-staff/); Downtown DSM is downtown-centred (https://www.DSMpartnership.com/downtowndsmusa/news-blog/blog/five-downtown-dsm-events-nov-4--10). DEPENDS ON LEAP-001 and WEB-OPS-007. SIZE: M. SUCCESS METRIC: subscribers per edition, editions with a paying sponsor, suburb-edition ad revenue."
     },
@@ -9887,7 +9887,7 @@
         "The partner dashboard reports calendar views, event clicks and submissions per month, measured, with unavailable shown where a metric has no source.",
         "Embed responses are cached and rate limited per partner; an origin not on the partner's list gets the unbranded calendar."
       ],
-      "priority": 88,
+      "priority": 0.57,
       "passes": false,
       "notes": "NEW STORY (fills a slot freed by merging the draft's alerts and calendar-feed stories). COMPETITIVE RATIONALE: Catch Des Moines is the metro DMO with the hotel and chamber backlink profile (WEB-SEO-011 notes 'we will not out-authority them'); licensing the calendar to the suburbs and chambers turns that authority gap into distribution. UNVERIFIED: what calendar tools Ankeny, Waukee, Johnston, Urbandale and West Des Moines use today and what they pay; check each city and chamber site and validate with 3 prospects before pricing or building the billing half. SIZE: L. SUCCESS METRIC: signed partners, licence ARR, partner-submitted events per month, referral sessions from partner calendars."
     },
@@ -9903,7 +9903,7 @@
         "The org admin sees seats used and aggregate activation (seat claimed, onboarding completed) only, never individual browsing.",
         "Seat revenue is reported separately from consumer MRR in the admin view."
       ],
-      "priority": 89,
+      "priority": 0.62,
       "passes": false,
       "notes": "NEW STORY (replaces the draft's LEAP-013 referral reward, self-sized S, a reward bolted onto existing profile_referral_codes and gated on an unmade owner decision; small polish, not a big move). COMPETITIVE RATIONALE: UNVERIFIED gap. The Greater Des Moines Partnership's talent-attraction work is the nearest analogue; no consumer city guide in the metro is known to sell employer seats. Validate with 3 HR buyers before building billing. SIZE: M. SUCCESS METRIC: organizations signed, paid seats, seat activation rate, seat-to-individual conversion after employment ends."
     },
@@ -9919,7 +9919,7 @@
         "HotelsNearVenue and EventHotelCallout link large-group visitors into the RFP form with the event and dates prefilled.",
         "Spam and test submissions are filtered by bot protection before any lead is delivered or charged."
       ],
-      "priority": 90,
+      "priority": 0.67,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Catch Des Moines serves meeting and sports planners as a bureau (https://www.catchdesmoines.com), not a self-serve lead marketplace. DEPENDS ON WEB-SEC-029 (bot protection) and LEAP-002's claim-holder billing. SIZE: M. SUCCESS METRIC: RFPs per month, subscribed hotels, lead revenue, won rate reported by hotels."
     },
@@ -9935,7 +9935,7 @@
         "Responses include a schema version, canonical event URL, last-verified timestamp and attribution string; a contract test fails if a documented field disappears.",
         "Shipped iOS and Android clients that call these endpoints keep working per the repo's CLAUDE.md backward-compatibility rules: either a documented keyless legacy path stays open for them, or they migrate first."
       ],
-      "priority": 91,
+      "priority": 0.71,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: discovery is moving into answer layers (Ask Maps, https://www.seroundtable.com/ask-maps-google-gemini-41068.html; Yelp Assistant, https://macrumors.com/2026/04/21/yelp-ai-assistant/). No external evidence of B2B demand was found, so validate with 3 prospects before building paid tiers. RELATION: LEAP-006 shares the query layer and is the free consumer channel. CRITIC FIX: the draft proposed a new api_keys table; one is already defined (and missing in production), so the story reconciles it. SIZE: M. SUCCESS METRIC: active keys, paid API subscriptions, attributed referral clicks."
     },
@@ -9951,7 +9951,7 @@
         "An owner-supplied value from a Verified Business (LEAP-002) is not overwritten by a contributor without admin review.",
         "An admin report shows contributions per week, acceptance rate and share of listings verified in the last 90 days."
       ],
-      "priority": 92,
+      "priority": 0.76,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Yelp's assistant now phones restaurants to keep data fresh (https://ppc.land/yelp-assistant-goes-full-service-book-order-and-schedule-in-one-chat/); Des Moines Insider can match freshness locally through people who live here. CRITIC FIX: dropped the draft's 'top contributors get a free Insider month' AC, an unpriced reward that needs an owner decision; reputation is the reward until the owner decides. DEPENDS ON WEB-BE-045 for the closed/hours fields. SIZE: L. SUCCESS METRIC: share of listings verified within 90 days, accepted contributions per week, active contributors per month."
     },
@@ -9967,7 +9967,7 @@
         "An admin report shows booking clicks and affiliate-tagged share by partner.",
         "Shared plan pages (LEAP-007) carry the same booking actions."
       ],
-      "priority": 93,
+      "priority": 0.81,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Yelp Assistant books via Guest Manager and orders via DoorDash (https://www.yelp-ir.com/news/press-releases/news-release-details/2026/Yelp-Launches-the-New-Yelp-Assistant-Transforming-Local-Discovery-from-Search-to-Answers-and-Actions/default.aspx); Ask Maps plans but did not book at launch (https://www.droid-life.com/2026/03/12/google-gets-new-ai-powered-ask-maps-feature/). DEPENDS ON WEB-FEAT-021 for any hotel revenue (affiliate_url is empty) and SEO-054/WEB-BE-045 for hours. SIZE: M. SUCCESS METRIC: booking clicks per plan, affiliate-tagged share, affiliate revenue per month."
     },
@@ -9983,7 +9983,7 @@
         "iOS and Android offer the pass only where store rules allow, as a non-renewing purchase; where unavailable, web purchase still works.",
         "Pass revenue is reported separately from subscription MRR."
       ],
-      "priority": 94,
+      "priority": 0.86,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Catch Des Moines' 2026 Visitors Guide is static print (https://issuu.com/catchdesmoines/docs/catch_des_moines_visitors_guide_2026); Brew Moines shows visitors use a passport mechanic (https://www.catchdesmoines.com/brewmoines/). CRITIC NOTE: the pass sells only benefits that exist; WEB-FEAT-016 stripped advertised benefits that had no implementation, so do not reintroduce any. DEPENDS ON GM card a222e9bf (subscription purchase path proven). SIZE: M. SUCCESS METRIC: passes sold per month, share via hotel QR codes, pass-to-subscription conversion."
     },
@@ -9999,7 +9999,7 @@
         "Trail pages are public, indexable, and show how many people completed the trail.",
         "Sponsors get a report of starts, check-ins per stop, completions and redemptions."
       ],
-      "priority": 95,
+      "priority": 0.9,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: Catch Des Moines runs the Brew Moines GPS passport for one category (https://www.catchdesmoines.com/brewmoines/). CRITIC FIX: the draft called the brewery trail 'hardcoded'; it reads the breweries table, and the real limit is that it is brewery-specific. Hook path corrected to src/hooks/useBreweryTrail.ts. SIZE: L. SUCCESS METRIC: trails sold, completions per month, signups attributed to trail pages."
     },
@@ -10015,7 +10015,7 @@
         "The Clip offers the full app after the save, and installs attributed to a QR are recorded.",
         "A printable poster template with the QR and event details is generated per event."
       ],
-      "priority": 96,
+      "priority": 0.95,
       "passes": false,
       "notes": "COMPETITIVE RATIONALE: none of Catch Des Moines, Axios or DSM at Dawn is known to connect physical promotion to a save; the social-over-search claim in the draft (https://news.designrush.com/instagram-tiktok-beat-google-in-local-search-among-gen-z) has an unconfirmed study date and is context, not evidence. CRITIC NOTE: whether the Clip ships today is unverified; REL-006 (signing not configured) blocks any Clip release regardless of this story. SIZE: M. SUCCESS METRIC: QR scans per month, scan-to-save rate, installs attributed to QR."
     }
