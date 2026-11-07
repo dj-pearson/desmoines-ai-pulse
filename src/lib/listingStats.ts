@@ -28,10 +28,22 @@ export interface PeerComparison {
   median_views: number;
   /** Share of peers with fewer views, 0-100. */
   percentile: number;
+  /** Business Pro only (20261102000006); absent for a free owner. */
+  pro?: PeerProDetail;
+}
+
+/** Where the listing sits in its group, and the spread around it. Pro only. */
+export interface PeerProDetail {
+  /** 1 = most viewed in the group, this listing included. */
+  rank: number;
+  /** Group size including this listing. */
+  of: number;
+  p25_views: number;
+  p75_views: number;
 }
 
 export type ListingStats =
-  | { status: "no_data"; days: number }
+  | { status: "no_data"; days: number; pro: boolean }
   | {
       status: "ok";
       days: number;
@@ -41,6 +53,8 @@ export type ListingStats =
       totals: StatTotals;
       previous: StatTotals;
       peers: PeerComparison | null;
+      /** Business Pro is live on this listing (or the caller is an admin). */
+      pro: boolean;
     };
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -68,7 +82,16 @@ function peers(v: unknown): PeerComparison | null {
   if (!group || !GROUPS.has(group) || label === null || size === null || median === null || percentile === null) {
     return null;
   }
-  return { group: group as PeerComparison["group"], label, size, median_views: median, percentile };
+  const base: PeerComparison = { group: group as PeerComparison["group"], label, size, median_views: median, percentile };
+  const rank = num(o.rank);
+  const of = num(o.of);
+  const p25 = num(o.p25_views);
+  const p75 = num(o.p75_views);
+  // All four or none: a half-present Pro block is treated as absent, never shown partly.
+  if (rank !== null && of !== null && p25 !== null && p75 !== null) {
+    base.pro = { rank, of, p25_views: p25, p75_views: p75 };
+  }
+  return base;
 }
 
 export function parseListingStats(raw: unknown): ListingStats | null {
@@ -76,7 +99,9 @@ export function parseListingStats(raw: unknown): ListingStats | null {
   const o = raw as Record<string, unknown>;
   const days = num(o.days);
   if (days === null) return null;
-  if (o.status === "no_data") return { status: "no_data", days };
+  // `pro` arrived with 20261102000006; before it the key is absent, which is free.
+  const pro = o.pro === true;
+  if (o.status === "no_data") return { status: "no_data", days, pro };
   if (o.status !== "ok") return null;
 
   const from = str(o.from);
@@ -92,7 +117,7 @@ export function parseListingStats(raw: unknown): ListingStats | null {
     if (!day || !date) return null;
     series.push({ date, ...day });
   }
-  return { status: "ok", days, from, to, series, totals: t, previous: p, peers: peers(o.peers) };
+  return { status: "ok", days, from, to, series, totals: t, previous: p, peers: peers(o.peers), pro };
 }
 
 /**
@@ -134,4 +159,27 @@ export function peerSentence(peers: PeerComparison, listingType: "restaurant" | 
     return `More page views than ${peers.percentile}% of the ${count} we list. The typical one got ${peers.median_views.toLocaleString()}.`;
   }
   return `Fewer page views than ${100 - peers.percentile}% of the ${count} we list. The typical one got ${peers.median_views.toLocaleString()}.`;
+}
+
+/**
+ * The Pro rank line: "#3 of 24 Mexican restaurants by page views. The middle
+ * half of the group got 20 to 70." Group words come from peerGroupPhrase, so
+ * the free sentence and this one name the group the same way.
+ */
+export function rankSentence(peers: PeerComparison, listingType: "restaurant" | "attraction"): string | null {
+  if (!peers.pro) return null;
+  const { rank, of, p25_views, p75_views } = peers.pro;
+  return `#${rank} of ${of} ${peerGroupPhrase(peers, listingType)} by page views. The middle half of the group got ${p25_views.toLocaleString()} to ${p75_views.toLocaleString()}.`;
+}
+
+/** The daily series as CSV, for the Pro download. Plain ASCII, one row per day. */
+export function statsCsv(series: readonly StatDay[]): string {
+  const rows = series.map((d) => `${d.date},${d.views},${d.shares},${d.clicks}`);
+  return ["date,views,shares,clicks", ...rows].join("\n") + "\n";
+}
+
+/** "$49/month" from integer cents, as business_plans stores the price. */
+export function monthlyPriceLabel(cents: number): string {
+  const dollars = cents / 100;
+  return `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}/month`;
 }
