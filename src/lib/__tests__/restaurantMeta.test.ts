@@ -18,6 +18,7 @@ import {
   currentDescription,
   acceptsReservationsOf,
   buildRestaurantSchema,
+  restaurantDealOffers,
   priceTier,
   RESTAURANT_TITLE_BUDGET,
   RESTAURANT_DESCRIPTION_BUDGET,
@@ -353,6 +354,51 @@ describe('buildRestaurantSchema', () => {
     expect(buildRestaurantSchema(row, { ...ctx, acceptsReservations: 'https://resy.com/x' }).acceptsReservations).toBe(
       'https://resy.com/x',
     );
+  });
+
+  // WEB-FEAT-036: in-date deals become makesOffer; no deals, no property.
+  it('omits makesOffer when the page lists no deals', () => {
+    expect(buildRestaurantSchema(row, ctx)).not.toHaveProperty('makesOffer');
+    expect(buildRestaurantSchema(row, { ...ctx, offers: [] })).not.toHaveProperty('makesOffer');
+    expect(buildRestaurantSchema(row, { ...ctx, offers: restaurantDealOffers([], ctx.url) })).not.toHaveProperty(
+      'makesOffer',
+    );
+  });
+
+  it('emits makesOffer from the deals the page lists, pointing at #deals', () => {
+    const offers = restaurantDealOffers(
+      [
+        {
+          title: 'Happy hour',
+          description: 'Half-price wells',
+          start_date: '2026-09-01T00:00:00Z',
+          end_date: '2026-12-31T00:00:00Z',
+        },
+        { title: 'Free dessert', description: null, start_date: '2026-09-01T00:00:00Z', end_date: null },
+      ],
+      ctx.url,
+    );
+    expect(buildRestaurantSchema(row, { ...ctx, offers }).makesOffer).toEqual([
+      {
+        '@type': 'Offer',
+        name: 'Happy hour',
+        description: 'Half-price wells',
+        validFrom: '2026-09-01T00:00:00Z',
+        validThrough: '2026-12-31T00:00:00Z',
+        url: 'https://example.com/restaurants/fixture#deals',
+      },
+      {
+        '@type': 'Offer',
+        name: 'Free dessert',
+        validFrom: '2026-09-01T00:00:00Z',
+        url: 'https://example.com/restaurants/fixture#deals',
+      },
+    ]);
+  });
+
+  it('never puts a promo code in an Offer node', () => {
+    const coded = { title: 'Ten off', start_date: '2026-09-01T00:00:00Z', code: 'SECRET10' };
+    expect(JSON.stringify(restaurantDealOffers([coded], ctx.url))).not.toContain('SECRET10');
   });
 
   it('never carries an aggregateRating: the only rating held is Google\'s', () => {

@@ -152,6 +152,17 @@ export function orderDealsForVenue(deals: Deal[], now: Date = new Date()): Deal[
 }
 
 /**
+ * The deals a restaurant page shows, decided once so the Deals section, its
+ * quick-link chip and the Restaurant node's makesOffer cannot disagree
+ * (WEB-FEAT-036). A closed or temporarily closed place shows none: a special
+ * at a place you can't walk into is not an offer.
+ */
+export function venuePageDeals(deals: Deal[] | undefined, opts: { shut: boolean; now: Date }): Deal[] {
+  if (opts.shut || !deals || deals.length === 0) return [];
+  return orderDealsForVenue(deals, opts.now);
+}
+
+/**
  * Records a reveal. The card reveals the code before this resolves, and the
  * count it bumps is not rendered anywhere public, so there is nothing to
  * refetch on success. A failure must not hide the code the visitor already

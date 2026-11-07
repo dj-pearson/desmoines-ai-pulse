@@ -32,7 +32,7 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 vi.mock("@/lib/errorHandler", () => ({ handleError: (...a: unknown[]) => handleError(...a) }));
 
-import { fetchRestaurantDeals, orderDealsForVenue, type Deal } from "@/hooks/useDeals";
+import { fetchRestaurantDeals, orderDealsForVenue, venuePageDeals, type Deal } from "@/hooks/useDeals";
 import { RestaurantDealsList } from "@/components/restaurants/RestaurantDeals";
 
 const WED_5PM_CT = new Date("2026-09-23T22:00:00Z");
@@ -82,6 +82,30 @@ describe("orderDealsForVenue", () => {
     const a = deal({ id: "a" });
     const b = deal({ id: "b" });
     expect(orderDealsForVenue([b, a], WED_5PM_CT).map((d) => d.id)).toEqual(["b", "a"]);
+  });
+});
+
+// WEB-FEAT-036: the section, the Deals chip and makesOffer all read this list,
+// so an empty result here is what omits all three.
+describe("venuePageDeals", () => {
+  it("is empty for a shut place, whatever deals it has", () => {
+    expect(venuePageDeals([running, anyTime], { shut: true, now: WED_5PM_CT })).toEqual([]);
+  });
+
+  it("is empty before the query answers and when it answers with nothing", () => {
+    expect(venuePageDeals(undefined, { shut: false, now: WED_5PM_CT })).toEqual([]);
+    expect(venuePageDeals([], { shut: false, now: WED_5PM_CT })).toEqual([]);
+  });
+
+  it("is empty when every deal is out of date", () => {
+    expect(venuePageDeals([expired], { shut: false, now: WED_5PM_CT })).toEqual([]);
+  });
+
+  it("lists the in-date deals in venue order for an open place", () => {
+    expect(venuePageDeals([expired, anyTime, running], { shut: false, now: WED_5PM_CT }).map((d) => d.id)).toEqual([
+      "running",
+      "any",
+    ]);
   });
 });
 

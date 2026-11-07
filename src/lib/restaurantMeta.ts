@@ -406,6 +406,46 @@ export interface RestaurantSchemaContext {
    * Unknown is left out, never published as false.
    */
   acceptsReservations?: boolean | string;
+  /**
+   * Offer nodes for the in-date deals this page lists (restaurantDealOffers).
+   * Emitted as makesOffer only when non-empty (WEB-FEAT-036).
+   */
+  offers?: RestaurantOfferNode[];
+}
+
+/** What restaurantDealOffers reads from a deal row. */
+export interface RestaurantOfferInput {
+  title: string;
+  description?: string | null;
+  start_date: string;
+  end_date?: string | null;
+}
+
+export interface RestaurantOfferNode {
+  "@type": "Offer";
+  name: string;
+  description?: string;
+  validFrom: string;
+  validThrough?: string;
+  url: string;
+}
+
+/**
+ * schema.org Offer nodes for the deals a restaurant page shows, in the shape
+ * /deals already publishes in its ItemList, minus offeredBy (the Restaurant
+ * node is the offerer here). Each points at the page's #deals section. The
+ * promo code is never included: on the site it sits behind the recorded
+ * reveal on /deals, and JSON-LD is readable by anyone.
+ */
+export function restaurantDealOffers(deals: RestaurantOfferInput[], pageUrl: string): RestaurantOfferNode[] {
+  return deals.map((deal) => ({
+    "@type": "Offer" as const,
+    name: deal.title,
+    ...(deal.description ? { description: deal.description } : {}),
+    validFrom: deal.start_date,
+    ...(deal.end_date ? { validThrough: deal.end_date } : {}),
+    url: `${pageUrl}#deals`,
+  }));
 }
 
 /** acceptsReservations for the Restaurant node: the booking URL, the row's yes/no, or undefined. */
@@ -437,6 +477,7 @@ export interface RestaurantSchemaRow {
  *  - hasMenu points at the captured Menu node when there is one, else their menu page;
  *  - sameAs is their site and the Google listing, when the row has them;
  *  - acceptsReservations only when the row says yes or no;
+ *  - makesOffer only for the in-date deals the page lists;
  *  - no aggregateRating: the only rating on the row is Google's, which is not
  *    first-party, and content_rating_aggregates held 0 restaurant ratings on
  *    2026-10-01 (SEO-034);
@@ -470,6 +511,8 @@ export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantS
     // point at it. Otherwise their own menu page.
     ...(ctx.hasCapturedMenu ? { hasMenu: `${ctx.url}#menu` } : ctx.menuUrl ? { hasMenu: ctx.menuUrl } : {}),
     ...(ctx.acceptsReservations !== undefined ? { acceptsReservations: ctx.acceptsReservations } : {}),
+    // Only the in-date deals the page lists; none means no property at all.
+    ...(ctx.offers && ctx.offers.length > 0 ? { makesOffer: ctx.offers } : {}),
     ...(tier ? { priceRange: tier } : {}),
     ...(row.image_url ? { image: [row.image_url] } : {}),
     ...(row.latitude != null && row.longitude != null

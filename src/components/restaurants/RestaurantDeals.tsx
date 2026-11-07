@@ -8,15 +8,8 @@ import {
   hasDealSchedule,
   isDealLiveAt,
   orderDealsForVenue,
-  useRestaurantDeals,
   type Deal,
 } from "@/hooks/useDeals";
-import { useMinuteClock } from "@/hooks/useMinuteClock";
-
-interface RestaurantDealsProps {
-  restaurantId: string;
-  restaurantName: string;
-}
 
 interface RestaurantDealsListProps {
   deals: Deal[];
@@ -93,12 +86,4 @@ export function RestaurantDealsList({ deals, restaurantName, now }: RestaurantDe
       </section>
     </>
   );
-}
-
-/** The restaurant's in-date deals and happy hours, re-evaluated each minute. */
-export function RestaurantDeals({ restaurantId, restaurantName }: RestaurantDealsProps) {
-  const now = useMinuteClock();
-  const { data } = useRestaurantDeals(restaurantId);
-  if (!data || data.length === 0) return null;
-  return <RestaurantDealsList deals={data} restaurantName={restaurantName} now={now} />;
 }
