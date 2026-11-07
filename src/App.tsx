@@ -6,8 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { usePageTransition } from "@/hooks/usePageTransition";
-import { isCapacitor } from "@/lib/capacitorUtils";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation, useNavigationType } from "react-router-dom";
@@ -63,11 +61,6 @@ const Toaster = lazyWithRetry(() =>
 const Sonner = lazyWithRetry(() =>
   import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
 );
-
-// Capacitor-only effects. Mounted behind isCapacitor(), so a web visitor never
-// requests the chunk. See the component for why the condition lives here and
-// not inside each hook.
-const CapacitorRuntime = lazyWithRetry(() => import("@/components/CapacitorRuntime"));
 
 const Index = lazyWithRetry(() => import("./pages/Index"));
 const Auth = lazyWithRetry(() => import("./pages/Auth"));
@@ -269,8 +262,8 @@ const WhatsNew = lazyWithRetry(() => import("./pages/WhatsNew"));
 // session; anything older than the last 50 pages isn't worth restoring).
 const MAX_REMEMBERED_SCROLL_POSITIONS = 50;
 
-// Scroll management on route changes – essential for Capacitor where
-// the browser's default scroll restoration doesn't kick in.
+// Scroll management on route changes. An SPA route change is not a page load,
+// so the browser's own scroll restoration never kicks in.
 //
 // Forward navigation starts at the top of the new page. Going *back* restores
 // where you were, so returning to a long list doesn't dump you at the top of it
@@ -359,21 +352,8 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
     onShowHelp: () => setShowShortcutsModal(true),
   });
 
-  // Subtle page transition animation for Capacitor (no-op on web). Stays here
-  // rather than moving into CapacitorRuntime because it returns the ref the
-  // wrapper below needs.
-  const pageTransitionRef = usePageTransition<HTMLDivElement>();
-
   return (
-    <div ref={pageTransitionRef}>
-      {/* Push registration, deep links, swipe-back, status bar and keyboard
-          avoidance. Every one of them opens with `if (!isCapacitor()) return`,
-          so on the web this chunk is never requested. WEB-PERF-020 AC4. */}
-      {isCapacitor() && (
-        <Suspense fallback={null}>
-          <CapacitorRuntime />
-        </Suspense>
-      )}
+    <div>
       {children}
       {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
           first time someone presses "?" rather than by every visitor. */}
