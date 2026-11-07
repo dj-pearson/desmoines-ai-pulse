@@ -60,7 +60,7 @@ export class SecurityUtils {
   /**
    * Validate and sanitize user input
    */
-  static validateInput(input: unknown, schema: z.ZodSchema): z.SafeParseReturnType<unknown, unknown> {
+  static validateInput(input: unknown, schema: z.ZodSchema): z.ZodSafeParseResult<unknown> {
     try {
       return schema.safeParse(input);
     } catch (error) {

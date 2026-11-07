@@ -131,6 +131,9 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+// zod 4 types the z.coerce.number() fields as taking unknown input and parsing
+// to number | "", so the form's input and output types are given separately.
+type FormInput = z.input<typeof formSchema>;
 
 function slugify(input: string): string {
   return input
@@ -281,7 +284,7 @@ export default function HotelEditDialog({
     [hotel],
   );
 
-  const form = useForm<FormValues>({
+  const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues,
     mode: "onBlur",
