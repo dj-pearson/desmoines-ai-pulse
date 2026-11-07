@@ -4,10 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNewsletterSubscription, NewsletterPreferences } from "@/hooks/useNewsletterSubscription";
-import { Mail, CheckCircle, Utensils } from "lucide-react";
+import { Mail, Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { NEWSLETTER_PROMISE } from "@/content/newsletterCopy";
+import {
+  NEWSLETTER_PROMISE,
+  NEWSLETTER_CONFIRM_HEADING,
+  NEWSLETTER_CONFIRM_BODY,
+} from "@/content/newsletterCopy";
 
 /*
  * Copy rule (explore pass 2 WP6 item 4): say only what the weekly send holds.
@@ -68,16 +72,18 @@ export function NewsletterSignup({
     setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Success state
+  // Submitted, not subscribed: the row stays pending until the emailed link is
+  // clicked, so this asks for that click instead of announcing a welcome. Same
+  // copy for every outcome; see newsletterCopy.ts (WEB-ADS-017).
   if (submitted) {
     return (
-      <div className={cn("text-center py-6", className)}>
-        <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-3">
-          <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+      <div role="status" className={cn("text-center py-6", className)}>
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+          <Mail className="w-6 h-6 text-primary" aria-hidden="true" />
         </div>
-        <h3 className="text-lg font-semibold mb-1">You're In!</h3>
-        <p className="text-sm text-muted-foreground">
-          Welcome to the Des Moines Insider community. Check your inbox!
+        <h3 className="text-lg font-semibold mb-1">{NEWSLETTER_CONFIRM_HEADING}</h3>
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+          {NEWSLETTER_CONFIRM_BODY}
         </p>
         <Button
           variant="link"

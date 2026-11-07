@@ -15,3 +15,19 @@ export const NEWSLETTER_RETRY_MESSAGE =
 
 export const NEWSLETTER_SUBMIT_LABEL = "Subscribe Free";
 export const NEWSLETTER_SUBMITTING_LABEL = "Subscribing...";
+
+/*
+ * What NewsletterSignup says after a successful submit (WEB-ADS-017). The row
+ * is 'pending' until the emailed link is clicked, so this must not read as
+ * done: it used to say "You're In! Welcome to the Des Moines Insider
+ * community" while the toast from the same submit said "Almost there".
+ *
+ * It must also read the same for every outcome. newsletter-subscribe answers
+ * one sentence for a new, pending, unsubscribed or already-active address and
+ * mails nobody who is already active, so "we've sent you a link" would be
+ * false for that reader and "you're already subscribed" would be an oracle.
+ * Hence the conditional, which matches the function's GENERIC_ANSWER.
+ */
+export const NEWSLETTER_CONFIRM_HEADING = "Check your inbox";
+export const NEWSLETTER_CONFIRM_BODY =
+  "If that address can receive mail from us, a confirmation link is on its way. Click it to finish signing up; until then, no weekly email.";
