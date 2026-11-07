@@ -243,6 +243,40 @@ class DeepLinkHandlerTest {
     }
 
     @Test
+    fun aPushWithTypeAndIdRoutesAndIsDrained() {
+        // AND-AUDIT-026: the iOS payload keys, as PushNotificationService writes them.
+        val intent = Intent()
+        DeepLinkHandler.notificationExtrasFromPush(mapOf("type" to "article", "id" to "a1"))
+            .forEach { (key, value) -> intent.putExtra(key, value) }
+
+        assertTrue(handler.handleIntent(intent))
+        assertEquals(Destination.Article(LinkId("a1")), handler.consumeDestination())
+
+        assertFalse(handler.handleIntent(intent))
+    }
+
+    @Test
+    fun aPushUrlGoesThroughTheLinkParser() {
+        val intent = Intent()
+        val url = "https://desmoinesinsider.com/stay/hotel-fort-des-moines"
+        DeepLinkHandler.notificationExtrasFromPush(mapOf("url" to url))
+            .forEach { (key, value) -> intent.putExtra(key, value) }
+
+        assertTrue(handler.handleIntent(intent))
+        assertEquals(Destination.Hotel(LinkId("hotel-fort-des-moines")), handler.consumeDestination())
+    }
+
+    @Test
+    fun aPushUrlOffOurHostIsRefused() {
+        val intent = Intent()
+        DeepLinkHandler.notificationExtrasFromPush(mapOf("url" to "https://desmoinesinsider.com.evil.io/events/x"))
+            .forEach { (key, value) -> intent.putExtra(key, value) }
+
+        assertFalse(handler.handleIntent(intent))
+        assertNull(handler.consumeDestination())
+    }
+
+    @Test
     fun aNotificationWithNoContentIdIsNotHandled() {
         val intent = Intent().putExtra("navigate_to", "event_detail")
         assertFalse(handler.handleIntent(intent))
