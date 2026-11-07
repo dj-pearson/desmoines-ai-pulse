@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { STRETCHED_BUTTON_CLASS } from '@/lib/stretchedButton';
 
 const log = createLogger('AIArticleGenerator');
 
@@ -323,16 +324,24 @@ const AIArticleGenerator: React.FC = () => {
                         {suggestions.suggestions.map((suggestion, index) => (
                           <Card 
                             key={index} 
-                            className={`cursor-pointer transition-all hover:shadow-md ${
-                              selectedSuggestion?.title === suggestion.title 
-                                ? 'ring-2 ring-primary bg-primary/5' 
+                            className={`relative transition-all hover:shadow-md ${
+                              selectedSuggestion?.title === suggestion.title
+                                ? 'ring-2 ring-primary bg-primary/5'
                                 : 'hover:border-primary/50'
                             }`}
-                            onClick={() => handleSuggestionSelect(suggestion)}
                           >
                             <CardContent className="p-4 space-y-3">
                               <div className="space-y-2">
-                                <h4 className="font-semibold line-clamp-2">{suggestion.title}</h4>
+                                <h4 className="font-semibold line-clamp-2">
+                                  <button
+                                    type="button"
+                                    aria-pressed={selectedSuggestion?.title === suggestion.title}
+                                    onClick={() => handleSuggestionSelect(suggestion)}
+                                    className={STRETCHED_BUTTON_CLASS}
+                                  >
+                                    {suggestion.title}
+                                  </button>
+                                </h4>
                                 <p className="text-sm text-muted-foreground line-clamp-2">{suggestion.description}</p>
                               </div>
                               

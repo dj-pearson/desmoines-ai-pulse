@@ -227,10 +227,16 @@ export function MenuUploadPanel({ restaurants }: MenuUploadPanelProps) {
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors
+            className={`relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors
               ${dragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/40"}`}
           >
+            {/* The click target is a real button over the zone, so Tab and Enter/Space open the picker (WEB-UX-057). */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label={file ? `Replace ${file.name}` : "Choose a menu file"}
+              className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
             <input
               ref={fileInputRef}
               type="file"

@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileText, Plus, Lightbulb, X } from "lucide-react";
+import { STRETCHED_BUTTON_CLASS } from '@/lib/stretchedButton';
 import {
   getTemplatesByCategory,
   type ContentTemplate,
@@ -89,15 +90,21 @@ export default function ContentTemplateSelector({
                   return (
                     <Card
                       key={template.id}
-                      className={`cursor-pointer transition-all hover:shadow-md ${
+                      className={`relative transition-all hover:shadow-md ${
                         isSelected ? 'ring-2 ring-primary shadow-md' : ''
                       }`}
-                      onClick={() => handleSelectTemplate(template)}
                     >
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-base">
-                          <span className="text-2xl">{template.icon}</span>
-                          <span>{template.name}</span>
+                          <span className="text-2xl" aria-hidden="true">{template.icon}</span>
+                          <button
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => handleSelectTemplate(template)}
+                            className={STRETCHED_BUTTON_CLASS}
+                          >
+                            {template.name}
+                          </button>
                           {isSelected && (
                             <Badge variant="default" className="ml-auto">
                               Selected

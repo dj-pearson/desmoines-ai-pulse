@@ -37,6 +37,7 @@ import { useContentQueue, QueueItem } from '@/hooks/useContentQueue';
 import { format } from 'date-fns';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { STRETCHED_BUTTON_CLASS } from "@/lib/stretchedButton";
 
 export function ContentQueue() {
   const { user } = useAdminAuth();
@@ -192,17 +193,35 @@ export function ContentQueue() {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('pending')}>
+        <Card className="relative hover:bg-accent">
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-blue-600">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground">Pending Review</p>
+            <p className="text-xs text-muted-foreground">
+              <button
+                type="button"
+                aria-pressed={statusFilter === 'pending'}
+                onClick={() => setStatusFilter('pending')}
+                className={STRETCHED_BUTTON_CLASS}
+              >
+                Pending Review
+              </button>
+            </p>
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('needs_review')}>
+        <Card className="relative hover:bg-accent">
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-yellow-600">{stats.needsReview}</div>
-            <p className="text-xs text-muted-foreground">Needs Manual Review</p>
+            <p className="text-xs text-muted-foreground">
+              <button
+                type="button"
+                aria-pressed={statusFilter === 'needs_review'}
+                onClick={() => setStatusFilter('needs_review')}
+                className={STRETCHED_BUTTON_CLASS}
+              >
+                Needs Manual Review
+              </button>
+            </p>
           </CardContent>
         </Card>
 

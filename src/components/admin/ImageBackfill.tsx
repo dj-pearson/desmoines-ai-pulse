@@ -24,6 +24,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { SafeExternalLink } from "@/components/SafeExternalLink";
+import { STRETCHED_BUTTON_CLASS } from "@/lib/stretchedButton";
 
 const log = createLogger('ImageBackfill');
 
@@ -272,9 +273,18 @@ export default function ImageBackfill() {
             {CATEGORIES.map((cat) => {
               const s = stats[cat.value];
               return (
-                <Card key={cat.value} className={`cursor-pointer transition-colors ${category === cat.value ? 'border-primary' : ''}`} onClick={() => { setCategory(cat.value); handleReset(); }}>
+                <Card key={cat.value} className={`relative transition-colors ${category === cat.value ? 'border-primary' : ''}`}>
                   <CardContent className="p-3 text-center">
-                    <p className="text-sm font-medium">{cat.label}</p>
+                    <p className="text-sm font-medium">
+                      <button
+                        type="button"
+                        aria-pressed={category === cat.value}
+                        onClick={() => { setCategory(cat.value); handleReset(); }}
+                        className={STRETCHED_BUTTON_CLASS}
+                      >
+                        {cat.label}
+                      </button>
+                    </p>
                     {s ? (
                       <>
                         <p className="text-2xl font-bold">{s.needsBackfill}</p>
