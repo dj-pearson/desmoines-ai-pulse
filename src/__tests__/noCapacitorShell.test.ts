@@ -17,6 +17,11 @@ import { join } from "node:path";
  * arm of each), the detection helpers and plugin types in capacitorUtils, the
  * no-op hapticTap and its five callers, the unused nativeShare/getPlatform,
  * and ImageViewer, which nothing rendered and which only opened in the shell.
+ *
+ * Slice 3 removed what the body class used to switch on: about 320 lines of
+ * .capacitor-app / .cap-page-enter / .keyboard-visible rules in index.css,
+ * and the isCapacitor arm of the early error handler in index.html (its CSP
+ * hash in public/_headers re-pinned; check-csp-hashes guards that).
  * This file keeps all of it gone.
  */
 
@@ -92,5 +97,14 @@ describe("Capacitor shell removal (WEB-FEAT-039)", () => {
     for (const name of ["toSafeExternalUrl", "openExternalUrl", "shareWithOutcome"]) {
       expect(code, name).toMatch(new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${name}\\b`));
     }
+  });
+
+  it("index.css has no rules for the shell's classes", () => {
+    const css = readFileSync("src/index.css", "utf8");
+    expect(css).not.toMatch(/\.capacitor-app\b|\.cap-page-enter\b|\.keyboard-visible\b|@keyframes\s+cap-/);
+  });
+
+  it("index.html's inline scripts do not look for window.Capacitor", () => {
+    expect(readFileSync("index.html", "utf8")).not.toMatch(/\bCapacitor\b/);
   });
 });

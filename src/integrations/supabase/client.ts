@@ -12,7 +12,7 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // Validate environment variables are present.
 // IMPORTANT: Do NOT throw at module level — a throw here crashes the entire
 // import chain (App → AuthContext → client) before React mounts, and the
-// error is completely silent in Capacitor's WKWebView. The user just sees
+// error happens before any error UI exists. The user just sees
 // "Loading..." forever with no error message.
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   logger.error(
