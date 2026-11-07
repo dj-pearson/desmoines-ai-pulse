@@ -73,8 +73,8 @@ and area or-groups), `RestaurantLifecycleTests` (lifecycle, opening label, local
 - D3: the web's separate sponsor query (`pickDailySponsors`, two boosted slots rotating daily). iOS
   still arranges sponsored rows within page one only.
 - D8: a real premium dining-tips feature. No tips column readable by anon was added.
-- D11: hashing QueryCache filenames. Shared Platform change; R14 stops search text reaching them
-  from Dining only.
+- D11: hashing QueryCache filenames. Done 2026-11-07 (IOS-AUDIT-PERF-032): filenames are the
+  SHA-256 of the key, and old percent-encoded names are renamed on first launch.
 - Column projection on the table path. Selecting a column production lacks returns 42703 and blanks
   the list (WEB-QA-003), and there is no production access here to check the list.
 
