@@ -31,10 +31,10 @@
  * a three-day festival exports as three days. The row never had the
  * event_end_utc it used to read.
  */
-import { markdownToPlainText } from '@/lib/aiText';
-import { BRAND } from '@/lib/brandConfig';
-import { DEFAULT_EVENT_HOURS, eventEnd } from '@/lib/eventTiming';
-import { createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
+import { markdownToPlainText } from './aiText';
+import { BRAND } from './brandConfig';
+import { DEFAULT_EVENT_HOURS, eventEnd } from './eventTiming';
+import { createEventSlugWithCentralTime, hasSpecificTime } from './timezone';
 
 export interface IcsEventInput {
   id: string;
@@ -158,15 +158,57 @@ export function hasUsableDate(event: IcsEventInput): boolean {
 }
 
 /**
- * Build the ICS document for one event.
+ * Fold a content line at 75 octets, per RFC 5545 section 3.1.
  *
- * Returns null when the start date cannot be parsed, so a malformed row
- * produces no download rather than a file full of `Invalid Date`.
+ * A long DESCRIPTION is the usual offender. Most clients tolerate an unfolded
+ * line, but a subscribed feed is re-read by every calendar on a timer and the
+ * strict parsers are the ones that silently drop the whole feed. Continuation
+ * lines start with one space. Counting is by UTF-8 byte and never splits a
+ * character, so an accented venue name survives.
  */
-export function buildEventIcs(event: IcsEventInput): string | null {
+export function foldIcsLine(line: string): string {
+  const encoder = new TextEncoder();
+  if (encoder.encode(line).length <= 75) return line;
+  const parts: string[] = [];
+  let current = '';
+  let bytes = 0;
+  // The first line may carry 75 octets; continuations carry 74 after the space.
+  let limit = 75;
+  for (const ch of line) {
+    const size = encoder.encode(ch).length;
+    if (bytes + size > limit) {
+      parts.push(current);
+      current = '';
+      bytes = 0;
+      limit = 74;
+    }
+    current += ch;
+    bytes += size;
+  }
+  parts.push(current);
+  return parts.join('\r\n ');
+}
+
+export interface VeventOptions {
+  /**
+   * Add a one-hour display alarm. Right for a single event someone chose to
+   * add; wrong for a subscribed feed, where it would ring for every one of
+   * hundreds of events the reader never picked.
+   */
+  alarm?: boolean;
+  /** DTSTAMP. Injected so tests and feeds produce stable output. */
+  stamp?: Date;
+}
+
+/**
+ * The VEVENT lines for one event, unfolded. Null when the start cannot be
+ * parsed, so a malformed row is skipped rather than written as `Invalid Date`.
+ */
+function veventLines(event: IcsEventInput, options: VeventOptions = {}): string[] | null {
   const start = resolveStart(event);
   if (Number.isNaN(start.getTime())) return null;
   const end = resolveEnd(event, start);
+  const alarm = options.alarm ?? true;
 
   const description = event.description ? escapeIcsText(stripHtml(event.description)) : '';
   const location = event.venue || event.location || '';
@@ -182,16 +224,9 @@ export function buildEventIcs(event: IcsEventInput): string | null {
     : [`DTSTART:${formatIcsDate(start)}`, `DTEND:${formatIcsDate(end)}`];
 
   return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Des Moines Insider//Event Calendar//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'X-WR-CALNAME:Des Moines Events',
-    'X-WR-TIMEZONE:America/Chicago',
     'BEGIN:VEVENT',
     `UID:${event.id}@desmoinesinsider.com`,
-    `DTSTAMP:${formatIcsDate(new Date())}`,
+    `DTSTAMP:${formatIcsDate(options.stamp ?? new Date())}`,
     ...timing,
     `SUMMARY:${escapeIcsText(event.title)}`,
     description ? `DESCRIPTION:${description}` : '',
@@ -199,16 +234,59 @@ export function buildEventIcs(event: IcsEventInput): string | null {
     `URL:${eventUrl(event)}`,
     'STATUS:CONFIRMED',
     'SEQUENCE:0',
-    'BEGIN:VALARM',
-    'TRIGGER:-PT1H',
-    'ACTION:DISPLAY',
-    'DESCRIPTION:Event reminder',
-    'END:VALARM',
+    ...(alarm
+      ? ['BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Event reminder', 'END:VALARM']
+      : []),
     'END:VEVENT',
-    'END:VCALENDAR',
-  ]
-    .filter(Boolean)
-    .join('\r\n');
+  ].filter(Boolean);
+}
+
+export interface CalendarOptions extends VeventOptions {
+  /** X-WR-CALNAME: what the reader's calendar list shows. */
+  name?: string;
+  /**
+   * How often a subscribing client should re-fetch, as an ISO 8601 duration
+   * (`PT6H`). Only meaningful for a feed; a one-off download omits it.
+   */
+  refreshInterval?: string;
+}
+
+/**
+ * A full VCALENDAR for any number of events. Rows without a usable start are
+ * skipped. The single-event download and the subscribed feeds both come
+ * through here, so there is one serializer and the two cannot disagree about
+ * when an event starts.
+ */
+export function buildCalendarIcs(events: readonly IcsEventInput[], options: CalendarOptions = {}): string {
+  const header = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Des Moines Insider//Event Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${escapeIcsText(options.name ?? 'Des Moines Events')}`,
+    'X-WR-TIMEZONE:America/Chicago',
+    ...(options.refreshInterval
+      ? [
+          `REFRESH-INTERVAL;VALUE=DURATION:${options.refreshInterval}`,
+          // Outlook and older Apple clients read this one instead.
+          `X-PUBLISHED-TTL:${options.refreshInterval}`,
+        ]
+      : []),
+  ];
+  const body = events.flatMap((event) => veventLines(event, options) ?? []);
+  return [...header, ...body, 'END:VCALENDAR'].map(foldIcsLine).join('\r\n');
+}
+
+/**
+ * Build the ICS document for one event.
+ *
+ * Returns null when the start date cannot be parsed, so a malformed row
+ * produces no download rather than a file full of `Invalid Date`.
+ */
+export function buildEventIcs(event: IcsEventInput): string | null {
+  if (!hasUsableDate(event)) return null;
+  return buildCalendarIcs([event], { alarm: true });
 }
 
 /** Google Calendar "add event" link. Returns null when the date is unusable. */
