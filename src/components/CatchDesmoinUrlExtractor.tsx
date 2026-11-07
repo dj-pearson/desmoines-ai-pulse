@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('CatchDesmoinUrlExtractor');
 
@@ -321,25 +322,25 @@ export default function CatchDesmoinUrlExtractor() {
                         <div className="text-sm space-y-1">
                           <div className="text-gray-600">
                             <span className="font-medium">From:</span> 
-                            <a 
+                            <SafeExternalLink
                               href={update.oldUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="ml-1 text-blue-600 hover:underline break-all"
                             >
                               {update.oldUrl}
-                            </a>
+                            </SafeExternalLink>
                           </div>
                           <div className="text-blue-700">
                             <span className="font-medium">To:</span> 
-                            <a 
+                            <SafeExternalLink
                               href={update.newUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="ml-1 text-green-600 hover:underline break-all font-medium"
                             >
                               {update.newUrl}
-                            </a>
+                            </SafeExternalLink>
                           </div>
                         </div>
                       </div>
@@ -417,25 +418,25 @@ export default function CatchDesmoinUrlExtractor() {
                         <div className="text-sm space-y-1">
                           <div className="text-gray-600">
                             <span className="font-medium">From:</span> 
-                            <a 
+                            <SafeExternalLink
                               href={update.oldUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="ml-1 text-blue-600 hover:underline break-all"
                             >
                               {new URL(update.oldUrl).hostname}
-                            </a>
+                            </SafeExternalLink>
                           </div>
                           <div className="text-green-700">
                             <span className="font-medium">To:</span> 
-                            <a 
+                            <SafeExternalLink
                               href={update.newUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="ml-1 text-blue-600 hover:underline break-all"
                             >
                               {new URL(update.newUrl).hostname}
-                            </a>
+                            </SafeExternalLink>
                           </div>
                         </div>
                       </div>

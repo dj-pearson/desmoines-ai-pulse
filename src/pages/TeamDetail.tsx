@@ -1,8 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useTeam, useTeamGames } from '@/hooks/useTeams';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,12 +30,10 @@ export default function TeamDetail() {
       <div className="min-h-screen bg-background">
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/sports/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-8 w-64 mb-4" />
           <Skeleton className="h-32 w-full" />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -54,11 +50,9 @@ export default function TeamDetail() {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={`/sports/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <ErrorState error={teamError} onRetry={() => refetchTeam()} />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -70,12 +64,10 @@ export default function TeamDetail() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Team Not Found</h1>
           <Link to="/sports" className="text-primary hover:underline">Back to Sports Hub</Link>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -111,7 +103,6 @@ export default function TeamDetail() {
         <script type="application/ld+json">{toJsonLd(teamJsonLd)}</script>
       </Helmet>
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           {/* Breadcrumb */}
           <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground mb-6">
@@ -223,7 +214,6 @@ export default function TeamDetail() {
             )}
           </section>
         </div>
-        <Footer />
       </div>
     </>
   );

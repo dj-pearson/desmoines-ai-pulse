@@ -7,7 +7,7 @@ import {
   RESTAURANT_LIST_COLUMNS,
 } from '@/lib/listColumns';
 import { createSlug } from '@/lib/slug';
-import { createEventSlugWithCentralTime } from '@/lib/timezone';
+import { centralDayStartUtcISO, createEventSlugWithCentralTime } from '@/lib/timezone';
 
 /**
  * Shared reads for the Social "Trending" tab (TrendingContent, fed by
@@ -47,11 +47,13 @@ export function tableForContentType(type: TrendingContentType) {
   return TABLES[type];
 }
 
-/** Start of today, so an event later today still counts as upcoming. */
+/**
+ * Start of today in Des Moines, so an event later today still counts as
+ * upcoming. This was `setHours(0, 0, 0, 0)`, midnight in the READER's zone, so
+ * a reader in London saw last night's Des Moines shows as still upcoming.
+ */
 function startOfTodayIso(): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  return centralDayStartUtcISO();
 }
 
 /**

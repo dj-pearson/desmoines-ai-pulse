@@ -62,6 +62,7 @@ export function useBreweries() {
         .neq('is_merged', true)
         .or(
           `and(or(status.is.null,status.neq.closed),or(${
+            // postgrest-safe: BREWERY_NAMES is a fixed list in this file, no commas or parentheses
             BREWERY_NAMES.map(n => `name.ilike.%${n}%`).join(',') + ',cuisine.ilike.%Brewery%,cuisine.ilike.%Craft Beer%'
           }))`,
         )

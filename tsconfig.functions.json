@@ -37,7 +37,8 @@
     "noUnusedParameters": false,
     "allowJs": true,
     "checkJs": false,
-    "moduleDetection": "force"
+    "moduleDetection": "force",
+    "resolveJsonModule": true
   },
   "include": ["functions/**/*.ts", "functions/_typecheck/*.d.ts"]
 }

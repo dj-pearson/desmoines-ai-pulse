@@ -6,8 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useContactForm, InquiryType } from "@/hooks/useContactForm";
 import { useAuth } from "@/hooks/useAuth";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Mail, Phone, Send, MessageSquare, Megaphone, HelpCircle, ThumbsUp, CheckCircle } from "lucide-react";
@@ -92,8 +90,6 @@ export default function Contact() {
       />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-6xl mx-auto">
             <Breadcrumbs
@@ -448,8 +444,6 @@ export default function Contact() {
             </div>
           </div>
         </div>
-
-        <Footer />
       </div>
     </>
   );

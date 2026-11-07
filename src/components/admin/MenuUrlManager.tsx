@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { ExternalLink, Link2, Link2Off, Save, RotateCcw, Search } from "lucide-react";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 export interface RestaurantMenuRow {
   id: string;
@@ -179,7 +180,7 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
 
                   <TableCell>
                     {r.website ? (
-                      <a
+                      <SafeExternalLink
                         href={r.website}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -188,7 +189,7 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
                       >
                         <ExternalLink className="h-3 w-3 shrink-0" />
                         {r.website.replace(/^https?:\/\//, "")}
-                      </a>
+                      </SafeExternalLink>
                     ) : (
                       <span className="text-muted-foreground text-sm">—</span>
                     )}
@@ -208,14 +209,15 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <a
+                              <SafeExternalLink
+                                fallback={null}
                                 href={currentEdit ?? r.menu_url ?? ""}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-muted-foreground hover:text-primary"
                               >
                                 <ExternalLink className="h-4 w-4" />
-                              </a>
+                              </SafeExternalLink>
                             </TooltipTrigger>
                             <TooltipContent>Open URL</TooltipContent>
                           </Tooltip>

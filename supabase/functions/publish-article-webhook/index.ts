@@ -14,8 +14,9 @@ import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, extractClaudeText, d
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
-import { validateURLForSSRF } from "../_shared/validation.ts";
+import { validateURLForSSRFResolved, type SSRFValidationOptions } from "../_shared/validation.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { safeFetch, UnsafeFetchError } from "../_shared/fetchGuard.ts";
 
 /**
  * Webhook signature (WEB-BE-009).
@@ -100,10 +101,14 @@ serve(async (req) => {
     // got this right: https only, private IPs blocked. That is a tightening on
     // paper and a loosening in practice, since the previous behaviour was to
     // reject everything.
-    const ssrfResult = validateURLForSSRF(webhookUrl, {
+    //
+    // The check resolves the host too: the literal one passes any hostname,
+    // including one whose A record is 10.0.0.5 or 169.254.169.254.
+    const webhookSsrf: SSRFValidationOptions = {
       allowedProtocols: ['https:'],
       blockPrivateIPs: true,
-    });
+    };
+    const ssrfResult = await validateURLForSSRFResolved(webhookUrl, webhookSsrf);
     if (!ssrfResult.valid) {
       return new Response(
         JSON.stringify({ error: `Invalid webhook URL: ${ssrfResult.error}` }),
@@ -248,11 +253,13 @@ Return ONLY a JSON object with this exact structure:
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       let transient = false;
       try {
-        webhookResponse = await fetchWithTimeout(webhookUrl, {
-          method: 'POST',
-          headers: webhookHeaders,
-          body: rawBody,
-        });
+        // safeFetch re-checks every redirect hop with the same options, so a
+        // 307 to http:// or to an internal host is refused instead of followed.
+        webhookResponse = await safeFetch(
+          webhookUrl,
+          { method: 'POST', headers: webhookHeaders, body: rawBody },
+          { ssrf: webhookSsrf, fetchFn: (u, init) => fetchWithTimeout(u, init) },
+        );
 
         if (webhookResponse.ok) {
           lastError = undefined;
@@ -272,6 +279,11 @@ Return ONLY a JSON object with this exact structure:
       } catch (err) {
         // A thrown permanent-failure error must propagate, not be retried.
         if (err instanceof Error && err.message === 'Webhook delivery failed') throw err;
+        // A refused redirect will be refused again; retrying only delays the error.
+        if (err instanceof UnsafeFetchError) {
+          console.error('Webhook delivery refused:', err.message);
+          throw new Error('Webhook delivery failed');
+        }
         // Network error / timeout — transient.
         transient = true;
         lastError = err;

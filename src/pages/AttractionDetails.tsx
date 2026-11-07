@@ -10,23 +10,22 @@ import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
-import { RatingSystem } from "@/components/RatingSystem";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ErrorState } from "@/components/ui/error-state";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
 import { BRAND } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Landmark } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { lazy, useState, type ReactNode } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
@@ -50,7 +49,15 @@ import { handleError } from "@/lib/errorHandler";
 import { formatMiles, nearby } from "@/lib/venuePages";
 import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { safeWebUrl } from "@/lib/reservations";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+
+// Ratings sit below the fold and fire their own requests on mount. React.lazy
+// defers the chunk; DeferredWidget defers the mount until the reader scrolls
+// near it. Same pattern as EventDetails and RestaurantDetails.
+const RatingSystem = lazy(() =>
+  import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
+);
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 
@@ -142,6 +149,7 @@ export default function AttractionDetails() {
     data: attraction,
     isLoading,
     error,
+    refetch,
   } = useQuery({
     queryKey: detailQueryKey("attraction", slug ?? ""),
     // attractions now has a slug column (migration 20260919000008), so this is
@@ -243,7 +251,6 @@ export default function AttractionDetails() {
       <>
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/attractions/${slug}`} />
-        <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
             <div className="animate-pulse space-y-6">
@@ -259,7 +266,6 @@ export default function AttractionDetails() {
             </div>
           </div>
         </div>
-        <Footer />
       </>
     );
   }
@@ -269,13 +275,28 @@ export default function AttractionDetails() {
   // off the site stayed reachable by its own URL and kept its indexable page.
   const inactive = Boolean(attraction) && attraction?.is_active === false;
 
-  if (error || !attraction || inactive) {
+  // WEB-SEO-040, as on HotelDetails. A failed fetch is not a missing row: it
+  // gets a retry and no robots meta, so a transient PostgREST error on a live
+  // attraction does not ask Google to drop the page.
+  if (error) {
+    return (
+      <>
+        <RouteCanonical path={`/attractions/${slug}`} />
+        <div className="min-h-screen bg-background">
+          <div className="container mx-auto px-4 py-16">
+            <ErrorState error={error} onRetry={() => void refetch()} />
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!attraction || inactive) {
     return (
       <>
         <Helmet>
           <meta name="robots" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="min-h-screen bg-background flex items-center justify-center px-4">
           <Card className="max-w-md mx-auto text-center rounded-2xl">
             <CardContent className="p-8">
@@ -295,7 +316,6 @@ export default function AttractionDetails() {
             </CardContent>
           </Card>
         </div>
-        <Footer />
       </>
     );
   }
@@ -348,6 +368,9 @@ export default function AttractionDetails() {
 
   // Rows for "Plan your visit". Each renders only with data behind it. The
   // site's own wording first; the is_free flag only when there is none.
+  // The website comes from scraped and owner-edited data; only an http(s) URL
+  // may become a link.
+  const websiteUrl = safeWebUrl(attraction.website);
   const admission =
     attraction.admission_summary ||
     (attraction.is_free === true
@@ -434,7 +457,6 @@ export default function AttractionDetails() {
 
   return (
     <>
-      <Header />
       <EnhancedAttractionSEO
         attraction={attraction}
         slug={attractionSlug}
@@ -491,6 +513,7 @@ export default function AttractionDetails() {
             <div className="flex gap-2">
               <ShareDialog
                 title={attraction.name}
+                itemName={attraction.name}
                 description={attraction.description || `${attraction.name}, a ${typeLabel} in the ${BRAND.city} area`}
                 url={typeof window !== "undefined" ? window.location.href : ""}
                 onShare={trackShare}
@@ -677,10 +700,10 @@ export default function AttractionDetails() {
                       </span>
                     </VisitRow>
                   )}
-                  {attraction.website && (
+                  {websiteUrl && (
                     <VisitRow term="Website">
                       <a
-                        href={attraction.website}
+                        href={websiteUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex min-h-11 items-center gap-1 font-medium text-primary hover:underline"
@@ -739,8 +762,10 @@ export default function AttractionDetails() {
           />
 
           {/* Ratings & Reviews (WEB-FEAT-010) */}
-          <div id="reviews" className="mb-8">
-            <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
+          <div id="reviews" className="mb-8 scroll-mt-20">
+            <DeferredWidget minHeight={240} label="Ratings and reviews">
+              <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
+            </DeferredWidget>
           </div>
 
           {/* Attraction-Specific FAQ */}
@@ -823,7 +848,6 @@ export default function AttractionDetails() {
 
         <LastUpdatedBadge updatedAt={attraction.updated_at} className="mt-6 justify-center" />
       </div>
-      <Footer />
       <BackToTop />
 
       <StickyMobileCTA
@@ -839,10 +863,10 @@ export default function AttractionDetails() {
             : undefined
         }
         secondaryAction={
-          attraction.website
+          websiteUrl
             ? {
                 label: "Visit Website",
-                href: attraction.website,
+                href: websiteUrl,
                 icon: "website",
                 isExternal: true,
               }

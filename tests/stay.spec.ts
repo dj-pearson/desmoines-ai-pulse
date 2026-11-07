@@ -26,7 +26,10 @@ import { installFixtureBackend } from './support/fixtureBackend';
 
 const ISO = '2026-09-01T12:00:00.000Z';
 const TOTAL = 63;
-const ARENA = { latitude: 41.5908, longitude: -93.6208 };
+// The arena's pin as Hotels.tsx holds it (FIXED_NEAR_PLACES). SEO-045 moved it
+// from the seeded 41.5908, which sat at the EMC Expo Center, to the geocode;
+// against the old point, hotel 22 (step 1) was nearer than hotel 47 (step 0).
+const ARENA = { latitude: 41.5925082, longitude: -93.6210723 };
 
 function hotel(i: number, extra: Record<string, unknown> = {}) {
   // Distance from the arena is unrelated to the index: 5 is a unit mod 63, so

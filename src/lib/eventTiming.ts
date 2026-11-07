@@ -15,7 +15,7 @@
  * plus three hours, else (no announced time) the end of its Central day.
  * Everything takes `now` so the rules are tested on a fixed clock.
  */
-import { centralDateOf, centralWindow, formatInCentralTime, hasSpecificTime } from "@/lib/timezone";
+import { centralDateOf, centralWindow, formatInCentralTime, hasSpecificTime } from "./timezone";
 
 /** Same assumed run time as eventEndIso in eventSchema.ts. */
 export const DEFAULT_EVENT_HOURS = 3;

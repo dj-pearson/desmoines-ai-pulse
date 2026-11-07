@@ -102,48 +102,48 @@ export function useTrending(options: FallbackConfig = {}) {
   // group) are defined in hook scope; hoisting them out would be a much larger
   // change for no behavioural gain (WEB-PERF-013).
   const fetchTrendingData = async (): Promise<TrendingQueryResult> => {
-    try {
-      if (config.useRealData && config.readScores) {
-        // The scores are written per Central day; a UTC date read the next
-        // day's (empty) rows every evening after 7pm Central.
-        const { data: trendingScores, error: scoresError } = await supabase
-          .from('trending_scores')
-          .select(TRENDING_SCORE_COLUMNS)
-          .eq('date', formatInTimeZone(new Date(), CENTRAL_TIMEZONE, 'yyyy-MM-dd'))
-          .in('content_type', types)
-          .order('rank')
-          .limit(10);
-
-        if (scoresError) {
-          // Falling back is right; doing it silently is not. An unreadable
-          // trending_scores and an empty one both land here, and only one of
-          // them is a problem somebody should know about.
-          logger.error('fetchTrendingData', 'Could not read trending scores', { error: scoresError });
-        }
-
-        if (trendingScores && trendingScores.length > 0) {
-          // We have real data! Fetch the actual content
-          const enrichedTrending = await enrichTrendingWithContent(trendingScores);
-          
-          const groupedTrending = groupTrendingByType(enrichedTrending);
-          
-          // Check if we have enough data
-          const totalItems = Object.values(groupedTrending).reduce((sum, items) => sum + items.length, 0);
-          
-          if (totalItems >= config.minItemsRequired) {
-            return { trending: groupedTrending, hasRealData: true };
-          }
-        }
+    if (config.useRealData && config.readScores) {
+      // Only the trending_scores path may fall back: when it fails, the
+      // organic reads below are still a real answer. When THEY fail there is
+      // no answer left, so their error is not caught here and reaches TanStack
+      // (an outage used to render "No rated places to show right now").
+      try {
+        const measured = await readTrendingScores();
+        if (measured) return { trending: measured, hasRealData: true };
+      } catch (error) {
+        logger.error('fetchTrendingData', 'Error fetching trending data', { error: String(error) });
       }
-
-      // Fallback: organic reads (upcoming events, highly rated places)
-      return { trending: await generateFallbackTrending(), hasRealData: false };
-    } catch (error) {
-      // Trending is a nice-to-have surface: fall back rather than surfacing an
-      // error state, but keep the reason visible in dev.
-      logger.error('fetchTrendingData', 'Error fetching trending data', { error: String(error) });
-      return { trending: await generateFallbackTrending(), hasRealData: false };
     }
+
+    // Fallback: organic reads (upcoming events, highly rated places)
+    return { trending: await generateFallbackTrending(), hasRealData: false };
+  };
+
+  /** The admin-only measured list, or null when there is not enough of it. */
+  const readTrendingScores = async (): Promise<TrendingData | null> => {
+    // The scores are written per Central day; a UTC date read the next
+    // day's (empty) rows every evening after 7pm Central.
+    const { data: trendingScores, error: scoresError } = await supabase
+      .from('trending_scores')
+      .select(TRENDING_SCORE_COLUMNS)
+      .eq('date', formatInTimeZone(new Date(), CENTRAL_TIMEZONE, 'yyyy-MM-dd'))
+      .in('content_type', types)
+      .order('rank')
+      .limit(10);
+
+    if (scoresError) {
+      // Falling back is right; doing it silently is not. An unreadable
+      // trending_scores and an empty one both land here, and only one of
+      // them is a problem somebody should know about.
+      logger.error('fetchTrendingData', 'Could not read trending scores', { error: scoresError });
+      return null;
+    }
+
+    if (!trendingScores || trendingScores.length === 0) return null;
+
+    const grouped = groupTrendingByType(await enrichTrendingWithContent(trendingScores));
+    const totalItems = Object.values(grouped).reduce((sum, items) => sum + items.length, 0);
+    return totalItems >= config.minItemsRequired ? grouped : null;
   };
 
   const enrichTrendingWithContent = async (trendingScores: Array<Record<string, unknown>>) => {
@@ -167,47 +167,50 @@ export function useTrending(options: FallbackConfig = {}) {
     // A map keyed by `${type}:${id}` so results can be re-associated in order.
     const contentByKey = new Map<string, Record<string, unknown>>();
 
-    try {
-      const [eventsRes, restaurantsRes, attractionsRes, playgroundsRes] = await Promise.all([
-        idsByType.event.length
-          ? applyEventVisibility(
-              supabase.from('events').select(EVENT_LIST_COLUMNS).in('id', idsByType.event),
-            )
-          : null,
-        idsByType.restaurant.length
-          ? supabase
-              .from('restaurants')
-              .select(RESTAURANT_LIST_COLUMNS)
-              .in('id', idsByType.restaurant)
-              .neq('is_merged', true)
-              // A closed place can still carry views, but it is not trending (SEO-059)
-              .or(NOT_CLOSED_RESTAURANT_FILTER)
-          : null,
-        idsByType.attraction.length
-          ? supabase
-              .from('attractions')
-              .select(ATTRACTION_LIST_COLUMNS)
-              .in('id', idsByType.attraction)
-              .eq('is_active', true)
-          : null,
-        idsByType.playground.length
-          ? supabase.from('playgrounds').select(PLAYGROUND_LIST_COLUMNS).in('id', idsByType.playground)
-          : null,
-      ]);
+    const [eventsRes, restaurantsRes, attractionsRes, playgroundsRes] = await Promise.all([
+      idsByType.event.length
+        ? applyEventVisibility(
+            supabase.from('events').select(EVENT_LIST_COLUMNS).in('id', idsByType.event),
+          )
+        : null,
+      idsByType.restaurant.length
+        ? supabase
+            .from('restaurants')
+            .select(RESTAURANT_LIST_COLUMNS)
+            .in('id', idsByType.restaurant)
+            .neq('is_merged', true)
+            // A closed place can still carry views, but it is not trending (SEO-059)
+            .or(NOT_CLOSED_RESTAURANT_FILTER)
+        : null,
+      idsByType.attraction.length
+        ? supabase
+            .from('attractions')
+            .select(ATTRACTION_LIST_COLUMNS)
+            .in('id', idsByType.attraction)
+            .eq('is_active', true)
+        : null,
+      idsByType.playground.length
+        ? supabase.from('playgrounds').select(PLAYGROUND_LIST_COLUMNS).in('id', idsByType.playground)
+        : null,
+    ]);
 
-      const collect = (type: string, rows: unknown) => {
-        for (const row of (rows as Array<Record<string, unknown>>) || []) {
-          contentByKey.set(`${type}:${row.id}`, row);
-        }
-      };
+    // A content read that failed is not "these items no longer exist". It used
+    // to be caught here and turned into an empty map, which dropped every
+    // measured item silently; now it throws, and fetchTrendingData logs it and
+    // falls back to the organic reads.
+    const failed = [eventsRes, restaurantsRes, attractionsRes, playgroundsRes].find((res) => res?.error);
+    if (failed?.error) throw failed.error;
 
-      collect('event', eventsRes?.data);
-      collect('restaurant', restaurantsRes?.data);
-      collect('attraction', attractionsRes?.data);
-      collect('playground', playgroundsRes?.data);
-    } catch (error) {
-      logger.error('enrichTrendingWithContent', 'Error batch-fetching trending content', { error: String(error) });
-    }
+    const collect = (type: string, rows: unknown) => {
+      for (const row of (rows as Array<Record<string, unknown>>) || []) {
+        contentByKey.set(`${type}:${row.id}`, row);
+      }
+    };
+
+    collect('event', eventsRes?.data);
+    collect('restaurant', restaurantsRes?.data);
+    collect('attraction', attractionsRes?.data);
+    collect('playground', playgroundsRes?.data);
 
     // Re-associate content in the original trending order.
     const enriched = [];
@@ -240,135 +243,142 @@ export function useTrending(options: FallbackConfig = {}) {
       playgrounds: []
     };
 
-    try {
-      // ORGANIC READS ONLY (home pass-2 WP3 item 2). This used to read
-      // is_featured rows for every type and title them "Featured". Since
-      // 20260902000004 a featured restaurant or event is a sponsored one or an
-      // admin pick, so the column was paid placement under an editorial label.
-      // Now: upcoming visible events by date, and places rated
-      // HIGHLY_RATED_MIN or better (restaurants not merged and not closed,
-      // attractions active). A sponsored row can still qualify on its rating;
-      // the caller labels it and caps it at one per column.
-      //
-      // All reads use the list projections (WEB-PERF-025/035), run in
-      // parallel, and a type the caller did not ask for is not read at all.
-      const skip = Promise.resolve({ data: null, error: null });
-      const [
-        { data: recentEvents, error: recentEventsError },
-        { data: restaurants, error: restaurantsError },
-        { data: attractions, error: attractionsError },
-        { data: playgrounds, error: playgroundsError },
-      ] = await Promise.all([
-        wants('event')
-          ? applyEventVisibility(
-              supabase.from('events').select(EVENT_LIST_COLUMNS).gte('date', new Date().toISOString()),
-            )
-              .order('date')
-              .limit(6)
-          : skip,
-        wants('restaurant')
-          ? supabase
-              .from('restaurants')
-              .select(RESTAURANT_LIST_COLUMNS)
-              .gte('rating', HIGHLY_RATED_MIN)
-              .neq('is_merged', true)
-              // Keeps rows with no status; a bare .not('status','in',...)
-              // would drop them.
-              .or(`status.is.null,status.not.in.${NOT_SERVING}`)
-              .order('rating', { ascending: false })
-              .order('name')
-              .limit(4)
-          : skip,
-        wants('attraction')
-          ? supabase
-              .from('attractions')
-              .select(ATTRACTION_LIST_COLUMNS)
-              .gte('rating', HIGHLY_RATED_MIN)
-              .eq('is_active', true)
-              .order('rating', { ascending: false })
-              .order('name')
-              .limit(4)
-          : skip,
-        wants('playground')
-          ? supabase
-              .from('playgrounds')
-              .select(PLAYGROUND_LIST_COLUMNS)
-              .gte('rating', HIGHLY_RATED_MIN)
-              .order('rating', { ascending: false })
-              .order('name')
-              .limit(4)
-          : skip,
-      ]);
+    // ORGANIC READS ONLY (home pass-2 WP3 item 2). This used to read
+    // is_featured rows for every type and title them "Featured". Since
+    // 20260902000004 a featured restaurant or event is a sponsored one or an
+    // admin pick, so the column was paid placement under an editorial label.
+    // Now: upcoming visible events by date, and places rated
+    // HIGHLY_RATED_MIN or better (restaurants not merged and not closed,
+    // attractions active). A sponsored row can still qualify on its rating;
+    // the caller labels it and caps it at one per column.
+    //
+    // All reads use the list projections (WEB-PERF-025/035), run in
+    // parallel, and a type the caller did not ask for is not read at all.
+    const skip = Promise.resolve({ data: null, error: null });
+    const [
+      { data: recentEvents, error: recentEventsError },
+      { data: restaurants, error: restaurantsError },
+      { data: attractions, error: attractionsError },
+      { data: playgrounds, error: playgroundsError },
+    ] = await Promise.all([
+      wants('event')
+        ? applyEventVisibility(
+            supabase.from('events').select(EVENT_LIST_COLUMNS).gte('date', new Date().toISOString()),
+          )
+            .order('date')
+            .limit(6)
+        : skip,
+      wants('restaurant')
+        ? supabase
+            .from('restaurants')
+            .select(RESTAURANT_LIST_COLUMNS)
+            .gte('rating', HIGHLY_RATED_MIN)
+            .neq('is_merged', true)
+            // Keeps rows with no status; a bare .not('status','in',...)
+            // would drop them.
+            .or(`status.is.null,status.not.in.${NOT_SERVING}`)
+            .order('rating', { ascending: false })
+            .order('name')
+            .limit(4)
+        : skip,
+      wants('attraction')
+        ? supabase
+            .from('attractions')
+            .select(ATTRACTION_LIST_COLUMNS)
+            .gte('rating', HIGHLY_RATED_MIN)
+            .eq('is_active', true)
+            .order('rating', { ascending: false })
+            .order('name')
+            .limit(4)
+        : skip,
+      wants('playground')
+        ? supabase
+            .from('playgrounds')
+            .select(PLAYGROUND_LIST_COLUMNS)
+            .gte('rating', HIGHLY_RATED_MIN)
+            .order('rating', { ascending: false })
+            .order('name')
+            .limit(4)
+        : skip,
+    ]);
 
-      // Position-based scores: an ordering key for this list, not a measurement.
-      fallback.events = (recentEvents || []).slice(0, 6).map((event, index) => ({
-        id: `fallback-event-${event.id}`,
-        contentType: 'event' as const,
-        contentId: event.id,
-        score: 100 - (index * 15), // Decreasing scores
-        rank: index + 1,
-        // No view data exists on this path - see the TrendingItem comment.
-        views24h: undefined,
-        views7d: undefined,
-        velocityScore: undefined,
-        content: event
-      }));
+    // Position-based scores: an ordering key for this list, not a measurement.
+    fallback.events = (recentEvents || []).slice(0, 6).map((event, index) => ({
+      id: `fallback-event-${event.id}`,
+      contentType: 'event' as const,
+      contentId: event.id,
+      score: 100 - (index * 15), // Decreasing scores
+      rank: index + 1,
+      // No view data exists on this path - see the TrendingItem comment.
+      views24h: undefined,
+      views7d: undefined,
+      velocityScore: undefined,
+      content: event
+    }));
 
-      // Restaurants, attractions and playgrounds: highly rated rows.
-      fallback.restaurants = (restaurants || []).map((restaurant, index) => ({
-        id: `fallback-restaurant-${restaurant.id}`,
-        contentType: 'restaurant' as const,
-        contentId: restaurant.id,
-        score: 80 - (index * 12),
-        rank: index + 1,
-        // No view data exists on this path - see the TrendingItem comment.
-        views24h: undefined,
-        views7d: undefined,
-        velocityScore: undefined,
-        content: restaurant
-      }));
+    // Restaurants, attractions and playgrounds: highly rated rows.
+    fallback.restaurants = (restaurants || []).map((restaurant, index) => ({
+      id: `fallback-restaurant-${restaurant.id}`,
+      contentType: 'restaurant' as const,
+      contentId: restaurant.id,
+      score: 80 - (index * 12),
+      rank: index + 1,
+      // No view data exists on this path - see the TrendingItem comment.
+      views24h: undefined,
+      views7d: undefined,
+      velocityScore: undefined,
+      content: restaurant
+    }));
 
-      fallback.attractions = (attractions || []).map((attraction, index) => ({
-        id: `fallback-attraction-${attraction.id}`,
-        contentType: 'attraction' as const,
-        contentId: attraction.id,
-        score: 70 - (index * 10),
-        rank: index + 1,
-        // No view data exists on this path - see the TrendingItem comment.
-        views24h: undefined,
-        views7d: undefined,
-        velocityScore: undefined,
-        content: attraction
-      }));
+    fallback.attractions = (attractions || []).map((attraction, index) => ({
+      id: `fallback-attraction-${attraction.id}`,
+      contentType: 'attraction' as const,
+      contentId: attraction.id,
+      score: 70 - (index * 10),
+      rank: index + 1,
+      // No view data exists on this path - see the TrendingItem comment.
+      views24h: undefined,
+      views7d: undefined,
+      velocityScore: undefined,
+      content: attraction
+    }));
 
-      fallback.playgrounds = (playgrounds || []).map((playground, index) => ({
-        id: `fallback-playground-${playground.id}`,
-        contentType: 'playground' as const,
-        contentId: playground.id,
-        score: 60 - (index * 8),
-        rank: index + 1,
-        // No view data exists on this path - see the TrendingItem comment.
-        views24h: undefined,
-        views7d: undefined,
-        velocityScore: undefined,
-        content: playground
-      }));
+    fallback.playgrounds = (playgrounds || []).map((playground, index) => ({
+      id: `fallback-playground-${playground.id}`,
+      contentType: 'playground' as const,
+      contentId: playground.id,
+      score: 60 - (index * 8),
+      rank: index + 1,
+      // No view data exists on this path - see the TrendingItem comment.
+      views24h: undefined,
+      views7d: undefined,
+      velocityScore: undefined,
+      content: playground
+    }));
 
-      // The fallback is itself a set of reads, and each one silently discarded
-      // its error. A trending section that is empty because five queries failed
-      // and one that is empty because nothing qualifies render identically.
-      const fallbackErrors = [
-        recentEventsError && `recent events: ${recentEventsError.message}`,
-        restaurantsError && `restaurants: ${restaurantsError.message}`,
-        attractionsError && `attractions: ${attractionsError.message}`,
-        playgroundsError && `playgrounds: ${playgroundsError.message}`,
-      ].filter(Boolean);
-      if (fallbackErrors.length > 0) {
-        logger.error('generateFallbackTrending', 'Some fallback reads failed', { fallbackErrors });
-      }
-    } catch (error) {
-      logger.error('generateFallbackTrending', 'Error generating fallback trending', { error });
+    // The fallback is itself a set of reads, and each one silently discarded
+    // its error. A trending section that is empty because five queries failed
+    // and one that is empty because nothing qualifies render identically.
+    const fallbackErrors = [
+      recentEventsError && `recent events: ${recentEventsError.message}`,
+      restaurantsError && `restaurants: ${restaurantsError.message}`,
+      attractionsError && `attractions: ${attractionsError.message}`,
+      playgroundsError && `playgrounds: ${playgroundsError.message}`,
+    ].filter(Boolean);
+    if (fallbackErrors.length > 0) {
+      logger.error('generateFallbackTrending', 'Some fallback reads failed', { fallbackErrors });
     }
+
+    // Logging was half of it: the empty lists were still returned as a
+    // success, and MostSearched told the visitor "No rated places to show
+    // right now" during an outage. If a read failed and nothing at all came
+    // back, the empty result is not an answer, so throw the first failure
+    // (the PostgREST error object itself, so shouldRetry can read its code).
+    // A partial failure that still produced rows renders what it has.
+    const firstError = recentEventsError ?? restaurantsError ?? attractionsError ?? playgroundsError;
+    const rowCount =
+      fallback.events.length + fallback.restaurants.length + fallback.attractions.length + fallback.playgrounds.length;
+    if (firstError && rowCount === 0) throw firstError;
 
     return fallback;
   };
@@ -385,7 +395,7 @@ export function useTrending(options: FallbackConfig = {}) {
     } as TrendingData);
   };
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: [
       'trending',
       config.useRealData,
@@ -401,10 +411,14 @@ export function useTrending(options: FallbackConfig = {}) {
     retry: shouldRetry,
   });
 
-  // Public shape preserved exactly for existing consumers.
+  // The original four fields keep their shape; isError and error are added.
+  // On failure `trending` is still EMPTY_TRENDING, so a caller that ignores
+  // isError cannot crash, but it will show an empty state: check isError.
   return {
     trending: data?.trending ?? EMPTY_TRENDING,
     isLoading,
+    isError,
+    error,
     hasRealData: data?.hasRealData ?? false,
     refetch
   };

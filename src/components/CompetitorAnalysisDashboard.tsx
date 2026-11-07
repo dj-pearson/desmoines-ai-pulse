@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('CompetitorAnalysisDashboard');
 
@@ -174,14 +175,14 @@ export function CompetitorAnalysisDashboard() {
               </CardTitle>
               <CardDescription className="flex items-center gap-2">
                 <SpriteIcon name="external-link" className="w-4 h-4" />
-                <a 
+                <SafeExternalLink
                   href={competitor.website_url} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="hover:underline"
                 >
                   Visit Website
-                </a>
+                </SafeExternalLink>
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -259,14 +260,15 @@ export function CompetitorAnalysisDashboard() {
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>Scraped: {new Date(item.scraped_at).toLocaleDateString()}</span>
                         {item.url && (
-                          <a 
+                          <SafeExternalLink
+                            fallback={null}
                             href={item.url} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="hover:underline flex items-center gap-1"
                           >
                             View <SpriteIcon name="external-link" className="w-3 h-3" />
-                          </a>
+                          </SafeExternalLink>
                         )}
                       </div>
                     </div>

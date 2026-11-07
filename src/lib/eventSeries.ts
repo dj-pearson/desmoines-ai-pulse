@@ -309,6 +309,7 @@ export function seriesForSlug(slug: string | null | undefined): EventSeriesDef |
  * nothing here can break out of the filter.
  */
 export function seriesTitlePatterns(def: EventSeriesDef): string[] {
+  // postgrest-safe: aliases are [a-z0-9 ] only (see above)
   return def.aliases.map((alias) => `title.ilike.*${alias.split(" ").join("*")}*`);
 }
 

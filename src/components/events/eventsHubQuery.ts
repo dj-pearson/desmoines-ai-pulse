@@ -6,6 +6,7 @@ import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { queryKeys } from "@/lib/queryKeys";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { applyEventArea, eventAreaOrFilter, eventInArea, type EventArea } from "@/lib/eventAreas";
+import { hubSearchQuery } from "@/lib/eventSearchQuery";
 import { FREE_PRICE_FILTER, isFreePrice } from "@/lib/eventPrice";
 import { roundCoordinate } from "@/lib/nearMeOrigins";
 import { isSponsoredActive, SPONSORED_CAP } from "@/lib/sponsored";
@@ -197,29 +198,9 @@ export function windowContainsNow(window: CentralWindow, now: Date): boolean {
   return Date.parse(window.start) <= t && t <= Date.parse(window.end);
 }
 
-/** tsquery operators and quoting; stripped from typed input before it is sent. */
-const TSQUERY_META = /[&|!():*<>'"\\]/g;
-
-export interface HubSearchQuery {
-  query: string;
-  /** undefined means to_tsquery (PostgREST `fts`). */
-  type?: "websearch";
-}
-
-/**
- * The search box as a tsquery that matches while you type (item 12): every
- * word must match, and the last one is a prefix, so "jaz" finds jazz. Input
- * with quotes or an OR goes to websearch_to_tsquery, which understands them.
- */
-export function hubSearchQuery(input: string): HubSearchQuery | null {
-  const raw = input.trim();
-  if (!raw) return null;
-  if (raw.includes('"') || /(^|\s)OR(\s|$)/.test(raw)) return { query: raw, type: "websearch" };
-  const tokens = raw.replace(TSQUERY_META, " ").split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { query: raw, type: "websearch" };
-  const last = tokens.length - 1;
-  return { query: tokens.map((t, i) => (i === last ? `${t}:*` : t)).join(" & ") };
-}
+// hubSearchQuery lives in src/lib/eventSearchQuery.ts so the calendar feed's
+// Pages Function can import it without pulling in the Supabase client.
+export { hubSearchQuery, type HubSearchQuery } from "@/lib/eventSearchQuery";
 
 export interface HubFilterOptions {
   /** Extra OR groups, AND-ed with the hub's own in the one `or=` param. */
@@ -367,14 +348,45 @@ export interface HubCalendarSummary {
 }
 
 /**
- * SEO-036: the counts and the range for /events' first sentence, from the
- * same filters the unfiltered list uses. Two requests: the latest row with an
- * exact count (the total and the last date in one read), and a count-only
- * HEAD for the free rows. tests/events-request-budget.spec.ts counts both.
+ * True when these filters select the same rows as UNFILTERED_HUB, by the
+ * same tests applyHubFilters makes. Sort is ignored: it orders the rows, it
+ * does not change how many there are.
  */
-export async function fetchHubCalendarSummary(now: Date): Promise<HubCalendarSummary> {
+export function isUnfilteredHub(filters: HubFilters): boolean {
+  return (
+    !hubSearchQuery(filters.search) &&
+    (!filters.category || filters.category === "all") &&
+    !filters.window &&
+    !filters.area &&
+    !filters.freeOnly
+  );
+}
+
+export interface HubCalendarSummaryOptions {
+  /**
+   * Ask for the exact total. Pass false when the caller already has it: the
+   * unfiltered list's first page counts exactly the same rows, so a second
+   * exact count over `events` is a scan for a number already in hand
+   * (Loop 8). total then comes back null and the caller supplies it.
+   */
+  withTotal?: boolean;
+}
+
+/**
+ * SEO-036: the counts and the range for /events' first sentence, from the
+ * same filters the unfiltered list uses. Two requests: the latest row (with
+ * an exact count only when withTotal), and a count-only HEAD for the free
+ * rows. tests/events-request-budget.spec.ts counts both. The free count stays
+ * exact: the sentence prints it.
+ */
+export async function fetchHubCalendarSummary(
+  now: Date,
+  { withTotal = true }: HubCalendarSummaryOptions = {}
+): Promise<HubCalendarSummary> {
   const lastQuery = applyHubFilters(
-    supabase.from("events").select("date, event_start_utc", { count: "exact" }),
+    supabase
+      .from("events")
+      .select("date, event_start_utc", withTotal ? { count: "exact" } : undefined),
     UNFILTERED_HUB,
     now
   )
@@ -388,9 +400,9 @@ export async function fetchHubCalendarSummary(now: Date): Promise<HubCalendarSum
   const row = (last.data ?? [])[0] as { date: string | null; event_start_utc: string | null } | undefined;
   const instant = row ? row.event_start_utc || row.date : null;
   return {
-    // null when the count header did not come back; the page then says nothing
-    // rather than "no upcoming events".
-    total: last.count ?? null,
+    // null when not asked for or the count header did not come back; the
+    // page then says nothing rather than "no upcoming events".
+    total: withTotal ? last.count ?? null : null,
     free,
     lastDay: instant ? centralDateOf(new Date(instant)) : null,
   };

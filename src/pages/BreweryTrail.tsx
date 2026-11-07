@@ -2,8 +2,6 @@ import { useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Beer, CheckCircle2, Circle, Star } from 'lucide-react';
 import { toast } from 'sonner';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import ItemListSchema from '@/components/schema/ItemListSchema';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
@@ -328,7 +326,6 @@ export default function BreweryTrail() {
         itemType="Place"
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="mb-10 max-w-3xl">
             <p className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3">
@@ -464,7 +461,6 @@ export default function BreweryTrail() {
             </div>
           )}
         </div>
-        <Footer />
       </div>
 
       {/* One dialog for the page, not one per card. */}

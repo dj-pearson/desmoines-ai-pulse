@@ -62,6 +62,14 @@ vi.mock('@/integrations/supabase/client', () => {
 
 vi.mock('@/lib/safeStorage', () => ({
   storage: { get: () => null, set: () => undefined, remove: () => undefined },
+  // The role cache (WEB-PERF-051). Always a miss here.
+  sessionStore: {
+    get: () => null,
+    set: () => undefined,
+    remove: () => undefined,
+    getString: () => null,
+    setString: () => undefined,
+  },
 }));
 
 import { supabase as supabaseMock } from '@/integrations/supabase/client';

@@ -1,6 +1,4 @@
 import { Link } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -36,9 +34,6 @@ export default function Terms() {
         url="https://desmoinesinsider.com/terms"
         type="website"
       />
-
-      <Header />
-
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <Breadcrumbs
           className="mb-4"
@@ -413,8 +408,6 @@ export default function Terms() {
           </section>
         </article>
       </div>
-
-      <Footer />
       <BackToTop />
     </div>
   );

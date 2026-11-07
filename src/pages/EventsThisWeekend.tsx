@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Filter } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { ListFreshness } from "@/components/ListFreshness";
 import { MonthLinks } from "@/components/seo/MonthLinks";
 import { FAQSection } from "@/components/FAQSection";
@@ -47,6 +45,7 @@ import {
 import { formatCount } from "@/lib/pluralize";
 import { hubTopPicks, weekendHeadline } from "@/lib/eventHubSummary";
 import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
+import { useSiteFooter } from "@/hooks/useSiteFooter";
 
 /**
  * WEB-PERF-023. Rendering the whole weekend measured 4,374 DOM elements. The
@@ -120,6 +119,8 @@ function ChipGroup({ label, allLabel, options, selected, onSelect }: ChipGroupPr
 }
 
 export default function EventsThisWeekend() {
+  // SEO-037: the footer's preferred-source button stays off on this page.
+  useSiteFooter({ preferredSource: false });
   // Filters live in the URL (WEB-UX-001), so a filtered weekend is shareable
   // and survives Back.
   const { getStr, setParam, setMany } = useUrlFilters();
@@ -357,9 +358,6 @@ export default function EventsThisWeekend() {
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/this-weekend')}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -735,8 +733,6 @@ export default function EventsThisWeekend() {
           description="Add Des Moines Insider as a preferred source and Google will show more of our weekend picks in Top Stories."
         />
       </div>
-
-      <Footer preferredSource={false} />
     </div>
   );
 }

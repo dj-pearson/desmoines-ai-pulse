@@ -159,8 +159,11 @@ test.describe('Hub pass 2: phone first screen (item 3)', () => {
     await page.route('**/rest/v1/events?**', (route) => json(route, [show]));
     await page.route('**/rest/v1/restaurants?**', (route) => {
       const url = route.request().url();
-      // The tonight query is the one that needs hours.
-      if (url.includes('opening=not.is.null')) {
+      // The tonight query is the one that needs hours. Since SEO-054 that is
+      // hours_json, the only hours production carries (`opening` is a date
+      // there); this matched `opening=not.is.null`, no request carried it,
+      // and the strip had no restaurant to pair.
+      if (url.includes('hours_json=not.is.null')) {
         return json(route, [
           {
             id: '80000000-0000-0000-0000-000000000001',
@@ -169,7 +172,16 @@ test.describe('Hub pass 2: phone first screen (item 3)', () => {
             cuisine: 'American',
             latitude: 41.5801,
             longitude: -93.6201,
-            opening: 'Mon-Sun 11:00 AM - 11:00 PM',
+            opening: null,
+            // Google's structured shape (placeHours.ts): 11 AM - 11 PM daily.
+            hours_json: {
+              version: 1,
+              timeZone: 'America/Chicago',
+              periods: [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+                open: { day, hour: 11, minute: 0 },
+                close: { day, hour: 23, minute: 0 },
+              })),
+            },
             opening_date: null,
             status: 'open',
           },

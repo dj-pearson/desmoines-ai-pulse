@@ -1,6 +1,8 @@
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { PlainTextBlocks } from "@/components/PlainTextBlocks";
+import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
+import { CENTRAL_TIMEZONE } from "@/lib/timezone";
 
 interface AIWriteupProps {
   writeup: string;
@@ -12,14 +14,16 @@ interface AIWriteupProps {
   headingLevel?: 2 | 3;
 }
 
-function formatDate(dateString: string): string | null {
+/**
+ * The "written" date, in Central. toLocaleDateString used the reader's zone,
+ * and the prerenderer's (UTC): a writeup generated at 9 PM CDT on the 24th
+ * prerendered as "September 25" and hydrated to "September 24" in a Central
+ * browser. Same fix as ListFreshness.
+ */
+function formatWrittenDate(dateString: string): string | null {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return formatInTimeZone(date, CENTRAL_TIMEZONE, "MMMM d, yyyy");
 }
 
 /**
@@ -31,7 +35,7 @@ function formatDate(dateString: string): string | null {
  * (restaurants plan WP8 item 11).
  */
 export function AIWriteup({ writeup, generatedAt, className, headingLevel = 3 }: AIWriteupProps) {
-  const written = generatedAt ? formatDate(generatedAt) : null;
+  const written = generatedAt ? formatWrittenDate(generatedAt) : null;
   const Heading = headingLevel === 2 ? "h2" : "h3";
 
   return (

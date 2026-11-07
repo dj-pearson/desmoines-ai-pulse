@@ -74,6 +74,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
 import { toast } from "sonner";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 
@@ -174,7 +175,7 @@ function AttractionDetailSheet({
             </div>
           )}
           {attraction.website && (
-            <a
+            <SafeExternalLink
               href={attraction.website}
               target="_blank"
               rel="noreferrer noopener"
@@ -182,7 +183,7 @@ function AttractionDetailSheet({
             >
               {attraction.website}
               <ExternalLink className="h-3 w-3 flex-shrink-0" />
-            </a>
+            </SafeExternalLink>
           )}
         </div>
         <SheetFooter className="mt-6">

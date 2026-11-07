@@ -28,11 +28,9 @@ const EVENT_READ_SURFACES = [
   'src/lib/eventQuery.ts', // applyEventVisibility itself
   'src/hooks/useEvents.ts',
   'src/hooks/useEventBySlug.ts',
-  'src/hooks/useSupabase.ts',
   'src/hooks/useHomepageStats.ts',
   'src/hooks/useAdvancedSearch.ts',
   'src/hooks/useTrending.ts',
-  'src/hooks/usePersonalizedRecommendations.ts',
   'src/hooks/useTonightPairings.ts',
   'src/hooks/useHomeSnapshot.ts',
   'src/components/SearchAutocomplete.tsx',

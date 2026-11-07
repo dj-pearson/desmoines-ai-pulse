@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
@@ -177,6 +178,67 @@ function toStoredFilters(filters: AdvancedSearchFilters): Json {
     sortBy: filters.sortBy,
     featuredOnly: filters.featuredOnly,
   };
+}
+
+/**
+ * URL params for a SUBMITTED search, so Back, refresh and a shared link all
+ * restore it. `q` is the name /search has always linked here with
+ * (`/search/advanced?q=jazz`), and it is written on every submit, empty or not:
+ * its presence is what says "a search ran", so pressing Search with the box
+ * blank (browse everything the filters allow) survives a refresh too.
+ */
+export const ADVANCED_SEARCH_PARAMS = {
+  query: 'q',
+  category: 'category',
+  location: 'location',
+  rating: 'rating',
+  from: 'from',
+  to: 'to',
+  sort: 'sort',
+  featured: 'featured',
+} as const;
+
+const PARAM_KEYS: readonly string[] = Object.values(ADVANCED_SEARCH_PARAMS);
+
+/**
+ * The submitted search the URL describes, or null when it describes none (no
+ * search param at all). Every value goes through toAdvancedFilters, so a
+ * hand-edited or stale link (`rating=7`, `category=bars`) lands on a default
+ * rather than on a query no control can show.
+ */
+export function filtersFromSearchParams(params: URLSearchParams): AdvancedSearchFilters | null {
+  if (!PARAM_KEYS.some((key) => params.has(key))) return null;
+  const P = ADVANCED_SEARCH_PARAMS;
+  const category = (params.get(P.category) ?? '').toLowerCase();
+  const rating = params.get(P.rating);
+  return toAdvancedFilters({
+    query: params.get(P.query) ?? '',
+    category: CATEGORIES.find((c) => c.toLowerCase() === category) ?? 'All',
+    location: params.get(P.location) ?? '',
+    rating: rating === null ? 0 : Number(rating),
+    dateRange: { start: params.get(P.from) ?? undefined, end: params.get(P.to) ?? undefined },
+    sortBy: params.get(P.sort),
+    featuredOnly: params.get(P.featured) === '1',
+  });
+}
+
+/**
+ * `prev` with this page's params replaced by `filters`. Defaults are left out
+ * so the URL stays short; params this page does not own (utm_*, say) are kept.
+ */
+export function withSearchParams(prev: URLSearchParams, filters: AdvancedSearchFilters): URLSearchParams {
+  const P = ADVANCED_SEARCH_PARAMS;
+  const next = new URLSearchParams(prev);
+  for (const key of PARAM_KEYS) next.delete(key);
+  next.set(P.query, filters.query.trim());
+  if (filters.category !== 'All') next.set(P.category, filters.category.toLowerCase());
+  if (filters.location) next.set(P.location, filters.location);
+  if (filters.rating > 0) next.set(P.rating, String(filters.rating));
+  if (filters.dateRange.start) next.set(P.from, filters.dateRange.start);
+  if (filters.dateRange.end) next.set(P.to, filters.dateRange.end);
+  if (filters.sortBy !== 'relevance') next.set(P.sort, filters.sortBy);
+  if (filters.featuredOnly) next.set(P.featured, '1');
+  return next;
 }
 
 /** Stable empty array - a fresh `[]` default would give `results` a new identity
@@ -360,23 +422,29 @@ async function executeSearch(f: AdvancedSearchFilters): Promise<SearchResult[]> 
  *  concurrent identical ones dedupe. */
 const searchQueryKey = (f: AdvancedSearchFilters | null) => ['advanced-search', f] as const;
 
-export interface UseAdvancedSearchOptions {
-  /** Seeds `filters.query`, from `?q=` on the page. */
-  initialQuery?: string;
-}
-
-export function useAdvancedSearch({ initialQuery = '' }: UseAdvancedSearchOptions = {}) {
+/**
+ * /search/advanced. The URL holds the SUBMITTED search and drives the query;
+ * `filters` is the draft the controls edit until the visitor presses Search.
+ * The query is keyed on what was submitted, never on the draft, so typing does
+ * not fetch (WEB-PERF-013).
+ */
+export function useAdvancedSearch() {
   const { user } = useAuth();
-  const [filters, setFilters] = useState<AdvancedSearchFilters>(() => ({
-    ...DEFAULT_ADVANCED_FILTERS,
-    query: initialQuery.trim(),
-  }));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramsKey = searchParams.toString();
+  const submittedFilters = useMemo(
+    () => filtersFromSearchParams(new URLSearchParams(paramsKey)),
+    [paramsKey],
+  );
+  const [filters, setFilters] = useState<AdvancedSearchFilters>(
+    () => submittedFilters ?? DEFAULT_ADVANCED_FILTERS,
+  );
+  // Back/forward or a pasted link changes the submitted search; the controls
+  // follow it, or they would show one search while the results show another.
+  useEffect(() => {
+    setFilters(submittedFilters ?? DEFAULT_ADVANCED_FILTERS);
+  }, [submittedFilters]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  /** The filters of the most recently submitted search. This hook is imperative
-   *  by design - consumers call performSearch(...) - so the query is keyed on
-   *  what was submitted rather than on the live `filters` state (WEB-PERF-013). */
-  const [submittedFilters, setSubmittedFilters] = useState<AdvancedSearchFilters | null>(null);
-  const queryClient = useQueryClient();
 
   const loadSavedSearches = useCallback(async () => {
     if (!user) return;
@@ -400,7 +468,16 @@ export function useAdvancedSearch({ initialQuery = '' }: UseAdvancedSearchOption
     loadSavedSearches();
   }, [loadSavedSearches]);
 
-  const { data: results = EMPTY_RESULTS, isFetching: loading } = useQuery({
+  // A failure THROWS, so the page can tell "the search failed" from "nothing
+  // matched". performSearch used to catch it and hand back [], and the page
+  // said "Nothing matched" to a search that never ran.
+  const {
+    data: results = EMPTY_RESULTS,
+    isFetching: loading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: searchQueryKey(submittedFilters),
     queryFn: () => executeSearch(submittedFilters as AdvancedSearchFilters),
     enabled: submittedFilters !== null,
@@ -409,23 +486,24 @@ export function useAdvancedSearch({ initialQuery = '' }: UseAdvancedSearchOption
     retry: shouldRetry,
   });
 
-  const performSearch = useCallback(async (searchFilters: AdvancedSearchFilters) => {
-    setSubmittedFilters(searchFilters);
-    try {
-      // fetchQuery shares the key above, so this both awaits the result for
-      // callers that need it and primes the cache the useQuery above reads.
-      return await queryClient.fetchQuery({
-        queryKey: searchQueryKey(searchFilters),
-        queryFn: () => executeSearch(searchFilters),
-        staleTime: STALE_TIME.SHORT,
-        gcTime: GC_TIME,
-      });
-    } catch (error) {
-      handleError(error, { component: 'useAdvancedSearch', action: 'performSearch' });
-      toast.error('Search failed. Please try again.');
-      return [];
-    }
-  }, [queryClient]);
+  useEffect(() => {
+    if (isError) handleError(error, { component: 'useAdvancedSearch', action: 'search' });
+  }, [isError, error]);
+
+  /** Submits a search: one history entry, so Back returns to the previous one. */
+  const performSearch = useCallback(
+    (searchFilters: AdvancedSearchFilters) => {
+      const next = withSearchParams(searchParams, searchFilters);
+      // The same search again changes no URL, so nothing would re-run; a
+      // visitor pressing Search after a failure means "try again".
+      if (next.toString() === searchParams.toString()) {
+        void refetch();
+        return;
+      }
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams, refetch],
+  );
 
   const saveSearch = async (name: string, searchFilters: AdvancedSearchFilters) => {
     if (!user) {
@@ -458,7 +536,7 @@ export function useAdvancedSearch({ initialQuery = '' }: UseAdvancedSearchOption
   /** Loads a row this page wrote. The page sends other rows to /search instead. */
   const loadSearch = async (search: SavedSearch) => {
     setFilters(search.filters);
-    void performSearch(search.filters);
+    performSearch(search.filters);
     try {
       const { error } = await supabase
         .from('saved_searches')
@@ -495,7 +573,9 @@ export function useAdvancedSearch({ initialQuery = '' }: UseAdvancedSearchOption
 
   const resetFilters = () => {
     setFilters(DEFAULT_ADVANCED_FILTERS);
-    setSubmittedFilters(null);
+    const next = new URLSearchParams(searchParams);
+    for (const key of PARAM_KEYS) next.delete(key);
+    setSearchParams(next);
   };
 
   return {
@@ -504,6 +584,9 @@ export function useAdvancedSearch({ initialQuery = '' }: UseAdvancedSearchOption
     results,
     savedSearches,
     loading,
+    isError,
+    error,
+    refetch,
     /** True once any search has been submitted; the page shows a prompt before that. */
     hasSearched: submittedFilters !== null,
     performSearch,

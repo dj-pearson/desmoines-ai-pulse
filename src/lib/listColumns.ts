@@ -35,6 +35,37 @@ export function withAdminColumns(columns: string, include?: boolean): string {
 export const RESTAURANT_LIST_COLUMNS =
   "city, created_at, cuisine, data_quality_score, description, enhanced, google_place_id, id, image_url, is_featured, is_merged, is_sponsored, sponsored_until, latitude, location, longitude, merged_at, merged_into, name, opening, opening_date, opening_timeframe, phone, popularity_score, price_range, rating, slug, source_url, status, updated_at, website, writeup_generated_at";
 
+/**
+ * What restaurant detail reads on top of the list columns, instead of
+ * select("*"), which also shipped search_vector, geom, writeup_prompt_used and
+ * the heal bookkeeping on every view and every card hover. Checked against
+ * RestaurantDetails.tsx and what it hands its row to: restaurantMeta (title,
+ * description, schema), restaurantFaqs, reservations, and the pSEO area-page
+ * matcher. Every name here is in scripts/db-snapshot.json (2026-08-24).
+ */
+export const RESTAURANT_DETAIL_EXTRA_COLUMNS =
+  "menu_url, seo_title, seo_description, seo_keywords, seo_h1, geo_summary, geo_key_facts, geo_faq, ai_writeup";
+
+export const RESTAURANT_DETAIL_COLUMNS = `${RESTAURANT_LIST_COLUMNS}, ${RESTAURANT_DETAIL_EXTRA_COLUMNS}`;
+
+/**
+ * Detail columns that later migrations add and scripts/db-snapshot.json does
+ * not have: hours_json and business_status (20260919000009), neighborhood
+ * (SEO-060), and the Places reservation fields (20260909000001), the last four
+ * not in types.ts either. A missing one 42703s the whole select, so
+ * fetchRestaurantDetail drops whichever the error names and retries. An array,
+ * not a string, so check-list-columns does not hold the types.ts gap against it.
+ */
+export const RESTAURANT_DETAIL_OPTIONAL_COLUMNS = [
+  "hours_json",
+  "business_status",
+  "neighborhood",
+  "google_maps_uri",
+  "reservable",
+  "reservation_url",
+  "reservation_provider",
+] as const;
+
 // NOTE: keep every name here in sync with `public.events` AS DEPLOYED, not as
 // migrated. A column that does not exist makes PostgREST reject the whole select
 // with 42703, which surfaces as a blank events surface site-wide. WEB-QA-003 was

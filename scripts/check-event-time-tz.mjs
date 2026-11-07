@@ -24,13 +24,39 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
-const EXCLUDE = /(^|\/)(admin|cms|crm)\/|(Admin|Cms|Crm)[A-Z]|Admin\.tsx$|Manager\.tsx$|Dashboard\.tsx$|Wizard\.tsx$|ContentTable\.tsx$|Scraping|Competitor|EventDataEnhancer|SecurityMonitoring|SEOTools|DomainHighlight|GooglePlaces|WeekendGuide|ApiKeyManager|RecurringEventFields/;
+// ContentQueue (AdminTools, CMSDashboard) and EventReviewSystem (the admin
+// submission review) are staff screens, so browser-local is right there. They
+// surfaced when the date-fns `format(new Date(...))` shape was added.
+const EXCLUDE = /(^|\/)(admin|cms|crm)\/|(Admin|Cms|Crm)[A-Z]|Admin\.tsx$|Manager\.tsx$|Dashboard\.tsx$|Wizard\.tsx$|ContentTable\.tsx$|Scraping|Competitor|EventDataEnhancer|SecurityMonitoring|SEOTools|DomainHighlight|GooglePlaces|WeekendGuide|ApiKeyManager|RecurringEventFields|ContentQueue|EventReviewSystem/;
 
-// A date-bearing identifier immediately followed by a reader-timezone read.
-const PATTERN =
-  /new Date\(\s*[A-Za-z_$][\w$.?\[\]'"-]*\.(date|start_date|end_date|event_start_utc|event_start_local|instance_date)\b[^)]*\)\s*\.\s*(toLocaleDateString|toLocaleTimeString|toLocaleString|getDate|getDay|getMonth|getFullYear|getHours|getMinutes)\b/;
+const DATE_FIELD = String.raw`[A-Za-z_$][\w$.?\[\]'"-]*\.(date|start_date|end_date|event_start_utc|event_start_local|instance_date)\b[^)]*\)`;
 
+// Two shapes, both of which format an instant in the browser's zone:
+//   1. new Date(x.date).toLocaleDateString() / .getDate() and friends.
+//   2. date-fns format(new Date(x.date), ...) or format(parseISO(x.date), ...).
+//      date-fns `format` has no timezone argument; it reads local fields.
+//      FavoritesView printed "MMM d, yyyy" this way, so an 11:30 PM Central
+//      show was the next day for every reader east of Central.
+//      formatInTimeZone / formatInCentralTime do not match (`format(` only).
+export const PATTERNS = [
+  new RegExp(String.raw`new Date\(\s*` + DATE_FIELD + String.raw`\s*\.\s*(toLocaleDateString|toLocaleTimeString|toLocaleString|getDate|getDay|getMonth|getFullYear|getHours|getMinutes)\b`),
+  new RegExp(String.raw`(^|[^\w$.])format\(\s*(new Date|parseISO)\(\s*` + DATE_FIELD),
+];
+
+/** True when one source line formats an event date in the reader's zone. */
+export function isReaderTzLine(line) {
+  const code = line.trim();
+  // Skip comment lines - this script's own docblock quotes the bad pattern.
+  if (code.startsWith('//') || code.startsWith('*') || code.startsWith('/*')) return false;
+  return PATTERNS.some((p) => p.test(code));
+}
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) main();
+
+function main() {
 // --others picks up files not yet committed, and existsSync drops files deleted
 // in the working tree but still in the index. Without both, a branch that
 // deletes a component crashes this check with ENOENT, and a new component is
@@ -46,10 +72,7 @@ const hits = [];
 for (const file of files) {
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
-    const code = line.trim();
-    // Skip comment lines - this script's own docblock quotes the bad pattern.
-    if (code.startsWith('//') || code.startsWith('*') || code.startsWith('/*')) return;
-    if (PATTERN.test(code)) hits.push({ file, line: i + 1, text: code });
+    if (isReaderTzLine(line)) hits.push({ file, line: i + 1, text: line.trim() });
   });
 }
 
@@ -73,3 +96,4 @@ Use src/lib/timezone.ts: formatEventPart(event, 'EEEE'), formatEventTimeOnly(eve
 sentinel as "7:31 PM"), formatEventDateShort(event), or formatInCentralTime.
 `);
 process.exit(1);
+}

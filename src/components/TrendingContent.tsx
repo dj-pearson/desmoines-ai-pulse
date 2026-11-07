@@ -1,11 +1,10 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTrending } from '@/hooks/useTrendingContent';
 import { useSimplePersonalization } from '@/hooks/useSimplePersonalization';
 import { contentHref, isTrendingContentType } from '@/lib/trendingContent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/error-state';
 import { Star } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
@@ -30,11 +29,11 @@ export default function TrendingContent({
   showPersonalized = true,
   className = ''
 }: TrendingContentProps) {
-  const navigate = useNavigate();
   const {
     trendingItems,
     isLoading: trendingLoading,
-    error: trendingError
+    error: trendingError,
+    refreshTrending,
   } = useTrending({ contentType, timeWindow, limit: Math.ceil(limit / 2) });
   
   const { 
@@ -69,9 +68,13 @@ export default function TrendingContent({
 
   if (trendingError && (!showPersonalized || recommendations.length === 0)) {
     return (
-      <div className={`text-center py-8 ${className}`}>
-        <p className="text-gray-500">Unable to load trending content at this time.</p>
-      </div>
+      <ErrorState
+        error={trendingError}
+        onRetry={() => void refreshTrending()}
+        title="Couldn't load trending content"
+        compact
+        className={className}
+      />
     );
   }
 
@@ -118,7 +121,16 @@ export default function TrendingContent({
     }
   };
 
-  const handleContentClick = (item: any) => {
+  type ContentItem = (typeof allContent)[number];
+
+  // The canonical URL. This was /<type>/<uuid>, a 404 for attractions and
+  // playgrounds (they resolve by slug or name, never by id).
+  const hrefFor = (item: ContentItem) =>
+    isTrendingContentType(item.contentType)
+      ? contentHref(item.contentType, item.content, item.contentId)
+      : '/';
+
+  const handleContentClick = (item: ContentItem) => {
     if (item.source === 'personalized') {
       trackRecommendationClick({
         id: item.id,
@@ -128,14 +140,6 @@ export default function TrendingContent({
         reason: item.reason
       });
     }
-    
-    // The canonical URL. This was /<type>/<uuid>, a 404 for attractions and
-    // playgrounds (they resolve by slug or name, never by id).
-    navigate(
-      isTrendingContentType(item.contentType)
-        ? contentHref(item.contentType, item.content, item.contentId)
-        : '/',
-    );
   };
 
   return (
@@ -155,16 +159,18 @@ export default function TrendingContent({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {allContent.map((item) => (
-          <Card 
-            key={item.id} 
-            className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
-            onClick={() => handleContentClick(item)}
+          // The title is a real link stretched over the card, so the card is
+          // reachable by Tab and opens with Enter. It was a clickable Card
+          // with no role, no tabindex and no key handler.
+          <Card
+            key={item.id}
+            className="relative hover:shadow-lg transition-shadow duration-200"
           >
             {text(item.content?.image_url) && (
               <div className="relative h-40 overflow-hidden rounded-t-lg">
                 <OptimizedImage
                   src={text(item.content.image_url)!}
-                  alt={text(item.content.name) ?? text(item.content.title) ?? ''}
+                  alt=""
                   containerClassName="w-full h-full"
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 33vw"
@@ -192,7 +198,13 @@ export default function TrendingContent({
             
             <CardHeader className="pb-2">
               <CardTitle className="text-base line-clamp-2">
-                {text(item.content?.name) ?? text(item.content?.title) ?? 'Untitled'}
+                <Link
+                  to={hrefFor(item)}
+                  onClick={() => handleContentClick(item)}
+                  className="rounded-sm after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2"
+                >
+                  {text(item.content?.name) ?? text(item.content?.title) ?? 'Untitled'}
+                </Link>
               </CardTitle>
               <CardDescription className="flex items-center gap-1">
                 <SpriteIcon name="map-pin" className="h-3 w-3" />

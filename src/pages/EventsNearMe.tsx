@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import { Navigation, List, Map as MapIcon, Loader2, SlidersHorizontal } from 'lucide-react';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { EventListJsonLd } from '@/components/schema/EventListJsonLd';
 import { SocialEventCard } from '@/components/SocialEventCard';
@@ -265,7 +263,6 @@ export default function EventsNearMe() {
         maxItems={PAGE_SIZE}
       />
       <div className="min-h-screen flex flex-col bg-background">
-        <Header />
         <div className="flex-1 container mx-auto px-4 py-8">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3">Events near me</h1>
@@ -528,7 +525,6 @@ export default function EventsNearMe() {
             </section>
           )}
         </div>
-        <Footer />
       </div>
     </>
   );

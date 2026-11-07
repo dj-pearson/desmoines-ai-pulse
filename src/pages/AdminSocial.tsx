@@ -3,13 +3,14 @@ import SocialAccountsManager from "@/components/admin/SocialAccountsManager";
 import SocialPostQueue from "@/components/admin/SocialPostQueue";
 import SocialPosterSettings from "@/components/admin/SocialPosterSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SlideshowBuilder } from "@/components/admin/SlideshowBuilder";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useTabState } from "@/hooks/useTabState";
 
 export default function AdminSocial() {
   useDocumentTitle("Social · Admin");
   const [activeTab, setActiveTab] = useTabState("accounts", {
-    validTabs: ["accounts", "queue", "automation"],
+    validTabs: ["accounts", "queue", "automation", "slideshow"],
   });
   return (
     <div className="min-h-screen bg-background">
@@ -20,6 +21,7 @@ export default function AdminSocial() {
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
             <TabsTrigger value="queue">Post queue</TabsTrigger>
             <TabsTrigger value="automation">Automation</TabsTrigger>
+            <TabsTrigger value="slideshow">Slideshow</TabsTrigger>
           </TabsList>
           <TabsContent value="accounts" className="mt-4">
             <SocialAccountsManager />
@@ -29,6 +31,9 @@ export default function AdminSocial() {
           </TabsContent>
           <TabsContent value="automation" className="mt-4">
             <SocialPosterSettings />
+          </TabsContent>
+          <TabsContent value="slideshow" className="mt-4">
+            <SlideshowBuilder />
           </TabsContent>
         </Tabs>
       </div>

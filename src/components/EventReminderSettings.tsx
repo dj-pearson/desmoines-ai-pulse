@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { scheduleEventReminder } from '@/hooks/usePushNotifications';
 import { isCapacitor } from '@/lib/capacitorUtils';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { signInHref } from '@/components/header/navigationConfig';
 
 interface EventReminderSettingsProps {
   eventId: string;
@@ -24,6 +26,7 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
     toggleReminder,
     isTogglingReminder,
   } = useEventReminders(eventId);
+  const location = useLocation();
 
   if (!isAuthenticated) {
     return (
@@ -34,7 +37,13 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
             Event Reminders
           </CardTitle>
           <CardDescription>
-            Sign in to receive email reminders before this event
+            <Link
+              to={signInHref(location.pathname, location.search)}
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              Sign in
+            </Link>{' '}
+            to receive email reminders before this event
           </CardDescription>
         </CardHeader>
       </Card>

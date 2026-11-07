@@ -24,14 +24,43 @@ function centralDay(days: number): string {
 }
 
 const NEXT_WEEK = centralDay(7);
-/** An ISO instant on `day` (or the next day when hourUtc >= 24), in UTC. */
-function utcFor(day: string, hourUtc: number, minute = 0, second = 0): string {
-  const next = new Date(`${day}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + (hourUtc >= 24 ? 1 : 0));
-  const h = String(hourUtc % 24).padStart(2, '0');
-  const m = String(minute).padStart(2, '0');
-  const s = String(second).padStart(2, '0');
-  return `${next.toISOString().slice(0, 10)}T${h}:${m}:${s}Z`;
+/**
+ * The UTC instant of a Central wall-clock time on `day`, as an ISO string.
+ *
+ * The offset is looked up for that day, not assumed. This used to add a fixed
+ * five hours (CDT), so once DST ended the untimed row's event_start_utc landed
+ * on 18:31:58 Central while its event_start_local said 19:31:58, and the card
+ * truthfully printed "6:31 PM CT" for a row meant to carry the no-time marker
+ * (WEB-QA-040).
+ */
+function centralUtc(day: string, hour: number, minute = 0, second = 0): string {
+  const wallAsUtc = Date.UTC(
+    Number(day.slice(0, 4)),
+    Number(day.slice(5, 7)) - 1,
+    Number(day.slice(8, 10)),
+    hour,
+    minute,
+    second,
+  );
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  /** Central's offset from UTC at `ms`, in ms (negative). */
+  const offsetAt = (ms: number): number => {
+    const p = Object.fromEntries(fmt.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - ms;
+  };
+  // Twice, so a guess on the far side of a DST change corrects itself.
+  let instant = wallAsUtc - offsetAt(wallAsUtc);
+  instant = wallAsUtc - offsetAt(instant);
+  return new Date(instant).toISOString().replace('.000Z', 'Z');
 }
 
 const ID = {
@@ -58,12 +87,12 @@ function row(id: string, title: string, overrides: Record<string, unknown>) {
     city: 'Des Moines',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-09-01T00:00:00Z',
-    date: utcFor(NEXT_WEEK, 24),
+    date: centralUtc(NEXT_WEEK, 19),
     end_date: null,
     enhanced_description: null,
     original_description: 'Supplied by events-card-honesty.spec.ts',
     event_start_local: `${NEXT_WEEK}T19:00:00`,
-    event_start_utc: utcFor(NEXT_WEEK, 24),
+    event_start_utc: centralUtc(NEXT_WEEK, 19),
     event_timezone: 'America/Chicago',
     image_url: null,
     is_enhanced: false,
@@ -85,8 +114,8 @@ const ROWS = [
   // The no-time marker: 19:31:58 Central.
   row(ID.untimed, TITLE.untimed, {
     event_start_local: `${NEXT_WEEK}T19:31:58`,
-    event_start_utc: utcFor(NEXT_WEEK, 24, 31, 58),
-    date: utcFor(NEXT_WEEK, 24, 31, 58),
+    event_start_utc: centralUtc(NEXT_WEEK, 19, 31, 58),
+    date: centralUtc(NEXT_WEEK, 19, 31, 58),
   }),
   // SeatGeek's placeholder: 03:30:00 Central, source on seatgeek.com.
   row(ID.seatgeek, TITLE.seatgeek, {
@@ -173,13 +202,13 @@ test.describe('/events card honesty (pass 2, WP2)', () => {
   });
 
   test('a real time prints in Central with CT', async ({ page }) => {
-    // 00:00Z is 7 PM in CDT and 6 PM in CST; read it the way the card does.
+    // The row starts at 7 PM Central on either side of a DST change; read it the way the card does.
     const expected = new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Chicago',
       hour: 'numeric',
       minute: '2-digit',
     })
-      .format(new Date(utcFor(NEXT_WEEK, 24)))
+      .format(new Date(centralUtc(NEXT_WEEK, 19)))
       // ICU puts a narrow no-break space before AM/PM; the card uses a plain one.
       .replace(/\s/g, ' ');
     await page.goto('/events');

@@ -3,6 +3,9 @@ import {
   isLinkableRestaurant,
   isLinkableUpcomingEvent,
   isLocated,
+  NEARBY_EVENT_SCAN_COLUMNS,
+  NEARBY_RESTAURANT_SCAN_COLUMNS,
+  orderByIds,
   selectNearbyEvents,
   selectNearbyRestaurants,
 } from "@/lib/nearbyLinks";
@@ -135,5 +138,30 @@ describe("selectNearbyEvents", () => {
 
   it("returns nothing without coordinates", () => {
     expect(selectNearbyEvents({ latitude: undefined, longitude: undefined }, rows, { now })).toEqual([]);
+  });
+});
+
+describe("orderByIds", () => {
+  it("puts rows back in the selector's order and drops ids with no row", () => {
+    const rows = [{ id: "c" }, { id: "a" }, { id: "x" }];
+    expect(orderByIds(rows, ["a", "b", "c"]).map((r) => r.id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("scan projections", () => {
+  const cols = (s: string) => new Set(s.split(",").map((c) => c.trim()));
+
+  it("carry every field the selectors read, and no card text", () => {
+    const r = cols(NEARBY_RESTAURANT_SCAN_COLUMNS);
+    for (const c of ["id", "latitude", "longitude", "status", "business_status", "is_merged", "cuisine"]) {
+      expect(r.has(c)).toBe(true);
+    }
+    const e = cols(NEARBY_EVENT_SCAN_COLUMNS);
+    for (const c of ["id", "latitude", "longitude", "date", "is_merged", "is_hidden", "archived_at"]) {
+      expect(e.has(c)).toBe(true);
+    }
+    for (const heavy of ["description", "original_description", "enhanced_description", "name", "title"]) {
+      expect(r.has(heavy) || e.has(heavy)).toBe(false);
+    }
   });
 });

@@ -1,8 +1,6 @@
 import { useId } from 'react';
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { Link, useSearchParams } from 'react-router-dom';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import ItemListSchema from '@/components/schema/ItemListSchema';
 import { FAQSection } from '@/components/FAQSection';
@@ -327,7 +325,6 @@ export default function OutdoorsHub() {
         itemType="Place"
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-10">
           <header className="max-w-[70ch]">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
@@ -683,7 +680,6 @@ export default function OutdoorsHub() {
             />
           </section>
         </div>
-        <Footer />
       </div>
     </>
   );

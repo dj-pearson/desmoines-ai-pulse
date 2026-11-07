@@ -33,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('URLSourceManager');
 
@@ -380,14 +381,14 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <a 
+                            <SafeExternalLink
                               href={source.url} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline text-sm truncate block max-w-[200px]"
                             >
                               {source.url}
-                            </a>
+                            </SafeExternalLink>
                           </TableCell>
                           <TableCell>
                             <Badge variant={source.is_active ? "default" : "secondary"}>

@@ -11,8 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Phone, Globe, Mail, Star, ChevronRight, ArrowLeft, Navigation } from "lucide-react";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -66,7 +64,6 @@ export default function HotelDetails() {
       <div className="min-h-screen bg-background pb-24">
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/stay/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-8 w-48 mb-4" />
           <Skeleton className="h-64 w-full rounded-lg mb-6" />
@@ -78,7 +75,6 @@ export default function HotelDetails() {
             <Skeleton className="h-40" />
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -95,11 +91,9 @@ export default function HotelDetails() {
     return (
       <div className="min-h-screen bg-background pb-24">
         <RouteCanonical path={`/stay/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <ErrorState error={error} onRetry={() => void refetch()} />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -111,7 +105,6 @@ export default function HotelDetails() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="flex items-center justify-center flex-1 py-24">
           <div className="text-center">
             <SpriteIcon name="building-2" className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
@@ -124,7 +117,6 @@ export default function HotelDetails() {
             </Button>
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -220,8 +212,6 @@ export default function HotelDetails() {
       />
 
       <div className="min-h-screen bg-background pb-24">
-        <Header />
-
         {/* Breadcrumbs */}
         <div className="container mx-auto px-4 py-4">
           <nav aria-label="Breadcrumb">
@@ -552,8 +542,6 @@ export default function HotelDetails() {
             </div>
           </div>
         </div>
-
-        <Footer />
       </div>
 
       <StickyMobileCTA

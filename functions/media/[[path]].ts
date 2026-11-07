@@ -170,6 +170,61 @@ export function upstreamUrlFor(
   return url.toString();
 }
 
+/**
+ * WHAT MAY BE SERVED FIRST-PARTY FROM HERE (stored XSS through /media/*.svg).
+ *
+ * This route answers under the site's own origin, and public/_headers - so the
+ * site CSP - does not apply to a Pages Function response. The media bucket
+ * accepts image/svg+xml and any signed-in user can upload to it, so an SVG
+ * carrying <script>, opened directly at /media/..., ran as first-party script
+ * and could read the Supabase session out of localStorage. The same goes for
+ * anything else the origin labels as an active type (text/html, XML).
+ *
+ * So every response gets nosniff, an SVG gets a CSP that forbids script and
+ * sandboxes the document (it still renders in an <img>, which never runs
+ * script anyway), and a Content-Type outside the passive types below is served
+ * as an opaque download instead of being rendered here. Raster images keep
+ * their headers as they were, plus nosniff.
+ */
+export const SVG_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox";
+
+const PASSIVE_TYPE =
+  /^(image\/(?!svg\+xml$)[a-z0-9.+-]+|video\/[a-z0-9.+-]+|audio\/[a-z0-9.+-]+|font\/[a-z0-9.+-]+|application\/pdf)$/;
+
+function mediaTypeOf(contentType: string | null): string {
+  return (contentType ?? "").split(";")[0].trim().toLowerCase();
+}
+
+/**
+ * Apply the first-party safety headers in place. Exported for the offline test.
+ * The route calls it on fresh responses AND on cache hits, because an entry
+ * cached before this existed can live for a year.
+ */
+export function hardenMediaHeaders(headers: Headers, path: string, status = 200): void {
+  headers.set("X-Content-Type-Options", "nosniff");
+
+  const raw = headers.get("Content-Type");
+  const type = mediaTypeOf(raw);
+  const isSvg = /\.svg$/i.test(path) || type === "image/svg+xml";
+
+  if (isSvg) {
+    headers.set("Content-Security-Policy", SVG_CSP);
+    if (type === "image/svg+xml") return;
+    // An .svg path the origin labelled as something else is not trusted to be
+    // an image; it falls through to the download branch below.
+  }
+
+  // A 304 with no Content-Type leaves the browser's stored (already hardened)
+  // headers alone; there is nothing here to rewrite.
+  if (status === 304 && !raw) return;
+
+  if (!isSvg && PASSIVE_TYPE.test(type)) return;
+
+  headers.set("Content-Type", "application/octet-stream");
+  headers.set("Content-Disposition", "attachment");
+  headers.set("Content-Security-Policy", SVG_CSP);
+}
+
 export async function onRequest(context: Ctx): Promise<Response> {
   const { request, env, params } = context;
 
@@ -199,8 +254,12 @@ export async function onRequest(context: Ctx): Promise<Response> {
   const cacheKey = new Request(requestUrl.toString(), { method: "GET" });
 
   if (cache) {
-    const hit = await cache.match(cacheKey);
-    if (hit) return hit;
+    const hit: Response | undefined = await cache.match(cacheKey);
+    if (hit) {
+      const hitHeaders = new Headers(hit.headers);
+      hardenMediaHeaders(hitHeaders, path, hit.status);
+      return new Response(hit.body, { status: hit.status, headers: hitHeaders });
+    }
   }
 
   const transform = mediaTransformFrom(requestUrl.searchParams);
@@ -232,6 +291,7 @@ export async function onRequest(context: Ctx): Promise<Response> {
   // the original is the failure this route exists to stop repeating, and it is
   // invisible in a status code.
   headers.set("X-Media-Origin", transform ? "supabase-render" : "supabase-storage");
+  hardenMediaHeaders(headers, path, upstream.status);
 
   const response = new Response(upstream.body, { status: upstream.status, headers });
 

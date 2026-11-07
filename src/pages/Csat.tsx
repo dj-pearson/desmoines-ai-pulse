@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Star, Loader2, CheckCircle2 } from "lucide-react";
-import Header from "@/components/Header";
 import SEOHead from "@/components/SEOHead";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,7 +48,6 @@ export default function Csat() {
     <>
       <SEOHead title="Rate your support experience - Des Moines Insider" description="Tell us how we did." />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-12">
           <Card className="mx-auto max-w-md">
             <CardHeader>

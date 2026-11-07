@@ -1,9 +1,7 @@
 import { HubArticles } from "@/components/seo/HubArticles";
 import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { useState, useMemo, useEffect, lazy, Suspense, useRef, startTransition } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import { AdBanner } from "@/components/AdBanner";
+import { AdBanner } from "@/components/LazyAdBanner";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -401,9 +399,6 @@ export default function Attractions() {
           "Des Moines sightseeing",
         ]}
       />
-
-      <Header />
-
       {/* Hero: one solid brand surface at about half the old height
           (Explore plan WP3 item 11). */}
       <section className="bg-[#2D1B69]">
@@ -822,7 +817,9 @@ export default function Attractions() {
                       {attraction.image_url ? (
                         <OptimizedImage
                           src={attraction.image_url}
-                          alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                          // Decorative: the title link below already names the
+                          // card, so a descriptive alt read it out twice.
+                          alt=""
                           // The first row of a three-column grid. Chrome does not start a lazy
                           // image's fetch until layout has run, so the LCP candidate on a listing
                           // page must not be lazy (WEB-SEO-032).
@@ -837,7 +834,7 @@ export default function Attractions() {
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       ) : (
-                        <div className="aspect-video bg-muted flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
+                        <div className="aspect-video bg-muted flex items-center justify-center" aria-hidden="true">
                           <Landmark className="h-12 w-12 text-muted-foreground" aria-hidden="true" />
                         </div>
                       )}
@@ -1132,9 +1129,6 @@ export default function Attractions() {
           />
         </div>
       </section>
-
-      <Footer />
-
       {/* Back to Top Button */}
       <BackToTop />
     </div>

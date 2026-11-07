@@ -27,8 +27,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useHotelFilterOptions, useHotels } from "@/hooks/useHotels";
 import { useVenueMatchRows } from "@/hooks/useVenues";
@@ -559,8 +557,6 @@ export default function Hotels() {
       />
 
       <div className="min-h-screen bg-background pb-24">
-        <Header />
-
         {/* Hero: a flat brand surface (WP2 item 10). */}
         {/* Pass-2 WP2 item 5: h1 and search only on a phone, so a hotel card
             starts on the first screen. The subtitle returns from sm up. */}
@@ -880,8 +876,6 @@ export default function Hotels() {
             </div>
           </div>
         </div>
-
-        <Footer />
       </div>
     </>
   );

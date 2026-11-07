@@ -37,7 +37,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { looksAutomated, UUID_RE } from '../_shared/adEventFilters.ts';
 
 Deno.serve(async (req) => {
@@ -54,10 +54,6 @@ Deno.serve(async (req) => {
 
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  // One page view legitimately produces a handful of these; a flood is abuse.
-  const limited = checkRateLimit(req, { max: 120, message: 'Too many tracking events.' });
-  if (!limited.success && limited.response) return limited.response;
-
   try {
     const body = await req.json().catch(() => ({}));
     const {
@@ -71,6 +67,21 @@ Deno.serve(async (req) => {
       referrer_url: referrerUrl,
       impression_id: impressionId,
     } = body ?? {};
+
+    // One page view legitimately produces a handful of these; a flood is abuse.
+    // Persistent, because the in-memory count reset on every cold start and was
+    // per isolate, so a flood spread across instances never reached it. Keyed
+    // by client IP and campaign: inflating one advertiser's numbers is the
+    // abuse, and a page showing several campaigns should not share one budget.
+    // A malformed campaign id shares one bucket per IP rather than escaping the
+    // limit. Limit and window unchanged (120 per 15 minutes).
+    const limitKey = UUID_RE.test(String(campaignId ?? '')) ? campaignId : 'invalid';
+    const limited = await checkRateLimitPersistent(req, {
+      endpoint: `track-ad-event:${limitKey}`,
+      max: 120,
+      message: 'Too many tracking events.',
+    });
+    if (!limited.success && limited.response) return limited.response;
 
     if (kind !== 'impression' && kind !== 'click') {
       return json({ error: 'kind must be "impression" or "click"' }, 400);

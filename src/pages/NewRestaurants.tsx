@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { formatInTimeZone } from "date-fns-tz";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RestaurantCard from "@/components/RestaurantCard";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -187,9 +185,6 @@ export default function NewRestaurants() {
           </script>
         </Helmet>
       )}
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -259,8 +254,6 @@ export default function NewRestaurants() {
           ]}
         />
       </div>
-
-      <Footer />
     </div>
   );
 }

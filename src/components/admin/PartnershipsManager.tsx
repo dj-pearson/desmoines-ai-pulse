@@ -65,6 +65,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 type Application = Database["public"]["Tables"]["partnership_applications"]["Row"];
 
@@ -254,9 +256,12 @@ export default function PartnershipsManager() {
         .from("partnership_applications")
         .select("*")
         .order("created_at", { ascending: false });
-      if (search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = search ? sanitizePostgrestPattern(search) : "";
+      if (safeSearch) {
         q = q.or(
-          `business_name.ilike.%${search}%,contact_email.ilike.%${search}%,business_type.ilike.%${search}%`,
+          `business_name.ilike.%${safeSearch}%,contact_email.ilike.%${safeSearch}%,business_type.ilike.%${safeSearch}%`,
         );
       }
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
@@ -511,7 +516,7 @@ export default function PartnershipsManager() {
                           {app.business_name}
                         </div>
                         {app.website && (
-                          <a
+                          <SafeExternalLink
                             href={app.website}
                             target="_blank"
                             rel="noreferrer"
@@ -520,7 +525,7 @@ export default function PartnershipsManager() {
                           >
                             {app.website}
                             <ExternalLink className="h-3 w-3" />
-                          </a>
+                          </SafeExternalLink>
                         )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm">
@@ -638,14 +643,14 @@ export default function PartnershipsManager() {
                   {detail.website && (
                     <div className="flex items-center gap-2">
                       <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                      <a
+                      <SafeExternalLink
                         href={detail.website}
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary hover:underline truncate"
                       >
                         {detail.website}
-                      </a>
+                      </SafeExternalLink>
                     </div>
                   )}
                 </div>

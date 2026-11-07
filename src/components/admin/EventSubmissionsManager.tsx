@@ -72,6 +72,8 @@ import { handleError } from "@/lib/errorHandler";
 import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
+import { safeWebUrl } from "@/lib/reservations";
 
 const log = createLogger("EventSubmissionsManager");
 
@@ -233,9 +235,12 @@ export default function EventSubmissionsManager() {
       let q = supabase
         .from("user_submitted_events")
         .select("*", { count: "exact" });
-      if (search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = search ? sanitizePostgrestPattern(search) : "";
+      if (safeSearch) {
         q = q.or(
-          `title.ilike.%${search}%,venue.ilike.%${search}%,description.ilike.%${search}%,location.ilike.%${search}%`,
+          `title.ilike.%${safeSearch}%,venue.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`,
         );
       }
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
@@ -765,14 +770,19 @@ export default function EventSubmissionsManager() {
                   {detail.website_url && (
                     <div>
                       Website:{" "}
-                      <a
-                        href={detail.website_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        {detail.website_url}
-                      </a>
+                      {/* Submitter-typed: link it only when it is http(s), show anything else as text. */}
+                      {safeWebUrl(detail.website_url) ? (
+                        <a
+                          href={safeWebUrl(detail.website_url) ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {detail.website_url}
+                        </a>
+                      ) : (
+                        <span>{detail.website_url}</span>
+                      )}
                     </div>
                   )}
                 </div>

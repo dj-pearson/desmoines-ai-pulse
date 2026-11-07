@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 export interface MediaAsset {
   id: string;
@@ -97,9 +98,12 @@ export function useMediaLibrary(filters: MediaFilters = {}) {
         query = query.eq("is_optimized", isOptimized);
       }
 
-      if (searchQuery) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = searchQuery ? sanitizePostgrestPattern(searchQuery) : "";
+      if (safeSearch) {
         query = query.or(
-          `title.ilike.%${searchQuery}%,original_file_name.ilike.%${searchQuery}%,alt_text.ilike.%${searchQuery}%`
+          `title.ilike.%${safeSearch}%,original_file_name.ilike.%${safeSearch}%,alt_text.ilike.%${safeSearch}%`
         );
       }
 

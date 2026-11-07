@@ -20,73 +20,27 @@ import { getClientIp } from "./clientIp.ts";
 // share it. Re-exported for callers that already import this file.
 export { getClientIp };
 
-// In-memory fallback store (used when DB is unavailable)
-interface RateLimitStore {
-  [key: string]: {
-    count: number;
-    resetTime: number;
-  };
-}
-const memoryStore: RateLimitStore = {};
+import {
+  checkRateLimitMemory,
+  getClientIdentifier,
+  memoryStore,
+  tooManyRequestsResponse,
+  type RateLimitOptions,
+  type RateLimitResult,
+} from "./rateLimitCore.ts";
 
-export interface RateLimitOptions {
-  windowMs?: number;
-  max?: number;
-  message?: string;
-  skipSuccessfulRequests?: boolean;
-  skipFailedRequests?: boolean;
-  endpoint?: string;
-  /**
-   * Verified user id (from auth.getUser, NOT from a client-supplied field).
-   * When set, the limit is keyed per-user so a single shared NAT/IP can't
-   * exhaust everyone's budget and so one user can't dodge the limit by
-   * rotating IPs. Only pass this once the JWT has actually been verified.
-   */
-  userId?: string;
-  /**
-   * Skip the limit for a caller presenting EDGE_FUNCTION_API_KEY or
-   * SUPABASE_SERVICE_ROLE_KEY (WEB-BE-047).
-   *
-   * THE CASE FOR IT. firecrawl-scraper allows 10 requests per 15 minutes keyed
-   * by client IP; scrape-events invokes it once per scraping job from ONE
-   * egress address, and there are 15 seeded jobs. The limit was throttling the
-   * site's own ingestion, which is the opposite of what it is for.
-   *
-   * WHY IT COSTS NOTHING. Both credentials already authorise this function's
-   * entire surface, and the service-role key authorises the whole database.
-   * Throttling a caller that holds one protects nothing - it can do the damage
-   * directly. The limit stays for anonymous and user-authenticated callers,
-   * which is who it was written for.
-   *
-   * OPT-IN per endpoint, never a default: an endpoint that costs money per
-   * call may want a ceiling even on internal traffic.
-   */
-  exemptInternal?: boolean;
-}
-
-export interface RateLimitResult {
-  success: boolean;
-  limit: number;
-  remaining: number;
-  resetTime: number;
-  response?: Response;
-}
-
-/**
- * Get client identifier for rate limiting.
- * When a verified userId is supplied, the limit is keyed per-user; otherwise
- * it falls back to the trusted client IP (for anonymous-allowed endpoints).
- */
-function getClientIdentifier(req: Request, userId?: string): string {
-  if (userId) return `user:${userId}`;
-  return `ip:${getClientIp(req)}`;
-}
+// The in-memory limiter, the client key and the 429 builder live in
+// rateLimitCore.ts (no remote imports) so they can be tested offline.
+// Re-exported so existing callers keep importing from this file.
+export { checkRateLimit, rateLimitCorsHeaders, RATE_LIMIT_EXPOSED_HEADERS } from "./rateLimitCore.ts";
+export type { RateLimitOptions, RateLimitResult } from "./rateLimitCore.ts";
 
 /**
  * Attempt database-backed rate limit check via the check_rate_limit RPC function.
  * Returns null if database is unavailable (triggers fallback).
  */
 async function checkRateLimitDB(
+  req: Request,
   clientId: string,
   endpoint: string,
   windowMs: number,
@@ -120,22 +74,15 @@ async function checkRateLimitDB(
         limit: result.max_allowed,
         remaining: 0,
         resetTime,
-        response: new Response(
-          // The caller's message, as the in-memory path already sends. This
-          // used to be a fixed string, so moving an endpoint to the persistent
-          // limiter silently changed what its 429 said.
-          JSON.stringify({ error: message, retryAfter }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              'X-RateLimit-Limit': result.max_allowed.toString(),
-              'X-RateLimit-Remaining': '0',
-              'X-RateLimit-Reset': resetTime.toString(),
-              'Retry-After': retryAfter.toString(),
-            },
-          },
-        ),
+        // The caller's message, as the in-memory path already sends. This
+        // used to be a fixed string, so moving an endpoint to the persistent
+        // limiter silently changed what its 429 said.
+        response: tooManyRequestsResponse(req, {
+          message,
+          limit: result.max_allowed,
+          resetTime,
+          retryAfter,
+        }),
       };
     }
 
@@ -149,82 +96,6 @@ async function checkRateLimitDB(
     // Database unavailable — fall through to in-memory
     return null;
   }
-}
-
-/**
- * In-memory fallback rate limit check (original implementation).
- */
-function checkRateLimitMemory(
-  clientId: string,
-  windowMs: number,
-  max: number,
-  message: string,
-): RateLimitResult {
-  const now = Date.now();
-  const windowStart = Math.floor(now / windowMs) * windowMs;
-  const resetTime = windowStart + windowMs;
-  const key = `${clientId}:${windowStart}`;
-
-  // Cleanup old entries periodically
-  if (Math.random() < 0.01) {
-    for (const k in memoryStore) {
-      if (memoryStore[k].resetTime < now) {
-        delete memoryStore[k];
-      }
-    }
-  }
-
-  if (!memoryStore[key]) {
-    memoryStore[key] = { count: 0, resetTime };
-  }
-
-  const entry = memoryStore[key];
-  entry.count++;
-
-  const remaining = Math.max(0, max - entry.count);
-
-  if (entry.count > max) {
-    const retryAfter = Math.ceil((resetTime - now) / 1000);
-    return {
-      success: false,
-      limit: max,
-      remaining: 0,
-      resetTime,
-      response: new Response(
-        JSON.stringify({ error: message, retryAfter }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-RateLimit-Limit': max.toString(),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': resetTime.toString(),
-            'Retry-After': retryAfter.toString(),
-          },
-        },
-      ),
-    };
-  }
-
-  return { success: true, limit: max, remaining, resetTime };
-}
-
-/**
- * Check if request is rate limited (synchronous, in-memory).
- * Backward-compatible with all existing callers.
- *
- * For database-backed persistent rate limiting, use checkRateLimitPersistent().
- */
-export function checkRateLimit(
-  req: Request,
-  options: RateLimitOptions = {},
-): RateLimitResult {
-  const windowMs = options.windowMs || 15 * 60 * 1000;
-  const max = options.max || 100;
-  const message = options.message || 'Too many requests, please try again later.';
-
-  const clientId = getClientIdentifier(req);
-  return checkRateLimitMemory(clientId, windowMs, max, message);
 }
 
 /**
@@ -254,7 +125,7 @@ export async function checkRateLimitPersistent(
   const clientId = getClientIdentifier(req, options.userId);
 
   // Try database-backed rate limiting first
-  const dbResult = await checkRateLimitDB(clientId, endpoint, windowMs, max, message);
+  const dbResult = await checkRateLimitDB(req, clientId, endpoint, windowMs, max, message);
   if (dbResult) return dbResult;
 
   // FAIL OPEN: a DB-lookup miss/outage must never break the product. The
@@ -265,7 +136,7 @@ export async function checkRateLimitPersistent(
   );
 
   // Fallback to in-memory
-  return checkRateLimitMemory(clientId, windowMs, max, message);
+  return checkRateLimitMemory(req, clientId, windowMs, max, message);
 }
 
 /**

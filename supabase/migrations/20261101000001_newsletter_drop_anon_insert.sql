@@ -1,0 +1,35 @@
+-- newsletter_subscribers: no direct INSERT from anon or authenticated.
+--
+-- 20251126000000:105 created "Anyone can subscribe to newsletter" FOR INSERT
+-- WITH CHECK (true), with no TO clause, so it applies to PUBLIC (anon and
+-- authenticated alike). The status column defaults to 'active' (:10).
+-- 20260918000002 moved signup to double opt-in through the newsletter-subscribe
+-- edge function but left this policy in place, so anyone holding the public
+-- anon key could still POST {"email": "<anyone>"} to /rest/v1/newsletter_subscribers
+-- and get an 'active' row the weekly digest then mails, skipping confirmation.
+--
+-- No later migration adds another INSERT policy on this table:
+--   20260413000002  unsubscribe token, column REVOKE, no policy
+--   20260918000002  'pending' status, confirm RPC, no policy
+--   20261002000002  unsubscribe RPC rewrite, no policy
+--   20261005000003  admin SELECT and admin UPDATE only
+--
+-- Nothing that ships to a client inserts here any more:
+--   web     src/hooks/useNewsletterSubscription.ts and Footer.tsx call the
+--           newsletter-subscribe edge function (WEB-FEAT-019);
+--           NewsletterSubscribersManager.tsx only selects and updates.
+--   iOS     no reference to newsletter_subscribers in ios/, now or in history.
+--   Android no reference in android/ (SettingsScreen has a label string only).
+-- So no shipped mobile binary depends on this policy, and tightening it does
+-- not break an older client (CLAUDE.md, Backward Compatibility, RLS).
+--
+-- Every server writer (newsletter-subscribe's upsert, ses-events,
+-- delete-user-account) uses the service role, which bypasses RLS.
+-- email-unsubscribe and the confirm page go through the SECURITY DEFINER
+-- newsletter_unsubscribe_by_token / newsletter_confirm_by_token RPCs, which
+-- are unaffected. Admin SELECT/UPDATE policies from 20261005000003 stay.
+--
+-- Additive in the sense that matters: no table, column or RPC changes, and
+-- re-running is a no-op.
+
+DROP POLICY IF EXISTS "Anyone can subscribe to newsletter" ON public.newsletter_subscribers;

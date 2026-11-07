@@ -1,7 +1,5 @@
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -239,7 +237,6 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
       <div data-account-body className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6">
         <Breadcrumbs
           items={[
@@ -419,7 +416,6 @@ export default function Profile() {
           </TabsContent>
         </Tabs>
       </div>
-      <Footer />
     </div>
   );
 }

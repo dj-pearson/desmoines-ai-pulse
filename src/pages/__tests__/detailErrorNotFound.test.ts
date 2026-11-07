@@ -21,6 +21,10 @@ const PAGES = [
   ["src/pages/ItineraryDetail.tsx", "error"],
   ["src/pages/SeasonalGuide.tsx", "error"],
   ["src/pages/HotelDetails.tsx", "error"],
+  // Both carry a second not-found condition (inactive, out of metro), so the
+  // not-found branch is `if (!row || ...)` rather than `if (!row)`.
+  ["src/pages/AttractionDetails.tsx", "error"],
+  ["src/pages/PlaygroundDetails.tsx", "error"],
 ] as const;
 
 /** Source with comments removed, so the prose explaining a rule cannot satisfy it. */
@@ -46,7 +50,7 @@ describe("detail pages separate a failed fetch from a missing row", () => {
         // Order is the behaviour: a not-found check that runs first swallows
         // the error, because a failed query also yields no data.
         const errorBranch = code.search(new RegExp(`if\\s*\\(\\s*${errorVar}\\s*\\)`));
-        const notFound = code.search(/if\s*\(\s*!\w+\s*\)\s*\{/);
+        const notFound = code.search(/if\s*\(\s*!\w+\s*(\)\s*\{|\|\|)/);
         expect(errorBranch).toBeGreaterThan(-1);
         expect(notFound).toBeGreaterThan(-1);
         expect(errorBranch).toBeLessThan(notFound);

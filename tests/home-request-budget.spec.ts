@@ -162,7 +162,7 @@ for (const vp of VIEWPORTS) {
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    const input = page.getByRole('search').getByRole('searchbox');
+    const input = page.getByRole('search').getByRole('combobox');
     await expect(input).toBeInViewport({ timeout: 30_000 });
 
     const tonightLink = page.locator('a[data-tonight-link="event"]').first();
