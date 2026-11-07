@@ -6,7 +6,7 @@ import { type Permission, type UserRole } from "@/lib/security";
 import { sessionStore } from "@/lib/safeStorage";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/loading-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ProtectedRouteProps {
   children: ReactNode;
