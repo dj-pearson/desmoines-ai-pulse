@@ -134,13 +134,13 @@ res = await route.onRequest(c);
 ck('missing config is 502', res.status === 502);
 
 console.log('\npersonal feeds: parsing and criteria');
-const TOKEN = '3f2b9c1e-8a4d-4f6e-9b2a-1c3d5e7f9a0b';
-ck('token path parses', feeds.personalFeedTokenFromPath(`/calendar/my/${TOKEN}.ics`) === TOKEN);
-ck('uppercase token is lowercased', feeds.personalFeedTokenFromPath(`/calendar/my/${TOKEN.toUpperCase()}.ics`) === TOKEN);
-for (const p of ['/calendar/my/abc.ics', `/calendar/my/${TOKEN}`, `/calendar/my/${TOKEN}.ics/x`, `/calendar/${TOKEN}.ics`, '/calendar/my/zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz.ics'])
+const FEED_UUID = '3f2b9c1e-8a4d-4f6e-9b2a-1c3d5e7f9a0b';
+ck('token path parses', feeds.personalFeedTokenFromPath(`/calendar/my/${FEED_UUID}.ics`) === FEED_UUID);
+ck('uppercase token is lowercased', feeds.personalFeedTokenFromPath(`/calendar/my/${FEED_UUID.toUpperCase()}.ics`) === FEED_UUID);
+for (const p of ['/calendar/my/abc.ics', `/calendar/my/${FEED_UUID}`, `/calendar/my/${FEED_UUID}.ics/x`, `/calendar/${FEED_UUID}.ics`, '/calendar/my/zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz.ics'])
   ck(`refuses ${p}`, feeds.personalFeedTokenFromPath(p) === null);
 ck('a fixed slug is not a token', feeds.personalFeedTokenFromPath('/calendar/music.ics') === null);
-ck('personal URL', feeds.personalFeedUrl(TOKEN, 'https://desmoinesinsider.com') === `https://desmoinesinsider.com/calendar/my/${TOKEN}.ics`);
+ck('personal URL', feeds.personalFeedUrl(FEED_UUID, 'https://desmoinesinsider.com') === `https://desmoinesinsider.com/calendar/my/${FEED_UUID}.ics`);
 
 const web = feeds.personalFeedFromSavedSearch({ name: 'Jazz in WDM', search_type: 'event_list', filters: { q: 'live jazz', location: 'west-des-moines', price: 'free', category: 'Music', preset: 'this-weekend' } });
 ck('web row: name', web.name === 'Des Moines Insider: Jazz in WDM');
@@ -173,29 +173,29 @@ globalThis.fetch = async (url, init) => {
   if (String(url).includes('/rpc/saved_search_calendar_feed')) return new Response(JSON.stringify(rpcRow), { status: 200 });
   return new Response(JSON.stringify(rows.slice(0, 1)), { status: 200 });
 };
-({ c, pending } = ctx(`/calendar/my/${TOKEN}.ics`));
+({ c, pending } = ctx(`/calendar/my/${FEED_UUID}.ics`));
 res = await route.onRequest(c);
 await Promise.all(pending);
 ck('personal feed is 200', res.status === 200);
-ck('RPC got the token', JSON.parse(calls[0].init.body).p_token === TOKEN && calls[0].init.method === 'POST');
+ck('RPC got the token', JSON.parse(calls[0].init.body).p_token === FEED_UUID && calls[0].init.method === 'POST');
 ck('events query carries the saved search', decodeURIComponent(calls[1].url).includes('search_vector=fts(english).jazz:*'));
 ck('named after the saved search', (await res.text()).includes('X-WR-CALNAME:Des Moines Insider: Jazz in WDM'));
 ck('noindex', res.headers.get('x-robots-tag') === 'noindex, nofollow');
 ck('fixed feeds are not noindexed', !route.feedHeaders('music').has('x-robots-tag'));
 
 calls = [];
-({ c, pending } = ctx(`/calendar/my/${TOKEN.toUpperCase()}.ics`));
+({ c, pending } = ctx(`/calendar/my/${FEED_UUID.toUpperCase()}.ics`));
 res = await route.onRequest(c);
 ck('uppercase spelling hits the same cache entry', res.status === 200 && calls.length === 0);
 
 store.clear();
 globalThis.fetch = async () => new Response('[]', { status: 200 });
-({ c, pending } = ctx(`/calendar/my/${TOKEN}.ics`));
+({ c, pending } = ctx(`/calendar/my/${FEED_UUID}.ics`));
 res = await route.onRequest(c);
 ck('unknown or revoked token is 404', res.status === 404);
 
 globalThis.fetch = async () => new Response(JSON.stringify({ code: 'PGRST202' }), { status: 404 });
-({ c, pending } = ctx(`/calendar/my/${TOKEN}.ics`));
+({ c, pending } = ctx(`/calendar/my/${FEED_UUID}.ics`));
 res = await route.onRequest(c);
 await Promise.all(pending);
 ck('RPC not deployed is 502, not a cached 404', res.status === 502 && store.size === 0);
@@ -203,7 +203,7 @@ ck('RPC not deployed is 502, not a cached 404', res.status === 502 && store.size
 globalThis.fetch = async (url) => String(url).includes('/rpc/')
   ? new Response(JSON.stringify([{ name: 'r', search_type: 'advanced', filters: { tab: 'restaurants' } }]), { status: 200 })
   : new Response('[]', { status: 200 });
-({ c, pending } = ctx(`/calendar/my/${TOKEN}.ics`));
+({ c, pending } = ctx(`/calendar/my/${FEED_UUID}.ics`));
 res = await route.onRequest(c);
 ck('a non-event saved search is 404', res.status === 404);
 
