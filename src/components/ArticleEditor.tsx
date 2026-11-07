@@ -15,8 +15,12 @@ import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag } f
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const log = createLogger('ArticleEditor');
+
+/** The featured-image preview sits in the editor's side column, about 400px wide. */
+const FEATURED_PREVIEW_WIDTHS = [400, 800];
 
 interface ArticleData {
   title: string;
@@ -471,14 +475,12 @@ export default function ArticleEditor() {
                 <CardTitle>Featured Image</CardTitle>
               </CardHeader>
               <CardContent>
-                <img
+                <OptimizedImage
                   src={articleData.featured_image_url}
                   alt={`Featured image for ${articleData.title || 'article'}`}
-                  className="w-full h-32 object-cover rounded"
-                  loading="lazy"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
+                  containerClassName="w-full h-32 rounded"
+                  sizes="(max-width: 1024px) 100vw, 400px"
+                  transformWidths={FEATURED_PREVIEW_WIDTHS}
                 />
               </CardContent>
             </Card>
