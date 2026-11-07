@@ -83,7 +83,8 @@ restart it from `develop` (or `main` if there is no `develop`).
 
 1. `git fetch origin`, check out the rolling branch, `npm ci`.
 2. Run the saved workflow `improvement-loop-round` with
-   `{ repo, lanes: [all eleven], date, trailers }`.
+   `{ repo, lanes: [all eleven], date, trailers, base }`, where `base` is
+   `git rev-parse HEAD` of the rolling branch.
 3. Save its result array to a scratch file. Cherry-pick each `commit_sha`
    in lane order. On a conflict in `docs/improvement-loops/lanes/*`, take the
    lane's version. On any other conflict, skip that lane's commit
@@ -118,3 +119,4 @@ that lock as the remote branch `loops-lock`.
 | 2026-11-07 | claude/continuous-improvement-loops-76i72u | events, restaurants, ui-ux, performance, security, seo-geo, marketing-growth, ios, android | 9 commits; 5 stories closed, 4 split with handoffs, 12 new stories. validate exit 0, vitest 2737/2737 |
 | 2026-11-07 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 8 stories closed, 3 split, 7 new stories. validate exit 0, vitest 2794/2794 |
 | 2026-11-07 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 8 stories closed, 3 split. validate exit 0, vitest 2808/2808 |
+| 2026-11-07 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 8 stories closed, 3 split. validate exit 0, vitest 2833/2833 |

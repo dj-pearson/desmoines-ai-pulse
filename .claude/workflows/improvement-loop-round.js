@@ -1,7 +1,7 @@
 export const meta = {
   name: 'improvement-loop-round',
   description: 'One continuous-improvement loop per lane, each agent in its own worktree, one committed improvement each',
-  whenToUse: 'Running a round of docs/improvement-loops. args: { repo, lanes, date, trailers }',
+  whenToUse: 'Running a round of docs/improvement-loops. args: { repo, lanes, date, trailers, base }',
   phases: [{ title: 'Loop', detail: 'one agent per lane: pick, implement, verify, commit' }],
 }
 
@@ -9,10 +9,13 @@ export const meta = {
 // args.lanes    lane names from docs/improvement-loops/lanes/
 // args.date     YYYY-MM-DD for the loop-log rows
 // args.trailers commit trailer lines, newline-separated
+// args.base     sha of the rolling branch head; worktrees are created from the
+//               remote default branch, so each agent resets onto this first
 const LANES = args.lanes
 const REPO = args.repo
 const DATE = args.date
 const TRAILERS = args.trailers
+const BASE = args.base
 
 const SCHEMA = {
   type: 'object',
@@ -36,7 +39,9 @@ phase('Loop')
 const results = await parallel(LANES.map(lane => () => agent(
 `You are the "${lane}" lane agent running ONE continuous-improvement loop on Des Moines Insider (main checkout at ${REPO}; you are in a separate git worktree of it).
 
-Setup: if node_modules is missing in your worktree, run: ln -s ${REPO}/node_modules node_modules
+Setup, before anything else:
+- Run: git reset --hard ${BASE}  (your worktree may have been created from main; this puts you on the rolling branch, which has docs/improvement-loops and earlier rounds' work)
+- If node_modules is missing in your worktree, run: ln -s ${REPO}/node_modules node_modules
 
 Read docs/improvement-loops/README.md (the protocol) and docs/improvement-loops/lanes/${lane}.md, then run exactly one loop:
 1. If the lane file has a Handoff, continue it. Otherwise pick the highest-value open story ("passes": false) in prd.json for your lane's prefixes. For shared prefixes (WEB-FEAT, WEB-BE, XPLAT) only take stories about your lane's topic. If nothing open fits or is worth it, audit your lane's paths and define the single most valuable gap as a new story (next free id in your lane's prefix; check prd.json for the max number).

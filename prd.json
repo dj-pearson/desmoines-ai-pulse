@@ -5787,7 +5787,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "NOBODY IS CURRENTLY LOCKED OUT, and that changes what AC4 is deciding. Measured against auth.users and\nauth.identities 2026-08-24 (claude/prd-p1-loop-3).\n\n    providers      users  first sign-in  last sign-in  active in 90d\n    email              5     2026-03-24    2026-07-23      1\n    apple              3     2026-03-05    2026-05-13      0     <- the 3 this story is named for\n    apple+google       2     2026-07-04    2026-08-23      2\n    google             1     2026-03-09    2026-03-09      0     <- XPLAT-003's population, and it is ONE\n    total             11\n\nTHE THREE APPLE-ONLY ACCOUNTS HAVE NOT SIGNED IN SINCE 2026-05-13. The one Google-only account signed in once,\non 2026-03-09, and never again. So of the four accounts the two stories describe as unreachable, zero have been\nactive in three months.\n\nTHE ONLY ACTIVE ACCOUNTS HOLD BOTH PROVIDERS. The two apple+google users are the pair that signed in most\nrecently, 2026-08-23. They can sign in on either platform because they carry both identities, which is exactly\nwhy they are not affected and why the affected set looks inert.\n\nAND NO NATIVE CLIENT HAS EVER CONNECTED: user_analytics carries zero Capacitor, CFNetwork or Darwin user agents\nacross 60,226 rows (XPLAT-004). The apps are not in anyone's hands yet, so \"unreachable on Android\" has not\ncost a real sign-in attempt.\n\nSO THE ARGUMENT FOR FIXING THESE IS NOT \"UNBLOCK EXISTING USERS\". It is that shipping an app whose sign-in\noptions differ from the web app is a pre-launch consistency defect, and the cost lands AFTER launch on a user\nwho cannot get in and does not file a bug - they just leave, and nothing in the funnel distinguishes that from\ndisinterest. Which is a better reason than the headcount, and it argues for AC4's \"fix them together\": doing\none and not the other guarantees the defect survives launch on one platform.\n\nXPLAT-003's POPULATION IS ONE ACCOUNT, worth stating because that story carries no number where this one\ncarries three. The asymmetry is real but small in both directions, and neither number should drive the\ndecision.\n\nFOUND 2026-08-23 (claude/prd-p1-loop) while doing XPLAT-003 AC4, which asked to correct a comment claiming the\nAndroid auth source \"Mirrors iOS AuthService.swift ... and Google Sign-In\". Checking that claim in both\ndirections is what surfaced this.\n\nTHE THREE CLIENTS OFFER DIFFERENT PROVIDER SETS:\n    web      email + apple + google\n    Android  email + google        <- no Apple\n    iOS      email + apple         <- no Google (XPLAT-003)\n\nMEASURED AGAINST auth.identities, not raw_app_meta_data, on 2026-08-23:\n    5  email only\n    3  apple only        <- CANNOT SIGN IN ON ANDROID\n    2  apple + google    <- fine everywhere, which is why identity linking hides the size of both gaps\n    1  google only       <- cannot sign in on iOS; this is XPLAT-003\nSo 3 users are stranded here against 1 on iOS. The gap this story covers is THREE TIMES the one that already had\na story, and it had none.\n\nNOT A SUBSET OF XPLAT-003. Adding Google to iOS does nothing for the 3 apple-only users on Android; the fix is a\ndifferent SDK on a different platform. AC4 above asks for the sequencing decision rather than assuming it.\n\nWHY IT WENT UNNOTICED: identity linking. Counting raw_app_meta_data->>'provider' reports 4 apple and 2 google\naccounts, which makes the iOS side look bigger and this side look already-covered. The 2 apple+google users sign\nin fine on both platforms and mask the shape. Anyone re-measuring should group auth.identities by user_id.\n\nAPPLE REQUIRES THIS ON iOS, NOT ON ANDROID, so there is no store-review deadline here - which is presumably why\nit drifted. The cost is entirely user-side and silent: an apple-only user installs the Android app and finds no\nbutton that reaches their account, with nothing telling them why.\n\nNOT STARTED. Supabase Auth supports Apple as an OAuth provider on Android via the web flow, so this does not need\nApple's native SDK - but it does need the Apple Services ID and return URL configured, which is a console action.\n"
+      "notes": "NOBODY IS CURRENTLY LOCKED OUT, and that changes what AC4 is deciding. Measured against auth.users and\nauth.identities 2026-08-24 (claude/prd-p1-loop-3).\n\n    providers      users  first sign-in  last sign-in  active in 90d\n    email              5     2026-03-24    2026-07-23      1\n    apple              3     2026-03-05    2026-05-13      0     <- the 3 this story is named for\n    apple+google       2     2026-07-04    2026-08-23      2\n    google             1     2026-03-09    2026-03-09      0     <- XPLAT-003's population, and it is ONE\n    total             11\n\nTHE THREE APPLE-ONLY ACCOUNTS HAVE NOT SIGNED IN SINCE 2026-05-13. The one Google-only account signed in once,\non 2026-03-09, and never again. So of the four accounts the two stories describe as unreachable, zero have been\nactive in three months.\n\nTHE ONLY ACTIVE ACCOUNTS HOLD BOTH PROVIDERS. The two apple+google users are the pair that signed in most\nrecently, 2026-08-23. They can sign in on either platform because they carry both identities, which is exactly\nwhy they are not affected and why the affected set looks inert.\n\nAND NO NATIVE CLIENT HAS EVER CONNECTED: user_analytics carries zero Capacitor, CFNetwork or Darwin user agents\nacross 60,226 rows (XPLAT-004). The apps are not in anyone's hands yet, so \"unreachable on Android\" has not\ncost a real sign-in attempt.\n\nSO THE ARGUMENT FOR FIXING THESE IS NOT \"UNBLOCK EXISTING USERS\". It is that shipping an app whose sign-in\noptions differ from the web app is a pre-launch consistency defect, and the cost lands AFTER launch on a user\nwho cannot get in and does not file a bug - they just leave, and nothing in the funnel distinguishes that from\ndisinterest. Which is a better reason than the headcount, and it argues for AC4's \"fix them together\": doing\none and not the other guarantees the defect survives launch on one platform.\n\nXPLAT-003's POPULATION IS ONE ACCOUNT, worth stating because that story carries no number where this one\ncarries three. The asymmetry is real but small in both directions, and neither number should drive the\ndecision.\n\nFOUND 2026-08-23 (claude/prd-p1-loop) while doing XPLAT-003 AC4, which asked to correct a comment claiming the\nAndroid auth source \"Mirrors iOS AuthService.swift ... and Google Sign-In\". Checking that claim in both\ndirections is what surfaced this.\n\nTHE THREE CLIENTS OFFER DIFFERENT PROVIDER SETS:\n    web      email + apple + google\n    Android  email + google        <- no Apple\n    iOS      email + apple         <- no Google (XPLAT-003)\n\nMEASURED AGAINST auth.identities, not raw_app_meta_data, on 2026-08-23:\n    5  email only\n    3  apple only        <- CANNOT SIGN IN ON ANDROID\n    2  apple + google    <- fine everywhere, which is why identity linking hides the size of both gaps\n    1  google only       <- cannot sign in on iOS; this is XPLAT-003\nSo 3 users are stranded here against 1 on iOS. The gap this story covers is THREE TIMES the one that already had\na story, and it had none.\n\nNOT A SUBSET OF XPLAT-003. Adding Google to iOS does nothing for the 3 apple-only users on Android; the fix is a\ndifferent SDK on a different platform. AC4 above asks for the sequencing decision rather than assuming it.\n\nWHY IT WENT UNNOTICED: identity linking. Counting raw_app_meta_data->>'provider' reports 4 apple and 2 google\naccounts, which makes the iOS side look bigger and this side look already-covered. The 2 apple+google users sign\nin fine on both platforms and mask the shape. Anyone re-measuring should group auth.identities by user_id.\n\nAPPLE REQUIRES THIS ON iOS, NOT ON ANDROID, so there is no store-review deadline here - which is presumably why\nit drifted. The cost is entirely user-side and silent: an apple-only user installs the Android app and finds no\nbutton that reaches their account, with nothing telling them why.\n\nNOT STARTED. Supabase Auth supports Apple as an OAuth provider on Android via the web flow, so this does not need\nApple's native SDK - but it does need the Apple Services ID and return URL configured, which is a console action.\n | AC1, AC3 and AC5 are done in code. Android now shows \"Continue with Apple\", which uses supabase-kt signInWith(Apple) on the existing PKCE client, the same Supabase Apple provider web uses. The browser returns to com.desmoines.aipulse://auth-callback?flow=oauth. AuthCallbackRouter classifies that as a new AuthCallback.OAuth, and MainActivity exchanges the code on the existing guarded path. Provider sets are updated in the AuthRemoteDataSource KDoc. Verified: 20 AuthCallbackRouter JVM tests pass on a stub harness (kotlinc 2.2.10), 4 of them new, and a mutant with flow=oauth disabled fails exactly those 4. Not compiled: the app module and 2 new AuthViewModelTest cases (no Android SDK, no mockk). AC2 is still open: it needs the hosted redirect allowlist to accept the flow=oauth URL, plus a device sign-in. Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "XPLAT-013",
@@ -10518,8 +10518,8 @@
         "check-raw-img baseline drops by one"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found in the WEB-PERF-041 notes (2026-09-18) and confirmed still present on 2026-11-07."
+      "passes": true,
+      "notes": "Found in the WEB-PERF-041 notes (2026-09-18) and confirmed still present on 2026-11-07. | 2026-11-07: the eight /guides cards fetched /api/placeholder/400/250. The SPA fallback answers that URL 200 with the homepage HTML, so each visit made 8 Function hits, 3 of them at fetchpriority=high. No real guide photos exist (nothing in public/, and the static list has no DB column), so each card now draws its category icon in the same aspect-video box. That went against AC1/AC2 as written: /guides left check-lcp-priority's LISTING_PAGES because its grid has no image left to prioritise, and check-raw-img gains a hard rule that fails on any /api/placeholder literal in src/ (negative control fires). Raw-img baseline 11 -> 10 (AC3 met). Verified with check-raw-img, check-lcp-priority, eslint and npm run type-check. check-prerender-content (needs a prerendered dist) was not run."
     },
     {
       "id": "WEB-SEC-053",
@@ -10569,7 +10569,8 @@
         "No other page's meta changes"
       ],
       "priority": 4,
-      "passes": false
+      "passes": true,
+      "notes": "EnhancedLocalSEO now uses the suburb for geo.placename and locality on /events/<suburb> pages and omits the downtown geo.position/ICBM there, since the repo has no checked suburb coordinate. Pages without a suburb keep the same meta. New vitest enhancedLocalSeoGeo fails on the old component and passes now; vitest src/components+src/lib 2093/2093; app type ratchet 61/61."
     },
     {
       "id": "WEB-SEO-051",
@@ -10593,7 +10594,8 @@
         "Permission denial shows the same recovery path as event detail"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true,
+      "notes": "EKEvent rules moved out of EventDetailViewModel into EventCalendarEntry/EventCalendarWriter (ios/DesMoinesInsider/Services/EventCalendarWriter.swift), used by event detail and by upcoming Saved event rows, which now offer Add to Calendar in the context menu and as a VoiceOver action; a denial shows event detail's alert and wording on both screens, now with Open Settings. 10 new XCTest cases in EventCalendarEntryTests; not compiled or run (no Xcode here); check-mobile-schema, check-app-versions, check-unused-members, check-privacy-manifest exit 0."
     },
     {
       "id": "IOS-AUDIT-PERF-032",
@@ -10689,8 +10691,8 @@
         "Per-user rate limit on checkin_to_event (for example, N per hour) enforced in SQL",
         "The RPC's signature and return shape stay as they are, per the CLAUDE.md backward-compatibility rules"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 while fixing WEB-SEC-053. A client-reported GPS position can never be proven genuine; this story only narrows what a forged one can earn."
+      "passes": true,
+      "notes": "Found 2026-11-07 while fixing WEB-SEC-053. A client-reported GPS position can never be proven genuine; this story only narrows what a forged one can earn. | 2026-11-07: migration 20261107000097 rewrites checkin_to_event's body. It rejects NULL/NaN/Infinity/out-of-range coordinates (22023) before acos(), allows 10 check-ins per user per rolling hour under an advisory lock (54000), and verifies only from 2h before start to 2h after end (start+6h when end_date is NULL, start-12h..start+36h when time_tbd); signature, grant and return shape are unchanged. While reproducing, found that the WEB-SEC-053 clamp verified lat=NaN at 0 m from any venue. Every case was reproduced on local Postgres 16 before the fix and checked after it. New offline suite event-checkin-bounds fails 14 checks without the migration; not applied to production. Handoff: docs/improvement-loops/lanes/security.md"
     },
     {
       "priority": 3,
@@ -10717,7 +10719,7 @@
         "npm run validate and vitest pass"
       ],
       "passes": false,
-      "notes": "Found 2026-11-07 while closing WEB-FEAT-020. | 2026-11-07 slice 1 of 3. Deleted CapacitorRuntime and its lazy mount, its four hooks (useDeepLinks, useSwipeBack, useStatusBarStyle, useKeyboardAware), usePageTransition, and main.tsx's capacitor-app class, link interceptor, window.open override and splash hide, 497 lines out. src/__tests__/noCapacitorShell.test.ts keeps those files gone and ratchets the 8 files still branching on isCapacitor(). Verified with npm run validate exit 0 and vitest 2791/2791; restoring useSwipeBack.ts fails 2 of the 8 new cases. Note: the worktree started on 65138139, which is not an ancestor of the rolling branch, so I reset it to ddfe9524 (the rolling branch tip the other lanes use) before working. Handoff: docs/improvement-loops/lanes/features.md"
+      "notes": "Found 2026-11-07 while closing WEB-FEAT-020. | 2026-11-07 slice 1 of 3. Deleted CapacitorRuntime and its lazy mount, its four hooks (useDeepLinks, useSwipeBack, useStatusBarStyle, useKeyboardAware), usePageTransition, and main.tsx's capacitor-app class, link interceptor, window.open override and splash hide, 497 lines out. src/__tests__/noCapacitorShell.test.ts keeps those files gone and ratchets the 8 files still branching on isCapacitor(). Verified with npm run validate exit 0 and vitest 2791/2791; restoring useSwipeBack.ts fails 2 of the 8 new cases. Note: the worktree started on 65138139, which is not an ancestor of the rolling branch, so I reset it to ddfe9524 (the rolling branch tip the other lanes use) before working. Handoff: docs/improvement-loops/lanes/features.md | Slice 2 of 3: removed every isCapacitor()/isMobileApp() branch (web arm kept) in 6 files, the shell helpers/plugin types, hapticTap and its 5 callers, unused nativeShare/getPlatform, and the unrendered ImageViewer; guard test now asserts zero shell branches. validate exit 0, vitest 2815/2815. Handoff: docs/improvement-loops/lanes/features.md"
     },
     {
       "priority": 1,
@@ -10740,8 +10742,8 @@
         "For each literal, either compute it with centralDay() from tests/support/fixtureClock.ts, pin the clock, or record why the spec does not depend on it being in the future",
         "Re-baseline with node scripts/check-fixture-dates.mjs --write so the list shrinks"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 by the reliability lane (WEB-QA-041). The first one comes due 2026-11-25."
+      "passes": true,
+      "notes": "Found 2026-11-07 by the reliability lane (WEB-QA-041). The first one comes due 2026-11-25. | Reproduced by running the original specs with the browser clock past their dates: playground-detail's nearby-event test fails after 2027-10-01 (1 failed, 15 passed), and both subscription specs still pass on 2026-12-15. playground-detail now uses centralDay(30). subscription-portal pins the clock with setFixedTime. subscription-success uses clock.install, because its poll bound reads Date.now() and a frozen clock would never reach 30 seconds. Fixture-dates baseline went from 5 to 0. On a vite build the three specs pass 16/16."
     },
     {
       "id": "AND-AUDIT-026",
@@ -10771,7 +10773,7 @@
         "A Deno test with a trimmed real fixture asserts title, date and price for at least two events"
       ],
       "passes": false,
-      "notes": "Found 2026-11-07 while adding the Eventbrite price. Not verified: this container's proxy refuses eventbrite.com."
+      "notes": "Found 2026-11-07 while adding the Eventbrite price. Not verified: this container's proxy refuses eventbrite.com. | AC2 DONE 2026-11-07: eventbrite.ts findEventList reads buckets[*].events, then search_data.events.results, then a bounded scan for event-card arrays, logs the path used, and returns success:false naming the blob's top-level keys when none is found (was success:true with 0 rows). Verified by new eventbrite.test.ts 9/9 under a node Deno.test shim with a negative control failing 3/9; AC1/AC3 still need a live page because the proxy refuses eventbrite.com, so the fixtures are hand-built. Handoff: docs/improvement-loops/lanes/events.md"
     },
     {
       "priority": 2,
@@ -10783,8 +10785,8 @@
         "mapPinState uses resolveOpenStatus(hours_json, hoursTextOf(opening), now), the same evaluator as open-now",
         "Tests: a row with hours_json and a date-valued opening gets an open/closed pin rather than unknown, with a negative control"
       ],
-      "passes": false,
-      "notes": "Found while shipping WEB-FEAT-038. The id may collide if another lane takes the next WEB-FEAT number this round."
+      "passes": true,
+      "notes": "Found while shipping WEB-FEAT-038. The id may collide if another lane takes the next WEB-FEAT number this round. | RESTAURANT_MAP_POINT_COLUMNS now selects hours_json. mapPinState calls resolveOpenStatus(hours_json, hoursTextOf(opening), now), the same evaluator open-now uses, so a production row (with a date in `opening`) gets an open, closing-soon or closed pin instead of 'Hours unknown'. The RestaurantsMap fallback rows pass hours_json through too. Verified: new tests use a production-shaped row, and the negative control (dropping hours_json from the call) turns 2 of them red. vitest 2812/2812, type-check ratchet 61/61, check-list-columns 12/12. Not checked against production rows. The worktree was reset onto claude/continuous-improvement-loops-76i72u first, because it had been created from main (65138139), which has no docs/improvement-loops."
     },
     {
       "priority": 4,
@@ -10812,6 +10814,110 @@
         "Verify a tapped push on a device opens the content it names"
       ],
       "notes": "Found 2026-11-07 while doing AND-AUDIT-026. Overlaps XPLAT-006 (the web push token source); decide whether the two are one story."
+    },
+    {
+      "id": "WEB-UX-055",
+      "title": "Icon-only buttons on public surfaces have no accessible name",
+      "description": "As a screen-reader user rating an event, I should hear which button is like, dislike or interested and whether it is already on. EventFeedback rendered three icon-only buttons on every EventCard for signed-in users with no aria-label and no aria-pressed, announced as 'button' three times. The same gap existed on the EventSubmissionForm add/remove tag buttons, the GroupEventPlannerSimple add-to-plan button and the NewsletterSignup footer variant (icon-only submit, placeholder-only email field).",
+      "acceptanceCriteria": [
+        "EventFeedback buttons are named 'Interested in <title>', 'Like <title>', 'Dislike <title>' (fallback 'this event') and expose aria-pressed for the current rating",
+        "EventCard passes the event title to EventFeedback",
+        "Tag add/remove, planner add and footer newsletter submit/email have accessible names; decorative icons are aria-hidden",
+        "A vitest spec fails on the old code and passes on the new"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-11-07 (ui-ux loop). iconButtonNames.test.tsx fails 4/4 on old code, passes 4/4; vitest 2812/2812; type ratchet 61/61. About 55 admin-only icon buttons without names (ContentTable, cms/*, admin/*) were not touched. | EventFeedback's interested/like/dislike buttons (every event card for signed-in readers) now have per-event accessible names and aria-pressed; the same missing-name fix was applied to the /submit-event tag buttons, the /social planner add button and the footer newsletter form. New iconButtonNames.test.tsx fails 4/4 on the old code and passes 4/4 on the new; full vitest 2812/2812, type ratchet 61/61, eslint 0 errors, check-ui-craft 3 (baseline 7)."
+    },
+    {
+      "id": "WEB-ADS-018",
+      "title": "Referrals never reach 'subscribed', so nobody can tell whether invites bring in paying members",
+      "description": "As the owner judging the referral program, I need to see how many invites became paying members. get_my_referral_stats() (20261006000002) returns a subscribed count, but nothing moves a referrals row past 'signed_up', so the count is 0 for every member. useReferralStats left it out for that reason.",
+      "acceptanceCriteria": [
+        "Evidence: supabase/migrations/20261006000002_profile_referral_codes.sql (only attribute_referral writes referrals, always with 'signed_up'); src/hooks/useReferralStats.ts docstring saying subscribed would always read 0",
+        "A trigger on user_subscriptions (covers web, iOS and Android writers) moves the referred member's referral from signed_up to subscribed when a row becomes 'active' on a non-free plan; trials don't count; rewarded rows are never moved back",
+        "The trigger can't fail the subscription write it hangs off",
+        "Backfill members who already pay; additive only, no RPC or column shape change",
+        "The invite card shows the paid count once it is above zero; vitest on the label and on the migration's rules"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "2026-11-07 marketing-growth loop: done in code. Migration 20261107000105 plus useReferralStats/InviteFriendsCard, with referralCountLabel in src/lib/referralCode.ts. Ran against a local Postgres 16 stub covering backfill, an iOS insert, a trial converting, the free plan skipped, a rewarded row untouched, and a forced referrals failure leaving the subscription row written (negative control: without the exception block the row is lost). vitest 8/8, eslint, type-check ratchet 61/61, check-migrations-parse/order/safety, check-schema. Known limit: the existing 'Users can create referrals' INSERT policy still lets a user insert a referrals row naming themselves as referrer (recorded in 20261006000002 as a tightening for a later release), so a forged row could also be counted as subscribed. The counts carry no reward. OWNER: apply 20261107000105. | Done in code (2026-11-07): migration 20261107000105 adds a trigger on user_subscriptions that moves a referred member's referral from signed_up to subscribed when they start an active, non-free plan on any platform, and backfills members who already pay. Trials don't count, rewarded rows are never moved back, and a failure can't fail the subscription write. The invite card now says \"N went on to subscribe\". Ran against a local Postgres 16 stub, including a negative control; vitest 8/8 new; eslint, type-check ratchet 61/61, check-migrations-parse/order/safety and check-schema all pass. Owner: apply 20261107000105."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-BE-059",
+      "title": "Three event adapters still make up a 19:00 time for date-only events, which WEB-BE-037 removed everywhere else",
+      "description": "As the dedup tiers, I need date-only events to carry NO_TIME_MARKER. WEB-BE-037 made catchdesmoines, jsonLdEvents and ai-crawler emit a date-only string so the shared parser stamps the marker, but eventbrite.ts formatDateTime still writes \"19:00:00\" when start_time is missing, tribeEvents.ts:287 writes \"${day} 19:00:00\" for all_day events, and vibrantmusichall.ts:251 uses \"19:00\". The same event from these paths and from Catch Des Moines gets different instants, and a 7 PM time is shown for an event that never published one.",
+      "acceptanceCriteria": [
+        "Evidence: _shared/domain-adapters/eventbrite.ts formatDateTime; tribeEvents.ts:287; vibrantmusichall.ts:251",
+        "Each adapter returns a date-only string when the source gives no time, so _shared/eventDateTime.ts stamps NO_TIME_MARKER",
+        "Deno tests for each adapter assert the date-only output for a no-time record and an unchanged output for a timed one"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-07 while working WEB-BE-058 in eventbrite.ts."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-056",
+      "title": "About 55 admin icon-only buttons have no accessible name",
+      "description": "A TypeScript AST audit of src/components (excluding ui/) found icon-only Button/button elements with no aria-label, aria-labelledby or title in admin surfaces: ContentTable.tsx (7), cms/RichTextEditor.tsx (5), cms/EnhancedArticleEditor.tsx (5), ArticleEditor.tsx (5), cms/CategoryTagManager.tsx (4), and more under admin/ and cms/. Admin staff using assistive tech hear 'button' for edit/delete/move actions.",
+      "acceptanceCriteria": [
+        "Every icon-only button under src/components/admin, src/components/cms and the Content* managers has an accessible name",
+        "A ratchet script (or vitest static scan) stops the count rising"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-057",
+      "title": "Clickable Card/div elements with no keyboard access in admin media and content queues",
+      "description": "Cards and divs with onClick but no role, tabIndex or key handler: admin/MediaLibrary.tsx:478 and :581, admin/ImageBackfill.tsx:275, ContentQueue.tsx:195/:202, ContentTemplateSelector.tsx:90, AIArticleGenerator.tsx:324, admin/MenuUploadDialog.tsx:220, admin/MenuUploadPanel.tsx:225, ImageViewer.tsx:137/:153. Keyboard users cannot select media or templates.",
+      "acceptanceCriteria": [
+        "Each is a real button (or a stretched button inside the card) reachable by Tab and operable with Enter/Space",
+        "A test covers MediaLibrary selection by keyboard"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-QA-046",
+      "title": "/guides category badges look clickable and filter nothing; static guide links may open not-found pages",
+      "description": "As a visitor on /guides, I need the category chips to filter the grid and every 'Read Guide' link to open a guide. src/pages/GuidesPage.tsx renders eight category Badges with cursor-pointer and hover styles but no handler. The eight static cards link to /guides/<slug>, which SeasonalGuide resolves from seasonal_guides, and no migration seeds those slugs (rainy-day-des-moines, date-night-des-moines, ...). Production was not probed.",
+      "acceptanceCriteria": [
+        "Probe seasonal_guides in production for the eight static slugs; record which resolve",
+        "Either make the chips real filters (buttons with aria-pressed) or render them as non-interactive labels",
+        "Static cards whose slug does not resolve link to an existing page or are removed",
+        "Covered by a spec in tests/ that is in a CI lane"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-07 by the performance lane while doing WEB-PERF-058. Belongs to ui-ux, or to seo-geo for the links; assign the next free WEB-UX id."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-056",
+      "title": "Any first client that adds a check-in button must handle checkin_to_event's 22023 and 54000 errors",
+      "description": "As a user checking in, I need a clear message when the server refuses a check-in, because checkin_to_event now raises 'Invalid coordinates' (22023) and 'Too many check-ins, try again later' (54000), and no client calls it yet, so no error copy exists.",
+      "acceptanceCriteria": [
+        "The first web/iOS/Android caller of checkin_to_event maps 22023 and 54000 to user-facing copy via handleError (web) or the platform equivalent",
+        "An unverified result (outside the time window or over 500m) is shown as 'checked in, not verified' rather than as a failure"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-07 while doing WEB-SEC-055. No caller exists today, so nothing is broken; this records the contract for whoever adds one."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-ADS-019",
+      "title": "Drop the 'Users can create referrals' INSERT policy so members cannot inflate their own invite counts",
+      "description": "As the owner, I need referral counts to mean something before any reward is attached. The 20251126000000 INSERT policy (auth.uid() = referrer_id) lets any signed-in user insert referrals rows naming themselves as referrer. Nothing in web or mobile inserts directly, since attribute_referral is the only writer, so the policy can go. It is a tightening, so it ships in a later release than 20261006000002, as that migration's header says.",
+      "acceptanceCriteria": [
+        "Evidence: supabase/migrations/20251126000000_add_newsletter_and_subscriptions.sql:138; the header of 20261006000002",
+        "grep web, ios, android and supabase/functions for a direct referrals insert = 0",
+        "Migration drops the policy; check-migration-safety override label justified in the PR",
+        "npm run check-migrations-parse and check-migration-order pass"
+      ],
+      "passes": false,
+      "notes": "Found during the 2026-11-07 marketing-growth loop (WEB-ADS-018)."
     }
   ]
 }
