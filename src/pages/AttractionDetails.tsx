@@ -43,6 +43,7 @@ import {
   seasonLabel,
 } from "@/lib/attractionAtAGlance";
 import { AttractionAtAGlance } from "@/components/AttractionAtAGlance";
+import { attractionMetaDescription, attractionPageTitle } from "@/lib/attractionMeta";
 import { isPrerender } from "@/lib/isPrerender";
 import { useNow } from "@/hooks/useNow";
 import { handleError } from "@/lib/errorHandler";
@@ -464,12 +465,10 @@ export default function AttractionDetails() {
       {/* No `location` prop: EnhancedAttractionSEO's TouristAttraction is the
           one place entity this page publishes (Explore plan WP3 item 4). */}
       <SEOHead
-        title={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
-        description={
-          attraction.description
-            ? attraction.description.slice(0, 160)
-            : `${attraction.name}, a ${typeLabel} in the ${BRAND.city} area: hours, directions and what's on nearby.`
-        }
+        // WEB-SEO-053: the city the address names, not Des Moines for every row,
+        // and a description that is more than the two-word column.
+        title={attractionPageTitle(attraction)}
+        description={attractionMetaDescription(attraction)}
         type="website"
         imageUrl={attraction.image_url || undefined}
         url={`/attractions/${attractionSlug}`}

@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
 import { attractionOpeningHoursSpec } from "@/lib/attractionHours";
+import { attractionPageTitle } from "@/lib/attractionMeta";
 
 interface AttractionData {
   id?: string | null;
@@ -44,12 +45,11 @@ export default function EnhancedAttractionSEO({
   const attractionUrl = `${BRAND.baseUrl}/attractions/${slug}`;
   // Branded dynamic OG card (WEB-FEAT-008); falls back to the item photo / default.
 
-  const getOptimizedTitle = () => {
-    const parts = [attraction.name];
-    if (attraction.type) parts.push(attraction.type);
-    parts.push(`${BRAND.city}, ${BRAND.state}`);
-    return `${parts.join(" - ")} | Things to Do`;
-  };
+  // The WebPage node's name is the page's <title> before the brand suffix
+  // (WEB-SEO-053). It was its own string, "{name} - {type} - Des Moines, Iowa"
+  // plus a section suffix, which put every attraction in Des Moines and
+  // matched no title the page shows.
+  const getOptimizedTitle = () => attractionPageTitle(attraction);
 
   // Explore WP3 item 4: no "by visitors", no "popular", and no "Plan your
   // visit today" sales line. Pass 2 item 2: no "Rated X/5" either.
@@ -208,12 +208,9 @@ export default function EnhancedAttractionSEO({
       {/* Place-Specific Meta for AI Parsers */}
       <meta name="place:name" content={attraction.name} />
       <meta name="place:type" content={attraction.type} />
-      <meta
-        name="place:location"
-        content={
-          attraction.location || `${BRAND.city}, ${BRAND.state}`
-        }
-      />
+      {/* Only the row's own location. The fallback was "Des Moines, Iowa",
+          wrong for the Altoona and Clive rows (WEB-SEO-053). */}
+      {attraction.location && <meta name="place:location" content={attraction.location} />}
       {/* No place:city. The table has no city column, and the set includes
           Ankeny, Altoona and Waukee (see the address note above). */}
       <meta name="place:state" content={BRAND.state} />
