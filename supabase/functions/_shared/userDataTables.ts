@@ -28,6 +28,8 @@ export const PURGE_TABLES: readonly string[] = [
   "activity_feed",
   "user_activities",
   "user_analytics",
+  // Which Business Pro weekly emails went out; a send log, nothing retained.
+  "business_pro_report_sends",
   "user_interactions_enhanced",
   "user_event_interactions",
   "user_restaurant_interactions",
@@ -122,6 +124,8 @@ export const RETAINED_TABLES: Readonly<Record<string, string>> = {
   ad_impressions: "Advertiser billing records; the counterparty is the advertiser, not this user.",
   campaigns: "Advertising contracts with their own retention and dispute window.",
   business_profiles: "Business listing under a commercial contract, not a personal profile.",
+  business_subscriptions:
+    "Business Pro billing record under a commercial contract (Stripe ids, status, period); same basis as subscription_events.",
   contact_submissions: "Inbound business correspondence; may be needed to answer the inquiry it records.",
   partnership_applications: "Commercial application record with its own review trail.",
 
