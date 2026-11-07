@@ -85,14 +85,16 @@ restart it from `develop` (or `main` if there is no `develop`).
 2. Run the saved workflow `improvement-loop-round` with
    `{ repo, lanes: [all eleven], date, trailers, base }`, where `base` is
    `git rev-parse HEAD` of the rolling branch.
-3. Save its result array to a scratch file. Cherry-pick each `commit_sha`
-   in lane order. On a conflict in `docs/improvement-loops/lanes/*`, take the
-   lane's version. On any other conflict, skip that lane's commit
-   (`git cherry-pick --abort`) and record it as skipped.
-4. `npm run validate` and `npx vitest run`. If either fails, find the lane
-   commit that broke it, `git revert` it, and re-run until both pass. Then
-   remove skipped and reverted lanes from the results file and run
-   `node scripts/apply-loop-results.mjs <results.json>`.
+3. Save its result array to a scratch file and run
+   `node scripts/merge-loop-round.mjs <results.json> <landed.json>`. It assigns
+   real ids to new stories (lanes name them `<PREFIX>-NEW-<lane>` so parallel
+   lanes cannot collide), cherry-picks each lane's commit with the placeholder
+   rewritten, takes the lane's version on a lane-file conflict, and skips a
+   lane on any other conflict.
+4. Remove the agent worktrees, then `npm run validate` and `npx vitest run`.
+   If either fails, find the lane commit that broke it, `git revert` it, drop
+   that lane from `<landed.json>`, and re-run until both pass. Then
+   `node scripts/apply-loop-results.mjs <landed.json>`.
 5. Add a row to the round log, commit `docs(prd): record improvement-loop round N`,
    push, and remove the agent worktrees (`git worktree remove --force`).
 
@@ -121,3 +123,4 @@ that lock as the remote branch `loops-lock`.
 | 2026-11-07 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 8 stories closed, 3 split. validate exit 0, vitest 2808/2808 |
 | 2026-11-07 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 8 stories closed, 3 split. validate exit 0, vitest 2833/2833 |
 | 2026-11-07 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits, no merge conflicts; 9 stories closed, 2 split. validate exit 0, vitest 2857/2857 |
+| 2026-11-07 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 8 stories closed, 3 split, 10 new. Three lanes picked WEB-FEAT-041; renumbered to 042/043. validate exit 0, vitest 2909/2909 |

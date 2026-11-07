@@ -33,7 +33,7 @@ function nextId(prefix) {
   return `${prefix}-${String(max + 1).padStart(3, "0")}`;
 }
 function prefixOf(id) {
-  const m = /^([A-Z]+(?:-[A-Z]+)*?)(?=-(?:\d|X))/.exec(id || "");
+  const m = /^([A-Z]+(?:-[A-Z]+)*?)(?=-(?:\d|X|NEW))/.exec(id || "");
   return m ? m[1] : "WEB-QA";
 }
 

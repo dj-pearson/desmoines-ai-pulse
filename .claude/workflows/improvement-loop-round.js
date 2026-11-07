@@ -30,7 +30,7 @@ const SCHEMA = {
     notes: { type: 'string', description: 'one or two sentences for the prd.json notes field: what changed and how it was verified' },
     verification: { type: 'string', description: 'exact commands run and their result (pass/fail counts)' },
     handoff: { type: 'string', description: 'remaining slices if split, else empty' },
-    additional_stories: { type: 'array', items: { type: 'object' }, description: 'other prd.json-shaped stories you found but did not do (max 3)' },
+    additional_stories: { type: 'array', items: { type: 'object' }, description: 'other prd.json-shaped stories you found but did not do (max 3); id is <PREFIX>-NEW' },
   },
   required: ['lane', 'story_id', 'story_is_new', 'commit_sha', 'passes', 'notes', 'verification', 'handoff', 'additional_stories'],
 }
@@ -44,7 +44,7 @@ Setup, before anything else:
 - If node_modules is missing in your worktree, run: ln -s ${REPO}/node_modules node_modules
 
 Read docs/improvement-loops/README.md (the protocol) and docs/improvement-loops/lanes/${lane}.md, then run exactly one loop:
-1. If the lane file has a Handoff, continue it. Otherwise pick the highest-value open story ("passes": false) in prd.json for your lane's prefixes. For shared prefixes (WEB-FEAT, WEB-BE, XPLAT) only take stories about your lane's topic. If nothing open fits or is worth it, audit your lane's paths and define the single most valuable gap as a new story (next free id in your lane's prefix; check prd.json for the max number).
+1. If the lane file has a Handoff, continue it. Otherwise pick the highest-value open story ("passes": false) in prd.json for your lane's prefixes. For shared prefixes (WEB-FEAT, WEB-BE, XPLAT) only take stories about your lane's topic. If nothing open fits or is worth it, audit your lane's paths and define the single most valuable gap as a new story. A NEW story's id is the placeholder <PREFIX>-NEW-${lane} (for example WEB-FEAT-NEW-${lane}); use exactly that string in new_story.id, the commit subject, the lane file and any code comment. Other lanes run in parallel, so never pick a number yourself; the orchestrator assigns it and rewrites the placeholder.
 2. Size it to one commit (~400 changed lines, one concern). If bigger, do a complete, shippable first slice and describe the rest as handoff.
 3. Implement it, following CLAUDE.md (backward-compatible DB/edge changes, server decides money, safeStorage, handleError, no any). Reproduce bugs first. Do not touch code owned by another lane unless the fix requires it.
 4. Verify with the checks for the area you touched (README "Checks by area"). Run them; report real results. Never skip/disable a test or loosen a baseline. For ios/android, no compiler is available: say "not compiled" plainly.
