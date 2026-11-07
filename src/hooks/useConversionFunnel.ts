@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
-import { hasConsent } from '@/components/CookieConsentBanner';
+import { hasConsent } from '@/lib/cookieConsent';
 
 const log = createLogger('useConversionFunnel');
 

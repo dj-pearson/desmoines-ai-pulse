@@ -21,7 +21,7 @@ import SEOHead from "@/components/SEOHead";
 import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
-import { reopenConsentBanner } from "@/components/CookieConsentBanner";
+import { reopenConsentBanner } from "@/lib/cookieConsent";
 
 export default function PrivacyPolicy() {
   const lastUpdated = "October 23, 2026";

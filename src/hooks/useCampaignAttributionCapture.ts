@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import type { CookieConsent } from "@/components/CookieConsentBanner";
+import type { CookieConsent } from "@/lib/cookieConsent";
 import { analyticsGranted } from "@/lib/analyticsConsent";
 import { applyAttributionConsent, captureCampaignAttribution } from "@/lib/campaignAttribution";
 

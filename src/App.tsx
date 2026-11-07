@@ -200,7 +200,7 @@ const AdvertisingPolicies = lazyWithRetry(() => import("./pages/AdvertisingPolic
 const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
-import { CookieConsentBanner } from "@/components/CookieConsentBanner";
+import { CookieConsentGate } from "@/components/CookieConsentGate";
 
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
@@ -644,7 +644,7 @@ const App = () => (
             </Route>
           </Routes>
           </RouteErrorBoundary>
-          <CookieConsentBanner />
+          <CookieConsentGate />
           <BottomNav />
         </KeyboardShortcutsProvider>
       </ErrorBoundary>

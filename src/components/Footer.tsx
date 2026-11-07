@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BRAND } from "@/lib/brandConfig";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
-import { reopenConsentBanner } from "@/components/CookieConsentBanner";
+import { reopenConsentBanner } from "@/lib/cookieConsent";
 import { SiteDirectory } from "@/components/seo/SiteDirectory";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
