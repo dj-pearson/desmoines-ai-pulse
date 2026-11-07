@@ -1,0 +1,80 @@
+# Continuous improvement loops
+
+Several agents improve Des Moines Insider (web, iOS, Android) at the same time.
+Each agent owns one **lane** and ships **one improvement per loop**. Work that
+doesn't fit one loop is split, and the next loop in that lane picks it up from
+the handoff note.
+
+Run one loop by hand with `/improve-loop <lane>`. Run a round across lanes with
+a Workflow (one agent per lane, each in its own worktree), or on a schedule.
+
+## Lanes
+
+| Lane | Owns | prd.json prefixes |
+|---|---|---|
+| `events` | Event discovery, detail, calendar feeds, ingestion quality, submissions | `WEB-FEAT` (events), `XPLAT` (events) |
+| `restaurants` | Restaurant discovery, detail, open-now, menus, dietary, deals | `WEB-FEAT` (restaurants) |
+| `ui-ux` | Visual polish, interaction, empty/error states, accessibility (WCAG 2.1 AA) | `WEB-UX` |
+| `performance` | Bundle size, LCP/CLS/INP, query count, caching, egress | `WEB-PERF` |
+| `security` | RLS, edge-function auth, secrets, CSP, abuse limits, privacy | `WEB-SEC`, `WEB-AUTH`, `WEB-LEGAL` |
+| `seo-geo` | Meta, structured data, sitemaps, internal links, AI-answer (GEO) content | `WEB-SEO` |
+| `marketing-growth` | Acquisition, retention, email, referral, advertiser funnel, business claims | `WEB-ADS`, `AOS-PROSPECT`, `AOS-MANAGE` |
+| `features` | Accounts, notifications, personalization, enterprise/admin features | `WEB-FEAT`, `WEB-BE` |
+| `reliability` | Tests, CI lanes, data quality, observability, ops runbooks | `WEB-QA`, `WEB-CI`, `WEB-OPS`, `WEB-QUAL` |
+| `ios` | `ios/` SwiftUI app: parity, crashes, UX, App Store compliance | `IOS-AUDIT-*`, `XPLAT` (iOS half) |
+| `android` | `android/` Kotlin app: parity, crashes, UX, Play compliance | `AND-AUDIT`, `XPLAT` (Android half) |
+
+Each lane has a file in `lanes/` with its mission, the paths it owns, and its
+**handoff** section: the in-flight multi-loop item, if any.
+
+## The backlog
+
+`prd.json` at the repo root is the one backlog. Don't start a second one. A
+story is open while `"passes": false`. New findings become new stories using the
+lane's prefix and the next free number.
+
+## One loop
+
+1. **Resume or pick.** If the lane file has a handoff, continue it. Otherwise
+   pick the highest-priority open story in the lane's prefixes. If none fits,
+   audit the lane's paths for the single most valuable gap and add it as a story.
+2. **Size it.** One loop is one reviewable commit (rough ceiling: ~400 changed
+   lines, one concern). Bigger than that, split it: do slice 1 now, write the
+   rest as a handoff in the lane file (what's done, what's next, the files,
+   the trap you found).
+3. **Reproduce, then change.** Bugs get reproduced first. Follow `CLAUDE.md`:
+   server decides money, backward-compatible migrations and edge functions,
+   `safeStorage`, `handleError`, no `any`.
+4. **Verify.** Run the checks that cover what you touched (below). Never skip,
+   disable or loosen a test or baseline to get green.
+5. **Record.** Mark the story `"passes": true` with a `notes` line saying how
+   it was verified, or add the new stories you found. Update the lane file's
+   loop log (one line) and handoff.
+6. **Commit.** Conventional commit with the story id, e.g.
+   `fix(events): ... (WEB-FEAT-035)`. One loop, one commit.
+
+## Checks by area
+
+| Touched | Run |
+|---|---|
+| `src/**` | `npx eslint <files>`, `npm run type-check`, the `check-*` scripts named in `validate` that relate to the change |
+| `supabase/functions/**` | `npm run type-check:functions`, `npm run check-edge-auth`, Deno tests for that function if present |
+| `supabase/migrations/**` | `npm run check-migrations-parse`, `npm run check-migration-order` |
+| A user journey | the relevant spec in `tests/`; if it should guard the journey, add it to a CI lane (`npm run check-e2e-lanes`) |
+| `ios/**`, `android/**` | No Xcode/Gradle in cloud sessions. Keep changes small, mirror existing patterns, and say plainly in the notes that it was not compiled |
+
+`npm run validate` is the full gate (~3.5 min cold). Run it before a round is
+pushed, not in every loop.
+
+## Running a round in parallel
+
+Agents in the same round work in separate git worktrees and must not edit
+`prd.json` or each other's lane files; they return their story updates and the
+orchestrator applies them once, which avoids nine-way merge conflicts in one
+JSON file. Each agent commits in its worktree; the orchestrator cherry-picks
+the commits onto the round branch, runs `npm run validate`, and pushes.
+
+## Round log
+
+| Date | Branch | Lanes | Result |
+|---|---|---|---|
