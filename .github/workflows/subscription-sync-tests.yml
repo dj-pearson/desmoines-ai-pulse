@@ -121,6 +121,10 @@ jobs:
       - run: deno test --allow-env supabase/functions/_shared/aiModel.test.ts
       # Written with versionCheckLog.ts and never added to a lane.
       - run: deno test supabase/functions/_shared/versionCheckLog.test.ts
+      # WEB-SEC-057. play-rtdn-webhook must pin the push subscription's service
+      # account, or any Google identity can mint a token that passes.
+      # --allow-read: the wiring check reads the webhook source.
+      - run: deno test --allow-read supabase/functions/_shared/pubsubOidc.test.ts
       # The limiter's 429 must carry CORS for the requesting origin, or the
       # browser drops it and the client sees a network error instead of
       # "rate limit exceeded". --allow-env: the CORS allow-list reads it.

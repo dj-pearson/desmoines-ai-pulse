@@ -39,6 +39,9 @@
  * Required env vars:
  *   GOOGLE_PLAY_SERVICE_ACCOUNT_KEY  — JSON service account key for Play Developer API
  *   PLAY_RTDN_AUDIENCE               — expected `aud` for the OIDC push token (this fn's URL)
+ *   PLAY_RTDN_SERVICE_ACCOUNT        - expected `email` of the OIDC push token: the service
+ *                                      account set on the push subscription (step 4). Without
+ *                                      it any Google identity can mint a passing token.
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  */
@@ -46,6 +49,7 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { checkPubSubOidcClaims, type PubSubOidcClaims } from '../_shared/pubsubOidc.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -59,10 +63,6 @@ const VIP_PRODUCT_IDS = new Set(['vip_monthly']);
 const GOOGLE_API_BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_OAUTH_CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
-const GOOGLE_OIDC_ISSUERS = new Set([
-  'https://accounts.google.com',
-  'accounts.google.com',
-]);
 
 // RTDN subscriptionNotification.notificationType enum
 const NOTIFICATION_TYPES: Record<number, string> = {
@@ -223,21 +223,15 @@ async function importJwkRs256(jwk: GoogleJwk): Promise<CryptoKey> {
   );
 }
 
-interface OidcClaims {
-  iss: string;
-  aud: string;
-  sub: string;
-  email?: string;
-  email_verified?: boolean;
-  exp: number;
-  iat: number;
-}
-
 /**
  * Verify the OIDC bearer token Google attaches to push messages.
  * Returns the decoded claims on success, throws on failure.
  */
-async function verifyOidcToken(token: string, expectedAudience: string): Promise<OidcClaims> {
+async function verifyOidcToken(
+  token: string,
+  expectedAudience: string,
+  expectedServiceAccount: string,
+): Promise<PubSubOidcClaims> {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Invalid JWT format');
 
@@ -264,21 +258,17 @@ async function verifyOidcToken(token: string, expectedAudience: string): Promise
 
   const claims = JSON.parse(
     new TextDecoder().decode(base64UrlDecode(parts[1])),
-  ) as OidcClaims;
+  ) as PubSubOidcClaims;
 
-  if (!GOOGLE_OIDC_ISSUERS.has(claims.iss)) {
-    throw new Error(`Unexpected OIDC issuer: ${claims.iss}`);
-  }
-  if (claims.aud !== expectedAudience) {
-    throw new Error(`OIDC audience mismatch: expected=${expectedAudience}, got=${claims.aud}`);
-  }
-  const now = Math.floor(Date.now() / 1000);
-  if (typeof claims.exp !== 'number' || claims.exp < now - 60) {
-    throw new Error('OIDC token expired');
-  }
-  if (typeof claims.iat !== 'number' || claims.iat > now + 300) {
-    throw new Error('OIDC token issued-at is in the future');
-  }
+  // Issuer, audience, expiry AND the push subscription's service account
+  // (WEB-SEC-057): without the last one any Google identity that mints a token
+  // for this URL passes.
+  const rejection = checkPubSubOidcClaims(claims, {
+    audience: expectedAudience,
+    serviceAccountEmail: expectedServiceAccount,
+    nowSec: Math.floor(Date.now() / 1000),
+  });
+  if (rejection) throw new Error(`OIDC claims rejected: ${rejection}`);
 
   return claims;
 }
@@ -466,8 +456,20 @@ serve(async (req) => {
     });
   }
 
+  // WEB-SEC-057. The service account the push subscription authenticates as.
+  // Fail closed like the audience: Pub/Sub redelivers a 5xx, so a missing
+  // value delays notifications until it is set rather than dropping them.
+  const expectedServiceAccount = Deno.env.get('PLAY_RTDN_SERVICE_ACCOUNT') ?? '';
+  if (!expectedServiceAccount.trim()) {
+    console.error('PLAY_RTDN_SERVICE_ACCOUNT env var not set');
+    return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
-    await verifyOidcToken(authHeader.slice(7).trim(), expectedAudience);
+    await verifyOidcToken(authHeader.slice(7).trim(), expectedAudience, expectedServiceAccount);
   } catch (err) {
     console.error('OIDC verification failed:', err instanceof Error ? err.message : err);
     return new Response(JSON.stringify({ error: 'Invalid OIDC token' }), {
