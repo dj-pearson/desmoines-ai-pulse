@@ -9698,6 +9698,326 @@
       "priority": 3,
       "passes": true,
       "notes": "FILED AND FIXED 2026-09-19 (claude/admiring-cori-ukwzcp), in the iteration that found it. It surfaced while closing WEB-SEO-043: a rule measuring `const pageTitle` reported four over-length titles and two were false, and the reason they were false was this.\n\nTWENTY PAGES did both. useDocumentTitle removed from all of them, with its now-unused import; the Helmet title stays. AcceptableUsePolicy, AccessibilityStatement, AdvertisingPolicies, AffiliateDisclosure, Attractions, CookiePolicy, DMCAPolicy, DataProcessingAgreement, DateNightEvents, DietaryRestaurants, EventsThisWeekend, EventsToday, FreeEvents, GuidesPage, Hotels, KidsEvents, NewsletterConfirm, OpenNowRestaurants, Playgrounds, Unsubscribe.\n\nTHE RACE WAS HIDING A TOO-LONG TITLE, which is why AC3 exists. /restaurants/dietary rendered 72 characters the moment its short imperative title stopped winning, and its description was 214. Both fixed. That is the argument for re-measuring everything rather than the pages the story names: a duplicate setter does not just make the title ambiguous, it masks the length of the one that reaches a crawler.\n\nVERIFIED by rendering 36 routes against a production build, sampling each title at 1.2s and 3.7s: 0 titles that change after mount, 0 over 60, 0 descriptions over 160. Before the fix, sampling twice was the only way to see the race at all. npm run validate passes, vitest 680/680, the required axe lane 48/48, and route-smoke is 95 passed / 13 failed - the same 13 backend-dependent failures as before the change.\n\nAC5's check is NOT built. The pattern is visible in source and would be a short script, but the twenty instances are gone and a check with no baseline to hold is better written when somebody re-introduces one. Recorded rather than built, deliberately."
+    },
+    {
+      "id": "LEAP-001",
+      "title": "Sell a presenting-sponsor slot in the Des Moines Insider weekly digest",
+      "description": "As a local business, I want to buy the presenting-sponsor slot in Des Moines Insider's weekly digest so I reach people who opted in to hear about Des Moines. assemble-weekly-digest and send-weekly-digest contain zero references to a sponsor (grep, 2026-11-07), and ad_rate_card has no newsletter placement, so the one owned channel with a habit attached earns nothing. Axios Des Moines and 6AM City fund themselves on this unit. Des Moines Insider's digest is assembled from structured event data rather than written by hand, so a sponsor can be matched to the issue's content (a brewery against a brewery-heavy weekend).",
+      "acceptanceCriteria": [
+        "A 'newsletter_sponsor' row exists in ad_rate_card. Pricing today is per day (base_daily_rate x days_count through calculate_campaign_pricing, 20260902000008_campaign_pricing_authority.sql), so one issue is modelled explicitly (days_count = 1 per issue date, or an additive pricing-unit column), and enforce_campaign_placement_pricing still computes the price; create-campaign-checkout re-prices it and returns 409 PRICE_CHANGED on a mismatch like every other placement.",
+        "assemble-weekly-digest reads the paid, approved newsletter_sponsor campaign for the issue's send date and renders exactly one sponsor block (logo, two lines of copy, one link) above the first section; with no paid campaign it renders no block and no house filler that implies a sponsor.",
+        "Only one newsletter_sponsor campaign can hold a given issue date; a checkout for a sold date is refused before payment and the next open dates are returned.",
+        "Sponsor clicks go through a tracked redirect recording issue id, campaign id and an anonymous click into the source useCampaignAnalytics already reads; opens render as unmeasured unless an open pixel is actually wired.",
+        "/advertise (src/pages/Advertise.tsx, which today states no subscriber figure at all) shows the newsletter unit with the measured count of active, confirmed newsletter_subscribers; when the count is unreadable (activeSubscriberCount returns -1 since WEB-BE-032) the page says the figure is unavailable rather than printing 0 or a round number.",
+        "The sponsor block carries a visible 'Sponsored' label linking to /advertising-policies, and the creative passes campaign-creative-review before the issue sends; an unreviewed creative blocks the block, not the issue."
+      ],
+      "priority": 77,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Axios Des Moines runs a daily ad-backed newsletter (https://www.axios.com/local/des-moines/2026/02/09/1-fun-thing-we-re-5-years-old); 6AM City reports most of its revenue from local-business advertising across ~400 newsletters (https://www.amediaoperator.com/news/6am-citys-secret-weapon-400-newsletters-with-no-staff/). Neither is shown to target sponsors by issue content. CRITIC FIXES: the draft told the builder to remove a hardcoded '15K+ Newsletter Subscribers' claim from Advertise.tsx; no such string exists there, so that AC was replaced with adding the measured figure. The draft also said 'priced per issue' as if the pricing authority supported it; it is per day. DEPENDS ON: WEB-OPS-007 (the digest send is a pg_cron job, and 57 of 61 jobs had never succeeded), WEB-ADS-006 (creative auto-review never runs), WEB-ADS-010/011 and GM card a222e9bf (purchase path proven by one real purchase). SIZE: M. SUCCESS METRIC: first paid issue within 60 days of launch; then share of issues sold per month and revenue per issue, reported against the measured subscriber count."
+    },
+    {
+      "id": "LEAP-002",
+      "title": "Verified Business: turn a free listing claim into a paid monthly tier",
+      "description": "As an owner who has claimed my listing, I want to pay for a Verified Business tier that lets me add photos, upload a menu, post deals, boost my events and see what my listing did for me each month. WEB-ADS-009 built business_claims and an owner-scoped UPDATE policy limited to hours, photos, website and description, plus a 'Promote this listing' link into /advertise; BusinessHub.tsx has no price, premium or verified tier. Claim owners are Des Moines Insider's warmest advertiser leads, and owner-supplied hours and menus feed verified data back into listings, which is the accuracy edge over AI answer layers that repeat stale data.",
+      "acceptanceCriteria": [
+        "A 'verified_business' Stripe price plus subscription_plans row exists, purchasable only by a user holding an approved business_claims row; checkout reuses create-subscription-checkout and stripe-webhook, not a second payment path. Confirm subscription_plans exists in production before building (WEB-QA-018 found 29 queried tables missing).",
+        "BusinessHub.tsx shows Free vs Verified side by side with the real Stripe price; Verified features unlock only while the subscription is active per the webhook and revert on cancel without deleting the owner's content.",
+        "Verified owners can upload a menu through parse-menu-upload, add photos into the existing media pipeline, and post deals into the deals table (insert today is admin-only after WEB-SEC-033; widen it to verified claimants of that listing only); each change records the owner as source.",
+        "A 'Verified by owner' badge, defined once, shows on restaurant/attraction detail pages and list cards only for active Verified listings, never for unclaimed or lapsed ones.",
+        "A monthly report per Verified listing (page views, directions taps, website and phone clicks, saves) is generated and emailed; a metric with no recorded source renders as unavailable with the reason, never as 0.",
+        "An admin view reads Verified MRR, active count and churn from Stripe, not from a local counter."
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Yelp sells paid business-page upgrades and is moving listings into an action product (https://www.yelp-ir.com/news/press-releases/news-release-details/2026/Yelp-Launches-the-New-Yelp-Assistant-Transforming-Local-Discovery-from-Search-to-Answers-and-Actions/default.aspx), but has no Des Moines event graph; Catch Des Moines lists businesses with no owner tooling (https://www.catchdesmoines.com). NOT A DUPLICATE: WEB-ADS-009 is the free claim; this is the paid tier on top. DEPENDS ON WEB-QA-013/026 (page views now recorded) for the report, WEB-ADS-009 AC5 (admin claim queue screen) for claim throughput. SIZE: L. SUCCESS METRIC: claim-to-Verified conversion and Verified MRR; target 10 paying Verified businesses within one quarter of launch."
+    },
+    {
+      "id": "LEAP-003",
+      "title": "Organizer and venue accounts with direct publishing and an embeddable upcoming-events widget",
+      "description": "As a venue or event organizer, I want a free organizer account where my events publish without the anonymous queue, and an embed code that shows my upcoming events on my own site. The local music coalition dissolved and 80/35 was cancelled, so Des Moines organizers have fewer places to post. Every embed is a backlink and a referral source, and every organizer who posts directly makes the Des Moines Insider calendar more complete than Catch Des Moines' visitor-focused one. A repo grep found no embed widget and no PRD story proposing one.",
+      "acceptanceCriteria": [
+        "Organizer accounts link to a venue record (VenueDetail.tsx) or an organizer profile; submissions from a linked organizer through /submit-event (SubmitEvent.tsx) skip anonymous triage (triage-event-submission) and publish once the AI checks pass. WEB-ADS-008 (human-approved submissions never reach the site) is closed first.",
+        "A public, cacheable widget endpoint returns a venue's or organizer's upcoming events as an iframe/script embed in light and dark styles; every event links to its Des Moines Insider event page with a UTM tag.",
+        "The organizer dashboard shows the embed code, a copyable 'Listed on Des Moines Insider' badge, and measured widget impressions and click-throughs per week.",
+        "Embed loads are cached and rate limited so a busy venue site cannot load the database; an unknown venue id returns an empty widget, not an error page.",
+        "Each organizer gets a per-event share kit from the dashboard: OG image via og-image, short link, prewritten caption.",
+        "Admin sees the count of active embeds and referral sessions from them."
+      ],
+      "priority": 79,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: 80/35 cancelled (https://littlevillagemag.com/80-35-officially-canceled-after-nearly-20-years-in-des-moines/); Catch Des Moines offers 'Submit Your Event' with no embed (https://www.catchdesmoines.com/events/). Owning the organizer relationship completes the event graph, which Google Ask Maps lacks for small and suburban events. CRITIC FIX: dropped the draft's 'Do515 may have stopped resolving', which was unverified. This is the supply side LEAP-004 (ticketing) and LEAP-012 (white-label calendars) build on. SIZE: L. SUCCESS METRIC: active organizer accounts, active embeds, referral sessions per month, and share of weekend events that arrived by direct organizer submission."
+    },
+    {
+      "id": "LEAP-004",
+      "title": "Self-serve RSVP and ticketing for small Des Moines events, with a lower fee than Eventbrite",
+      "description": "As a church fundraiser, trivia night or small venue, I want to sell tickets or take free RSVPs on my Des Moines Insider event page and get paid out, instead of sending buyers to Eventbrite. Event pages today only link out to a ticket URL; event_attendance and event_attendees record interest, not a purchase. Ticketing is the transaction that makes an organizer come back every week, and the buyer list it creates (with consent) is the most valuable audience a city guide can own. No PRD story covers ticket sales, payouts or Stripe Connect (searched all nine PRD files).",
+      "acceptanceCriteria": [
+        "Organizers with a linked account (LEAP-003) can onboard to Stripe Connect Express from the organizer dashboard; ticket money never passes through a Des Moines Insider balance, and payouts are Stripe's.",
+        "An event can offer free RSVP or paid ticket types (name, price, quantity, sales window); checkout is a Stripe Checkout session on the connected account with an application fee, and capacity is enforced in the database so two buyers cannot take the last ticket.",
+        "Buyers receive an emailed ticket with a QR code; the organizer can scan or look up tickets at the door from a mobile web check-in page, and a ticket can be checked in once.",
+        "Refunds and event cancellation refund all buyers through Stripe and emit STATUS:CANCELLED on the event; the fee policy (who absorbs Stripe fees, whether the application fee is refunded) lives in one configuration row.",
+        "The fee shown to organizers is the real computed fee, with an example ticket breakdown, and the public event page shows the all-in buyer price before checkout.",
+        "Admin sees gross ticket volume, application-fee revenue and refund rate from Stripe data; the organizer sees sales per ticket type and an exportable attendee list of buyers who opted in to organizer contact."
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": "NEW STORY (replaces the draft's LEAP-003, which was already built: send-weekly-digest is a personalized per-user digest and agent-weekly-digest, AOS-NURTURE-004 passes=true, sends interest- and saved-search-matched issues on a Thursday cron). COMPETITIVE RATIONALE: Eventbrite charges organizers a percentage plus a per-ticket fixed fee on top of payment processing (check current US rates at https://www.eventbrite.com/organizer/pricing/ before setting ours); a metro-only platform with a lower fee and a built-in local audience is a real wedge for the long tail of small organizers. Eventbrite also sells sponsored listings in US markets (https://www.businesswire.com/news/home/20251118599275/en), so it competes for the same organizer dollar. OWNER DECISIONS: fee level; whether paid tickets are allowed for events not run by the organizer account. DEPENDS ON LEAP-003 and WEB-ADS-008. SIZE: L. SUCCESS METRIC: events selling tickets per month, gross ticket volume, application-fee revenue, and repeat organizers (sold tickets in 2+ months)."
+    },
+    {
+      "id": "LEAP-005",
+      "title": "Sell promotion at the moment of intent: featured events at submission and featured deals for claimed owners",
+      "description": "As an organizer submitting an event, or an owner posting a deal, I want to pay to feature it right there instead of being sent to a generic /advertise page. SubmitEvent.tsx offers no paid option, src/pages/EventPromotionPlanner.tsx:422 just navigates to /advertise, and Deals.tsx:312 tells readers that featured deals 'are picked by the Des Moines Insider team', so deals.is_featured is set by hand and the placement with the clearest commercial value is given away. The sponsored-listing machinery already exists (sponsored_listing in ad_rate_card, is_sponsored/sponsored_until on content rows, cap of 2, tracked impressions from WEB-FEAT-005) and deal redemptions are already counted (deal_redemptions, WEB-SEC-033); what is missing is the purchase at the point where intent is highest.",
+      "acceptanceCriteria": [
+        "SubmitEvent.tsx offers Free, Featured and Featured+Expedited with prices read from ad_rate_card ('event_feature' and 'event_expedite' rows); paid options go through create-campaign-checkout so the price is server-authoritative.",
+        "A paid feature sets is_sponsored and sponsored_until on the event only after payment succeeds and the event is approved; a rejected event is refunded automatically through process-stripe-refund, and a breached expedite SLA (timestamp set at submission, admin alert raised) refunds the expedite fee.",
+        "A claimed business owner can buy 'featured_deal' for one of their own deals; deals.is_featured is then set only by an active paid campaign and cleared when the campaign or deal ends, with unused days credited; the 'picked by the Des Moines Insider team' copy at Deals.tsx:312 is replaced by a sponsored disclosure.",
+        "EventPromotionPlanner.tsx links to the feature checkout for an event the organizer owns, not to /advertise.",
+        "Featured items respect the existing cap of 2 per list and carry a 'Featured' or 'Sponsored' label on every surface, including the weekly digest deals section.",
+        "The buyer's report shows impressions and clicks (sponsored inventory class) and, for deals, redemptions from deal_redemptions; any metric with no recorded source renders as unavailable."
+      ],
+      "priority": 81,
+      "passes": false,
+      "notes": "MERGED: the draft's LEAP-006 (featured events) and LEAP-019 (featured deals). On its own, LEAP-019 was mostly built: redemption counting shipped in WEB-SEC-033 and deals.is_featured already orders the list (src/hooks/useDeals.ts:79); what remained was one new placement row. Together they are one product: low-priced placement sold where intent is. COMPETITIVE RATIONALE: 6AM City widened its advertiser base with low-priced listing products (https://pressgazette.co.uk/news/6am-city-ryan-heafy-interview/); Eventbrite sells sponsored event listings (https://www.businesswire.com/news/home/20251118599275/en). DEPENDS ON WEB-ADS-008, WEB-ADS-010/011, and LEAP-002's deal-insert widening for claimed owners. SIZE: M. SUCCESS METRIC: share of submissions choosing a paid option, monthly event-feature plus featured-deal revenue, redemption rate per featured deal."
+    },
+    {
+      "id": "LEAP-006",
+      "title": "Put the Des Moines Insider event graph inside ChatGPT and Claude: an MCP server and a ChatGPT app with attribution",
+      "description": "As someone asking an AI assistant 'what is on in Des Moines this weekend with kids', I want an answer drawn from Des Moines Insider's deduplicated metro calendar, with links back. Discovery is moving into answer layers (Google Ask Maps, Yelp Assistant), and Des Moines Insider is currently only a page those layers might crawl; the site's own SEO stories show crawlers often get an SPA shell (SEO-001, SEO-027). Publishing a first-party tool that assistants call directly makes Des Moines Insider the source an assistant uses rather than one it may or may not have indexed. No PRD story proposes an MCP server or ChatGPT app (searched all nine PRD files).",
+      "acceptanceCriteria": [
+        "A public remote MCP server exposes read-only tools: search_events (date range, area from src/pseo/taxonomy.ts, category, price, kid-friendly), get_event, search_restaurants, open_now, and plan_weekend; every result carries the canonical Des Moines Insider URL and a last-verified timestamp.",
+        "The same tools are packaged as a ChatGPT app with OpenAI's Apps SDK, rendering event cards that link to Des Moines Insider pages with a UTM source per assistant.",
+        "Tools read through the same queries api-events and api-restaurants use (shared code, not a copy), are rate limited per client, and never return user data, unpublished or archived events, or past events presented as upcoming.",
+        "Tool calls, results returned and click-throughs are counted per assistant and per tool, visible in an admin view; a tool error is distinguishable from an empty result in those counts.",
+        "A contract test fails if a documented tool field disappears, so assistants depending on the schema do not silently break.",
+        "Signed-in Insider users can connect their account (OAuth) so the assistant can save events or create a standing alert (LEAP-008); without a connection the tools stay read-only."
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": "NEW STORY (fills a slot freed by merging the draft's featured events and featured deals). COMPETITIVE RATIONALE: Google Ask Maps answers itinerary questions from its places index (https://www.seroundtable.com/ask-maps-google-gemini-41068.html) and Yelp Assistant answers and books in chat (https://macrumors.com/2026/04/21/yelp-ai-assistant/); OpenAI's Apps SDK (announced October 2025, with travel launch partners such as Booking.com and Expedia) lets a source appear inside ChatGPT. Neither Catch Des Moines nor Axios Des Moines is known to ship one; verify before claiming it publicly. RELATION: LEAP-015 sells the same data to B2B buyers; this is the consumer distribution channel, free and attributed. SEO-049 (AI citation baseline) is the before measure. SIZE: M. SUCCESS METRIC: weekly tool calls, click-throughs to Des Moines Insider from assistants, and accounts connected through an assistant."
+    },
+    {
+      "id": "LEAP-007",
+      "title": "Public, prerendered trip-plan pages: every AI itinerary becomes a shareable link and a long-tail search page",
+      "description": "As someone who built a Des Moines plan in Trip Planner, I want to publish it as a link my friends can open without an account. TRIP_SHARE_AVAILABLE is false in src/lib/tripPlannerStatus.ts because /trips/shared/:code has no route and the D1 storage migration (20261014000001) deliberately has no public read path for trip_plans (TP-25). Android already builds ${SITE_URL}/trips/shared/<code> links (TripPlannerRemoteDataSource.kt, hidden by AND-OVH-011), so the web route is also the missing half of a shipped mobile feature. A prerendered '2-day Des Moines itinerary with kids' page competes for itinerary queries with plans built from events Google does not know about.",
+      "acceptanceCriteria": [
+        "A /trips/shared/:code route renders a published plan read-only for anonymous visitors through a SECURITY DEFINER RPC that returns only plans the owner published and strips user id, email, private notes and home addresses; direct anon SELECT on trip_plans stays closed.",
+        "Only the owner can publish or unpublish; an unpublished or unknown code returns a 'no longer shared' page with a 410-style status, codes are random, and the RPC is rate limited so codes cannot be enumerated.",
+        "Shared pages are prerendered with title, description, ItemList/TouristTrip JSON-LD for the stops, and an OG card from og-image.",
+        "The page offers 'Plan your own' into TripPlanner with one free anonymous generation before signup, and signups are attributed to the share code.",
+        "Stops whose date has passed are marked past; a past event is never presented as upcoming.",
+        "TRIP_SHARE_AVAILABLE is removed rather than left as a dead flag, and the URL format matches what Android already emits so ANDP-012 can re-enable Share without a client change."
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Google Ask Maps builds itineraries from its places index (https://www.droid-life.com/2026/03/12/google-gets-new-ai-powered-ask-maps-feature/) but cannot see small and suburban Des Moines events. CRITIC NOTES: WEB-FEAT-011 is marked passes=true and lists 'Share generates the public /trips/shared/<code> link', which the live flag contradicts; this story is the real build, not a duplicate. The planner itself only came back after the D1 migration recreated trip_plans, so confirm generate-itinerary is healthy in production first. SIZE: M. SUCCESS METRIC: plans published per week, visits per shared plan, signups attributed to share codes."
+    },
+    {
+      "id": "LEAP-008",
+      "title": "Standing alerts in plain English, delivered by email and as a live calendar feed",
+      "description": "As a local, I want to type 'jazz under $20 near East Village on Fridays' once and be told whenever a match is added, or have it appear in my Google or Apple calendar and update itself. nlp-search already parses queries and saved-search-alerts already sends matches, but they are not joined; src/lib/icsEvent.ts and AddToCalendarButton.tsx add one event at a time. Ask Maps and Yelp Assistant answer once; neither watches a complete local calendar for you, and a webcal feed puts Des Moines Insider in a user's calendar every week with no install.",
+      "acceptanceCriteria": [
+        "From SearchResults.tsx a signed-in user can save a natural-language query; nlp-search's structured output (categories, price, area, day of week, keywords) is stored as the saved search's filter with the original text kept, and the user sees and can correct the parsed interpretation before saving.",
+        "saved-search-alerts evaluates these with the same matching code as structured saved searches and sends at most one digest per user per day; each email links to that search's results and unsubscribes from that alert alone.",
+        "A public edge function serves RFC 5545 feeds for a neighborhood, a category, a venue, and a user's saved search (the last by an unguessable, revocable per-user token); feeds reuse icsEvent.ts formatting, give each VEVENT a stable UID, use America/Chicago, and emit STATUS:CANCELLED for removed events for a period.",
+        "NeighborhoodPage.tsx, category hubs, VenueDetail.tsx and the saved-search list show 'Subscribe in calendar' with webcal:// and Google Calendar links; feeds are cached with a short TTL and rate limited per token.",
+        "Insider (10 saved searches) and VIP limits apply unchanged; a free user can create one standing alert as a trial.",
+        "Alerts created, alert email clicks and distinct feed tokens fetched in the last 7 days are counted, so a delivery failure is distinguishable from no matches."
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": "MERGED: the draft's LEAP-011 (natural-language alerts) and LEAP-012 (calendar feeds, self-sized S, which failed the 'big move' test alone). Both are delivery surfaces for the same saved-search object. COMPETITIVE RATIONALE: Ask Maps (https://www.techspot.com/news/111670-google-maps-gets-conversational-gemini-powered-ask-maps.html) and Yelp Assistant (https://ppc.land/yelp-assistant-goes-full-service-book-order-and-schedule-in-one-chat/) are question-and-answer tools; Catch Des Moines' events page has no feed (https://www.catchdesmoines.com/events/). DEPENDS ON IOS-AUDIT-FEAT-012 (alert delivery unverified) and WEB-OPS-007: saved-search-alerts runs from pg_cron and the job fails until app.settings.service_role_key is set. SIZE: M. SUCCESS METRIC: standing alerts and active feeds per week, alert click rate, 30-day retention of users with an alert or feed vs without."
+    },
+    {
+      "id": "LEAP-009",
+      "title": "The structured family and playground database: verified attributes, age filters and parent confirmations",
+      "description": "As a parent, I want to find a fenced playground with shade, restrooms and a splash pad near Johnston that suits a 3-year-old, today. Playgrounds and kids content is the module that already ranks (6,706 GSC impressions at positions 6-7, src/pseo/measuredDemand.ts). The playgrounds table already has has_restrooms, has_shade, surface_type, accessibility_notes, age_range and amenities (20260520000005_add_playground_admin_fields.sql), but no per-attribute source or verification date, and no way for parents to keep it current. Competitors publish undated listicles.",
+      "acceptanceCriteria": [
+        "Each playground attribute (existing columns plus new fenced, splash_pad, parking, indoor) carries a source and last_verified_at; AdminPlaygrounds.tsx edits values and shows provenance.",
+        "Playgrounds.tsx filters on these attributes and distance; PlaygroundDetails.tsx shows each attribute with its verification date, and an unknown attribute displays as unknown, never as 'no'.",
+        "Signed-in parents can confirm or correct an attribute with an optional photo; three agreeing confirmations update the value, and every change is logged with contributor, previous value and time.",
+        "Kids events gain an age-range field filled by ingestion where the source states it, and /events/kids (KidsEvents.tsx) filters by age.",
+        "Playground structured data is built only from verified attributes; filtered combinations with measured demand (e.g. 'splash pads in Ankeny') are generated through the existing pSEO system and its inventory gate.",
+        "A coverage report shows the share of playgrounds with each attribute verified in the last 12 months."
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Des Moines Parent and desmoinesmom.com publish roundups, not filterable data (https://outdoorfun.desmoinesparent.com/?p=4430, https://desmoinesmom.com/des-moines-parks/). NOT A DUPLICATE of prd-seo-q4 SEO-042 (playground titles and hub conversion): this is the data model and contribution loop those pages need. CRITIC FIX: the draft said the table 'gains typed attributes'; six already exist, so the story now adds provenance and only the missing columns. SIZE: L. SUCCESS METRIC: playgrounds with 5+ verified attributes, parent confirmations per month, organic clicks to playground and kids pages."
+    },
+    {
+      "id": "LEAP-010",
+      "title": "Best of Des Moines as a dated annual awards season with category sponsors and winner kits",
+      "description": "As a local business, I want to sponsor a Best Of category or buy a winner's kit (decal, web badge, social graphics). BestOf.tsx and BestOfCategory.tsx have no sponsor or badge references. Reader-voted local awards are a proven revenue line for city media, voting requires an account so the ballot drives signups, and the Des Moines Insider ballot covers suburbs the Register's and CITYVIEW's editorial lists cover thinly.",
+      "acceptanceCriteria": [
+        "Best Of runs as a dated season (nomination, voting, results) configured in the database, with the ballot closed outside voting windows; WEB-SEC-025 (ballot privacy policy, written but not applied) and WEB-SEC-029 (bot protection on signup) ship first.",
+        "A category can carry one paid sponsor bought through campaign checkout ('bestof_category_sponsor' placement), shown as 'Presented by' on BestOfCategory.tsx; a test proves sponsorship cannot change vote counts or ordering.",
+        "Winners get a free embeddable badge linking to their category page; a paid winner kit is purchasable only by the winning business's approved claimant (business_claims).",
+        "Results pages are prerendered per category and per suburb with the counting method stated.",
+        "New accounts created from the ballot page are attributed to the season.",
+        "A sponsor or kit purchase for a business that did not win, or a category already sponsored, is refused before payment."
+      ],
+      "priority": 86,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: CITYVIEW publishes editorial guides (https://www.dmcityview.com/feature-1/2026/05/06/summer-arts-entertainment-guide-9/); the Register's print base keeps shrinking (Sunday print 19,571 reported to 2026-03-31, https://ground.news/article/register-woes-congressional-stock-trades-ai-legislation-iowas-most-common-criminal-offenses-and-ankeny-is-a-top-5-place-to-live, secondary source). CRITIC FIX: the draft cited 'SEC-029', which does not exist; the bot-protection story is WEB-SEC-029. SIZE: L. SUCCESS METRIC: ballot-driven signups per season, badges embedded, sponsor plus kit revenue per season."
+    },
+    {
+      "id": "LEAP-011",
+      "title": "Suburb editions: per-suburb digests and hubs for Ankeny, Waukee, Johnston, Urbandale and West Des Moines, each with its own sponsor",
+      "description": "As someone living in Waukee, I want a weekly email and a page about what's on in Waukee, not downtown Des Moines. Downtown DSM and Catch Des Moines lean central. 6AM City built its business on many small local newsletters with ads; suburb editions give Des Moines Insider several sellable inventories and suburb chambers as sales partners. No PRD story proposes per-suburb newsletters.",
+      "acceptanceCriteria": [
+        "Subscribers choose one or more suburb editions at signup and in preferences; the choice is stored additively on newsletter_subscribers.",
+        "assemble-weekly-digest produces a per-suburb issue from events, openings and deals located in that suburb using src/pseo/taxonomy.ts, and skips an edition whose week has fewer than a configured minimum of items rather than sending a thin issue; the skip is recorded.",
+        "Each edition has its own newsletter_sponsor inventory (LEAP-001), priced from that edition's measured subscriber count.",
+        "Suburb hub pages (NeighborhoodPage.tsx or a suburb route) show the edition signup and an issue archive, prerendered.",
+        "Per-edition subscribers, sends and clicks are reported separately.",
+        "A suburb chamber or city can be given a partner login that submits events into that edition's queue."
+      ],
+      "priority": 87,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: 6AM City runs about 400 local newsletters with most revenue from local-business ads (https://www.amediaoperator.com/news/6am-citys-secret-weapon-400-newsletters-with-no-staff/); Downtown DSM is downtown-centred (https://www.DSMpartnership.com/downtowndsmusa/news-blog/blog/five-downtown-dsm-events-nov-4--10). DEPENDS ON LEAP-001 and WEB-OPS-007. SIZE: M. SUCCESS METRIC: subscribers per edition, editions with a paying sponsor, suburb-edition ad revenue."
+    },
+    {
+      "id": "LEAP-012",
+      "title": "White-label community calendars licensed to Des Moines suburbs, chambers and districts",
+      "description": "As a suburb, chamber or business district, I want a branded community events calendar on my own site, kept current without staff, instead of maintaining one by hand. Des Moines Insider already crawls, deduplicates and geotags the metro calendar; licensing a filtered, branded view of it turns the event graph into recurring B2B revenue, puts Des Moines Insider attribution on civic sites, and brings each partner's own submissions into the shared graph. This goes beyond LEAP-003's free per-venue widget: it is a paid, configurable product for a whole jurisdiction.",
+      "acceptanceCriteria": [
+        "A partner record defines a filter (taxonomy areas from src/pseo/taxonomy.ts, categories, optional venue list), branding (logo, colours, fonts) and an allowed embed origin list; the calendar renders as an embed or a hosted page at a partner path.",
+        "Partners can submit and edit events through a partner login; those events enter the shared Des Moines Insider calendar under the same moderation as organizer submissions (LEAP-003).",
+        "Licences are annual Stripe subscriptions through create-subscription-checkout; a lapsed licence shows a 'Powered by Des Moines Insider' fallback calendar rather than breaking the partner's page.",
+        "Every event in a partner calendar carries a 'via Des Moines Insider' link to its canonical event page; the partner can hide Des Moines Insider ads but not the attribution.",
+        "The partner dashboard reports calendar views, event clicks and submissions per month, measured, with unavailable shown where a metric has no source.",
+        "Embed responses are cached and rate limited per partner; an origin not on the partner's list gets the unbranded calendar."
+      ],
+      "priority": 88,
+      "passes": false,
+      "notes": "NEW STORY (fills a slot freed by merging the draft's alerts and calendar-feed stories). COMPETITIVE RATIONALE: Catch Des Moines is the metro DMO with the hotel and chamber backlink profile (WEB-SEO-011 notes 'we will not out-authority them'); licensing the calendar to the suburbs and chambers turns that authority gap into distribution. UNVERIFIED: what calendar tools Ankeny, Waukee, Johnston, Urbandale and West Des Moines use today and what they pay; check each city and chamber site and validate with 3 prospects before pricing or building the billing half. SIZE: L. SUCCESS METRIC: signed partners, licence ARR, partner-submitted events per month, referral sessions from partner calendars."
+    },
+    {
+      "id": "LEAP-013",
+      "title": "Insider for Employers: bulk Insider seats sold to Des Moines employers as a relocation and retention perk",
+      "description": "As an HR lead at a Des Moines employer, I want to give new hires and relocating staff Insider accounts so they find their footing in the metro quickly. Insider is $4.99/month and VIP $12.99/month (src/lib/planBenefits.ts), priced for individuals; there is no team or seat product. Des Moines' large insurance and financial employers recruit from outside Iowa, and a city-guide perk that answers 'what is there to do here' is something Des Moines Insider can sell in bulk using its existing entitlement checks.",
+      "acceptanceCriteria": [
+        "An organization record holds a seat count and a Stripe subscription billed per seat through create-subscription-checkout; seats grant Insider entitlements through the existing entitlement checks, not a parallel flag.",
+        "An org admin invites employees by email or by an allowed email domain; a claimed seat attaches to the employee's own account, and removing the employee frees the seat without deleting their saves.",
+        "Employees who leave keep their account and can continue on an individual plan; their saves and saved searches are never visible to the employer.",
+        "A 'New to Des Moines' onboarding path (neighborhood picker, interests, first-week events, LEAP-008 standing alerts) is shown to seat holders on first sign-in.",
+        "The org admin sees seats used and aggregate activation (seat claimed, onboarding completed) only, never individual browsing.",
+        "Seat revenue is reported separately from consumer MRR in the admin view."
+      ],
+      "priority": 89,
+      "passes": false,
+      "notes": "NEW STORY (replaces the draft's LEAP-013 referral reward, self-sized S, a reward bolted onto existing profile_referral_codes and gated on an unmade owner decision; small polish, not a big move). COMPETITIVE RATIONALE: UNVERIFIED gap. The Greater Des Moines Partnership's talent-attraction work is the nearest analogue; no consumer city guide in the metro is known to sell employer seats. Validate with 3 HR buyers before building billing. SIZE: M. SUCCESS METRIC: organizations signed, paid seats, seat activation rate, seat-to-individual conversion after employment ends."
+    },
+    {
+      "id": "LEAP-014",
+      "title": "Route group-travel RFPs to Des Moines hotels and venues as a paid lead product",
+      "description": "As a wedding party, sports team or conference planner, I want to submit one RFP and hear back from several Des Moines hotels; as a hotel, I want to pay for qualified group leads. GroupTravel.tsx collects a hotel RFP (RfpFormValues) and sends it through the generic useContactForm (GroupTravel.tsx:201), so it lands in a contact inbox and earns nothing. Hotel booking CTAs pay nothing either, because affiliate_url is empty (WEB-FEAT-021).",
+      "acceptanceCriteria": [
+        "RFP submissions are stored in a dedicated table (dates, group size, room nights, budget band, preferred area), not the contact-form table, with RLS limiting reads to the planner, admins and matched subscribed hotels.",
+        "Hotels with an approved business_claims row can subscribe to group leads (Stripe subscription or per-lead price) and set filters (min rooms, dates, areas); matching RFPs are emailed within 15 minutes.",
+        "Each RFP goes to at most a configured number of hotels; planner contact details are visible only to subscribed recipients, and the planner is told how many hotels received it.",
+        "The planner gets a page listing responses; hotels mark a lead won or lost so conversion is measured.",
+        "HotelsNearVenue and EventHotelCallout link large-group visitors into the RFP form with the event and dates prefilled.",
+        "Spam and test submissions are filtered by bot protection before any lead is delivered or charged."
+      ],
+      "priority": 90,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Catch Des Moines serves meeting and sports planners as a bureau (https://www.catchdesmoines.com), not a self-serve lead marketplace. DEPENDS ON WEB-SEC-029 (bot protection) and LEAP-002's claim-holder billing. SIZE: M. SUCCESS METRIC: RFPs per month, subscribed hotels, lead revenue, won rate reported by hotels."
+    },
+    {
+      "id": "LEAP-015",
+      "title": "Licensed Des Moines events API with keys, tiers and required attribution",
+      "description": "As a hotel concierge screen, relocation firm or employer intranet, I want a documented Des Moines events feed with an API key and an SLA. api-events and api-restaurants run on the anon key with an IP rate limit and no per-caller keys. An api_keys table is defined in 20251204000000_security_features.sql and a useApiKeys hook and an orphan ApiKeyManager exist (WEB-AUTH-011), but WEB-QA-018 lists api_keys and api_key_usage among the tables missing in production. Licensing the metro calendar makes Des Moines Insider the upstream source others cite.",
+      "acceptanceCriteria": [
+        "WEB-QA-018's decision for api_keys/api_key_usage is taken as 'build': the existing migration is reconciled and applied (hashed keys, owner, tier, monthly quota, status), not a second table; ApiKeyManager is wired or deleted per WEB-AUTH-011.",
+        "api-events and api-restaurants accept a key, enforce quota per key, and keep a free tier with a low quota and mandatory attribution.",
+        "Paid tiers are Stripe subscriptions through create-subscription-checkout; a lapsed subscription drops the key to free tier rather than breaking the caller.",
+        "A developer page lets a signed-in user create, rotate and revoke keys and see daily usage; the raw key is shown once at creation.",
+        "Responses include a schema version, canonical event URL, last-verified timestamp and attribution string; a contract test fails if a documented field disappears.",
+        "Shipped iOS and Android clients that call these endpoints keep working per the repo's CLAUDE.md backward-compatibility rules: either a documented keyless legacy path stays open for them, or they migrate first."
+      ],
+      "priority": 91,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: discovery is moving into answer layers (Ask Maps, https://www.seroundtable.com/ask-maps-google-gemini-41068.html; Yelp Assistant, https://macrumors.com/2026/04/21/yelp-ai-assistant/). No external evidence of B2B demand was found, so validate with 3 prospects before building paid tiers. RELATION: LEAP-006 shares the query layer and is the free consumer channel. CRITIC FIX: the draft proposed a new api_keys table; one is already defined (and missing in production), so the story reconciles it. SIZE: M. SUCCESS METRIC: active keys, paid API subscriptions, attributed referral clicks."
+    },
+    {
+      "id": "LEAP-016",
+      "title": "Local contributor program: verified locals submit corrections and photos and earn reputation",
+      "description": "As someone who knows the Des Moines metro, I want to flag closures, correct hours and add photos, and be recognized for it. Nothing marks a restaurant closed and hours are not ingested (WEB-BE-045), and a crawler alone cannot keep up. A contribution loop focused on accuracy keeps Des Moines Insider's records fresher than the AI layers that summarize stale data.",
+      "acceptanceCriteria": [
+        "Signed-in users can submit a correction (closed, hours, price, attribute) or a photo on restaurant, attraction, playground and venue detail pages; submissions enter a moderation queue with AI pre-checks and apply on approval.",
+        "Contributors earn reputation per accepted contribution, shown on their profile and in Gamification.tsx; above a threshold their corrections apply immediately and stay reversible by admins.",
+        "Each applied change records contributor, previous value and timestamp, and detail pages show 'last verified' with the date.",
+        "Photo submissions pass existing media moderation and are deduplicated against existing images (WEB-OPS-022).",
+        "An owner-supplied value from a Verified Business (LEAP-002) is not overwritten by a contributor without admin review.",
+        "An admin report shows contributions per week, acceptance rate and share of listings verified in the last 90 days."
+      ],
+      "priority": 92,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Yelp's assistant now phones restaurants to keep data fresh (https://ppc.land/yelp-assistant-goes-full-service-book-order-and-schedule-in-one-chat/); Des Moines Insider can match freshness locally through people who live here. CRITIC FIX: dropped the draft's 'top contributors get a free Insider month' AC, an unpriced reward that needs an owner decision; reputation is the reward until the owner decides. DEPENDS ON WEB-BE-045 for the closed/hours fields. SIZE: L. SUCCESS METRIC: share of listings verified within 90 days, accepted contributions per week, active contributors per month."
+    },
+    {
+      "id": "LEAP-017",
+      "title": "Bookable plans: tickets, reservations and hotels as tracked actions inside every itinerary",
+      "description": "As someone with a Trip Planner plan, I want to book the table, buy the tickets and reserve the hotel from the plan. Yelp Assistant books tables and orders food in chat; a Des Moines Insider plan that only lists places loses the action. src/lib/reservations.ts, generate-hotel-affiliate-urls, event ticket links and the Reserve/Book CTAs from WEB-UX-021 already exist; joining them into the plan with attribution turns plans into a commerce basket.",
+      "acceptanceCriteria": [
+        "Each itinerary stop shows its booking action (reservation link from reservations.ts, ticket URL or LEAP-004 checkout, hotel affiliate URL) when one exists, and nothing when it does not.",
+        "All outbound booking clicks go through one tracked redirect recording plan id, stop, partner and whether an affiliate tag was applied; untagged fallbacks are counted separately so affiliate coverage is visible.",
+        "Affiliate links are disclosed on the plan page via the existing affiliate disclosure page.",
+        "The planner prefers stops open at the planned time (restaurantHours.ts, attractionHours.ts) and states when hours are unverified.",
+        "An admin report shows booking clicks and affiliate-tagged share by partner.",
+        "Shared plan pages (LEAP-007) carry the same booking actions."
+      ],
+      "priority": 93,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Yelp Assistant books via Guest Manager and orders via DoorDash (https://www.yelp-ir.com/news/press-releases/news-release-details/2026/Yelp-Launches-the-New-Yelp-Assistant-Transforming-Local-Discovery-from-Search-to-Answers-and-Actions/default.aspx); Ask Maps plans but did not book at launch (https://www.droid-life.com/2026/03/12/google-gets-new-ai-powered-ask-maps-feature/). DEPENDS ON WEB-FEAT-021 for any hotel revenue (affiliate_url is empty) and SEO-054/WEB-BE-045 for hours. SIZE: M. SUCCESS METRIC: booking clicks per plan, affiliate-tagged share, affiliate revenue per month."
+    },
+    {
+      "id": "LEAP-018",
+      "title": "Visitor Pass: a 7-day Insider pass sold to tourists through hotels and the Visitors Guide",
+      "description": "As a visitor in Des Moines for a weekend, I want a one-time 7-day pass that unlocks AI trip plans, ad-free browsing and partner perks, instead of a monthly subscription I will forget to cancel. Insider ($4.99/mo) and VIP ($12.99/mo) in src/lib/planBenefits.ts fit residents, not tourists. Catch Des Moines gives visitors a static printed guide; a digital pass with live events and perks, distributed by hotel front desks, is a channel nobody in the market uses.",
+      "acceptanceCriteria": [
+        "A one-time 'visitor_pass_7d' Stripe product grants Insider entitlements for 7 days from purchase through the existing entitlement checks, and expires with no cancellation step.",
+        "VisitorsGuide.tsx, hotel detail pages and /stay show the pass with its real Stripe price; purchase works with a magic-link account and no password.",
+        "Hotels get printable QR codes that open the pass page with the hotel recorded as referrer; sales are reported per hotel.",
+        "Pass holders see partner perks (deals flagged pass-eligible) with a single-use redemption code per perk, counted in deal_redemptions.",
+        "iOS and Android offer the pass only where store rules allow, as a non-renewing purchase; where unavailable, web purchase still works.",
+        "Pass revenue is reported separately from subscription MRR."
+      ],
+      "priority": 94,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Catch Des Moines' 2026 Visitors Guide is static print (https://issuu.com/catchdesmoines/docs/catch_des_moines_visitors_guide_2026); Brew Moines shows visitors use a passport mechanic (https://www.catchdesmoines.com/brewmoines/). CRITIC NOTE: the pass sells only benefits that exist; WEB-FEAT-016 stripped advertised benefits that had no implementation, so do not reintroduce any. DEPENDS ON GM card a222e9bf (subscription purchase path proven). SIZE: M. SUCCESS METRIC: passes sold per month, share via hotel QR codes, pass-to-subscription conversion."
+    },
+    {
+      "id": "LEAP-019",
+      "title": "Insider Passport: sponsored trails with verified check-ins and partner redemptions, beyond the brewery trail",
+      "description": "As a local, I want trails like 'Ankeny coffee crawl', 'Holiday lights' or 'Taco trail' that I complete by checking in, with a sponsor reward at the end. BreweryTrail.tsx with useBreweries and useBreweryCheckins (src/hooks/useBreweryTrail.ts) implements one passport whose stops are the breweries table, so the mechanic cannot be reused for any other category. Catch Des Moines' Brew Moines proves the mechanic works locally; making trails data lets businesses and districts sponsor them.",
+      "acceptanceCriteria": [
+        "Trails become data (trail table with stops pointing at any listing type, dates, sponsor, reward); BreweryTrail.tsx moves onto it with every existing brewery check-in preserved, proved by a before/after count.",
+        "Check-ins are verified by geofence (device within a radius of the stop) or a venue QR code, and a trail cannot complete faster than a plausible travel time.",
+        "A sponsor buys a trail through campaign checkout ('sponsored_trail' placement); rewards use single-use codes the venue validates.",
+        "Completing a trail produces a shareable OG card via og-image and a badge in Gamification.tsx.",
+        "Trail pages are public, indexable, and show how many people completed the trail.",
+        "Sponsors get a report of starts, check-ins per stop, completions and redemptions."
+      ],
+      "priority": 95,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Catch Des Moines runs the Brew Moines GPS passport for one category (https://www.catchdesmoines.com/brewmoines/). CRITIC FIX: the draft called the brewery trail 'hardcoded'; it reads the breweries table, and the real limit is that it is brewery-specific. Hook path corrected to src/hooks/useBreweryTrail.ts. SIZE: L. SUCCESS METRIC: trails sold, completions per month, signups attributed to trail pages."
+    },
+    {
+      "id": "LEAP-020",
+      "title": "QR posters and the App Clip: every flyer and venue sign becomes a save-and-remind entry point",
+      "description": "As someone looking at a poster for a show, I want to scan it and save the event with a reminder in one tap, without installing an app. ios/DesMoinesInsiderClip exists and now honours its invocation URL (IOS-AUDIT-FEAT-033) with a corrected full-app link (IOS-AUDIT-FEAT-031), but no organizer is given a QR code. A QR per event that opens the Clip on iPhone and the event page elsewhere puts Des Moines Insider on physical posters across the metro.",
+      "acceptanceCriteria": [
+        "Every published event gets a short URL and a downloadable QR (PNG and SVG) in the organizer dashboard (LEAP-003) and on the SubmitEvent.tsx confirmation.",
+        "On iOS the URL invokes DesMoinesInsiderClip (AASA and App Clip experience configured; IOS-AUDIT-REL-007 and IOS-AUDIT-REL-006 signing closed first); on Android and desktop it opens the web event page.",
+        "The Clip and web page offer one-tap save and a reminder; reminders without an account use email only after explicit opt-in.",
+        "Scans are counted per event and per placement label so organizers see which poster worked.",
+        "The Clip offers the full app after the save, and installs attributed to a QR are recorded.",
+        "A printable poster template with the QR and event details is generated per event."
+      ],
+      "priority": 96,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: none of Catch Des Moines, Axios or DSM at Dawn is known to connect physical promotion to a save; the social-over-search claim in the draft (https://news.designrush.com/instagram-tiktok-beat-google-in-local-search-among-gen-z) has an unconfirmed study date and is context, not evidence. CRITIC NOTE: whether the Clip ships today is unverified; REL-006 (signing not configured) blocks any Clip release regardless of this story. SIZE: M. SUCCESS METRIC: QR scans per month, scan-to-save rate, installs attributed to QR."
     }
   ]
 }
