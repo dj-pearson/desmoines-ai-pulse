@@ -92,7 +92,8 @@ const ctx = (path, method = 'GET') => {
 };
 
 globalThis.fetch = async (url) => { fetched.push(String(url)); return new Response(JSON.stringify(rows.slice(0, 2)), { status: 200 }); };
-let { c, pending } = ctx('/calendar/nope.ics');
+let pending;
+let { c } = ctx('/calendar/nope.ics');
 let res = await route.onRequest(c);
 ck('unknown feed is 404', res.status === 404);
 ck('and never touches the database', fetched.length === 0);
@@ -107,7 +108,7 @@ ck('queried events on the configured origin', fetched[0]?.startsWith('https://p.
 ck('body has the events', (await res.text()).includes('BEGIN:VEVENT'));
 ck('cached without the query string', store.has('https://desmoinesinsider.com/calendar/music.ics'));
 
-({ c, pending } = ctx('/calendar/music.ics'));
+({ c } = ctx('/calendar/music.ics'));
 res = await route.onRequest(c);
 ck('second request is a cache hit', res.status === 200 && fetched.length === 1);
 
@@ -120,15 +121,15 @@ ck('upstream error is 502', res.status === 502);
 ck('and not cached', store.size === 0 && res.headers.get('cache-control') === 'no-store');
 
 globalThis.fetch = async () => { throw new Error('network'); };
-({ c, pending } = ctx('/calendar/arts.ics'));
+({ c } = ctx('/calendar/arts.ics'));
 res = await route.onRequest(c);
 ck('network failure is 502, not a throw', res.status === 502);
 
-({ c, pending } = ctx('/calendar/music.ics', 'POST'));
+({ c } = ctx('/calendar/music.ics', 'POST'));
 res = await route.onRequest(c);
 ck('POST is 405', res.status === 405);
 
-({ c, pending } = ctx('/calendar/music.ics'));
+({ c } = ctx('/calendar/music.ics'));
 c.env = {};
 res = await route.onRequest(c);
 ck('missing config is 502', res.status === 502);
@@ -184,13 +185,13 @@ ck('noindex', res.headers.get('x-robots-tag') === 'noindex, nofollow');
 ck('fixed feeds are not noindexed', !route.feedHeaders('music').has('x-robots-tag'));
 
 calls = [];
-({ c, pending } = ctx(`/calendar/my/${FEED_UUID.toUpperCase()}.ics`));
+({ c } = ctx(`/calendar/my/${FEED_UUID.toUpperCase()}.ics`));
 res = await route.onRequest(c);
 ck('uppercase spelling hits the same cache entry', res.status === 200 && calls.length === 0);
 
 store.clear();
 globalThis.fetch = async () => new Response('[]', { status: 200 });
-({ c, pending } = ctx(`/calendar/my/${FEED_UUID}.ics`));
+({ c } = ctx(`/calendar/my/${FEED_UUID}.ics`));
 res = await route.onRequest(c);
 ck('unknown or revoked token is 404', res.status === 404);
 
@@ -203,7 +204,7 @@ ck('RPC not deployed is 502, not a cached 404', res.status === 502 && store.size
 globalThis.fetch = async (url) => String(url).includes('/rpc/')
   ? new Response(JSON.stringify([{ name: 'r', search_type: 'advanced', filters: { tab: 'restaurants' } }]), { status: 200 })
   : new Response('[]', { status: 200 });
-({ c, pending } = ctx(`/calendar/my/${FEED_UUID}.ics`));
+({ c } = ctx(`/calendar/my/${FEED_UUID}.ics`));
 res = await route.onRequest(c);
 ck('a non-event saved search is 404', res.status === 404);
 
