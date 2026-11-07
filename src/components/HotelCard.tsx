@@ -54,7 +54,10 @@ export default function HotelCard({
 
   return (
     <Card className="group overflow-hidden transition-shadow duration-200 hover:shadow-md">
-      <Link to={`/stay/${hotel.slug}`} className="block">
+      {/* Named on the link itself: with no image_url the only content is a
+          role="img" placeholder, which check-prerender-content (and some
+          crawlers) do not read as a link name. Eight hotels hit this. */}
+      <Link to={`/stay/${hotel.slug}`} className="block" aria-label={hotel.name}>
         <div className={`relative ${imageHeight} overflow-hidden bg-muted`}>
           {hotel.image_url ? (
             <img
