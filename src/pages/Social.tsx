@@ -205,12 +205,22 @@ export default function Social() {
                     {friendGroups.map((group) => (
                       <div
                         key={group.id}
-                        className="p-4 border rounded-lg cursor-pointer hover:bg-muted"
-                        onClick={() => setSelectedGroupId(group.id)}
+                        className="relative p-4 border rounded-lg hover:bg-muted"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium">{group.name}</h3>
+                            {/* WEB-UX-052: a div with onClick had no tab stop,
+                                so a keyboard user could not open a group. */}
+                            <h3 className="font-medium">
+                              <button
+                                type="button"
+                                aria-pressed={selectedGroupId === group.id}
+                                onClick={() => setSelectedGroupId(group.id)}
+                                className="text-left rounded-sm after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
+                              >
+                                {group.name}
+                              </button>
+                            </h3>
                             <p className="text-sm text-muted-foreground">
                               {group.description}
                             </p>
