@@ -126,10 +126,31 @@ const dbImageSites = [];
 let clsRisk = 0;
 const clsSites = [];
 
+/**
+ * WEB-PERF-058: a HARD rule on an image URL that no route serves.
+ *
+ * GuidesPage pointed eight cards at /api/placeholder/400/250. There is no
+ * /api route on this site: _routes.json sends the request to
+ * the Pages middleware and the SPA fallback answers 200 with the homepage HTML,
+ * so each card downloaded a whole document and rendered a broken image. Every
+ * other check stayed green because the <img> tags existed. Scanned in every
+ * .tsx under src/, admin included and comments stripped, because the URL lived
+ * in a data constant, not in the tag.
+ */
+const DEAD_IMAGE_URL = /["'`]\/api\/placeholder\b/;
+const deadUrlSites = [];
+
 for (const file of walk(SRC)) {
   const rel = relative(ROOT, file).replace(/\\/g, '/');
+  const raw = readFileSync(file, 'utf8');
+  if (DEAD_IMAGE_URL.test(raw)) {
+    const stripped = stripComments(raw);
+    stripped.split('\n').forEach((text, i) => {
+      if (DEAD_IMAGE_URL.test(text)) deadUrlSites.push(`${rel}:${i + 1}`);
+    });
+  }
   if (EXCLUDE.test(relative(ROOT, file))) continue;
-  const source = stripComments(readFileSync(file, 'utf8'));
+  const source = stripComments(raw);
   const tags = imgTags(source);
   if (tags.length === 0) continue;
   counts[rel] = tags.length;
@@ -216,6 +237,17 @@ if (dbImageSites.length > 0) {
       'Storage or /media/ URL and the original is served at full size. Use\n' +
       '<OptimizedImage>; there is no ratchet entry for this case (WEB-PERF-037 AC3,\n' +
       'widened from src/pages to every scanned file by WEB-PERF-041).\n',
+  );
+  process.exit(1);
+}
+
+if (deadUrlSites.length > 0) {
+  console.error(`\nX ${deadUrlSites.length} image URL(s) point at /api/placeholder, which no route serves:\n`);
+  for (const site of deadUrlSites) console.error(`  ${site}`);
+  console.error(
+    '\nThe SPA fallback answers that path 200 with the homepage HTML, so the\n' +
+      'browser downloads a whole document and draws a broken image (WEB-PERF-058).\n' +
+      'Use a real image through <OptimizedImage>, or draw the panel without one.\n',
   );
   process.exit(1);
 }

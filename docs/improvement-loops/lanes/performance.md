@@ -8,16 +8,16 @@
 
 ## Handoff
 
-None. WEB-PERF-041 closed in loop 3. The 11 raw `<img>` left in
-`.github/raw-img-baseline.json` are deliberate, and none reads a database
-image column (check-raw-img now fails on that in any scanned file, not only
-src/pages): AffiliateAdBanner (external creative, box sized from the placement
-key), MFAEnrollmentDialog (QR data URL), EventPhotoUpload and
-EventSubmissionForm (object-URL previews), Footer (Apple badge), OptimizedLogo
-(local asset), GuidesPage (WEB-PERF-058), and four in code nothing imports:
-EventPhotoGallery (2), ImageViewer, SocialProofBadge's AttendeeAvatars.
-Deleting that dead code is hygiene, not performance (it is tree-shaken), and
-EventSocialHub is still read by a Deno test, so it is left to a cleanup story.
+None. WEB-PERF-058 closed in loop 4: /guides had no real photos to show, so
+the eight cards now draw an icon panel in the same aspect-video box instead of
+fetching /api/placeholder/400/250 (which the SPA fallback answered with the
+homepage HTML). /guides left check-lcp-priority's LISTING_PAGES because its
+grid has no image; put it back if the guides get photos. check-raw-img now
+fails on any `/api/placeholder` literal in src/. The 10 raw `<img>` left in
+`.github/raw-img-baseline.json` are deliberate (see the WEB-PERF-041 notes):
+AffiliateAdBanner, MFAEnrollmentDialog, EventPhotoUpload, EventSubmissionForm,
+Footer, OptimizedLogo, and dead code (EventPhotoGallery x2, ImageViewer,
+SocialProofBadge's AttendeeAvatars) left to a cleanup story.
 
 ## Loop log
 
@@ -26,3 +26,4 @@ EventSocialHub is still read by a Deno test, so it is left to a cleanup story.
 | 2026-11-07 | WEB-PERF-041 | f5ae9fd0 | Six DB-image cards on OptimizedImage (transform srcset); /stay first row eager and added to check-lcp-priority; raw-img 24 -> 17; story stays open for the tail |
 | 2026-11-07 | WEB-PERF-041 | this commit | RatingSystem review photos (80px preview, 96px thumbs, lightbox) on OptimizedImage with box-sized transform widths; raw-img 17 -> 14; EventPhotoGallery found dead; story stays open |
 | 2026-11-07 | WEB-PERF-041 | this commit | Map popup, event-review dialog and article-editor previews on OptimizedImage with box-sized widths; DB-image hard gate widened from src/pages to every scanned file (negative control fires); raw-img 14 -> 11, all deliberate; story closed |
+| 2026-11-07 | WEB-PERF-058 | this commit | /guides cards stop fetching /api/placeholder (8 Function hits per visit, 3 at fetchpriority=high) and draw an icon panel; new hard rule in check-raw-img (negative control fires); raw-img 11 -> 10; story closed |
