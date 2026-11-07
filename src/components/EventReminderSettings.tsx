@@ -6,19 +6,19 @@ import { Label } from '@/components/ui/label';
 import { Bell, BellOff } from "lucide-react";
 import { useEventReminders, type ReminderType } from '@/hooks/useEventReminders';
 import { Skeleton } from '@/components/ui/skeleton';
-import { scheduleEventReminder } from '@/hooks/usePushNotifications';
-import { isCapacitor } from '@/lib/capacitorUtils';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { signInHref } from '@/components/header/navigationConfig';
 
 interface EventReminderSettingsProps {
   eventId: string;
+  /** Unused since the Capacitor local-notification branch went (WEB-FEAT-020). Kept so callers still compile. */
   eventTitle?: string;
+  /** Unused, see eventTitle. */
   eventDate?: Date;
   className?: string;
 }
 
-export function EventReminderSettings({ eventId, eventTitle, eventDate, className = '' }: EventReminderSettingsProps) {
+export function EventReminderSettings({ eventId, className = '' }: EventReminderSettingsProps) {
   const {
     isAuthenticated,
     isLoading,
@@ -114,18 +114,7 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
               <Checkbox
                 id={`reminder-${option.type}`}
                 checked={enabled}
-                onCheckedChange={() => {
-                  toggleReminder(option.type);
-                  // Also schedule a local notification on Capacitor
-                  if (!enabled && isCapacitor() && eventTitle && eventDate) {
-                    scheduleEventReminder({
-                      eventId,
-                      eventTitle,
-                      eventDate,
-                      reminderType: option.type,
-                    });
-                  }
-                }}
+                onCheckedChange={() => toggleReminder(option.type)}
                 disabled={isTogglingReminder}
                 className="h-5 w-5"
               />

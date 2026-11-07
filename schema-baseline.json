@@ -67,7 +67,6 @@
     "table|src/hooks/useCrmTasks.ts|crm_tasks",
     "table|src/hooks/usePayments.ts|invoices",
     "table|src/hooks/usePayments.ts|payments",
-    "table|src/hooks/usePushNotifications.ts|device_tokens",
     "table|src/hooks/useSessionTimeout.ts|user_sessions",
     "table|src/hooks/useTripPlanner.ts|trip_plan_items",
     "table|src/hooks/useTripPlanner.ts|trip_plans",

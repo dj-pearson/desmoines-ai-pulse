@@ -14,3 +14,4 @@ None. (When a loop splits work, write here: story id, what's done, what's next, 
 
 | Date | Story | Commit | Result |
 |---|---|---|---|
+| 2026-11-07 | WEB-FEAT-020 | this commit | Done. Decision (b): no web push. Deleted the unreachable Capacitor push hook (direct device_tokens write with columns the table lacks) and the dead local-notification branch in EventReminderSettings; guard test keeps device_tokens writes out of src. |

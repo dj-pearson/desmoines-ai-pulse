@@ -24,7 +24,6 @@
     "src/hooks/useCommunityFeatures.ts": 1,
     "src/hooks/useCrmNotes.ts": 1,
     "src/hooks/usePrefetchDetail.ts": 1,
-    "src/hooks/usePushNotifications.ts": 1,
     "src/hooks/useRatings.ts": 1,
     "src/hooks/useRestaurants.ts": 2,
     "src/hooks/useSecurityContext.ts": 2,

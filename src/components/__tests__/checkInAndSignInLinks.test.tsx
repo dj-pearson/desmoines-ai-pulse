@@ -38,7 +38,6 @@ vi.mock("@/hooks/useEventReminders", () => ({
     isTogglingReminder: false,
   }),
 }));
-vi.mock("@/hooks/usePushNotifications", () => ({ scheduleEventReminder: vi.fn() }));
 
 import BottomNav from "@/components/BottomNav";
 import { EventCheckIn } from "@/components/EventCheckIn";

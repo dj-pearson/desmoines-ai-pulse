@@ -2,9 +2,10 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
 /**
- * WEB-PERF-020 AC4. Five hooks do nothing outside the Capacitor shell -
- * push registration, deep links, swipe-back, status-bar style, keyboard
- * avoidance - and each one opens with `if (!isCapacitor()) return;`. Called
+ * WEB-PERF-020 AC4. These hooks do nothing outside the Capacitor shell -
+ * deep links, swipe-back, status-bar style, keyboard avoidance (push
+ * registration was a fifth until WEB-FEAT-020 deleted it) - and each one
+ * opens with `if (!isCapacitor()) return;`. Called
  * straight from the app shell they still shipped 10.4 KB in the entry chunk to
  * every web visitor.
  *
@@ -15,7 +16,6 @@ import { readFileSync } from "node:fs";
  * back in the entry with nothing failing.
  */
 const HOOKS = [
-  "usePushNotifications",
   "useDeepLinks",
   "useSwipeBack",
   "useStatusBarStyle",
