@@ -21,6 +21,27 @@ import { installFixtureBackend } from './support/fixtureBackend';
 
 const ISO = '2026-01-01T00:00:00Z';
 
+/**
+ * A Central calendar day `offset` days from now, as yyyy-MM-dd.
+ *
+ * Fixture dates are relative so the spec cannot rot. It used to hardcode
+ * opening_date '2026-11-01' for "opening soon" rows; once that day passed,
+ * homeOpenings correctly dropped them as stale and the required smoke lane
+ * went red on every branch with no code change.
+ */
+function centralDay(offset: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(
+    new Date(Date.now() + offset * 86_400_000),
+  );
+}
+
+/** 10 days ago: inside JUST_OPENED_WINDOW_DAYS (60), so it reads "Opened <day>". */
+const JUST_OPENED_DAY = centralDay(-10);
+/** How openingLabel prints that day, e.g. "Oct 28" (a year is appended across a year boundary). */
+const JUST_OPENED_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(
+  new Date(`${JUST_OPENED_DAY}T12:00:00Z`),
+);
+
 function opening(i: number, name: string, slug: string) {
   return {
     id: `40000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
@@ -47,7 +68,7 @@ function opening(i: number, name: string, slug: string) {
     merged_at: null,
     merged_into: null,
     opening: true,
-    opening_date: '2026-11-01',
+    opening_date: centralDay(30),
     opening_timeframe: null,
     phone: null,
     popularity_score: 0,
@@ -66,7 +87,7 @@ const OPENINGS = [
   // Still marked upcoming, dated last year: must not be shown at all.
   { ...opening(3, 'Stale Promise Cafe', 'stale-promise-cafe'), opening_date: '2025-03-03' },
   // Opened recently.
-  { ...opening(4, 'Just Opened Deli', 'just-opened-deli'), status: 'newly_opened', opening_date: '2026-09-12' },
+  { ...opening(4, 'Just Opened Deli', 'just-opened-deli'), status: 'newly_opened', opening_date: JUST_OPENED_DAY },
 ];
 
 const PLAYGROUNDS = [
@@ -191,7 +212,7 @@ test('openings never print a date that has passed, and recent ones say Opened', 
   await dashboard.getByRole('tab', { name: 'New openings' }).click();
 
   await expect(dashboard.locator('a[href="/restaurants/just-opened-deli"]')).toHaveCount(1);
-  await expect(dashboard.locator('article', { hasText: 'Just Opened Deli' })).toContainText(/Opened Sep 12/);
+  await expect(dashboard.locator('article', { hasText: 'Just Opened Deli' })).toContainText(`Opened ${JUST_OPENED_LABEL}`);
   await expect(dashboard.getByText('Stale Promise Cafe')).toHaveCount(0);
   await expect(dashboard.getByText(/Open(s|ing) Mar 3, 2025/)).toHaveCount(0);
 });
