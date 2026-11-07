@@ -255,6 +255,7 @@ jobs:
       # that row and only one is actionable. Four negative controls prove each
       # ordering and the `>=` on store rank.
       - run: deno test --allow-read supabase/functions/_tests/checkout-decision.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/business-pro.test.ts
       # WEB-BE-039. firecrawl-scraper matched a scraped venue with `includes`
       # either way, guarded by `searchText.length >= 5 || venueLower.length >= 5`
       # - an OR whose right-hand side is about the KNOWN venue, so it always
