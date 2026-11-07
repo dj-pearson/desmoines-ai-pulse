@@ -16,6 +16,10 @@ import { strict as assert } from "node:assert";
 import { priceFromOffers } from "./jsonLdOffers.ts";
 import { extractEventsFromJsonLd } from "./jsonLdEvents.ts";
 import { toAdapterEvent } from "./domain-adapters/catchdesmoinesParse.ts";
+import {
+  priceFromTicketAvailability,
+  toAdapterEvent as eventbriteToAdapterEvent,
+} from "./domain-adapters/eventbrite.ts";
 import { isFreePrice } from "../../../src/lib/eventPrice.ts";
 import { parseEventPrice } from "../../../src/lib/eventOffers.ts";
 
@@ -112,4 +116,55 @@ Deno.test("Catch Des Moines detail pages keep the price their ld+json states", (
   assert.equal(toAdapterEvent({ ...base, offers: { price: "22" } }, detail, null)?.price, "$22");
   assert.equal(toAdapterEvent({ ...base, isAccessibleForFree: true }, detail, null)?.price, "Free");
   assert.equal(toAdapterEvent(base, detail, null)?.price, "See website");
+});
+
+Deno.test("Eventbrite browse results keep the price their ticket_availability states", () => {
+  // eventbrite.ts wrote "See website" on every row although the browse blob
+  // carries the same min/max the cards print as "From $25.00" and "Free".
+  const usd = (major: string) => ({ currency: "USD", major_value: major, value: Math.round(Number(major) * 100) });
+  const ta = (extra: Record<string, unknown>) => ({ ticket_availability: extra });
+
+  assert.equal(
+    priceFromTicketAvailability(ta({ is_free: false, minimum_ticket_price: usd("25.00"), maximum_ticket_price: usd("60.00") })),
+    "$25-$60",
+  );
+  assert.equal(
+    priceFromTicketAvailability(ta({ minimum_ticket_price: usd("18.50"), maximum_ticket_price: usd("18.50") })),
+    "$18.50",
+  );
+  assert.equal(
+    priceFromTicketAvailability(ta({ is_free: false, minimum_ticket_price: usd("0.00"), maximum_ticket_price: usd("20.00") })),
+    "Free - $20",
+  );
+  assert.equal(priceFromTicketAvailability(ta({ is_free: true })), "Free");
+  assert.equal(
+    priceFromTicketAvailability(ta({ is_free: true, minimum_ticket_price: usd("0.00"), maximum_ticket_price: usd("0.00") })),
+    "Free",
+  );
+  // Minor units only when the decimal string is missing.
+  assert.equal(priceFromTicketAvailability(ta({ minimum_ticket_price: { currency: "USD", value: 1500 } })), "$15");
+  // An amount outranks the flag, and another currency is not a dollar price.
+  assert.equal(priceFromTicketAvailability(ta({ is_free: true, minimum_ticket_price: usd("40.00") })), "$40");
+  assert.equal(
+    priceFromTicketAvailability(ta({ minimum_ticket_price: { currency: "CAD", major_value: "30.00" } })),
+    undefined,
+  );
+  // Unknown stays unknown.
+  assert.equal(priceFromTicketAvailability({}), undefined);
+  assert.equal(priceFromTicketAvailability(ta({ is_free: false })), undefined);
+  assert.equal(priceFromTicketAvailability({ ticket_availability: null }), undefined);
+  assert.equal(priceFromTicketAvailability(ta({ minimum_ticket_price: { currency: "USD", display: "Sold out" } })), undefined);
+  // The top-level flag older payloads carry.
+  assert.equal(priceFromTicketAvailability({ is_free: true }), "Free");
+
+  const base = { eventbrite_event_id: "1", name: "Show", start_date: "2026-12-05", start_time: "19:30" };
+  assert.equal(
+    eventbriteToAdapterEvent({ ...base, ticket_availability: { minimum_ticket_price: usd("12.00") } })?.price,
+    "$12",
+  );
+  assert.equal(eventbriteToAdapterEvent(base)?.price, "See website");
+
+  for (const [text, free] of [["$25-$60", false], ["Free - $20", false], ["Free", true], ["$18.50", false]] as const) {
+    assert.equal(isFreePrice(text), free, `isFreePrice(${text})`);
+  }
 });

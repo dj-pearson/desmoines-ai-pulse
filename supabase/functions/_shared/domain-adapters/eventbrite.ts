@@ -14,6 +14,7 @@
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
+import { priceFromOffers } from "../jsonLdOffers.ts";
 
 const BROWSE_URL_RE = /^https?:\/\/(www\.)?eventbrite\.com\/d\//i;
 const SERVER_DATA_RE = /window\.__SERVER_DATA__\s*=\s*(\{[\s\S]+?\});\s*\n/;
@@ -38,7 +39,24 @@ interface EventbriteTag {
   prefix?: string;
   display_name?: string;
 }
-interface EventbriteEvent {
+/**
+ * Eventbrite money: `major_value` is the decimal string ("25.00"), `value`
+ * the same amount in minor units (2500). The browse cards print "From $25.00"
+ * and "Free" from these, so the price is in the blob we already parse.
+ */
+interface EventbriteTicketPrice {
+  currency?: string;
+  major_value?: string;
+  value?: number;
+  display?: string;
+}
+interface EventbriteTicketAvailability {
+  is_free?: boolean;
+  is_sold_out?: boolean;
+  minimum_ticket_price?: EventbriteTicketPrice | null;
+  maximum_ticket_price?: EventbriteTicketPrice | null;
+}
+export interface EventbriteEvent {
   eventbrite_event_id?: string;
   name?: string;
   summary?: string;
@@ -51,6 +69,8 @@ interface EventbriteEvent {
   tags?: EventbriteTag[];
   is_online_event?: boolean;
   is_cancelled?: boolean;
+  is_free?: boolean;
+  ticket_availability?: EventbriteTicketAvailability | null;
 }
 interface EventbriteBucket {
   events?: EventbriteEvent[];
@@ -156,7 +176,7 @@ export const eventbriteAdapter: DomainAdapter = {
   },
 };
 
-function toAdapterEvent(evt: EventbriteEvent): AdapterEvent | null {
+export function toAdapterEvent(evt: EventbriteEvent): AdapterEvent | null {
   if (!evt.name || !evt.start_date) return null;
 
   const venue = evt.primary_venue;
@@ -173,10 +193,39 @@ function toAdapterEvent(evt: EventbriteEvent): AdapterEvent | null {
     location,
     venue: venue?.name ?? "Venue TBD",
     category: mapCategory(evt.tags ?? []),
-    price: "See website",
+    price: priceFromTicketAvailability(evt) ?? "See website",
     source_url: evt.url,
     image_url: evt.image?.url ?? null,
   };
+}
+
+/** One Eventbrite amount as the schema.org Offer fields priceFromOffers reads. */
+function asOfferPrice(p: EventbriteTicketPrice | null | undefined): Record<string, unknown> | null {
+  if (!p || typeof p !== "object") return null;
+  // Prefer the decimal string; fall back to minor units only when it is a
+  // whole number of cents, so a missing major_value is not read as dollars.
+  let price: unknown = p.major_value;
+  if ((price === undefined || price === null || price === "") && Number.isInteger(p.value)) {
+    price = (p.value as number) / 100;
+  }
+  if (price === undefined || price === null || price === "") return null;
+  return { price, priceCurrency: p.currency };
+}
+
+/**
+ * The events.price text for an Eventbrite browse result (WEB-BE-049 AC3), or
+ * undefined when the blob carries no price, so the caller keeps "See website".
+ *
+ * Routed through priceFromOffers so Eventbrite rows read exactly like the
+ * ld+json sources: "Free", "$25", "$25-$60", "Free - $20". The same rules
+ * apply: a non-USD amount is not a dollar price, and an explicit amount
+ * outranks the free flag.
+ */
+export function priceFromTicketAvailability(evt: EventbriteEvent): string | undefined {
+  const ta = evt.ticket_availability;
+  const offers = [asOfferPrice(ta?.minimum_ticket_price), asOfferPrice(ta?.maximum_ticket_price)]
+    .filter((o): o is Record<string, unknown> => o !== null);
+  return priceFromOffers(offers, ta?.is_free ?? evt.is_free);
 }
 
 function formatDateTime(date: string, time?: string): string {
