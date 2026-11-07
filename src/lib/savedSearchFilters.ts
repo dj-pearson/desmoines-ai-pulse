@@ -16,8 +16,8 @@
  * `filters` null, a string or an array, still normalizes. Nothing here throws.
  */
 import { z } from "zod";
-import { findEventArea } from "@/lib/eventAreas";
-import { FALLBACK_CATEGORY, normalizeCategory } from "@/lib/eventCategories";
+import { findEventArea } from "./eventAreas";
+import { FALLBACK_CATEGORY, normalizeCategory } from "./eventCategories";
 
 /** The list-page filter keys we persist and deep-link back to (WEB-UX-001). */
 export const SAVED_SEARCH_FILTER_KEYS = ["q", "category", "location", "price", "preset", "sort"] as const;

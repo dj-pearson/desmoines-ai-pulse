@@ -122,6 +122,25 @@ export function useSavedSearchAlerts() {
     onSuccess: invalidate,
   });
 
+  /**
+   * Turn a search's personal calendar feed on or off, or issue a new link
+   * (growth roadmap #9). The token is only ever written by this RPC: a trigger
+   * ignores client writes to the column (20261102000003). Returns the token,
+   * or null when the feed is now off.
+   */
+  const setCalendarFeed = useMutation({
+    mutationFn: async ({ id, enabled, rotate = false }: { id: string; enabled: boolean; rotate?: boolean }) => {
+      const { data, error } = await supabase.rpc("set_saved_search_calendar", {
+        p_id: id,
+        p_enabled: enabled,
+        p_rotate: rotate,
+      });
+      if (error) throw error;
+      return (data as string | null) ?? null;
+    },
+    onSuccess: invalidate,
+  });
+
   const setAlertsPref = useMutation({
     mutationFn: async (enabled: boolean) => {
       const { error } = await supabase
@@ -146,6 +165,7 @@ export function useSavedSearchAlerts() {
     saveSearch,
     toggleAlerts,
     deleteSearch,
+    setCalendarFeed,
     setAlertsPref,
   };
 }

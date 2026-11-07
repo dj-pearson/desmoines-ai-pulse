@@ -17,20 +17,35 @@
  * "@/" alias (see the header of functions/_middleware.ts).
  */
 import { BRAND } from "./brandConfig";
+import { eventAreaOrFilter, findEventArea, type EventArea } from "./eventAreas";
 import { EVENT_CATEGORIES } from "./eventCategories";
 import { FREE_PRICE_FILTER } from "./eventPrice";
+import { hubSearchQuery } from "./eventSearchQuery";
+import { normalizeSavedSearch, type SavedSearchRowLike } from "./savedSearchFilters";
 
-export interface CalendarFeed {
+/**
+ * What a feed selects, beyond the window and the unpublish filters. The fixed
+ * feeds use category and freeOnly; a personal feed built from a saved search
+ * can use all four.
+ */
+export interface FeedCriteria {
+  /** Exact `events.category` value. */
+  category?: string;
+  /** Only events whose listed price says free or $0 (FREE_PRICE_FILTER). */
+  freeOnly?: boolean;
+  /** The search box text, matched the way the hub matches it (hubSearchQuery). */
+  search?: string;
+  /** An /events area (src/lib/eventAreas.ts). */
+  area?: EventArea;
+}
+
+export interface CalendarFeed extends FeedCriteria {
   /** The URL segment: /calendar/<slug>.ics. Never rename. */
   slug: string;
   /** X-WR-CALNAME, and the label in the Subscribe menu. */
   name: string;
   /** One line for the Subscribe menu. */
   description: string;
-  /** Exact `events.category` value, when the feed is one category. */
-  category?: string;
-  /** Only events whose listed price says free or $0 (FREE_PRICE_FILTER). */
-  freeOnly?: boolean;
 }
 
 /** How far ahead a feed reaches. Far enough to plan a month, small enough to stay fast. */
@@ -113,8 +128,13 @@ export function feedSlugFromPath(pathname: string): string | null {
  *
  * `fromIso` is the start of today in Central time (centralDayStartUtcISO), the
  * same lower bound /events uses, so a show already under way tonight stays in.
+ *
+ * Search, area and free follow applyHubFilters in
+ * src/components/events/eventsHubQuery.ts predicate for predicate, including
+ * putting every OR group into ONE `or=` param: PostgREST would otherwise have
+ * to combine two `or` keys, and the hub deliberately never relies on that.
  */
-export function feedRestQuery(feed: CalendarFeed, fromIso: string): URLSearchParams {
+export function feedRestQuery(criteria: FeedCriteria, fromIso: string): URLSearchParams {
   const from = new Date(fromIso);
   const until = new Date(from.getTime() + FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const params = new URLSearchParams();
@@ -124,11 +144,87 @@ export function feedRestQuery(feed: CalendarFeed, fromIso: string): URLSearchPar
   params.set("is_merged", "neq.true");
   params.set("is_hidden", "neq.true");
   params.set("archived_at", "is.null");
-  if (feed.category) params.set("category", `eq.${feed.category}`);
-  if (feed.freeOnly) params.set("or", `(${FREE_PRICE_FILTER})`);
+  if (criteria.category) params.set("category", `eq.${criteria.category}`);
+
+  const search = criteria.search ? hubSearchQuery(criteria.search) : null;
+  if (search) {
+    params.set("search_vector", `${search.type === "websearch" ? "wfts" : "fts"}(english).${search.query}`);
+  }
+
+  const orGroups: string[] = [];
+  if (criteria.freeOnly) orGroups.push(FREE_PRICE_FILTER);
+  const area = criteria.area;
+  if (area) {
+    const group = eventAreaOrFilter(area);
+    if (group) orGroups.push(group);
+    // postgrest-safe: area.city comes from the fixed EVENT_AREAS list, not from input
+    else if (area.kind === "city") params.set("city", `ilike.${area.city}`);
+    else {
+      const { south, west, north, east } = area.bbox;
+      params.append("latitude", `gte.${south}`);
+      params.append("latitude", `lte.${north}`);
+      params.append("longitude", `gte.${west}`);
+      params.append("longitude", `lte.${east}`);
+    }
+  }
+  if (orGroups.length === 1) params.set("or", `(${orGroups[0]})`);
+  else if (orGroups.length > 1) params.set("or", `(and(${orGroups.map((g) => `or(${g})`).join(",")}))`);
+
   params.set("order", "date.asc");
   params.set("limit", String(FEED_MAX_EVENTS));
   return params;
+}
+
+// ---------------------------------------------------------------------------
+// Personal feeds: one saved search, behind an unguessable token
+// ---------------------------------------------------------------------------
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * The token in /calendar/my/<token>.ics, or null. A UUID only, lowercased, so
+ * nothing else reaches the RPC and two spellings of one token share a cache
+ * entry.
+ */
+export function personalFeedTokenFromPath(pathname: string): string | null {
+  const m = /^\/calendar\/my\/([0-9a-fA-F-]{36})\.ics$/.exec(pathname);
+  if (!m) return null;
+  const token = m[1].toLowerCase();
+  return UUID_RE.test(token) ? token : null;
+}
+
+export function personalFeedUrl(token: string, origin: string = BRAND.baseUrl): string {
+  return `${origin.replace(/\/$/, "")}/calendar/my/${token}.ics`;
+}
+
+export interface PersonalFeed {
+  name: string;
+  criteria: FeedCriteria;
+}
+
+/**
+ * A saved_searches row as feed criteria, or null when it is not an events
+ * search (an iOS restaurants tab, an advanced place search): those have no
+ * events to put in a calendar.
+ *
+ * Read through normalizeSavedSearch, the same reader the dashboard and the
+ * alert links use, so the iOS `query` key and the web `q` key both work.
+ * `preset` and `sort` are deliberately ignored: a feed is a rolling window, and
+ * "this weekend" frozen into a calendar would mean a different weekend from the
+ * one the reader saved it on.
+ */
+export function personalFeedFromSavedSearch(row: SavedSearchRowLike & { name?: string | null }): PersonalFeed | null {
+  const n = normalizeSavedSearch(row);
+  if (n.kind !== "events") return null;
+  return {
+    name: `${BRAND.name}: ${row.name?.trim() || n.label}`,
+    criteria: {
+      search: n.q || undefined,
+      category: n.category || undefined,
+      area: findEventArea(n.location),
+      freeOnly: n.price.toLowerCase() === "free",
+    },
+  };
 }
 
 export interface FeedLinks {
@@ -142,8 +238,8 @@ export interface FeedLinks {
   outlook: string;
 }
 
-export function feedLinks(feed: CalendarFeed, origin: string = BRAND.baseUrl): FeedLinks {
-  const https = `${origin.replace(/\/$/, "")}/calendar/${feed.slug}.ics`;
+/** Subscribe links for any feed URL: a fixed feed's or a personal one. */
+export function linksForFeedUrl(https: string, name: string): FeedLinks {
   const webcal = https.replace(/^https?:\/\//, "webcal://");
   return {
     https,
@@ -151,6 +247,10 @@ export function feedLinks(feed: CalendarFeed, origin: string = BRAND.baseUrl): F
     google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
     outlook:
       "https://outlook.live.com/calendar/0/addfromweb?" +
-      new URLSearchParams({ url: https, name: feed.name }).toString(),
+      new URLSearchParams({ url: https, name }).toString(),
   };
+}
+
+export function feedLinks(feed: CalendarFeed, origin: string = BRAND.baseUrl): FeedLinks {
+  return linksForFeedUrl(`${origin.replace(/\/$/, "")}/calendar/${feed.slug}.ics`, feed.name);
 }

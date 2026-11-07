@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, BellOff, Loader2, Search, Trash2 } from "lucide-react";
+import { Bell, BellOff, CalendarPlus, CalendarCheck, Loader2, Search, Trash2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { SavedSearchCalendarDialog } from "@/components/dashboard/SavedSearchCalendarDialog";
 import { useSavedSearchAlerts, type SavedSearchListItem } from "@/hooks/useSavedSearchAlerts";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -44,11 +45,16 @@ export function SavedSearchesTab() {
     alertsPrefLoading,
     toggleAlerts,
     deleteSearch,
+    setCalendarFeed,
     setAlertsPref,
   } = useSavedSearchAlerts();
   const { hasFeature, isLoading: subscriptionLoading } = useSubscription();
   const { toast } = useToast();
   const [pendingDelete, setPendingDelete] = useState<SavedSearchListItem | null>(null);
+  // Held by id, not by row, so the dialog shows the refetched token after a
+  // change instead of the row as it was when the dialog opened.
+  const [calendarId, setCalendarId] = useState<string | null>(null);
+  const calendarSearch = searches.find((s) => s.id === calendarId) ?? null;
 
   // saved-search-alerts skips rows whose owner lacks create_alerts, so a lit
   // bell for a lapsed member would promise email that never goes out.
@@ -100,7 +106,8 @@ export function SavedSearchesTab() {
         </CardTitle>
         <CardDescription>
           Watch a search from Search, or save one from the Events page, and we'll
-          email you when new matching events are added.
+          email you when new matching events are added. The calendar button puts a
+          search's events straight into Google, Apple or Outlook.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -183,6 +190,24 @@ export function SavedSearchesTab() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
+                    {isEvents && (
+                      // Not plan-gated: a calendar feed costs one cached read
+                      // an hour, unlike alert email.
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-11 min-w-11"
+                        aria-label={`Calendar feed for ${s.name}`}
+                        onClick={() => setCalendarId(s.id)}
+                      >
+                        {s.calendar_token ? (
+                          <CalendarCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                        ) : (
+                          <CalendarPlus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        )}
+                      </Button>
+                    )}
                     {isEvents ? (
                       <Button
                         type="button"
@@ -228,6 +253,12 @@ export function SavedSearchesTab() {
         )}
       </CardContent>
 
+      <SavedSearchCalendarDialog
+        search={calendarSearch}
+        onClose={() => setCalendarId(null)}
+        setCalendarFeed={setCalendarFeed}
+      />
+
       <AlertDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => {
@@ -240,7 +271,9 @@ export function SavedSearchesTab() {
             <AlertDialogDescription>
               {pendingDelete
                 ? pendingDelete.normalized.kind === "events"
-                  ? `"${pendingDelete.name}" will be removed and its email alerts will stop.`
+                  ? pendingDelete.calendar_token
+                    ? `"${pendingDelete.name}" will be removed, its email alerts will stop, and its calendar link will stop working.`
+                    : `"${pendingDelete.name}" will be removed and its email alerts will stop.`
                   : `"${pendingDelete.name}" will be removed.`
                 : ""}
             </AlertDialogDescription>

@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CalendarFeedLinks } from "@/components/events/CalendarFeedLinks";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +8,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -38,23 +36,11 @@ interface SubscribeCalendarDialogProps {
  */
 export function SubscribeCalendarDialog({ defaultSlug = "all", children }: SubscribeCalendarDialogProps) {
   const [slug, setSlug] = useState(feedForSlug(defaultSlug) ? defaultSlug : "all");
-  const [copied, setCopied] = useState(false);
   const feed = feedForSlug(slug) ?? CALENDAR_FEEDS[0];
   // Always the production domain. Inside the iOS and Android apps the origin is
   // capacitor://localhost, which no calendar server can fetch, and a preview
   // deploy's URL would leave subscribers pointed at a build that gets deleted.
   const links = feedLinks(feed);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(links.https);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Permission denied or an insecure context. The URL is already shown in
-      // a selectable field below, so there is nothing else to do.
-    }
-  };
 
   return (
     <Dialog
@@ -89,47 +75,7 @@ export function SubscribeCalendarDialog({ defaultSlug = "all", children }: Subsc
           <p className="text-sm text-muted-foreground">{feed.description}, for the next 60 days.</p>
         </div>
 
-        <div className="grid gap-2">
-          <Button asChild className="h-11 justify-start">
-            <a href={links.google} target="_blank" rel="noopener noreferrer">
-              Add to Google Calendar
-            </a>
-          </Button>
-          <Button asChild variant="outline" className="h-11 justify-start">
-            <a href={links.webcal}>Add to Apple Calendar</a>
-          </Button>
-          <Button asChild variant="outline" className="h-11 justify-start">
-            <a href={links.outlook} target="_blank" rel="noopener noreferrer">
-              Add to Outlook
-            </a>
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="calendar-feed-url">Or copy the link into any calendar app</Label>
-          <div className="flex gap-2">
-            <Input
-              id="calendar-feed-url"
-              readOnly
-              value={links.https}
-              onFocus={(e) => e.currentTarget.select()}
-              className="h-11 font-mono text-xs"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-11 w-11 shrink-0"
-              onClick={copy}
-              aria-label={copied ? "Link copied" : "Copy link"}
-            >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            </Button>
-          </div>
-          <p className="sr-only" aria-live="polite">
-            {copied ? "Link copied to your clipboard." : ""}
-          </p>
-        </div>
+        <CalendarFeedLinks links={links} inputId="calendar-feed-url" />
       </DialogContent>
     </Dialog>
   );
