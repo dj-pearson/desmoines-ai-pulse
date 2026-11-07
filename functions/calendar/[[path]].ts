@@ -22,6 +22,13 @@
  * FEED_CACHE_SECONDS, so PostgREST sees roughly one request per feed per hour
  * no matter how many people subscribe.
  *
+ * PERSONAL FEEDS. /calendar/my/<token>.ics is one saved search, looked up by
+ * the secret token through saved_search_calendar_feed() (migration
+ * 20261102000003), which returns that row's filters and nothing else. The
+ * token is the only credential, so these responses carry noindex and are
+ * never linked from a public page. Turning the feed off or rotating the token
+ * takes effect once the edge copy expires, within FEED_CACHE_SECONDS.
+ *
  * FAILURE. An upstream error returns 502 and is NOT cached. A subscribing
  * client keeps its previous copy on an error, which is the right outcome; an
  * empty 200 would wipe every event out of every subscriber's calendar.
@@ -32,6 +39,9 @@ import {
   feedForSlug,
   feedRestQuery,
   feedSlugFromPath,
+  personalFeedFromSavedSearch,
+  personalFeedTokenFromPath,
+  type FeedCriteria,
 } from "../../src/lib/calendarFeeds";
 import { buildCalendarIcs, toIcsEvent } from "../../src/lib/icsEvent";
 import { centralDayStartUtcISO } from "../../src/lib/timezone";
@@ -52,30 +62,81 @@ interface Ctx {
 type FeedRow = Parameters<typeof toIcsEvent>[0];
 
 /** The headers every feed response carries. Exported for the offline test. */
-export function feedHeaders(slug: string): Headers {
-  return new Headers({
+export function feedHeaders(filename: string, personal = false): Headers {
+  const headers = new Headers({
     "Content-Type": "text/calendar; charset=utf-8",
     // inline, so a browser that opens the https URL shows or hands it to the
     // calendar app instead of saving a file named "[[path]]".
-    "Content-Disposition": `inline; filename="${slug}.ics"`,
+    "Content-Disposition": `inline; filename="${filename}.ics"`,
     "Cache-Control": `public, max-age=${FEED_CACHE_SECONDS}`,
     "X-Content-Type-Options": "nosniff",
-    // Calendar clients fetch server-side, so this only matters to a browser
-    // script; there is no reason to let another origin read the feed.
     "Access-Control-Allow-Origin": "*",
   });
+  // A personal feed's URL is its password. Keep it out of every index.
+  if (personal) headers.set("X-Robots-Tag", "noindex, nofollow");
+  return headers;
 }
 
-/** Build the feed body from rows. Pure, so the offline test can run it. */
-export function renderFeed(slug: string, rows: readonly FeedRow[], stamp: Date = new Date()): string | null {
-  const feed = feedForSlug(slug);
-  if (!feed) return null;
+/** Build a calendar body from rows. Pure, so the offline test can run it. */
+export function renderCalendar(name: string, rows: readonly FeedRow[], stamp: Date = new Date()): string {
   return buildCalendarIcs(rows.map(toIcsEvent), {
-    name: feed.name,
+    name,
     refreshInterval: FEED_REFRESH_INTERVAL,
     alarm: false,
     stamp,
   });
+}
+
+/** A fixed feed's body by slug, or null for an unknown slug. */
+export function renderFeed(slug: string, rows: readonly FeedRow[], stamp: Date = new Date()): string | null {
+  const feed = feedForSlug(slug);
+  return feed ? renderCalendar(feed.name, rows, stamp) : null;
+}
+
+const unavailable = () =>
+  new Response("Calendar temporarily unavailable", {
+    status: 502,
+    headers: { "Cache-Control": "no-store", "Retry-After": "600" },
+  });
+
+const notFound = () =>
+  new Response("No such calendar feed", { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
+
+interface Target {
+  name: string;
+  filename: string;
+  criteria: FeedCriteria;
+  personal: boolean;
+}
+
+type Resolved = Target | "not-found" | "unavailable";
+
+/** Look a personal token up. Exported for the offline test. */
+export async function resolvePersonalFeed(base: string, anon: string, token: string): Promise<Resolved> {
+  let rows: Array<{ name?: string | null; filters?: unknown; search_type?: string | null }>;
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/saved_search_calendar_feed`, {
+      method: "POST",
+      headers: {
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ p_token: token }),
+    });
+    // Includes the RPC not being deployed yet (PGRST202): a server problem,
+    // not proof the feed was turned off, so it must not be cached as a 404.
+    if (!res.ok) return "unavailable";
+    rows = await res.json();
+  } catch {
+    return "unavailable";
+  }
+  const row = Array.isArray(rows) ? rows[0] : undefined;
+  if (!row) return "not-found";
+  const feed = personalFeedFromSavedSearch(row);
+  if (!feed) return "not-found";
+  return { name: feed.name, filename: "my-events", criteria: feed.criteria, personal: true };
 }
 
 export async function onRequest(context: Ctx): Promise<Response> {
@@ -87,10 +148,9 @@ export async function onRequest(context: Ctx): Promise<Response> {
 
   const url = new URL(request.url);
   const slug = feedSlugFromPath(url.pathname);
-  const feed = slug ? feedForSlug(slug) : undefined;
-  if (!slug || !feed) {
-    return new Response("No such calendar feed", { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
-  }
+  const token = slug ? null : personalFeedTokenFromPath(url.pathname);
+  const fixed = slug ? feedForSlug(slug) : undefined;
+  if (!fixed && !token) return notFound();
 
   const base = (env.VITE_SUPABASE_URL || env.SUPABASE_URL || "").replace(/\/+$/, "");
   const anon = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
@@ -102,35 +162,38 @@ export async function onRequest(context: Ctx): Promise<Response> {
   const cache = (globalThis as any).caches?.default;
   // Query strings are ignored on purpose: Google appends its own, and each
   // distinct one would otherwise be a separate cache entry and a separate
-  // database read.
-  const cacheKey = new Request(`${url.origin}${url.pathname}`, { method: "GET" });
+  // database read. A personal token is lowercased by the path parser, so the
+  // key uses the parsed value, not the raw path.
+  const keyPath = fixed ? `/calendar/${fixed.slug}.ics` : `/calendar/my/${token}.ics`;
+  const cacheKey = new Request(`${url.origin}${keyPath}`, { method: "GET" });
   if (cache) {
     const hit: Response | undefined = await cache.match(cacheKey);
     if (hit) return request.method === "HEAD" ? new Response(null, { headers: hit.headers }) : hit;
   }
 
+  let target: Resolved;
+  if (fixed) {
+    target = { name: fixed.name, filename: fixed.slug, criteria: fixed, personal: false };
+  } else {
+    target = await resolvePersonalFeed(base, anon, token!);
+  }
+  if (target === "unavailable") return unavailable();
+  if (target === "not-found") return notFound();
+
   let rows: FeedRow[];
   try {
-    const query = feedRestQuery(feed, centralDayStartUtcISO());
+    const query = feedRestQuery(target.criteria, centralDayStartUtcISO());
     const res = await fetch(`${base}/rest/v1/events?${query.toString()}`, {
       headers: { apikey: anon, Authorization: `Bearer ${anon}`, Accept: "application/json" },
     });
-    if (!res.ok) {
-      return new Response("Calendar temporarily unavailable", {
-        status: 502,
-        headers: { "Cache-Control": "no-store", "Retry-After": "600" },
-      });
-    }
+    if (!res.ok) return unavailable();
     rows = (await res.json()) as FeedRow[];
   } catch {
-    return new Response("Calendar temporarily unavailable", {
-      status: 502,
-      headers: { "Cache-Control": "no-store", "Retry-After": "600" },
-    });
+    return unavailable();
   }
 
-  const body = renderFeed(slug, rows) ?? "";
-  const response = new Response(body, { status: 200, headers: feedHeaders(slug) });
+  const body = renderCalendar(target.name, rows);
+  const response = new Response(body, { status: 200, headers: feedHeaders(target.filename, target.personal) });
   if (cache) context.waitUntil(cache.put(cacheKey, response.clone()));
   return request.method === "HEAD" ? new Response(null, { headers: response.headers }) : response;
 }

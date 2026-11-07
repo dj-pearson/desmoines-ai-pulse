@@ -8167,6 +8167,7 @@ export type Database = {
       saved_searches: {
         Row: {
           alerts_enabled: boolean
+          calendar_token: string | null
           created_at: string
           filters: Json
           id: string
@@ -8180,6 +8181,7 @@ export type Database = {
         }
         Insert: {
           alerts_enabled?: boolean
+          calendar_token?: string | null
           created_at?: string
           filters?: Json
           id?: string
@@ -8193,6 +8195,7 @@ export type Database = {
         }
         Update: {
           alerts_enabled?: boolean
+          calendar_token?: string | null
           created_at?: string
           filters?: Json
           id?: string
@@ -13399,6 +13402,7 @@ export type Database = {
         Args: { p_filters: Json; p_name: string }
         Returns: {
           alerts_enabled: boolean
+          calendar_token: string | null
           created_at: string
           filters: Json
           id: string
@@ -14425,6 +14429,14 @@ export type Database = {
       run_scraping_jobs_simple: { Args: never; Returns: undefined }
       run_social_media_automation: { Args: never; Returns: undefined }
       run_social_media_publishing: { Args: never; Returns: undefined }
+      saved_search_calendar_feed: {
+        Args: { p_token: string }
+        Returns: {
+          filters: Json
+          name: string
+          search_type: string
+        }[]
+      }
       search_events: {
         Args: {
           limit_count?: number
@@ -14498,6 +14510,10 @@ export type Database = {
           rank: number
           rating: number
         }[]
+      }
+      set_saved_search_calendar: {
+        Args: { p_enabled?: boolean; p_id: string; p_rotate?: boolean }
+        Returns: string
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
