@@ -9,22 +9,25 @@
 ## Handoff
 
 WEB-PERF-041 AC3 (route reader-facing `<img>` through OptimizedImage). Done
-2026-11-07: the six card-grid images that read a database URL - HotelCard
-(/stay, now with first-row `priority`), DealCard, EventHotelCallout (80px
-thumb, widths 80/160/240), PseoLiveListings, and AdvancedSearchPage grid and
-list views. `.github/raw-img-baseline.json` is 24 -> 17.
+so far: six DB-image card grids (loop 1), then RatingSystem's three
+review-photo images (loop 2: 80px upload preview, 96px thumbnails, lightbox).
+`.github/raw-img-baseline.json` is 24 -> 17 -> 14.
 
-Next: most of the 17 left are not worth converting (local assets, object-URL
-previews, logos, avatars: OptimizedImage adds a wrapper and no bytes). Check
-each before converting: EventPhotoGallery (2, user-uploaded `media_url`, the
-best remaining candidate), ImageViewer, EventReviewSystem, RatingSystem (3),
-SocialProofBadge. GuidesPage's one is the `/api/placeholder` broken-image bug,
-which needs real images, not OptimizedImage. Trap: each conversion adds 2-3
-elements per card (wrapper div, picture, placeholder), so check
-`check-dom-budget` on routes already over 1,500 (WEB-PERF-023).
+Checked and not worth converting: EventPhotoGallery (2) is dead code - its
+only importer, EventSocialHub, is imported by nothing in `src/`; delete both
+rather than optimise them. The 14 left are local assets, object-URL previews,
+logos and avatars (OptimizedImage adds a wrapper and no bytes). Candidates
+still worth a look: SocialProofBadge (32px attendee avatars on every
+EventCard - only if the URLs are storage or /media/, not Google profile
+URLs), ImageViewer, EventReviewSystem (admin-only via AdminTools). GuidesPage's
+one is WEB-PERF-058 (`/api/placeholder`), which needs real images. Once those
+are triaged the story can close with the rest recorded as deliberate.
+Trap: each conversion adds 2-3 elements, so check `check-dom-budget` on routes
+over 1,500 (WEB-PERF-023).
 
 ## Loop log
 
 | Date | Story | Commit | Result |
 |---|---|---|---|
-| 2026-11-07 | WEB-PERF-041 | this commit | Six DB-image cards on OptimizedImage (transform srcset); /stay first row eager and added to check-lcp-priority; raw-img 24 -> 17; story stays open for the tail |
+| 2026-11-07 | WEB-PERF-041 | f5ae9fd0 | Six DB-image cards on OptimizedImage (transform srcset); /stay first row eager and added to check-lcp-priority; raw-img 24 -> 17; story stays open for the tail |
+| 2026-11-07 | WEB-PERF-041 | this commit | RatingSystem review photos (80px preview, 96px thumbs, lightbox) on OptimizedImage with box-sized transform widths; raw-img 17 -> 14; EventPhotoGallery found dead; story stays open |

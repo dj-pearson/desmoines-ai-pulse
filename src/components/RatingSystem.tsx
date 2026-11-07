@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { useRatings, type RatingWithProfile, type ReviewerReputation } from "@/hooks/useRatings";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,16 @@ import { Database } from "@/integrations/supabase/types";
 import { format, formatDistanceToNow } from "date-fns";
 
 const MAX_REVIEW_PHOTOS = 3;
+
+// WEB-PERF-041. Review photos are stored at up to 1280px and 500KB
+// (resizeImageFile's defaults) and were shown as raw <img> in 80px and 96px
+// boxes, so each thumbnail downloaded the stored original. These widths are
+// 1x/2x/3x of the box, so OptimizedImage asks the render endpoint for a
+// rendition that size instead.
+const PREVIEW_THUMB_WIDTHS = [80, 160, 240];
+const REVIEW_THUMB_WIDTHS = [96, 192, 288];
+// The lightbox is a max-w-3xl dialog; nothing above the stored 1280px edge.
+const LIGHTBOX_WIDTHS = [640, 960, 1280];
 
 type ContentType = Database["public"]["Enums"]["content_type"];
 type RatingValue = Database["public"]["Enums"]["rating_value"];
@@ -441,7 +452,13 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                         <div className="flex flex-wrap gap-2" role="group" aria-labelledby={photosLabelId}>
                           {photoUrls.map((url) => (
                             <div key={url} className="relative h-20 w-20 overflow-hidden rounded-md border">
-                              <img src={url} alt="Review upload" className="h-full w-full object-cover" />
+                              <OptimizedImage
+                                src={url}
+                                alt="Review upload"
+                                containerClassName="h-full w-full"
+                                sizes="80px"
+                                transformWidths={PREVIEW_THUMB_WIDTHS}
+                              />
                               <button
                                 type="button"
                                 onClick={() => removePhoto(url)}
@@ -602,7 +619,13 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, reputation, onVoteHelpf
               className="h-24 w-24 overflow-hidden rounded-md border"
               aria-label="View review photo"
             >
-              <img src={url} alt="Review photo" loading="lazy" className="h-full w-full object-cover" />
+              <OptimizedImage
+                src={url}
+                alt="Review photo"
+                containerClassName="h-full w-full"
+                sizes="96px"
+                transformWidths={REVIEW_THUMB_WIDTHS}
+              />
             </button>
           ))}
         </div>
@@ -617,10 +640,15 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, reputation, onVoteHelpf
               A viewport-relative cap plus object-contain bounds the box before
               the bytes do. */}
           {lightbox && (
-            <img
+            <OptimizedImage
               src={lightbox}
               alt="Review photo"
-              className="max-h-[80vh] w-full rounded-md object-contain"
+              priority
+              objectFit="contain"
+              containerClassName="rounded-md"
+              className="h-auto max-h-[80vh]"
+              sizes="(max-width: 768px) 100vw, 752px"
+              transformWidths={LIGHTBOX_WIDTHS}
             />
           )}
         </DialogContent>

@@ -120,3 +120,49 @@ describe("RatingSystem load states", () => {
     authState.user = { id: "u1" };
   });
 });
+
+/**
+ * WEB-PERF-041. Review photos are stored at up to 1280px / 500KB and were
+ * raw <img> tags in 96px boxes, so every thumbnail downloaded the stored
+ * original. They now ask the render endpoint for a box-sized rendition.
+ */
+describe("RatingSystem review photo sizing", () => {
+  const PHOTO = "https://abc.supabase.co/storage/v1/object/public/review-photos/u2/p.jpg";
+  const RENDER = "/storage/v1/render/image/public/review-photos/u2/p.jpg";
+
+  it("requests 96px-box renditions for thumbnails and viewport-sized ones in the lightbox", async () => {
+    const user = userEvent.setup();
+    ratingsState.ratings = [
+      {
+        id: "rv1",
+        user_id: "u2",
+        rating: "4",
+        review_text: "Good noodles",
+        photo_urls: [PHOTO],
+        created_at: "2026-10-01T12:00:00Z",
+        profiles: null,
+      },
+    ];
+    renderSystem();
+
+    const thumb = screen.getByAltText("Review photo");
+    const thumbSet = thumb.getAttribute("srcset") ?? "";
+    expect(thumbSet).toContain(`${RENDER}?width=96`);
+    expect(thumbSet).toContain("288w");
+    expect(thumbSet).not.toContain("640w");
+    expect(thumb.getAttribute("sizes")).toBe("96px");
+    expect(thumb.getAttribute("loading")).toBe("lazy");
+    // The plain src stays the original, so a failed transform still shows the photo.
+    expect(thumb.getAttribute("src")).toBe(PHOTO);
+
+    await user.click(screen.getByRole("button", { name: "View review photo" }));
+    const dialog = await screen.findByRole("dialog", { name: "Review photo" });
+    const full = dialog.querySelector("img") as HTMLImageElement;
+    const fullSet = full.getAttribute("srcset") ?? "";
+    expect(fullSet).toContain(`${RENDER}?width=1280`);
+    expect(fullSet).not.toContain("96w");
+    // Opened on purpose and immediately visible: no reason to defer the fetch.
+    expect(full.getAttribute("loading")).toBe("eager");
+    ratingsState.ratings = [];
+  });
+});
