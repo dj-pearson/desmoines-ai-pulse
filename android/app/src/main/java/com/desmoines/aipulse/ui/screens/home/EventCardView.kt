@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.home
 
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -80,9 +81,9 @@ fun EventCardView(
     // Accessibility label
     val accessibilityLabel = buildString {
         append(event.title)
-        event.parsedDate?.let {
+        EventTimeText.spokenDateTime(event, "EEEE, MMMM d")?.let {
             append(". ")
-            append(it.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, h:mm a", UiFormatLocale)))
+            append(it)
         }
         append(". ${event.displayLocation}")
         if (event.isFree) append(". Free event")
@@ -215,7 +216,7 @@ fun EventCardView(
                 Spacer(modifier = Modifier.height(Dimens.SpacingSm))
 
                 // Date/time row
-                event.parsedDate?.let { date ->
+                EventTimeText.dateTimeText(event, "EEE, MMM d", "h:mm a", " · ")?.let { dateTime ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clearAndSetSemantics { }
@@ -228,7 +229,7 @@ fun EventCardView(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", UiFormatLocale)),
+                            text = dateTime,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

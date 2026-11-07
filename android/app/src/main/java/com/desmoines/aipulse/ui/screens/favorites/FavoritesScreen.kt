@@ -1,6 +1,5 @@
 package com.desmoines.aipulse.ui.screens.favorites
 
-import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -75,9 +74,9 @@ import com.desmoines.aipulse.ui.components.FavoritesLimitBanner
 import com.desmoines.aipulse.ui.components.SubscriptionBanner
 import com.desmoines.aipulse.ui.components.BannerStyle
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -433,7 +432,7 @@ private fun FavoriteEventRow(
                     color = if (isPast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 )
 
-                event.parsedDate?.let { date ->
+                EventTimeText.dateTimeText(event, "MMM d", "h:mm a", ", ")?.let { dateTime ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -445,7 +444,7 @@ private fun FavoriteEventRow(
                             tint = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("MMM d, h:mm a", UiFormatLocale)),
+                            text = dateTime,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )

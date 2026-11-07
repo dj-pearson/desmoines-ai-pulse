@@ -1,6 +1,5 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
-import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -16,6 +15,8 @@ import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.util.EventCalendarEntry
+import com.desmoines.aipulse.util.EventReminderTiming
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /**
@@ -177,12 +177,17 @@ class EventDetailViewModel @Inject constructor(
     fun toggleReminder() {
         val event = _event.value ?: return
         val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return
+        // A time-TBA row fires at 9am on its day, not an hour before a
+        // placeholder time (AND-AUDIT-029).
+        val fireAtMillis = EventReminderTiming.fireAtMillis(event) ?: return
 
         val nowSet = localNotificationService.toggleReminder(
             eventId = event.id,
             title = event.title,
             venue = event.venue,
             eventTimeMillis = startMillis,
+            triggerAtMillis = fireAtMillis,
+            isDayOf = !event.hasSpecificTime,
         )
         val wasSet = _isReminderSet.value
         _isReminderSet.value = nowSet
@@ -192,8 +197,12 @@ class EventDetailViewModel @Inject constructor(
         // button looking like it ignored the tap.
         if (!wasSet && !nowSet) {
             _reminderMessage.value =
-                if (startMillis - LocalNotificationService.REMINDER_OFFSET_MILLIS <= nowMillis()) {
-                    "This event starts in under an hour, too soon for a reminder."
+                if (fireAtMillis <= nowMillis()) {
+                    if (event.hasSpecificTime) {
+                        "This event starts in under an hour, too soon for a reminder."
+                    } else {
+                        "This event has no set time, so its reminder goes out at 9am that day, and that has passed."
+                    }
                 } else {
                     "Couldn't set the reminder. Please try again."
                 }
@@ -217,10 +226,21 @@ class EventDetailViewModel @Inject constructor(
          * EventDetailActions.swift: hidden once the event has started, since
          * there is nothing left to remind about, but kept while a reminder is
          * set so it can still be cancelled.
+         *
+         * A row with no real start time has no start to compare against, so
+         * it shows until its 9am day-of reminder time has passed
+         * (AND-AUDIT-029). Comparing the placeholder start kept the button on
+         * screen into the evening of a SeatGeek row's day for a reminder that
+         * could no longer be set.
          */
         internal fun isReminderButtonVisible(event: Event, isReminderSet: Boolean, nowMillis: Long): Boolean {
             val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return false
-            return isReminderSet || startMillis >= nowMillis
+            if (isReminderSet) return true
+            if (!event.hasSpecificTime) {
+                val fireAtMillis = EventReminderTiming.fireAtMillis(event) ?: return false
+                return fireAtMillis > nowMillis
+            }
+            return startMillis >= nowMillis
         }
     }
 
@@ -269,9 +289,9 @@ class EventDetailViewModel @Inject constructor(
         get() {
             val event = _event.value ?: return ""
             val parts = mutableListOf(event.title)
-            event.parsedDate?.let { date ->
-                val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a", UiFormatLocale)
-                parts.add(date.format(formatter))
+            EventTimeText.dayText(event, "MMM d, yyyy")?.let { day ->
+                val time = EventTimeText.timeText(event)
+                parts.add(if (event.hasSpecificTime) "$day $time" else "$day (${EventTimeText.TIME_TBA})")
             }
             parts.add("at ${event.displayLocation}")
             return parts.joinToString(" - ") + "\n\nFound on Des Moines Insider"
