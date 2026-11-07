@@ -95,7 +95,7 @@ function ClaimRow({ claim }: { claim: MyBusinessClaim }) {
 
       {verified && (
         <div className="mt-4 max-w-3xl">
-          <ListingStatsPanel listingType={claim.listing_type} listingId={claim.listing_id} listingName={name} />
+          <ListingStatsPanel listingType={claim.listing_type} listingId={claim.listing_id} />
         </div>
       )}
 

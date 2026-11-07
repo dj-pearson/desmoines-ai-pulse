@@ -30,7 +30,7 @@ const OK = {
 };
 
 const renderPanel = () =>
-  render(<ListingStatsPanel listingType="restaurant" listingId="r1" listingName="Taqueria" />);
+  render(<ListingStatsPanel listingType="restaurant" listingId="r1" />);
 
 beforeEach(() => hook.mockReset());
 
