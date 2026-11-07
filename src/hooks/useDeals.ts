@@ -92,6 +92,66 @@ export function useDeals(category?: string) {
 }
 
 /**
+ * The in-date deals linked to one restaurant (entity_type 'restaurant',
+ * entity_id = the restaurant's id). Same columns and date window as /deals, so
+ * a deal shows on the venue page exactly when it shows on the list.
+ *
+ * A failed read is reported and answered with no deals: the section is a
+ * supplement to the restaurant page, and an error card there would push the
+ * menu down to say something the visitor can't act on.
+ */
+export async function fetchRestaurantDeals(restaurantId: string): Promise<Deal[]> {
+  const active = activeWindowFilter(new Date().toISOString());
+  const { data, error } = await supabase
+    .from('deals')
+    .select(DEAL_LIST_COLUMNS)
+    .eq('entity_type', 'restaurant')
+    .eq('entity_id', restaurantId)
+    .lte('start_date', active.start)
+    .or(active.endOr)
+    .order('is_featured', { ascending: false })
+    .order('end_date', { ascending: true });
+  if (error) {
+    handleError(error, { component: 'useRestaurantDeals', action: 'fetch', metadata: { restaurantId } });
+    return [];
+  }
+  return (data ?? []) as unknown as Deal[];
+}
+
+export function useRestaurantDeals(restaurantId: string | undefined) {
+  return useQuery({
+    queryKey: ['deals', 'restaurant', restaurantId],
+    queryFn: () => fetchRestaurantDeals(restaurantId as string),
+    enabled: !!restaurantId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * A venue's deals in the order a visitor standing outside wants them: a
+ * scheduled deal running now, then deals with no schedule (good whenever they
+ * are in date), then starting later today, then other days, then the ones
+ * already over for today. Deals outside their date window at `now` are
+ * dropped, so one that expires while the page is open leaves at that minute.
+ * Stable within a group, so the query's featured-first order survives.
+ */
+export function orderDealsForVenue(deals: Deal[], now: Date = new Date()): Deal[] {
+  const rank = (deal: Deal): number => {
+    if (!hasDealSchedule(deal)) return 1;
+    if (isDealLiveAt(deal, now)) return 0;
+    const today = dealTodayStatus(deal, now);
+    if (today?.kind === 'later') return 2;
+    if (today?.kind === 'ended') return 4;
+    return 3;
+  };
+  return deals
+    .filter((d) => inDateRange(d, now))
+    .map((deal, index) => ({ deal, index, rank: rank(deal) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ deal }) => deal);
+}
+
+/**
  * Records a reveal. The card reveals the code before this resolves, and the
  * count it bumps is not rendered anywhere public, so there is nothing to
  * refetch on success. A failure must not hide the code the visitor already

@@ -14,3 +14,4 @@ None. (When a loop splits work, write here: story id, what's done, what's next, 
 
 | Date | Story | Commit | Result |
 |---|---|---|---|
+| 2026-11-07 | WEB-FEAT-035 | this commit | Restaurant pages list their in-date deals and happy hours (deals.entity_id), running-now first on the Central clock; vitest 2719/2719, validate green |

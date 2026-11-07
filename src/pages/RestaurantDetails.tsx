@@ -59,6 +59,7 @@ import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { isSponsoredActive } from "@/lib/sponsored";
 import { NearbyContent, TonightNearRestaurant } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
+import { RestaurantDeals } from "@/components/restaurants/RestaurantDeals";
 import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -1022,6 +1023,10 @@ export default function RestaurantDetails() {
                   </CollapsibleSection>
                 </>
               )}
+
+              {/* Deals and happy hours linked to this venue; nothing when none are in date
+                  or the place is shut (WEB-FEAT-035). */}
+              {!isShut && <RestaurantDeals restaurantId={restaurant.id} restaurantName={restaurant.name} />}
 
               {/* Menu: a section of its own, not a card inside this card (WP3.14) */}
               <Separator className="my-8" />
