@@ -96,7 +96,7 @@ export function useAuthSecurity(): AuthSecurityHookReturn {
         if (!phoneValidation.success) {
           return {
             isValid: false,
-            errors: phoneValidation.error.errors.map(e => e.message)
+            errors: phoneValidation.error.issues.map(e => e.message)
           };
         }
         return { isValid: true, errors: [] };

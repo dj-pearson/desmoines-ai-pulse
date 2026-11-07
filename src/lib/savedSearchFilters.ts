@@ -42,9 +42,16 @@ export function buildSavedSearchUrl(filters: SavedSearchFilters): string {
   return `/events${qs ? `?${qs}` : ""}`;
 }
 
-/** A string, or "" for anything else (numbers, arrays, null, missing). */
+/**
+ * A string, or "" for anything else (numbers, arrays, null, missing).
+ *
+ * `.optional()` before the transform is what lets the key be absent. In zod 3
+ * an unknown() key was optional on its own; zod 4 makes a transformed key
+ * required, so without it every row missing any of these keys threw.
+ */
 const text = z
   .unknown()
+  .optional()
   .transform((v) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ") : ""));
 
 const filtersSchema = z.preprocess(
