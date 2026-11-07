@@ -27,6 +27,13 @@
  * never the weather. Green on the tree it landed on: 1,183 sitemapped paths, 12
  * rules, zero of direction 1 and zero of direction 2.
  *
+ * One exception to "no live data": the events sitemap is built from the
+ * database and drops an event the day after it ends, so a redirect to a dated
+ * event page loses its sitemap entry without any commit. Those are reported,
+ * not failed (scripts/lib/expiredEventTarget.mjs). This was the first such
+ * redirect: SEO-055, Slaughterhouse 2026-10-01 -> 2026-10-02, red on every
+ * branch from 2026-11-07.
+ *
  * SPA fallback rules (`/* /index.html 200`) are not redirects and are skipped;
  * only 301/302/307/308 count.
  *
@@ -35,6 +42,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chicagoToday, expiredEventDate } from './lib/expiredEventTarget.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = join(ROOT, 'public');
@@ -98,13 +106,20 @@ const submitted = rules.filter((r) => !r.from.includes('*') && listed.has(r.from
 // this target is orphaned by construction and always will be.
 const isSitemapFile = (to) => /^\/sitemap[a-z0-9-]*\.xml$/i.test(to);
 
-const orphanTargets = rules.filter(
+const unlisted = rules.filter(
   (r) =>
     !r.to.includes('*') &&
     !/^https?:/i.test(r.to) &&
     !isSitemapFile(r.to) &&
     !listed.has(r.to),
 );
+
+// A dated event page drops out of sitemap-events.xml the day after the event,
+// by design (see scripts/lib/expiredEventTarget.mjs). That is the database
+// moving, not a commit, so it is reported and not failed.
+const today = chicagoToday();
+const expiredEventTargets = unlisted.filter((r) => expiredEventDate(r.to, today));
+const orphanTargets = unlisted.filter((r) => !expiredEventDate(r.to, today));
 
 let failed = false;
 
@@ -133,6 +148,11 @@ if (orphanTargets.length > 0) {
       'from a URL we have asked it to forget. Add the target to a sitemap (and to\n' +
       'PRERENDER_ROUTES if it is a hub), or drop the redirect.\n',
   );
+}
+
+if (expiredEventTargets.length > 0) {
+  console.log(`\n${expiredEventTargets.length} redirect(s) to a past event, which the events sitemap leaves out on purpose (not failed):`);
+  for (const r of expiredEventTargets) console.log(`  ${r.from} -> ${r.to}`);
 }
 
 if (wildcard.length > 0) {
