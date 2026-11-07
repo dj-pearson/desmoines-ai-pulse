@@ -6,6 +6,8 @@ import com.desmoines.aipulse.util.DeepLinkHandler.Destination
 import com.desmoines.aipulse.util.DeepLinkHandler.LinkId
 import com.desmoines.aipulse.util.DeepLinkHandler.ScreenDestination
 import com.desmoines.aipulse.util.DeepLinkHandler.TabDestination
+import com.desmoines.aipulse.data.model.Neighborhood
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -145,6 +147,39 @@ class DeepLinkWebDestinationTest {
         assertEquals(Destination.Tab(TabDestination.SEARCH), web("/search", q = "   "))
         assertEquals(Destination.Tab(TabDestination.SEARCH), web("/search"))
         assertEquals(Destination.Tab(TabDestination.SEARCH), web("/search/advanced"))
+    }
+
+    // MARK: - Neighborhoods (AND-AUDIT-025)
+
+    @Test
+    fun `a neighborhood link opens that guide, the section root opens the hub`() {
+        assertEquals(Destination.Neighborhood("ankeny"), web("/neighborhoods/ankeny"))
+        assertEquals(Destination.Neighborhood("east-village"), web("/neighborhoods/east-village"))
+        assertEquals(Destination.Screen(ScreenDestination.NEIGHBORHOODS), web("/neighborhoods"))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["not-a-place", "Ankeny", "ankeny%2F..", "downtown-ish"])
+    fun `a slug the app has no guide for lands on the hub`(segment: String) {
+        assertEquals(Destination.Screen(ScreenDestination.NEIGHBORHOODS), web("/neighborhoods/$segment"))
+    }
+
+    @Test
+    fun `every neighborhood the web links has a native guide`() {
+        // The web builds /neighborhoods/<slug> from src/lib/neighborhoods.ts. A
+        // slug added there and not to Neighborhood.all would open the hub, not
+        // the guide, and nothing else would notice.
+        val repoRoot = generateSequence(File("").absoluteFile) { it.parentFile }
+            .first { File(it, "src/lib/neighborhoods.ts").exists() }
+        val webSlugs = Regex("""^\s*slug:\s*'([a-z0-9-]+)'""", RegexOption.MULTILINE)
+            .findAll(File(repoRoot, "src/lib/neighborhoods.ts").readText())
+            .map { it.groupValues[1] }
+            .toSet()
+        assertTrue(webSlugs.size >= 8, "read only $webSlugs from src/lib/neighborhoods.ts")
+        assertEquals(webSlugs, Neighborhood.all.map { it.slug }.toSet())
+        for (slug in webSlugs) {
+            assertEquals(Destination.Neighborhood(slug), web("/neighborhoods/$slug"))
+        }
     }
 
     // MARK: - Fallbacks

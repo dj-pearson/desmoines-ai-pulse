@@ -2,6 +2,7 @@ package com.desmoines.aipulse.util
 
 import android.content.Intent
 import android.net.Uri
+import com.desmoines.aipulse.data.model.Neighborhood as NeighborhoodGuide
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,8 @@ import javax.inject.Singleton
  * - `/attractions/:slug-or-id` -> Attraction detail
  * - `/stay/:slug` -> Hotel detail, `/stay` -> Hotels list
  * - `/articles/:slug` -> Article detail, `/articles` -> Articles list
+ * - `/neighborhoods/:slug` -> that neighborhood guide, or the Neighborhoods
+ *   hub for a slug the app has no guide for; `/neighborhoods` -> the hub
  * - `/search?q=` -> Search with the query, `/search` -> Search tab
  * - any other path on our host -> the in-app WebView of that URL
  *
@@ -47,6 +50,8 @@ class DeepLinkHandler @Inject constructor() {
         data class Attraction(val id: LinkId) : Destination()
         data class Hotel(val id: LinkId) : Destination()
         data class Article(val id: LinkId) : Destination()
+        /** One guide, by a slug [NeighborhoodGuide.bySlug] knows (AND-AUDIT-025). */
+        data class Neighborhood(val slug: String) : Destination()
         data class Tab(val tab: TabDestination) : Destination()
         data class Screen(val screen: ScreenDestination) : Destination()
         data class Search(val query: String) : Destination()
@@ -59,7 +64,7 @@ class DeepLinkHandler @Inject constructor() {
 
     /** Non-tab list screens a web landing page maps to. */
     enum class ScreenDestination {
-        WEEKEND, HOTELS, ARTICLES
+        WEEKEND, HOTELS, ARTICLES, NEIGHBORHOODS
     }
 
     private val _pendingDestination = MutableStateFlow<Destination?>(null)
@@ -199,7 +204,7 @@ class DeepLinkHandler @Inject constructor() {
          * parsing it; DeepLinkManifestParityTest holds the two lists equal.
          */
         val CLAIMED_WEB_SECTIONS: Set<String> =
-            setOf("events", "restaurants", "attractions", "stay", "articles", "search")
+            setOf("events", "restaurants", "attractions", "stay", "articles", "search", "neighborhoods")
 
         /** Longest search text a link may carry (iOS maxLinkQueryLength). */
         const val MAX_LINK_QUERY_LENGTH = 120
@@ -253,6 +258,17 @@ class DeepLinkHandler @Inject constructor() {
 
         fun isMonthPage(segment: String): Boolean = MONTH_PAGE_PATTERN.matches(segment)
 
+        /**
+         * /neighborhoods/<slug> (AND-AUDIT-025, iOS IOS-AUDIT-FEAT-038). Every
+         * slug the web builds (src/lib/neighborhoods.ts) is in Neighborhood.all,
+         * so a shared guide opens that guide. A slug the app has no guide for
+         * lands on the hub, never on nothing. Exact match against the curated
+         * list is the validation, so nothing unchecked reaches the nav route.
+         */
+        fun neighborhoodDestination(segment: String): Destination =
+            NeighborhoodGuide.bySlug(segment)?.let { Destination.Neighborhood(it.slug) }
+                ?: Destination.Screen(ScreenDestination.NEIGHBORHOODS)
+
         /** The trimmed, capped `q` of a /search link, or null when empty. */
         fun searchQuery(raw: String?): String? =
             raw?.trim()?.take(MAX_LINK_QUERY_LENGTH)?.trim()?.takeIf { it.isNotEmpty() }
@@ -301,6 +317,7 @@ class DeepLinkHandler @Inject constructor() {
                     "restaurants" -> Destination.Tab(TabDestination.DINING)
                     "stay" -> Destination.Screen(ScreenDestination.HOTELS)
                     "articles" -> Destination.Screen(ScreenDestination.ARTICLES)
+                    "neighborhoods" -> Destination.Screen(ScreenDestination.NEIGHBORHOODS)
                     // /attractions has no native list screen.
                     else -> Destination.Web(url)
                 }
@@ -330,6 +347,7 @@ class DeepLinkHandler @Inject constructor() {
                 "articles" ->
                     webLinkId(segment)?.let { Destination.Article(it) }
                         ?: Destination.Screen(ScreenDestination.ARTICLES)
+                "neighborhoods" -> neighborhoodDestination(segment)
                 else -> Destination.Web(url)
             }
         }

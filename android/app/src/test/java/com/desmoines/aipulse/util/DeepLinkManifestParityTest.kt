@@ -98,7 +98,7 @@ class DeepLinkManifestParityTest {
             .toSet()
         assertEquals(DeepLinkHandler.CLAIMED_WEB_SECTIONS, prefixes)
         assertEquals(
-            setOf("events", "restaurants", "attractions", "stay", "articles", "search"),
+            setOf("events", "restaurants", "attractions", "stay", "articles", "search", "neighborhoods"),
             prefixes,
         )
     }
