@@ -91,6 +91,44 @@ describe("mapPinState", () => {
     }
   });
 
+  describe("production rows: hours in hours_json, a date in opening (WEB-FEAT-040)", () => {
+    // Google's periods: day 0 is Sunday. Every day 11:00-22:00.
+    const elevenToTen = {
+      periods: [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+        open: { day, hour: 11, minute: 0 },
+        close: { day, hour: 22, minute: 0 },
+      })),
+    };
+    const prodRow = (over: Partial<RestaurantMapPoint> = {}) =>
+      row({ opening: "2019-06-01", hours_json: elevenToTen, ...over });
+
+    it("colours the pin from hours_json", () => {
+      expect(mapPinState(prodRow(), at("12:00"))).toEqual({ status: "open", label: "Open until 10 PM" });
+      expect(mapPinState(prodRow(), at("21:30")).status).toBe("closing-soon");
+      expect(mapPinState(prodRow(), at("23:00")).status).toBe("closed");
+    });
+
+    it("is unknown without hours_json, because the date in opening is not hours (negative control)", () => {
+      expect(mapPinState(prodRow({ hours_json: null }), at("12:00"))).toEqual({
+        status: "unknown",
+        label: "Hours unknown",
+      });
+    });
+
+    it("prefers hours_json over hours text that disagrees", () => {
+      const pin = mapPinState(prodRow({ opening: "Mon-Sun 6am-8am" }), at("12:00"));
+      expect(pin.status).toBe("open");
+    });
+
+    it("still lets status and business_status win over hours_json", () => {
+      expect(mapPinState(prodRow({ business_status: "CLOSED_TEMPORARILY" }), at("12:00"))).toEqual({
+        status: "closed",
+        label: "Temporarily closed",
+      });
+      expect(mapPinState(prodRow({ status: "closed" }), at("12:00")).label).toBe("Permanently closed");
+    });
+  });
+
   it("says hours unknown rather than guessing", () => {
     expect(mapPinState(row({ opening: null }), at("12:00"))).toEqual({
       status: "unknown",
@@ -100,9 +138,10 @@ describe("mapPinState", () => {
 });
 
 describe("MAP_POINT_COLUMNS", () => {
-  it("selects business_status, which mapPinState reads", () => {
+  it("selects business_status and hours_json, which mapPinState reads", () => {
     const columns = MAP_POINT_COLUMNS.split(",").map((c) => c.trim());
     expect(columns).toContain("business_status");
+    expect(columns).toContain("hours_json");
     expect(columns).toContain("status");
   });
 });

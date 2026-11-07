@@ -175,11 +175,14 @@ export const SEARCH_PAIRING_RESTAURANT_COLUMNS =
  * Restaurant map pins (useRestaurantMapPoints). business_status is how a pin
  * says "Temporarily closed": restaurants.status has no such value and Google
  * keeps publishing the weekly hours of a temporarily closed place
- * (WEB-FEAT-038). Production has carried the column since 20260919000009 and
- * open-now and Tonight already select it.
+ * (WEB-FEAT-038). hours_json is what colours a pin open or closed: it is the
+ * only hours production carries, and `opening` is a date (SEO-054), so
+ * without it nearly every pin read "Hours unknown" (WEB-FEAT-040). Both
+ * columns have been in production since 20260919000009, and open-now and
+ * Tonight already select them.
  */
 export const RESTAURANT_MAP_POINT_COLUMNS =
-  "id, name, slug, latitude, longitude, cuisine, opening, price_range, rating, image_url, phone, status, business_status";
+  "id, name, slug, latitude, longitude, cuisine, opening, hours_json, price_range, rating, image_url, phone, status, business_status";
 
 /**
  * The four columns needed to DERIVE an event slug, and nothing else

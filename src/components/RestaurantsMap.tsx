@@ -18,7 +18,8 @@ import {
   type RestaurantMapPoint,
 } from '@/hooks/useRestaurantMapPoints';
 import { haversineDistance } from '@/lib/geo';
-import { isPermanentlyClosedRestaurant } from '@/lib/restaurantHours';
+import { isPermanentlyClosedRestaurant, type StoredOpeningHours } from '@/lib/restaurantHours';
+import type { Json } from '@/integrations/supabase/types';
 
 /** A page row, accepted only as a fallback when the map query fails. */
 interface PageRestaurant {
@@ -29,6 +30,8 @@ interface PageRestaurant {
   longitude?: number | null;
   cuisine?: string | null;
   opening?: string | null;
+  /** Json in the generated types; resolveOpenStatus treats every field as untrusted. */
+  hours_json?: Json | null;
   price_range?: string | null;
   rating?: number | null;
   image_url?: string | null;
@@ -56,6 +59,7 @@ function toPoint(r: PageRestaurant): RestaurantMapPoint {
     longitude: r.longitude ?? null,
     cuisine: r.cuisine ?? null,
     opening: r.opening ?? null,
+    hours_json: (r.hours_json as StoredOpeningHours | null) ?? null,
     price_range: r.price_range ?? null,
     rating: r.rating ?? null,
     image_url: r.image_url ?? null,

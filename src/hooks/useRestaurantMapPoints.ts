@@ -4,8 +4,10 @@ import { DIETARY_KEYWORDS, resolveDietarySelections } from "@/hooks/useRestauran
 import {
   businessStatusLabel,
   formatOpenStatusLine,
-  getRestaurantOpenStatus,
+  hoursTextOf,
   isPermanentlyClosedRestaurant,
+  resolveOpenStatus,
+  type StoredOpeningHours,
 } from "@/lib/restaurantHours";
 import { RESTAURANT_MAP_POINT_COLUMNS } from "@/lib/listColumns";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
@@ -49,7 +51,10 @@ export interface RestaurantMapPoint {
   latitude: number | null;
   longitude: number | null;
   cuisine: string | null;
+  /** A date in production (SEO-054); read only through hoursTextOf. */
   opening: string | null;
+  /** Google's structured hours: the hours a pin is coloured from (WEB-FEAT-040). */
+  hours_json?: StoredOpeningHours | null;
   price_range: string | null;
   rating: number | null;
   image_url: string | null;
@@ -150,12 +155,14 @@ export interface MapPinState {
 
 /**
  * Status for one pin at `now`, read through the shared Central-time evaluator.
+ * It is the same call open-now and Tonight make: hours_json first, and the
+ * `opening` text only when that is real hours text rather than a date.
  *
  * The listing's own `status` column wins over the hours text: a closed or
  * not-yet-open place is never shown as open because its old hours parse.
  */
 export function mapPinState(
-  point: Pick<RestaurantMapPoint, "opening" | "status" | "business_status">,
+  point: Pick<RestaurantMapPoint, "opening" | "hours_json" | "status" | "business_status">,
   now: Date
 ): MapPinState {
   if (point.status === "closed") return { status: "closed", label: "Permanently closed" };
@@ -169,7 +176,7 @@ export function mapPinState(
   // a renovating restaurant is a green pin every lunchtime (WEB-FEAT-038).
   const closure = businessStatusLabel(point.business_status);
   if (closure) return { status: "closed", label: closure };
-  const result = getRestaurantOpenStatus(point.opening, now);
+  const result = resolveOpenStatus(point.hours_json, hoursTextOf(point.opening), now);
   const line = formatOpenStatusLine(result);
   switch (result.status) {
     case "open":
