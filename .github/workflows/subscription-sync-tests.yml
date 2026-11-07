@@ -125,6 +125,9 @@ jobs:
       # account, or any Google identity can mint a token that passes.
       # --allow-read: the wiring check reads the webhook source.
       - run: deno test --allow-read supabase/functions/_shared/pubsubOidc.test.ts
+      # WEB-SEC-058. A voided-purchase notification revokes only once Google's
+      # voidedpurchases.list confirms the token. --allow-read: wiring check.
+      - run: deno test --allow-read supabase/functions/_shared/playVoidedPurchase.test.ts
       # The limiter's 429 must carry CORS for the requesting origin, or the
       # browser drops it and the client sees a network error instead of
       # "rate limit exceeded". --allow-env: the CORS allow-list reads it.

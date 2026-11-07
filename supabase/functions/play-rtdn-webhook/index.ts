@@ -37,7 +37,12 @@
  *   }
  *
  * Required env vars:
- *   GOOGLE_PLAY_SERVICE_ACCOUNT_KEY  — JSON service account key for Play Developer API
+ *   GOOGLE_PLAY_SERVICE_ACCOUNT_KEY  — JSON service account key for Play Developer API.
+ *                                      The account needs Play Console's "View financial
+ *                                      data" permission: a refund is revoked only once
+ *                                      purchases.voidedpurchases.list confirms it
+ *                                      (WEB-SEC-058), and without that permission the
+ *                                      call is refused and no refund is revoked.
  *   PLAY_RTDN_AUDIENCE               — expected `aud` for the OIDC push token (this fn's URL)
  *   PLAY_RTDN_SERVICE_ACCOUNT        - expected `email` of the OIDC push token: the service
  *                                      account set on the push subscription (step 4). Without
@@ -50,6 +55,12 @@ import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { checkPubSubOidcClaims, type PubSubOidcClaims } from '../_shared/pubsubOidc.ts';
+import {
+  confirmVoidedPurchase,
+  isTransientHttpStatus,
+  processVoidedPurchase,
+  TransientPlayApiError,
+} from '../_shared/playVoidedPurchase.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -126,29 +137,6 @@ interface GoogleSubscriptionPurchase {
   orderId?: string;
   acknowledgementState?: number;
   linkedPurchaseToken?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Transient upstream failures
-// ---------------------------------------------------------------------------
-
-/**
- * Signals a *transient* failure talking to Google (network error, timeout, 5xx,
- * 408, 429). These are safe — and desirable — to retry, so the webhook returns a
- * non-2xx status and lets Pub/Sub redeliver the notification. Permanent failures
- * (bad request, auth/config, 404) throw a plain Error / return null instead and
- * are acked (200), because redelivery wouldn't help.
- */
-class TransientPlayApiError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'TransientPlayApiError';
-  }
-}
-
-/** HTTP statuses from Google that are worth retrying. */
-function isTransientHttpStatus(status: number): boolean {
-  return status >= 500 || status === 429 || status === 408;
 }
 
 // ---------------------------------------------------------------------------
@@ -588,74 +576,9 @@ serve(async (req) => {
     });
   }
 
-  // -------------------------------------------------------------------------
-  // 4a. Voided purchase notification (refund / chargeback)
-  // -------------------------------------------------------------------------
-  if (vn) {
-    const purchaseToken = vn.purchaseToken;
-    // WEB-BE-032. Unlike the idempotency guard above, this one IS fatal, and the
-    // reason is what the play_rtdn_log row says afterwards: with the error
-    // discarded, a failed lookup produced subRow === null, the refund was never
-    // applied, and the log recorded status 'no_match' - an affirmative claim
-    // that we looked and there was no such subscription. A refunded user keeps
-    // their entitlement and the audit trail says that was correct.
-    //
-    // Throwing returns 500 before anything is written to play_rtdn_log, so Play
-    // redelivers and the retry reprocesses cleanly.
-    const { data: subRow, error: subLookupError } = await supabase
-      .from('user_subscriptions')
-      .select('id, user_id')
-      .eq('platform', 'android')
-      .eq('google_purchase_token', purchaseToken)
-      .maybeSingle();
-
-    if (subLookupError) {
-      console.error(
-        `Voided-purchase subscription lookup failed for token=${purchaseToken}: ${subLookupError.message}`,
-      );
-      throw subLookupError;
-    }
-
-    if (subRow) {
-      // The revocation itself. A silent failure here leaves a refunded customer
-      // entitled, so it throws for the same reason.
-      const { error: revokeError } = await supabase
-        .from('user_subscriptions')
-        .update({
-          status: 'canceled',
-          cancel_at_period_end: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', subRow.id);
-
-      if (revokeError) {
-        console.error(`Failed to revoke refunded subscription id=${subRow.id}:`, revokeError.message);
-        throw revokeError;
-      }
-    }
-
-    await supabase.from('play_rtdn_log').insert({
-      message_id: messageId,
-      notification_type: 'VOIDED_PURCHASE',
-      purchase_token: purchaseToken,
-      user_subscription_id: subRow?.id ?? null,
-      processed_at: new Date().toISOString(),
-      status: subRow ? 'applied' : 'no_match',
-    });
-
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // -------------------------------------------------------------------------
-  // 4b. Subscription notification — fetch fresh state from Play API
-  // -------------------------------------------------------------------------
-  const subNotif = sn!;
-  const typeName = NOTIFICATION_TYPES[subNotif.notificationType] ?? `UNKNOWN_${subNotif.notificationType}`;
-
-  // Load service account key
+  // Both branches below ask the Play Developer API, so the key is loaded once.
+  // Missing or unparseable, answer 500 before anything is logged: Pub/Sub
+  // redelivers, and the notification is applied once the key is set.
   const saKeyJson = Deno.env.get('GOOGLE_PLAY_SERVICE_ACCOUNT_KEY');
   if (!saKeyJson) {
     console.error('GOOGLE_PLAY_SERVICE_ACCOUNT_KEY env var not set');
@@ -675,6 +598,77 @@ serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  // -------------------------------------------------------------------------
+  // 4a. Voided purchase notification (refund / chargeback)
+  // -------------------------------------------------------------------------
+  if (vn) {
+    const purchaseToken = vn.purchaseToken;
+    // WEB-SEC-058. Revokes only when voidedpurchases.list confirms the token;
+    // a forged message that passed OIDC no longer cancels anyone. Lookup and
+    // revoke errors still throw (WEB-BE-032): a 500 before play_rtdn_log is
+    // written, so Play redelivers instead of the log claiming 'no_match'.
+    const result = await processVoidedPurchase({ messageId, purchaseToken }, {
+      findSubscription: async (token) => {
+        const { data, error } = await supabase
+          .from('user_subscriptions')
+          .select('id, user_id')
+          .eq('platform', 'android')
+          .eq('google_purchase_token', token)
+          .maybeSingle();
+        if (error) {
+          console.error(`Voided-purchase subscription lookup failed for token=${token}: ${error.message}`);
+          throw error;
+        }
+        return data;
+      },
+      confirmVoid: async () =>
+        confirmVoidedPurchase({
+          fetchFn: fetchWithTimeout,
+          apiBase: GOOGLE_API_BASE,
+          accessToken: await getGoogleAccessToken(sa),
+          packageName: notification.packageName ?? EXPECTED_PACKAGE_NAME,
+          purchaseToken,
+          eventTimeMillis: notification.eventTimeMillis,
+          nowMs: Date.now(),
+        }),
+      revoke: async (id) => {
+        const { error } = await supabase
+          .from('user_subscriptions')
+          .update({
+            status: 'canceled',
+            cancel_at_period_end: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id);
+        if (error) {
+          console.error(`Failed to revoke refunded subscription id=${id}:`, error.message);
+          throw error;
+        }
+      },
+      writeLog: async (row) => {
+        await supabase.from('play_rtdn_log').insert(row);
+      },
+      now: () => new Date(),
+    });
+
+    if (result.status === 503) {
+      console.error(`Transient Play API failure confirming void for messageId=${messageId}; Pub/Sub will retry`);
+    } else if (result.body.revoked === false) {
+      console.warn(`Voided-purchase notification ${messageId} not confirmed by Play; subscription left as is`);
+    }
+
+    return new Response(JSON.stringify(result.body), {
+      status: result.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // 4b. Subscription notification — fetch fresh state from Play API
+  // -------------------------------------------------------------------------
+  const subNotif = sn!;
+  const typeName = NOTIFICATION_TYPES[subNotif.notificationType] ?? `UNKNOWN_${subNotif.notificationType}`;
 
   let purchase: GoogleSubscriptionPurchase | null = null;
   let fetchError: string | null = null;
