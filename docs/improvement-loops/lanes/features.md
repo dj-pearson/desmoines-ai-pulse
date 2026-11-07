@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. WEB-FEAT-039 is done. Optional follow-up, not started: rename `src/lib/capacitorUtils.ts` (now only toSafeExternalUrl/openExternalUrl/shareWithOutcome) to something like `externalLinks.ts`; about 12 importers.
+None. WEB-FEAT-043 is done in one loop. Optional follow-up from earlier loops, not started: rename `src/lib/capacitorUtils.ts` (now only toSafeExternalUrl/openExternalUrl/shareWithOutcome) to something like `externalLinks.ts`; about 12 importers.
 
 ## Loop log
 
@@ -18,3 +18,4 @@ None. WEB-FEAT-039 is done. Optional follow-up, not started: rename `src/lib/cap
 | 2026-11-07 | WEB-FEAT-039 | this commit | Slice 1 of 3. Deleted CapacitorRuntime, its four hooks, usePageTransition and main.tsx's shell code (497 lines out). Ratchet test lists the 8 files still branching. validate exit 0, vitest 2791/2791. |
 | 2026-11-07 | WEB-FEAT-039 | this commit | Slice 2 of 3. Removed every isCapacitor()/isMobileApp() branch (web arm kept), the shell helpers and plugin types, hapticTap and its callers, and the unrendered ImageViewer (310 lines out). Guard now asserts zero branches. validate exit 0, vitest 2815/2815. |
 | 2026-11-07 | WEB-FEAT-039 | this commit | Done (slice 3 of 3). Deleted 324 lines of .capacitor-app/.cap-page-enter/.keyboard-visible CSS and the isCapacitor arm of index.html's early error handler; re-pinned its CSP hash. Guard test covers CSS and index.html. check-csp-hashes OK, vitest 2835/2835, type-check ratchet 61/61, vite build OK. |
+| 2026-11-07 | WEB-FEAT-043 | this commit | Done (new story). Dashboard "Clear all" now deletes the signed-in user's recently_viewed rows, and a clear/remove discards an in-flight server merge; before, the history merged back on reload and on other devices. 4 of 5 new hook tests failed before the fix, 5/5 after; type-check ratchet 61/61. |
