@@ -185,6 +185,15 @@ export const RESTAURANT_MAP_POINT_COLUMNS =
   "id, name, slug, latitude, longitude, cuisine, opening, hours_json, price_range, rating, image_url, phone, status, business_status";
 
 /**
+ * Restaurants under a food article (pickHubRestaurants in useArticles). It
+ * selected `opening` alone for hours, which production stores as a date, so
+ * the block could never say "Open now", and it had no business_status, so a
+ * CLOSED_TEMPORARILY place was offered as a place to try (WEB-FEAT-042).
+ */
+export const ARTICLE_HUB_RESTAURANT_COLUMNS =
+  "id, slug, name, status, business_status, cuisine, opening, hours_json";
+
+/**
  * The four columns needed to DERIVE an event slug, and nothing else
  * (WEB-PERF-035 AC2).
  *
