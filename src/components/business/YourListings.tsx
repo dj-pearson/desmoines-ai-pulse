@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { ClaimedListingEditForm } from "@/components/business/ClaimedListingEditForm";
+import { ListingStatsPanel } from "@/components/business/ListingStatsPanel";
 import {
   useListingSearch,
   useMyBusinessClaims,
@@ -91,6 +92,12 @@ function ClaimRow({ claim }: { claim: MyBusinessClaim }) {
           </div>
         )}
       </div>
+
+      {verified && (
+        <div className="mt-4 max-w-3xl">
+          <ListingStatsPanel listingType={claim.listing_type} listingId={claim.listing_id} listingName={name} />
+        </div>
+      )}
 
       {verified && editing && claim.listing && (
         <div id={editId} className="mt-4 max-w-2xl">

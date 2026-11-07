@@ -13933,6 +13933,10 @@ export type Database = {
         }[]
       }
       get_level_from_xp: { Args: { xp: number }; Returns: number }
+      get_listing_owner_stats: {
+        Args: { p_days?: number; p_listing_id: string; p_listing_type: string }
+        Returns: Json
+      }
       get_my_referral_stats: {
         Args: never
         Returns: {
