@@ -18,6 +18,7 @@ import {
   type RestaurantMapPoint,
 } from '@/hooks/useRestaurantMapPoints';
 import { haversineDistance } from '@/lib/geo';
+import { isPermanentlyClosedRestaurant } from '@/lib/restaurantHours';
 
 /** A page row, accepted only as a fallback when the map query fails. */
 interface PageRestaurant {
@@ -33,6 +34,7 @@ interface PageRestaurant {
   image_url?: string | null;
   phone?: string | null;
   status?: string | null;
+  business_status?: string | null;
 }
 
 interface RestaurantsMapProps {
@@ -59,6 +61,7 @@ function toPoint(r: PageRestaurant): RestaurantMapPoint {
     image_url: r.image_url ?? null,
     phone: r.phone ?? null,
     status: r.status ?? null,
+    business_status: r.business_status ?? null,
   };
 }
 
@@ -80,7 +83,7 @@ export function RestaurantsMap({ filters = {}, restaurants = [] }: RestaurantsMa
   // Closed rows stay off the map (pass 2 WP1 item 11). The query already
   // leaves them out; the page fallback is filtered the same way.
   const source = useMemo(
-    () => (usingPageFallback ? restaurants.filter((r) => r.status !== 'closed').map(toPoint) : points),
+    () => (usingPageFallback ? restaurants.filter((r) => !isPermanentlyClosedRestaurant(r)).map(toPoint) : points),
     [usingPageFallback, restaurants, points]
   );
   const { mapped, unmapped } = useMemo(() => splitByCoordinates(source), [source]);

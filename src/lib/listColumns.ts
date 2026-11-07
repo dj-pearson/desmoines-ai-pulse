@@ -162,6 +162,26 @@ export const TONIGHT_RESTAURANT_COLUMNS =
   "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status, business_status";
 
 /**
+ * Dinner near each event on /search (useSearchPairings). The same columns
+ * pickDinner reads for Tonight, plus price_range for the card. It used to be a
+ * private list in the hook without hours_json or business_status, so
+ * pickDinner fell back to `opening` (a date in production) and never found a
+ * dinner, and a CLOSED_TEMPORARILY place could not be ruled out (WEB-FEAT-038).
+ */
+export const SEARCH_PAIRING_RESTAURANT_COLUMNS =
+  "id, name, slug, cuisine, price_range, latitude, longitude, opening, hours_json, opening_date, status, business_status";
+
+/**
+ * Restaurant map pins (useRestaurantMapPoints). business_status is how a pin
+ * says "Temporarily closed": restaurants.status has no such value and Google
+ * keeps publishing the weekly hours of a temporarily closed place
+ * (WEB-FEAT-038). Production has carried the column since 20260919000009 and
+ * open-now and Tonight already select it.
+ */
+export const RESTAURANT_MAP_POINT_COLUMNS =
+  "id, name, slug, latitude, longitude, cuisine, opening, price_range, rating, image_url, phone, status, business_status";
+
+/**
  * The four columns needed to DERIVE an event slug, and nothing else
  * (WEB-PERF-035 AC2).
  *

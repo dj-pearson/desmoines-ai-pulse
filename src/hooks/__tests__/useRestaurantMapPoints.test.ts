@@ -4,6 +4,7 @@ import { fromZonedTime } from "date-fns-tz";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
 import {
+  MAP_POINT_COLUMNS,
   MAP_PIN_STATUS_COLORS,
   MAP_PIN_STATUS_ORDER,
   mapFilterKey,
@@ -67,11 +68,42 @@ describe("mapPinState", () => {
     });
   });
 
+  it("labels a Google CLOSED_TEMPORARILY place closed even though its weekly hours still say open (WEB-FEAT-038)", () => {
+    const renovating = row({ business_status: "CLOSED_TEMPORARILY" });
+    // Same row, same noon: the hours alone would colour it green.
+    expect(mapPinState(row(), at("12:00")).status).toBe("open");
+    expect(mapPinState(renovating, at("12:00"))).toEqual({ status: "closed", label: "Temporarily closed" });
+    expect(mapPinState(row({ business_status: " closed_temporarily " }), at("12:00")).label).toBe(
+      "Temporarily closed"
+    );
+    expect(mapPinState(row({ business_status: "CLOSED_PERMANENTLY" }), at("12:00"))).toEqual({
+      status: "closed",
+      label: "Permanently closed",
+    });
+  });
+
+  it("reads OPERATIONAL, missing and unrecognised business_status as no closure", () => {
+    for (const business_status of ["OPERATIONAL", null, undefined, "SOMETHING_NEW"]) {
+      expect(mapPinState(row({ business_status }), at("12:00"))).toEqual({
+        status: "open",
+        label: "Open until 10 PM",
+      });
+    }
+  });
+
   it("says hours unknown rather than guessing", () => {
     expect(mapPinState(row({ opening: null }), at("12:00"))).toEqual({
       status: "unknown",
       label: "Hours unknown",
     });
+  });
+});
+
+describe("MAP_POINT_COLUMNS", () => {
+  it("selects business_status, which mapPinState reads", () => {
+    const columns = MAP_POINT_COLUMNS.split(",").map((c) => c.trim());
+    expect(columns).toContain("business_status");
+    expect(columns).toContain("status");
   });
 });
 
