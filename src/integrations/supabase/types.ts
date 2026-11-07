@@ -13933,6 +13933,10 @@ export type Database = {
         }[]
       }
       get_level_from_xp: { Args: { xp: number }; Returns: number }
+      get_listing_claim_teaser: {
+        Args: { p_listing_id: string; p_listing_type: string }
+        Returns: Json
+      }
       get_listing_owner_stats: {
         Args: { p_days?: number; p_listing_id: string; p_listing_type: string }
         Returns: Json
@@ -14220,6 +14224,18 @@ export type Database = {
       is_admin_or_sales: { Args: never; Returns: boolean }
       is_email_domain_blocked: { Args: { p_email: string }; Returns: boolean }
       is_ip_blocked: { Args: { p_ip_address: string }; Returns: boolean }
+      list_unclaimed_listings_by_views: {
+        Args: { p_days?: number; p_limit?: number; p_listing_type?: string }
+        Returns: {
+          listing_id: string
+          name: string
+          pending_claims: number
+          phone: string
+          slug: string
+          views: number
+          website: string
+        }[]
+      }
       log_admin_action: {
         Args: {
           p_action_description: string
