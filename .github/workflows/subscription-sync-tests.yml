@@ -588,6 +588,8 @@ jobs:
       # WEB-BE-058: a __SERVER_DATA__ blob with no event list is a failure,
       # not a quiet week. Pure parsing, no network or env.
       - run: deno test supabase/functions/_shared/domain-adapters/eventbrite.test.ts
+      # WEB-BE-059: a date-only show is the date alone, not an invented 7pm.
+      - run: deno test supabase/functions/_shared/domain-adapters/vibrantmusichall.test.ts
       # Menu-scraping invariants — see docs/scraping/MENU_SCRAPER.md.
       # All fixture-based; no network access needed.
       - run: deno test supabase/functions/_shared/menu/menuNormalize.test.ts

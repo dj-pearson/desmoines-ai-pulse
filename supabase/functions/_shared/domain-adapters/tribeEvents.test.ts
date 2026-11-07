@@ -8,7 +8,7 @@
  * when no featured image is set, a `venue` that can arrive as an object or an
  * array, all-day events, and a non-JSON 200 from a site without the plugin.
  */
-import { tribeEventsAdapter } from "./tribeEvents.ts";
+import { normalizeStartDate, tribeEventsAdapter } from "./tribeEvents.ts";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`assertion failed: ${msg}`);
@@ -133,11 +133,12 @@ Deno.test("maps a Tribe payload into complete AdapterEvents", async () => {
     `excerpt de-tagged, got "${concert.description}"`,
   );
 
-  // All-day events get the pipeline's 19:00 convention, not 00:00 — a midnight
-  // start reads as "yesterday" in a day view.
+  // WEB-BE-059: an all-day event is the DATE ONLY, so the shared parser stamps
+  // NO_TIME_MARKER. Not 00:00 (reads as "yesterday" in a day view) and not
+  // 19:00 (reads as a real 7pm show).
   assert(
-    openHouse.date === "2026-09-20 19:00:00",
-    `all-day → 19:00, got ${openHouse.date}`,
+    openHouse.date === "2026-09-20",
+    `all-day → date only, got ${openHouse.date}`,
   );
   assert(openHouse.price === "Free", "Free normalized");
   assert(openHouse.image_url === null, "image:false → null");
@@ -248,4 +249,17 @@ Deno.test("pagination stops once a short page arrives", async () => {
 
   assert(result.items.length === 51, `all 51 events, got ${result.items.length}`);
   assert(calls === 2, `stopped after the short page, made ${calls} calls`);
+});
+
+// WEB-BE-059. Every no-time shape is the date only, so the shared parser stamps
+// NO_TIME_MARKER; a published time passes through untouched.
+Deno.test("normalizeStartDate: date only when there is no time, verbatim when there is", () => {
+  const norm = (start_date: string, all_day = false) => normalizeStartDate({ start_date, all_day });
+  assert(norm("2026-09-20 00:00:00", true) === "2026-09-20", "all-day midnight → date only");
+  assert(norm("2026-09-20 18:00:00", true) === "2026-09-20", "all-day with a clock → date only");
+  assert(norm("2026-09-20") === "2026-09-20", "bare date → date only");
+  assert(norm("2026-09-12 20:00:00") === "2026-09-12 20:00:00", "timed start unchanged");
+  assert(norm("2026-09-12T19:30") === "2026-09-12 19:30:00", "T separator, no seconds → :00");
+  assert(norm("2026-09-12 00:00:00") === "2026-09-12 00:00:00", "a published midnight is kept");
+  assert(norm("soon") === null, "unreadable → null");
 });

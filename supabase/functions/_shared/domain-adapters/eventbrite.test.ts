@@ -15,7 +15,7 @@
  */
 
 import { strict as assert } from "node:assert";
-import { findEventList, parseBrowseHtml } from "./eventbrite.ts";
+import { findEventList, formatDateTime, parseBrowseHtml } from "./eventbrite.ts";
 
 function page(blob: unknown): string {
   return `<html><head><script>window.__SERVER_DATA__ = ${
@@ -141,4 +141,24 @@ Deno.test("no blob and a broken blob are still failures", () => {
   const broken = parseBrowseHtml("<script>window.__SERVER_DATA__ = {\"a\": };\n</script>");
   assert.equal(broken.success, false);
   assert.match(broken.error ?? "", /Failed to parse/);
+});
+
+// WEB-BE-059. A missing start_time used to become 7pm, which reads as a real
+// showtime and disagrees with every other producer. The adapter now hands the
+// shared parser a bare date, and parseEventDateTime stamps NO_TIME_MARKER.
+Deno.test("an event with no start_time is the date only, not 7pm", () => {
+  const { start_time: _omit, ...noTime } = MARKET;
+  const result = parseBrowseHtml(page({ buckets: [{ events: [noTime, JAZZ] }] }));
+  assert.equal(result.success, true, result.error);
+  const byTitle = new Map(result.items.map((i) => [i.title, i.date]));
+  assert.equal(byTitle.get("Winter Farmers Market"), "2026-12-12");
+  assert.equal(byTitle.get("Jazz in July Kickoff"), "2026-12-05 19:30:00");
+});
+
+Deno.test("formatDateTime keeps a published time and drops an unreadable one", () => {
+  assert.equal(formatDateTime("2026-12-05", "17:30"), "2026-12-05 17:30:00");
+  assert.equal(formatDateTime("2026-12-05", "00:00"), "2026-12-05 00:00:00");
+  assert.equal(formatDateTime("2026-12-05"), "2026-12-05");
+  assert.equal(formatDateTime("2026-12-05", ""), "2026-12-05");
+  assert.equal(formatDateTime("2026-12-05", "7pm"), "2026-12-05");
 });

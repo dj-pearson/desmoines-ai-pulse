@@ -327,11 +327,14 @@ export function priceFromTicketAvailability(evt: EventbriteEvent): string | unde
   return priceFromOffers(offers, ta?.is_free ?? evt.is_free);
 }
 
-function formatDateTime(date: string, time?: string): string {
+export function formatDateTime(date: string, time?: string): string {
   // Eventbrite gives "2026-05-14" + "17:30" (or missing time). Treat as
   // Central Time per the venue's `timezone` field (filtered above).
-  const t = time && /^\d{2}:\d{2}$/.test(time) ? `${time}:00` : "19:00:00";
-  return `${date} ${t}`;
+  // WEB-BE-059: no time means the DATE ONLY, so parseEventDateTime stamps
+  // NO_TIME_MARKER. This used to write 7pm, which reads as a real showtime and
+  // gave the same event a different instant here than from Catch Des Moines.
+  if (time && /^\d{2}:\d{2}$/.test(time)) return `${date} ${time}:00`;
+  return date;
 }
 
 function mapCategory(tags: EventbriteTag[]): string {
