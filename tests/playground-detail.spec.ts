@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { installFixtureBackend } from './support/fixtureBackend';
+import { centralDay } from './support/fixtureClock';
 
 /**
  * Explore pass 2 WP4: /playgrounds/:slug.
@@ -71,13 +72,18 @@ const NEIGHBOUR = {
 
 const HOSTILE_NAME = 'Fixture </script><script>window.__pwned=1</script> Playground';
 
+// A month out, from today. The rail keeps only upcoming events
+// (isLinkableUpcomingEvent), so a literal date here empties it on the day after
+// (WEB-QA-044; it was '2027-10-01').
+const NEARBY_DAY = centralDay(30);
+
 const NEARBY_EVENT = {
   id: '21000000-0000-0000-0000-000000000001',
   title: 'Fixture Story Time in the Park',
   description: 'An event supplied by tests/playground-detail.spec.ts.',
   category: 'Family',
-  date: '2027-10-01',
-  event_start_utc: '2027-10-01T15:00:00Z',
+  date: NEARBY_DAY,
+  event_start_utc: `${NEARBY_DAY}T15:00:00Z`,
   start_time: '10:00:00',
   end_time: null,
   location: 'Des Moines',
