@@ -108,6 +108,31 @@ describe('newsletter signup', () => {
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
+  it('sends the campaign the visitor landed on, not just this page\'s query string', async () => {
+    // WEB-ADS-016: the footer form is usually submitted on a later page, where
+    // the utm_* params are gone. Reading window.location alone stored no
+    // campaign for exactly the visitors a campaign brought in.
+    const { captureCampaignAttribution, resetSessionAttributionForTests } = await import(
+      '@/lib/campaignAttribution'
+    );
+    resetSessionAttributionForTests();
+    captureCampaignAttribution('?utm_source=facebook&utm_medium=paid&utm_campaign=fall-guide', false);
+    invoke.mockResolvedValue({ data: { ok: true, message: ANSWER }, error: null });
+    const { result } = renderHook(() => useNewsletterSubscription());
+
+    await act(async () => {
+      await result.current.subscribe({ email: 'reader@example.com', source: 'footer' });
+    });
+
+    const [, options] = invoke.mock.calls[0] as [string, { body: Record<string, unknown> }];
+    expect(options.body.utm).toEqual({
+      utm_source: 'facebook',
+      utm_medium: 'paid',
+      utm_campaign: 'fall-guide',
+    });
+    resetSessionAttributionForTests();
+  });
+
   it('exposes no client-side unsubscribe', () => {
     // newsletter_subscribers has INSERT and admin-SELECT policies and NO
     // UPDATE policy, so the old unsubscribe() matched zero rows, got no error
