@@ -65,13 +65,14 @@ type Pending = PendingException | PendingMessage;
 const MAX_BUFFERED = 50;
 const pending: Pending[] = [];
 
-// The loaded module, once it arrives. `unknown` rather than a Sentry type so
-// this file has no type-level dependency on the package either — a type-only
-// import would be erased, but the import specifier is easy to promote to a
+// The loaded module, once it arrives. Typed with a type query on the narrow
+// re-export module rather than `any`: `typeof import(...)` is erased at
+// compile time and, unlike an `import type` statement, cannot be edited into a
 // value import by accident, which is how a deferred dependency creeps back
-// onto the critical path.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let sentry: any = null;
+// onto the critical path. It also means calling anything sentryClient.ts does
+// not export is a type error.
+type SentryClient = typeof import('./sentryClient');
+let sentry: SentryClient | null = null;
 let loading: Promise<void> | null = null;
 
 function buffer(entry: Pending) {
@@ -140,15 +141,18 @@ export async function loadSentry(): Promise<void> {
 
   loading = (async () => {
     try {
-      const mod = await import('@sentry/react');
+      // The narrow module, not '@sentry/react' itself. Importing the package
+      // namespace kept every export alive, replay and tracing included, in a
+      // 187.9 KB gzipped chunk; see sentryClient.ts.
+      const mod = await import('./sentryClient');
+      // No tracesSampleRate / replays*SampleRate. They were set here without
+      // browserTracingIntegration or replayIntegration, so they never did
+      // anything; error capture is decided by the default integrations alone.
       mod.init({
         dsn: getSentryDsn(),
         environment: import.meta.env.MODE,
         release: import.meta.env['VITE_APP_VERSION'] as string | undefined,
         enabled: import.meta.env.PROD,
-        tracesSampleRate: 0.1,
-        replaysSessionSampleRate: 0,
-        replaysOnErrorSampleRate: 0.1,
       });
       sentry = mod;
       flush();

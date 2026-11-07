@@ -22,7 +22,7 @@ import EventFeedback from "@/components/EventFeedback";
 import ShareDialog from "@/components/ShareDialog";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
-import { useFeedback } from "@/hooks/useFeedback";
+import { useTrackInteraction } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewTracking } from "@/hooks/useViewTracking";
 import { recordView } from "@/lib/recentlyViewed";
@@ -65,7 +65,7 @@ interface EventCardProps {
 
 function EventCardComponent({ event, onViewDetails, priority = false }: EventCardProps) {
   const { isAuthenticated } = useAuth();
-  const { trackInteraction } = useFeedback();
+  const trackInteraction = useTrackInteraction();
   const { trackView } = useViewTracking(event.id);
   const [isNew, setIsNew] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -208,27 +208,29 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
           <div className="flex gap-2 flex-wrap">
             <Button
               onClick={handleViewDetails}
-              className="bg-primary hover:bg-blue-700 text-white"
+              className="bg-primary hover:bg-primary/90 text-white"
             >
               View Details
             </Button>
 
-            <Link
-              to={`/events/${createEventSlugWithCentralTime(
-                event.title,
-                event
-              )}`}
-            >
-              <Button variant="outline" size="sm" aria-label={`View full page for ${event.title}`}>
+            <Button asChild variant="outline" size="sm">
+              <Link
+                to={`/events/${createEventSlugWithCentralTime(
+                  event.title,
+                  event
+                )}`}
+                aria-label={`View full page for ${event.title}`}
+              >
                 <SpriteIcon name="external-link" className="h-4 w-4 mr-1" aria-hidden="true" />
                 Full Page
-              </Button>
-            </Link>
+              </Link>
+            </Button>
 
             <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
 
             <ShareDialog
               title={event.title}
+              itemName={event.title}
               description={markdownToPlainText(event.enhanced_description || event.original_description) || `Join us for ${event.title}`}
               url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`}
             />

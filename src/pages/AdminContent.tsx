@@ -37,7 +37,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
-import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
+import { useRestaurantOpeningsAdmin } from "@/hooks/useRestaurantOpenings";
 import { useHotels } from "@/hooks/useHotels";
 import { ContentItem, ContentType } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -176,7 +176,7 @@ export default function AdminContent() {
   // (WEB-PERF-033).
   const attractions = useAttractions({ search: searchTerms.attractions, countMode: "exact" });
   const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds, countMode: "exact" });
-  const restaurantOpenings = useRestaurantOpenings({
+  const restaurantOpenings = useRestaurantOpeningsAdmin({
     search: searchTerms.restaurantOpenings,
   });
   const hotels = useHotels({ search: searchTerms.hotels, activeOnly: false, countMode: "exact" });

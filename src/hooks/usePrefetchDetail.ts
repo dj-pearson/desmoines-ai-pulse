@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchRestaurantDetail } from '@/lib/restaurantDetail';
 import { fetchBySlug } from '@/lib/resolveBySlug';
 import { DETAIL_STALE_TIME, detailQueryKey } from '@/lib/detailQueryKeys';
 
@@ -21,22 +21,10 @@ export function usePrefetchRestaurant() {
       const doFetch = () => {
         queryClient.prefetchQuery({
           queryKey: detailQueryKey('restaurant', slugOrId),
-          queryFn: async () => {
-            let { data } = await supabase
-              .from('restaurants')
-              .select('*')
-              .eq('slug', slugOrId)
-              .maybeSingle();
-            if (!data) {
-              const result = await supabase
-                .from('restaurants')
-                .select('*')
-                .eq('id', slugOrId)
-                .maybeSingle();
-              data = result.data;
-            }
-            return data;
-          },
+          // The page's own fetcher: same projection, same uuid-only id
+          // fallback. This used select('*') and always retried by id, so a
+          // slug miss sent a 22P02 request on every hover.
+          queryFn: () => fetchRestaurantDetail(slugOrId),
           staleTime: DETAIL_STALE_TIME,
         });
       };

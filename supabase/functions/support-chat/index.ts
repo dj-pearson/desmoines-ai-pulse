@@ -21,7 +21,7 @@ import { getAIConfig, getAnthropicApiKey, lightweightModel, shapeClaudeRequest }
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { crisisMessageText, crisisPayload, detectCrisisIntent } from "../_shared/crisisSupport.ts";
 import { anthropicCostUsd } from "../_shared/providerUsage.ts";
-import { capHistory, type Msg } from "./history.ts";
+import { capHistory, transcriptRows, type Msg } from "./history.ts";
 import { guardAi, type QuotaClient } from "../_shared/aiQuota.ts";
 import { resolveEntitledTier } from "../_shared/entitlements.ts";
 
@@ -70,7 +70,35 @@ async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], p
   }
 }
 
-async function openTicket(supabase: Client, userId: string | null, history: Msg[], reason: string): Promise<string | null> {
+// Tickets an anonymous caller may open per UTC day, per IP. "Talk to a human"
+// skips the AI quota (it never calls the model), so before this the only bound
+// on ticket inserts was the 15-per-15-minutes request limit: about 1,400 a day
+// from one address. Signed-in users are not counted here. The window fits the
+// rate-limit cleanup, which keeps rows for a day after created_at.
+const ANON_TICKET_LIMIT = {
+  endpoint: "support-chat-ticket",
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 5,
+  message: "You've opened the most support tickets allowed today without signing in. Please sign in, or use the contact form.",
+};
+
+const ANON_TICKET_CAP_REPLY =
+  "I couldn't open another ticket from this connection today. Please sign in, or send us a message through the contact form, and a person will follow up.";
+
+/** Counts one anonymous ticket; returns the denial when the day's cap is spent, else null. */
+async function anonTicketDenied(req: Request, userId: string | null) {
+  if (userId) return null;
+  const rl = await checkRateLimitPersistent(req, ANON_TICKET_LIMIT);
+  return rl.success ? null : rl;
+}
+
+async function openTicket(
+  supabase: Client,
+  userId: string | null,
+  history: Msg[],
+  reason: string,
+  serverReply?: string | null,
+): Promise<string | null> {
   const first = history.find((m) => m.role === "user")?.content ?? "In-app support chat";
   const { data: ticket } = await supabase
     .from("support_tickets")
@@ -79,8 +107,9 @@ async function openTicket(supabase: Client, userId: string | null, history: Msg[
     .single();
   const ticketId = ticket?.id ?? null;
   if (ticketId) {
-    // Attach the full transcript.
-    const rows = history.map((m) => ({ ticket_id: ticketId, sender: m.role === "user" ? "user" : "agent", body: m.content, metadata: { transcript: true } }));
+    // Attach the transcript: the user's turns, plus the reply this request
+    // generated. Client-supplied assistant turns are not stored (history.ts).
+    const rows = transcriptRows(ticketId, history, serverReply);
     if (rows.length) await supabase.from("support_messages").insert(rows);
     await createAgentTask(supabase, {
       agentKey: AGENT_KEY,
@@ -154,6 +183,15 @@ Deno.serve(async (req) => {
     });
     if (!guard.ok) return guard.response;
     settleAi = (costUsd) => guard.settle({ costUsd });
+  } else {
+    // A 429, like the AI quota above and the request limit: useSupportChat
+    // treats it as a failed call and offers the contact form.
+    const denied = await anonTicketDenied(req, userId);
+    if (denied) {
+      return denied.response
+        ? addRateLimitHeaders(denied.response, denied)
+        : j({ error: ANON_TICKET_LIMIT.message }, 429, corsHeaders);
+    }
   }
 
   const ledger = await runAgent(AGENT_KEY, async (ctx) => {
@@ -181,7 +219,20 @@ Deno.serve(async (req) => {
     }
 
     if (!d || !d.canAnswer) {
-      const ticketId = await openTicket(supabase, userId, history, !d ? "assistant unavailable" : "could not resolve from KB");
+      // The model has already answered and been paid for, so a spent ticket
+      // cap returns that answer un-escalated instead of a 429.
+      if (await anonTicketDenied(req, userId)) {
+        ctx.processed(1);
+        ctx.summary("in-app chat unresolved; anonymous daily ticket cap reached");
+        return { escalated: false, ticketId: null, reply: ANON_TICKET_CAP_REPLY, sources: d?.sources ?? [] };
+      }
+      const ticketId = await openTicket(
+        supabase,
+        userId,
+        history,
+        !d ? "assistant unavailable" : "could not resolve from KB",
+        d?.reply || null,
+      );
       ctx.escalated(1);
       ctx.summary("in-app chat escalated (unresolved)");
       return {

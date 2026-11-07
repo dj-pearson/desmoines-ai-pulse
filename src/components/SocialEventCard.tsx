@@ -392,6 +392,7 @@ function SocialEventCardComponent({
             <AddToCalendarButton event={event} variant="ghost" iconOnly />
             <ShareDialog
               title={event.title}
+              itemName={event.title}
               description={
                 markdownToPlainText(event.enhanced_description || event.original_description) ||
                 `Check out ${event.title} in Des Moines`

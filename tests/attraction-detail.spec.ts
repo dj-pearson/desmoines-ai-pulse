@@ -19,6 +19,7 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * 8. One Website link in the page body; "Paid admission" alone with no
  *    website; no "Est. visit time" for a type we have no estimate for, and no
  *    "How long" question in the FAQ.
+ * 9. A failed fetch is a Retry, not "not found", and carries no noindex.
  *
  * Table overrides are registered AFTER installFixtureBackend, which the
  * fixture documents as the way to win the match.
@@ -220,6 +221,32 @@ test.describe('attraction detail (explore pass 2 WP3)', () => {
       'href',
       '/map?layers=attraction',
     );
+  });
+
+  test('a failed fetch offers Retry and sets no noindex (WEB-SEO-040)', async ({ page }) => {
+    // A 500 with no PostgREST code is retried twice by shouldRetry, so the
+    // error state arrives after about three seconds of backoff.
+    let failing = true;
+    await install(page, row());
+    await page.route('**/rest/v1/attractions**', (route) => {
+      if (!failing) return route.fallback();
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        headers,
+        body: JSON.stringify({ message: 'fixture: upstream failure' }),
+      });
+    });
+
+    await page.goto('/attractions/detail-fixture-museum');
+    const retry = page.getByRole('button', { name: 'Try again' });
+    await expect(retry).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Attraction not found')).toHaveCount(0);
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
+
+    failing = false;
+    await retry.click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Detail Fixture Museum' })).toBeVisible();
   });
 
   for (const scenario of ['found', 'not found'] as const) {

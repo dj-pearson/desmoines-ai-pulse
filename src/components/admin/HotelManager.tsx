@@ -84,6 +84,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
 import { toast } from "sonner";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -204,7 +205,7 @@ function HotelDetailSheet({
                   <span className="ml-1">({hotel.affiliate_provider})</span>
                 )}
               </div>
-              <a
+              <SafeExternalLink
                 href={hotel.affiliate_url}
                 target="_blank"
                 rel="noreferrer noopener"
@@ -212,7 +213,7 @@ function HotelDetailSheet({
               >
                 {hotel.affiliate_url}
                 <ExternalLink className="h-3 w-3 flex-shrink-0" />
-              </a>
+              </SafeExternalLink>
             </div>
           )}
           {hotel.amenities && hotel.amenities.length > 0 && (

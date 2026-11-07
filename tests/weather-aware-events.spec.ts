@@ -127,6 +127,16 @@ const FINE = {
   effectiveTemperatureF: 72,
 };
 
+/**
+ * An event's card, by its h3 title. Not getByText: since SEO-036 (a4ed13b)
+ * /events/today also lists each event as a plain link in "Top picks for the
+ * day", so the bare title matches twice. The cards are what the reorder acts
+ * on, so they are what these tests mean.
+ */
+function eventCard(page: Page, title: string) {
+  return page.getByRole('heading', { level: 3, name: title, exact: true });
+}
+
 async function visibleTitles(page: Page): Promise<string[]> {
   const titles = await page
     .locator('h3, h2')
@@ -142,8 +152,8 @@ test.describe('WEB-FEAT-022 weather-aware ordering on /events/today', () => {
     await page.goto('/events/today');
 
     // Both events present: the reorder ranks, it never filters.
-    await expect(page.getByText('Indoor Gallery Night')).toBeVisible();
-    await expect(page.getByText('Outdoor Market Morning')).toBeVisible();
+    await expect(eventCard(page, 'Indoor Gallery Night')).toBeVisible();
+    await expect(eventCard(page, 'Outdoor Market Morning')).toBeVisible();
 
     // The adjustment is explained rather than silent.
     await expect(page.getByRole('note')).toContainText('indoor picks are first');
@@ -168,8 +178,8 @@ test.describe('WEB-FEAT-022 weather-aware ordering on /events/today', () => {
     await stubEvents(page, { indoorFlags: true });
     await page.goto('/events/today');
 
-    await expect(page.getByText('Indoor Gallery Night')).toBeVisible();
-    await expect(page.getByText('Outdoor Market Morning')).toBeVisible();
+    await expect(eventCard(page, 'Indoor Gallery Night')).toBeVisible();
+    await expect(eventCard(page, 'Outdoor Market Morning')).toBeVisible();
     // No verdict means no banner, rather than a banner apologising for itself.
     await expect(page.getByRole('note')).toHaveCount(0);
   });
@@ -181,8 +191,8 @@ test.describe('WEB-FEAT-022 weather-aware ordering on /events/today', () => {
     await stubEvents(page, { indoorFlags: false });
     await page.goto('/events/today');
 
-    await expect(page.getByText('Indoor Gallery Night')).toBeVisible();
-    await expect(page.getByText('Outdoor Market Morning')).toBeVisible();
+    await expect(eventCard(page, 'Indoor Gallery Night')).toBeVisible();
+    await expect(eventCard(page, 'Outdoor Market Morning')).toBeVisible();
   });
 
   test('renders a populated list when weather reports itself unavailable', async ({ page }) => {
@@ -202,7 +212,7 @@ test.describe('WEB-FEAT-022 weather-aware ordering on /events/today', () => {
     await stubEvents(page, { indoorFlags: true });
     await page.goto('/events/today');
 
-    await expect(page.getByText('Outdoor Market Morning')).toBeVisible();
+    await expect(eventCard(page, 'Outdoor Market Morning')).toBeVisible();
     await expect(page.getByRole('note')).toHaveCount(0);
   });
 });

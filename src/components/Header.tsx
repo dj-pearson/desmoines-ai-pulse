@@ -24,6 +24,23 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
+/**
+ * Skip-link target: SiteLayout's <main>, which follows this header
+ * (WEB-UX-041). It used to be a marker span after the header, because <main>
+ * then wrapped the header too and focusing it landed in front of the logo.
+ */
+const MAIN_CONTENT_ID = "main-content";
+
+function skipToContent(event: React.MouseEvent<HTMLAnchorElement>) {
+  const target = document.getElementById(MAIN_CONTENT_ID);
+  if (!target) return; // no main landmark: let the browser follow the href
+  event.preventDefault();
+  // Focused directly so the skip does not push a #hash onto the router's
+  // history. Plain focus() scrolls only if <main> is off-screen, which keeps
+  // the first line of content out from under the sticky header.
+  target.focus();
+}
+
 export default function Header() {
   // Flags + actions only (no user/session) so the header doesn't re-render on
   // token-refresh ticks. (WEB-PERF-005)
@@ -102,10 +119,11 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50 safe-area-top">
-      {/* Skip Navigation Link for Accessibility */}
+    <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50 safe-area-top print:hidden">
+      {/* Skip link (WCAG 2.4.1), to the <main> that follows this header. */}
       <a
-        href="#main-content"
+        href={`#${MAIN_CONTENT_ID}`}
+        onClick={skipToContent}
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
       >
         Skip to main content

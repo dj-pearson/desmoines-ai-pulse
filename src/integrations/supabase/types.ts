@@ -8167,6 +8167,7 @@ export type Database = {
       saved_searches: {
         Row: {
           alerts_enabled: boolean
+          calendar_token: string | null
           created_at: string
           filters: Json
           id: string
@@ -8180,6 +8181,7 @@ export type Database = {
         }
         Insert: {
           alerts_enabled?: boolean
+          calendar_token?: string | null
           created_at?: string
           filters?: Json
           id?: string
@@ -8193,6 +8195,7 @@ export type Database = {
         }
         Update: {
           alerts_enabled?: boolean
+          calendar_token?: string | null
           created_at?: string
           filters?: Json
           id?: string
@@ -13399,6 +13402,7 @@ export type Database = {
         Args: { p_filters: Json; p_name: string }
         Returns: {
           alerts_enabled: boolean
+          calendar_token: string | null
           created_at: string
           filters: Json
           id: string
@@ -13929,6 +13933,14 @@ export type Database = {
         }[]
       }
       get_level_from_xp: { Args: { xp: number }; Returns: number }
+      get_listing_claim_teaser: {
+        Args: { p_listing_id: string; p_listing_type: string }
+        Returns: Json
+      }
+      get_listing_owner_stats: {
+        Args: { p_days?: number; p_listing_id: string; p_listing_type: string }
+        Returns: Json
+      }
       get_my_referral_stats: {
         Args: never
         Returns: {
@@ -14212,6 +14224,18 @@ export type Database = {
       is_admin_or_sales: { Args: never; Returns: boolean }
       is_email_domain_blocked: { Args: { p_email: string }; Returns: boolean }
       is_ip_blocked: { Args: { p_ip_address: string }; Returns: boolean }
+      list_unclaimed_listings_by_views: {
+        Args: { p_days?: number; p_limit?: number; p_listing_type?: string }
+        Returns: {
+          listing_id: string
+          name: string
+          pending_claims: number
+          phone: string
+          slug: string
+          views: number
+          website: string
+        }[]
+      }
       log_admin_action: {
         Args: {
           p_action_description: string
@@ -14425,6 +14449,14 @@ export type Database = {
       run_scraping_jobs_simple: { Args: never; Returns: undefined }
       run_social_media_automation: { Args: never; Returns: undefined }
       run_social_media_publishing: { Args: never; Returns: undefined }
+      saved_search_calendar_feed: {
+        Args: { p_token: string }
+        Returns: {
+          filters: Json
+          name: string
+          search_type: string
+        }[]
+      }
       search_events: {
         Args: {
           limit_count?: number
@@ -14498,6 +14530,10 @@ export type Database = {
           rank: number
           rating: number
         }[]
+      }
+      set_saved_search_calendar: {
+        Args: { p_enabled?: boolean; p_id: string; p_rotate?: boolean }
+        Returns: string
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

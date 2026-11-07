@@ -13,8 +13,6 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { ogImageUrl } from "@/lib/ogImage";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { AIWriteup } from "@/components/AIWriteup";
 import { RestaurantStatus } from "@/components/RestaurantStatus";
 import ShareDialog from "@/components/ShareDialog";
@@ -61,15 +59,24 @@ import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { isSponsoredActive } from "@/lib/sponsored";
 import { NearbyContent, TonightNearRestaurant } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
-import { RatingSystem } from "@/components/RatingSystem";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { fetchRestaurantDetail } from "@/lib/restaurantDetail";
 import { isRestaurantPseoSlug } from "@/pseo/restaurantAreaSlugs";
+import { useSiteFooter } from "@/hooks/useSiteFooter";
 
 // SEO-065: the pSEO renderer, loaded only for an area slug no restaurant owns.
 const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPseoPage"));
+
+// Ratings sit below the fold and fire their own requests on mount. React.lazy
+// defers the chunk; LazySection defers the mount until the reader scrolls near
+// it. Same pattern as EventDetails.
+const RatingSystem = lazy(() =>
+  import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
+);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -81,8 +88,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *    reading RestaurantCard gives it. The legacy spellings are for rows
  *    written before the CHECK.
  *  - `business_status`, Google's CLOSED_PERMANENTLY / CLOSED_TEMPORARILY. It
- *    is read off the select("*") row the way hours_json is, so it is undefined
- *    until migration 20260919000009 is applied, and no select names it.
+ *    is one of RESTAURANT_DETAIL_OPTIONAL_COLUMNS, like hours_json, so it is
+ *    undefined on a database without migration 20260919000009.
  */
 type Lifecycle = RestaurantLifecycle;
 
@@ -104,7 +111,7 @@ function formatOpeningDate(value: string | null | undefined): string | null {
 /**
  * Open/closed for this page, from one evaluation on the shared minute clock,
  * so the hero badge and the hours block cannot disagree (WP8 item 5).
- * hours_json is used when select("*") returns it; nothing adds the column.
+ * hours_json is an optional detail column, so it may be undefined.
  */
 function useRestaurantOpenStatus(
   hoursJson: StoredOpeningHours | null | undefined,
@@ -140,29 +147,8 @@ function hoursCheckedAt(hoursJson: StoredOpeningHours | null | undefined): strin
 function useRestaurantDetail(slug: string | undefined) {
   return useQuery({
     queryKey: detailQueryKey("restaurant", slug ?? ""),
-    queryFn: async () => {
-      let { data, error } = await supabase
-        .from("restaurants")
-        .select("*")
-        .eq("slug", slug)
-        .maybeSingle();
-
-      // Fall back to the id only when the param IS a uuid. Comparing a uuid
-      // column with a slug raises 22P02, which surfaced as the error page for
-      // any unknown slug instead of not-found.
-      if (!data && !error && UUID_RE.test(slug ?? "")) {
-        const result = await supabase
-          .from("restaurants")
-          .select("*")
-          .eq("id", slug)
-          .maybeSingle();
-        data = result.data;
-        error = result.error;
-      }
-
-      if (error) throw error;
-      return data;
-    },
+    // RESTAURANT_DETAIL_COLUMNS, not select("*"); shared with the hover prefetch.
+    queryFn: () => fetchRestaurantDetail(slug ?? ""),
     staleTime: DETAIL_STALE_TIME,
   });
 }
@@ -201,6 +187,8 @@ function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hours
 }
 
 export default function RestaurantDetails() {
+  // SEO-037: the footer's preferred-source button stays off on this page.
+  useSiteFooter({ preferredSource: false });
   const { slug } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -295,7 +283,6 @@ export default function RestaurantDetails() {
       <>
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/restaurants/${slug}`} />
-        <Header />
         <div className="min-h-screen bg-gray-50 dark:bg-background" role="status" aria-live="polite" aria-busy="true">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
             <div className="animate-pulse space-y-6 motion-reduce:animate-none">
@@ -317,7 +304,6 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer preferredSource={false} />
       </>
     );
   }
@@ -329,7 +315,6 @@ export default function RestaurantDetails() {
     return (
       <>
         <RouteCanonical path={`/restaurants/${slug}`} />
-        <Header />
         {/* A div: App.tsx already provides the one <main>. */}
         <div className="min-h-screen bg-gray-50 dark:bg-background flex items-center justify-center px-4">
           <div className="max-w-md text-center" role="alert">
@@ -357,7 +342,6 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer preferredSource={false} />
       </>
     );
   }
@@ -368,7 +352,6 @@ export default function RestaurantDetails() {
         <Helmet>
           <meta name="robots" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="min-h-screen bg-gray-50 dark:bg-background flex items-center justify-center px-4">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
@@ -388,7 +371,6 @@ export default function RestaurantDetails() {
             </CardContent>
           </Card>
         </div>
-        <Footer preferredSource={false} />
       </>
     );
     // SEO-065: no restaurant has this slug, and it is a taxonomy location, so
@@ -422,7 +404,7 @@ export default function RestaurantDetails() {
   // Pre-opening copy on a place that has opened is left out everywhere (WP3.4).
   const aboutText = currentDescription(restaurant);
   const hoursSpec = resolveOpeningHoursSpecification(hoursJson, restaurant.opening);
-  // Columns select("*") returns that types.ts does not list yet (Places
+  // Optional detail columns types.ts does not list yet (Places
   // enrichment and SEO-060). Each is optional and read defensively.
   const placeExtras = restaurant as {
     google_maps_uri?: string | null;
@@ -562,7 +544,6 @@ export default function RestaurantDetails() {
 
   return (
     <>
-      <Header />
       <SEOHead
         title={seoTitle}
         description={seoDescription}
@@ -619,6 +600,7 @@ export default function RestaurantDetails() {
             <div className="flex gap-2">
               <ShareDialog
                 title={restaurant.name}
+                itemName={restaurant.name}
                 description={
                   aboutText ||
                   `${restaurant.name}${restaurant.cuisine ? `, ${restaurant.cuisine}` : ""} in ${cityName}`
@@ -1116,7 +1098,9 @@ export default function RestaurantDetails() {
 
           {/* Ratings & Reviews (WEB-FEAT-010) */}
           <div id="reviews" className="mb-8 scroll-mt-20">
-            <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+            <DeferredWidget minHeight={240} label="Ratings and reviews">
+              <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+            </DeferredWidget>
           </div>
 
           {/* Restaurant-Specific FAQ. FAQSection draws its own card. */}
@@ -1199,7 +1183,6 @@ export default function RestaurantDetails() {
           hoursCheckedOn={lifecycle !== "closed" ? hoursCheckedAt(hoursJson) : null}
         />
       </div>
-      <Footer preferredSource={false} />
       <BackToTop />
 
       {/* No sticky actions for a closed place: every one of them (reserve,

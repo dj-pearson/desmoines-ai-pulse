@@ -1,7 +1,5 @@
 import { useMemo } from "react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { ListFreshness } from "@/components/ListFreshness";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
@@ -207,9 +205,6 @@ export default function EventsToday() {
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/today')}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           items={[
@@ -400,8 +395,6 @@ export default function EventsToday() {
         <EventsLandingLinks current="/events/today" className="mb-8" />
         <FAQSection faqs={faqData} />
       </div>
-
-      <Footer />
     </div>
   );
 }

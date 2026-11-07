@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateURLForSSRF } from '../_shared/validation.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -107,46 +108,18 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Admin only. This used to read profiles.user_role itself and let
+  // 'moderator' through, and the work below rewrites events.source_url with
+  // the service role. The shared helper checks user_roles then profiles and
+  // accepts admin / root_admin, or a machine caller (WEB-SEC-023).
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    // Get authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Verify user is admin
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Check if user has admin role
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('user_role')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!profile || !['admin', 'root_admin', 'moderator'].includes(profile.user_role)) {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient permissions' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     if (req.method === 'POST') {
       // Try both API keys - prioritize the custom search API

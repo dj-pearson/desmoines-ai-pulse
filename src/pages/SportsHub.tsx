@@ -1,8 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import ItemListSchema from '@/components/schema/ItemListSchema';
 import { EventListJsonLd } from '@/components/schema/EventListJsonLd';
@@ -189,7 +187,6 @@ export default function SportsHub() {
         />
       )}
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           {/* Hero */}
           <div className="text-center mb-10">
@@ -395,7 +392,6 @@ export default function SportsHub() {
             )}
           </section>
         </div>
-        <Footer />
       </div>
     </>
   );

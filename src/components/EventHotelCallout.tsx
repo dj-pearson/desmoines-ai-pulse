@@ -1,4 +1,4 @@
-import { useEventHotels } from "@/hooks/useHotels";
+import { useEventHotels, useHotelPins } from "@/hooks/useHotels";
 import { NearbyHotels } from "@/components/venues/NearbyHotels";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -164,6 +164,10 @@ function HotelList({
   nearSlug = null,
 }: EventHotelCalloutProps) {
   const { hotels: linkedHotels, isLoading } = useEventHotels(eventId);
+  // Start the NearbyHotels read now rather than after the linked-hotels read
+  // settles empty. It is one shared, long-lived query, so NearbyHotels below
+  // renders from this cache entry instead of waterfalling a second request.
+  useHotelPins();
 
   // Reserve the space instead of rendering nothing, so the rails below don't
   // jump when the list lands.

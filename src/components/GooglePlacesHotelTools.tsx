@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('GooglePlacesHotelTools');
 
@@ -519,7 +520,8 @@ export default function GooglePlacesHotelTools() {
                           )}
                         </div>
                         {hotel.website && (
-                          <a
+                          <SafeExternalLink
+                            fallback={null}
                             href={hotel.website}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -527,7 +529,7 @@ export default function GooglePlacesHotelTools() {
                           >
                             <SpriteIcon name="external-link" className="h-3 w-3" />
                             Website
-                          </a>
+                          </SafeExternalLink>
                         )}
                       </div>
                       <div className="flex gap-2 ml-4">

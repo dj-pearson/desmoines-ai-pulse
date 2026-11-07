@@ -8,6 +8,7 @@ import type {
   CrmContactSummary,
 } from '@/types/crm';
 import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 const CRM_CONTACTS_KEY = 'crm-contacts';
 
@@ -21,9 +22,12 @@ export function useCrmContacts(filters?: CrmContactFilters) {
         .select('*');
 
       // Apply filters
-      if (filters?.search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = filters?.search ? sanitizePostgrestPattern(filters.search) : '';
+      if (safeSearch) {
         query = query.or(
-          `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,company.ilike.%${filters.search}%`
+          `first_name.ilike.%${safeSearch}%,last_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,company.ilike.%${safeSearch}%`
         );
       }
 

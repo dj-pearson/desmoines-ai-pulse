@@ -1,7 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
 import { OptimizedImage } from "@/components/OptimizedImage";
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -146,7 +144,6 @@ export default function BestOfCategory() {
         />
       )}
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8 max-w-3xl" data-best-of-category>
           <Link
             to="/best-of"
@@ -332,7 +329,6 @@ export default function BestOfCategory() {
             </div>
           )}
         </div>
-        <Footer />
       </div>
     </>
   );

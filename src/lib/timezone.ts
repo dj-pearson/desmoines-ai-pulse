@@ -1,6 +1,6 @@
 import { addDays, parseISO } from "date-fns";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
-import { createLogger } from '@/lib/logger';
+import { createLogger } from './logger';
 import { hasStatedStartTime, NO_TIME_MARKER } from './eventTime';
 
 const logger = createLogger('timezone');

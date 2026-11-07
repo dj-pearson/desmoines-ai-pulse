@@ -33,6 +33,7 @@ import { Resvg, initWasm } from "https://esm.sh/@resvg/resvg-wasm@2.6.2";
 import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { safeFetch } from "../_shared/fetchGuard.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
 // /og-image.png does not exist - Cloudflare answers it with the SPA shell, so
@@ -137,7 +138,10 @@ async function fetchImageDataUri(url: string | null): Promise<string | null> {
     return null;
   }
   try {
-    const res = await fetch(url);
+    // safeFetch re-checks every redirect hop; fetch() would follow a 302 to an
+    // internal address that the check above never saw. A refused hop throws
+    // and lands in the catch below, same as a dead URL.
+    const res = await safeFetch(url);
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") || "image/jpeg";
     if (!ct.startsWith("image/")) return null;

@@ -1,5 +1,3 @@
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import SeasonalContent from "@/components/SeasonalContent";
 import { FAQSection } from "@/components/FAQSection";
@@ -7,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, Utensils, Car, Bed } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { BRAND } from "@/lib/brandConfig";
 import {
   getAnnualEvent,
   annualEventStatus,
@@ -45,6 +44,11 @@ export default function IowaStateFairPage() {
     "description": "Iowa's premier annual event featuring agriculture, entertainment, food, and attractions at the Iowa State Fairgrounds in Des Moines",
     "startDate": FAIR.startISO,
     "endDate": FAIR.endISO,
+    "eventStatus": "https://schema.org/EventScheduled",
+    "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
+    // The page has no fair photo of its own; this is the image SEOHead already
+    // sends as og:image, so the markup and the share card agree.
+    "image": [`${BRAND.baseUrl}${BRAND.ogImage}`],
     "location": {
       "@type": "Place",
       "name": "Iowa State Fairgrounds",
@@ -66,14 +70,11 @@ export default function IowaStateFairPage() {
       "@type": "Organization", 
       "name": "Iowa State Fair",
       "url": "https://www.iowastatefair.org"
-    },
-    "offers": {
-      "@type": "Offer",
-      "url": "https://www.iowastatefair.org/admission/",
-      "priceCurrency": "USD",
-      "price": "15.00",
-      "availability": "https://schema.org/InStock"
     }
+    // No offers block. It said "15.00" and InStock with nothing behind either:
+    // annualEvents.ts verifies dates only, and a wrong price in Event markup is
+    // shown in search results as ours. Add it back from a verified field (with
+    // its own verifiedAt), not a literal.
   };
 
   const businessDirectorySchema = {
@@ -141,9 +142,6 @@ export default function IowaStateFairPage() {
         structuredData={[stateFairSchema, businessDirectorySchema]}
         type="event"
       />
-      
-      <Header />
-
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-yellow-600 via-orange-600 to-red-600 overflow-hidden min-h-[400px]">
         <div className="absolute inset-0 bg-black/20"></div>
@@ -442,8 +440,6 @@ export default function IowaStateFairPage() {
           />
         </div>
       </section>
-
-      <Footer />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getRestaurantOpenStatus, formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { safeHttpUrl } from '@/lib/safeUrl';
 
 interface OpenStatusChipProps {
   /** Free-form hours text (same format the open/closed parser understands). */
@@ -58,10 +59,11 @@ export function OpenStatusChip({
     );
   }
 
-  if (website) {
+  const safeWebsite = safeHttpUrl(website);
+  if (safeWebsite) {
     return (
       <a
-        href={website}
+        href={safeWebsite}
         target="_blank"
         rel="noopener noreferrer"
         className={cn(

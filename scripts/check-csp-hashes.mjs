@@ -71,6 +71,50 @@ if (scriptSrc.includes("'unsafe-inline'")) {
   process.exit(1);
 }
 
+// A public package CDN in script-src serves any version of any npm package, so
+// an HTML injection loads whatever it likes from it and the hashes above stop
+// mattering. unpkg.com and cdn.jsdelivr.net sat here with nothing loading
+// script from either. A scheme-only source (https:) or a bare * is the same
+// hole, wider.
+const PUBLIC_CDN_HOSTS = [
+  'unpkg.com',
+  'cdn.jsdelivr.net',
+  'fastly.jsdelivr.net',
+  'cdnjs.cloudflare.com',
+  'esm.sh',
+  'esm.run',
+  'cdn.skypack.dev',
+  'jspm.dev',
+  'ga.jspm.io',
+  'cdn.statically.io',
+  'rawcdn.githack.com',
+  'raw.githack.com',
+  'raw.githubusercontent.com',
+  'gitcdn.link',
+];
+const sources = scriptSrc.split(/\s+/).filter(Boolean);
+const hostOf = (src) => src.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split(/[/:]/)[0].toLowerCase();
+const cdnSources = sources.filter((src) => {
+  const host = hostOf(src);
+  if (host.startsWith('*.')) {
+    // *.jsdelivr.net covers cdn.jsdelivr.net: flag a wildcard over any CDN.
+    const base = host.slice(2);
+    return PUBLIC_CDN_HOSTS.some((cdn) => cdn === base || cdn.endsWith('.' + base) || base.endsWith('.' + cdn));
+  }
+  return PUBLIC_CDN_HOSTS.some((cdn) => host === cdn || host.endsWith('.' + cdn));
+});
+const wildSources = sources.filter((src) => src === '*' || /^[a-z][a-z0-9+.-]*:$/i.test(src));
+if (cdnSources.length > 0 || wildSources.length > 0) {
+  console.error(
+    `X script-src in ${HEADERS} allows a source any page injection can load\n` +
+      `  arbitrary code from:\n` +
+      [...cdnSources, ...wildSources].map((s) => `    ${s}`).join('\n') +
+      `\n  Bundle the dependency instead, or pin the exact first-party host that\n` +
+      `  serves it.`
+  );
+  process.exit(1);
+}
+
 const pinned = [...scriptSrc.matchAll(/'(sha256-[A-Za-z0-9+/=]+)'/g)].map((m) => m[1]);
 const blocked = found.filter((f) => !pinned.includes(f.hash));
 const stale = pinned.filter((p) => !found.some((f) => f.hash === p));

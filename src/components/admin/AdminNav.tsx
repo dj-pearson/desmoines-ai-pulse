@@ -361,12 +361,12 @@ export default function AdminNav() {
           </div>
         </div>
 
-        <Link to="/" className="flex-shrink-0">
-          <Button variant="outline" size="sm" className="gap-2">
+        <Button asChild variant="outline" size="sm" className="flex-shrink-0 gap-2">
+          <Link to="/">
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Back to Site</span>
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
     </nav>
   );

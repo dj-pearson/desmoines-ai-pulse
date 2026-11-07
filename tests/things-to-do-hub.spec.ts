@@ -166,9 +166,12 @@ const WEDNESDAY_10AM = new Date('2026-09-30T15:00:00Z');
 /**
  * The weekend line's projection (LANDING_LIGHT_COLUMNS), as supabase-js writes
  * it into the URL. Long enough not to match the Tonight rail's own events
- * query, which starts with the same six columns.
+ * query, which starts with the same six columns. SEO-036 (a4ed13b) put
+ * time_tbd after end_date; with the old prefix this matched no request and
+ * "one request" read as zero.
  */
-const LIGHT_SELECT = 'select=id,title,date,event_start_utc,event_start_local,end_date,category,city,price,venue,location';
+const LIGHT_SELECT =
+  'select=id,title,date,event_start_utc,event_start_local,end_date,time_tbd,category,city,price,venue,location';
 
 test('weekend line and /events/this-weekend: one windowed request, one number', async ({ page }) => {
   await page.clock.setFixedTime(WEDNESDAY_10AM);

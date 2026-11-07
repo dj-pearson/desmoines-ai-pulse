@@ -26,9 +26,11 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SEO_HEAD = readFileSync(join(HERE, '../../src/components/SEOHead.tsx'), 'utf8');
 const MIDDLEWARE = readFileSync(join(HERE, '../_middleware.ts'), 'utf8');
-// The body target is not in the head: App.tsx renders the one <main> every
-// route shares, and the entity shell replaces its contents.
-const APP = readFileSync(join(HERE, '../../src/App.tsx'), 'utf8');
+// The body target is not in the head: SiteLayout renders the one <main> every
+// route shares, and the entity shell replaces its contents. It lived in
+// App.tsx until WEB-UX-041 moved the header and footer outside <main>; this
+// read App.tsx after the move and failed on code that was still correct.
+const SITE_LAYOUT = readFileSync(join(HERE, '../../src/components/layout/SiteLayout.tsx'), 'utf8');
 
 const { selfCanonicalRewrites, entityShellRewrites } = await import('../_middleware.ts');
 
@@ -47,7 +49,8 @@ function shellEmits(selector) {
   if (meta) return new RegExp(`${meta[1]}="${meta[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`).test(SEO_HEAD);
   if (selector === 'link[rel="canonical"]') return /rel="canonical"/.test(SEO_HEAD);
   if (selector === 'script[type="application/ld+json"]') return /application\/ld\+json/.test(SEO_HEAD);
-  if (selector === 'main#main-content') return /<main id="main-content"/.test(APP);
+  // Attributes may sit on their own lines, as SiteLayout writes them.
+  if (selector === 'main#main-content') return /<main\b[^>]*\bid="main-content"/.test(SITE_LAYOUT);
   return null; // unrecognised shape - reported rather than silently passed
 }
 
@@ -68,7 +71,7 @@ for (const [name, rules] of Object.entries(RULE_SETS)) {
     ck(
       `${rule.selector} is a tag the shell has`,
       emitted === true,
-      emitted === null ? 'unrecognised selector shape - teach shellEmits about it' : 'SEOHead emits no such tag',
+      emitted === null ? 'unrecognised selector shape - teach shellEmits about it' : 'the shell emits no such tag (SEOHead, or SiteLayout for <main>)',
     );
   }
 }

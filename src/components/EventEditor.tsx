@@ -25,6 +25,7 @@ import { CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { useScrollPreservation } from "@/hooks/useScrollPreservation";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { safeHttpUrl } from "@/lib/safeUrl";
 
 interface EventEditorProps {
   event: any;
@@ -100,6 +101,10 @@ export default function EventEditor({
     return problemIndicators.some(Boolean);
   };
 
+  // source_url is scraped text: only an http(s) URL becomes a link, and
+  // `new URL` below can no longer throw on a malformed value.
+  const sourceHref = safeHttpUrl(formData.source_url);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -150,15 +155,19 @@ export default function EventEditor({
           {/* Source URL */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Source:</span>
-            <a
-              href={formData.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-blue-600 hover:underline"
-            >
-              {new URL(formData.source_url).hostname}
-              <SpriteIcon name="external-link" className="h-3 w-3" />
-            </a>
+            {sourceHref ? (
+              <a
+                href={sourceHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-blue-600 hover:underline"
+              >
+                {new URL(sourceHref).hostname}
+                <SpriteIcon name="external-link" className="h-3 w-3" />
+              </a>
+            ) : (
+              <span className="break-all">{formData.source_url}</span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

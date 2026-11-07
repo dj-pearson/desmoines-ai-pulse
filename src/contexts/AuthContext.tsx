@@ -10,6 +10,7 @@ import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { createLogger } from '@/lib/logger';
 import { clearPersonalStorage } from '@/lib/userPreferencesStore';
+import { sessionStore } from '@/lib/safeStorage';
 import { DEFAULT_ROLE, highestRole, isFullAdmin, isUserRole, type UserRole } from '@/lib/roles';
 
 const log = createLogger('AuthContext');
@@ -98,25 +99,90 @@ const AuthStateContext = createContext<AuthState | undefined>(undefined);
 const AuthFlagsContext = createContext<AuthFlags | undefined>(undefined);
 const AuthActionsContext = createContext<AuthActions | undefined>(undefined);
 
-// Cache for the resolved role. WEB-AUTH-010: this held a boolean, which is
-// why a second consumer (useAdminAuth) had to re-query for the role name and
-// could reach a different answer.
-const roleCache = new Map<string, { role: UserRole; timestamp: number }>();
+// The resolved role, cached in sessionStorage per user id (WEB-PERF-051).
+//
+// It was an in-memory Map, so every reload paid for the full role resolution
+// again - and for an ordinary user (no user_roles row) that was three sequential
+// round trips, one of them the sync_oauth_user_role WRITE. sessionStorage
+// survives a reload but not the tab, and sessionStore falls back to memory when
+// the store is blocked (private mode), so nothing here can throw.
+//
+// THIS IS A UI HINT, NOT A GRANT. Anyone can edit sessionStorage, and a
+// tampered entry can make the nav and ProtectedRoute render an admin page
+// shell. It cannot make any request succeed: user_roles writes are denied to
+// clients (20260612000000), admin RLS policies read user_roles through
+// is_admin() on the server, and admin edge functions check the caller's JWT
+// with isAdminUserId (_shared/apiKeyAuth.ts). That was already true of the
+// Map: client-side gating has never been more than a patch to React state
+// away, so the cache moving to storage changes the effort, not the exposure.
+//
+// One key, one user. An entry for a different user id reads as a miss and is
+// removed, which is what "clear on user change" means here.
+const ROLE_CACHE_KEY = 'auth.roleCache.v1';
+// Set once sync_oauth_user_role has been attempted for this user in this tab,
+// so the SIGNED_IN that supabase-js re-emits on every tab focus does not write
+// again (WEB-PERF-051).
+const OAUTH_LINK_KEY = 'auth.oauthRoleLinked.v1';
 const CACHE_TTL = 5 * 60 * 1000;
 const pendingChecks = new Map<string, Promise<UserRole | null>>();
 
+interface CachedRoleEntry {
+  userId: string;
+  role: UserRole;
+  timestamp: number;
+}
+
+function writeCachedRole(userId: string, role: UserRole): void {
+  sessionStore.set<CachedRoleEntry>(ROLE_CACHE_KEY, { userId, role, timestamp: Date.now() });
+}
+
+/** Drop the role cache and the OAuth-link marker. Sign-out and user change. */
+function clearRoleCache(): void {
+  sessionStore.remove(ROLE_CACHE_KEY);
+  sessionStore.remove(OAUTH_LINK_KEY);
+}
+
 /**
- * Synchronous read of the admin cache. Returns null when there is no fresh
- * entry. Lets a re-emitted auth event resolve admin status without ever
- * entering the `isAdminLoading` state (which unmounts ProtectedRoute
- * subtrees). See handleAuthChange. (WEB-UX-008)
+ * Synchronous read of the role cache. Returns null when there is no fresh,
+ * well-formed entry for this user. Lets a re-emitted auth event resolve admin
+ * status without ever entering the `isAdminLoading` state (which unmounts
+ * ProtectedRoute subtrees). See handleAuthChange. (WEB-UX-008)
  */
 function readCachedRole(userId: string): UserRole | null {
-  const cached = roleCache.get(userId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.role;
+  const cached = sessionStore.get<Partial<CachedRoleEntry>>(ROLE_CACHE_KEY);
+  if (!cached) return null;
+  if (cached.userId !== userId) {
+    // Another account's answer. Never reuse it, and do not leave it around.
+    clearRoleCache();
+    return null;
   }
-  return null;
+  const age = typeof cached.timestamp === 'number' ? Date.now() - cached.timestamp : NaN;
+  // A future timestamp is as malformed as a missing one: both would otherwise
+  // pin the entry past its TTL.
+  if (!isUserRole(cached.role) || !(age >= 0 && age < CACHE_TTL)) {
+    sessionStore.remove(ROLE_CACHE_KEY);
+    return null;
+  }
+  return cached.role;
+}
+
+function oauthLinkAttempted(userId: string): boolean {
+  return sessionStore.getString(OAUTH_LINK_KEY) === userId;
+}
+
+/**
+ * A user changes when a different id signs in on this tab. Keeps a field-equal
+ * user object's identity, so effects keyed on `user` (100-odd hooks) do not
+ * re-run on every TOKEN_REFRESHED, which hands back a freshly parsed copy of
+ * the same user each hour.
+ */
+function stableUser(prev: User | null, next: User | null): User | null {
+  if (!prev || !next || prev === next || prev.id !== next.id) return next;
+  try {
+    return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+  } catch {
+    return next;
+  }
 }
 
 // Login attempt throttling — max 5 failed attempts per email per 15 minutes
@@ -238,37 +304,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * The user's strongest role, cached. Returns null when the read FAILED, which
    * is not the same as `'user'`: callers deny access on either, but only the
    * real answer is cached (WEB-CI-032).
+   *
+   * `linkOAuth` runs sync_oauth_user_role when no role row matches. Only a
+   * SIGNED_IN event asks for it (WEB-PERF-051); it bypasses the cache, because
+   * a cached 'user' is exactly the answer the link exists to correct.
    */
-  const resolveRole = useCallback(async (user: User): Promise<UserRole | null> => {
-    const cached = readCachedRole(user.id);
-    if (cached !== null) return cached;
+  const resolveRole = useCallback(async (
+    user: User,
+    { linkOAuth = false }: { linkOAuth?: boolean } = {},
+  ): Promise<UserRole | null> => {
+    if (!linkOAuth) {
+      const cached = readCachedRole(user.id);
+      if (cached !== null) return cached;
+      // A linking check answers this question too, and its answer is better.
+      const linking = pendingChecks.get(`${user.id}:link`);
+      if (linking) return linking;
+    }
 
-    const pending = pendingChecks.get(user.id);
+    const pendingKey = `${user.id}:${linkOAuth ? 'link' : 'read'}`;
+    const pending = pendingChecks.get(pendingKey);
     if (pending) return pending;
+
+    // Marked before the reads, not after the RPC: a user whose role row
+    // turns up below never needs the link either, and the marker is what stops
+    // the next tab-focus SIGNED_IN from trying again.
+    if (linkOAuth) sessionStore.setString(OAUTH_LINK_KEY, user.id);
 
     const checkPromise = (async () => {
       try {
         // WEB-CI-032: both reads used to discard `error`. supabase-js RESOLVES
         // with an { error } object rather than throwing, so a failed read
         // arrived here as data: null - indistinguishable from "this user holds
-        // no admin row". The function then fell through to
-        // `adminStatusCache.set(..., { isAdmin: false })` and pinned that
-        // answer for CACHE_TTL, five minutes. One dropped request and a real
-        // admin lost /admin/* for five minutes with nothing logged anywhere,
-        // because esbuild.drop strips console.* from production.
+        // no admin row" - and that guess was cached for the full TTL. A failure
+        // is not an answer, so it is not cached; null is returned (deny) and
+        // the next call retries.
         //
-        // A failure is not an answer, so it is not cached. `false` is still
-        // returned - denying admin on an unknown is the safe direction - but
-        // the next call retries instead of reading back a guess.
-        // WEB-AUTH-010: ALL rows, ranked by precedence. This was
-        // .maybeSingle(), which resolves with PGRST116 when a user holds two
-        // role rows - so the handler above logged it and returned false, and
-        // an extra row silently revoked admin. A role row is a grant; holding
-        // two means holding both, and the effective role is the strongest.
-        const { data: rolesData, error: rolesError } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id);
+        // WEB-AUTH-010: ALL user_roles rows, ranked by precedence. A role row is
+        // a grant; holding two means holding both.
+        //
+        // WEB-PERF-051: the two reads are independent, so they run together.
+        // The profile read is wasted when a role row exists; it is one cheap
+        // indexed select, against a round trip saved on every miss.
+        const [rolesResult, profileResult] = await Promise.all([
+          supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id),
+          supabase
+            .from("profiles")
+            .select("user_role")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+        ]);
+        const { data: rolesData, error: rolesError } = rolesResult;
 
         if (rolesError) {
           log.error('resolveRole', 'Role read failed; not caching', { error: rolesError });
@@ -277,36 +365,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (rolesData && rolesData.length > 0) {
           const role = highestRole(rolesData);
-          roleCache.set(user.id, { role, timestamp: Date.now() });
+          writeCachedRole(user.id, role);
           return role;
         }
 
-        // OAUTH ROLE LINKING, moved here from useAdminAuth (WEB-AUTH-010).
+        // OAUTH ROLE LINKING (WEB-AUTH-010).
         //
         // A user who signs in with Google gets a NEW auth user id, so their
         // user_roles rows - keyed by the id of the account they made with a
-        // password - do not match. sync_oauth_user_role links them by email.
-        // useAdminAuth called it and AuthContext did not, which is a second way
-        // the two disagreed: an OAuth admin got the nav and then Access Denied.
+        // password - do not match. sync_oauth_user_role links them by email
+        // and WRITES the role into user_roles, so once it has run the read
+        // above finds the row on every later load.
         //
-        // Consulted before the profiles fallback, matching the order
-        // useAdminAuth used, so no user loses a role they had yesterday. An
-        // error is ignored rather than fatal: the RPC is a best-effort link,
+        // That is why it runs only on SIGNED_IN (WEB-PERF-051): it used to run
+        // on every INITIAL_SESSION of every user without a role row - most
+        // users - making each page load pay for a third sequential call, and a
+        // write. Consulted before the profiles fallback, the order useAdminAuth
+        // used. An error is ignored rather than fatal: the link is best-effort,
         // and a user with no linkable row is the normal case.
-        const { data: syncedRole, error: syncError } = await supabase.rpc(
-          'sync_oauth_user_role',
-          { p_user_id: user.id },
-        );
-        if (!syncError && isUserRole(syncedRole) && syncedRole !== DEFAULT_ROLE) {
-          roleCache.set(user.id, { role: syncedRole, timestamp: Date.now() });
-          return syncedRole;
+        if (linkOAuth) {
+          const { data: syncedRole, error: syncError } = await supabase.rpc(
+            'sync_oauth_user_role',
+            { p_user_id: user.id },
+          );
+          if (!syncError && isUserRole(syncedRole) && syncedRole !== DEFAULT_ROLE) {
+            writeCachedRole(user.id, syncedRole);
+            return syncedRole;
+          }
         }
 
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("user_role")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const { data: profileData, error: profileError } = profileResult;
 
         if (profileError) {
           log.error('resolveRole', 'Profile role read failed; not caching', { error: profileError });
@@ -315,24 +403,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (profileData?.user_role) {
           const role = highestRole([{ role: profileData.user_role }]);
-          roleCache.set(user.id, { role, timestamp: Date.now() });
+          writeCachedRole(user.id, role);
           return role;
         }
 
         // Both reads succeeded and neither carries a role: a real answer, so
         // it is safe to cache.
-        roleCache.set(user.id, { role: DEFAULT_ROLE, timestamp: Date.now() });
+        writeCachedRole(user.id, DEFAULT_ROLE);
         return DEFAULT_ROLE;
       } catch (error) {
         log.error('resolveRole', 'Role check error', { error });
         return null;
       } finally {
-        pendingChecks.delete(user.id);
+        pendingChecks.delete(pendingKey);
       }
     })();
 
-    pendingChecks.set(user.id, checkPromise);
+    pendingChecks.set(pendingKey, checkPromise);
     return checkPromise;
+  }, []);
+
+  // Role resolutions can overlap: on an OAuth redirect, getSession's read-only
+  // check and the SIGNED_IN linking check are in flight together, and the
+  // read-only one can finish second with the pre-link answer. Each resolution
+  // takes a number; only the latest started may write its answer.
+  const roleSeqRef = useRef(0);
+
+  /**
+   * Write a resolved role into state, unless the user changed or a newer
+   * resolution has started since. Always ends the loading state, and keeps
+   * state identity when nothing changed.
+   */
+  const applyRole = useCallback((user: User, role: UserRole | null, seq: number) => {
+    const nextRole = role ?? DEFAULT_ROLE;
+    const isAdmin = role !== null && isFullAdmin(role);
+    setAuthState(prev => {
+      if (prev.user?.id !== user.id) return prev;
+      if (seq !== roleSeqRef.current) return prev;
+      if (prev.isAdmin === isAdmin && prev.userRole === nextRole && !prev.isAdminLoading) return prev;
+      log.debug('applyRole', 'Role resolved', { role: nextRole, isAdmin });
+      return { ...prev, isAdmin, userRole: nextRole, isAdminLoading: false };
+    });
   }, []);
 
   /**
@@ -344,18 +455,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * when the answer hasn't changed, so this is a no-op re-render in the common
    * case. (WEB-UX-008)
    */
-  const revalidateAdminSilently = useCallback(async (user: User) => {
-    const role = await resolveRole(user);
+  const revalidateAdminSilently = useCallback(async (user: User, options?: { linkOAuth?: boolean }) => {
+    const seq = ++roleSeqRef.current;
+    const role = await resolveRole(user, options);
     if (isLoggingOutRef.current) return;
-    const nextRole = role ?? DEFAULT_ROLE;
-    const isAdmin = role !== null && isFullAdmin(role);
-    setAuthState(prev => {
-      if (prev.user?.id !== user.id) return prev;
-      if (prev.isAdmin === isAdmin && prev.userRole === nextRole) return prev;
-      log.debug('revalidateAdminSilently', 'Role changed', { role: nextRole, isAdmin });
-      return { ...prev, isAdmin, userRole: nextRole };
-    });
-  }, [resolveRole]);
+    applyRole(user, role, seq);
+  }, [resolveRole, applyRole]);
 
   /**
    * Drop every cached query when a session ends (WEB-SEC-031).
@@ -405,7 +510,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearQueryCache();
       clearPersonalStorage(currentUserIdRef.current);
       currentUserIdRef.current = null;
-      roleCache.clear();
+      clearRoleCache();
+      pendingChecks.clear();
       resolvedAdminForUserRef.current = null;
       setAuthState({
         user: null,
@@ -454,12 +560,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (event === 'TOKEN_REFRESHED') {
       log.debug('handleAuthChange', 'Token refreshed');
-      // Just update the session, don't re-check admin
+      // Just update the session, don't re-check admin. The user object is a
+      // fresh copy of the same user on every refresh; keeping the old
+      // reference when nothing in it changed stops effects keyed on `user`
+      // from re-running each hour (WEB-PERF-051).
       if (session) {
         setAuthState(prev => ({
           ...prev,
           session,
-          user: session.user,
+          user: stableUser(prev.user, session.user),
         }));
       }
       return;
@@ -487,14 +596,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return {
           ...prev,
-          user: nextUser,
+          user: stableUser(prev.user, nextUser),
           session,
           isLoading: false,
           isAuthenticated: true,
         };
       });
-      // Still re-validate the role, just without a visible loading state.
-      void revalidateAdminSilently(nextUser);
+      // Still re-validate the role, just without a visible loading state. A
+      // SIGNED_IN for a user not yet linked in this tab carries the OAuth link
+      // with it: on an OAuth redirect, getSession can resolve the user (without
+      // the link) before supabase-js announces the sign-in. Once attempted,
+      // the marker keeps tab-focus re-emits from writing again (WEB-PERF-051).
+      const cachedForLink = readCachedRole(nextUser.id);
+      void revalidateAdminSilently(nextUser, {
+        linkOAuth:
+          event === 'SIGNED_IN' &&
+          !oauthLinkAttempted(nextUser.id) &&
+          (cachedForLink === null || cachedForLink === DEFAULT_ROLE),
+      });
       return;
     }
 
@@ -533,9 +652,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // A fresh admin answer already in cache resolves synchronously — no loading
     // state, so a returning user never sees the page blink.
     const cachedRole = nextUser ? readCachedRole(nextUser.id) : null;
+    // WEB-PERF-051: sync_oauth_user_role runs on SIGNED_IN only, never on
+    // INITIAL_SESSION or TOKEN_REFRESHED, and at most once per user per tab. A
+    // cached role other than 'user' already came from a role row, which the
+    // link would only echo back.
+    const linkOAuth =
+      !!nextUser &&
+      event === 'SIGNED_IN' &&
+      !oauthLinkAttempted(nextUser.id) &&
+      (cachedRole === null || cachedRole === DEFAULT_ROLE);
     const needsAdminCheck =
       !!nextUser &&
-      cachedRole === null &&
+      (cachedRole === null || linkOAuth) &&
       (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');
 
     setAuthState(prev => ({
@@ -558,19 +686,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Check admin status for new sessions
     if (needsAdminCheck) {
-      const role = await resolveRole(nextUser);
+      const seq = ++roleSeqRef.current;
+      const role = await resolveRole(nextUser, { linkOAuth });
       if (isMounted && !isLoggingOutRef.current) {
         log.debug('handleAuthChange', 'Role check result', { role });
         resolvedAdminForUserRef.current = nextUser.id;
-        setAuthState(prev => ({
-          ...prev,
-          isAdmin: role !== null && isFullAdmin(role),
-          userRole: role ?? DEFAULT_ROLE,
-          isAdminLoading: false,
-        }));
+        applyRole(nextUser, role, seq);
       }
     }
-  }, [resolveRole, revalidateAdminSilently, clearQueryCache]);
+  }, [resolveRole, revalidateAdminSilently, clearQueryCache, applyRole]);
 
   useEffect(() => {
     log.info('init', 'Initializing auth context');
@@ -613,16 +737,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (cachedRole !== null) {
             resolvedAdminForUserRef.current = session.user.id;
           } else {
+            // Read-only: the OAuth link is a SIGNED_IN concern (WEB-PERF-051).
+            const seq = ++roleSeqRef.current;
             const role = await resolveRole(session.user);
             if (isMounted) {
               log.debug('init', 'Initial role check', { role });
               resolvedAdminForUserRef.current = session.user.id;
-              setAuthState(prev => ({
-                ...prev,
-                isAdmin: role !== null && isFullAdmin(role),
-                userRole: role ?? DEFAULT_ROLE,
-                isAdminLoading: false,
-              }));
+              applyRole(session.user, role, seq);
             }
           }
         }
@@ -649,7 +770,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscriptionRef.current = null;
       log.debug('cleanup', 'Auth context cleanup');
     };
-  }, [resolveRole, handleAuthChange]);
+  }, [resolveRole, handleAuthChange, applyRole]);
 
   // Login with email/password (with attempt throttling)
   const login = useCallback(async (email: string, password: string, captchaToken?: string): Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }> => {
@@ -823,8 +944,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearPersonalStorage(currentUserIdRef.current);
     currentUserIdRef.current = null;
 
-    // Clear admin cache first
-    roleCache.clear();
+    // Clear the role cache first (sessionStorage, so it would otherwise
+    // outlive the sign-out for the rest of the tab).
+    clearRoleCache();
     pendingChecks.clear();
     resolvedAdminForUserRef.current = null;
 

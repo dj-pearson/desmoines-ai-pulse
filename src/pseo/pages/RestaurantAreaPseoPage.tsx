@@ -10,8 +10,6 @@
  */
 import type { ReactNode } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { PseoPage } from '../components/PseoPage';
 import { usePseoPage } from '../hooks/usePseoPage';
 
@@ -27,7 +25,6 @@ export default function RestaurantAreaPseoPage({ slug, notFound }: RestaurantAre
   if (isLoading) {
     return (
       <>
-        <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8 space-y-8">
             <Skeleton className="h-4 w-48" />
@@ -36,7 +33,6 @@ export default function RestaurantAreaPseoPage({ slug, notFound }: RestaurantAre
             <span className="sr-only">Loading restaurants</span>
           </div>
         </div>
-        <Footer />
       </>
     );
   }

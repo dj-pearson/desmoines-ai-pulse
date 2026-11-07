@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 /**
  * One <main> per page (WCAG 1.3.1, axe landmark-no-duplicate-main).
  *
- * App.tsx renders <main id="main-content"> around every route, so a page that
+ * SiteLayout renders <main id="main-content"> around every route, so a page that
  * renders its own <main> nests a second landmark inside the first. The e2e
  * check in accessibility.spec.ts only loads "/", which is how PseoPage, Auth,
  * ProfilePage, Profile and UserDashboard each shipped one. Several signed-in
@@ -15,7 +15,7 @@ import { join, relative } from 'node:path';
 const SRC = join(__dirname, '..');
 
 /** The one landmark, and the unused shadcn SidebarInset primitive. */
-const ALLOWED = new Set(['App.tsx', 'components/ui/sidebar.tsx']);
+const ALLOWED = new Set(['components/layout/SiteLayout.tsx', 'components/ui/sidebar.tsx']);
 
 function tsxFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -26,7 +26,7 @@ function tsxFiles(dir: string): string[] {
 }
 
 describe('main landmark', () => {
-  it('only App.tsx renders <main>', () => {
+  it('only SiteLayout renders <main>', () => {
     const offenders = tsxFiles(SRC)
       .map((path) => relative(SRC, path).split('\\').join('/'))
       .filter((rel) => !ALLOWED.has(rel))

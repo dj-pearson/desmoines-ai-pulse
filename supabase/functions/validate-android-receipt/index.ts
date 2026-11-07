@@ -10,6 +10,11 @@
  *   SUPABASE_URL                    - Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY       - Supabase service role key
  *
+ * Optional:
+ *   ANDROID_OWNERSHIP_ENFORCE       - 'true' refuses a purchase token held by
+ *                                     another account (409). Unset, the
+ *                                     conflict is logged and still allowed.
+ *
  * Accepts POST: { purchaseToken, productId, userId, packageName }
  * Returns: { valid: true, entitlement: { tier, expiresAt } } on success
  *          { valid: false, reason: string } on failure
@@ -20,6 +25,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import {
+  decideGoogleOwnership,
+  hashAccountId,
+  isOwnershipEnforced,
+} from '../_shared/googleOwnership.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -153,6 +163,8 @@ interface GoogleSubscriptionPurchase {
   orderId?: string;
   acknowledgementState?: number; // 0=not_acknowledged, 1=acknowledged
   linkedPurchaseToken?: string;
+  /** Set by BillingFlowParams.setObfuscatedAccountId: sha256 hex of the buyer's user id. */
+  obfuscatedExternalAccountId?: string;
 }
 
 /**
@@ -428,6 +440,51 @@ serve(async (req) => {
       `Google Play verification OK: user=${user.id}, tier=${tier}, product=${productId}, ` +
       `status=${status}, expires=${expiresAt}, autoRenewing=${googleResult.autoRenewing}`
     );
+
+    // -----------------------------------------------------------------------
+    // 5b. One purchase token, one account (WEB-SEC-050)
+    // -----------------------------------------------------------------------
+    const { data: otherHolders, error: holdersError } = await supabase
+      .from('user_subscriptions')
+      .select('id, user_id')
+      .eq('platform', 'android')
+      .eq('google_purchase_token', purchaseToken)
+      .neq('user_id', user.id)
+      .in('status', ['active', 'trialing', 'past_due']);
+
+    // Fail closed: a dropped error reads as "nobody else holds it".
+    if (holdersError) {
+      throw new Error(`user_subscriptions ownership lookup failed: ${holdersError.message}`);
+    }
+
+    const otherOwnerIds = (otherHolders ?? []).map((r: { user_id: string }) => r.user_id);
+    const ownership = decideGoogleOwnership({
+      callerAccountHash: await hashAccountId(user.id),
+      obfuscatedExternalAccountId: googleResult.obfuscatedExternalAccountId ?? null,
+      otherActiveOwnerIds: otherOwnerIds,
+    });
+
+    if (ownership.action === 'conflict') {
+      // Log-only until ANDROID_OWNERSHIP_ENFORCE=true: refusing is a
+      // tightening of a contract older binaries already call.
+      const enforced = isOwnershipEnforced(Deno.env.get('ANDROID_OWNERSHIP_ENFORCE'));
+      console.warn(JSON.stringify({
+        event: 'android_ownership_conflict',
+        enforced,
+        reason: ownership.reason,
+        caller: user.id,
+        product: productId,
+        order: googleResult.orderId ?? null,
+        obfuscated_id: googleResult.obfuscatedExternalAccountId ? 'present' : 'absent',
+        other_holders: otherOwnerIds,
+      }));
+      if (enforced) {
+        return new Response(
+          JSON.stringify({ valid: false, reason: ownership.reason ?? 'owned_by_another_account' }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // -----------------------------------------------------------------------
     // 6. Upsert subscription in the database

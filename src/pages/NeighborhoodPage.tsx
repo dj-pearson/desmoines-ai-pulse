@@ -1,7 +1,5 @@
 import { useParams, Link, Navigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import NeighborhoodGuide from "@/components/NeighborhoodGuide";
 import LocalSEO from "@/components/LocalSEO";
 import { Button } from "@/components/ui/button";
@@ -58,17 +56,15 @@ export default function NeighborhoodPage() {
           <meta name="robots" content="noindex, follow" />
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-semibold mb-3">We don't have a guide for that neighborhood</h1>
           <p className="text-muted-foreground mb-6">
             Eight Des Moines metro neighborhoods have guides. Pick one from the list.
           </p>
-          <Link to="/neighborhoods">
-            <Button>All neighborhoods</Button>
-          </Link>
+          <Button asChild>
+            <Link to="/neighborhoods">All neighborhoods</Link>
+          </Button>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -100,9 +96,6 @@ export default function NeighborhoodPage() {
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
       )}
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -114,12 +107,12 @@ export default function NeighborhoodPage() {
         />
 
         <div className="mb-6">
-          <Link to="/neighborhoods">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/neighborhoods">
               <ArrowLeft className="h-4 w-4 mr-2" />
               All Neighborhoods
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         {error ? (
@@ -158,8 +151,6 @@ export default function NeighborhoodPage() {
           className="mt-12 border-t pt-8"
         />
       </div>
-
-      <Footer />
     </div>
   );
 }

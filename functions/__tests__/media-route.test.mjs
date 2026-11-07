@@ -73,5 +73,82 @@ ck('a normal hero keeps the year', m.maxAgeFor('events/x/hero.jpg') === 31536000
 ck('a name merely containing the words keeps the year',
    m.maxAgeFor('events/x/places-photo-gallery.jpg') === 31536000);
 
+// Stored XSS through /media/*.svg. The route answers first-party and the site
+// CSP in public/_headers does not reach a Function response, so an uploaded SVG
+// with <script> ran as the site. These drive onRequest end to end with a stubbed
+// origin (no `caches` in Node, so the cache branch is skipped).
+console.log('\nfirst-party safety headers');
+const realFetch = globalThis.fetch;
+const serve = async (path, body, contentType, extraHeaders = {}) => {
+  globalThis.fetch = async () => new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': contentType, ETag: '"abc"', ...extraHeaders },
+  });
+  try {
+    return await m.onRequest({
+      request: new Request(`https://example.test/media/${path}`),
+      env: { SUPABASE_URL: 'https://p.supabase.co' },
+      params: { path: path.split('/') },
+      waitUntil() {},
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+};
+
+const svg = await serve('events/x/hero.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'image/svg+xml');
+const svgCsp = svg.headers.get('Content-Security-Policy') ?? '';
+ck('svg: 200', svg.status === 200);
+ck('svg: nosniff', svg.headers.get('X-Content-Type-Options') === 'nosniff');
+ck('svg: CSP sandbox', /(^|;\s*)sandbox(\s*;|$)/.test(svgCsp));
+ck("svg: CSP default-src 'none' (no script-src)", svgCsp.includes("default-src 'none'") && !svgCsp.includes('script-src'));
+ck('svg: still image/svg+xml, so <img> keeps working', svg.headers.get('Content-Type') === 'image/svg+xml');
+
+const svgByType = await serve('events/x/hero.png', '<svg/>', 'image/svg+xml; charset=utf-8');
+ck('svg by upstream content-type alone gets the CSP',
+   /sandbox/.test(svgByType.headers.get('Content-Security-Policy') ?? ''));
+
+const svgMislabelled = await serve('events/x/hero.svg', '<html><script>alert(1)</script></html>', 'text/html');
+ck('.svg path served as text/html is downgraded to a download',
+   svgMislabelled.headers.get('Content-Type') === 'application/octet-stream'
+     && svgMislabelled.headers.get('Content-Disposition') === 'attachment');
+
+const html = await serve('events/x/hero.jpg', '<script>alert(document.cookie)</script>', 'text/html; charset=utf-8');
+ck('html upstream: not served as text/html', !/html/i.test(html.headers.get('Content-Type') ?? ''));
+ck('html upstream: application/octet-stream', html.headers.get('Content-Type') === 'application/octet-stream');
+ck('html upstream: Content-Disposition attachment', html.headers.get('Content-Disposition') === 'attachment');
+ck('html upstream: nosniff', html.headers.get('X-Content-Type-Options') === 'nosniff');
+ck('html upstream: CSP sandbox as a backstop', /sandbox/.test(html.headers.get('Content-Security-Policy') ?? ''));
+
+const xml = await serve('events/x/hero.jpg', '<x/>', 'application/xhtml+xml');
+ck('xhtml upstream is downgraded too', xml.headers.get('Content-Type') === 'application/octet-stream');
+const none = await serve('events/x/hero.jpg', 'x', '');
+ck('missing upstream content-type is downgraded', none.headers.get('Content-Type') === 'application/octet-stream');
+
+const jpg = await serve('events/x/hero.jpg', 'JPEGBYTES', 'image/jpeg');
+ck('raster: Content-Type unchanged', jpg.headers.get('Content-Type') === 'image/jpeg');
+ck('raster: nosniff', jpg.headers.get('X-Content-Type-Options') === 'nosniff');
+ck('raster: no CSP added', jpg.headers.get('Content-Security-Policy') === null);
+ck('raster: no Content-Disposition', jpg.headers.get('Content-Disposition') === null);
+ck('raster: year cache kept', jpg.headers.get('Cache-Control') === 'public, max-age=31536000');
+ck('raster: ETag passed through', jpg.headers.get('ETag') === '"abc"');
+ck('raster: X-Media-Origin kept', jpg.headers.get('X-Media-Origin') === 'supabase-storage');
+ck('raster: body untouched', (await jpg.text()) === 'JPEGBYTES');
+
+for (const [p, ct] of [['events/x/clip.mp4', 'video/mp4'], ['events/x/menu.pdf', 'application/pdf'],
+                       ['events/x/f.woff2', 'font/woff2'], ['events/x/hero.webp', 'image/webp']]) {
+  const r = await serve(p, 'x', ct);
+  ck(`${ct} passes through`, r.headers.get('Content-Type') === ct && r.headers.get('Content-Disposition') === null);
+}
+
+console.log('\nhardenMediaHeaders on a cache hit or 304');
+const h304 = new Headers({ ETag: '"abc"' });
+m.hardenMediaHeaders(h304, 'events/x/hero.jpg', 304);
+ck('304 without Content-Type is not turned into a download',
+   h304.get('Content-Type') === null && h304.get('X-Content-Type-Options') === 'nosniff');
+const hOld = new Headers({ 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=31536000' });
+m.hardenMediaHeaders(hOld, 'events/x/hero.svg');
+ck('an SVG cached before the fix is hardened on the way out', /sandbox/.test(hOld.get('Content-Security-Policy') ?? ''));
+
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);

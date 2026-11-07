@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 // `openingTimeframe` IS A READ-SIDE ALIAS AND BELONGS ONLY ON THE ROW. The
 // column is `opening_timeframe`; the camelCase name is produced by
@@ -29,7 +30,7 @@ interface RestaurantOpeningFilters {
   offset?: number;
 }
 
-export function useRestaurantOpenings(filters: RestaurantOpeningFilters = {}) {
+export function useRestaurantOpeningsAdmin(filters: RestaurantOpeningFilters = {}) {
   const [state, setState] = useState<RestaurantOpeningsState>({
     restaurantOpenings: [],
     isLoading: true,
@@ -46,9 +47,12 @@ export function useRestaurantOpenings(filters: RestaurantOpeningFilters = {}) {
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false });
 
-      if (filters.search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = filters.search ? sanitizePostgrestPattern(filters.search) : "";
+      if (safeSearch) {
         query = query.or(
-          `name.ilike.%${filters.search}%,cuisine.ilike.%${filters.search}%,location.ilike.%${filters.search}%`
+          `name.ilike.%${safeSearch}%,cuisine.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`
         );
       }
 

@@ -32,3 +32,34 @@ export function capHistory(raw: unknown): Msg[] {
   while (out.length && out[0].role !== "user") out.shift();
   return out;
 }
+
+export interface TranscriptRow {
+  ticket_id: string;
+  sender: "user" | "agent";
+  body: string;
+  metadata: { transcript: true; generated?: true };
+}
+
+/**
+ * The support_messages rows for a ticket's transcript.
+ *
+ * Only the user's turns come from the request. The client sends the whole
+ * conversation, assistant turns included, and those used to be stored as
+ * sender "agent", which SupportConsole shows as something our side said. A
+ * caller could write any text into that line. support_sender is an enum
+ * (user, agent, admin, system) with no value for "the client says the bot
+ * said this", and "system" would make the same false claim, so client-supplied
+ * assistant turns are not stored at all.
+ *
+ * `serverReply` is a reply this request generated itself; that one is ours,
+ * so it is stored as "agent" and marked generated.
+ */
+export function transcriptRows(ticketId: string, history: Msg[], serverReply?: string | null): TranscriptRow[] {
+  const rows: TranscriptRow[] = history
+    .filter((m) => m.role === "user")
+    .map((m) => ({ ticket_id: ticketId, sender: "user", body: m.content, metadata: { transcript: true } }));
+  if (serverReply) {
+    rows.push({ ticket_id: ticketId, sender: "agent", body: serverReply, metadata: { transcript: true, generated: true } });
+  }
+  return rows;
+}

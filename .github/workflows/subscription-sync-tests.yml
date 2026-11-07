@@ -121,6 +121,10 @@ jobs:
       - run: deno test --allow-env supabase/functions/_shared/aiModel.test.ts
       # Written with versionCheckLog.ts and never added to a lane.
       - run: deno test supabase/functions/_shared/versionCheckLog.test.ts
+      # The limiter's 429 must carry CORS for the requesting origin, or the
+      # browser drops it and the client sees a network error instead of
+      # "rate limit exceeded". --allow-env: the CORS allow-list reads it.
+      - run: deno test --allow-env supabase/functions/_shared/rateLimitCore.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
       # XPLAT-011. Asserts docstring, implementation and all three clients agree
@@ -467,6 +471,12 @@ jobs:
       # IOS-DD-MONETIZATION-02. One Apple subscription unlocked every account
       # that validated it. Pins the appAccountToken / explicit-Restore rules.
       - run: deno test supabase/functions/_shared/appleOwnership.test.ts
+      # WEB-SEC-050. One Google Play purchase token unlocked every account
+      # that sent it. Pins the obfuscatedExternalAccountId / first-holder rules.
+      - run: deno test supabase/functions/_shared/googleOwnership.test.ts
+      # WEB-SEC-051. Sandbox (TestFlight) purchases wrote the same premium row
+      # as paid ones. Pins the allowlist + IOS_SANDBOX_ENFORCE rules.
+      - run: deno test supabase/functions/_shared/appleSandboxPolicy.test.ts
       # The App Store notifications webhook checked only that the LAST x5c
       # cert was Apple's root and verified the JWS with the FIRST, so a
       # self-made leaf with Apple's public root appended passed and could
@@ -602,6 +612,9 @@ jobs:
       # Daily AI quota and spend guard (NON_CORE_REVIEW_2026-09 WP1). Offline:
       # the Supabase client is a stub.
       - run: deno test supabase/functions/_shared/aiQuota.test.ts
+      # Decision mail goes only to the submitting account's confirmed address,
+      # never to the typed contact_email (WEB-SEC-041).
+      - run: deno test supabase/functions/notify-event-submission/recipient.test.ts
       - run: deno test supabase/functions/discover-chat/conversation.test.ts
       - run: deno test supabase/functions/discover-chat/picks.test.ts
       # Trip planner request validation, Central-time windows and item
@@ -638,7 +651,7 @@ jobs:
       - run: deno test --allow-read --allow-env supabase/functions/_shared/agentPolicy.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/eventSourceOwnership.test.ts
       - run: deno test --allow-net supabase/functions/_shared/fetchWithTimeout.test.ts
-      - run: deno test --allow-env supabase/functions/_shared/fetchGuard.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/fetchGuard.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/postgrestErrors.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/prompts/prompts.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/validation.test.ts

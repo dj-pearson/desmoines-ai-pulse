@@ -27,6 +27,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
+import { classifyCaller, isMachineCaller } from '../_shared/callerKind.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
@@ -339,8 +340,14 @@ Deno.serve(async (req) => {
   // AuthZ: internal (service/API key) OR the content owner OR an admin.
   const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const apiKey = req.headers.get('X-API-Key') || req.headers.get('x-api-key');
-  const isInternal =
-    (apiKey && apiKey === Deno.env.get('EDGE_FUNCTION_API_KEY')) || (bearer && bearer === serviceKey);
+  // Timing-safe, and an unset secret never matches (WEB-SEC-038). `===` leaked
+  // how many leading characters of a guess were right.
+  const isInternal = isMachineCaller(
+    classifyCaller(
+      { apiKeyHeader: apiKey, bearer },
+      { apiKey: Deno.env.get('EDGE_FUNCTION_API_KEY'), serviceRoleKey: serviceKey },
+    ),
+  );
 
   if (!isInternal) {
     if (!bearer) return json({ error: 'Authentication required' }, 401, corsHeaders);

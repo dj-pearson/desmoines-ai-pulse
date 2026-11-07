@@ -1,6 +1,7 @@
 import { LucideSprite } from "@/components/ui/icon-sprite.generated";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
@@ -113,6 +114,7 @@ const SubscriptionPortal = lazyWithRetry(() => import("./pages/SubscriptionPorta
 const AdminRefunds = lazyWithRetry(() => import("./pages/AdminRefunds"));
 const BusinessPartnership = lazyWithRetry(() => import("./pages/BusinessPartnership"));
 const BusinessHub = lazyWithRetry(() => import("./pages/BusinessHub"));
+const ClaimListing = lazyWithRetry(() => import("./pages/ClaimListing"));
 const GuidesPage = lazyWithRetry(() => import("./pages/GuidesPage"));
 const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"));
 const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
@@ -262,22 +264,6 @@ const AdminBusinessClaims = lazyWithRetry(
 const BestOf = lazyWithRetry(() => import("./pages/BestOf"));
 const BestOfCategory = lazyWithRetry(() => import("./pages/BestOfCategory"));
 const WhatsNew = lazyWithRetry(() => import("./pages/WhatsNew"));
-
-// Mobile-optimized loading component with accessibility support
-const PageLoader = () => (
-  <div
-    className="min-h-screen bg-background flex items-center justify-center"
-    role="status"
-    aria-live="polite"
-    aria-busy="true"
-  >
-    <div className="animate-pulse space-y-4 text-center motion-reduce:animate-none">
-      <div className="h-8 bg-muted rounded w-48 mx-auto" aria-hidden="true"></div>
-      <div className="h-4 bg-muted rounded w-32 mx-auto" aria-hidden="true"></div>
-      <span className="sr-only">Loading page content...</span>
-    </div>
-  </div>
-);
 
 // Maximum number of remembered scroll positions (bounds the map over a long
 // session; anything older than the last 50 pages isn't worth restoring).
@@ -456,217 +442,227 @@ const App = () => (
             </Suspense>
             <AccessibilityWidget />
             <RouteErrorBoundary>
-            <main id="main-content" tabIndex={-1} className="pb-bottom-nav">
-            <Suspense fallback={<PageLoader />}>
             <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/auth/verified" element={<AuthVerified />} />
-            <Route path="/auth/reset-password" element={<ResetPassword />} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/my-events" element={<ProfilePage />} />
-            <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
-            <Route path="/admin/content" element={<ProtectedRoute requireAdmin><AdminContent /></ProtectedRoute>} />
-            <Route path="/admin/ai" element={<ProtectedRoute requireAdmin><AdminAI /></ProtectedRoute>} />
-            <Route path="/admin/tools" element={<ProtectedRoute requireAdmin><AdminTools /></ProtectedRoute>} />
-            <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
-            <Route path="/admin/oauth/callback" element={<ProtectedRoute requireAdmin><AdminGscCallback /></ProtectedRoute>} />
-            <Route path="/admin/seo" element={<ProtectedRoute requireAdmin><SEODashboard /></ProtectedRoute>} />
-            <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
-            <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
-            <Route path="/admin/autonomy" element={<ProtectedRoute requireAdmin><AdminAutonomy /></ProtectedRoute>} />
-            <Route path="/admin/inbox" element={<ProtectedRoute requireAdmin><AdminInbox /></ProtectedRoute>} />
-            <Route path="/admin/approvals" element={<ProtectedRoute requireAdmin><AdminApprovals /></ProtectedRoute>} />
-            <Route path="/admin/agents" element={<ProtectedRoute requireAdmin><AdminAgents /></ProtectedRoute>} />
-            <Route path="/admin/agent-audit" element={<ProtectedRoute requireAdmin><AdminAuditLog /></ProtectedRoute>} />
-            <Route path="/admin/support-kb" element={<ProtectedRoute requireAdmin><AdminSupportKb /></ProtectedRoute>} />
-            <Route path="/admin/support-tickets" element={<ProtectedRoute requireAdmin><AdminSupportTickets /></ProtectedRoute>} />
-            <Route path="/admin/support" element={<ProtectedRoute requireAdmin><AdminSupport /></ProtectedRoute>} />
-            <Route path="/admin/lifecycle" element={<ProtectedRoute requireAdmin><AdminLifecycle /></ProtectedRoute>} />
-            <Route path="/admin/crm" element={<ProtectedRoute requireAdmin><AdminCrm /></ProtectedRoute>} />
-            <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
-            <Route path="/admin/menus" element={<ProtectedRoute requireAdmin><AdminMenus /></ProtectedRoute>} />
-            {/* Admin Backend Overhaul routes — stubs until each story replaces the page */}
-            <Route path="/admin/hotels" element={<ProtectedRoute requireAdmin><AdminHotels /></ProtectedRoute>} />
-            <Route path="/admin/attractions" element={<ProtectedRoute requireAdmin><AdminAttractions /></ProtectedRoute>} />
-            <Route path="/admin/playgrounds" element={<ProtectedRoute requireAdmin><AdminPlaygrounds /></ProtectedRoute>} />
-            <Route path="/admin/social" element={<ProtectedRoute requireAdmin><AdminSocial /></ProtectedRoute>} />
-            <Route path="/admin/email" element={<ProtectedRoute requireAdmin><AdminEmail /></ProtectedRoute>} />
-            <Route path="/admin/deals" element={<ProtectedRoute requireAdmin><AdminDeals /></ProtectedRoute>} />
-            <Route path="/admin/partnerships" element={<ProtectedRoute requireAdmin><AdminPartnerships /></ProtectedRoute>} />
-            <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
-            <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />
-            <Route path="/admin/event-submissions" element={<ProtectedRoute requireAdmin><AdminEventSubmissions /></ProtectedRoute>} />
-            <Route path="/admin/business-claims" element={<ProtectedRoute requireAdmin><AdminBusinessClaims /></ProtectedRoute>} />
-            <Route path="/restaurants" element={<Restaurants />} />
-            {/* Restaurant SEO hub pages */}
-            <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
-            <Route path="/restaurants/new" element={<NewRestaurants />} />
-            <Route path="/restaurants/dietary" element={<DietaryRestaurants />} />
-            {/* Eat & Drink pass 2 WP4.13: one self-canonical path per diet. */}
-            <Route path="/restaurants/dietary/:diet" element={<DietaryRestaurants />} />
-            <Route path="/attractions" element={<Attractions />} />
-            <Route path="/playgrounds" element={<Playgrounds />} />
-            <Route path="/events" element={<EventsPage />} />
-            {/* Time-sensitive SEO pages */}
-            <Route path="/events/today" element={<EventsToday />} />
-            <Route
-              path="/events/this-weekend"
-              element={<EventsThisWeekend />}
-            />
-            {/* Location-based discovery */}
-            <Route path="/events/near-me" element={<EventsNearMe />} />
-            {/* Category SEO hub pages */}
-            <Route path="/events/free" element={<FreeEvents />} />
-            <Route path="/events/kids" element={<KidsEvents />} />
-            <Route path="/events/date-night" element={<DateNightEvents />} />
-            {/* Location-based event pages */}
-            <Route
-              path="/events/west-des-moines"
-              element={<EventsByLocation />}
-            />
-            <Route path="/events/ankeny" element={<EventsByLocation />} />
-            <Route path="/events/urbandale" element={<EventsByLocation />} />
-            <Route path="/events/johnston" element={<EventsByLocation />} />
-            <Route path="/events/altoona" element={<EventsByLocation />} />
-            <Route path="/events/clive" element={<EventsByLocation />} />
-            <Route
-              path="/events/windsor-heights"
-              element={<EventsByLocation />}
-            />
-            <Route path="/events/waukee" element={<EventsByLocation />} />
-            <Route path="/events/series/:slug" element={<EventSeriesPage />} />
-            <Route path="/events/:slug" element={<EventsSegmentHandler />} />
-            <Route path="/articles" element={<Articles />} />
-            <Route path="/articles/:slug" element={<ArticleDetails />} />
-            <Route
-              path="/admin/articles/new"
-              element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}
-            />
-            <Route
-              path="/admin/articles/edit/:id"
-              element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}
-            />
-            <Route
-              path="/admin/cms"
-              element={<ProtectedRoute requireAdmin><CMSDashboard /></ProtectedRoute>}
-            />
-            <Route path="/admin/campaigns" element={<ProtectedRoute requireAdmin><AdminCampaigns /></ProtectedRoute>} />
-            <Route path="/admin/campaigns/:campaignId" element={<ProtectedRoute requireAdmin><AdminCampaignDetail /></ProtectedRoute>} />
-            <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
-            <Route path="/attractions/:slug" element={<AttractionDetails />} />
-            <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
-            {/* Hotels / Stay pages */}
-            <Route path="/stay" element={<Hotels />} />
-            <Route path="/stay/:slug" element={<HotelDetails />} />
-            {/* SEO-045: hotels near one venue, by straight-line distance. */}
-            <Route path="/stay/near/:slug" element={<HotelsNearVenue />} />
-            <Route path="/advertise" element={<Advertise />} />
-            <Route path="/advertise/success" element={<AdvertiseSuccess />} />
-            <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
-            <Route path="/campaigns" element={<ProtectedRoute><CampaignDashboard /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/creatives" element={<ProtectedRoute><UploadCreatives /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/analytics" element={<ProtectedRoute><CampaignAnalytics /></ProtectedRoute>} />
-            <Route path="/campaigns/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
-            <Route path="/weekend" element={<WeekendPage />} />
-            <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
-            <Route
-              path="/neighborhoods/:neighborhood"
-              element={<NeighborhoodPage />}
-            />
-            <Route path="/iowa-state-fair" element={<IowaStateFairPage />} />
-            <Route path="/social" element={<Social />} />
-            <Route path="/gamification" element={<Gamification />} />
-            <Route path="/pricing" element={<Pricing />} />
-            <Route path="/subscription/success" element={<SubscriptionSuccess />} />
-            <Route path="/subscription" element={<ProtectedRoute><SubscriptionPortal /></ProtectedRoute>} />
-            <Route path="/admin/refunds" element={<ProtectedRoute requireAdmin><AdminRefunds /></ProtectedRoute>} />
-            <Route
-              path="/business-partnership"
-              element={<BusinessPartnership />}
-            />
-            <Route path="/business" element={<BusinessHub />} />
-            <Route path="/search" element={<SearchResults />} />
-            <Route path="/search/advanced" element={<AdvancedSearchPage />} />
-            <Route path="/guides" element={<GuidesPage />} />
-            {/* Eat & Drink pass 2 WP4.7: /real-time was a second "what's open"
-                page with no status filter and two dead buttons. It goes to
-                open-now; public/_redirects 301s it too. Keep for >= 1 release. */}
-            <Route path="/real-time" element={<Navigate to="/restaurants/open-now" replace />} />
-            {/* Lead magnet tools */}
-            <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
-            {/* AI-powered features */}
-            <Route path="/trip-planner" element={<TripPlanner />} />
-            {/* Curated itineraries */}
-            <Route path="/itineraries" element={<ItinerariesPage />} />
-            <Route path="/itineraries/:slug" element={<ItineraryDetail />} />
-            {/* Deals & coupons */}
-            <Route path="/deals" element={<DealsPage />} />
-            {/* Discovery map */}
-            <Route path="/map" element={<DiscoverMap />} />
-            {/* Event submission */}
-            <Route path="/submit-event" element={<SubmitEvent />} />
-            {/* Affiliate disclosure */}
-            <Route path="/affiliate-disclosure" element={<AffiliateDisclosure />} />
-            {/* Legal pages */}
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/accessibility" element={<AccessibilityStatement />} />
-            <Route path="/cookie-policy" element={<CookiePolicy />} />
-            <Route path="/dmca" element={<DMCAPolicy />} />
-            <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
-            <Route path="/account/delete" element={<AccountDeletion />} />
-            {/* WEB-ADS-014: three advertiser surfaces linked here and it was not a route. */}
-            <Route path="/advertising-policies" element={<AdvertisingPolicies />} />
-            <Route path="/dpa" element={<DataProcessingAgreement />} />
-            {/* One-click newsletter unsubscribe (CAN-SPAM §5(a)(5)) */}
-            <Route path="/unsubscribe" element={<Unsubscribe />} />
-            {/* Newsletter double opt-in confirmation (WEB-FEAT-019) */}
-            <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
-            {/* Contact page */}
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/support" element={<Support />} />
-            <Route path="/csat" element={<Csat />} />
-            {/* Community voting */}
-            <Route path="/best-of" element={<BestOf />} />
-            <Route path="/best-of/:category" element={<BestOfCategory />} />
-            {/* Scene updates feed */}
-            <Route path="/whats-new" element={<WhatsNew />} />
-            {/* Visitor & planner pages */}
-            <Route path="/getting-around" element={<GettingAround />} />
-            <Route path="/visitors-guide" element={<VisitorsGuide />} />
-            <Route path="/group-travel" element={<GroupTravel />} />
-            <Route path="/guides/:slug" element={<SeasonalGuide />} />
-            {/* Content hubs */}
-            <Route path="/music" element={<MusicHub />} />
-            <Route path="/music/venues/:slug" element={<VenueDetail />} />
-            <Route path="/sports" element={<SportsHub />} />
-            <Route path="/sports/:slug" element={<TeamDetail />} />
-            <Route path="/outdoors" element={<OutdoorsHub />} />
-            <Route path="/outdoors/:slug" element={<TrailDetail />} />
-            <Route path="/breweries" element={<BreweryTrail />} />
-            {/* pSEO 2.0 programmatic pages — catch-all before 404 */}
-            <Route path="/things-to-do" element={<ThingsToDoHub />} />
-            <Route path="/guide/:location" element={<PseoRoutePage />} />
-            <Route path="/things-to-do/:seg1" element={<PseoRoutePage />} />
-            <Route path="/things-to-do/:seg1/:seg2" element={<PseoRoutePage />} />
-            <Route path="/nightlife/:seg1" element={<PseoRoutePage />} />
-            <Route path="/nightlife/:seg1/:seg2" element={<PseoRoutePage />} />
-            {/* Generic pSEO catch-all for category/location combos like
-                /brunch/east-village, /italian/valley-junction, /asian/ankeny.
-                React Router v6 ranks static segments higher than dynamic ones,
-                so existing routes (e.g. /restaurants/:slug) still match first. */}
-            <Route path="/:seg1/:seg2" element={<PseoRoutePage />} />
-            <Route path="/:seg1" element={<PseoRoutePage />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
+            {/* WEB-UX-041: the header and footer are rendered by SiteLayout,
+                outside <main>, so they are the page's banner and contentinfo
+                landmarks. chrome="none" is every route that rendered neither
+                before the move (admin, auth, the bare legal and newsletter
+                pages); chrome="header" is the three that had a header and no
+                footer. A page that needs a different footer calls
+                useSiteFooter(). */}
+            <Route element={<SiteLayout chrome="none" />}>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+              <Route path="/admin/content" element={<ProtectedRoute requireAdmin><AdminContent /></ProtectedRoute>} />
+              <Route path="/admin/ai" element={<ProtectedRoute requireAdmin><AdminAI /></ProtectedRoute>} />
+              <Route path="/admin/tools" element={<ProtectedRoute requireAdmin><AdminTools /></ProtectedRoute>} />
+              <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
+              <Route path="/admin/oauth/callback" element={<ProtectedRoute requireAdmin><AdminGscCallback /></ProtectedRoute>} />
+              <Route path="/admin/seo" element={<ProtectedRoute requireAdmin><SEODashboard /></ProtectedRoute>} />
+              <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
+              <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
+              <Route path="/admin/autonomy" element={<ProtectedRoute requireAdmin><AdminAutonomy /></ProtectedRoute>} />
+              <Route path="/admin/inbox" element={<ProtectedRoute requireAdmin><AdminInbox /></ProtectedRoute>} />
+              <Route path="/admin/approvals" element={<ProtectedRoute requireAdmin><AdminApprovals /></ProtectedRoute>} />
+              <Route path="/admin/agents" element={<ProtectedRoute requireAdmin><AdminAgents /></ProtectedRoute>} />
+              <Route path="/admin/agent-audit" element={<ProtectedRoute requireAdmin><AdminAuditLog /></ProtectedRoute>} />
+              <Route path="/admin/support-kb" element={<ProtectedRoute requireAdmin><AdminSupportKb /></ProtectedRoute>} />
+              <Route path="/admin/support-tickets" element={<ProtectedRoute requireAdmin><AdminSupportTickets /></ProtectedRoute>} />
+              <Route path="/admin/support" element={<ProtectedRoute requireAdmin><AdminSupport /></ProtectedRoute>} />
+              <Route path="/admin/lifecycle" element={<ProtectedRoute requireAdmin><AdminLifecycle /></ProtectedRoute>} />
+              <Route path="/admin/crm" element={<ProtectedRoute requireAdmin><AdminCrm /></ProtectedRoute>} />
+              <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
+              <Route path="/admin/menus" element={<ProtectedRoute requireAdmin><AdminMenus /></ProtectedRoute>} />
+              {/* Admin Backend Overhaul routes — stubs until each story replaces the page */}
+              <Route path="/admin/hotels" element={<ProtectedRoute requireAdmin><AdminHotels /></ProtectedRoute>} />
+              <Route path="/admin/attractions" element={<ProtectedRoute requireAdmin><AdminAttractions /></ProtectedRoute>} />
+              <Route path="/admin/playgrounds" element={<ProtectedRoute requireAdmin><AdminPlaygrounds /></ProtectedRoute>} />
+              <Route path="/admin/social" element={<ProtectedRoute requireAdmin><AdminSocial /></ProtectedRoute>} />
+              <Route path="/admin/email" element={<ProtectedRoute requireAdmin><AdminEmail /></ProtectedRoute>} />
+              <Route path="/admin/deals" element={<ProtectedRoute requireAdmin><AdminDeals /></ProtectedRoute>} />
+              <Route path="/admin/partnerships" element={<ProtectedRoute requireAdmin><AdminPartnerships /></ProtectedRoute>} />
+              <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
+              <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />
+              <Route path="/admin/event-submissions" element={<ProtectedRoute requireAdmin><AdminEventSubmissions /></ProtectedRoute>} />
+              <Route path="/admin/business-claims" element={<ProtectedRoute requireAdmin><AdminBusinessClaims /></ProtectedRoute>} />
+              <Route
+                path="/admin/articles/new"
+                element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}
+              />
+              <Route
+                path="/admin/articles/edit/:id"
+                element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}
+              />
+              <Route
+                path="/admin/cms"
+                element={<ProtectedRoute requireAdmin><CMSDashboard /></ProtectedRoute>}
+              />
+              <Route path="/admin/campaigns" element={<ProtectedRoute requireAdmin><AdminCampaigns /></ProtectedRoute>} />
+              <Route path="/admin/campaigns/:campaignId" element={<ProtectedRoute requireAdmin><AdminCampaignDetail /></ProtectedRoute>} />
+              <Route path="/admin/refunds" element={<ProtectedRoute requireAdmin><AdminRefunds /></ProtectedRoute>} />
+              {/* Lead magnet tools */}
+              <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
+              {/* Affiliate disclosure */}
+              <Route path="/affiliate-disclosure" element={<AffiliateDisclosure />} />
+              <Route path="/cookie-policy" element={<CookiePolicy />} />
+              <Route path="/dmca" element={<DMCAPolicy />} />
+              <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+              {/* WEB-ADS-014: three advertiser surfaces linked here and it was not a route. */}
+              <Route path="/advertising-policies" element={<AdvertisingPolicies />} />
+              <Route path="/dpa" element={<DataProcessingAgreement />} />
+              {/* One-click newsletter unsubscribe (CAN-SPAM §5(a)(5)) */}
+              <Route path="/unsubscribe" element={<Unsubscribe />} />
+              {/* Newsletter double opt-in confirmation (WEB-FEAT-019) */}
+              <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
+            </Route>
+            <Route element={<SiteLayout chrome="header" />}>
+              <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/csat" element={<Csat />} />
+            </Route>
+            <Route element={<SiteLayout />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth/verified" element={<AuthVerified />} />
+              <Route path="/auth/reset-password" element={<ResetPassword />} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/my-events" element={<ProfilePage />} />
+              <Route path="/restaurants" element={<Restaurants />} />
+              {/* Restaurant SEO hub pages */}
+              <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
+              <Route path="/restaurants/new" element={<NewRestaurants />} />
+              <Route path="/restaurants/dietary" element={<DietaryRestaurants />} />
+              {/* Eat & Drink pass 2 WP4.13: one self-canonical path per diet. */}
+              <Route path="/restaurants/dietary/:diet" element={<DietaryRestaurants />} />
+              <Route path="/attractions" element={<Attractions />} />
+              <Route path="/playgrounds" element={<Playgrounds />} />
+              <Route path="/events" element={<EventsPage />} />
+              {/* Time-sensitive SEO pages */}
+              <Route path="/events/today" element={<EventsToday />} />
+              <Route
+                path="/events/this-weekend"
+                element={<EventsThisWeekend />}
+              />
+              {/* Location-based discovery */}
+              <Route path="/events/near-me" element={<EventsNearMe />} />
+              {/* Category SEO hub pages */}
+              <Route path="/events/free" element={<FreeEvents />} />
+              <Route path="/events/kids" element={<KidsEvents />} />
+              <Route path="/events/date-night" element={<DateNightEvents />} />
+              {/* Location-based event pages */}
+              <Route
+                path="/events/west-des-moines"
+                element={<EventsByLocation />}
+              />
+              <Route path="/events/ankeny" element={<EventsByLocation />} />
+              <Route path="/events/urbandale" element={<EventsByLocation />} />
+              <Route path="/events/johnston" element={<EventsByLocation />} />
+              <Route path="/events/altoona" element={<EventsByLocation />} />
+              <Route path="/events/clive" element={<EventsByLocation />} />
+              <Route
+                path="/events/windsor-heights"
+                element={<EventsByLocation />}
+              />
+              <Route path="/events/waukee" element={<EventsByLocation />} />
+              <Route path="/events/series/:slug" element={<EventSeriesPage />} />
+              <Route path="/events/:slug" element={<EventsSegmentHandler />} />
+              <Route path="/articles" element={<Articles />} />
+              <Route path="/articles/:slug" element={<ArticleDetails />} />
+              <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
+              <Route path="/attractions/:slug" element={<AttractionDetails />} />
+              <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
+              {/* Hotels / Stay pages */}
+              <Route path="/stay" element={<Hotels />} />
+              <Route path="/stay/:slug" element={<HotelDetails />} />
+              {/* SEO-045: hotels near one venue, by straight-line distance. */}
+              <Route path="/stay/near/:slug" element={<HotelsNearVenue />} />
+              <Route path="/advertise" element={<Advertise />} />
+              <Route path="/advertise/success" element={<AdvertiseSuccess />} />
+              <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
+              <Route path="/campaigns" element={<ProtectedRoute><CampaignDashboard /></ProtectedRoute>} />
+              <Route path="/campaigns/:campaignId" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
+              <Route path="/campaigns/:campaignId/creatives" element={<ProtectedRoute><UploadCreatives /></ProtectedRoute>} />
+              <Route path="/campaigns/:campaignId/analytics" element={<ProtectedRoute><CampaignAnalytics /></ProtectedRoute>} />
+              <Route path="/campaigns/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
+              <Route path="/weekend" element={<WeekendPage />} />
+              <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
+              <Route
+                path="/neighborhoods/:neighborhood"
+                element={<NeighborhoodPage />}
+              />
+              <Route path="/iowa-state-fair" element={<IowaStateFairPage />} />
+              <Route path="/social" element={<Social />} />
+              <Route path="/gamification" element={<Gamification />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+              <Route path="/subscription" element={<ProtectedRoute><SubscriptionPortal /></ProtectedRoute>} />
+              <Route
+                path="/business-partnership"
+                element={<BusinessPartnership />}
+              />
+              <Route path="/business" element={<BusinessHub />} />
+              <Route path="/business/claim/:type/:id" element={<ClaimListing />} />
+              <Route path="/search" element={<SearchResults />} />
+              <Route path="/search/advanced" element={<AdvancedSearchPage />} />
+              <Route path="/guides" element={<GuidesPage />} />
+              {/* Eat & Drink pass 2 WP4.7: /real-time was a second "what's open"
+                  page with no status filter and two dead buttons. It goes to
+                  open-now; public/_redirects 301s it too. Keep for >= 1 release. */}
+              <Route path="/real-time" element={<Navigate to="/restaurants/open-now" replace />} />
+              {/* AI-powered features */}
+              <Route path="/trip-planner" element={<TripPlanner />} />
+              {/* Curated itineraries */}
+              <Route path="/itineraries" element={<ItinerariesPage />} />
+              <Route path="/itineraries/:slug" element={<ItineraryDetail />} />
+              {/* Deals & coupons */}
+              <Route path="/deals" element={<DealsPage />} />
+              {/* Discovery map */}
+              <Route path="/map" element={<DiscoverMap />} />
+              {/* Event submission */}
+              <Route path="/submit-event" element={<SubmitEvent />} />
+              {/* Legal pages */}
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/accessibility" element={<AccessibilityStatement />} />
+              <Route path="/account/delete" element={<AccountDeletion />} />
+              {/* Contact page */}
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/about" element={<About />} />
+              {/* Community voting */}
+              <Route path="/best-of" element={<BestOf />} />
+              <Route path="/best-of/:category" element={<BestOfCategory />} />
+              {/* Scene updates feed */}
+              <Route path="/whats-new" element={<WhatsNew />} />
+              {/* Visitor & planner pages */}
+              <Route path="/getting-around" element={<GettingAround />} />
+              <Route path="/visitors-guide" element={<VisitorsGuide />} />
+              <Route path="/group-travel" element={<GroupTravel />} />
+              <Route path="/guides/:slug" element={<SeasonalGuide />} />
+              {/* Content hubs */}
+              <Route path="/music" element={<MusicHub />} />
+              <Route path="/music/venues/:slug" element={<VenueDetail />} />
+              <Route path="/sports" element={<SportsHub />} />
+              <Route path="/sports/:slug" element={<TeamDetail />} />
+              <Route path="/outdoors" element={<OutdoorsHub />} />
+              <Route path="/outdoors/:slug" element={<TrailDetail />} />
+              <Route path="/breweries" element={<BreweryTrail />} />
+              {/* pSEO 2.0 programmatic pages — catch-all before 404 */}
+              <Route path="/things-to-do" element={<ThingsToDoHub />} />
+              <Route path="/guide/:location" element={<PseoRoutePage />} />
+              <Route path="/things-to-do/:seg1" element={<PseoRoutePage />} />
+              <Route path="/things-to-do/:seg1/:seg2" element={<PseoRoutePage />} />
+              <Route path="/nightlife/:seg1" element={<PseoRoutePage />} />
+              <Route path="/nightlife/:seg1/:seg2" element={<PseoRoutePage />} />
+              {/* Generic pSEO catch-all for category/location combos like
+                  /brunch/east-village, /italian/valley-junction, /asian/ankeny.
+                  React Router v6 ranks static segments higher than dynamic ones,
+                  so existing routes (e.g. /restaurants/:slug) still match first. */}
+              <Route path="/:seg1/:seg2" element={<PseoRoutePage />} />
+              <Route path="/:seg1" element={<PseoRoutePage />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Route>
           </Routes>
-          </Suspense>
-          </main>
           </RouteErrorBoundary>
           <CookieConsentBanner />
           <BottomNav />

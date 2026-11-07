@@ -23,6 +23,7 @@ import {
   ImageIcon,
   Loader2,
 } from "lucide-react";
+import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 const log = createLogger('ImageBackfill');
 
@@ -369,14 +370,15 @@ export default function ImageBackfill() {
                   )}
                   <span className="font-medium truncate max-w-[200px]">{detail.name || detail.id}</span>
                   {detail.imageUrl && (
-                    <a
+                    <SafeExternalLink
+                      fallback={null}
                       href={detail.imageUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-500 underline text-xs truncate max-w-[200px]"
                     >
                       image
-                    </a>
+                    </SafeExternalLink>
                   )}
                   {detail.reason && (
                     <span className="text-muted-foreground text-xs truncate">{detail.reason}</span>

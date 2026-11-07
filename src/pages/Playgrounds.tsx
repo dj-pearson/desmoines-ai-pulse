@@ -1,8 +1,6 @@
 import { HubArticles } from "@/components/seo/HubArticles";
 import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { useEffect, useState, useMemo, lazy, Suspense } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -502,9 +500,6 @@ export default function Playgrounds() {
           "outdoor activities kids Des Moines",
         ]}
       />
-
-      <Header />
-
       {/* Flat brand hero. Explore pass 2 WP4 item 6: no min-height and a short
           top on phones, one line of subcopy, and the sort control (Name /
           Near me) next to the search box, so the first result card is on a
@@ -1076,8 +1071,6 @@ export default function Playgrounds() {
           />
         </div>
       </section>
-
-      <Footer />
       <BackToTop />
     </div>
   );

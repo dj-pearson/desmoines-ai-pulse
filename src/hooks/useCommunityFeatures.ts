@@ -3,6 +3,7 @@ import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { checkInToastMessage, type CheckInStatus } from '@/lib/checkInStatus';
 
 const logger = createLogger('useCommunityFeatures');
 
@@ -105,7 +106,7 @@ export function useCommunityFeatures() {
   // back; that filter named `is_approved`, which has never existed.
 
   // Check-in Functions
-  const updateEventCheckIn = async (eventId: string, status: 'interested' | 'going' | 'maybe' | 'not_going') => {
+  const updateEventCheckIn = async (eventId: string, status: CheckInStatus) => {
     if (!user) return false;
 
     try {
@@ -121,7 +122,7 @@ export function useCommunityFeatures() {
 
       if (error) throw error;
 
-      toast.success(`Marked as ${status}!`);
+      toast.success(checkInToastMessage(status));
       return true;
     } catch (error) {
       logger.error('updateEventCheckIn', 'Failed to update check-in', { error });

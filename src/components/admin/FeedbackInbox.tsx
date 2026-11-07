@@ -50,6 +50,7 @@ import { handleError } from "@/lib/errorHandler";
 import { SecurityUtils } from "@/lib/securityUtils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 interface Submission {
   id: string;
@@ -192,9 +193,12 @@ export default function FeedbackInbox() {
           "id, name, email, phone, subject, message, inquiry_type, source_page, status, priority, assigned_to, admin_notes, responded_at, user_id, created_at, updated_at",
           { count: "exact" },
         );
-      if (search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = search ? sanitizePostgrestPattern(search) : "";
+      if (safeSearch) {
         q = q.or(
-          `name.ilike.%${search}%,email.ilike.%${search}%,subject.ilike.%${search}%,message.ilike.%${search}%`,
+          `name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,subject.ilike.%${safeSearch}%,message.ilike.%${safeSearch}%`,
         );
       }
       if (statusFilter !== "all") q = q.eq("status", statusFilter);

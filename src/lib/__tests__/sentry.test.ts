@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /**
  * Sentry loads after first paint (WEB-PERF-020), which is only acceptable
@@ -122,5 +124,37 @@ describe('deferred Sentry', () => {
   it('resolves a DSN so the deferral is actually armed', async () => {
     const s = await freshModule();
     expect(s.getSentryDsn()).toMatch(/^https:\/\/.+@.+\.ingest\..*sentry\.io\/\d+$/);
+  });
+});
+
+/**
+ * The deferred chunk was 187.9 KB gzipped because sentry.ts imported the
+ * @sentry/react namespace, which keeps every export (replay/rrweb, feedback,
+ * tracing) alive. These pin the narrow path: sentry.ts loads only
+ * sentryClient.ts, and sentryClient.ts re-exports named functions, never `*`.
+ */
+describe('Sentry chunk stays narrow', () => {
+  const read = (rel: string) => readFileSync(resolve(__dirname, '..', rel), 'utf8');
+
+  it('sentry.ts dynamic-imports the narrow module, not the package', () => {
+    const src = read('sentry.ts');
+    expect(src).toContain("import('./sentryClient')");
+    expect(src).not.toMatch(/import\(\s*['"]@sentry\//);
+    expect(src).not.toMatch(/from\s+['"]@sentry\//);
+  });
+
+  it('sentryClient.ts re-exports by name only', () => {
+    const src = read('sentryClient.ts');
+    expect(src).not.toMatch(/export\s*\*/);
+    expect(src).not.toMatch(/import\s*\*\s*as/);
+  });
+
+  it('init is not asked for tracing or replay it cannot do', async () => {
+    const s = await freshModule();
+    await s.loadSentry();
+    const opts = init.mock.calls[0][0] as Record<string, unknown>;
+    expect(opts).not.toHaveProperty('integrations');
+    expect(opts).not.toHaveProperty('tracesSampleRate');
+    expect(opts).not.toHaveProperty('replaysOnErrorSampleRate');
   });
 });

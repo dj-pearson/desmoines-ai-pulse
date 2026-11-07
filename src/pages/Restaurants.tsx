@@ -1,8 +1,6 @@
 import { HubArticles } from "@/components/seo/HubArticles";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import { AdBanner } from "@/components/AdBanner";
+import { AdBanner } from "@/components/LazyAdBanner";
 import SEOHead from "@/components/SEOHead";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
 import {
@@ -677,8 +675,6 @@ export default function Restaurants() {
           dark:text-gray-100 section headings below rendered near-white on
           near-white (3.0:1 at best). */}
       <div className="min-h-screen bg-gray-50 dark:bg-background">
-        <Header />
-
         {/* Hero. One flat brand surface (WP1 item 13): the gradient and three
             blurred orbs cost paint time and said nothing. Compact on a phone
             so the first card is in the first viewport (item 6). */}
@@ -738,7 +734,7 @@ export default function Restaurants() {
                       addRecentSearch('restaurants', searchInput);
                     }
                   }}
-                  className="w-full h-12 sm:h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-slate-500"
+                  className={`w-full h-12 sm:h-14 pl-14 ${searchInput ? "pr-48" : "pr-36"} text-base md:text-lg bg-white border-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-slate-500`}
                   aria-label="Search restaurants"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -746,7 +742,9 @@ export default function Restaurants() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-11 w-11 sm:h-8 sm:w-8 text-slate-500 hover:text-slate-900"
+                      // 44px at every width; sm:h-8 shrank it to 32px on desktop
+                      // touch screens. The input's right padding grows to match.
+                      className="h-11 w-11 text-slate-500 hover:text-slate-900"
                       onClick={() => {
                         setSearchInput("");
                         setFilters((prev) => ({ ...prev, search: "" }));
@@ -1192,8 +1190,6 @@ export default function Restaurants() {
         <div {...regionProps}>{announcement}</div>
 
         <RestaurantsHubFaq restaurantCount={hubTotal} cuisineCount={cuisineCounts.length} />
-
-        <Footer />
         <BackToTop />
       </div>
     </>

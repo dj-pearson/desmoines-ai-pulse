@@ -1,10 +1,8 @@
 import { useParams, Link, useNavigate, Navigate } from "react-router-dom";
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, useEffect, useMemo, useState, type ReactNode } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useEventBySlug } from "@/hooks/useEventBySlug";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import ShareDialog from "@/components/ShareDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +14,7 @@ import AIWriteup from "@/components/AIWriteup";
 import EventCard from "@/components/EventCard";
 import EventHotelCallout from "@/components/EventHotelCallout";
 import { LazySection } from "@/components/LazySection";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import {
   centralDateOf,
   centralHour,
@@ -62,6 +61,7 @@ import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
 import { EventProvenance } from "@/components/events/EventProvenance";
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { PlainTextBlocks } from "@/components/PlainTextBlocks";
+import { useSiteFooter } from "@/hooks/useSiteFooter";
 
 // Below-the-fold widgets that each fire their own requests on mount. React.lazy
 // defers the chunk; LazySection defers the mount until the reader scrolls near
@@ -115,22 +115,6 @@ function withArticle(category: string | null): string {
   return `${/^[aeiou]/i.test(category) ? "an" : "a"} ${category} event`;
 }
 
-interface DeferredWidgetProps {
-  minHeight: number;
-  label: string;
-  children: ReactNode;
-}
-
-/** Fixed-height box until mounted, so the deferred widgets add no layout shift. */
-function DeferredWidget({ minHeight, label, children }: DeferredWidgetProps) {
-  const reserve = <div style={{ minHeight }} aria-hidden="true" />;
-  return (
-    <LazySection minHeight={minHeight} label={label} placeholder={reserve}>
-      <Suspense fallback={reserve}>{children}</Suspense>
-    </LazySection>
-  );
-}
-
 interface FactRowProps {
   term: string;
   children: ReactNode;
@@ -150,7 +134,6 @@ function EventLoadingState({ slug }: { slug: string | undefined }) {
     <div className="min-h-screen bg-background">
       {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
       <RouteCanonical path={`/events/${slug}`} />
-      <Header />
       <div className="container mx-auto px-4 py-8">
         <div className="animate-pulse space-y-6">
           <div className="h-6 bg-muted rounded w-1/4" />
@@ -172,12 +155,13 @@ function EventLoadingState({ slug }: { slug: string | undefined }) {
           </div>
         </div>
       </div>
-      <Footer preferredSource={false} />
     </div>
   );
 }
 
 export default function EventDetails() {
+  // SEO-037: the footer's preferred-source button stays off on this page.
+  useSiteFooter({ preferredSource: false });
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   // The hero is dropped entirely when its image fails, rather than hidden by
@@ -267,7 +251,6 @@ export default function EventDetails() {
         {/* No robots meta. The event may exist; a noindex here would drop a
             live page from the index because the backend blinked. */}
         <RouteCanonical path={`/events/${slug}`} />
-        <Header />
         <div className="container mx-auto px-4 py-16">
           <div className="text-center space-y-4 max-w-md mx-auto" role="alert">
             <h1 className="text-2xl font-bold">We couldn't load this event</h1>
@@ -285,7 +268,6 @@ export default function EventDetails() {
             </div>
           </div>
         </div>
-        <Footer preferredSource={false} />
       </div>
     );
   }
@@ -310,7 +292,6 @@ export default function EventDetails() {
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
         <div className="min-h-screen bg-background">
-          <Header />
           <div className="container mx-auto px-4 py-16">
             <div className="text-center space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
@@ -341,7 +322,6 @@ export default function EventDetails() {
               </div>
             </div>
           </div>
-          <Footer preferredSource={false} />
         </div>
       </>
     );
@@ -433,8 +413,6 @@ export default function EventDetails() {
       />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         {/* Hero Image Section */}
         {event.image_url && !heroFailed && (
           <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
@@ -454,7 +432,9 @@ export default function EventDetails() {
 
         <div className="container mx-auto px-4">
           {/* Content starts overlapping hero image */}
-          <div className={event.image_url ? '-mt-32 relative z-10' : 'pt-8'}>
+          {/* Only overlap when the hero actually rendered; a failed image hides
+              the hero, and -mt-32 then pulled this under the sticky header. */}
+          <div className={event.image_url && !heroFailed ? '-mt-32 relative z-10' : 'pt-8'}>
             <Breadcrumbs
               items={[
                 { label: "Home", href: "/" },
@@ -599,6 +579,7 @@ export default function EventDetails() {
                       <FavoriteButton eventId={event.id} size="sm" variant="outline" />
                       <ShareDialog
                         title={event.title}
+                        itemName={event.title}
                         description={
                           markdownToPlainText(event.enhanced_description || event.original_description) ||
                           `Check out ${event.title} in Des Moines`
@@ -784,7 +765,7 @@ export default function EventDetails() {
                   <CardContent className="space-y-1 p-4 pt-0">
                     <Link
                       to="/events/today"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <SpriteIcon name="clock" className="h-4 w-4 text-muted-foreground" />
@@ -794,7 +775,7 @@ export default function EventDetails() {
                     </Link>
                     <Link
                       to="/events/this-weekend"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
@@ -804,7 +785,7 @@ export default function EventDetails() {
                     </Link>
                     <Link
                       to="/events/free"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <SpriteIcon name="ticket" className="h-4 w-4 text-muted-foreground" />
@@ -815,7 +796,7 @@ export default function EventDetails() {
                     {category && (
                       <Link
                         to={`/events?category=${encodeURIComponent(category)}`}
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                        className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                       >
                         <span className="flex items-center gap-2">
                           <Tag className="h-4 w-4 text-muted-foreground" />
@@ -826,7 +807,7 @@ export default function EventDetails() {
                     )}
                     <Link
                       to="/events"
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      className="flex items-center justify-between p-2 coarse:min-h-[44px] rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
                         <ArrowLeft className="h-4 w-4 text-muted-foreground" />
@@ -841,15 +822,27 @@ export default function EventDetails() {
 
             {/* One hotel section, upcoming events only: linked hotels, else
                 NearbyHotels by distance (WP8 item 9). */}
-            {isUpcoming && (
+            {isUpcoming && !showHotelList && (
               <EventHotelCallout
                 eventId={event.id}
-                latitude={latitude}
-                longitude={longitude}
                 placeName={event.venue || "this event"}
                 nearSlug={venuePage?.slug ?? null}
-                showList={showHotelList}
+                showList={false}
               />
+            )}
+            {/* The list makes two hotel reads; defer them until the reader is
+                near. 280 and mt-8 match the callout's own loading reserve. */}
+            {isUpcoming && showHotelList && (
+              <LazySection minHeight={280} className="mt-8" label="Hotels nearby">
+                <EventHotelCallout
+                  eventId={event.id}
+                  latitude={latitude}
+                  longitude={longitude}
+                  placeName={event.venue || "this event"}
+                  nearSlug={venuePage?.slug ?? null}
+                  showList
+                />
+              </LazySection>
             )}
 
             {/* Same category, upcoming, its own bounded query (WP8 item 7). */}
@@ -931,8 +924,6 @@ export default function EventDetails() {
 
           <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
         </div>
-
-        <Footer preferredSource={false} />
       </div>
 
       {/* The sticky bar's link takes no onClick, so outbound clicks are

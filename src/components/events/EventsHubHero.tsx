@@ -1,8 +1,9 @@
 import type { ComponentType, ReactNode, RefObject } from "react";
-import { Clock, Loader2, Navigation, Search, Star, Tag, X } from "lucide-react";
+import { CalendarPlus, Clock, Loader2, Navigation, Search, Star, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { SubscribeCalendarDialog } from "@/components/events/SubscribeCalendarDialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -74,6 +75,11 @@ export interface EventsHubHeroProps {
   onToggleNearMe: () => void;
   /** "318 upcoming events from ... to ..., 12 free." Nothing renders while null. */
   summary?: string | null;
+  /**
+   * The calendar feed the Sync calendar chip preselects: the page's category or
+   * "free" when those filters are on, else "all" (src/lib/calendarFeeds.ts).
+   */
+  subscribeFeedSlug?: string;
 }
 
 export function EventsHubHero({
@@ -89,6 +95,7 @@ export function EventsHubHero({
   isLocating,
   onToggleNearMe,
   summary,
+  subscribeFeedSlug = "all",
 }: EventsHubHeroProps) {
   return (
     <section className="border-b bg-muted/40">
@@ -168,6 +175,21 @@ export function EventsHubHero({
             >
               {isLocating ? "Locating..." : "Near me"}
             </QuickChip>
+            {/* Not a filter, so it is a plain button with no aria-pressed;
+                it shares the chip shape so the row reads as one set of actions. */}
+            <SubscribeCalendarDialog defaultSlug={subscribeFeedSlug}>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                Sync calendar
+              </button>
+            </SubscribeCalendarDialog>
           </div>
         </div>
       </div>

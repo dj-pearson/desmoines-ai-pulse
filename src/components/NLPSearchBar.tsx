@@ -77,10 +77,14 @@ interface NLPSearchBarProps {
  * and again on /search) is gone, and with it the tabs, the scroll area and the
  * result renderer from the hero chunk.
  *
- * The suggestions region is a disclosure, not a combobox: the input reports
- * `aria-expanded` and `aria-controls`, and the panel holds ordinary links a
- * keyboard reaches with Tab. Escape closes it from anywhere inside and returns
- * focus to the input without reopening it.
+ * The input is a combobox whose popup is a non-modal dialog
+ * (aria-haspopup="dialog"), not a listbox: the panel holds ordinary links a
+ * keyboard reaches with Tab, so there is no arrow-key option model to fake.
+ * aria-expanded is not allowed on a plain searchbox (axe aria-allowed-attr,
+ * which failed the required a11y lane once the scan saw the loaded home page),
+ * and the combobox role is the one that allows it on an input.
+ * Escape closes it from anywhere inside and returns focus to the input
+ * without reopening it.
  */
 export function NLPSearchBar({
   placeholder = "Search events, restaurants, places...",
@@ -221,6 +225,9 @@ export function NLPSearchBar({
           enterKeyHint="search"
           name="q"
           autoComplete="off"
+          role="combobox"
+          aria-haspopup="dialog"
+          aria-autocomplete="none"
           aria-expanded={expanded}
           aria-controls={panelId}
           aria-describedby={statusId}
@@ -264,7 +271,7 @@ export function NLPSearchBar({
 
       <div
         id={panelId}
-        role="region"
+        role="dialog"
         aria-label="Search suggestions"
         hidden={!expanded}
         className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border bg-popover p-2 text-left text-popover-foreground shadow-lg"

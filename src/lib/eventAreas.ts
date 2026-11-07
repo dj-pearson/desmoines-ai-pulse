@@ -154,6 +154,7 @@ export function eventAreaOrFilter(area: EventArea): string | null {
   const locations = locationPatterns(area.city)
     .map((pattern) => `location.ilike."${pattern}"`)
     .join(",");
+  // postgrest-safe: area.city comes from the fixed EVENT_AREAS list, not from input
   return `city.ilike.${area.city},and(city.is.null,or(${locations}))`;
 }
 

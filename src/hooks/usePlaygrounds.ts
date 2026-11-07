@@ -9,6 +9,7 @@ import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { PLAYGROUND_LIST_COLUMNS } from "@/lib/listColumns";
 import { handleError } from "@/lib/errorHandler";
 import { suburbFromLocation } from "@/lib/playgroundMeta";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
@@ -95,6 +96,7 @@ export function suburbFilter(suburb: string): string {
   // backslash and a double quote are escaped with a backslash.
   const quote = (v: string) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   return suburbLikePatterns(suburb)
+    // postgrest-safe: quote() double-quotes the LIKE-escaped pattern, which is how PostgREST takes a comma
     .map((p) => `location.ilike.${quote(p)}`)
     .join(",");
 }
@@ -208,9 +210,12 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
           break;
       }
 
-      if (filters.search) {
+      // A comma or parenthesis in the box would end the or() clause and 400
+      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+      const safeSearch = filters.search ? sanitizePostgrestPattern(filters.search) : "";
+      if (safeSearch) {
         query = query.or(
-          `name.ilike.%${filters.search}%,location.ilike.%${filters.search}%,age_range.ilike.%${filters.search}%`
+          `name.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%,age_range.ilike.%${safeSearch}%`
         );
       }
 

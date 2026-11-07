@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { useAuthState } from '@/contexts/AuthContext';
+import { analyticsGranted } from '@/lib/analyticsConsent';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('useAnalytics');
-const ENABLE_DIRECT_CONTENT_METRICS = false;
 
 /**
  * Ceiling on the in-memory analytics queue when flushes are failing. Prevents a
@@ -14,9 +15,61 @@ const ENABLE_DIRECT_CONTENT_METRICS = false;
  */
 const MAX_QUEUED_EVENTS = 500;
 
-interface AnalyticsData {
-  sessionId: string;
-  userId?: string;
+/** How long an event waits in the queue before it is written. */
+const FLUSH_DELAY_MS = 10000;
+
+/**
+ * Retry backoff for a batch user_interactions_enhanced did not store
+ * (WEB-QA-038). The retry used to come every 10s for as long as the tab was
+ * open, so a table that rejected every insert drew six requests a minute from
+ * each consenting visitor. Now each consecutive failure doubles the wait, from
+ * FLUSH_DELAY_MS up to this cap.
+ */
+const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
+
+/**
+ * A batch the database refused this many times in a row (a 4xx, or a
+ * PostgREST/Postgres code like 42P01, 42703 or PGRST204) is dropped. Sending
+ * the same rows again will not change the answer. Network failures and 5xx
+ * do not count toward this: those batches are kept and retried on the backoff.
+ */
+const MAX_REJECTED_ATTEMPTS = 3;
+
+/** The wait before the next flush after `failures` consecutive failed flushes. */
+export function retryDelayMs(failures: number): number {
+  if (failures <= 0) return FLUSH_DELAY_MS;
+  return Math.min(FLUSH_DELAY_MS * 2 ** (failures - 1), MAX_RETRY_DELAY_MS);
+}
+
+/**
+ * Whether an insert error means "these rows will never be accepted" rather
+ * than "try later". supabase-js reports a failed fetch as status 0, so a
+ * status settles it when there is one; 408 and 429 are the 4xx worth
+ * retrying. Without a status, a Postgres/PostgREST error code (42xxx schema
+ * and permission, 23xxx constraint, 22xxx data, PGRSTxxx) is a rejection.
+ */
+export function isPermanentRejection(
+  error: { code?: string | null } | null | undefined,
+  status?: number | null,
+): boolean {
+  if (typeof status === 'number' && status > 0) {
+    return status >= 400 && status < 500 && status !== 408 && status !== 429;
+  }
+  if (status === 0) return false;
+  return /^(PGRST|42|23|22)/.test(error?.code ?? '');
+}
+
+/**
+ * One session id per page load, shared by every mounted instance of the hook.
+ * It is mounted three times on some routes (AllInclusiveDashboard, MostSearched,
+ * SearchResults), and a per-instance id split one visit into that many
+ * sessions. In memory only, so nothing is stored on the device for a visitor
+ * who has not consented.
+ */
+let sharedSessionId: string | null = null;
+function getSessionId(): string {
+  if (!sharedSessionId) sharedSessionId = crypto.randomUUID();
+  return sharedSessionId;
 }
 
 interface TrackingEvent {
@@ -45,9 +98,18 @@ interface SessionData {
 /** Rows queued for user_interactions_enhanced, typed as that table's Insert. */
 type InteractionInsert = Database['public']['Tables']['user_interactions_enhanced']['Insert'];
 
+/**
+ * Every write below is gated on analyticsGranted(), the same check
+ * usePageTracking, useWebVitals and useContentTracking make: nothing is
+ * recorded until the visitor has granted the analytics category.
+ */
 export function useAnalytics() {
-  const [sessionId] = useState(() => crypto.randomUUID());
-  const [userId, setUserId] = useState<string | null>(null);
+  const [sessionId] = useState(getSessionId);
+  // From the auth context rather than a getUser() round trip per instance. The
+  // round trip also resolved after the mount effect had captured a null user,
+  // so the mount-time event was always written as anonymous.
+  const { user } = useAuthState();
+  const userId = user?.id ?? null;
   const [sessionData, setSessionData] = useState<SessionData>(() => ({
     startTime: new Date(),
     pageViews: 0,
@@ -57,7 +119,7 @@ export function useAnalytics() {
     entryPoint:
       typeof document === 'undefined' || !document.referrer ? 'direct' : document.referrer,
   }));
-  
+
   // Queue for batching analytics events
   // Typed as the destination table's Insert, not Record<string, unknown>. An
   // index-signature type says "this may carry any key", which supabase-js 2.85+
@@ -65,38 +127,148 @@ export function useAnalytics() {
   // the whole batch is lost.
   const eventQueue = useRef<InteractionInsert[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unmounted = useRef(false);
+  // Consecutive failed flushes of any kind (sets the backoff), and consecutive
+  // rejections of the batch now queued (decides when it is dropped). Both
+  // reset when a batch lands.
+  const failedFlushes = useRef(0);
+  const rejectedAttempts = useRef(0);
 
-  useEffect(() => {
-    // Get current user
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
-    };
-    getUser();
+  // Flush queued events to enhanced analytics table
+  const flushEventQueue = useCallback(async () => {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    if (eventQueue.current.length === 0) return;
+    // Consent can be withdrawn after an event was queued. Drop what is held
+    // rather than send it.
+    if (!analyticsGranted()) {
+      eventQueue.current = [];
+      return;
+    }
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUserId(session?.user?.id || null);
-    });
+    const eventsToFlush = [...eventQueue.current];
+    eventQueue.current = [];
 
-    // Track page view on mount
-    trackPageView();
-
-    // Set up periodic flush of queued events
-    flushTimer.current = setInterval(flushEventQueue, 10000); // Flush every 10 seconds
-
-    // Cleanup
-    return () => {
-      subscription.unsubscribe();
-      if (flushTimer.current) {
-        clearInterval(flushTimer.current);
+    // supabase-js resolves with { error } instead of throwing, so the old
+    // try/catch re-queue path never ran and a rejected batch was simply lost.
+    //
+    // There is no user_analytics fallback any more: trackEvent already writes
+    // every event to user_analytics directly, so copying a failed batch there
+    // recorded each of those events twice.
+    let failed = false;
+    let rejected = false;
+    try {
+      const { error, status } = await supabase.from('user_interactions_enhanced').insert(eventsToFlush);
+      if (error) {
+        failed = true;
+        rejected = isPermanentRejection(error, status);
+        log.warn('flushEventQueue', 'user_interactions_enhanced insert rejected', {
+          count: eventsToFlush.length,
+          message: error.message,
+          code: error.code,
+          status,
+        });
       }
-      flushEventQueue(); // Final flush
-    };
+    } catch (error) {
+      // A throw is a network or client failure, never the database's answer.
+      failed = true;
+      log.error('flushEventQueue', 'Error flushing analytics queue', { error });
+    }
+
+    if (failed) {
+      failedFlushes.current += 1;
+      if (rejected) rejectedAttempts.current += 1;
+
+      if (rejectedAttempts.current >= MAX_REJECTED_ATTEMPTS) {
+        // The database has refused these rows MAX_REJECTED_ATTEMPTS times.
+        // Drop them. Anything queued during the flush stays and goes out on
+        // the backoff, which is not reset because nothing has landed yet.
+        log.warn('flushEventQueue', 'Dropping an analytics batch the database keeps rejecting', {
+          count: eventsToFlush.length,
+          attempts: rejectedAttempts.current,
+        });
+        rejectedAttempts.current = 0;
+      } else {
+        // Re-queue the events that failed, ahead of anything enqueued while
+        // the flush was in flight. Bounded so a persistent outage cannot grow
+        // the queue without limit; dropping the oldest analytics events is
+        // strictly better than pinning the tab's memory.
+        const requeued = [...eventsToFlush, ...eventQueue.current];
+        eventQueue.current = requeued.slice(-MAX_QUEUED_EVENTS);
+      }
+      scheduleFlush();
+      // Content metrics go out only for a batch that was stored, so a retried
+      // batch is not counted twice.
+      return;
+    }
+    failedFlushes.current = 0;
+    rejectedAttempts.current = 0;
+    log.debug('flushEventQueue', `Flushed ${eventsToFlush.length} enhanced analytics events`);
+
+    // Batch content metrics to Edge Function (reduces overhead)
+    try {
+      const isUuid = (v: unknown) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
+      const allowedTypes = new Set(['view','search','click','share','bookmark','favorite','hover','scroll','filter']);
+      const allowedContent = new Set(['event','restaurant','attraction','playground','page','search_result']);
+
+      const metricEvents = eventsToFlush
+        .map(e => ({
+          content_type: e.content_type,
+          content_id: e.content_id,
+          metric_type: e.interaction_type,
+          metric_value: 1,
+        }))
+        .filter(e => allowedTypes.has(e.metric_type as string) && allowedContent.has(e.content_type as string) && isUuid(e.content_id));
+
+      if (metricEvents.length > 0) {
+        const { error } = await supabase.functions.invoke('log-content-metrics', {
+          body: { events: metricEvents },
+        });
+        if (error) {
+          log.warn('flushEventQueue', 'Batch metrics logging failed (edge function)', { error });
+        }
+      }
+    } catch (e) {
+      log.warn('flushEventQueue', 'Batch metrics logging failed (edge function)', { error: e });
+    }
+    // scheduleFlush only reads refs and calls back into this function.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Arm one delayed flush when something is waiting, instead of a standing
+  // 10s interval per instance that ran whether or not anything was queued.
+  // The delay is FLUSH_DELAY_MS while flushes succeed and backs off while they
+  // fail (retryDelayMs). After unmount the cleanup has already done the final
+  // flush, so nothing new is armed.
+  function scheduleFlush() {
+    if (flushTimer.current || unmounted.current) return;
+    if (eventQueue.current.length === 0) return;
+    flushTimer.current = setTimeout(() => {
+      flushTimer.current = null;
+      void flushEventQueue();
+    }, retryDelayMs(failedFlushes.current));
+  }
+
+  // No page view on mount. usePageTracking (App.tsx) already records the real
+  // page_view for every route, behind consent; this hook recorded another one
+  // per mounted instance, so the homepage counted three views per visit.
+  useEffect(() => {
+    unmounted.current = false;
+    return () => {
+      unmounted.current = true;
+      if (flushTimer.current) {
+        clearTimeout(flushTimer.current);
+        flushTimer.current = null;
+      }
+      void flushEventQueue(); // Final flush
+    };
+  }, [flushEventQueue]);
 
   // Enhanced event tracking with batching
   const trackEvent = async (event: TrackingEvent) => {
+    if (!analyticsGranted()) return;
     try {
       // Update session data
       setSessionData(prev => ({
@@ -125,9 +297,11 @@ export function useAnalytics() {
 
       // Add to queue for batching
       eventQueue.current.push(enhancedEvent);
+      scheduleFlush();
 
-      // Also maintain backward compatibility with existing tables
-      await supabase.from('user_analytics').insert({
+      // Also maintain backward compatibility with existing tables. A rejected
+      // insert resolves with { error }; it does not throw into the catch.
+      const { error: legacyError } = await supabase.from('user_analytics').insert({
         session_id: sessionId,
         user_id: userId,
         event_type: event.eventType,
@@ -140,7 +314,13 @@ export function useAnalytics() {
         referrer: document.referrer,
         page_url: window.location.href
       });
-
+      if (legacyError) {
+        log.warn('trackEvent', 'user_analytics insert rejected', {
+          message: legacyError.message,
+          code: legacyError.code,
+        });
+        return;
+      }
 
       log.debug('trackEvent', 'Analytics event tracked', { eventType: event.eventType, contentType: event.contentType });
     } catch (error) {
@@ -148,90 +328,10 @@ export function useAnalytics() {
     }
   };
 
-  // Flush queued events to enhanced analytics table
-  const flushEventQueue = useCallback(async () => {
-    if (eventQueue.current.length === 0) return;
-
-    // Hoisted out of the try so the catch can actually re-queue what failed.
-    // While it was scoped inside, the error path could not see it (see below).
-    const eventsToFlush = [...eventQueue.current];
-
-    try {
-      eventQueue.current = []; // Clear queue
-
-      // Try to insert to enhanced analytics table (graceful fallback if table doesn't exist yet)
-      try {
-        await supabase.from('user_interactions_enhanced').insert(eventsToFlush);
-        log.debug('flushEventQueue', `Flushed ${eventsToFlush.length} enhanced analytics events`);
-      } catch (enhancedError) {
-        log.debug('flushEventQueue', 'Enhanced analytics table not available yet, using fallback');
-        // Fallback to existing user_analytics table with simplified data
-        const fallbackEvents = eventsToFlush.map(event => ({
-          session_id: event.session_id,
-          user_id: event.user_id,
-          event_type: event.interaction_type,
-          content_type: event.content_type,
-          content_id: event.content_id,
-          device_type: event.device_type,
-          user_agent: event.user_agent,
-          referrer: event.referrer,
-          page_url: window.location.href
-        }));
-        
-        for (const event of fallbackEvents) {
-          // Queue items are loosely typed (Record<string, unknown>); the row
-          // shape is correct at runtime, so bypass the generated-row check.
-          await supabase.from('user_analytics').insert(event as never);
-        }
-        log.debug('flushEventQueue', `Flushed ${fallbackEvents.length} analytics events to fallback table`);
-      }
-
-      // Batch content metrics to Edge Function (reduces overhead)
-      try {
-        const isUuid = (v: unknown) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
-        const allowedTypes = new Set(['view','search','click','share','bookmark','favorite','hover','scroll','filter']);
-        const allowedContent = new Set(['event','restaurant','attraction','playground','page','search_result']);
-
-        const metricEvents = eventsToFlush
-          .map(e => ({
-            content_type: e.content_type,
-            content_id: e.content_id,
-            metric_type: e.interaction_type,
-            metric_value: 1,
-          }))
-          .filter(e => allowedTypes.has(e.metric_type as string) && allowedContent.has(e.content_type as string) && isUuid(e.content_id));
-
-        if (metricEvents.length > 0) {
-          await supabase.functions.invoke('log-content-metrics', {
-            body: { events: metricEvents },
-          });
-        }
-      } catch (e) {
-        log.warn('flushEventQueue', 'Batch metrics logging failed (edge function)', { error: e });
-      }
-    } catch (error) {
-      log.error('flushEventQueue', 'Error flushing analytics queue', { error });
-      // Re-queue the events that actually failed, ahead of anything enqueued
-      // while the flush was in flight.
-      //
-      // This previously read `[...eventQueue.current, ...eventQueue.current]`,
-      // which did the opposite of its comment: eventsToFlush had already been
-      // cleared from the queue and was out of scope here, so the failed events
-      // were LOST while whatever arrived during the flush was DUPLICATED — and
-      // duplicated again on every subsequent failure, doubling the queue each
-      // time. A backend outage therefore produced exponential memory growth and
-      // inflated counts for the events that survived.
-      //
-      // Bounded so a persistent outage cannot grow the queue without limit;
-      // dropping the oldest analytics events is strictly better than pinning
-      // the tab's memory.
-      const requeued = [...eventsToFlush, ...eventQueue.current];
-      eventQueue.current = requeued.slice(-MAX_QUEUED_EVENTS);
-    }
-  }, []);
-
-  // Track page views with enhanced data
-  const trackPageView = useCallback(async () => {
+  // Track page views with enhanced data. Not called on mount (see above); kept
+  // for callers that want to record a view of something other than the route.
+  const trackPageView = async () => {
+    if (!analyticsGranted()) return;
     setSessionData(prev => ({
       ...prev,
       pageViews: prev.pageViews + 1,
@@ -243,10 +343,11 @@ export function useAnalytics() {
       contentType: 'page',
       contentId: crypto.randomUUID(), // Generate proper UUID for pages
     });
-  }, [sessionId, userId]);
+  };
 
   // Enhanced search tracking with user journey data
   const trackSearch = async (query: string, filters: Record<string, string | undefined>, resultsCount: number, clickedResultId?: string) => {
+    if (!analyticsGranted()) return;
     try {
       // Track in existing search analytics table.
       //
@@ -260,7 +361,7 @@ export function useAnalytics() {
       // column is a foreign key to events, and a search result can be a
       // restaurant or attraction, which would violate the constraint. It stays
       // in search_filters until a content-type-agnostic column exists.
-      await supabase.from('search_analytics').insert({
+      const { error: searchError } = await supabase.from('search_analytics').insert({
         user_id: userId ?? null,
         search_query: query,
         results_count: resultsCount,
@@ -273,6 +374,12 @@ export function useAnalytics() {
           clickedResultId: clickedResultId ?? null,
         },
       });
+      if (searchError) {
+        log.warn('trackSearch', 'search_analytics insert rejected', {
+          message: searchError.message,
+          code: searchError.code,
+        });
+      }
 
       // Track as enhanced interaction
       await trackEvent({
@@ -303,10 +410,13 @@ export function useAnalytics() {
     value: string,
     confidence: number = 0.5,
   ) => {
+    if (!analyticsGranted()) return;
     try {
-      // Try to use enhanced preference profiles table
+      // Try to use enhanced preference profiles table. A rejection resolves
+      // with { error } rather than throwing, so it is rethrown to reach the
+      // fallback below.
       try {
-        await supabase.from('user_preference_profiles').upsert({
+        const { error: preferenceError } = await supabase.from('user_preference_profiles').upsert({
           user_id: userId,
           session_id: userId ? null : sessionId,
           [`preferred_${category}s`]: [value],
@@ -315,7 +425,8 @@ export function useAnalytics() {
         }, {
           onConflict: userId ? 'user_id' : 'session_id'
         });
-      } catch (enhancedError) {
+        if (preferenceError) throw preferenceError;
+      } catch {
         log.debug('trackPreference', 'Enhanced preference table not available, tracking as analytics event');
         // Fallback to tracking as a regular analytics event
         await trackEvent({
@@ -333,6 +444,7 @@ export function useAnalytics() {
 
   // Track conversion events (phone calls, website visits, etc.)
   const trackConversion = async (conversionType: 'website_visit' | 'phone_call' | 'direction_request' | 'email', contentType: string, contentId: string) => {
+    if (!analyticsGranted()) return;
     try {
       // Try to update user journey with conversion
       try {
@@ -343,7 +455,7 @@ export function useAnalytics() {
         // values come from where the session actually started, captured at
         // mount. supabase-js 2.85+ is what surfaced it - the old types let a
         // missing required column through.
-        await supabase.from('user_journeys').upsert({
+        const { error: journeyError } = await supabase.from('user_journeys').upsert({
           session_id: sessionId,
           user_id: userId,
           entry_page: sessionData.entryPage,
@@ -357,7 +469,8 @@ export function useAnalytics() {
         }, {
           onConflict: 'session_id'
         });
-      } catch (enhancedError) {
+        if (journeyError) throw journeyError;
+      } catch {
         log.debug('trackConversion', 'Enhanced journey table not available, tracking as analytics event');
       }
 

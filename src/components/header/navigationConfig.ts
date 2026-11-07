@@ -23,7 +23,6 @@ import {
   DollarSign,
   type LucideIcon,
 } from "lucide-react";
-import { isValidRedirectUrl } from "@/lib/redirectSafety";
 
 export interface NavItem {
   href: string;
@@ -136,24 +135,5 @@ export const navigationLinks: NavItem[] = [
   { href: "/whats-new", label: "What's New", icon: Sparkles },
 ];
 
-/** Where the shell's auth links bring a visitor back to: this page, or "/". */
-function returnPath(pathname: string, search: string): string {
-  if (pathname.startsWith("/auth")) return "/";
-  const here = `${pathname}${search}`;
-  if (isValidRedirectUrl(here)) return here;
-  return isValidRedirectUrl(pathname) ? pathname : "/";
-}
-
-/**
- * The shell's "Sign Up Free" links: opens the sign-up tab and comes back to
- * the page the visitor was on. Auth validates `redirect` again.
- */
-export function signUpHref(pathname: string, search = ""): string {
-  return `/auth?mode=signup&redirect=${encodeURIComponent(returnPath(pathname, search))}`;
-}
-
-/** Sign in, coming back to the current page. */
-export function signInHref(pathname: string, search = ""): string {
-  const target = returnPath(pathname, search);
-  return target === "/" ? "/auth" : `/auth?redirect=${encodeURIComponent(target)}`;
-}
+// Moved to @/lib/signInLinks so BottomNav (entry chunk) need not import this file.
+export { signInHref, signUpHref } from "@/lib/signInLinks";

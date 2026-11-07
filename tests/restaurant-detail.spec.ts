@@ -127,6 +127,11 @@ test.describe('restaurant detail', () => {
   });
 
   test('nearby events exclude hidden and archived rows and link to the event', async ({ page }) => {
+    // The fixture events start 2026-10-01 19:00 UTC. From 2026-10-02 on they
+    // had started, both rails rightly dropped them (selectNearbyEvents keeps
+    // only events not yet started), and nothing rendered to click. A clock the
+    // day before keeps them upcoming without the spec depending on today.
+    await page.clock.setFixedTime(new Date('2026-09-30T15:00:00Z'));
     await installFixtureBackend(page);
     await serveRestaurants(page, [BASE]);
     const eventQueries: string[] = [];

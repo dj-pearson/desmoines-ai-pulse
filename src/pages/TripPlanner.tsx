@@ -4,8 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Baby, Check, DollarSign, Download, Lightbulb, Loader2, Music, Palette, Trash2, TreePine, Utensils, CalendarPlus } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { FAQSection, type FAQItem } from "@/components/FAQSection";
 import { UpgradeModal } from "@/components/UpgradeModal";
@@ -211,8 +209,6 @@ export default function TripPlanner() {
       />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-8" data-page-body="trip-planner">
           <Breadcrumbs
             className="mb-3"
@@ -257,8 +253,6 @@ export default function TripPlanner() {
             />
           </div>
         </section>
-
-        <Footer />
       </div>
     </>
   );

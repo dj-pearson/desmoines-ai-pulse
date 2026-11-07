@@ -9,8 +9,6 @@
  */
 import { lazy, Suspense, type ComponentType } from "react";
 import { useParams } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { RouteCanonical } from "@/components/RouteCanonical";
 
 /** One retry on a failed chunk load (a deploy between page load and click). */
@@ -32,7 +30,6 @@ function SegmentLoadingState({ slug }: { slug: string | undefined }) {
   return (
     <div className="min-h-screen bg-background">
       <RouteCanonical path={`/events/${slug ?? ""}`} />
-      <Header />
       <div
         className="container mx-auto px-4 py-8"
         role="status"
@@ -48,7 +45,6 @@ function SegmentLoadingState({ slug }: { slug: string | undefined }) {
           </div>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }

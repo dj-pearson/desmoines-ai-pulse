@@ -8,8 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Trophy, Target, Award, Star, Camera, MapPin, Share2 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -70,7 +68,6 @@ export default function Gamification() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <Breadcrumbs
             className="mb-4 text-left"
@@ -121,15 +118,12 @@ export default function Gamification() {
             </Button>
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -293,8 +287,6 @@ export default function Gamification() {
           </TabsContent>
         </Tabs>
       </div>
-      
-      <Footer />
     </div>
   );
 }

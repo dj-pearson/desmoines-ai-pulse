@@ -196,6 +196,14 @@ const PENDING_MIGRATIONS = [
   // until the same migration has created trip_plans, so the pending window is
   // the one where the endpoint already refuses with trip_storage_unavailable.
   { table: 'trip_plan_generations', migration: '20261014000001' },
+  // Which Apple environment an iOS row came from (WEB-SEC-051).
+  // validate-ios-receipt writes it in its own best-effort UPDATE that logs
+  // PGRST204 until applied, so the entitlement write never depends on it.
+  { table: 'user_subscriptions', column: 'apple_environment', migration: '20261102000001' },
+  // The For You RPC with is_sponsored / sponsored_until (WEB-PERF-052). The
+  // pending window is safe: useForYouRail falls back to v1 plus the follow-up
+  // events read on PGRST202 and stops asking for v2 for the session.
+  { rpc: 'get_personalized_recommendations_v2', migration: '20261102000002' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

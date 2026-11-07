@@ -61,6 +61,7 @@ export function rowMentionsDiet(
  */
 export function dietOrClause(diet: Diet): string {
   return diet.keywords
+    // postgrest-safe: diet.keywords are fixed strings defined in this file
     .map((k) => `description.ilike.%${k}%,name.ilike.%${k}%,cuisine.ilike.%${k}%`)
     .join(",");
 }

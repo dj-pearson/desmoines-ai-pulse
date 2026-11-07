@@ -2,14 +2,12 @@ import { useState, useEffect, useCallback, lazy, Suspense, useRef, useMemo } fro
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AlertCircle, Calendar, ChevronDown, RefreshCw, SearchX, Tag, X } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { HubArticles } from "@/components/seo/HubArticles";
 import { EventsHubDirectory } from "@/components/seo/EventsHubDirectory";
-import { AdBanner } from "@/components/AdBanner";
+import { AdBanner } from "@/components/LazyAdBanner";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { ListFreshness } from "@/components/ListFreshness";
@@ -46,6 +44,7 @@ import { arrangeSponsored, isSponsoredActive, SPONSORED_CAP } from "@/lib/sponso
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { buildEventItemList } from "@/lib/eventSchema";
 import { EVENT_CATEGORIES, isCanonicalCategory } from "@/lib/eventCategories";
+import { feedForCategory } from "@/lib/calendarFeeds";
 import { findEventArea } from "@/lib/eventAreas";
 import { isPrerender } from "@/lib/isPrerender";
 import { centralDateOf, createEventSlugWithCentralTime } from "@/lib/timezone";
@@ -59,6 +58,7 @@ import {
   fetchNearMe,
   fetchSponsoredLead,
   flattenPages,
+  isUnfilteredHub,
   nearMeCountLabel,
   parseHubSort,
   pickedDay,
@@ -433,15 +433,26 @@ export default function EventsPage() {
    * whatever the filters are, keyed by the Central day so it rolls over at
    * midnight. Dates are absolute (eventHubSummary.ts says why).
    */
+  // Loop 8: on the unfiltered list, page 1's exact count is already the
+  // sentence's total (same filters, same `now` rule), so the summary skips a
+  // second exact count over `events`. It is remembered for when a filter goes
+  // on later; a visitor who lands filtered gets the summary's own count.
+  const listIsUnfiltered = !nearParam && isUnfilteredHub(hubFilters);
+  const listTotal = listIsUnfiltered && !isUpdating && firstPage ? firstPage.total : null;
+  const [knownTotal, setKnownTotal] = useState<number | null>(null);
+  useEffect(() => {
+    if (listTotal !== null) setKnownTotal(listTotal);
+  }, [listTotal]);
   const calendarQuery = useQuery({
     queryKey: queryKeys.events.list({ hub: "calendar-summary", day: today }),
-    queryFn: () => fetchHubCalendarSummary(new Date()),
+    queryFn: () => fetchHubCalendarSummary(new Date(), { withTotal: !listIsUnfiltered }),
     staleTime: 5 * 60 * 1000,
   });
   const calendar = calendarQuery.data;
+  const calendarTotal = listTotal ?? calendar?.total ?? knownTotal;
   const calendarSummary =
-    calendar && calendar.total !== null
-      ? hubSummary(today, calendar.lastDay, { total: calendar.total, free: calendar.free })
+    calendar && calendarTotal !== null
+      ? hubSummary(today, calendar.lastDay, { total: calendarTotal, free: calendar.free })
       : null;
   // No top-picks block here (SEO-036 puts it on /events/today and
   // /events/this-weekend): on a phone it pushed the first card to 817px,
@@ -691,8 +702,6 @@ export default function EventsPage() {
       />
 
       <div className="min-h-screen bg-background">
-        <Header />
-
         <EventsHubHero
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -706,6 +715,11 @@ export default function EventsPage() {
           isLocating={isLoadingLocation}
           onToggleNearMe={handleNearMe}
           summary={calendarSummary}
+          subscribeFeedSlug={
+            priceRange === "free"
+              ? "free"
+              : feedForCategory(selectedCategory === "all" ? null : selectedCategory).slug
+          }
         />
 
         <EventFiltersSheet
@@ -986,8 +1000,6 @@ export default function EventsPage() {
             </div>
           </div>
         </section>
-
-        <Footer />
         <BackToTop />
       </div>
     </>

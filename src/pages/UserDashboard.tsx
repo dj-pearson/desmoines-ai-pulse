@@ -2,7 +2,6 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Megaphone, Plus, Settings, User, X } from "lucide-react";
-import Header from "@/components/Header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -382,8 +381,6 @@ export default function UserDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
       <div className="container mx-auto mobile-padding py-4 md:py-6">
         <div className="mb-3 flex items-center gap-2">
           <User className="h-5 w-5 text-primary" aria-hidden="true" />

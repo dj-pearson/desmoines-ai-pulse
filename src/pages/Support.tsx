@@ -1,4 +1,3 @@
-import Header from "@/components/Header";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SupportChat from "@/components/support/SupportChat";
 import SEOHead from "@/components/SEOHead";
@@ -12,7 +11,6 @@ export default function Support() {
         keywords={["Des Moines Insider support", "help", "customer service", "contact support"]}
       />
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="mx-auto max-w-2xl">
             <Breadcrumbs className="mb-4" items={[{ label: "Home", href: "/" }, { label: "Support" }]} />

@@ -12,11 +12,19 @@
  *   SUPABASE_URL         - Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY - Supabase service role key
  *
+ * Optional (WEB-SEC-051, see _shared/appleSandboxPolicy.ts):
+ *   IOS_SANDBOX_ENFORCE           "true" refuses sandbox grants outside the allowlist
+ *   IOS_SANDBOX_ALLOWED_EMAILS    comma-separated; MUST include the App Review demo account
+ *   IOS_SANDBOX_ALLOWED_USER_IDS  comma-separated auth user ids
+ *
  * Accepts POST: { transactionId, originalTransactionId, productId, userId, transfer? }
  *   transfer (optional, default false): sent by the iOS Restore button only. It
  *   lets this account take over an Apple subscription another account holds
  *   when the purchase carried no appAccountToken (IOS-DD-MONETIZATION-02).
  * Returns: { valid: true, entitlement: { tier, expiresAt } } on success
+ *          { valid: true, entitlement: null, reason: 'sandbox_purchase_not_entitled' }
+ *            for a refused sandbox purchase (nothing written; the app keeps its
+ *            local StoreKit state and shows no error)
  *          { valid: false, reason: string } on failure
  */
 
@@ -25,6 +33,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { decideAppleOwnership } from '../_shared/appleOwnership.ts';
+import { decideSandboxGrant, SANDBOX_NOT_ENTITLED } from '../_shared/appleSandboxPolicy.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -435,6 +444,40 @@ serve(async (req) => {
     }
 
     // -----------------------------------------------------------------------
+    // 5a. Sandbox purchases are premium only for the allowlist (WEB-SEC-051)
+    // -----------------------------------------------------------------------
+    // Before ownership: a refused sandbox purchase must not cancel another
+    // account's row via the transfer branch either.
+    const sandboxDecision = decideSandboxGrant({
+      environment: appleResult.environment,
+      userId: user.id,
+      email: user.email,
+      enforceFlag: Deno.env.get('IOS_SANDBOX_ENFORCE'),
+      allowedEmails: Deno.env.get('IOS_SANDBOX_ALLOWED_EMAILS'),
+      allowedUserIds: Deno.env.get('IOS_SANDBOX_ALLOWED_USER_IDS'),
+    });
+
+    if (sandboxDecision.wouldRefuse) {
+      console.warn(
+        `[validate-ios-receipt] sandbox purchase outside allowlist: user=${user.id}, ` +
+        `product=${txInfo.productId}, env=${appleResult.environment}, ` +
+        `decision=${sandboxDecision.reason}`
+      );
+    }
+
+    if (!sandboxDecision.grant) {
+      // valid:true with no entitlement: StoreKitService treats it as success
+      // (clears any revocation, no error UI) and refreshBackendTier then reads
+      // no iOS row, so web and Android stay Free. A valid:false or 4xx would
+      // revoke the tester's local entitlement and show a rejection notice.
+      const refused = new Response(
+        JSON.stringify({ valid: true, entitlement: null, reason: SANDBOX_NOT_ENTITLED }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+      return addRateLimitHeaders(refused, rateLimit);
+    }
+
+    // -----------------------------------------------------------------------
     // 5b. One Apple subscription, one account (IOS-DD-MONETIZATION-02)
     // -----------------------------------------------------------------------
     // Apple's value, not the client's: the client-sent originalTransactionId
@@ -595,6 +638,19 @@ serve(async (req) => {
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+    }
+
+    // Which Apple environment the row came from (WEB-SEC-051). A separate,
+    // best-effort UPDATE: the column arrives with migration 20261102000001,
+    // and folding it into subscriptionData would fail every validation with
+    // PGRST204 until that is applied.
+    const { error: envError } = await supabase
+      .from('user_subscriptions')
+      .update({ apple_environment: appleResult.environment })
+      .eq('user_id', user.id)
+      .eq('platform', 'ios');
+    if (envError) {
+      console.warn(`[validate-ios-receipt] apple_environment not recorded: ${envError.message}`);
     }
 
     // -----------------------------------------------------------------------

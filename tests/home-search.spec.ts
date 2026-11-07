@@ -66,7 +66,7 @@ test.beforeEach(async ({ page }) => {
 
 async function heroInput(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  const input = page.getByRole('search').getByRole('searchbox');
+  const input = page.getByRole('search').getByRole('combobox');
   await expect(input).toBeVisible({ timeout: 30_000 });
   return input;
 }

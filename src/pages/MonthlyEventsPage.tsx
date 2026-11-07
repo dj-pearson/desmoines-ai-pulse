@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
@@ -71,7 +69,6 @@ function MonthNotFound({ label }: { label: string | null }) {
   return (
     <div className="min-h-screen bg-background">
       <NoIndexMeta />
-      <Header />
       <div className="container mx-auto px-4 py-16 max-w-2xl text-center">
         <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h1 className="text-3xl font-bold mb-3">
@@ -89,7 +86,6 @@ function MonthNotFound({ label }: { label: string | null }) {
           </Button>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }
@@ -314,9 +310,6 @@ export default function MonthlyEventsPage() {
         listDescription={pageDescription}
         listUrl={canonicalUrl}
       />
-
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -568,8 +561,6 @@ export default function MonthlyEventsPage() {
           description={`Common questions about ${monthDisplayName} events in Des Moines`}
         />
       </div>
-
-      <Footer />
     </div>
   );
 }

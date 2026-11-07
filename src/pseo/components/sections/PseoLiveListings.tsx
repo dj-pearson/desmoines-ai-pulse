@@ -16,6 +16,7 @@ import type { PseoDimensionRef } from '../../schemas';
 import { CATEGORY_FILTERS, dayAfter, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../listingFilters';
 import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 import { isVisitableStatus } from "@/lib/restaurantHours";
 import { attractionListingHref, eventListingHref, restaurantListingHref } from '../../listingHrefs';
 
@@ -207,8 +208,11 @@ async function fetchListings(
       // venue is in the OR because that is where a neighbourhood name actually
       // lands on this table - events.city is NULL on 1,243 of 1,249 rows, so the
       // city arm almost never fires. Same fields EventsByLocation.tsx matches.
+      // Names come from pSEO config, but one with a comma ("Ankeny, IA") would
+      // end the or() clause and 400, which empties the listing block.
+      const place = sanitizePostgrestPattern(location.name);
       query = query.or(
-        `city.ilike.%${location.name}%,location.ilike.%${location.name}%,venue.ilike.%${location.name}%`,
+        `city.ilike.%${place}%,location.ilike.%${place}%,venue.ilike.%${place}%`,
       );
     }
     if (categoryFilter?.entity === 'events') {
@@ -258,7 +262,9 @@ async function fetchListings(
       query =
         match.kind === 'neighborhood'
           ? query.eq('neighborhood', match.slug)
-          : query.or(`city.ilike.%${match.name}%,location.ilike.%${match.name}%`);
+          : query.or(
+              `city.ilike.%${sanitizePostgrestPattern(match.name)}%,location.ilike.%${sanitizePostgrestPattern(match.name)}%`,
+            );
     }
     if (categoryFilter?.entity === 'restaurants') {
       query = query.filter(categoryFilter.column, 'imatch', categoryFilter.pattern);

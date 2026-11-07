@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { safeWebUrl } from "@/lib/reservations";
 import { Spinner } from "@/components/ui/loading-skeleton";
 
 const log = createLogger('EventReviewSystem');
@@ -336,15 +337,19 @@ export default function EventReviewSystem() {
                                     <div>
                                       <Label className="font-semibold">Website</Label>
                                       <p className="text-sm">
-                                        {event.website_url ? (
-                                          <a 
-                                            href={event.website_url} 
+                                        {/* Submitter text: link it only when it is http(s),
+                                            otherwise show it as plain text for review. */}
+                                        {safeWebUrl(event.website_url) ? (
+                                          <a
+                                            href={safeWebUrl(event.website_url) ?? undefined}
                                             target="_blank" 
                                             rel="noopener noreferrer"
                                             className="text-blue-600 hover:underline"
                                           >
                                             {event.website_url}
                                           </a>
+                                        ) : event.website_url ? (
+                                          <span className="break-all">{event.website_url}</span>
                                         ) : "Not provided"}
                                       </p>
                                     </div>
