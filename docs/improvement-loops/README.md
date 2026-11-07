@@ -95,6 +95,22 @@ restart it from `develop` (or `main` if there is no `develop`).
 5. Add a row to the round log, commit `docs(prd): record improvement-loop round N`,
    push, and remove the agent worktrees (`git worktree remove --force`).
 
+### Continuous mode
+
+The scheduler's minimum interval is one hour, and a round takes about 30
+minutes, so the scheduled session runs rounds back to back instead of one per
+fire. Only one session may run rounds at a time; `scripts/loop-lock.sh` holds
+that lock as the remote branch `loops-lock`.
+
+- On start: `scripts/loop-lock.sh acquire <session-id>`. Exit 1 means another
+  session is running rounds; stop immediately and report "lock held".
+- Before every round: `scripts/loop-lock.sh refresh <session-id>`. If it exits 1,
+  another session took over; stop.
+- Before each round, `git fetch` and fast-forward the rolling branch.
+- Stop starting new rounds 4 hours after the session began, then
+  `scripts/loop-lock.sh release <session-id>`. The next hourly fire takes over.
+- A lock with no heartbeat for 75 minutes counts as abandoned.
+
 ## Round log
 
 | Date | Branch | Lanes | Result |
