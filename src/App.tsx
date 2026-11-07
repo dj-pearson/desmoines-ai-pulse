@@ -114,6 +114,7 @@ const SubscriptionPortal = lazyWithRetry(() => import("./pages/SubscriptionPorta
 const AdminRefunds = lazyWithRetry(() => import("./pages/AdminRefunds"));
 const BusinessPartnership = lazyWithRetry(() => import("./pages/BusinessPartnership"));
 const BusinessHub = lazyWithRetry(() => import("./pages/BusinessHub"));
+const ClaimListing = lazyWithRetry(() => import("./pages/ClaimListing"));
 const GuidesPage = lazyWithRetry(() => import("./pages/GuidesPage"));
 const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"));
 const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
@@ -600,6 +601,7 @@ const App = () => (
                 element={<BusinessPartnership />}
               />
               <Route path="/business" element={<BusinessHub />} />
+              <Route path="/business/claim/:type/:id" element={<ClaimListing />} />
               <Route path="/search" element={<SearchResults />} />
               <Route path="/search/advanced" element={<AdvancedSearchPage />} />
               <Route path="/guides" element={<GuidesPage />} />

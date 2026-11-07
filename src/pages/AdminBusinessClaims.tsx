@@ -1,5 +1,6 @@
 import AdminNav from "@/components/admin/AdminNav";
 import BusinessClaimsManager from "@/components/admin/BusinessClaimsManager";
+import { UnclaimedListingsPanel } from "@/components/admin/UnclaimedListingsPanel";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function AdminBusinessClaims() {
@@ -7,8 +8,9 @@ export default function AdminBusinessClaims() {
   return (
     <div className="min-h-screen bg-background">
       <AdminNav />
-      <div className="p-4 md:p-6">
+      <div className="space-y-6 p-4 md:p-6">
         <BusinessClaimsManager />
+        <UnclaimedListingsPanel />
       </div>
     </div>
   );
