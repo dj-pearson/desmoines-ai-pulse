@@ -74,6 +74,27 @@ orchestrator applies them once, which avoids nine-way merge conflicts in one
 JSON file. Each agent commits in its worktree; the orchestrator cherry-picks
 the commits onto the round branch, runs `npm run validate`, and pushes.
 
+### Round runbook (what the scheduled task does)
+
+The rolling branch is `claude/continuous-improvement-loops-76i72u`. Rounds stack
+on it so each round sees the last one's `prd.json` and handoffs; a PR into
+`develop` takes whatever has accumulated. If that branch's PR has merged,
+restart it from `develop` (or `main` if there is no `develop`).
+
+1. `git fetch origin`, check out the rolling branch, `npm ci`.
+2. Run the saved workflow `improvement-loop-round` with
+   `{ repo, lanes: [all eleven], date, trailers }`.
+3. Save its result array to a scratch file. Cherry-pick each `commit_sha`
+   in lane order. On a conflict in `docs/improvement-loops/lanes/*`, take the
+   lane's version. On any other conflict, skip that lane's commit
+   (`git cherry-pick --abort`) and record it as skipped.
+4. `npm run validate` and `npx vitest run`. If either fails, find the lane
+   commit that broke it, `git revert` it, and re-run until both pass. Then
+   remove skipped and reverted lanes from the results file and run
+   `node scripts/apply-loop-results.mjs <results.json>`.
+5. Add a row to the round log, commit `docs(prd): record improvement-loop round N`,
+   push, and remove the agent worktrees (`git worktree remove --force`).
+
 ## Round log
 
 | Date | Branch | Lanes | Result |
