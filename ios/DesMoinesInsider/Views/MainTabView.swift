@@ -313,6 +313,10 @@ struct MainTabView: View {
             // applies a Siri search (IOS-DD-PLATFORM-02), once any sheet is
             // out of the way so the results are not hidden behind it.
             TopPresenter.dismissAll { intentDispatcher.pending = .searchText(query) }
+        case .eventSearch(let query, let filters):
+            // Same path, carrying the /events link's filters as explicit
+            // ones (IOS-AUDIT-FEAT-041).
+            TopPresenter.dismissAll { intentDispatcher.pending = .filteredSearch(text: query, filters: filters) }
         case .tab(let tab):
             // Only flag a change that will fire onChange; an unchanged tab
             // would leave the flag set and swallow the next real tap.
@@ -360,7 +364,7 @@ struct MainTabView: View {
             // Own this payload — consume so SearchView doesn't also see it.
             _ = intentDispatcher.consume()
             askPulseLaunch = AskPulseLaunch(query: query)
-        case .findRestaurants, .findEvents, .searchText:
+        case .findRestaurants, .findEvents, .searchText, .filteredSearch:
             if selectedTab != .search {
                 programmaticTabChange = true
                 selectedTab = .search

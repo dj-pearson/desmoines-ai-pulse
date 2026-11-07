@@ -331,3 +331,46 @@ extension SearchQueryParser {
         }
     }
 }
+
+// MARK: - The web's /events keys (IOS-AUDIT-FEAT-041)
+
+extension SearchFilters {
+    /// Values the web treats as "no filter": the /events controls' defaults
+    /// (EventsPage.tsx) and savedSearchMatch.ts UNSET_VALUES.
+    static let webUnsetValues: Set<String> = ["", "all", "any-location", "any-price", "any"]
+
+    /// `raw` trimmed, or nil when missing or one of `webUnsetValues`.
+    static func webValue(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return webUnsetValues.contains(trimmed.lowercased()) ? nil : trimmed
+    }
+
+    /// The filter keys the web's /events hub reads - `category`, `location`
+    /// (or `area`), `price` and `preset` - as search filters. One reader for
+    /// a saved_searches row the web wrote and for a shared /events?... link,
+    /// so the two cannot drift. `query` is the search words, used only so a
+    /// "tonight" search stays tonight: tonight has no preset of its own on
+    /// the web and is stored as "today".
+    init(webEventKeys keys: [String: String], query: String) {
+        self.init()
+        if let raw = Self.webValue(keys["category"]) {
+            let mapped = EventCategory(from: raw)
+            if mapped != .other || raw.lowercased() == "other" { category = mapped }
+        }
+        if let slug = Self.webValue(keys["preset"]) {
+            var preset = SearchQueryParser.preset(slug: slug)
+            if preset == .today, SearchQueryParser.parse(query).filters.datePreset == .tonight {
+                preset = .tonight
+            }
+            datePreset = preset
+        }
+        if Self.webValue(keys["price"])?.lowercased() == "free" {
+            freeOnly = true
+        }
+        let location = Self.webValue(keys["location"]) ?? Self.webValue(keys["area"])
+        if let location, let area = SearchQueryParser.area(slug: location) {
+            areas = [area]
+        }
+    }
+}

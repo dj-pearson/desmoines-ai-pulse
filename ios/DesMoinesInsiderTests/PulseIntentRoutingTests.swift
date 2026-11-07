@@ -77,4 +77,16 @@ final class PulseIntentRoutingTests: XCTestCase {
         XCTAssertEqual(route.tab, .events)
         XCTAssertTrue(route.filters.isEmpty)
     }
+
+    // MARK: - Filtered /events links (IOS-AUDIT-FEAT-041)
+
+    func testFilteredSearchKeepsTheLinksFiltersAsExplicitOnes() throws {
+        var filters = SearchFilters(freeOnly: true, tabHint: .events)
+        filters.datePreset = .thisWeekend
+        let pending = PulseIntentDispatcher.Pending.filteredSearch(text: "jazz", filters: filters)
+        let route = try XCTUnwrap(pending.searchRoute)
+        XCTAssertEqual(route.text, "jazz")
+        XCTAssertEqual(route.filters, filters)
+        XCTAssertEqual(route.tab, .events)
+    }
 }

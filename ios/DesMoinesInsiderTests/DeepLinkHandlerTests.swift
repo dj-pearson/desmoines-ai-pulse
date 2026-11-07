@@ -310,6 +310,68 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/search/advanced"), .tab(.search))
     }
 
+    // MARK: - Filtered /events links (IOS-AUDIT-FEAT-041)
+
+    func testFilteredEventsLinkSearchesWithThoseFilters() {
+        // The web hub's own "free this weekend" tile (hubLinks.ts).
+        var weekendFree = SearchFilters(freeOnly: true, tabHint: .events)
+        weekendFree.datePreset = .thisWeekend
+        XCTAssertEqual(dest("/events?preset=this-weekend&price=free"), .eventSearch(query: "", filters: weekendFree))
+
+        // A category tile, spelled the way the web writes it.
+        var festivals = SearchFilters(tabHint: .events)
+        festivals.category = .festival
+        XCTAssertEqual(dest("/events?category=Festival"), .eventSearch(query: "", filters: festivals))
+    }
+
+    func testSavedSearchAlertEmailLinkKeepsWordsAndArea() {
+        // savedSearchMatch.ts deepLink(): q, location, preset, sort, then utm keys.
+        let link = "/events?q=jazz&location=west-des-moines&preset=today&sort=date_asc"
+            + "&utm_source=saved-search&utm_medium=email"
+        var expected = SearchFilters(areas: [.westDesMoines], tabHint: .events)
+        expected.datePreset = .today
+        XCTAssertEqual(dest(link), .eventSearch(query: "jazz", filters: expected))
+    }
+
+    func testEventsLinkReadsTheOldSearchAliasAndAreaKey() {
+        // ?search= is what the WebSite SearchAction advertised (WEB-SEO-029);
+        // q wins when both are present, as on the web.
+        XCTAssertEqual(dest("/events?search=trivia"), .eventSearch(query: "trivia", filters: SearchFilters(tabHint: .events)))
+        XCTAssertEqual(dest("/events?q=jazz&search=trivia"), .eventSearch(query: "jazz", filters: SearchFilters(tabHint: .events)))
+        XCTAssertEqual(
+            dest("/events?area=ankeny"),
+            .eventSearch(query: "", filters: SearchFilters(areas: [.ankeny], tabHint: .events))
+        )
+    }
+
+    func testTonightWordsKeepTheTonightWindowOverTheSavedToday() {
+        var expected = SearchFilters(tabHint: .events)
+        expected.datePreset = .tonight
+        XCTAssertEqual(dest("/events?q=live%20music%20tonight&preset=today"), .eventSearch(query: "live music tonight", filters: expected))
+    }
+
+    func testEventsLinkWithNoUsableFilterIsStillHome() {
+        XCTAssertEqual(dest("/events"), .tab(.home))
+        XCTAssertEqual(dest("/events?utm_source=share&sort=date_asc&view=map&page=2"), .tab(.home))
+        // The controls' "no filter" values, an unknown category and preset,
+        // an unknown area, a non-free price and a blank q.
+        XCTAssertEqual(dest("/events?category=all&location=any-location&price=any-price"), .tab(.home))
+        XCTAssertEqual(dest("/events?category=Underwater%20Basket&preset=someday&location=mars&price=under-25&q=%20"), .tab(.home))
+    }
+
+    func testEventsLinkQueryIsCapped() {
+        let long = String(repeating: "a", count: 300)
+        XCTAssertEqual(
+            dest("/events?q=\(long)"),
+            .eventSearch(query: String(repeating: "a", count: 120), filters: SearchFilters(tabHint: .events))
+        )
+    }
+
+    func testFilteredEventsLinkIsRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(URL(string: "https://www.desmoinesinsider.com/events?price=free")!))
+        XCTAssertEqual(handler.consumeDestination(), .eventSearch(query: "", filters: SearchFilters(freeOnly: true, tabHint: .events)))
+    }
+
     func testSearchQueryIsCapped() {
         let long = String(repeating: "a", count: 300)
         XCTAssertEqual(dest("/search?q=\(long)"), .search(query: String(repeating: "a", count: 120)))

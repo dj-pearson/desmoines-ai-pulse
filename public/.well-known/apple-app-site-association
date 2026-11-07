@@ -5,6 +5,7 @@
       {
         "appID": "TEAM_ID_HERE.com.desmoines.aipulse",
         "paths": [
+          "/events",
           "/events/*",
           "/restaurants/*",
           "/attractions/*",

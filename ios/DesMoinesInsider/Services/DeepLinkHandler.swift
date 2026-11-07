@@ -6,6 +6,8 @@ import os
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id-or-slug` → Event detail
 /// - `desmoinesinsider.com/search?q=` → Search tab with the query
+/// - `desmoinesinsider.com/events?q=&category=&location=&price=&preset=` →
+///   Search tab on Events with those filters; bare `/events` → Home
 /// - `desmoinesinsider.com/restaurants/:id-or-slug` → Restaurant detail
 /// - `desmoinesinsider.com/attractions/:id-or-slug` → Attraction detail
 /// - `desmoinesinsider.com/stay/:id-or-slug` → Hotel detail
@@ -44,6 +46,11 @@ final class DeepLinkHandler {
         case bestOfCategory(slug: String)
         /// The Search tab with this text (IOS-DD-PLATFORM-02).
         case search(query: String)
+        /// The Search tab on Events with these words and filters: a filtered
+        /// /events?... link, e.g. the saved-search alert email's "see all"
+        /// or the web hub's /events?preset=this-weekend&price=free
+        /// (IOS-AUDIT-FEAT-041). Never both empty.
+        case eventSearch(query: String, filters: SearchFilters)
         /// A first-party page with no native screen, shown in SafariView so a
         /// claimed link never opens the app to nothing (IOS-DD-PLATFORM-02).
         /// Only ever a URL that passed isFirstPartyWebURL.
@@ -243,6 +250,31 @@ final class DeepLinkHandler {
         return .tab(.home)
     }
 
+    /// Bare /events with the hub's filter keys (IOS-AUDIT-FEAT-041). The web
+    /// writes every filter into the URL (EventsPage.tsx), the saved-search
+    /// alert email links there with them (savedSearchMatch.ts deepLink), and
+    /// the hub's own tiles link /events?category=Festival. All of these used
+    /// to open Home with the filters dropped. `q` wins over `search`, the
+    /// alias the old WebSite SearchAction used, as it does on the web.
+    /// `from`/`to`, `sort`, `near`, `view`, `page` and utm keys have no
+    /// Search equivalent and are ignored. No filter at all is still Home.
+    static func eventsHubDestination(_ url: URL) -> Destination {
+        var keys: [String: String] = [:]
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        for item in items where keys[item.name] == nil {
+            if let value = item.value { keys[item.name] = value }
+        }
+        let words = [keys["q"], keys["search"]]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+        let query = String(words.prefix(maxLinkQueryLength))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var filters = SearchFilters(webEventKeys: keys, query: query)
+        if query.isEmpty && filters.isEmpty { return .tab(.home) }
+        filters.tabHint = .events
+        return .eventSearch(query: query, filters: filters)
+    }
+
     /// /neighborhoods/<slug> (IOS-AUDIT-FEAT-038). Every slug the web builds
     /// (src/lib/neighborhoods.ts) is in Neighborhood.all, so a shared guide
     /// opens that guide; it used to open the hub and leave the user to find
@@ -280,7 +312,7 @@ final class DeepLinkHandler {
         guard path.count >= 2 else {
             // Root path — navigate to appropriate tab
             guard let first = path.first else { return .tab(.home) }
-            if first == "events" { return .tab(.home) }
+            if first == "events" { return Self.eventsHubDestination(url) }
             if first == "restaurants" { return .tab(.restaurants) }
             // Single-segment Discover parity surfaces, e.g. /trip-planner.
             if let discover = DiscoverDestination(slug: first) {

@@ -102,31 +102,15 @@ struct SavedSearch: Identifiable, Codable, Hashable {
     /// Only event_list rows get alert emails (saved-search-alerts/index.ts).
     var isAlertEligible: Bool { searchType == "event_list" }
 
-    /// The web's structured keys as search filters (IOS-DD-SEARCH-09).
+    /// The web's structured keys as search filters (IOS-DD-SEARCH-09). The
+    /// mapping is shared with /events?... links (IOS-AUDIT-FEAT-041), so a
+    /// saved search and the link the alert email sends for it agree.
     var structuredFilters: SearchFilters {
-        var out = SearchFilters()
-        if let raw = Self.setString(rawFilters["category"]) {
-            let category = EventCategory(from: raw)
-            if category != .other || raw.lowercased() == "other" { out.category = category }
+        var keys: [String: String] = [:]
+        for (key, value) in rawFilters {
+            if case .string(let text) = value { keys[key] = text }
         }
-        if let preset = Self.setString(rawFilters["preset"]) {
-            var datePreset = SearchQueryParser.preset(slug: preset)
-            // Tonight has no slug and is saved as "today". When the words still
-            // say tonight, re-running on iOS keeps the narrower window instead
-            // of widening "Live music tonight" to all of today.
-            if datePreset == .today, SearchQueryParser.parse(query).filters.datePreset == .tonight {
-                datePreset = .tonight
-            }
-            out.datePreset = datePreset
-        }
-        if Self.setString(rawFilters["price"])?.lowercased() == "free" {
-            out.freeOnly = true
-        }
-        let location = Self.setString(rawFilters["location"]) ?? Self.setString(rawFilters["area"])
-        if let location, let area = SearchQueryParser.area(slug: location) {
-            out.areas = [area]
-        }
-        return out
+        return SearchFilters(webEventKeys: keys, query: query)
     }
 
     /// `rawFilters` with only the alert flag changed. Every other key,
