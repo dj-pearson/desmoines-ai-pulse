@@ -15,6 +15,7 @@ import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
+import com.desmoines.aipulse.util.EventCalendarEntry
 import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -235,23 +236,21 @@ class EventDetailViewModel @Inject constructor(
     // MARK: - Calendar Integration
 
     /**
-     * Creates a calendar insert intent for the event.
-     * Uses CalendarContract for native calendar integration.
+     * Creates a calendar insert intent for the event. The start, end, all-day
+     * flag and time zone come from [EventCalendarEntry], the same rules iOS
+     * uses (AND-AUDIT-027).
      */
     fun createCalendarIntent(): Intent? {
-        val event = _event.value ?: return null
-        val date = event.parsedDate ?: return null
-
-        val startMillis = date.toInstant().toEpochMilli()
-        val endMillis = date.plusHours(2).toInstant().toEpochMilli() // 2h default duration
-
+        val entry = _event.value?.let { EventCalendarEntry.from(it) } ?: return null
         return Intent(Intent.ACTION_INSERT).apply {
             data = CalendarContract.Events.CONTENT_URI
-            putExtra(CalendarContract.Events.TITLE, event.title)
-            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startMillis)
-            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endMillis)
-            putExtra(CalendarContract.Events.EVENT_LOCATION, event.displayLocation)
-            putExtra(CalendarContract.Events.DESCRIPTION, event.displayDescription)
+            putExtra(CalendarContract.Events.TITLE, entry.title)
+            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, entry.startMillis)
+            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, entry.endMillis)
+            putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, entry.isAllDay)
+            putExtra(CalendarContract.Events.EVENT_TIMEZONE, entry.timeZoneId)
+            putExtra(CalendarContract.Events.EVENT_LOCATION, entry.location)
+            putExtra(CalendarContract.Events.DESCRIPTION, entry.description)
         }
     }
 

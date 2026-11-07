@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.data.model
 
+import com.desmoines.aipulse.util.EventSlug
 import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
@@ -44,6 +45,12 @@ data class Event(
     @SerialName("seo_keywords") val seoKeywords: List<String>? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+    /** When a multi-day run ends (end_date, 20260316000002). Null for a single sitting. */
+    @SerialName("end_date") val endDate: String? = null,
+    /** The source published a date but no start time (time_tbd, 20260902000016). */
+    @SerialName("time_tbd") val timeTbd: Boolean? = null,
+    /** Which ingest path wrote the row, e.g. "seatgeek". */
+    val source: String? = null,
 ) {
 
     // region Computed Properties
@@ -57,40 +64,32 @@ data class Event(
      * Tries ISO 8601 with fractional seconds, then without, then common formats.
      */
     val parsedDate: OffsetDateTime?
+        get() = parseTimestamp(date)
+
+    /** [endDate] parsed the same way as [parsedDate], or null when absent or unparseable. */
+    val parsedEndDate: OffsetDateTime?
+        get() = endDate?.let { parseTimestamp(it) }
+
+    /**
+     * Whether the row carries a real start time, as iOS Event.hasSpecificTime
+     * decides it (IOS-DD-EVENTS-05). False for an explicit time_tbd, for a
+     * SeatGeek row at its 03:30 placeholder, for the 19:31:58 no-time marker,
+     * and for a bare yyyy-MM-dd date, which has no time to show.
+     */
+    val hasSpecificTime: Boolean
         get() {
-            val formats = listOf(
-                DateTimeFormatter.ISO_OFFSET_DATE_TIME,
-                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd"),
-            )
-            for (fmt in formats) {
-                try {
-                    return OffsetDateTime.parse(date, fmt)
-                } catch (_: DateTimeParseException) {
-                    // Try next format
-                }
+            if (timeTbd == true) return false
+            if (date.trim().length == DATE_ONLY_LENGTH) return false
+            val start = parsedDate
+            val fromSeatGeek = listOf(source, sourceUrl).any { it?.contains("seatgeek", ignoreCase = true) == true }
+            if (fromSeatGeek && start != null && centralWallTime(start) == SEATGEEK_PLACEHOLDER) return false
+            val local = eventStartLocal
+            val tIndex = local?.indexOf('T') ?: -1
+            if (local != null && tIndex >= 0) {
+                return local.substring(tIndex + 1).take(8) != NO_TIME_MARKER
             }
-            // For date-only or datetime-without-offset formats, parse as LocalDate/LocalDateTime
-            try {
-                val ld = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                return ld.atStartOfDay().atOffset(java.time.ZoneOffset.UTC)
-            } catch (_: DateTimeParseException) {
-                // ignore
-            }
-            try {
-                val ldt = java.time.LocalDateTime.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))
-                return ldt.atOffset(java.time.ZoneOffset.UTC)
-            } catch (_: DateTimeParseException) {
-                // ignore
-            }
-            try {
-                val ldt = java.time.LocalDateTime.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                return ldt.atOffset(java.time.ZoneOffset.UTC)
-            } catch (_: DateTimeParseException) {
-                // ignore
-            }
-            return null
+            if (start != null && centralWallTime(start) == NO_TIME_MARKER) return false
+            return true
         }
 
     /** LatLng coordinate from latitude/longitude, or null if unavailable/zero. */
@@ -155,6 +154,46 @@ data class Event(
     // endregion
 
     companion object {
+        /** The ingest pipeline's "no time" wall clock in Central (iOS DesMoinesTime.noTimeMarker). */
+        const val NO_TIME_MARKER = "19:31:58"
+
+        /** SeatGeek's placeholder for an unannounced showtime (WEB-BE-038). */
+        const val SEATGEEK_PLACEHOLDER = "03:30:00"
+
+        private const val DATE_ONLY_LENGTH = 10
+
+        private val WALL_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+
+        private fun centralWallTime(instant: OffsetDateTime): String =
+            instant.atZoneSameInstant(EventSlug.CENTRAL).format(WALL_TIME)
+
+        /**
+         * Tries ISO 8601 with an offset, then the offset-less forms, which are
+         * read as UTC. Shared by [parsedDate] and [parsedEndDate].
+         */
+        fun parseTimestamp(raw: String): OffsetDateTime? {
+            try {
+                return OffsetDateTime.parse(raw, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            } catch (_: DateTimeParseException) {
+                // Try the offset-less forms
+            }
+            try {
+                val ld = LocalDate.parse(raw, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                return ld.atStartOfDay().atOffset(java.time.ZoneOffset.UTC)
+            } catch (_: DateTimeParseException) {
+                // ignore
+            }
+            for (pattern in listOf("yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss")) {
+                try {
+                    val ldt = java.time.LocalDateTime.parse(raw, DateTimeFormatter.ofPattern(pattern))
+                    return ldt.atOffset(java.time.ZoneOffset.UTC)
+                } catch (_: DateTimeParseException) {
+                    // ignore
+                }
+            }
+            return null
+        }
+
         /** Preview instance for Compose previews. */
         val preview = Event(
             id = "preview-1",
