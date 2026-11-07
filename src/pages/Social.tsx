@@ -35,6 +35,13 @@ export default function Social() {
     fetchFriends,
   } = useSocialFeatures();
 
+  // WEB-UX-054: the planner was always titled "Selected Group". Look the group
+  // up by id so its heading and share text name the group that was picked, and
+  // so a group that drops out of the list closes the planner instead of
+  // leaving it open for a group the reader can no longer see.
+  const selectedGroup =
+    friendGroups?.find((group) => group.id === selectedGroupId) ?? null;
+
   const handleSendFriendRequest = async () => {
     if (!searchEmail.trim()) return;
 
@@ -249,10 +256,10 @@ export default function Social() {
             </Card>
 
             {/* Enhanced Group Event Planner */}
-            {selectedGroupId && (
+            {selectedGroup && (
               <EnhancedGroupPlanner
-                groupId={selectedGroupId}
-                groupName="Selected Group"
+                groupId={selectedGroup.id}
+                groupName={selectedGroup.name}
                 onClose={() => setSelectedGroupId(null)}
               />
             )}
