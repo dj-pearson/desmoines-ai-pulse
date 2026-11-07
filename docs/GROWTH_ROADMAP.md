@@ -16,15 +16,15 @@ back, not by size of the idea.
 | 12 | Be the answer AI assistants give | `public/llms.txt`, GEO fields (`geo_summary`, `geo_key_facts`, `geo_faq`) on content tables, `api-events` / `api-restaurants` | A public, documented, cacheable events feed; `llms.txt` pointing at it; schema.org `Event` coverage audit on every detail page | Not started |
 | 9 | Calendar sync | `src/lib/icsEvent.ts`, `src/lib/tripCalendar.ts`, `use-calendar-export` (one-off `.ics` downloads) | A subscribable `webcal://` feed per saved search / category, served by an edge function, so new events appear in the user's calendar without re-downloading | Built: `/calendar/<feed>.ics` (all, free, one per category), "Sync calendar" chip on /events, and personal feeds per saved search at `/calendar/my/<token>.ics` (dashboard, Saved searches). Needs migration `20261102000003` applied. |
 | 17 | Take a cut of conversions | Hotel affiliate URLs (`generate-hotel-affiliate-urls`), `AffiliatePartnersManager` | Reservation (OpenTable/Resy), rideshare and ticket affiliate links on restaurant and event detail pages; click tracking | Not started |
-| 2 | Auto-claim every business | `AdminBusinessClaims`, `BusinessDashboard`, `agent-lead-sourcing`, `agent-outreach` | Outbound "your page got N views, claim it" campaign driven by real view counts; one-click claim link | Not started |
-| 3 | Owner dashboard they check daily | `BusinessDashboard` | Per-listing views, saves, impressions, and a same-category neighborhood comparison; paid tier upsell | Not started |
+| 2 | Auto-claim every business | `AdminBusinessClaims`, `BusinessDashboard`, `agent-lead-sourcing`, `agent-outreach` | Outbound "your page got N views, claim it" campaign driven by real view counts; one-click claim link | Built: `/business/claim/<type>/<id>` and the admin "Unclaimed listings, most viewed" list with claim link and email draft (sent by hand). Needs migration `20261102000005`. |
+| 3 | Owner dashboard they check daily | `BusinessDashboard` | Per-listing views, saves, impressions, and a same-category neighborhood comparison; paid tier upsell | Built: stats panel on /business for verified owners (views, clicks, shares, peer percentile). Needs migration `20261102000004`. Paid tier not started. |
 | 11 | SEO page for every query with demand | `generate-pseo-page`, `pseo-batch-worker`, GSC sync | Scale up, gated on real data behind each page (minimum row count per page) so thin pages never ship | Not started |
 
 ### Phase 2: new user-facing features
 
 | # | Idea | Notes | Status |
 |---|---|---|---|
-| 13 | Daily "Tonight in DSM" slideshow | Admin tool that turns the day's events into a 5-8 slide vertical slideshow (image + title + time + venue), exportable for TikTok/Reels/Shorts. Easy to create by hand, not an auto-generated video. Feeds `social-daily-poster`. | Not started |
+| 13 | Daily "Tonight in DSM" slideshow | Admin tool that turns the day's events into a 5-8 slide vertical slideshow (image + title + time + venue), exportable for TikTok/Reels/Shorts. Easy to create by hand, not an auto-generated video. Feeds `social-daily-poster`. | Built: Admin > Social > Slideshow, downloads 1080x1920 PNGs. |
 | 7 | SMS concierge | No SMS provider in the codebase today. Needs a number (Twilio or similar) and an inbound webhook that calls `generate-itinerary`. | Skipped for now (2026-11-07) |
 | 8 | Group planning with voting | Shareable poll link, no account needed to vote, winner gets booked. Each poll is an acquisition loop. | Not started |
 | 10 | Insider perks | Negotiated perks at partner venues shown on the Insider membership. Business side first (sign 20-40 venues), then the in-app card. | Not started |
