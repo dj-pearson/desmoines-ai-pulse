@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
 import { CATEGORY_FILTERS, dayAfter, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../listingFilters';
@@ -116,11 +117,11 @@ function ListingCard({ item }: { item: ListingItem }) {
       <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
         {item.image_url && (
           <div className="h-36 overflow-hidden rounded-t-lg">
-            <img
+            <OptimizedImage
               src={item.image_url}
               alt={item.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
+              containerClassName="h-full w-full"
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
           </div>
         )}

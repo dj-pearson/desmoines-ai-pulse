@@ -123,6 +123,9 @@ const LISTING_PAGES = {
   '/guides': 'src/pages/GuidesPage.tsx',
   '/breweries': 'src/pages/BreweryTrail.tsx',
   '/itineraries': 'src/pages/Itineraries.tsx',
+  // Added 2026-11-07 (WEB-PERF-041). HotelCard was a raw lazy <img>, so the
+  // first hotel on /stay waited for layout before it started loading.
+  '/stay': 'src/pages/Hotels.tsx',
 };
 
 /**
