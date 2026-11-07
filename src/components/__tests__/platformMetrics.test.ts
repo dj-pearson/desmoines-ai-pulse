@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { formatMetricNumber, hasReportableSample, MIN_DATA_DAYS } from "@/components/advertising/PlatformMetrics";
+import { formatMetricNumber, hasReportableAudience, hasReportableSample, MIN_DATA_DAYS } from "@/components/advertising/PlatformMetrics";
 
 /**
  * WEB-ADS-012 AC4. Two things are being pinned, and the second matters more.
@@ -90,5 +90,72 @@ describe("no invented numbers reach an advertiser", () => {
     expect(SOURCE).not.toContain("Platform Reach");
     expect(SOURCE).not.toContain("Real audience data");
     expect(SOURCE).toContain("Search Impressions");
+  });
+});
+
+/**
+ * WEB-ADS-012 AC2. Site visits replace search impressions as the headline once
+ * get_site_audience_metrics answers with a real sample; until then the page
+ * must behave exactly as it did.
+ */
+describe("hasReportableAudience", () => {
+  it("is false with no data, which is what a missing RPC reads as", () => {
+    expect(hasReportableAudience(null)).toBe(false);
+  });
+
+  it("is false below the minimum window", () => {
+    expect(
+      hasReportableAudience({ monthly_page_views: 50_000, monthly_visits: 9_000, data_days: MIN_DATA_DAYS - 1 }),
+    ).toBe(false);
+  });
+
+  it("is false with page views but no sessions, which is a broken writer", () => {
+    expect(hasReportableAudience({ monthly_page_views: 1_200, monthly_visits: 0, data_days: 30 })).toBe(false);
+  });
+
+  it("is true once there is a real sample", () => {
+    expect(
+      hasReportableAudience({ monthly_page_views: 3_100, monthly_visits: 1_400, data_days: MIN_DATA_DAYS }),
+    ).toBe(true);
+  });
+});
+
+describe("site audience wiring", () => {
+  const SOURCE = readFileSync("src/components/advertising/PlatformMetrics.tsx", "utf8");
+  const MIGRATION = readFileSync("supabase/migrations/20261107000071_site_audience_metrics.sql", "utf8")
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("--"))
+    .join("\n");
+
+  it("prefers the audience block and keeps the search block as the fallback", () => {
+    const audience = SOURCE.indexOf("hasReportableAudience(audience)");
+    const search = SOURCE.indexOf("hasReportableSample(search)");
+    expect(audience).toBeGreaterThan(-1);
+    expect(search).toBeGreaterThan(audience);
+  });
+
+  it("names both RPCs as literals so check-schema-usage can see them", () => {
+    expect(SOURCE).toContain('supabase.rpc("get_site_audience_metrics"');
+    expect(SOURCE).toContain('supabase.rpc("get_platform_advertising_metrics"');
+  });
+
+  it("says the figures are a floor, because only consented visitors are counted", () => {
+    expect(SOURCE).toMatch(/accept analytics cookies/);
+  });
+
+  it("returns aggregates only from a SECURITY DEFINER function granted to anon", () => {
+    expect(MIGRATION).toMatch(/SECURITY DEFINER/);
+    expect(MIGRATION).toMatch(/SET search_path = public, pg_temp/);
+    expect(MIGRATION).toMatch(/GRANT EXECUTE ON FUNCTION public\.get_site_audience_metrics\(\) TO anon, authenticated/);
+    // No row-level column may leave the function: user_analytics holds
+    // ip_address, user_agent and user_id, and anon is the caller.
+    const body = MIGRATION.slice(MIGRATION.indexOf("AS $$"), MIGRATION.lastIndexOf("$$;"));
+    expect(body).not.toMatch(/ip_address|user_agent|user_id|page_url|referrer|search_query/);
+    expect(body).toMatch(/event_type = 'page_view'/);
+  });
+
+  it("is additive: the GSC function is not touched", () => {
+    expect(MIGRATION).not.toMatch(/get_platform_advertising_metrics/);
+    expect(MIGRATION).not.toMatch(/\bDROP\b/);
   });
 });

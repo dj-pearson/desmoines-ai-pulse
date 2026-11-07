@@ -138,6 +138,10 @@ const PENDING_MIGRATIONS = [
   { rpc: 'cancel_campaign', migration: '20260920000003' },
   { rpc: 'set_campaign_paused', migration: '20260920000003' },
   { rpc: 'request_campaign_refund', migration: '20260920000003' },
+  // Site visits and page views for /advertise (WEB-ADS-012 AC2). PlatformMetrics
+  // calls it alongside the GSC RPC and treats PGRST202 as "no sample", so the
+  // pending window shows exactly what the page showed before.
+  { rpc: 'get_site_audience_metrics', migration: '20261107000071' },
   { rpc: 'renew_campaign', migration: '20260920000004' },
   // Business listing claims (WEB-ADS-009). The table read is cast, so only the
   // RPC is visible to this scanner; both are listed so the "landed" check asks

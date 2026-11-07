@@ -14,3 +14,4 @@ None. (When a loop splits work, write here: story id, what's done, what's next, 
 
 | Date | Story | Commit | Result |
 |---|---|---|---|
+| 2026-11-07 | WEB-ADS-012 | this commit | AC2 done: /advertise shows consented site visits and page views from `get_site_audience_metrics` (migration 20261107000071), GSC block kept as fallback. Owner: apply the migration, regenerate types, drop the PENDING_MIGRATIONS entry. |
