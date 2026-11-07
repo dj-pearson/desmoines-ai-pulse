@@ -133,6 +133,26 @@ async function routeEvents(page: Page, rows: unknown[], delayMs = 0): Promise<st
   return seen;
 }
 
+/**
+ * WEB-SEO-048: the BreadcrumbList names the same pages, in the same order, as
+ * the visible breadcrumb nav, and every item is an absolute URL.
+ */
+async function expectBreadcrumbListMatchesNav(page: Page, expected: Array<[string, string]>) {
+  const nav = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(nav).toBeVisible();
+  const visible = (await nav.locator('li:not([aria-hidden="true"])').allInnerTexts()).map((t) => t.trim());
+  expect(visible).toEqual(expected.map(([name]) => name));
+  await expect(nav.locator('[aria-current="page"]')).toHaveText(expected[expected.length - 1][0]);
+
+  const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
+  const lists = blocks.map((b) => JSON.parse(b)).filter((node) => node['@type'] === 'BreadcrumbList');
+  expect(lists, 'exactly one BreadcrumbList').toHaveLength(1);
+  const items = lists[0].itemListElement as Array<{ position: number; name: string; item: string }>;
+  expect(items.map((i) => i.name)).toEqual(expected.map(([name]) => name));
+  expect(items.map((i) => i.position)).toEqual(expected.map((_, i) => i + 1));
+  expect(items.map((i) => new URL(i.item).pathname)).toEqual(expected.map(([, path]) => path));
+}
+
 /** Poll the page for `ms` and fail if it ever says "No upcoming". */
 async function neverSaysNoUpcoming(page: Page, ms: number) {
   const deadline = Date.now() + ms;
@@ -179,7 +199,11 @@ test.describe('/sports/iowa-cubs', () => {
     await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Official website/ })).toHaveAttribute('href', 'https://www.milb.com/iowa');
     await expect(page.locator('a button, button a')).toHaveCount(0);
-    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+    await expectBreadcrumbListMatchesNav(page, [
+      ['Home', '/'],
+      ['Sports', '/sports'],
+      ['Iowa Cubs', '/sports/iowa-cubs'],
+    ]);
 
     expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
     const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
@@ -214,7 +238,12 @@ test.describe('/music/venues/woolys', () => {
     await expect(page.getByText('No upcoming events listed for this venue.')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
     await expect(page.locator('a button, button a')).toHaveCount(0);
-    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+    // The trail follows the URL: /events is not a parent of a venue page.
+    await expectBreadcrumbListMatchesNav(page, [
+      ['Home', '/'],
+      ['Music', '/music'],
+      ['Woolys', '/music/venues/woolys'],
+    ]);
   });
 });
 
@@ -263,6 +292,12 @@ test.describe('/outdoors/high-trestle-trail', () => {
     expect(place.geo).toEqual({ '@type': 'GeoCoordinates', latitude: 41.8, longitude: -93.9 });
     expect(place.address?.['@type']).toBe('PostalAddress');
     expect(place.address?.addressRegion).toBe('IA');
+
+    await expectBreadcrumbListMatchesNav(page, [
+      ['Home', '/'],
+      ['Trails & Outdoors', '/outdoors'],
+      ['High Trestle Trail', '/outdoors/high-trestle-trail'],
+    ]);
   });
 
   test('a trail that is not a guide destination has no guide block', async ({ page }) => {

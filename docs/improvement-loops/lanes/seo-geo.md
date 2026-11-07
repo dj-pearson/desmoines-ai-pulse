@@ -14,3 +14,4 @@ None. (When a loop splits work, write here: story id, what's done, what's next, 
 
 | Date | Story | Commit | Result |
 |---|---|---|---|
+| 2026-11-07 | WEB-SEO-048 | this commit | Venue, trail, team, guide and hotels-near-venue pages now publish a BreadcrumbList built from the same list as the visible nav (DetailBreadcrumb). Smoke spec team-venue-trail-detail asserts nav and schema match; 8/8 pass, plus 139/139 across music-sports-hubs, stay-pass2, getting-around, route-smoke. |

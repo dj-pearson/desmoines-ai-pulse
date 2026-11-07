@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { Helmet } from 'react-helmet-async';
+import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { useTeam, useTeamGames } from '@/hooks/useTeams';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -104,12 +105,13 @@ export default function TeamDetail() {
       </Helmet>
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
-          {/* Breadcrumb */}
-          <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground mb-6">
-            <Link to="/sports" className="hover:text-primary">Sports</Link>
-            <span className="mx-2">/</span>
-            <span>{team.name}</span>
-          </nav>
+          <DetailBreadcrumb
+            className="mb-6"
+            crumbs={[
+              { name: 'Sports', path: '/sports' },
+              { name: team.name, path: `/sports/${team.slug}` },
+            ]}
+          />
 
           {/* Team Header */}
           <div className="mb-8">

@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
+import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
@@ -125,13 +126,14 @@ export default function HotelsNearVenue() {
       </Helmet>
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
-          <nav aria-label="Breadcrumb" className="mb-6 text-sm text-muted-foreground">
-            <Link to="/stay" className="hover:text-primary">Stay</Link>
-            <span className="mx-2" aria-hidden="true">/</span>
-            <Link to={`/music/venues/${venue.slug}`} className="hover:text-primary">{venueName}</Link>
-            <span className="mx-2" aria-hidden="true">/</span>
-            <span>Hotels nearby</span>
-          </nav>
+          <DetailBreadcrumb
+            className="mb-6"
+            crumbs={[
+              { name: 'Stay', path: '/stay' },
+              { name: venueName, path: `/music/venues/${venue.slug}` },
+              { name: 'Hotels nearby', path },
+            ]}
+          />
 
           <h1 className="mb-3 text-3xl font-bold md:text-4xl">Hotels near {venueName}</h1>
           {!hotelsPending && <p className="mb-2 max-w-[68ch] text-lg text-foreground">{summary}</p>}

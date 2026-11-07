@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { ErrorState } from "@/components/ui/error-state";
 import { Helmet } from 'react-helmet-async';
+import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { useSeasonalGuide, getSeasonLabel, getSeasonColor } from '@/hooks/useSeasonalGuides';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -92,12 +93,13 @@ export default function SeasonalGuide() {
       </Helmet>
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8 max-w-3xl">
-          {/* Breadcrumb */}
-          <nav className="text-sm text-muted-foreground mb-6">
-            <Link to="/guides" className="hover:text-primary">Guides</Link>
-            <span className="mx-2">/</span>
-            <span>{guide.title}</span>
-          </nav>
+          <DetailBreadcrumb
+            className="mb-6"
+            crumbs={[
+              { name: 'Guides', path: '/guides' },
+              { name: guide.title, path: `/guides/${slug}` },
+            ]}
+          />
 
           {/* Header */}
           <div className="mb-8">
