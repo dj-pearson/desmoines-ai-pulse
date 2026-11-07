@@ -188,8 +188,9 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                             variant="outline"
                             onClick={() => addEventToPlanning(event)}
                             className="ml-2"
+                            aria-label={`Add ${event.title} to the plan`}
                           >
-                            <PlusCircle className="w-3 h-3" />
+                            <PlusCircle className="w-3 h-3" aria-hidden="true" />
                           </Button>
                         </div>
                       </Card>

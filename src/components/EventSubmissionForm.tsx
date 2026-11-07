@@ -554,8 +554,8 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
                 maxLength={50}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
               />
-              <Button type="button" onClick={addCustomTag} size="sm">
-                <Plus className="h-4 w-4" />
+              <Button type="button" onClick={addCustomTag} size="sm" aria-label="Add custom tag">
+                <Plus className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -574,8 +574,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
                       size="sm"
                       className="h-auto p-0 w-4 h-4"
                       onClick={() => removeTag(tag)}
+                      aria-label={`Remove tag ${tag}`}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3 w-3" aria-hidden="true" />
                     </Button>
                   </Badge>
                 ))}

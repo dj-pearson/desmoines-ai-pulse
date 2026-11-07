@@ -237,7 +237,7 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
           </div>
 
           {isAuthenticated && (
-            <EventFeedback eventId={event.id} className="ml-2" />
+            <EventFeedback eventId={event.id} itemName={event.title} className="ml-2" />
           )}
         </div>
       </CardContent>

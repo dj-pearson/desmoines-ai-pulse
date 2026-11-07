@@ -127,13 +127,14 @@ export function NewsletterSignup({
           <Input
             type="email"
             placeholder="your@email.com"
+            aria-label="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             className="flex-1 bg-background"
           />
-          <Button type="submit" disabled={loading} size="sm">
-            <Mail className="w-4 h-4" />
+          <Button type="submit" disabled={loading} size="sm" aria-label="Subscribe">
+            <Mail className="w-4 h-4" aria-hidden="true" />
           </Button>
         </form>
         <p className="text-xs text-muted-foreground">
