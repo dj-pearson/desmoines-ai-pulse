@@ -12,6 +12,8 @@ import os
 /// - `desmoinesinsider.com/articles/:id-or-slug` → Article reader
 /// - `desmoinesinsider.com/neighborhoods/:slug` → Neighborhood guide, or the
 ///   Neighborhoods hub for a slug the app has no guide for
+/// - `desmoinesinsider.com/best-of/:slug` → That Best Of category, or the
+///   Best Of hub for a malformed slug
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
 /// - `com.desmoines.aipulse://auth-callback` → Auth callback (handled by Supabase)
@@ -36,6 +38,10 @@ final class DeepLinkHandler {
         /// One curated neighborhood guide, by its `Neighborhood.slug`
         /// (IOS-AUDIT-FEAT-038). Only ever a slug `Neighborhood.bySlug` knows.
         case neighborhood(slug: String)
+        /// One Best Of voting category, by its `voting_categories.slug`
+        /// (IOS-AUDIT-FEAT-040). Only ever a well-formed lowercase slug; whether
+        /// an active category has it is answered when the link opens.
+        case bestOfCategory(slug: String)
         /// The Search tab with this text (IOS-DD-PLATFORM-02).
         case search(query: String)
         /// A first-party page with no native screen, shown in SafariView so a
@@ -247,6 +253,19 @@ final class DeepLinkHandler {
         return .discover(.neighborhoods)
     }
 
+    /// /best-of/<slug> (IOS-AUDIT-FEAT-040). Categories live in the database,
+    /// so the shape is checked here and the row when the link opens. The
+    /// category screen shares this URL, and it used to open the hub, leaving
+    /// the person sent "Best Pizza" to find it again. A malformed slug lands
+    /// on the hub, never on nothing.
+    static func bestOfDestination(_ raw: String) -> Destination {
+        guard UUID(uuidString: raw) == nil, let slug = slugOrUUID(raw) else {
+            AppLogger.nav.warning("Rejected invalid best-of link: \(raw.prefix(50))")
+            return .discover(.bestOf)
+        }
+        return .bestOfCategory(slug: slug)
+    }
+
     private func parseUniversalLink(_ url: URL) -> Destination? {
         guard Self.isFirstPartyWebURL(url) else { return nil }
 
@@ -302,6 +321,8 @@ final class DeepLinkHandler {
             return .discover(.articles)
         case "neighborhoods":
             return Self.neighborhoodDestination(rawId)
+        case "best-of":
+            return Self.bestOfDestination(rawId)
         default:
             // Discover-hub parity surfaces (IOS-IA-002): the path's first
             // component is itself the slug, e.g. /trip-planner, /deals.

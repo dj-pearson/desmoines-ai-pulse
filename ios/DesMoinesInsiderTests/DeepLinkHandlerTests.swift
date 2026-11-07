@@ -263,6 +263,30 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.consumeDestination(), .neighborhood(slug: "clive"))
     }
 
+    // MARK: - Best Of categories (IOS-AUDIT-FEAT-040)
+
+    func testBestOfCategoryLinkOpensThatCategory() {
+        // BestOfCategoryView shares /best-of/<category.slug>; it used to open the hub.
+        XCTAssertEqual(dest("/best-of/best-pizza"), .bestOfCategory(slug: "best-pizza"))
+        XCTAssertEqual(dest("/best-of/brunch"), .bestOfCategory(slug: "brunch"))
+        XCTAssertEqual(dest("/best-of/best-pizza?utm_source=share"), .bestOfCategory(slug: "best-pizza"))
+    }
+
+    func testMalformedBestOfLinkFallsBackToTheHub() {
+        XCTAssertEqual(dest("/best-of"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/Best-Pizza"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/best%20pizza"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/best-pizza-"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/" + String(repeating: "a", count: 121)), .discover(.bestOf))
+        // The web routes by slug, never by id.
+        XCTAssertEqual(dest("/best-of/550e8400-e29b-41d4-a716-446655440000"), .discover(.bestOf))
+    }
+
+    func testBestOfCategoryLinkIsRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(URL(string: "https://www.desmoinesinsider.com/best-of/best-coffee")!))
+        XCTAssertEqual(handler.consumeDestination(), .bestOfCategory(slug: "best-coffee"))
+    }
+
     // MARK: - Nothing claimed strands the user (IOS-DD-PLATFORM-02)
 
     func testEveryClaimedPathRoutes() {

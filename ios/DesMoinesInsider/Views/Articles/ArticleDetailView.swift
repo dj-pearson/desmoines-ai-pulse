@@ -271,6 +271,9 @@ struct ArticleDetailView: View {
             // (IOS-AUDIT-FEAT-038); an unknown slug falls back to the web.
             guard let neighborhood = Neighborhood.bySlug(slug) else { return nil }
             return .neighborhood(neighborhood)
+        // A guide linking a Best Of category opens it natively
+        // (IOS-AUDIT-FEAT-040).
+        case .bestOfCategory(let slug): return .bestOfCategory(slug)
         // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
         case .tab, .search, .web: return nil
         }
