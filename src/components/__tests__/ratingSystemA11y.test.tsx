@@ -33,7 +33,6 @@ vi.mock("@/components/PremiumGate", () => ({
   PremiumGate: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
-vi.mock("@/lib/capacitorUtils", () => ({ hapticTap: () => {} }));
 
 import { RatingSystem } from "@/components/RatingSystem";
 

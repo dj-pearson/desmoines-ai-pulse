@@ -11,7 +11,6 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
 import { useNewsletterSubscription } from "@/hooks/useNewsletterSubscription";
 import { useAuthFlags } from "@/contexts/AuthContext";
-import { isCapacitor } from "@/lib/capacitorUtils";
 import { MemberUpgradeGate } from "@/components/header/UserMenu";
 import { signUpHref } from "@/components/header/navigationConfig";
 import {
@@ -37,9 +36,6 @@ export default function Footer({ preferredSource = true }: FooterProps = {}) {
   const { subscribe, loading: isLoading } = useNewsletterSubscription();
   const { isAuthenticated } = useAuthFlags();
   const { pathname, search } = useLocation();
-  // Inside the iOS/Android app the App Store badge sends a person who already
-  // has the app to install it.
-  const inApp = isCapacitor();
 
   // Double opt-in through the newsletter-subscribe edge function (WEB-FEAT-019,
   // Home plan WP7). This used to insert into newsletter_subscribers from the
@@ -196,8 +192,7 @@ export default function Footer({ preferredSource = true }: FooterProps = {}) {
                 </div>
               )}
 
-              {/* App Store badge, web only. */}
-              {!inApp && (
+              {/* App Store badge. */}
               <a
                 href="https://apps.apple.com/us/app/des-moines-insider-events/id6759137729"
                 target="_blank"
@@ -214,7 +209,6 @@ export default function Footer({ preferredSource = true }: FooterProps = {}) {
                   loading="lazy"
                 />
               </a>
-              )}
             </div>
 
             {/* Explore */}

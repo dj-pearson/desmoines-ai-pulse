@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { isCapacitor } from '@/lib/capacitorUtils';
 
 interface NetworkStatus {
   isOnline: boolean;
@@ -12,7 +11,6 @@ interface NetworkStatus {
  * Hook to monitor network connectivity status.
  * Tracks online/offline state and whether the user was recently offline.
  *
- * In Capacitor, uses the Network plugin for more reliable detection.
  * Automatically refetches visible TanStack queries on reconnect.
  */
 export function useNetworkStatus(): NetworkStatus {
@@ -39,41 +37,12 @@ export function useNetworkStatus(): NetworkStatus {
   }, []);
 
   useEffect(() => {
-    // Always listen to browser events as fallback
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // In Capacitor, also use the Network plugin for more reliable detection
-    let networkListener: { remove: () => void } | null = null;
-
-    if (isCapacitor()) {
-      const network = window.Capacitor?.Plugins?.Network as {
-        addListener?: (event: string, cb: (status: { connected: boolean }) => void) => Promise<{ remove: () => void }>;
-        getStatus?: () => Promise<{ connected: boolean }>;
-      } | undefined;
-
-      if (network?.addListener) {
-        network.addListener('networkStatusChange', (status: { connected: boolean }) => {
-          if (status.connected) {
-            handleOnline();
-          } else {
-            handleOffline();
-          }
-        }).then(listener => {
-          networkListener = listener;
-        });
-
-        // Get initial status from plugin
-        network.getStatus?.().then((status: { connected: boolean }) => {
-          setIsOnline(status.connected);
-        });
-      }
-    }
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      networkListener?.remove();
     };
   }, [handleOnline, handleOffline]);
 

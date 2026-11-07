@@ -6,7 +6,6 @@ import {
   type FavoriteContentType,
 } from "@/hooks/useContentFavorites";
 import { cn } from "@/lib/utils";
-import { hapticTap } from "@/lib/capacitorUtils";
 import { toast } from "sonner";
 import { useSyncExternalStore } from "react";
 import { useAuthFlags } from "@/contexts/AuthContext";
@@ -89,7 +88,6 @@ function FavoriteButtonView({
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        hapticTap();
         onToggle();
       }}
       disabled={isToggling}

@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { createLogger } from '@/lib/logger';
-import { hapticTap } from '@/lib/capacitorUtils';
 import { buildShareUrls, SHARE_BUTTON_CLASSES } from '@/lib/shareLinks';
 
 const log = createLogger('ShareDialog');
@@ -154,7 +153,6 @@ export default function ShareDialog({
   const handleNativeShare = async () => {
     if (navigator.share) {
       try {
-        hapticTap();
         await navigator.share({
           title: shareTitle,
           text: shareText,

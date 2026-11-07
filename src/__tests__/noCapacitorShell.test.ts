@@ -11,8 +11,13 @@ import { join } from "node:path";
  * Slice 1 deleted the shell runtime: CapacitorRuntime and its four hooks
  * (deep links, swipe-back, status bar, keyboard avoidance), the page
  * transition hook, and main.tsx's link interceptor, window.open override,
- * splash-screen hide and capacitor-app body class. This file keeps them gone
- * and ratchets the isCapacitor() branches that later slices remove.
+ * splash-screen hide and capacitor-app body class.
+ *
+ * Slice 2 removed every isCapacitor()/isMobileApp() branch (keeping the web
+ * arm of each), the detection helpers and plugin types in capacitorUtils, the
+ * no-op hapticTap and its five callers, the unused nativeShare/getPlatform,
+ * and ImageViewer, which nothing rendered and which only opened in the shell.
+ * This file keeps all of it gone.
  */
 
 const DELETED = [
@@ -22,23 +27,11 @@ const DELETED = [
   "src/hooks/useStatusBarStyle.ts",
   "src/hooks/useKeyboardAware.ts",
   "src/hooks/usePageTransition.ts",
+  "src/components/ImageViewer.tsx",
 ] as const;
 
-/**
- * Files that still branch on the shell. This list may only shrink: a file
- * that drops its last branch must come off it (the second case fails until it
- * does), and a file not on it may not start branching.
- */
-const REMAINING_BRANCHES = [
-  "src/components/AdBanner.tsx",
-  "src/components/AffiliateAdBanner.tsx",
-  "src/components/EnhancedHero.tsx",
-  "src/components/EventQuickView.tsx",
-  "src/components/Footer.tsx",
-  "src/components/ImageViewer.tsx",
-  "src/hooks/useNetworkStatus.ts",
-  "src/lib/capacitorUtils.ts",
-];
+/** Shell exports capacitorUtils no longer has, and nothing may bring back. */
+const DELETED_EXPORTS = ["isCapacitor", "isMobileApp", "getPlatform", "nativeShare", "hapticTap"] as const;
 
 const SHELL_REFERENCE =
   /\bisCapacitor\s*\(|\bisMobileApp\s*\(|__MOBILE_APP__|\bwindow\.Capacitor\b|\(window as any\)\.Capacitor\b/;
@@ -84,10 +77,20 @@ describe("Capacitor shell removal (WEB-FEAT-039)", () => {
     }
   });
 
-  it("only files on the remaining list branch on the shell, and every listed file still does", () => {
-    const branching = sourceFiles("src")
-      .filter((f) => SHELL_REFERENCE.test(codeOnly(f)))
-      .sort();
-    expect(branching).toEqual([...REMAINING_BRANCHES].sort());
+  it("no source file branches on the shell", () => {
+    const branching = sourceFiles("src").filter((f) => SHELL_REFERENCE.test(codeOnly(f)));
+    expect(branching).toEqual([]);
+  });
+
+  it.each(DELETED_EXPORTS)("capacitorUtils does not export %s", (name) => {
+    const code = codeOnly("src/lib/capacitorUtils.ts");
+    expect(code).not.toMatch(new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${name}\\b`));
+  });
+
+  it("capacitorUtils keeps the web helpers other code imports", () => {
+    const code = codeOnly("src/lib/capacitorUtils.ts");
+    for (const name of ["toSafeExternalUrl", "openExternalUrl", "shareWithOutcome"]) {
+      expect(code, name).toMatch(new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${name}\\b`));
+    }
   });
 });

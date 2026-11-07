@@ -4,7 +4,7 @@ import { openExternalUrl, toSafeExternalUrl } from '@/lib/capacitorUtils';
 /**
  * openExternalUrl is the one place scraped `source_url` values and advertiser
  * `link_url` values leave the site. Before this guard it handed any string to
- * window.open / Browser.open, so a `javascript:` link from a scraper or a
+ * window.open, so a `javascript:` link from a scraper or a
  * creative ran in our origin on click (Home plan WP4).
  */
 
@@ -51,7 +51,6 @@ describe('openExternalUrl', () => {
 
   afterEach(() => {
     openSpy.mockRestore();
-    delete window.Capacitor;
   });
 
   it('returns false and opens nothing for javascript:alert(1)', async () => {
@@ -59,15 +58,8 @@ describe('openExternalUrl', () => {
     expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it('does not hand a refused URL to the Capacitor Browser plugin', async () => {
-    const browserOpen = vi.fn().mockResolvedValue(undefined);
-    window.Capacitor = {
-      isNativePlatform: () => true,
-      getPlatform: () => 'ios',
-      Plugins: { Browser: { open: browserOpen, close: vi.fn() } },
-    };
+  it('returns false and opens nothing for a data: URL', async () => {
     await expect(openExternalUrl('data:text/html,x')).resolves.toBe(false);
-    expect(browserOpen).not.toHaveBeenCalled();
     expect(openSpy).not.toHaveBeenCalled();
   });
 

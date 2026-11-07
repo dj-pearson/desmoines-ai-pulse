@@ -20,7 +20,6 @@ vi.mock("@/hooks/useContentFavorites", () => ({
     isToggling: false,
   }),
 }));
-vi.mock("@/lib/capacitorUtils", () => ({ hapticTap: () => {} }));
 vi.mock("@/lib/paywallStore", () => ({ openPaywall: () => {} }));
 vi.mock("@/lib/favoriteAnalytics", () => ({ logFavoriteFunnelEvent: () => {} }));
 vi.mock("sonner", () => ({ toast: Object.assign(() => {}, { success: () => {} }) }));

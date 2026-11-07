@@ -19,7 +19,6 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuthFlags: () => ({ isAuthenticated: authState.isAuthenticated, isAdmin: false }),
 }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => userState }));
-vi.mock("@/lib/capacitorUtils", () => ({ hapticTap: vi.fn(), isCapacitor: () => false }));
 vi.mock("@/hooks/useCommunityFeatures", () => ({
   useCommunityFeatures: () => ({
     updateEventCheckIn: vi.fn().mockResolvedValue(true),

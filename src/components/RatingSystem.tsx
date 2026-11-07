@@ -1,7 +1,6 @@
 import React, { useState, useRef, useId } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2, ImagePlus, X, Loader2 } from "lucide-react";
-import { hapticTap } from "@/lib/capacitorUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +79,6 @@ const StarRating: React.FC<StarRatingProps> = ({
 
   const display = hoverRating || rating || 0;
   const select = (star: number) => {
-    hapticTap();
     onRatingChange?.(star.toString() as RatingValue);
   };
   const handleKey = (e: React.KeyboardEvent, star: number) => {

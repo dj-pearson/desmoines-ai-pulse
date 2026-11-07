@@ -21,7 +21,6 @@ vi.mock("@/lib/tracking", () => ({
   createViewabilityObserver: () => ({ disconnect: vi.fn() }),
 }));
 vi.mock("@/lib/adAnalytics", () => ({ logAdImpression: vi.fn(), logAdClick: vi.fn() }));
-vi.mock("@/lib/capacitorUtils", () => ({ isCapacitor: () => false, openExternalUrl: vi.fn() }));
 
 import { AffiliateAdBanner } from "@/components/AffiliateAdBanner";
 

@@ -7,7 +7,6 @@ import type { TodayCountMode } from "@/hooks/useHomepageStats";
 import { isPrerender } from "@/lib/isPrerender";
 import { nowInCentralTime } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
-import { isMobileApp } from "@/lib/capacitorUtils";
 
 /**
  * The hero's one colour, a flat brand navy in both themes and at every width.
@@ -48,7 +47,6 @@ export function EnhancedHero({
   isLoadingStats = false,
   className,
 }: EnhancedHeroProps) {
-  const isNativeApp = isMobileApp();
   // The build-time prerender freezes this HTML for a day or more. The greeting
   // and "N events today" are clock state, so the static copy carries neither;
   // the dated sentence crawlers read is the snapshot's (home-pass2 WP1 item 3).
@@ -86,8 +84,8 @@ export function EnhancedHero({
         HERO_BG,
         // No min-height anywhere (WP1 item 5). It was min-h-[80vh] on phones
         // and min-h-screen on desktop, so the first screen was all brand and
-        // the search input started below it. Native keeps its status-bar gap.
-        isNativeApp ? "pb-8 pt-14" : "py-8 md:py-10",
+        // the search input started below it.
+        "py-8 md:py-10",
         className
       )}
     >
