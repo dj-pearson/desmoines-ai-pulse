@@ -19,6 +19,13 @@ import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 import { getSiteUrl } from "../_shared/siteUrl.ts";
 import { sendEmail } from "../_shared/email.ts";
 import {
+  businessProTargetFromMetadata,
+  businessSubscriptionPatch,
+  isBusinessProInvoice,
+  isBusinessProMetadata,
+  type StripeSubscriptionLike as BusinessSubscriptionLike,
+} from "../_shared/businessPro.ts";
+import {
   type BillingEmailDeps,
   sendAdminNewCampaign,
   sendSubscriptionCancelled,
@@ -244,6 +251,13 @@ async function handleCheckoutSessionCompleted(
 
   // Determine if this is a campaign or subscription checkout
   const metadata = session.metadata || {};
+
+  // Business Pro first: it is a subscription checkout too, and must never be
+  // read as a reader plan. It carries kind=business_pro and no planId.
+  if (isBusinessProMetadata(metadata)) {
+    await handleBusinessProCheckout(supabase, stripe, session as unknown as { id: string; subscription?: string | { id: string } | null });
+    return;
+  }
 
   if (metadata.campaignId) {
     // Campaign one-time payment
@@ -787,6 +801,12 @@ async function handleSubscriptionUpdated(
   // Stripe redelivers rather than us falling back to the stale snapshot.
   const subscription = await stripe.subscriptions.retrieve(eventSubscription.id);
 
+  // Business Pro lives in business_subscriptions; nothing below applies to it.
+  if (isBusinessProMetadata(subscription.metadata)) {
+    await upsertBusinessSubscription(supabase, subscription as unknown as BusinessSubscriptionEvent);
+    return;
+  }
+
   // WP5 item 1: a plan change arrives here and nowhere else. The price on the
   // subscription is looked up in our own catalogue and plan_id moves only when
   // exactly one plan owns that price. Every row, active or not: a member on a
@@ -840,6 +860,11 @@ async function handleSubscriptionDeleted(
 ) {
   console.log("Subscription deleted:", subscription.id);
 
+  if (isBusinessProMetadata(subscription.metadata)) {
+    await upsertBusinessSubscription(supabase, subscription as unknown as BusinessSubscriptionEvent);
+    return;
+  }
+
   // Stripe's own end time, not the time this delivery ran (WP5 item 5).
   const { data: ended, error } = await supabase
     .from("user_subscriptions")
@@ -873,6 +898,11 @@ async function handleInvoicePaymentSucceeded(
   invoice: Stripe.Invoice
 ) {
   console.log("Invoice payment succeeded:", invoice.id);
+
+  if (invoice.subscription && (await isBusinessInvoice(supabase, invoice as unknown as BusinessInvoiceLike))) {
+    await recordBusinessProPayment(supabase, invoice as unknown as BusinessInvoiceLike);
+    return;
+  }
 
   // Get user ID from subscription or customer
   let userId: string | null = null;
@@ -982,6 +1012,14 @@ async function handleInvoicePaymentFailed(
   console.log("Invoice payment failed:", invoice.id);
 
   if (!invoice.subscription) return;
+
+  // Business Pro: Stripe follows a failed payment with customer.subscription.
+  // updated (past_due), which is what the row is written from. Nothing in the
+  // reader-plan path below applies.
+  if (await isBusinessInvoice(supabase, invoice as unknown as BusinessInvoiceLike)) {
+    console.log(`Business Pro invoice ${invoice.id} failed; status follows from the subscription event.`);
+    return;
+  }
 
   // Update subscription status to past_due
   const { error } = await supabase
@@ -1107,4 +1145,136 @@ async function handleTrialWillEnd(
     bodyText: notice.text,
     category: "transactional",
   });
+}
+
+// ---------------------------------------------------------------------------
+// Business Pro (growth roadmap #3, part 2). Separate table, separate rows:
+// see supabase/migrations/20261102000006_business_pro.sql and
+// _shared/businessPro.ts for why these never touch user_subscriptions.
+// ---------------------------------------------------------------------------
+
+// Structural types for the fields these helpers read, rather than the Stripe
+// namespace: the esm.sh types do not resolve under check-edge-types, and these
+// say exactly what each helper depends on.
+type BusinessSubscriptionEvent = BusinessSubscriptionLike & { id: string; metadata?: Record<string, string> | null };
+type BusinessInvoiceLike = {
+  id: string;
+  subscription?: unknown;
+  charge?: unknown;
+  amount_paid?: number | null;
+  currency?: string | null;
+  lines?: { data?: Array<{ description?: string | null }> } | null;
+  subscription_details?: { metadata?: Record<string, string> | null } | null;
+};
+type SubscriptionRetriever = { subscriptions: { retrieve(id: string): Promise<unknown> } };
+
+/**
+ * Write a Business Pro subscription as Stripe currently has it. Upserts on
+ * stripe_subscription_id, so it is correct whichever of checkout.session.
+ * completed and customer.subscription.updated arrives first. Throws on a
+ * database error so Stripe redelivers.
+ */
+async function upsertBusinessSubscription(
+  supabase: ReturnType<typeof createClient>,
+  subscription: BusinessSubscriptionEvent,
+) {
+  const patch = businessSubscriptionPatch(subscription);
+  const target = businessProTargetFromMetadata(subscription.metadata);
+  if (!target) {
+    // Without a target there is nothing to insert; update a row we may already hold.
+    console.error(`Business Pro subscription ${subscription.id} has unreadable metadata; updating by id only.`);
+    const { error } = await supabase
+      .from("business_subscriptions")
+      .update(patch)
+      .eq("stripe_subscription_id", subscription.id);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("business_subscriptions").upsert(
+    {
+      user_id: target.userId,
+      listing_type: target.listingType,
+      listing_id: target.listingId,
+      plan_id: target.businessPlanId,
+      stripe_subscription_id: subscription.id,
+      ...patch,
+    },
+    { onConflict: "stripe_subscription_id" },
+  );
+  if (error) {
+    console.error("Failed to write business_subscriptions:", error);
+    throw error;
+  }
+}
+
+async function handleBusinessProCheckout(
+  supabase: ReturnType<typeof createClient>,
+  stripe: SubscriptionRetriever,
+  session: { id: string; subscription?: string | { id: string } | null },
+) {
+  const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+  if (!subscriptionId) {
+    console.error(`Business Pro checkout ${session.id} completed with no subscription.`);
+    return;
+  }
+  // What Stripe says now, not the session snapshot (same reason as
+  // handleSubscriptionUpdated).
+  const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as BusinessSubscriptionEvent;
+  await upsertBusinessSubscription(supabase, subscription);
+}
+
+/** Is this invoice Business Pro, by its metadata or by a row we already hold? */
+async function isBusinessInvoice(
+  supabase: ReturnType<typeof createClient>,
+  invoice: BusinessInvoiceLike,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("business_subscriptions")
+    .select("id")
+    .eq("stripe_subscription_id", invoice.subscription as string)
+    .maybeSingle();
+  if (error) {
+    console.error("Business Pro invoice lookup failed:", error);
+    throw error;
+  }
+  return isBusinessProInvoice(invoice, !!data);
+}
+
+/** Record a Business Pro payment against the owner, not as an orphan reader payment. */
+async function recordBusinessProPayment(
+  supabase: ReturnType<typeof createClient>,
+  invoice: BusinessInvoiceLike,
+) {
+  let userId = businessProTargetFromMetadata(invoice.subscription_details?.metadata)?.userId ?? null;
+  if (!userId) {
+    const { data, error: ownerError } = await supabase
+      .from("business_subscriptions")
+      .select("user_id")
+      .eq("stripe_subscription_id", invoice.subscription as string)
+      .maybeSingle();
+    if (ownerError) {
+      // Throw so Stripe redelivers: recording the payment without its owner
+      // is the orphan this function exists to avoid.
+      console.error("Business Pro payment owner lookup failed:", ownerError);
+      throw ownerError;
+    }
+    userId = (data?.user_id as string | undefined) ?? null;
+  }
+  const { error } = await supabase.from("payments").upsert(
+    {
+      user_id: userId,
+      stripe_invoice_id: invoice.id,
+      stripe_charge_id: typeof invoice.charge === "string" ? invoice.charge : null,
+      amount: (invoice.amount_paid || 0) / 100,
+      currency: invoice.currency || "usd",
+      payment_type: "subscription" as const,
+      status: "succeeded" as const,
+      // subscription_id references user_subscriptions; Business Pro has none.
+      subscription_id: null,
+      description: `Business Pro - ${invoice.lines?.data?.[0]?.description || "monthly"}`,
+      paid_at: new Date().toISOString(),
+    },
+    { onConflict: "stripe_invoice_id", ignoreDuplicates: false },
+  );
+  if (error) console.error("Failed to log Business Pro payment:", error);
 }
