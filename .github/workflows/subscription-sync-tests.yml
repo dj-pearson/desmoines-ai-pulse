@@ -568,6 +568,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/billing-webhook-idempotency.test.ts
       - run: deno test --allow-read supabase/functions/_tests/storage-bucket-posture.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
+      # WEB-BE-049 AC3. schema.org offers -> events.price, checked against
+      # the src/lib readers that decide the free badge and Event JSON-LD.
+      - run: deno test supabase/functions/_shared/jsonLdOffers.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
       - run: deno test --allow-read supabase/functions/_tests/indexnow.test.ts

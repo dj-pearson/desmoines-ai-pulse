@@ -17,6 +17,7 @@
 
 import type { AdapterEvent } from "./types.ts";
 import { categoryForEventType } from "./catchdesmoinesCategory.ts";
+import { priceFromOffers } from "../jsonLdOffers.ts";
 
 export interface SchemaOrgEvent {
   "@type"?: string | string[];
@@ -27,6 +28,8 @@ export interface SchemaOrgEvent {
   image?: unknown;
   url?: string;
   location?: unknown;
+  offers?: unknown;
+  isAccessibleForFree?: unknown;
 }
 
 interface SchemaOrgPlace {
@@ -283,7 +286,7 @@ export function toAdapterEvent(
     location: formatPlaceLocation(place),
     venue,
     category: categoryForEventType(type),
-    price: "See website",
+    price: priceFromOffers(ev.offers, ev.isAccessibleForFree) ?? "See website",
     source_url: externalUrl ?? detailUrl,
     image_url: extractImage(ev.image) ?? extractOgImage(html),
     ...placeCoordinates(place),

@@ -21,6 +21,7 @@
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
+import { priceFromOffers } from "../jsonLdOffers.ts";
 
 const SHOWS_URL = "https://www.vibrantmusichall.com/shows";
 const VENUE_NAME = "Vibrant Music Hall";
@@ -204,7 +205,7 @@ function toAdapterEvent(ev: SchemaOrgEvent): AdapterEvent | null {
     location,
     venue,
     category: "Music",
-    price: extractPrice(ev.offers),
+    price: priceFromOffers(ev.offers) ?? "See website",
     source_url: url,
     image_url: image,
   };
@@ -232,17 +233,6 @@ function extractImage(image: ImageField | undefined): string | null {
   }
   const u = image.url ?? image.contentUrl;
   return typeof u === "string" && u ? u : null;
-}
-
-function extractPrice(offers: SchemaOrgOffer | SchemaOrgOffer[] | undefined): string {
-  const list = Array.isArray(offers) ? offers : offers ? [offers] : [];
-  for (const offer of list) {
-    const raw = offer.lowPrice ?? offer.price;
-    if (raw === undefined || raw === null || raw === "") continue;
-    const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-    if (Number.isFinite(num) && num > 0) return `From $${num}`;
-  }
-  return "See website";
 }
 
 /**
