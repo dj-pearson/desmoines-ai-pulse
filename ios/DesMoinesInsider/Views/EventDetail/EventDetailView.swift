@@ -11,6 +11,7 @@ struct EventDetailView: View {
     @State private var auth = AuthService.shared
     @State private var toast: ToastMessage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
 
     /// The event actually rendered.
     ///
@@ -101,6 +102,11 @@ struct EventDetailView: View {
             get: { viewModel.calendarError != nil },
             set: { if !$0 { viewModel.resetCalendarState() } }
         )) {
+            // A denial is fixed in Settings, so the alert goes there rather
+            // than leaving the user to find it (IOS-AUDIT-FEAT-039).
+            if viewModel.calendarOffersSettings {
+                Button("Open Settings") { openSettings() }
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.calendarError ?? "")
@@ -162,6 +168,10 @@ struct EventDetailView: View {
     }
 
     // MARK: - Actions (IOS-DD-EVENTS-14)
+
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+    }
 
     /// Save or unsave, with the same feedback as a card's heart
     /// (CardFavoriteButton): a toast either way, and a reason when it fails.
