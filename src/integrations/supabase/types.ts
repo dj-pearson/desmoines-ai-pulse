@@ -1817,6 +1817,30 @@ export type Database = {
         }
         Relationships: []
       }
+      business_pro_report_sends: {
+        Row: {
+          listing_id: string
+          listing_type: string
+          sent_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          listing_id: string
+          listing_type: string
+          sent_at?: string
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          listing_id?: string
+          listing_type?: string
+          sent_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       business_profiles: {
         Row: {
           address: string | null
@@ -13325,6 +13349,24 @@ export type Database = {
       batch_increment_views: {
         Args: { event_ids: string[] }
         Returns: undefined
+      }
+      business_pro_weekly_report_rows: {
+        Args: never
+        Returns: {
+          clicks: number
+          email: string
+          listing_id: string
+          listing_name: string
+          listing_type: string
+          prev_clicks: number
+          prev_shares: number
+          prev_views: number
+          shares: number
+          user_id: string
+          views: number
+          week_end: string
+          week_start: string
+        }[]
       }
       bump_newsletter_campaign_counter: {
         Args: { p_campaign_id: string; p_field: string }
