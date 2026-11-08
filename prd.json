@@ -11626,8 +11626,8 @@
         "search-filters tests whose only assertion sits behind a presence guard (if count > 0) assert unconditionally or are deleted"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Slice 1 done 2026-11-08 (reliability lane): AC1 and AC2. The check found 9 tests. search-filters' 6 now assert (restaurant search debounce, Clear all resets q, q reaches the URL, the live region announces the term, the search input stays put and CLS < 0.1) or are deleted (the loading indicator test). search-filters is 29/29 on a vite build and 87/87 with --repeat-each=3, and three negative controls in src fail exactly the targeted tests. AC3 and AC4 are open; see the reliability lane handoff. | Slice 1 of 2. The new npm run check-e2e-assertions runs in validate and pr-checks. It fails any test in a required lane (the smoke testMatch, and the a11y testMatch plus its grep) that has no expect, no expect*/assert* call and no throw, and it follows local and tests/support helpers transitively. It found 9 such tests. search-filters' 6 now assert or are deleted; the 3 in performance.spec are baselined. Verified on a vite build: search-filters 29/29, and 87/87 with --repeat-each=3. Three negative controls in src fail exactly the 3 targeted tests, the old spec trips the check 6 times, and the offline suite passes 28/28. Handoff: docs/improvement-loops/lanes/reliability.md | Slice 2: the three baselined performance.spec tests in the required smoke lane now assert (render-blocking app stylesheet that lands before FCP, same-origin images WebP/AVIF/SVG, and a gated-backend aria-busy loading state that clears from the viewport), so the e2e-assertions baseline went from 3 to 0. Verified on a vite build: performance.spec passed 84/84 with --repeat-each=3, and the three negative controls (non-blocking stylesheet, logo without its WebP source, TonightRail without aria-busy) each failed their test. Handoff: docs/improvement-loops/lanes/reliability.md"
+      "passes": true,
+      "notes": "Slice 1 done 2026-11-08 (reliability lane): AC1 and AC2. The check found 9 tests. search-filters' 6 now assert (restaurant search debounce, Clear all resets q, q reaches the URL, the live region announces the term, the search input stays put and CLS < 0.1) or are deleted (the loading indicator test). search-filters is 29/29 on a vite build and 87/87 with --repeat-each=3, and three negative controls in src fail exactly the targeted tests. AC3 and AC4 are open; see the reliability lane handoff. | Slice 1 of 2. The new npm run check-e2e-assertions runs in validate and pr-checks. It fails any test in a required lane (the smoke testMatch, and the a11y testMatch plus its grep) that has no expect, no expect*/assert* call and no throw, and it follows local and tests/support helpers transitively. It found 9 such tests. search-filters' 6 now assert or are deleted; the 3 in performance.spec are baselined. Verified on a vite build: search-filters 29/29, and 87/87 with --repeat-each=3. Three negative controls in src fail exactly the 3 targeted tests, the old spec trips the check 6 times, and the offline suite passes 28/28. Handoff: docs/improvement-loops/lanes/reliability.md | Slice 2: the three baselined performance.spec tests in the required smoke lane now assert (render-blocking app stylesheet that lands before FCP, same-origin images WebP/AVIF/SVG, and a gated-backend aria-busy loading state that clears from the viewport), so the e2e-assertions baseline went from 3 to 0. Verified on a vite build: performance.spec passed 84/84 with --repeat-each=3, and the three negative controls (non-blocking stylesheet, logo without its WebP source, TonightRail without aria-busy) each failed their test. Handoff: docs/improvement-loops/lanes/reliability.md | Slice 3 of 3, done. search-filters' five presence-guarded tests now assert: the events search tests set the backend's answer for each term (answerEventSearch over fixtureBackend) and check the list, the empty state and that ?q= reaches the query. 'multiple filters' checks that cuisine and price stay together in the URL and in the get_rotated_restaurants body. Eight more input guards/skips became toBeVisible. On a vite build: 29/29, and 87/87 with --repeat-each=3. With search broken on purpose, 6 tests fail, all 5 rewritten ones among them; the old spec on that same build failed only the one test that was already fixed."
     },
     {
       "priority": 3,
@@ -11651,8 +11651,8 @@
         "Evidence: scripts/check-hub-inventory.mjs upcomingParams() and the /events/free block",
         "The /events/free count uses the same running-event window as useEventLanding (ongoingStartFilter ANDed with FREE_PRICE_FILTER)"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane. Report-only script, needs Supabase credentials to run."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane. Report-only script, needs Supabase credentials to run. | check-hub-inventory now counts /events/free with ongoingStartFilter ANDed with FREE_PRICE_FILTER, and the suburb hubs with notOverFilter ANDed with the place group, each in one or= param. Before this it used a bare date >= today floor. A new vitest suite, hubInventoryFilters (16/16), compares every query string with the page helpers at four instants, and the free string with what useEventLanding actually sends. With the old floor put back the suite goes 9/16 red. Also passing: vitest src/lib+hooks+components/events 2517/2517, app type ratchet 32/32, eslint clean. Not run against live Supabase."
     },
     {
       "priority": 3,
@@ -11701,8 +11701,8 @@
         "The /restaurants dietary filter offers kosher",
         "A unit test asserts the list filter and the dietary pages use the same keywords"
       ],
-      "passes": false,
-      "notes": "Found while doing IOS-AUDIT-FEAT-044 (2026-11-08)."
+      "passes": true,
+      "notes": "Found while doing IOS-AUDIT-FEAT-044 (2026-11-08). | DIETS moved to src/lib/restaurantDiets.ts; useRestaurants' DIETARY_KEYWORDS, the /restaurants DIETARY_OPTIONS and the list/map ilike clauses (dietaryIlikeClauses) derive from it, so the list filter's keto search now includes \"ketogenic\" and the filter offers Kosher. src/lib/__tests__/restaurantDiets.test.ts asserts both surfaces use the same keywords; restoring the old table turns 4 of its 5 tests red. vitest 3077/3077, type-check ratchet 32/32."
     },
     {
       "priority": 3,
@@ -11716,7 +11716,7 @@
         "Both have TalkBack custom actions",
         "A JVM test pins which rows offer the reminder"
       ],
-      "notes": "Found in the AND-AUDIT-028 loop, 2026-11-08. | Slice 1 of 2 (2026-11-08): every Saved event row, past ones included, offers Share in its overflow menu and as a TalkBack action. Event detail and Saved now share util/EventShareText, whose text ends with SITE_URL/events/<id> as iOS's does (Android's share text had no link before). 5 new EventShareTextTest JVM tests pass on a stub kotlinc 2.2.10 harness (51/51 with the four event-time suites) and a mutation dropping the link fails 2. Compose UI and app module not compiled (no Android SDK), no device check. The reminder toggle (AC2, AC4) is the handoff. Handoff: docs/improvement-loops/lanes/android.md"
+      "notes": "Found in the AND-AUDIT-028 loop, 2026-11-08. | Slice 1 of 2 (2026-11-08): every Saved event row, past ones included, offers Share in its overflow menu and as a TalkBack action. Event detail and Saved now share util/EventShareText, whose text ends with SITE_URL/events/<id> as iOS's does (Android's share text had no link before). 5 new EventShareTextTest JVM tests pass on a stub kotlinc 2.2.10 harness (51/51 with the four event-time suites) and a mutation dropping the link fails 2. Compose UI and app module not compiled (no Android SDK), no device check. The reminder toggle (AC2, AC4) is the handoff. Handoff: docs/improvement-loops/lanes/android.md | Slice 2 of 2 (2026-11-08): upcoming Saved rows offer Remind me / Remove reminder (overflow item and TalkBack action) with detail's timing, so TBA rows get the 9am Central day-of reminder. Detail and Saved share EventReminderTiming.offersReminder/refusedMessage, Saved asks POST_NOTIFICATIONS and shows refusals in a new snackbar. 6 new EventReminderTimingTest JVM tests pass on a stub kotlinc 2.2.10 harness (57/57 across five event-time suites), and a mutation dropping the past-row guard fails exactly the past-row test. Code-complete: all four ACs are met in code, but the Compose UI, ViewModels and app module were not compiled (no Android SDK), EventDetailReminderTest was not run (no mockk), and two device checks are still open (see handoff). Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "WEB-PERF-064",
@@ -11800,7 +11800,8 @@
         "Each label is associated with its control (shared Label + useId, id on SelectTrigger; DatePickerWithRange gets an id or aria-labelledby passthrough)",
         "A vitest spec fails on the old code and passes on the new"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "ContentTable \"Sort by:\" and SearchTrafficDashboard \"Platform:\" now use the shared Label with htmlFor/useId on the Select trigger. \"Date Range:\" labels the picker via aria-labelledby (label + button), so the chosen dates stay in its name, and DatePickerWithRange takes id/aria-labelledby instead of a hardcoded id=\"date\". New adminFilterLabels.test.tsx fails 3/3 on the old code and passes 3/3 now; vitest 3075/3075, type ratchet 32/32, eslint 0 errors."
     },
     {
       "priority": 3,
@@ -11812,8 +11813,8 @@
         "Try candidate fixes (another minChunkSize value with the trade measured as in the vite.config comment, or a targeted manualChunks/output.experimentalMinChunkSize change) and record the per-route sums before and after",
         "Critical path does not grow beyond tolerance"
       ],
-      "passes": false,
-      "notes": "Found in the WEB-PERF-064 loop. The measuring method is in docs/improvement-loops/lanes/performance.md."
+      "passes": true,
+      "notes": "Found in the WEB-PERF-064 loop. The measuring method is in docs/improvement-loops/lanes/performance.md. | experimentalMinChunkSize 1000 -> 1 (Rollup default, no merging). Measured with the new scripts/measure-route-preload.mjs, which reads Rollup's module graph: summed per-route JS over 137 lazy routes went from 10,853 to 9,734 KB gz, and unused passenger modules from 1,892 to 615. 131 routes got lighter and none heavier by more than 0.2 KB (/restaurants 173.7 -> 152.0, /hotels 105.9 -> 87.7). Critical path went 174.9 -> 176.0, inside tolerance. 500 and 2000 were also measured and are worse on bytes. Pinned by manualChunks.test.ts (negative control: 1000 fails). 24 routes loaded clean in Chrome against vite preview."
     },
     {
       "priority": 4,
@@ -11838,8 +11839,8 @@
         "The web errorHandler and the iOS CrashUploader/ErrorSink still deliver errors without a session",
         "A Deno test shows an anonymous request with a foreign userId stores user_id null"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while baselining log-error in check-edge-auth. Not fixed."
+      "passes": true,
+      "notes": "Found 2026-11-08 while baselining log-error in check-edge-auth. Not fixed. | log-error now sets user_id from auth.getUser on the caller's bearer (wins over the body) or from a machine caller; an anonymous body.userId is stored as null and the row is still filed. The anon-key bearer (iOS) and no bearer (web) skip the getUser call, so no-session delivery is unchanged. Decision is in _shared/errorPolicy.ts. check-edge-auth now honours an '// edge-auth: attribution-only' marker so log-error stays baselined (5, unchanged). Verified: error-policy.test.ts 8/8 under Deno (source-shape case fails on the unfixed index.ts), edge-auth-check.test.mjs all pass (2 new fail with the marker ignored), check-edge-auth OK, test:offline 63/63, type-check:functions clean. Not deployed."
     },
     {
       "priority": 3,
@@ -11851,8 +11852,8 @@
         "NewsletterCampaignsManager handles the queued response and shows delivered counts as they arrive",
         "Response stays backward compatible (delivered, failed, recipient_count present)"
       ],
-      "passes": false,
-      "notes": "Found during the 2026-11-08 marketing-growth loop while fixing per-batch delivery recording."
+      "passes": true,
+      "notes": "Found during the 2026-11-08 marketing-growth loop while fixing per-batch delivery recording. | Done in code. send_now above 250 recipients (SEND_NOW_INLINE_LIMIT in _shared/newsletterDispatch.ts) is now written as scheduled, due now and unclaimed, and returns {queued:true, delivered:0, failed:0, recipient_count} with status 200, so dispatch-scheduled-newsletters sends it instead of the admin's request timing out. NewsletterCampaignsManager says \"Queued for N\" and, while a send is in flight, polls every 15s to show the newsletter_deliveries count as \"N so far\". New vitest 10/10 with 2 negative controls, full vitest 3082/3082, eslint, type-check ratchet 32/32, type-check:functions, check-edge-auth/edge-types/deno-lanes. Not run on Deno or SES. Owner: deploy send-newsletter-campaign."
     },
     {
       "priority": 3,
@@ -11865,7 +11866,7 @@
         "An unknown slug still opens the web page"
       ],
       "passes": false,
-      "notes": "Follow-up to IOS-AUDIT-FEAT-045, which routed these links to the web view."
+      "notes": "Follow-up to IOS-AUDIT-FEAT-045, which routed these links to the web view. | Slice 1 of 2: ios/DesMoinesInsider/Models/EventSeries.swift now holds the web's 20 EVENT_SERIES entries (every field) and ports normaliseEventTitle, seriesForEvent, getEventSeries and seriesTitlePatterns. That meets AC1. vitest src/lib/__tests__/iosEventSeriesParity.test.ts fails on any list drift and runs the 14 EventSeriesTests.normaliseCases pairs through the web normaliser; the negative control failed both tests. 7 new XCTest cases, not compiled (no Xcode here). AC2/AC3 (the screen and the deep-link switch) are in the lane handoff. Note: this worktree started 126 commits behind the rolling branch, so it was reset to 2c0e98d9 (claude/continuous-improvement-loops-76i72u) before any work was done. Handoff: docs/improvement-loops/lanes/ios.md"
     },
     {
       "priority": 3,
@@ -11878,6 +11879,62 @@
         "A JVM test pins each URL format"
       ],
       "notes": "Found in the AND-AUDIT-033 loop, 2026-11-08."
+    },
+    {
+      "id": "WEB-FEAT-056",
+      "title": "Event detail rails (More like this, Same night nearby) drop a multi-day event on its second day",
+      "description": "As a visitor on an event page, I need the rails under it to include events that are running right now. useRelatedEvents filtered date >= start of today (Central) and useSameNightNearby filtered date >= max(now, start - 3h), neither with an end_date arm. On day three of the State Fair, a concert page at the fairgrounds listed the fair on neither rail, while the hubs, site search, landings and .ics feeds all kept it (WEB-FEAT-041/045/050/052).",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useRelatedEvents.ts useRelatedEvents .gte('date', upcomingFloorUtc()) and useSameNightNearby .gte('date', lower)",
+        "Both rails send one or=date.gte.<bound>,end_date.gte.<bound> group (useEvents upcomingOrRunningFilter). The same-night upper bound date <= end of that Central day is unchanged",
+        "A row with no end_date still matches only on its own date, so last night's one-night show stays off",
+        "A vitest test evaluates the sent filters against fixture rows and shows the running festival on both rails, a past one-night show on neither, and a run that ends before the same-night window off that rail"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Done 2026-11-08 (events lane). useRelatedEvents.running.test.tsx passes 4/4 and was red first on the old code (2/4). vitest src/hooks src/pages src/components/events src/lib 2573/2573, type ratchet 32/32, eslint clean, and the event check-* scripts pass. Not run against a live PostgREST. useEventSeries keeps the bare floor on purpose, because a past page reads its first row as 'Next date'. | The \"More like this\" (useRelatedEvents) and \"Same night nearby\" (useSameNightNearby) rails filtered on date alone, so on its second day a multi-day run dropped off both. They now send useEvents' upcomingOrRunningFilter group, and the same-night upper bound is unchanged. Verified with the new useRelatedEvents.running.test.tsx, which evaluates the sent filters against fixture rows. It passes 4/4, and on the old code it fails 2/4, which also serves as the negative control. The wider vitest run passes 2573/2573, the type ratchet is at 32/32, and the event check-* scripts pass. Not run against a live PostgREST. Note: this worktree was created at 65138139, which is not on the rolling branch, so before any work it was reset to the rolling branch head 2c0e98d9, and this commit sits on that."
+    },
+    {
+      "id": "WEB-FEAT-057",
+      "title": "Event-reminder emails escape the subject, link a dateless slug, and print the no-time sentinel as a start time",
+      "description": "As a user who set an event reminder, I need the email to read correctly and link to the right occurrence. send-event-reminders ran the subject through escapeHtml, so 'Tacos & Tequila' arrived as 'Reminder: Tacos &amp; Tequila starts tomorrow'. It linked /events/<title-slug> with no date, which the detail page resolves by guessing the soonest same-title row. And for an event whose source gave no time it printed the 19:31:58 ingest sentinel as '7:31 PM CST' and said 'starts in 1 hour'.",
+      "acceptanceCriteria": [
+        "The subject is plain text and is never HTML-escaped",
+        "The link uses the canonical <title>-<YYYY-MM-DD> slug from eventPath(), with /events/<id> as the fallback",
+        "An event at the 19:31:58 sentinel shows its date only and is worded 'is today' or 'is tomorrow'",
+        "No empty Where line when venue and location are both missing",
+        "A Deno suite pins all of the above and runs in subscription-sync-tests.yml"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "send-event-reminders HTML-escaped the subject (\"Tacos &amp; Tequila\"), linked a dateless /events/<title> slug, and printed the 19:31:58 no-time sentinel as \"7:31 PM\" with \"starts in 1 hour\". Its content now comes from send-event-reminders/content.ts (plain-text subject, eventPath link, date-only line and today/tomorrow wording when there's no time, no empty Where). The new Deno suite failed 1 of 10 before index.ts was wired to the module and passes 10/10 after; it's in subscription-sync-tests.yml, type-check:functions is clean, and check-edge-types reports no new errors."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-PERF-067",
+      "title": "Forced vendor-editor chunk ships about 122 KB gz of tiptap/prosemirror to five admin routes that never open an editor",
+      "description": "With chunk merging off (WEB-PERF-065), the only passenger bytes left on lazy routes are the forced vendor-editor manual chunk: AdminAgents, AdminAnalyticsPage, AdminRefunds, CampaignAnalytics and AdminArticleEditor each statically reach one tiptap module and download the whole chunk. That is 615 KB gz summed.",
+      "acceptanceCriteria": [
+        "Run node scripts/measure-route-preload.mjs --out f.json, then use each route's wasted list to find the static importer that pulls tiptap into these routes",
+        "Make that import lazy, or stop forcing vendor-editor (and update the remove-lazy-preloads pattern list in vite.config.ts if the name goes away)",
+        "sumWasteKb drops from 615 and the critical path stays within tolerance"
+      ],
+      "passes": false,
+      "notes": "Found in the WEB-PERF-065 loop with scripts/measure-route-preload.mjs."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-058",
+      "title": "get_pending_reminders queues 3-hour and 1-hour reminders for events with no announced time",
+      "description": "As a user with a reminder on an event whose source gave no time, I should not get 'in 3 hours' and 'in 1 hour' emails timed against the 19:31:58 ingest sentinel. get_pending_reminders computes its windows from COALESCE(event_start_utc, date), so these fire at 16:31 and 18:31 Central. The email copy now says 'is today', but the sends themselves are noise. The RPC (or toggle_event_reminder) should skip or refuse hour-level reminders for sentinel rows. That needs a CREATE OR REPLACE with the same signature, so it stays backward-compatible.",
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-059",
+      "title": "The event-reminder unsubscribe link unsubscribes the newsletter, not the reminders",
+      "description": "send-event-reminders takes the footer's unsubscribe token from newsletter_subscribers by email. Clicking it ends the newsletter while reminders keep coming, and a user who isn't subscribed to the newsletter gets no token at all. Reminders need their own one-click opt-out, or the footer should link to the reminders tab on /my-events.",
+      "passes": false
     }
   ]
 }
