@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useId } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -146,6 +146,10 @@ export default function ContentEditDialog({
   const [newAmenity, setNewAmenity] = useState("");
   const [matchedVenue, setMatchedVenue] = useState<KnownVenue | null>(null);
   const [venueAutoFilled, setVenueAutoFilled] = useState(false);
+  // Each field's Label points at this id; field.key alone could collide with
+  // another id on the admin page behind the dialog.
+  const idPrefix = useId();
+  const fieldId = (key: string) => `${idPrefix}-${key}`;
 
   const config = fieldConfigs[contentType];
   const { findVenue, getAutoFillData, isReady: venuesReady } = useVenueMatcher();
@@ -367,12 +371,14 @@ export default function ContentEditDialog({
 
   const renderField = (field: any) => {
     const value = formData[field.key];
+    const id = fieldId(field.key);
 
     switch (field.type) {
       case "text":
       case "url":
         return (
           <Input
+            id={id}
             value={value || ""}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}`}
@@ -383,6 +389,7 @@ export default function ContentEditDialog({
       case "number":
         return (
           <Input
+            id={id}
             type="number"
             value={value || ""}
             onChange={(e) => handleFieldChange(field.key, parseFloat(e.target.value) || 0)}
@@ -396,6 +403,7 @@ export default function ContentEditDialog({
       case "textarea":
         return (
           <Textarea
+            id={id}
             value={value || ""}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}`}
@@ -409,7 +417,7 @@ export default function ContentEditDialog({
             value={value || ""}
             onValueChange={(val) => handleFieldChange(field.key, val)}
           >
-            <SelectTrigger>
+            <SelectTrigger id={id}>
               <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
             </SelectTrigger>
             <SelectContent>
@@ -426,6 +434,7 @@ export default function ContentEditDialog({
         return (
           <div className="flex items-center space-x-2">
             <Switch
+              id={id}
               checked={value || false}
               onCheckedChange={(checked) => handleFieldChange(field.key, checked)}
             />
@@ -493,6 +502,7 @@ export default function ContentEditDialog({
             <div className="flex gap-2">
               <Input
                 type="time"
+                aria-label={`${field.label} time`}
                 value={value ? format(value, "HH:mm") : ""}
                 onChange={(e) => {
                   const [hours, minutes] = e.target.value.split(':');
@@ -510,6 +520,7 @@ export default function ContentEditDialog({
           <div className="space-y-3">
             <div className="flex gap-2">
               <Input
+                id={id}
                 value={newAmenity}
                 onChange={(e) => setNewAmenity(e.target.value)}
                 placeholder="Add new amenity"
@@ -550,6 +561,7 @@ export default function ContentEditDialog({
       default:
         return (
           <Input
+            id={id}
             value={value || ""}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
             placeholder={`Enter ${field.label.toLowerCase()}`}
@@ -576,7 +588,7 @@ export default function ContentEditDialog({
         <div className="grid gap-4 py-4">
           {config.fields.map((field) => (
             <div key={field.key} className="grid gap-2">
-              <Label htmlFor={field.key} className="text-sm font-medium">
+              <Label htmlFor={fieldId(field.key)} className="text-sm font-medium">
                 {field.label}
                 {field.required && <span className="text-red-500 ml-1">*</span>}
               </Label>

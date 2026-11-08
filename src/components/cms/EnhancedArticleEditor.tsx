@@ -532,9 +532,10 @@ export default function EnhancedArticleEditor() {
               </div>
 
               <div>
-                <Label>SEO Keywords</Label>
+                <Label htmlFor="seo-keyword-new">SEO Keywords</Label>
                 <div className="flex gap-2 mb-2">
                   <Input
+                    id="seo-keyword-new"
                     value={newKeyword}
                     onChange={(e) => setNewKeyword(e.target.value)}
                     placeholder="Add SEO keyword..."
@@ -574,7 +575,7 @@ export default function EnhancedArticleEditor() {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select value={articleData.status} onValueChange={(value) => handleInputChange('status', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -617,14 +618,14 @@ export default function EnhancedArticleEditor() {
               )}
 
               <div>
-                <Label>Author</Label>
+                <Label htmlFor="author">Author</Label>
                 <Select
                   value={articleData.author_profile_id || 'none'}
                   onValueChange={(value) =>
                     handleInputChange('author_profile_id', value === 'none' ? null : value)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="author">
                     <SelectValue placeholder="Select author" />
                   </SelectTrigger>
                   <SelectContent>
@@ -648,7 +649,7 @@ export default function EnhancedArticleEditor() {
                     handleInputChange('category_id', cat?.id || null);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -668,12 +669,12 @@ export default function EnhancedArticleEditor() {
               </div>
 
               <div>
-                <Label>Priority</Label>
+                <Label htmlFor="priority">Priority</Label>
                 <Select
                   value={articleData.priority.toString()}
                   onValueChange={(value) => handleInputChange('priority', parseInt(value))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="priority">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -722,6 +723,7 @@ export default function EnhancedArticleEditor() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
+                  aria-label="New tag"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add tag..."

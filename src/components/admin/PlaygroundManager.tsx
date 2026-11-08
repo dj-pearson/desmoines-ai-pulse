@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -122,6 +122,8 @@ interface InlineEditProps {
 }
 
 function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
+  // One id for whichever control the field renders, so the Label names it.
+  const fieldId = useId();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<string>(() => {
     const v = playground[field];
@@ -201,12 +203,15 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-3">
         <div className="space-y-2">
-          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            htmlFor={fieldId}
+            className="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             {field.replace(/_/g, " ")}
           </Label>
           {field === "has_restrooms" || field === "has_shade" ? (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger>
+              <SelectTrigger id={fieldId}>
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
@@ -217,7 +222,7 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             </Select>
           ) : field === "surface_type" ? (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger>
+              <SelectTrigger id={fieldId}>
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
@@ -231,7 +236,7 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             </Select>
           ) : field === "age_range" ? (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger>
+              <SelectTrigger id={fieldId}>
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
@@ -245,6 +250,7 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             </Select>
           ) : field === "accessibility_notes" ? (
             <Textarea
+              id={fieldId}
               rows={4}
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -252,6 +258,7 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             />
           ) : (
             <Input
+              id={fieldId}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               autoFocus
@@ -301,6 +308,9 @@ export default function PlaygroundManager() {
     field: null,
     value: "",
   });
+  // The bulk dialog has no visible label over its one control; the title
+  // says the field, so the control's name says it too.
+  const bulkValueLabel = `New ${bulkEdit.field?.replace(/_/g, " ") ?? "value"}`;
   const [busy, setBusy] = useState(false);
 
   const state = usePlaygrounds({
@@ -419,6 +429,7 @@ export default function PlaygroundManager() {
                 setPage(0);
               }}
               placeholder="Search name, location, age…"
+              aria-label="Search playgrounds"
               className="pl-8"
             />
           </div>
@@ -429,7 +440,7 @@ export default function PlaygroundManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by source">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>
@@ -444,7 +455,7 @@ export default function PlaygroundManager() {
               setSortBy(v)
             }
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Sort playgrounds">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
@@ -704,7 +715,7 @@ export default function PlaygroundManager() {
                   setBulkEdit((prev) => ({ ...prev, value: v }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={bulkValueLabel}>
                   <SelectValue placeholder="—" />
                 </SelectTrigger>
                 <SelectContent>
@@ -720,7 +731,7 @@ export default function PlaygroundManager() {
                   setBulkEdit((prev) => ({ ...prev, value: v }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={bulkValueLabel}>
                   <SelectValue placeholder="—" />
                 </SelectTrigger>
                 <SelectContent>
@@ -739,7 +750,7 @@ export default function PlaygroundManager() {
                   setBulkEdit((prev) => ({ ...prev, value: v }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={bulkValueLabel}>
                   <SelectValue placeholder="—" />
                 </SelectTrigger>
                 <SelectContent>
@@ -753,6 +764,7 @@ export default function PlaygroundManager() {
               </Select>
             ) : bulkEdit.field === "accessibility_notes" ? (
               <Textarea
+                aria-label={bulkValueLabel}
                 rows={4}
                 value={bulkEdit.value}
                 onChange={(e) =>

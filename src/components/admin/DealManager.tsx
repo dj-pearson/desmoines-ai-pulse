@@ -680,6 +680,7 @@ export default function DealManager() {
                 setPage(0);
               }}
               placeholder="Search title, business…"
+              aria-label="Search deals"
               className="pl-8"
             />
           </div>
@@ -690,7 +691,7 @@ export default function DealManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by entity type">
               <SelectValue placeholder="Entity" />
             </SelectTrigger>
             <SelectContent>
@@ -709,7 +710,7 @@ export default function DealManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -726,7 +727,7 @@ export default function DealManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by deal type">
               <SelectValue placeholder="Deal type" />
             </SelectTrigger>
             <SelectContent>
@@ -1001,7 +1002,7 @@ export default function DealManager() {
                   />
                 </div>
                 <div>
-                  <Label>Entity type</Label>
+                  <Label htmlFor="d-entity">Entity type</Label>
                   <Select
                     value={editing.entity_type}
                     onValueChange={(v) =>
@@ -1013,7 +1014,7 @@ export default function DealManager() {
                       })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="d-entity">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1026,14 +1027,14 @@ export default function DealManager() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Deal type</Label>
+                  <Label htmlFor="d-type">Deal type</Label>
                   <Select
                     value={editing.deal_type}
                     onValueChange={(v) =>
                       setEditing({ ...editing, deal_type: v })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="d-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
