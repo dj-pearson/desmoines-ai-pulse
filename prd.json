@@ -11553,13 +11553,13 @@
       "priority": 3,
       "id": "AND-AUDIT-032",
       "title": "Trip planner start date uses the device day, not the Des Moines day",
-      "passes": false,
+      "passes": true,
       "description": "TripPlannerViewModel line ~216 computes the trip start as LocalDate.now().plusDays(offset). On a phone set to another zone, or near midnight, that is a different day from the Des Moines day that events and the itinerary refer to. EventTimeText.desMoinesToday() is the helper to reuse.",
       "acceptanceCriteria": [
         "The trip start date is computed from EventTimeText.desMoinesToday()",
         "A JVM test pins the start day for a UTC clock after 7pm Central"
       ],
-      "notes": "Found in the AND-AUDIT-031 loop, 2026-11-08."
+      "notes": "Found in the AND-AUDIT-031 loop, 2026-11-08. | Trip planner start/end dates now come from TripDates.range, which takes the phone's instant through EventTimeText.desMoinesToday, replacing LocalDate.now(), so a UTC phone after 7pm Central no longer sends tomorrow as \"today\". 4 new TripDatesTest JVM tests pass on a kotlinc 2.2.10 stub harness (52 existing event-time tests still pass), and a mutation restoring the device day fails exactly the 2 cross-zone tests. TripPlannerViewModel and the app module are not compiled (no Android SDK)."
     },
     {
       "priority": 4,
@@ -11826,8 +11826,8 @@
         "Assess whether any further trimming (for example keeping only direct deps) is worth the route-navigation waterfall it adds, with a measured navigation comparison, before shipping it",
         "check-bundle-budget ratchets down"
       ],
-      "passes": false,
-      "notes": "Found in the WEB-PERF-064 loop by stripping mapDeps from the built entry and re-gzipping. Dropping the three vendors removes only 468 refs, so on its own it is a small win. | 2026-11-08 slice 1 (AC1): vite.config.ts preloadAlreadyLoaded() is a modulePreload.resolveDependencies that drops every dep in the host chunk's static closure, using a bundle captured by a generateBundle order \"pre\" plugin. Entry refs went 8,381 -> 7,905 and entry gz 55.4 -> 55.2 KB; lazy hosts went 1,660 -> 792 refs; gz over all 31 hosts 427.6 -> 422.7 KB. check-bundle-budget now fails if the entry's mapDeps names a chunk index.html loads (the pre-change dist fails it). New vitest has a negative control (3/8 fail). 20 routes plus router clicks loaded clean in Chrome. AC2 (direct-deps-only, needs a throttled navigation comparison) and AC3 (baseline 174.9 vs measured 175.8, so it can't ratchet yet) remain open. Handoff: docs/improvement-loops/lanes/performance.md"
+      "passes": true,
+      "notes": "Found in the WEB-PERF-064 loop by stripping mapDeps from the built entry and re-gzipping. Dropping the three vendors removes only 468 refs, so on its own it is a small win. | 2026-11-08 slice 1 (AC1): vite.config.ts preloadAlreadyLoaded() is a modulePreload.resolveDependencies that drops every dep in the host chunk's static closure, using a bundle captured by a generateBundle order \"pre\" plugin. Entry refs went 8,381 -> 7,905 and entry gz 55.4 -> 55.2 KB; lazy hosts went 1,660 -> 792 refs; gz over all 31 hosts 427.6 -> 422.7 KB. check-bundle-budget now fails if the entry's mapDeps names a chunk index.html loads (the pre-change dist fails it). New vitest has a negative control (3/8 fail). 20 routes plus router clicks loaded clean in Chrome. AC2 (direct-deps-only, needs a throttled navigation comparison) and AC3 (baseline 174.9 vs measured 175.8, so it can't ratchet yet) remain open. Handoff: docs/improvement-loops/lanes/performance.md | 2026-11-08 slice 2 (AC2+AC3): AccessibilityWidget now announces via new src/lib/announce.ts (useAccessibility out of the entry, duplicate announcer in useFocusOnRouteChange merged) and the shortcut listener is a lazy headless KeyboardShortcutListener (lazyOrNothing); critical path 175.8 -> 174.7 KB gz, baseline ratcheted 174.9 -> 174.7, entryChunkA11yShortcuts test fails 2/4 on revert, vitest 3191/3191, shortcuts/widget/6 routes clean in Chrome. AC2 assessed and not shipped: direct-deps-only cut 36/8,018 mapDeps refs (0.2 KB gz) because rollup hoists transitive imports; target-only adds one RTT per navigation."
     },
     {
       "priority": 4,
@@ -12033,7 +12033,8 @@
         "Each section has a real button with aria-expanded that toggles it",
         "A vitest spec covers keyboard toggling"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "DataQualityDashboard section headers are now stretched buttons with aria-expanded/aria-controls (whole header still clicks); also fixed the Events section default-open key ('events' vs content type 'event') and tied the Severity label to its Select. New dataQualitySectionToggles.test.tsx fails 3/3 on old code, passes 3/3; vitest 3190/3190, type ratchet 30/30, eslint 0 errors, check-icon-button-names 0, check-ui-craft 3 <= 7."
     },
     {
       "priority": 4,
@@ -12159,7 +12160,8 @@
         "Each read either sends upcomingOrRunningFilter(upcomingFloorUtc()) or carries a comment explaining why it needs future-only rows",
         "Fixture-evaluating test per changed hook, with a negative control"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "useTrending's event fallback, fetchTrendingRows (For You rail) and useTeamGames (inside its existing and() group) now send upcomingOrRunningFilter(upcomingFloorUtc()). useNearbyListings scans with upcomingOrRunningFilter(now), and isLinkableUpcomingEvent now accepts a run whose end_date is still ahead (end_date added to the scan columns). useHomeSnapshot's \"Next up\" stays future-only on purpose, with a comment saying why. Verified by the new homeEventReads.running.test.tsx: 5/5 on the new code, the old code fails 3 of its first 4, and switching off the selector's run arm makes the nearby cases fail. nearbyLinks.test 17/17, eslint and the type ratchet are clean, and the related check-* scripts pass. Not run against a live PostgREST."
     },
     {
       "priority": 3,
@@ -12179,14 +12181,16 @@
       "id": "WEB-SEO-062",
       "title": "recordArticleView calls a detached supabase.rpc, which throws on every article detail view",
       "description": "src/lib/recordArticleView.ts does `const rpc = supabase.rpc as unknown as (...)` and then calls rpc(...). SupabaseClient.rpc reads this.rest, so a detached call throws TypeError \"Cannot read properties of undefined (reading 'rest')\" (confirmed in node against the installed supabase-js). It runs synchronously inside a useEffect in useArticleBySlug (src/hooks/useArticles.ts:583) for every real visitor, before the .then rejection handler can catch anything. So the view counter never counts, and the throw escapes the effect. Fix: supabase.rpc.bind(supabase), plus a test whose stub rejects detached calls (see src/pages/__tests__/unsubscribeReminder.test.tsx for one).",
-      "passes": false
+      "passes": true,
+      "notes": "recordArticleView now calls supabase.rpc.bind(supabase). The detached call threw \"reading 'rest'\" synchronously (reproduced in node against the installed supabase-js), so no article view was ever counted. New vitest cases stub a client whose rpc throws on a detached call: 2 fail on the old line, 10/10 pass now. Also green: vitest src/hooks 514/514, eslint, app type ratchet 30/30, check-schema."
     },
     {
       "priority": 4,
       "id": "WEB-FEAT-063",
       "title": "A newsletter unsubscribe silently stops event reminders the user sets later",
       "description": "send-event-reminders sends as category 'marketing', and _shared/email.ts blocks marketing for any address with an 'unsubscribe' row in email_suppressions, which newsletter_unsubscribe_by_token writes. A user who left the newsletter and then turns on a reminder on an event page gets nothing, and nothing tells them why. Decide whether opted-in per-event reminders get their own category, or whether the reminder switch should warn when the address is suppressed.",
-      "passes": false
+      "passes": true,
+      "notes": "send-event-reminders now sends as \"transactional\" via reminderSendInput/REMINDER_EMAIL_CATEGORY in content.ts, so a newsletter 'unsubscribe' suppression no longer drops reminders the user set; bounce/complaint/manual still block, and the per-event one-click List-Unsubscribe is kept. Verified with 4 new Deno tests that run the real sendEmail against a stub suppression table (2 fail with the old marketing category; content.test.ts passes 18/18), plus type-check:functions, check-edge-types and check-edge-auth."
     },
     {
       "priority": "low",
@@ -12198,7 +12202,157 @@
         "Live events opened anywhere else keep the existing refresh and unavailable behaviour",
         "XCTest covers both paths using EventDetailProviding"
       ],
+      "passes": true,
+      "notes": "The iOS event detail used to show \"no longer available\" for archived series editions. When the visible re-read now answers PGRST116, the detail takes the web's second look (classifyUnlisted) through a new EventsService.fetchArchivedEvent, which reads archived rows but never hidden or merged ones. If that finds the row, the screen says \"This event has already happened\", and the by-id load path behaves the same way. Verified with 8 new XCTest cases in EventDetailRefreshTests (not compiled: no Xcode here) plus vitest iosEventSeriesParity and iosEventLinkParity, 7/7 passing."
+    },
+    {
+      "id": "WEB-FEAT-064",
+      "title": "Dietary restaurant pages list places closed for good and can't show open status or temporary closures",
+      "description": "As someone looking for vegan, gluten-free, halal or similar food in Des Moines, I need the dietary list to show only places I can actually go to and to say whether they're open. useDietaryRestaurants selected RESTAURANT_LIST_COLUMNS, which has neither hours_json nor business_status, and filtered only status = 'closed'. Production stores a date in `opening`, so no card on /restaurants/dietary/:diet said 'Open until'. A CLOSED_TEMPORARILY place showed as an ordinary listing, often first in name order, and a Google CLOSED_PERMANENTLY row or a 'permanently_closed' status was listed as a place to eat.",
+      "acceptanceCriteria": [
+        "useDietaryRestaurants selects a projection that carries hours_json and business_status, registered under check-list-columns",
+        "Places closed for good (isPermanentlyClosedRestaurant: our status or Google CLOSED_PERMANENTLY) are not listed",
+        "Serving places sort ahead of CLOSED_TEMPORARILY and opening-soon places; name order holds within each group",
+        "A test drives the hook and fails when the old projection and return are restored"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed in the restaurants lane loop of 2026-11-08: DIETARY_RESTAURANT_COLUMNS plus dietaryListRows. Negative control turns 3 of 5 new tests red. | Cards on /restaurants/dietary/:diet now read hours_json and business_status. useDietaryRestaurants selects DIETARY_RESTAURANT_COLUMNS (registered in check-list-columns, 18/18) and runs rows through dietaryListRows, which drops Google CLOSED_PERMANENTLY and 'permanently_closed' rows and sorts serving places ahead of temporarily closed and opening-soon ones. Verified with 5 new tests; the negative control turns 3 of the 5 red. Restaurant/diet vitest 448/448, type-check ratchet 30/30, eslint clean."
+    },
+    {
+      "id": "WEB-SEC-066",
+      "title": "Brewery trail check-ins are readable by anyone with the anon key",
+      "description": "As a user on the brewery trail, I need my check-ins to stay between me and the platform. brewery_trail_checkins carries user_id, restaurant_id, checked_in_at, beer_name and rating, and 20260228000005 gave it \"Public read checkin counts\" FOR SELECT USING (true) with no TO clause. So the bundled anon key can list which breweries every account visited and when, and any signed-in user can read everyone else's trail.",
+      "acceptanceCriteria": [
+        "Drop \"Public read checkin counts\". docs/RLS_AUDIT.md lists it as the only USING (true) SELECT policy on the table",
+        "Keep owner read (auth.uid() = user_id) and add admin read via public.is_admin(), matching event_checkins (WEB-SEC-052)",
+        "Enumerate readers before tightening: web useBreweryCheckins reads .eq('user_id', user.id); iOS and Android do not reference the table; the edge function is only _shared/userDataTables.ts (service_role); no SQL object reads it",
+        "Remove brewery_trail_checkins from .github/identity-read-baseline.json (13 -> 12) so that a public read fails check-identity-reads",
+        "Verify against Postgres: anon reads 0 rows, a user reads only their own, admin reads all, owner insert and update unchanged"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "The \"Public read checkin counts\" SELECT USING (true) policy on brewery_trail_checkins let the anon key list which breweries every account visited and when. Migration 20261108000061 drops it and adds an admin read; the owner read is kept. The only client reader (useBreweryCheckins) reads its own rows, and iOS/Android never touch the table. Reproduced and fixed on local Postgres 16 with auth stubs: before, anon read 2 rows; after, 0; owner insert/update still work. identity-read baseline 13 -> 12, and the check exits 1 naming the table when the migration is removed. Not applied to production. Handoff: docs/improvement-loops/lanes/security.md"
+    },
+    {
+      "id": "WEB-ADS-029",
+      "title": "Admin newsletter list re-subscribes unconfirmed (pending) and opted-out addresses with one click",
+      "description": "As a reader who never confirmed, or who unsubscribed, I must not be put back on the newsletter by an admin click. NewsletterSubscribersManager predated double opt-in (20260918000002): it typed status as active|unsubscribed|bounced, so a 'pending' row rendered as 'Unsubscribed'. Every non-active row also had a Re-subscribe button that wrote status='active' through the admin UPDATE policy (20261005000003). send-newsletter-campaign mails every active row, so the click mailed an unconfirmed address (possibly typed in by a stranger) with no consent_records row and the confirm token still live. The same button overrode explicit opt-outs, and bulk Unsubscribe rewrote bounced rows to unsubscribed.",
+      "acceptanceCriteria": [
+        "Pending rows show 'Awaiting confirmation', not 'Unsubscribed', and the status filter offers it",
+        "No admin control writes status='active'; only newsletter_confirm_by_token returns an address to the list",
+        "Single and bulk unsubscribe update only rows whose status is still 'active'",
+        "Vitest spec fails on the old component and passes on the new"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed in the 2026-11-08 marketing-growth loop. src/components/admin/NewsletterSubscribersManager.tsx; spec src/components/__tests__/newsletterSubscribersManager.test.tsx 4/4 (old component 4/4 red; dropping the active scope 1/4 red). Full vitest 3191/3191, eslint, type-check ratchet 30/30. The admin UPDATE policy still allows writing 'active' through the API directly; a server-side guard is a separate story. | Done: NewsletterSubscribersManager treated 'pending' (never confirmed) rows as \"Unsubscribed\" and gave every non-active row a one-click Re-subscribe that wrote status='active'. send-newsletter-campaign mails every active row, so one admin click sent mail to an unconfirmed address with no consent record. Pending rows now show \"Awaiting confirmation\" and have their own filter. The re-subscribe action is gone, and unsubscribe is scoped to status='active', so bounced rows are no longer rewritten. New vitest 4/4; against the old component it fails 4/4, and dropping only the active scope fails 1/4. Full vitest 3191/3191, eslint clean, type-check ratchet 30/30, plus 7 check-* scripts. Note: this worktree was cut from main (65138139) rather than the round base, so I reset its branch to cd7a7b8a before working."
+    },
+    {
+      "id": "WEB-QA-055",
+      "priority": 2,
+      "title": "The Deno lane's paths filter misses most of the files its suites read, so a PR changing one runs nothing",
+      "description": "As a developer, I need the edge-function contract suites to run when a file they assert on changes. subscription-sync-tests.yml runs on pull_request with a paths filter that named about 25 files, while its Deno suites read 145+ files outside supabase/functions and walk src/, ios/, android/, scripts/ and docs/. A PR that changed only src/components/auth/SessionManager.tsx did not run session-timeout-policy.test.ts, which is how that test went stale (WEB-QA-051) and would have gone red on the next unrelated PR.",
+      "acceptanceCriteria": [
+        "A check resolves the path literals in every suite a path-filtered workflow runs (plus bare directory names in suites that walk directories) and fails when the workflow's pull_request paths filter does not cover one",
+        "The check runs in npm run validate and pr-checks.yml",
+        "subscription-sync-tests.yml's filter covers every file and walked tree the suites read",
+        "Negative control: the previous filter fails the check, with SessionManager.tsx among the misses",
+        "Offline suite covers glob semantics, YAML extraction and a scratch repo"
+      ],
+      "passes": true,
+      "notes": "Done 2026-11-08 (reliability lane). scripts/check-deno-lane-paths.mjs plus scripts/__tests__/check-deno-lane-paths.test.mjs (16/16). Filter widened to src/**, ios/**, android/**, scripts/**, docs/**, package.json, .gitleaks.toml. Old filter: 116 misses. test:offline 64/64. Known gap: paths built from variables are not seen. | subscription-sync-tests.yml's pull_request paths filter named about 25 files, but its Deno suites read 145+ files outside supabase/functions and walk src/, ios/, android/, scripts/ and docs/, so a PR touching only a file a suite reads ran nothing (that's how WEB-QA-051 went stale). New check-deno-lane-paths (validate, pr-checks) fails when a lane suite reads a path the filter misses, and the filter now covers what the suites read, including .gitleaks.toml, which the check found. Verified: the old filter fails with 116 misses (SessionManager.tsx among them), the new one passes, offline suite 16/16, test:offline 64/64."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-QA-056",
+      "title": "postgrestFilters src/ scan test fails intermittently in the full vitest run",
+      "description": "src/lib/__tests__/postgrestFilters.test.ts 'finds nothing unsanitized in src/' failed in 2 of 3 full npx vitest run passes on cd7a7b8a plus a component-only change, and passes 12/12 alone. Probably a timeout on a whole-src scan under parallel load; a flaky gate erodes trust in the round's vitest number.",
+      "acceptanceCriteria": [
+        "Reproduce under full-suite load and capture the failure message",
+        "Give the scan an explicit timeout or make it cheaper so it passes reliably in the full run",
+        "Three consecutive full runs pass"
+      ],
       "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-067",
+      "title": "The \"?\" keyboard shortcut never opens the shortcuts help on a US keyboard",
+      "description": "use-keyboard-shortcuts.ts opens help only when event.key === \"?\" && !event.shiftKey. On a US layout \"?\" is Shift+/, so shiftKey is always true and the help dialog the footer and docs advertise never opens. Seen in the WEB-PERF-066 loop: Playwright's keyboard.press(\"?\") (which sends shiftKey) does nothing, while a synthetic unshifted keydown opens the dialog.",
+      "acceptanceCriteria": [
+        "Pressing Shift+/ (\"?\") with focus outside an input opens the keyboard shortcuts dialog",
+        "Typing \"?\" in an input or textarea still does nothing",
+        "A test presses \"?\" the way a real keyboard sends it (shiftKey true) and asserts the dialog opens"
+      ],
+      "passes": false,
+      "notes": "Found in the WEB-PERF-066 loop (performance lane) while checking the lazy KeyboardShortcutListener in Chrome."
+    },
+    {
+      "priority": 2,
+      "id": "WEB-SEC-067",
+      "title": "event_attendance exposes who is attending what to anyone with the anon key",
+      "description": "As a user who marks an event as going, I need that to stay private unless I choose to share it. event_attendance is on the identity-read baseline (public USING (true) SELECT with user_id), and web readers (useCommunityFeatures, useMyPlans, PrivacyControls, checkInStatus) need enumerating before it can be tightened. Counts already have a tallies migration (20260827000002).",
+      "acceptanceCriteria": [
+        "Enumerate every reader of event_attendance across web, iOS, Android and edge, and note any reader that needs other users' rows",
+        "Serve any cross-user need (counts, friends going) through a SECURITY DEFINER aggregate",
+        "Scope SELECT to owner plus admin, as a multi-release change if a shipped binary reads other users' rows",
+        "identity-read baseline shrinks by one"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-ADS-030",
+      "title": "Server-side guard: only newsletter_confirm_by_token may move a newsletter_subscribers row to 'active'",
+      "description": "As the operator of a double opt-in list, I need the database to refuse an activation that skipped the confirm click. newsletter_subscribers_admin_update (20261005000003) lets any admin set status='active' through PostgREST. WEB-ADS-029 removed the button that did this, but the API still accepts it. An activation done that way writes no consent_records row and leaves confirm_token live.",
+      "acceptanceCriteria": [
+        "A BEFORE UPDATE trigger (or a narrower admin policy) rejects a change to status='active' from any other status unless it comes from newsletter_confirm_by_token or the service role",
+        "Admins can still set active -> unsubscribed and fix bounces",
+        "Exercised on a local Postgres stub: an admin-role activation fails, the confirm RPC still activates, re-apply is a no-op",
+        "Tightening an RLS write: confirm no shipped client (web admin only) relies on the activation path before release"
+      ],
+      "passes": false,
+      "notes": "Found during the 2026-11-08 marketing-growth loop (WEB-ADS-029). Needs a migration and an owner apply."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-CI-036",
+      "title": "Deno suites cannot run in cloud agent containers because they import from deno.land and esm.sh",
+      "description": "As a loop agent, I need to run the Deno lane locally. Deno 2.9 installs from npm (npm i deno), and jsr.io and registry.npmjs.org are reachable, but deno.land and esm.sh get a 403 from the proxy. Of the 166 deno test steps, 93 fail at import on deno.land/std asserts (90) or esm.sh supabase-js (3), so every 'not run here (no Deno)' note stays unverified.",
+      "acceptanceCriteria": [
+        "Move test-only std imports from https://deno.land/std@x to jsr:@std/assert (or node:assert), suite by suite, without changing what they assert",
+        "Map esm.sh supabase-js imports to npm: specifiers where tests need them",
+        "Document running the lane locally via npm i deno in README Checks by area"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the reliability lane: 73/166 lane steps pass locally, all 93 failures are network-blocked imports."
+    },
+    {
+      "priority": 2,
+      "id": "AND-AUDIT-036",
+      "title": "Restaurant open-now reads the phone's clock, not Des Moines time",
+      "passes": false,
+      "description": "Restaurant.isOpenNow (data/model/Restaurant.kt ~line 119) defaults to java.time.LocalDateTime.now(), which is the device's zone. business_hours are Des Moines local hours, so a visitor whose phone is still on Eastern or Pacific time, or on UTC, sees the wrong open/closed badge. The Open now filters in RestaurantsViewModel and DiscoverViewModel also include or drop the wrong places. The day-of-week can also be off by one near midnight.",
+      "acceptanceCriteria": [
+        "isOpenNow evaluates against the Des Moines wall clock (LocalDateTime.now(EventSlug.CENTRAL), or a ZonedDateTime instant converted to Central)",
+        "RestaurantsScreen badge, RestaurantsViewModel open-now filter and DiscoverViewModel open-now filter all go through the same Central-time evaluation",
+        "A JVM test pins a UTC instant (e.g. 02:00 UTC, which is 9pm Central the previous weekday) and asserts the previous weekday's hours are used"
+      ],
+      "notes": "Found in the AND-AUDIT-032 loop, 2026-11-08."
+    },
+    {
+      "id": "WEB-QA-057",
+      "title": "search-filters 'search should not cause layout shift' is flaky in the full smoke run",
+      "description": "In the round-13 background smoke run (810 tests, chromium-desktop) tests/search-filters.spec.ts:632 failed once and passed on retry. A required-lane test that needs a retry hides real regressions behind the retry budget.",
+      "acceptanceCriteria": [
+        "Reproduce with --repeat-each=20 --workers=4",
+        "Make the measurement wait for the settled state it means to measure",
+        "20/20 under load"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-11-08 by the orchestrator's background smoke run on cd7a7b8a."
     }
   ]
 }
