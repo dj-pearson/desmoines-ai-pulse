@@ -1,12 +1,17 @@
-import { ReactNode, useEffect, useRef } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { ReactNode, Suspense, lazy, useEffect, useRef } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { AccessDeniedPage, VerifyingScreen } from "@/components/auth/RouteGateScreens";
 import { useAuth } from "@/hooks/useAuth";
-import { usePermission } from "@/hooks/usePermission";
-import { type Permission, type UserRole } from "@/lib/security";
 import { sessionStore } from "@/lib/safeStorage";
-import { ShieldAlert, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import type { Permission, UserRole } from "@/lib/security";
+
+// The role/permission check (usePermission, useSecurityContext and the
+// lib/security role-permission map) is a separate chunk, fetched only when a
+// route sets minRole, permission or anyPermissions. ProtectedRoute itself is
+// eager because App.tsx wraps routes in it, so a static import here put all of
+// that in the entry chunk for every visitor (WEB-PERF-062). A failed fetch
+// throws into the route's error boundary: failing closed is right for a gate.
+const RoutePermissionGate = lazy(() => import("@/components/auth/RoutePermissionGate"));
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -81,7 +86,7 @@ export function ProtectedRoute({
   // /profile and /my-events set none of these props, and AuthContext has
   // already read both tables, so they were paying for the same two requests
   // again before first paint (account plan WP3 item 11). The permission branch
-  // now lives in PermissionGate below and mounts only when a prop asks for it.
+  // now lives in the lazy RoutePermissionGate and mounts only when a prop asks for it.
   const needsPermissionGate =
     !!minRole || !!permission || (!!anyPermissions && anyPermissions.length > 0);
 
@@ -156,149 +161,20 @@ export function ProtectedRoute({
 
   if (needsPermissionGate) {
     return (
-      <PermissionGate
-        userId={user.id}
-        minRole={minRole}
-        permission={permission}
-        anyPermissions={anyPermissions}
-        deniedMessage={deniedMessage}
-      >
-        {children}
-      </PermissionGate>
+      <Suspense fallback={<VerifyingScreen message="Checking permissions..." />}>
+        <RoutePermissionGate
+          userId={user.id}
+          minRole={minRole}
+          permission={permission}
+          anyPermissions={anyPermissions}
+          deniedMessage={deniedMessage}
+        >
+          {children}
+        </RoutePermissionGate>
+      </Suspense>
     );
   }
 
   // All checks passed - render children
   return <>{children}</>;
-}
-
-interface PermissionGateProps {
-  children: ReactNode;
-  userId: string;
-  minRole?: UserRole;
-  permission?: Permission;
-  anyPermissions?: Permission[];
-  deniedMessage?: string;
-}
-
-/**
- * The role and permission half of ProtectedRoute. Mounted only for a route
- * that sets minRole, permission or anyPermissions, so usePermission's reads
- * happen only where an answer is needed.
- */
-function PermissionGate({
-  children,
-  userId,
-  minRole,
-  permission,
-  anyPermissions,
-  deniedMessage,
-}: PermissionGateProps) {
-  const {
-    hasPermission,
-    hasAnyPermission,
-    hasMinimumRole,
-    isLoading: permissionLoading,
-  } = usePermission();
-
-  const passesAllChecks =
-    !(minRole && !hasMinimumRole(minRole)) &&
-    !(permission && !hasPermission(permission)) &&
-    !(anyPermissions && anyPermissions.length > 0 && !hasAnyPermission(anyPermissions));
-
-  // Same WEB-UX-008 rule as above: once this user passed, a background
-  // permission re-fetch must not swap the page for a spinner.
-  const verifiedUserIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!permissionLoading && passesAllChecks) {
-      verifiedUserIdRef.current = userId;
-    }
-  }, [userId, permissionLoading, passesAllChecks]);
-
-  if (permissionLoading && verifiedUserIdRef.current !== userId) {
-    return <VerifyingScreen message="Checking permissions..." />;
-  }
-
-  // Check minimum role requirement
-  if (minRole && !hasMinimumRole(minRole)) {
-    return (
-      <AccessDeniedPage
-        message={
-          deniedMessage ||
-          `This page requires ${minRole} access or higher.`
-        }
-      />
-    );
-  }
-
-  // Check specific permission requirement
-  if (permission && !hasPermission(permission)) {
-    return (
-      <AccessDeniedPage
-        message={
-          deniedMessage ||
-          "You don't have the required permission to access this page."
-        }
-      />
-    );
-  }
-
-  // Check any of multiple permissions
-  if (anyPermissions && anyPermissions.length > 0 && !hasAnyPermission(anyPermissions)) {
-    return (
-      <AccessDeniedPage
-        message={
-          deniedMessage ||
-          "You don't have any of the required permissions to access this page."
-        }
-      />
-    );
-  }
-
-  return <>{children}</>;
-}
-
-function VerifyingScreen({ message }: { message: string }) {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <Spinner size="xl" className="mx-auto" />
-        <p className="text-muted-foreground">{message}</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Access Denied Page Component
- * Shown when a user lacks required permissions
- */
-function AccessDeniedPage({ message }: { message: string }) {
-  const navigate = useNavigate();
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card border rounded-lg p-6 text-center">
-        <div className="mb-4">
-          <ShieldAlert className="h-12 w-12 text-destructive mx-auto" />
-        </div>
-        <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground mb-6">{message}</p>
-        <div className="flex gap-3 justify-center">
-          <Button
-            variant="outline"
-            onClick={() => navigate(-1)}
-            className="gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Go Back
-          </Button>
-          <Button
-            onClick={() => navigate("/")}
-          >
-            Go Home
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
 }

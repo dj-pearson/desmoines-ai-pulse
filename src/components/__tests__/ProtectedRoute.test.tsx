@@ -120,3 +120,39 @@ describe("ProtectedRoute (WEB-UX-008)", () => {
     expect(screen.getByTestId("auth-page")).toBeInTheDocument();
   });
 });
+
+// WEB-PERF-062: the role/permission half is now a lazy chunk. These pin that a
+// route setting minRole still waits for it, then grants or denies.
+describe("ProtectedRoute permission gate (lazy, WEB-PERF-062)", () => {
+  const roleTree = () => (
+    <MemoryRouter initialEntries={["/moderate"]}>
+      <Routes>
+        <Route
+          path="/moderate"
+          element={
+            <ProtectedRoute minRole="moderator">
+              <div data-testid="moderator-page">Moderate</div>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </MemoryRouter>
+  );
+
+  beforeEach(() => {
+    mockAuth = { user: { id: "u1" }, isLoading: false, isAdmin: false, isAdminLoading: false };
+    mockPermission.hasMinimumRole = () => true;
+  });
+
+  it("renders the page once the gate chunk loads and the role check passes", async () => {
+    render(roleTree());
+    expect(await screen.findByTestId("moderator-page")).toBeInTheDocument();
+  });
+
+  it("denies access when the role check fails", async () => {
+    mockPermission.hasMinimumRole = () => false;
+    render(roleTree());
+    expect(await screen.findByText(/requires moderator access/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("moderator-page")).not.toBeInTheDocument();
+  });
+});

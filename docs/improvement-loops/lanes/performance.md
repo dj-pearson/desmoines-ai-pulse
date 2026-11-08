@@ -8,22 +8,23 @@
 
 ## Handoff
 
-None. WEB-PERF-061 closed in loop 7: SessionManager and
-GuestFavoriteMigrator now gate on useAuthFlags and lazy-load the part that
-works (AdminSessionTimeout, GuestFavoriteMigrationRunner), so
-useSessionTimeout, use-toast, useGuestFavoriteMigration, guestFavorites,
-authReturn and favoriteAnalytics left the entry chunk (index 60.2 -> 57.2 KB
-gz, critical path 180.8 -> 178 KB, baseline ratcheted). The static-graph
-walker is now src/__tests__/support/eagerGraph.ts; to pin a module out of
-the entry, add it to SIGNED_IN_ONLY in entryChunkSignedInOnly.test.ts or
-write a sibling test on the same helper. A headless app-root lazy component should
-use src/lib/lazyOrNothing.ts so a purged chunk renders nothing instead of
-throwing into the root boundary. Next entry residents (minified bytes from the
-source map): App.tsx 44 KB (the route table), tailwind-merge 20 KB (held by
-button/card via error-boundary, SiteLayout, BottomNav, AccessibilityWidget;
-moving it means those stop importing cn/button), AuthContext 15 KB,
-react-helmet-async 12 KB, ProtectedRoute + usePermission + lib/security
-~8 KB (only protected routes need them). A local build needs placeholder
+None. WEB-PERF-062 closed in loop 8: ProtectedRoute's role/permission half
+is now src/components/auth/RoutePermissionGate.tsx behind React.lazy (shared
+screens in auth/RouteGateScreens.tsx), so usePermission, useSecurityContext
+and all of lib/security left the entry chunk (index 57.2 -> 55.2 KB gz,
+critical path 178 -> 175.8 KB, baseline ratcheted). No route sets
+minRole/permission today, so the gate chunk never loads in practice. Pinned by
+src/__tests__/entryChunkPermissionGate.test.ts. The static-graph walker is
+src/__tests__/support/eagerGraph.ts; write a sibling test on it to pin a
+module out of the entry. Note the walker treats
+`import { type X }` as a value import (only `import type` is skipped), so
+write `import type` for type-only imports or it reports a false chain. A
+headless app-root lazy component should use src/lib/lazyOrNothing.ts; a gate
+should use plain lazy() so a purged chunk fails closed. Next entry residents
+(minified bytes from the source map): App.tsx 44 KB (the route table),
+tailwind-merge 20 KB (held by button/card via error-boundary, SiteLayout,
+BottomNav, AccessibilityWidget; moving it means those stop importing
+cn/button), AuthContext 15 KB, react-helmet-async 12 KB. A local build needs placeholder
 VITE_SUPABASE_URL/ANON_KEY/SITE_URL exported or the html-env plugin aborts.
 The open WEB-PERF stories (023, 031, 034, 035) are all waiting on a migration
 being applied or on live data for the prerender.
@@ -39,3 +40,4 @@ being applied or on live data for the prerender.
 | 2026-11-07 | WEB-PERF-059 | this commit | Cookie banner lazy-loaded behind CookieConsentGate, fetched only with no stored choice or on reopen; Radix Checkbox/Label/Presence out of the entry chunk; critical path 187.2 -> 181.9 KB gz; story closed |
 | 2026-11-07 | WEB-PERF-060 | this commit | Spinner split into ui/spinner.tsx; eager ProtectedRoute no longer drags loading-skeleton.tsx into the entry chunk; critical path 181.9 -> 180.8 KB gz, baseline ratcheted; static-graph test with negative control; story closed |
 | 2026-11-07 | WEB-PERF-061 | this commit | Admin idle timeout and guest-favorite migration lazy-loaded behind useAuthFlags gates; six modules out of the entry chunk; critical path 180.8 -> 178 KB gz, baseline ratcheted; static-graph test with negative control; story closed |
+| 2026-11-08 | WEB-PERF-062 | this commit | ProtectedRoute permission half split into lazy RoutePermissionGate; usePermission, useSecurityContext and lib/security out of the entry chunk; critical path 178 -> 175.8 KB gz, baseline ratcheted; static-graph test with negative control (8 fail on a static import); story closed |
