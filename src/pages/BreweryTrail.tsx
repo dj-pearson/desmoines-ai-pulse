@@ -17,6 +17,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   breweryEventNotOver,
+  breweryStatusLine,
   splitBreweries,
   useBreweries,
   useBreweryCheckins,
@@ -31,7 +32,6 @@ import { getCanonicalUrl } from '@/lib/brandConfig';
 import { handleError } from '@/lib/errorHandler';
 import { isPrerender } from '@/lib/isPrerender';
 import { openingLabel } from '@/lib/restaurantOpenings';
-import { formatOpenStatusLine, resolveOpenStatus } from '@/lib/restaurantHours';
 import { createEventSlugWithCentralTime, formatEventDateShort } from '@/lib/timezone';
 
 
@@ -293,7 +293,7 @@ export default function BreweryTrail() {
       index={index}
       // WP4.10: no open/closed line in static HTML; it would be whatever the
       // build saw.
-      statusLine={prerender ? null : formatOpenStatusLine(resolveOpenStatus(undefined, brewery.opening, now))}
+      statusLine={prerender ? null : breweryStatusLine(brewery, now)}
       checkin={checkinByBrewery.get(brewery.id)}
       showCheckinControls={checkinsReady}
       onCheckin={(id) => setDialog({ mode: 'checkin', breweryId: id })}

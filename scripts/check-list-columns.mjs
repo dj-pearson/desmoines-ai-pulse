@@ -44,6 +44,7 @@ const TABLE_FOR = {
   RESTAURANT_MAP_POINT_COLUMNS: 'restaurants',
   ARTICLE_HUB_RESTAURANT_COLUMNS: 'restaurants',
   RESTAURANT_SUGGESTION_COLUMNS: 'restaurants',
+  BREWERY_TRAIL_COLUMNS: 'restaurants',
   RESTAURANT_DETAIL_EXTRA_COLUMNS: 'restaurants',
 };
 

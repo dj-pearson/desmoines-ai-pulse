@@ -194,6 +194,16 @@ export const ARTICLE_HUB_RESTAURANT_COLUMNS =
   "id, slug, name, status, business_status, cuisine, opening, hours_json";
 
 /**
+ * Brewery Trail cards (useBreweries). Only what the card, its JSON-LD and the
+ * upcoming label read, plus hours_json and business_status for the status
+ * line: it selected RESTAURANT_LIST_COLUMNS, which has neither, and evaluated
+ * `opening` alone, a date in production, so no card ever said "Open until"
+ * and a CLOSED_TEMPORARILY taproom could not be told apart (WEB-FEAT-044).
+ */
+export const BREWERY_TRAIL_COLUMNS =
+  "id, name, slug, city, location, description, image_url, latitude, longitude, opening, hours_json, opening_date, opening_timeframe, status, business_status";
+
+/**
  * Restaurant typeahead rows (SearchAutocomplete, useEntitySuggestions). status
  * and business_status are what label a place closed for good and rank it last
  * instead of offering it like any other (WEB-FEAT-048).
