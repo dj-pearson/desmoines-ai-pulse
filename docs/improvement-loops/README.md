@@ -91,7 +91,11 @@ restart it from `develop` (or `main` if there is no `develop`).
    lanes cannot collide), cherry-picks each lane's commit with the placeholder
    rewritten, takes the lane's version on a lane-file conflict, and skips a
    lane on any other conflict.
-4. Remove the agent worktrees, then `npm run validate` and `npx vitest run`.
+4. Remove the agent worktrees, then `npm run validate`, `npx vitest run`,
+   `npm run check-edge-types` and `npm run check-edge-auth` (the last two are
+   not in `validate`, and each has caught a lane regression that it missed).
+   When a ratchet reports files now under their baseline, shrink it
+   (`--update`) so the gain can't quietly come back.
    If either fails, find the lane commit that broke it, `git revert` it, drop
    that lane from `<landed.json>`, and re-run until both pass. Then
    `node scripts/apply-loop-results.mjs <landed.json>`.
