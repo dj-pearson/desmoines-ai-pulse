@@ -253,6 +253,27 @@ final class DeepLinkHandler {
         return .web(url)
     }
 
+    /// The web's detail pages under a Discover hub, as the path before the
+    /// slug: /music/venues/<slug> (VenueDetail), /sports/<slug> (TeamDetail)
+    /// and /outdoors/<slug> (TrailDetail). The app has a hub for each and no
+    /// detail screen.
+    static let hubDetailPrefixes: Set<String> = ["music/venues", "sports", "outdoors"]
+
+    /// A hub detail page opens on the web (IOS-AUDIT-006). These used to
+    /// fall to `DiscoverDestination(slug:)` on the first segment, so a guide
+    /// linking /sports/iowa-cubs or /outdoors/high-trestle-trail opened the
+    /// whole Sports or Outdoors hub and the team or trail was lost. The web
+    /// links venue pages from every event at a known venue
+    /// (EventDetails.tsx, NearbyVenues.tsx). Nil for anything else,
+    /// including bare /music/venues and a malformed slug, which have no web
+    /// page either and keep opening the hub.
+    static func hubDetailDestination(_ path: [String], url: URL) -> Destination? {
+        guard path.count >= 2, let slug = path.last,
+              hubDetailPrefixes.contains(path.dropLast().joined(separator: "/")),
+              UUID(uuidString: slug) == nil, slugOrUUID(slug) != nil else { return nil }
+        return .web(url)
+    }
+
     /// /restaurants/open-now, /restaurants/new and /restaurants/dietary[/<diet>]
     /// (IOS-AUDIT-FEAT-043). These used to open the Dining tab unfiltered, so
     /// a shared "open now" or "vegan" page showed every restaurant. The
@@ -485,6 +506,7 @@ final class DeepLinkHandler {
         case "best-of":
             return Self.bestOfDestination(rawId)
         default:
+            if let detail = Self.hubDetailDestination(path, url: url) { return detail }
             // Discover-hub parity surfaces (IOS-IA-002): the path's first
             // component is itself the slug, e.g. /trip-planner, /deals.
             if let discover = DiscoverDestination(slug: type) {

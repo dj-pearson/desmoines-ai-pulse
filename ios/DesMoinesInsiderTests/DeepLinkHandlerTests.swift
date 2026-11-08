@@ -204,6 +204,44 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertNil(DeepLinkHandler.stayNearDestination(path, url: url))
     }
 
+    // MARK: - Hub detail pages open on the web (IOS-AUDIT-006)
+
+    func testHubDetailPagesOpenTheWebPage() {
+        for path in ["/music/venues/wooly-s", "/sports/iowa-cubs", "/outdoors/high-trestle-trail"] {
+            let url = URL(string: "https://desmoinesinsider.com\(path)")!
+            XCTAssertEqual(handler.destination(for: url), .web(url), path)
+        }
+    }
+
+    func testHubDetailPagesAreNeverTheWholeHub() {
+        XCTAssertNotEqual(dest("/sports/iowa-wild"), .discover(.sports))
+        XCTAssertNotEqual(dest("/outdoors/grays-lake-trail"), .discover(.outdoors))
+        XCTAssertNotEqual(dest("/music/venues/val-air-ballroom"), .discover(.music))
+    }
+
+    func testPathsWithNoWebDetailPageStillOpenTheHub() {
+        // No web route exists for these, so the hub beats a 404.
+        XCTAssertEqual(dest("/music/venues"), .discover(.music))
+        XCTAssertEqual(dest("/music/wooly-s"), .discover(.music))
+        XCTAssertEqual(dest("/sports/iowa-cubs/schedule"), .discover(.sports))
+        XCTAssertEqual(dest("/sports/Not%20A%20Slug"), .discover(.sports))
+        XCTAssertEqual(dest("/outdoors/550e8400-e29b-41d4-a716-446655440000"), .discover(.outdoors))
+        XCTAssertEqual(dest("/deals/anything"), .discover(.deals))
+    }
+
+    func testBareHubLinksStillOpenTheHub() {
+        XCTAssertEqual(dest("/music"), .discover(.music))
+        XCTAssertEqual(dest("/sports"), .discover(.sports))
+        XCTAssertEqual(dest("/outdoors"), .discover(.outdoors))
+    }
+
+    func testAGuideLinkingATrailOpensTheTrailPageNotTheHub() {
+        // ArticleDetailView.openLink: nil presentation means the in-app
+        // browser on the site URL; it used to be the Outdoors hub.
+        let destination = dest("/outdoors/neal-smith-trail")
+        XCTAssertNil(ArticleDetailView.nativePresentation(for: destination))
+    }
+
     func testBadArticleSegmentFallsBackToArticlesHub() {
         XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/articles/Not%20A%20Slug")!))
         XCTAssertEqual(handler.consumeDestination(), .discover(.articles))
