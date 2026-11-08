@@ -144,6 +144,26 @@ describe('pseoEventFilters - temporal dimension is an overlap', () => {
     expect(titles(ROWS, preds)).toEqual(['Untimed tonight', 'Festival day two', 'Next week']);
   });
 
+  it('this-weekend on Sunday afternoon lists today, not next weekend (WEB-SEO-065)', () => {
+    // 3 PM CDT Sunday 2026-10-04.
+    const SUNDAY = new Date('2026-10-04T20:00:00Z');
+    // Opened Friday, closes 9 PM CDT tonight.
+    const fair = row('Weekend fair', '2026-10-02T15:00:00Z', '2026-10-05T02:00:00Z');
+    const sundayNight = row('Sunday night', '2026-10-05T01:00:00Z');
+    const nextSaturday = row('Next Saturday', '2026-10-11T01:00:00Z');
+    const f = pseoEventFilters({ temporalSlug: 'this-weekend' }, SUNDAY);
+    const preds = [orFilter(f.or), (r: Row) => cmp(r.date, 'lte', f.lte as string)];
+    // FESTIVAL closed at 10 PM CDT Saturday, so it is gone today.
+    expect(titles([fair, FESTIVAL, sundayNight, nextSaturday], preds)).toEqual(['Weekend fair', 'Sunday night']);
+  });
+
+  it('this-weekend on Friday afternoon includes Friday night', () => {
+    const fridayNight = row('Friday night', '2026-10-03T02:00:00Z'); // 9 PM CDT
+    const f = pseoEventFilters({ temporalSlug: 'this-weekend' }, AFTERNOON);
+    const preds = [orFilter(f.or), (r: Row) => cmp(r.date, 'lte', f.lte as string)];
+    expect(titles([fridayNight, NEXT_WEEK], preds)).toEqual(['Friday night']);
+  });
+
   it('an unknown temporal slug adds no window, as before', () => {
     expect(pseoEventFilters({ temporalSlug: 'someday' }, AFTERNOON)).toEqual(pseoEventFilters({}, AFTERNOON));
   });

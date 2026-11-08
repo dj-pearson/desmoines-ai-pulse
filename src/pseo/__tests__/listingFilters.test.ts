@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CATEGORY_FILTERS, dayAfter, temporalRange } from '../listingFilters';
 import { attainable } from '../../../scripts/lib/pseoShippable';
+import { centralWindow } from '../../lib/timezone';
 
 /**
  * These two filters were the reason 244 published pSEO pages rendered listings
@@ -21,9 +22,9 @@ describe('temporalRange', () => {
     expect(temporalRange('today', AUG_23)).toEqual({ from: '2026-08-23', to: '2026-08-23' });
   });
 
-  it('this-weekend spans the coming Saturday and Sunday', () => {
-    // From a Sunday, the coming Saturday is six days out - not today.
-    expect(temporalRange('this-weekend', AUG_23)).toEqual({ from: '2026-08-29', to: '2026-08-30' });
+  it('this-weekend on a Sunday is the weekend in progress, not next weekend', () => {
+    // WEB-SEO-065. This used to return 08-29..08-30, six days out.
+    expect(temporalRange('this-weekend', AUG_23)).toEqual({ from: '2026-08-21', to: '2026-08-23' });
   });
 
   it('a named month in progress starts today, not on the first', () => {
@@ -67,7 +68,7 @@ describe('temporalRange uses the Central date (WEB-SEO-064)', () => {
     // 8 PM CDT Saturday 2026-08-29 is 01:00Z Sunday. Read as Sunday, the old
     // code jumped to the following weekend while Saturday night was still on.
     const SATURDAY_EVENING = new Date('2026-08-30T01:00:00Z');
-    expect(temporalRange('this-weekend', SATURDAY_EVENING)).toEqual({ from: '2026-08-29', to: '2026-08-30' });
+    expect(temporalRange('this-weekend', SATURDAY_EVENING)).toEqual({ from: '2026-08-28', to: '2026-08-30' });
   });
 
   it('a month in progress clamps to the Central day on the last evening of the month', () => {
@@ -94,6 +95,42 @@ describe('temporalRange uses the Central date (WEB-SEO-064)', () => {
     expect(dayAfter('2026-08-31')).toBe('2026-09-01');
     expect(dayAfter('2028-02-28')).toBe('2028-02-29');
     expect(dayAfter('2026-12-31')).toBe('2027-01-01');
+  });
+});
+
+describe('this-weekend is the /events/this-weekend weekend (WEB-SEO-065)', () => {
+  // Instants across one weekend, Fri 2026-10-02 to Sun 2026-10-04 (CDT), and
+  // the days either side. Every one must give exactly centralWindow's days.
+  const cases: Array<[string, string, { from: string; to: string }]> = [
+    ['Thursday noon', '2026-10-01T17:00:00Z', { from: '2026-10-02', to: '2026-10-04' }],
+    ['Friday 9 AM', '2026-10-02T14:00:00Z', { from: '2026-10-02', to: '2026-10-04' }],
+    // 10 PM CDT Saturday is 03:00Z Sunday.
+    ['Saturday 10 PM', '2026-10-04T03:00:00Z', { from: '2026-10-02', to: '2026-10-04' }],
+    ['Sunday 3 PM', '2026-10-04T20:00:00Z', { from: '2026-10-02', to: '2026-10-04' }],
+    // 11 PM CDT Sunday is 04:00Z Monday: still this weekend in Des Moines.
+    ['Sunday 11 PM', '2026-10-05T04:00:00Z', { from: '2026-10-02', to: '2026-10-04' }],
+    ['Monday 1 AM', '2026-10-05T06:00:00Z', { from: '2026-10-09', to: '2026-10-11' }],
+  ];
+
+  for (const [label, iso, want] of cases) {
+    it(`${label} Central`, () => {
+      const now = new Date(iso);
+      expect(temporalRange('this-weekend', now)).toEqual(want);
+      const w = centralWindow('this-weekend', now);
+      expect({ from: w.startDay, to: w.endDay }).toEqual(want);
+    });
+  }
+
+  it('the inventory gate counts Friday through Sunday, from today', () => {
+    const SATURDAY_NOON = new Date('2026-10-03T17:00:00Z');
+    const events = [
+      { id: 'fri-night', date: '2026-10-03T01:00:00Z' }, // 8 PM CDT Fri: over
+      { id: 'sat-night', date: '2026-10-04T01:00:00Z' }, // 8 PM CDT Sat
+      { id: 'sun-brunch', date: '2026-10-04T15:00:00Z' }, // 10 AM CDT Sun
+      { id: 'next-fri', date: '2026-10-10T00:00:00Z' }, // 7 PM CDT Fri 10-09
+    ];
+    const rows = attainable('events', { temporal: { slug: 'this-weekend' } }, { events, restaurants: [], attractions: [] }, SATURDAY_NOON);
+    expect(rows.map((r: { id: string }) => r.id).sort()).toEqual(['sat-night', 'sun-brunch']);
   });
 });
 

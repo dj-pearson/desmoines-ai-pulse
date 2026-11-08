@@ -12,7 +12,7 @@
 import { isNeighborhoodSlug } from '../lib/neighborhoodBoundaries';
 import { upcomingOrRunningFilter } from '../lib/eventRunningFilter';
 import { sanitizePostgrestPattern } from '../lib/postgrestPattern';
-import { addCentralDays, centralDateOf, centralWeekday, centralWindow, upcomingFloorUtc } from '../lib/timezone';
+import { addCentralDays, centralDateOf, centralWindow, upcomingFloorUtc } from '../lib/timezone';
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -106,7 +106,9 @@ export function dayAfter(key: string): string {
 }
 
 /**
- * Temporal dimension -> a date window, clamped so it never starts in the past.
+ * Temporal dimension -> a date window. Months and seasons are clamped so they
+ * never start in the past; this-weekend is the whole Friday-Sunday weekend, and
+ * the listing's start-of-today floor does the clamping there.
  *
  * THIS DIMENSION WAS READ AND THEN NEVER USED. `temporal` was destructured at
  * the top of fetchListings and no branch referenced it, so /live-music/today,
@@ -148,9 +150,15 @@ export function temporalRange(slug: string, now: Date = new Date()): { from: str
 
   if (slug === 'today') return { from: today, to: today };
 
+  // WEB-SEO-065. The weekend is centralWindow's: Friday through Sunday, and on
+  // Friday, Saturday and Sunday the weekend in progress. This was the coming
+  // Saturday and Sunday, so on a Sunday afternoon /x/this-weekend listed the
+  // weekend six days out while /events/this-weekend (and its FAQ) listed
+  // today. pseoEventFilters still floors the window at the start of today, so
+  // Friday's rows drop off on Saturday unless they run into it.
   if (slug === 'this-weekend') {
-    const sat = addCentralDays(today, (6 - centralWeekday(today) + 7) % 7);
-    return { from: sat, to: addCentralDays(sat, 1) };
+    const w = centralWindow('this-weekend', now);
+    return { from: w.startDay, to: w.endDay };
   }
 
   const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june',
