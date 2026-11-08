@@ -2,7 +2,9 @@ package com.desmoines.aipulse.util
 
 import com.desmoines.aipulse.data.model.Event
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
@@ -71,6 +73,69 @@ class EventReminderTimingTest {
     @Test
     fun `an unparseable date has no reminder`() {
         assertNull(EventReminderTiming.fireAtMillis(event("soon")))
+    }
+
+    // endregion
+
+    // region offersReminder (AND-AUDIT-033: Saved rows and event detail share it)
+
+    // 19:31:58 CDT on Oct 3, the no-time marker: its reminder is 9am CDT (14:00Z).
+    private val tbaRow get() = event("2026-10-04T00:31:58+00:00")
+
+    // 7pm CDT on Oct 3, a timed show.
+    private val timedRow get() = event("2026-10-04T00:00:00+00:00")
+
+    @Test
+    fun `a past Saved row never offers a reminder, set or not`() {
+        val before = millis("2026-10-03T12:00:00Z")
+        assertFalse(EventReminderTiming.offersReminder(timedRow, isPast = true, isSet = false, nowMillis = before))
+        assertFalse(EventReminderTiming.offersReminder(timedRow, isPast = true, isSet = true, nowMillis = before))
+    }
+
+    @Test
+    fun `a TBA row offers a reminder before 9am on its day`() {
+        val sevenAmCentral = millis("2026-10-03T12:00:00Z")
+        assertTrue(EventReminderTiming.offersReminder(tbaRow, isPast = false, isSet = false, nowMillis = sevenAmCentral))
+    }
+
+    @Test
+    fun `a TBA row stops offering one after 9am unless it is already set`() {
+        // 10am CDT: the placeholder start (7:31pm) is still ahead, but the 9am reminder is not.
+        val tenAmCentral = millis("2026-10-03T15:00:00Z")
+        assertFalse(EventReminderTiming.offersReminder(tbaRow, isPast = false, isSet = false, nowMillis = tenAmCentral))
+        assertTrue(EventReminderTiming.offersReminder(tbaRow, isPast = false, isSet = true, nowMillis = tenAmCentral))
+    }
+
+    @Test
+    fun `a timed row offers one until it starts, and a set one after so it can be cancelled`() {
+        val sixPmCentral = millis("2026-10-03T23:00:00Z")
+        val eightPmCentral = millis("2026-10-04T01:00:00Z")
+        assertTrue(EventReminderTiming.offersReminder(timedRow, isPast = false, isSet = false, nowMillis = sixPmCentral))
+        assertFalse(EventReminderTiming.offersReminder(timedRow, isPast = false, isSet = false, nowMillis = eightPmCentral))
+        assertTrue(EventReminderTiming.offersReminder(timedRow, isPast = false, isSet = true, nowMillis = eightPmCentral))
+    }
+
+    @Test
+    fun `an unparseable date offers no reminder`() {
+        assertFalse(EventReminderTiming.offersReminder(event("soon"), isPast = false, isSet = true, nowMillis = 0L))
+    }
+
+    @Test
+    fun `a refused reminder says why`() {
+        // 6:30pm CDT: under an hour before the 7pm show.
+        assertEquals(
+            "This event starts in under an hour, too soon for a reminder.",
+            EventReminderTiming.refusedMessage(timedRow, millis("2026-10-03T23:30:00Z")),
+        )
+        assertEquals(
+            "This event has no set time, so its reminder goes out at 9am that day, and that has passed.",
+            EventReminderTiming.refusedMessage(tbaRow, millis("2026-10-03T15:00:00Z")),
+        )
+        // Still in time, so the schedule call itself failed.
+        assertEquals(
+            "Couldn't set the reminder. Please try again.",
+            EventReminderTiming.refusedMessage(timedRow, millis("2026-10-03T12:00:00Z")),
+        )
     }
 
     // endregion

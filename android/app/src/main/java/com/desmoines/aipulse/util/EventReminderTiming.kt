@@ -29,6 +29,51 @@ object EventReminderTiming {
         return day.atTime(DAY_OF_TIME).atZone(EventSlug.CENTRAL).toInstant().toEpochMilli()
     }
 
+    /**
+     * Whether a reminder control belongs on [event]: the one rule event detail
+     * and Saved rows share (AND-AUDIT-033), matching iOS EventDetailActions and
+     * FavoriteEventRow.
+     *  - A past row ([isPast], as the Saved list splits it) never offers one;
+     *    iOS's Saved context menu shows Remind me on upcoming rows only.
+     *  - A set reminder is offered otherwise, so it can be cancelled.
+     *  - A row with no real start time offers one until its 9am day-of fire
+     *    time passes (AND-AUDIT-029); the placeholder start would keep it up
+     *    into the evening for a reminder that can no longer be set.
+     *  - A timed row offers one until it starts.
+     */
+    fun offersReminder(event: Event, isPast: Boolean, isSet: Boolean, nowMillis: Long): Boolean {
+        if (isPast) return false
+        val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return false
+        if (isSet) return true
+        if (!event.hasSpecificTime) {
+            val fire = fireAtMillis(event) ?: return false
+            return fire > nowMillis
+        }
+        return startMillis >= nowMillis
+    }
+
+    /** Shown when the user declines POST_NOTIFICATIONS; nothing is scheduled. */
+    const val PERMISSION_DENIED_MESSAGE: String =
+        "Notifications are off for Des Moines Insider, so a reminder couldn't reach you. " +
+            "Turn them on in Settings to use reminders."
+
+    /**
+     * Why a request to set a reminder on [event] did not take: too close to
+     * the start, past 9am for a TBA row, or the schedule call itself failed.
+     */
+    fun refusedMessage(event: Event, nowMillis: Long): String {
+        val fire = fireAtMillis(event)
+        return if (fire != null && fire <= nowMillis) {
+            if (event.hasSpecificTime) {
+                "This event starts in under an hour, too soon for a reminder."
+            } else {
+                "This event has no set time, so its reminder goes out at 9am that day, and that has passed."
+            }
+        } else {
+            "Couldn't set the reminder. Please try again."
+        }
+    }
+
     /** The notification body; [isDayOf] is true for a reminder scheduled by the TBA rule. */
     fun body(title: String, venue: String?, isDayOf: Boolean): String = buildString {
         append(title)

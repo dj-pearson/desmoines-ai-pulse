@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -45,6 +47,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -85,6 +89,7 @@ import com.desmoines.aipulse.ui.components.SubscriptionBanner
 import com.desmoines.aipulse.ui.components.BannerStyle
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.util.EventCalendarEntry
+import com.desmoines.aipulse.util.EventReminderTiming
 import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.minHitTarget
 import com.desmoines.aipulse.util.rememberHapticPerformer
@@ -107,11 +112,23 @@ fun FavoritesScreen(
     onRemoveRestaurantFavorite: (String) -> Unit = {},
     onAddEventToCalendar: (Event) -> Unit = {},
     onShareEvent: (Event) -> Unit = {},
+    onToggleEventReminder: (Event) -> Unit = {},
+    onReminderMessageShown: () -> Unit = {},
     onRefresh: () -> Unit = {},
     scrollToTopTrigger: Int = 0,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // A reminder that did not take says why (too soon, 9am passed, permission
+    // denied), as event detail does, instead of the tap looking ignored.
+    LaunchedEffect(state.reminderMessage) {
+        state.reminderMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            onReminderMessageShown()
+        }
+    }
 
     // Scroll to top when the user re-taps the active bottom nav tab (ANDP-071).
     LaunchedEffect(scrollToTopTrigger) {
@@ -119,6 +136,7 @@ fun FavoritesScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             LargeTopAppBar(
                 title = { Text("Saved") },
@@ -158,6 +176,7 @@ fun FavoritesScreen(
                         onRemoveRestaurantFavorite = onRemoveRestaurantFavorite,
                         onAddEventToCalendar = onAddEventToCalendar,
                         onShareEvent = onShareEvent,
+                        onToggleEventReminder = onToggleEventReminder,
                     )
                 }
             }
@@ -176,6 +195,7 @@ private fun SavedContent(
     onRemoveRestaurantFavorite: (String) -> Unit,
     onAddEventToCalendar: (Event) -> Unit,
     onShareEvent: (Event) -> Unit,
+    onToggleEventReminder: (Event) -> Unit,
 ) {
     LazyColumn(
         state = listState,
@@ -225,6 +245,8 @@ private fun SavedContent(
                         onRemove = { onRemoveEventFavorite(event.id) },
                         onAddToCalendar = { onAddEventToCalendar(event) },
                         onShare = { onShareEvent(event) },
+                        isReminderSet = state.isReminderSet(event.id),
+                        onToggleReminder = { onToggleEventReminder(event) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -410,12 +432,20 @@ private fun FavoriteEventRow(
     modifier: Modifier = Modifier,
     onAddToCalendar: () -> Unit = {},
     onShare: () -> Unit = {},
+    isReminderSet: Boolean = false,
+    onToggleReminder: () -> Unit = {},
 ) {
     val haptic = rememberHapticPerformer()
     val opacity = if (isPast) 0.6f else 1f
     // Past rows and rows with no parseable date offer no calendar action
     // (AND-AUDIT-028), the same rule as iOS showsAddToCalendar.
     val offersCalendar = EventCalendarEntry.forSavedRow(event, isPast) != null
+    // The same rule as event detail's Remind Me (AND-AUDIT-033): upcoming rows
+    // only, kept while set so it can be cancelled.
+    val offersReminder = EventReminderTiming.offersReminder(
+        event, isPast = isPast, isSet = isReminderSet, nowMillis = System.currentTimeMillis(),
+    )
+    val reminderLabel = if (isReminderSet) "Remove reminder" else "Remind me"
 
     Card(
         modifier = modifier
@@ -429,6 +459,9 @@ private fun FavoriteEventRow(
                 customActions = buildList {
                     if (offersCalendar) {
                         add(CustomAccessibilityAction("Add to Calendar") { onAddToCalendar(); true })
+                    }
+                    if (offersReminder) {
+                        add(CustomAccessibilityAction(reminderLabel) { onToggleReminder(); true })
                     }
                     // Every row, past ones too, as iOS's Saved context menu does (AND-AUDIT-033).
                     add(CustomAccessibilityAction("Share") { onShare(); true })
@@ -536,6 +569,9 @@ private fun FavoriteEventRow(
                     offersCalendar = offersCalendar,
                     onAddToCalendar = onAddToCalendar,
                     onShare = onShare,
+                    offersReminder = offersReminder,
+                    isReminderSet = isReminderSet,
+                    onToggleReminder = onToggleReminder,
                 )
             }
         }
@@ -547,7 +583,8 @@ private fun FavoriteEventRow(
  * menu; a visible overflow button is the Android equivalent, found without
  * knowing to long-press. Share is on every row (AND-AUDIT-033); Add to
  * Calendar only where [offersCalendar] (AND-AUDIT-028: upcoming rows with a
- * parseable date).
+ * parseable date); Remind me / Remove reminder only where [offersReminder]
+ * (AND-AUDIT-033, EventReminderTiming.offersReminder).
  */
 @Composable
 private fun SavedEventRowMenu(
@@ -555,6 +592,9 @@ private fun SavedEventRowMenu(
     offersCalendar: Boolean,
     onAddToCalendar: () -> Unit,
     onShare: () -> Unit,
+    offersReminder: Boolean = false,
+    isReminderSet: Boolean = false,
+    onToggleReminder: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -573,6 +613,21 @@ private fun SavedEventRowMenu(
                     onClick = {
                         expanded = false
                         onAddToCalendar()
+                    },
+                )
+            }
+            if (offersReminder) {
+                DropdownMenuItem(
+                    text = { Text(if (isReminderSet) "Remove reminder" else "Remind me") },
+                    leadingIcon = {
+                        Icon(
+                            if (isReminderSet) Icons.Filled.Notifications else Icons.Filled.NotificationsNone,
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onToggleReminder()
                     },
                 )
             }

@@ -195,24 +195,13 @@ class EventDetailViewModel @Inject constructor(
         // Asked to set one and it did not take: say why instead of leaving the
         // button looking like it ignored the tap.
         if (!wasSet && !nowSet) {
-            _reminderMessage.value =
-                if (fireAtMillis <= nowMillis()) {
-                    if (event.hasSpecificTime) {
-                        "This event starts in under an hour, too soon for a reminder."
-                    } else {
-                        "This event has no set time, so its reminder goes out at 9am that day, and that has passed."
-                    }
-                } else {
-                    "Couldn't set the reminder. Please try again."
-                }
+            _reminderMessage.value = EventReminderTiming.refusedMessage(event, nowMillis())
         }
     }
 
     /** The user declined POST_NOTIFICATIONS; nothing is scheduled. */
     fun onNotificationPermissionDenied() {
-        _reminderMessage.value =
-            "Notifications are off for Des Moines Insider, so a reminder couldn't reach you. " +
-                "Turn them on in Settings to use reminders."
+        _reminderMessage.value = EventReminderTiming.PERMISSION_DENIED_MESSAGE
     }
 
     fun clearReminderMessage() {
@@ -231,16 +220,13 @@ class EventDetailViewModel @Inject constructor(
          * (AND-AUDIT-029). Comparing the placeholder start kept the button on
          * screen into the evening of a SeatGeek row's day for a reminder that
          * could no longer be set.
+         *
+         * The rule lives in [EventReminderTiming.offersReminder] so Saved rows
+         * use the same one (AND-AUDIT-033). Detail has no past/upcoming split,
+         * so it passes isPast = false and the start-time checks decide.
          */
-        internal fun isReminderButtonVisible(event: Event, isReminderSet: Boolean, nowMillis: Long): Boolean {
-            val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return false
-            if (isReminderSet) return true
-            if (!event.hasSpecificTime) {
-                val fireAtMillis = EventReminderTiming.fireAtMillis(event) ?: return false
-                return fireAtMillis > nowMillis
-            }
-            return startMillis >= nowMillis
-        }
+        internal fun isReminderButtonVisible(event: Event, isReminderSet: Boolean, nowMillis: Long): Boolean =
+            EventReminderTiming.offersReminder(event, isPast = false, isSet = isReminderSet, nowMillis = nowMillis)
     }
 
     /**

@@ -36,24 +36,19 @@ lists Add to Calendar and Remove from saved. The trap: the overflow sits inside 
 if a tap on it opens event detail instead of the menu, the IconButton is not consuming the click.
 (Past rows now also get the overflow, holding Share only; see AND-AUDIT-033.)
 
-AND-AUDIT-033 (Saved-row Share and Remind Me) is half done: slice 1 of 2 landed 2026-11-08.
-Done: every Saved event row (past ones too) has Share in its overflow and as a TalkBack custom action,
-and event detail and Saved share one builder, util/EventShareText. The text now ends with the event's
-page, SITE_URL/events/<id>, which iOS has always shared and Android never did (it ended "Found on Des
-Moines Insider" with no link). Next, slice 2, the reminder toggle on upcoming rows:
-  - FavoritesViewModel injects LocalNotificationService; FavoritesScreenState gains the set of event ids
-    with a reminder set (isReminderSet per id), refreshed on load.
-  - Move EventDetailViewModel.isReminderButtonVisible into a pure helper beside EventReminderTiming
-    (e.g. EventReminderTiming.offersReminder(event, isPast, isSet, nowMillis)) so detail and Saved share
-    the rule; the JVM test AC4 asks for goes there (past row: no; TBA row before 9am: yes; after 9am
-    unless set: no; set: yes so it can be cancelled).
-  - Overflow item and custom action read "Remind me" / "Remove reminder". The toggle call is the same
-    one detail makes (triggerAtMillis from EventReminderTiming.fireAtMillis, isDayOf = !hasSpecificTime).
-  - The trap: POST_NOTIFICATIONS on API 33+ must be asked in TabDestinations' Saved composable, as
-    DetailDestinations does, and the failure messages (too soon / 9am passed / permission denied) need a
-    snackbar on the Saved screen, which has none today.
-Device check for slice 1: share from a Saved row and from event detail for the same event and confirm
-the text matches, and that tapping the link on a phone with the app opens event detail.
+AND-AUDIT-033 (Saved-row Share and Remind Me) is code-complete; both slices landed 2026-11-08. Every
+Saved event row has Share (util/EventShareText, shared with detail); upcoming rows also have Remind me /
+Remove reminder in the overflow and as a TalkBack action, gated by EventReminderTiming.offersReminder,
+which event detail's button now uses too. Saved asks POST_NOTIFICATIONS in TabDestinations and shows the
+refusal messages (EventReminderTiming.refusedMessage / PERMISSION_DENIED_MESSAGE) in a new snackbar.
+Two device checks close it:
+  1. Share from a Saved row and from event detail for the same event; the text should match, and the
+     link should open event detail on a phone with the app.
+  2. On API 33+ with notifications not yet granted, tap Remind me on an upcoming Saved row, allow the
+     prompt, and confirm the item now reads Remove reminder; open the event and confirm detail shows the
+     bell as set, cancel it there, go Back, and confirm the row reads Remind me again. The trap: the
+     Saved ViewModel outlives the trip to detail, so if the row still says Remove reminder, the
+     LaunchedEffect(Unit) refreshReminderIds call in TabDestinations is not re-running on return.
 
 Still open under AND-AUDIT-026: a device tap on a real push needs a server-side FCM sender (XPLAT-015).
 
@@ -91,3 +86,4 @@ goes empty in the evening, check the date column on those rows before suspecting
 | 2026-11-08 | AND-AUDIT-031 | this commit | Events tab and Discover date presets are bounded at Des Moines midnights with an offset via EventTimeText.presetBounds (was bare local timestamps PostgREST read as UTC), today comes from America/Chicago, and the upcoming floor is Central midnight. 6 new DatePresetBoundsTest JVM tests pass on a stub harness (kotlinc 2.2.10) with the 37 existing EventCalendarEntry/EventReminderTiming/EventDesMoinesDay tests; a mutation restoring bare local bounds fails 3 of the 6. ViewModels, EventsRemoteDataSource and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-028 | this commit | Upcoming Saved event rows offer Add to Calendar from an overflow menu and a TalkBack custom action, built from the same EventCalendarEntry as event detail via a new shared EventCalendarIntent (intent + no-calendar toast); past and undated rows offer neither. 3 new EventCalendarEntryTest JVM tests pass on a stub harness (kotlinc 2.2.10), 46/46 across the four event-time suites; a mutation ignoring isPast fails exactly the past-row test. Compose UI and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-033 | this commit | Slice 1 of 2: every Saved event row offers Share (overflow item and TalkBack action), and event detail and Saved share one EventShareText whose text now ends with the event page SITE_URL/events/<id>, as iOS shares (it had no link). 5 new EventShareTextTest JVM tests pass on a stub harness (kotlinc 2.2.10), 51/51 across five event-time suites; a mutation dropping the link fails 2. Reminder toggle is the handoff. Compose UI and app module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-033 | this commit | Slice 2 of 2: upcoming Saved rows offer Remind me / Remove reminder (overflow item and TalkBack action) with detail's timing, so TBA rows get the 9am Central day-of reminder; POST_NOTIFICATIONS asked in the Saved destination, refusals shown in a new Saved snackbar. Detail and Saved share EventReminderTiming.offersReminder / refusedMessage. 6 new EventReminderTimingTest JVM tests pass on a stub harness (kotlinc 2.2.10), 57/57 across five event-time suites; a mutation dropping the past-row guard fails exactly the past-row test. EventDetailReminderTest, Compose UI and app module not compiled (no Android SDK, no mockk in cache); no device check |
