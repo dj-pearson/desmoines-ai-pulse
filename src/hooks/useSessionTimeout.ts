@@ -90,7 +90,17 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
   const { isAuthenticated, logout, getSessionExpiresAt, getSessionStartedAt, user } = useAuth();
   const { toast } = useToast();
 
-  const [isWarning, setIsWarning] = useState(false);
+  const [isWarning, setIsWarningState] = useState(false);
+  // The activity handler reads the warning through this ref, not through
+  // state. With isWarning in its dependency list, opening the warning gave the
+  // handler a new identity, re-ran the effect that arms the timers, and that
+  // effect's resetTimer() closed the warning and restarted the idle clock: an
+  // idle admin was warned every 25 minutes and never signed out.
+  const isWarningRef = useRef(false);
+  const setIsWarning = useCallback((value: boolean) => {
+    isWarningRef.current = value;
+    setIsWarningState(value);
+  }, []);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -175,7 +185,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
     // they own because one desktop tab sat idle is a bug that looks like a
     // policy. A deliberate Log Out still revokes everything.
     await logout({ scope: 'local' });
-  }, [clearAllTimers, toast, logout]);
+  }, [clearAllTimers, toast, logout, setIsWarning]);
 
   /**
    * Show warning before logout
@@ -185,18 +195,11 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
     const remainingMs = warningTime * 60 * 1000;
     setTimeRemaining(Math.floor(remainingMs / 1000));
 
-    // Start countdown
+    // Countdown for the dialog only. The idle timer set in resetTimer owns
+    // the logout; calling handleTimeout from here as well signed out twice,
+    // and from inside a state updater, which React may invoke more than once.
     countdownIntervalRef.current = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-          }
-          handleTimeout();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeRemaining(prev => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
 
     toast({
@@ -204,7 +207,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
       description: `You will be logged out in ${warningTime} minutes due to inactivity. Move your mouse or press any key to stay logged in.`,
       variant: 'default',
     });
-  }, [warningTime, toast, handleTimeout]);
+  }, [warningTime, toast, setIsWarning]);
 
   /**
    * Reset the idle timer
@@ -269,6 +272,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
     warningTime,
     maxSessionDuration,
     clearAllTimers,
+    setIsWarning,
     showWarning,
     handleTimeout,
     toast,
@@ -301,7 +305,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
    * Handle user activity events
    */
   const handleUserActivity = useCallback(() => {
-    if (isWarning) {
+    if (isWarningRef.current) {
       // If warning is showing, any activity dismisses it
       setIsWarning(false);
       toast({
@@ -310,7 +314,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
       });
     }
     resetTimer();
-  }, [isWarning, resetTimer, toast]);
+  }, [resetTimer, toast, setIsWarning]);
 
   /**
    * Setup activity listeners
