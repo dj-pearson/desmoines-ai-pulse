@@ -606,6 +606,9 @@ jobs:
       - run: deno test supabase/functions/nlp-search/dateWindow.test.ts
       - run: deno test --allow-read supabase/functions/nlp-search/search.test.ts
       - run: deno test supabase/functions/nlp-search/handler.test.ts
+      # The public events API's filters: visibility, Central-time window with
+      # the running arm, one or= group. Offline, no remote imports.
+      - run: deno test supabase/functions/api-events/listQuery.test.ts
       # Saved-search alert matching and the email it builds (WP5).
       - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts
       # support-chat is anon-callable; these caps are what bound one request's
