@@ -298,14 +298,7 @@ Hooks for admin dashboard and CRM functionality.
 
 | Hook | Description | Returns |
 |------|-------------|---------|
-| `useCrmActivities` | CRM activity tracking | `{ activities, logActivity }` |
-| `useCrmCommunications` | CRM communications management | `{ messages, sendMessage }` |
-| `useCrmContacts` | CRM contact management | `{ contacts, addContact }` |
-| `useCrmDashboard` | CRM dashboard data | `{ stats, pipeline }` |
-| `useCrmDeals` | CRM deal/opportunity management | `{ deals, updateDeal }` |
-| `useCrmNotes` | CRM notes and comments | `{ notes, addNote }` |
-| `useCrmSegments` | CRM customer segmentation | `{ segments, createSegment }` |
-| `useCrmTasks` | CRM task management | `{ tasks, assignTask }` |
+| `useCrm` | Admin sales pipeline behind /admin/crm, via the crm-console edge function | `useCrmBoard`, `useCrmAction`, `useProposal` |
 | `useTeamManagement` | Team/user management | `{ team, addMember }` |
 | `useContentQueue` | Content moderation queue | `{ queue, approve, reject }` |
 | `useDataExport` | Data export functionality | `{ exportData, formats }` |

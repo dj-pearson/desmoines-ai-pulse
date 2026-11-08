@@ -21,7 +21,6 @@
     "src/hooks/useBusinessPartnership.ts": 1,
     "src/hooks/useCampaignNotifications.ts": 1,
     "src/hooks/useCommunityFeatures.ts": 1,
-    "src/hooks/useCrmNotes.ts": 1,
     "src/hooks/useHotels.ts": 2,
     "src/hooks/usePayments.ts": 2,
     "src/hooks/usePrefetchDetail.ts": 2,
