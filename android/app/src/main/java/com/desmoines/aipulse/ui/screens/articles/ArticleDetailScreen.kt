@@ -1,6 +1,5 @@
 package com.desmoines.aipulse.ui.screens.articles
 
-import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,8 +51,6 @@ import com.desmoines.aipulse.ui.components.ArticleMarkdown
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.markdown.MarkdownParser
-import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,7 +136,7 @@ fun ArticleDetailScreen(
                         Text(article.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            formatDate(article.publishedAt)?.let {
+                            article.formattedDate?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("  ·  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -198,13 +195,4 @@ private fun RelatedCard(article: Article, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
         )
     }
-}
-
-private val prettyDate = DateTimeFormatter.ofPattern("MMM d, yyyy", UiFormatLocale)
-
-private fun formatDate(iso: String?): String? {
-    if (iso.isNullOrBlank()) return null
-    return runCatching { OffsetDateTime.parse(iso).format(prettyDate) }
-        .recoverCatching { java.time.LocalDate.parse(iso.take(10)).format(prettyDate) }
-        .getOrNull()
 }

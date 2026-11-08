@@ -105,6 +105,15 @@ ended at 6pm, and confirm it is not marked Active (it used to read the next day'
 deal row with start_time but no end_time is treated as all day on its scheduled days, as before and as
 iOS does; if one looks active at the wrong hour, check for a missing end_time before suspecting the zone.
 
+AND-AUDIT-038 (article and review dates) is code-complete and JVM-tested. Article.formattedDate and
+Review.formattedDate now take the Des Moines day through EventSlug.centralDate (they formatted the +00:00
+offset Postgres sends, so anything posted after 6pm/7pm Central was dated tomorrow), an article with no
+published_at falls back to created_at as iOS does, and Guides list cards now show "<date> · <n> min read"
+under the title as iOS cards do. One device check closes it: open Guides and a guide published in the
+evening Central and confirm card and detail show the same, Central, date. The trap: reading time on Android
+still truncates (words / 200, MarkdownParserTest pins it) where iOS and web round up, so a 399-word guide
+reads 1 min here and 2 on iOS; that is a separate parity call, not this bug.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -125,3 +134,4 @@ iOS does; if one looks active at the wrong hour, check for a missing end_time be
 | 2026-11-08 | AND-AUDIT-032 | this commit | Trip planner start and end dates count from the Des Moines day via a new TripDates.range (EventTimeText.desMoinesToday of the phone's instant), not LocalDate.now(), so a phone on UTC after 7pm Central no longer sends generate-itinerary tomorrow as "today". 4 new TripDatesTest JVM tests pass on a stub harness (kotlinc 2.2.10) with the 52 existing event-time tests; a mutation restoring the device day fails exactly the 2 cross-zone tests. TripPlannerViewModel and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-036 | this commit | Restaurant open/closed now reads the Des Moines wall clock: isOpenNow converts Instant.now() to America/Chicago via a new isOpenAt (was LocalDateTime.now() in the phone's zone), so the list badge and the Restaurants and Discover Open now filters agree with business_hours on any phone. 5 new RestaurantOpenNowTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation reading the instant in UTC fails exactly the 4 cross-zone tests. App module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-037 | this commit | Deal Active now reads the Des Moines clock: isActiveNow converts the instant to America/Chicago before taking weekday and minute (was the phone offset via OffsetDateTime.now()), and a 21:00-02:00 window now runs past midnight as on iOS (it could never match). 2 new DealTest JVM tests pass on a stub harness (kotlinc 2.2.10), 7/7 in the suite; the pre-fix Deal.kt fails exactly the 2 new tests. Existing recurring test inputs moved from Z to -05:00 so they still mean 4pm Central. DealsScreen, DealsViewModel and app module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-038 | this commit | Article and review dates read the Des Moines day via EventSlug.centralDate (were formatted in the +00:00 offset, so evening posts showed tomorrow); articles fall back to created_at like iOS, and Guides cards now show date and reading time. 8 new ArticleTest and 1 new ReviewTest JVM tests pass on a stub harness (kotlinc 2.2.10), 14/14 across both suites; a mutation restoring offset-day formatting fails 5 of the article tests and the new review test. Compose screens and app module not compiled (no Android SDK); no device check |

@@ -189,6 +189,11 @@ private fun ArticleCard(article: Article, onClick: () -> Unit) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        Text(
+            article.metaLine,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         val summary = article.displaySummary
         if (summary.isNotBlank()) {
             Spacer(Modifier.height(2.dp))
