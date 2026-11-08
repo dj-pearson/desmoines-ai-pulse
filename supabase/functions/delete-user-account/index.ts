@@ -122,7 +122,31 @@ async function performDeletion(
     ? (new Stripe(stripeKey, { apiVersion: "2023-10-16" }) as unknown as BillingClient)
     : null;
 
-  const billing = await cancelBillingBeforeErasure(stripe, subscriptionRows ?? []);
+  // Business Pro (20261102000006) bills per listing in its own table, and
+  // business_subscriptions is RETAINED, so nothing else would ever stop that
+  // charge: the account would go and the $49 a month would not. Same refusal
+  // on a failed read as above, for the same reason.
+  const { data: businessRows, error: businessReadError } = await supabase
+    .from("business_subscriptions")
+    .select("status, stripe_subscription_id, stripe_customer_id")
+    .eq("user_id", userId);
+  if (businessReadError) {
+    console.error("Business Pro lookup failed, refusing deletion:", businessReadError);
+    return new Response(
+      JSON.stringify({
+        error: "We could not read your Business Pro billing, so the account was not deleted. Nothing has been changed. Please try again.",
+        code: "SUBSCRIPTION_LOOKUP_FAILED",
+        manage_subscription_url: "/business",
+      }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const billing = await cancelBillingBeforeErasure(stripe, [
+    ...(subscriptionRows ?? []),
+    // Business Pro is Stripe-only, so every row is a web row.
+    ...(businessRows ?? []).map((r) => ({ ...r, platform: "web" })),
+  ]);
 
   if (billing.error) {
     // REFUSE, do not continue. Erasing the account here would leave an active

@@ -1784,6 +1784,63 @@ export type Database = {
           },
         ]
       }
+      business_plans: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          price_monthly_cents: number
+          slug: string
+          stripe_price_id_monthly: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          is_active?: boolean
+          price_monthly_cents: number
+          slug: string
+          stripe_price_id_monthly?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          price_monthly_cents?: number
+          slug?: string
+          stripe_price_id_monthly?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      business_pro_report_sends: {
+        Row: {
+          listing_id: string
+          listing_type: string
+          sent_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          listing_id: string
+          listing_type: string
+          sent_at?: string
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          listing_id?: string
+          listing_type?: string
+          sent_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       business_profiles: {
         Row: {
           address: string | null
@@ -1873,6 +1930,59 @@ export type Database = {
           zip_code?: string | null
         }
         Relationships: []
+      }
+      business_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          id: string
+          listing_id: string
+          listing_type: string
+          plan_id: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          listing_id: string
+          listing_type: string
+          plan_id: string
+          status: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          listing_id?: string
+          listing_type?: string
+          plan_id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "business_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       calendar_events: {
         Row: {
@@ -13240,6 +13350,24 @@ export type Database = {
         Args: { event_ids: string[] }
         Returns: undefined
       }
+      business_pro_weekly_report_rows: {
+        Args: never
+        Returns: {
+          clicks: number
+          email: string
+          listing_id: string
+          listing_name: string
+          listing_type: string
+          prev_clicks: number
+          prev_shares: number
+          prev_views: number
+          shares: number
+          user_id: string
+          views: number
+          week_end: string
+          week_start: string
+        }[]
+      }
       bump_newsletter_campaign_counter: {
         Args: { p_campaign_id: string; p_field: string }
         Returns: undefined
@@ -14203,6 +14331,10 @@ export type Database = {
         }[]
       }
       gettransactionid: { Args: never; Returns: unknown }
+      has_business_pro: {
+        Args: { p_listing_id: string; p_listing_type: string }
+        Returns: boolean
+      }
       hide_stale_events: { Args: { hide_after_days?: number }; Returns: Json }
       increment_deal_redemption: { Args: { deal_id: string }; Returns: number }
       increment_event_view: { Args: { event_id: string }; Returns: undefined }

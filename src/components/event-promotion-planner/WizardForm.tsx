@@ -22,8 +22,10 @@ import type { EventFormData, EventType, BudgetRange, SocialFollowing } from '@/t
 
 const formSchema = z.object({
   eventType: z.enum(['concert', 'festival', 'fundraiser', 'sports', 'community', 'business', 'family']),
+  // zod 4 dropped required_error (it was silently ignored after the upgrade);
+  // `error` covers the missing and the invalid value alike.
   eventDate: z.date({
-    required_error: 'Please select an event date',
+    error: 'Please select an event date',
   }),
   expectedAttendance: z.number().min(25).max(5000),
   budget: z.enum(['$0', '$0-$100', '$100-$500', '$500-$1000', '$1000+']),
