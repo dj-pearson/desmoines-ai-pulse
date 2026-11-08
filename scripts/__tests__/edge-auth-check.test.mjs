@@ -103,9 +103,56 @@ console.log('real verifiers still count');
     'sns/index.ts': SERVICE + 'const r = await handle(req, { verifySignature: verifySnsMessage });\n',
     'stripe/index.ts':
       SERVICE + 'const event = await stripe.webhooks.constructEventAsync(body, sig, secret);\n',
-    'user/index.ts': SERVICE + 'const { data } = await db.auth.getUser(token);\n',
+    'user/index.ts':
+      SERVICE +
+      'const { data } = await db.auth.getUser(token);\n' +
+      'if (!data?.user) return json({ error: "Invalid token" }, 401);\n',
   });
   ck('exit 0', r.code === 0, r.out);
+}
+
+console.log('getUser whose answer refuses nobody is not a caller check');
+{
+  // The track-ad-event / nlp-search shape: an optional bearer labels the row
+  // and every caller is served.
+  const r = sweep({
+    'tracker/index.ts':
+      SERVICE +
+      'let userId = null;\n' +
+      'if (token) { const { data } = await db.auth.getUser(token); userId = data?.user?.id ?? null; }\n' +
+      'await db.from("ad_impressions").insert({ user_id: userId });\n',
+  });
+  ck('flags the tracker', flags(r, 'tracker'), r.out);
+}
+
+console.log('a 401 in a sibling handler file counts, a 401 in a test or a comment does not');
+{
+  const getUserOnly = SERVICE + 'const { data } = await db.auth.getUser(token);\n';
+  const r = sweep({
+    'split/index.ts': getUserOnly,
+    'split/handler.ts': 'if (!user) return new Response("no", { status: 401 });\n',
+    'tested/index.ts': getUserOnly,
+    'tested/handler.test.ts': 'assertEquals(res.status, 401); new Response("", { status: 403 });\n',
+    'commented/index.ts': getUserOnly + '// answers { status: 401 } when the token is bad\n',
+  });
+  ck('split is guarded', !flags(r, 'split'), r.out);
+  ck('flags tested', flags(r, 'tested'), r.out);
+  ck('flags commented', flags(r, 'commented'), r.out);
+}
+
+console.log('an outgoing x-api-key header is not a caller check');
+{
+  const r = sweep({
+    'caller/index.ts':
+      SERVICE +
+      'await fetch(url, { headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01" } });\n',
+    'reader/index.ts':
+      SERVICE +
+      'const apiKey = req.headers.get("x-api-key");\n' +
+      'if (!apiKey || !timingSafeEqual(apiKey, secret)) return new Response("", { status: 401 });\n',
+  });
+  ck('flags the caller', flags(r, 'caller'), r.out);
+  ck('reader is guarded', !flags(r, 'reader'), r.out);
 }
 
 console.log('getUser marked attribution-only is not a caller check');
@@ -124,7 +171,9 @@ console.log('the marker in prose mid-line does not trigger');
 {
   const r = sweep({
     'user/index.ts':
-      SERVICE + 'const { data } = await db.auth.getUser(token); // not edge-auth: attribution-only\n',
+      SERVICE +
+      'const { data } = await db.auth.getUser(token); // not edge-auth: attribution-only\n' +
+      'if (!data?.user) return json({ error: "Invalid token" }, 401);\n',
   });
   ck('exit 0', r.code === 0, r.out);
 }
@@ -138,6 +187,9 @@ console.log('the real tree passes against its baseline');
   // Listed under "now verify the caller" would mean the sweep counts it as
   // guarded again, which is the regression this suite exists for.
   ck('log-error is not counted as guarded', !/^\s+log-error$/m.test(r.stdout), r.stdout);
+  for (const name of ['track-ad-event', 'nlp-search', 'support-chat', 'get-sponsored-pick']) {
+    ck(`${name} is not counted as guarded`, !new RegExp(`^\\s+${name}$`, 'm').test(r.stdout), r.stdout);
+  }
 }
 
 if (bad) {
