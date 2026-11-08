@@ -122,6 +122,9 @@ export function useEmailPreferences() {
         const { data, error } = await supabase
           .from('user_email_preferences')
           .insert({
+            // The column defaults to true (20251110000005). A write that does
+            // not name the digest must not opt the user into it (WEB-FEAT-076).
+            weekly_digest_enabled: false,
             user_id: user.id,
             ...newPreferences,
           })
