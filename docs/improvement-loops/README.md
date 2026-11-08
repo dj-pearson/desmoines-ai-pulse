@@ -59,7 +59,7 @@ lane's prefix and the next free number.
 |---|---|
 | `src/**` | `npx eslint <files>`, `npm run type-check`, the `check-*` scripts named in `validate` that relate to the change |
 | `supabase/functions/**` | `npm run type-check:functions`, `npm run check-edge-auth`, Deno tests for that function if present (no Deno here: `npm i deno` in the scratchpad, then `DENO=<that dir>/node_modules/.bin/deno node scripts/run-deno-lane.mjs <name>` runs every lane step whose line contains `<name>`, or the whole lane with no name. It adds `--no-lock` and an import map that points esm.sh URLs at the same npm packages, since esm.sh is blocked here. A new esm.sh URL reached by a suite fails at import: add it to `scripts/deno-container-import-map.json` at the version deno.lock resolves) |
-| `supabase/migrations/**` | `npm run check-migrations-parse`, `npm run check-migration-order` |
+| `supabase/migrations/**` | `npm run check-migrations-parse`, `npm run check-migration-order`, and `npm run check-schema` when code reads a new column or RPC: register it in `PENDING_MIGRATIONS` in `scripts/check-schema-usage.mjs` until types.ts is regenerated |
 | A user journey | the relevant spec in `tests/`; if it should guard the journey, add it to a CI lane (`npm run check-e2e-lanes`) |
 | `ios/**`, `android/**` | No Xcode/Gradle in cloud sessions. Keep changes small, mirror existing patterns, and say plainly in the notes that it was not compiled |
 

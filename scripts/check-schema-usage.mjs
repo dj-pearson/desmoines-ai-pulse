@@ -160,6 +160,10 @@ const PENDING_MIGRATIONS = [
   // went wrong" copy and the edge function answers 503, so mailbox providers
   // retry the one-click POST.
   { rpc: 'disable_event_alerts_by_token', migration: '20261108000098' },
+  // When stale restaurant hours were last re-read from Places (WEB-FEAT-079).
+  // Only the stale-refresh query in bulk-update-restaurants reads it; apply the
+  // migration before deploying that function or the refresh 42703s.
+  { table: 'restaurants', column: 'hours_checked_at', migration: '20261108000099' },
   // Business listing claims (WEB-ADS-009). The table read is cast, so only the
   // RPC is visible to this scanner; both are listed so the "landed" check asks
   // for them back once the types carry them. useBusinessClaim treats a 42P01 on
