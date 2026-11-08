@@ -12,7 +12,7 @@
  * not covered -- they need a network -- but they are thin: fetch, slice, parse,
  * and return empty rules on any failure.
  */
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 import { parseRobots, isPathAllowed } from '../_shared/robots.ts';
 
 const allowed = (txt: string, agent: string, path: string) =>

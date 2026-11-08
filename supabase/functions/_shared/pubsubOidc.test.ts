@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "https://deno.land/std@0.190.0/testing/asserts.ts";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import { checkPubSubOidcClaims, type PubSubOidcClaims } from "./pubsubOidc.ts";
 
 // WEB-SEC-057. play-rtdn-webhook accepted any Google-signed token whose

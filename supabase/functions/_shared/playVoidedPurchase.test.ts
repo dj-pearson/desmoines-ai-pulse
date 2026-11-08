@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.190.0/testing/asserts.ts";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
   confirmVoidedPurchase,
   type PlayRtdnLogRow,

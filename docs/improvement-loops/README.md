@@ -58,7 +58,7 @@ lane's prefix and the next free number.
 | Touched | Run |
 |---|---|
 | `src/**` | `npx eslint <files>`, `npm run type-check`, the `check-*` scripts named in `validate` that relate to the change |
-| `supabase/functions/**` | `npm run type-check:functions`, `npm run check-edge-auth`, Deno tests for that function if present |
+| `supabase/functions/**` | `npm run type-check:functions`, `npm run check-edge-auth`, Deno tests for that function if present (no Deno here: `npm i deno` in the scratchpad, then `<that dir>/node_modules/.bin/deno test <flags> <file>` with the flags from its subscription-sync-tests.yml line; add `--no-lock` or restore `deno.lock` after, because Deno rewrites it. Suites that import esm.sh through the code under test still cannot load here) |
 | `supabase/migrations/**` | `npm run check-migrations-parse`, `npm run check-migration-order` |
 | A user journey | the relevant spec in `tests/`; if it should guard the journey, add it to a CI lane (`npm run check-e2e-lanes`) |
 | `ios/**`, `android/**` | No Xcode/Gradle in cloud sessions. Keep changes small, mirror existing patterns, and say plainly in the notes that it was not compiled |

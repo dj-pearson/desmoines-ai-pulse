@@ -1,5 +1,5 @@
 // Run with: deno test supabase/functions/discover-chat/conversation.test.ts
-import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assertEquals } from 'jsr:@std/assert@1';
 import { clampConversation, MAX_MESSAGE_CHARS, MAX_MESSAGES } from './conversation.ts';
 
 const turn = (i: number) => ({ role: i % 2 === 0 ? 'user' : 'assistant', content: `m${i}` });

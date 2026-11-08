@@ -336,11 +336,19 @@ async function keptIds(canned: Record<string, unknown>): Promise<string[]> {
   return RUN_ROWS.filter((r) => events.every((c) => keptByDatePredicates(c, r))).map((r) => r.id);
 }
 
-Deno.test("upcomingOrRunningFilter is the same string as src/hooks/useEvents.ts", async () => {
-  const src = await Deno.readTextFile(new URL("../../../src/hooks/useEvents.ts", import.meta.url));
+// WEB-SEO-063 moved the client's copy out of useEvents into
+// src/lib/eventRunningFilter.ts (useEvents imports and re-exports it), and this
+// guard kept reading useEvents, so it failed on every run from then on.
+Deno.test("upcomingOrRunningFilter is the same string as the client's (src/lib/eventRunningFilter.ts)", async () => {
+  const lib = await Deno.readTextFile(new URL("../../../src/lib/eventRunningFilter.ts", import.meta.url));
   assert(
-    src.includes("return `date.gte.${lowerBoundIso},end_date.gte.${lowerBoundIso}`;"),
-    "useEvents upcomingOrRunningFilter changed; change dateWindow.ts to match",
+    lib.includes("return `date.gte.${lowerBoundIso},end_date.gte.${lowerBoundIso}`;"),
+    "client upcomingOrRunningFilter changed; change dateWindow.ts to match",
+  );
+  const hook = await Deno.readTextFile(new URL("../../../src/hooks/useEvents.ts", import.meta.url));
+  assert(
+    hook.includes('import { upcomingOrRunningFilter } from "@/lib/eventRunningFilter";'),
+    "useEvents no longer takes upcomingOrRunningFilter from src/lib/eventRunningFilter.ts; point this guard at its copy",
   );
   assertEquals(upcomingOrRunningFilter("X"), "date.gte.X,end_date.gte.X");
 });

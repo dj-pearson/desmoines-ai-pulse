@@ -24,7 +24,7 @@
  * way.
  */
 
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 
 const FUNCTIONS = new URL('../', import.meta.url);
 const REPO = new URL('../../../', import.meta.url);

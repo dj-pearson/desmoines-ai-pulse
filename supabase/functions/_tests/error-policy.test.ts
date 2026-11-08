@@ -3,7 +3,7 @@
  * source "edge", and error-triage opens at most MAX_NEW_TASKS_PER_RUN tasks
  * per run. Offline; pure functions only.
  */
-import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assertEquals } from 'jsr:@std/assert@1';
 import {
   MAX_NEW_TASKS_PER_RUN,
   pickClustersToCreate,

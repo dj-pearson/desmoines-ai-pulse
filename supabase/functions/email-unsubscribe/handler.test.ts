@@ -1,7 +1,7 @@
 /**
  *   deno test supabase/functions/email-unsubscribe/handler.test.ts
  */
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { handleUnsubscribe, type UnsubscribeRpc } from "./handler.ts";
 
 const TOKEN = "0123456789abcdef".repeat(3);

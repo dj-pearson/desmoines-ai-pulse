@@ -1,6 +1,6 @@
 // IOS-DD-TRIP-PLANNER-06 / -08: request validation, Central windows and item
 // sanitizing for generate-itinerary. Offline; no Supabase client.
-import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   centralEventWindow,
   centralMonthStartUtc,
