@@ -38,7 +38,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
-import { looksAutomated, UUID_RE } from '../_shared/adEventFilters.ts';
+import {
+  clampTrackingText,
+  looksAutomated,
+  resolveClickImpressionId,
+  TRACKING_TEXT_MAX,
+  UUID_RE,
+  type ImpressionOwner,
+} from '../_shared/adEventFilters.ts';
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -153,9 +160,11 @@ Deno.serve(async (req) => {
             placement_type: placementType ?? null,
             user_id: userId,
             session_id: sessionId ?? null,
-            user_agent: userAgent,
-            page_url: pageUrl ?? null,
-            referrer_url: referrerUrl ?? null,
+            // WEB-SEC-065: stored at a fixed maximum length, not whatever
+            // the caller sent.
+            user_agent: clampTrackingText(userAgent, TRACKING_TEXT_MAX.user_agent),
+            page_url: clampTrackingText(pageUrl, TRACKING_TEXT_MAX.page_url),
+            referrer_url: clampTrackingText(referrerUrl, TRACKING_TEXT_MAX.referrer_url),
             client_event_id: eventId,
             date: today,
           },
@@ -171,9 +180,29 @@ Deno.serve(async (req) => {
       return json({ recorded: true, id: data?.id ?? null, client_event_id: eventId });
     }
 
+    // WEB-SEC-065: linked only to an impression of this same campaign and
+    // creative; anything else is stored unlinked.
+    const linkedImpressionId = await resolveClickImpressionId(
+      impressionId,
+      campaignId,
+      creativeId,
+      async (id) => {
+        const { data, error: impressionError } = await supabase
+          .from('ad_impressions')
+          .select('campaign_id, creative_id')
+          .eq('id', id)
+          .maybeSingle();
+        if (impressionError) {
+          console.warn('[track-ad-event] impression lookup failed, click stored unlinked', impressionError.message);
+          return null;
+        }
+        return (data as ImpressionOwner | null) ?? null;
+      },
+    );
+
     const { error } = await supabase.from('ad_clicks').upsert(
       {
-        impression_id: UUID_RE.test(String(impressionId ?? '')) ? impressionId : null,
+        impression_id: linkedImpressionId,
         campaign_id: campaignId,
         creative_id: creativeId,
         client_event_id: eventId,
