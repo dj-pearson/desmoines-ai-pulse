@@ -12353,8 +12353,8 @@
         "20/20 under load"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found 2026-11-08 by the orchestrator's background smoke run on cd7a7b8a."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the orchestrator's background smoke run on cd7a7b8a. | Reproduced on a vite build: the test failed 1/20, then 4/60 at 4 workers (CLS 0.19-0.21). Layout-shift sources put every large entry inside the SearchAutocomplete overlay, whose groups answer separately and reflow inside it; the page alone scored 0.0031 in 60/60 runs. The test now hides the absolute overlay while measuring and asserts it opened and was hidden. Results: 140/140 runs under load, full spec 87/87 with --repeat-each=3, and a 400px push-down negative control fails 3/3 at 0.117."
     },
     {
       "id": "WEB-FEAT-065",
@@ -12441,8 +12441,8 @@
         "A Deno or node-shim test evaluates the sent filters against fixture rows",
         "Response shape unchanged"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane while fixing advanced search; not touched."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane while fixing advanced search; not touched. | DONE 2026-11-08 (events lane). nlp-search's 'when' facet now sends date <= window.end plus upcomingOrRunningFilter(window.start), and the no-window base sends upcomingOrRunningFilter(start of today CT). The helper is new in dateWindow.ts, and a test pins it to the useEvents string. search.test.ts has 5 new cases that evaluate the sent filters against fixture rows: 19/19 under a node shim, and the old search.ts fails 5/19. type-check:functions, check-edge-types, check-edge-auth and check-deno-lanes pass. Not run against a live PostgREST."
     },
     {
       "priority": 3,
@@ -12453,15 +12453,16 @@
         "Both reads use upcomingOrRunningFilter(upcomingFloorUtc()) (temporal range kept as an overlap)",
         "Vitest evaluates the sent filters against fixture rows"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane; src/pseo is seo-geo's, so left for that lane."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane; src/pseo is seo-geo's, so left for that lane. | PseoLiveListings and the inventory gate now send pseoEventFilters (upcomingOrRunningFilter(upcomingFloorUtc()) ANDed with the place in one or=, temporal window as a Central-day overlap); useAreaEvents sends areaEventsWindow with end_date and splitAreaEvents keeps unfinished runs; upcomingOrRunningFilter moved to src/lib/eventRunningFilter.ts, re-exported from useEvents. New vitest runningListings evaluates the sent filters on fixture rows, 13/13 (client split red on old areaGuide); vitest src/pseo+hooks+lib 2649/2649, test:offline 64/64, app type ratchet 30/30, eslint clean; not run against live Supabase."
     },
     {
       "priority": 4,
       "id": "WEB-FEAT-069",
       "title": "/deals links a deal to a merged duplicate restaurant page",
       "description": "useDealVenueLinks resolves deals.entity_id to restaurants.slug without checking is_merged, so a deal curated against a duplicate row that was later merged links to the duplicate rather than the kept restaurant. Check whether merged rows keep a pointer to the survivor and link there.",
-      "passes": false
+      "passes": true,
+      "notes": "Migration 20261108000090 adds a trigger on restaurants (AFTER UPDATE OF is_merged, merged_into) that moves a merged row's restaurant deals to the end of its merge chain (restaurant_merge_survivor, cycle-safe), and backfills deals already on merged rows. merge_duplicate_content only repoints real FKs and deals.entity_id has none, so before this the kept page's Deals section never listed those deals. /deals links now follow merged_into to the survivor's slug (fetchDealVenueLinks, DEAL_VENUE_RESTAURANT_COLUMNS, check-list-columns 20/20). Verified by running the migration in PGlite against a fixture, plus 8 new vitest tests (3 go red when the survivor lookup is removed), src/hooks vitest 537/537 and type-check ratchet 30/30."
     },
     {
       "priority": 3,
@@ -12473,8 +12474,8 @@
         "Scope SELECT to members of the same session (a SECURITY DEFINER membership helper, so the policy does not recurse) plus admins, and only if every shipped binary reads only its own sessions",
         "If a shipped binary reads beyond that, add an RPC first and wait for MIN_SUPPORTED_APP_VERSION"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while closing the likes and votes exposure. Not started."
+      "passes": true,
+      "notes": "Found 2026-11-08 while closing the likes and votes exposure. Not started. | Migration 20261108000093 replaces swipe_session_participants' anon-readable USING (true) SELECT with a member read TO authenticated (own row OR SECURITY DEFINER is_swipe_session_member: participant or host, not executable by anon) plus an admin read. Readers checked: Android reads only after inserting the signed-in caller, iOS fetchParticipants has no caller, there is no web reader, and edge reads only as service role. Reproduced on local Postgres 16: before, anon could read 4/4 rows; after, anon reads 0, members and host see only their own session, admin sees all, and inserts are unchanged. identity-read baseline goes 8 -> 7 by hand, and the new offline suite has 11 checks. Not applied to production. Caveat: the git history is shallow, so iOS binaries older than the current service could not be audited."
     },
     {
       "priority": "low",
@@ -12486,21 +12487,21 @@
         "/events/june-2026 and /events?from=2026-06-01&to=2026-06-30 open Search on Events limited to that range",
         "XCTest covers range parsing and the month-boundary days in Central time"
       ],
-      "passes": false,
-      "notes": "Found while doing IOS-AUDIT-NEW-ios."
+      "passes": true,
+      "notes": "Found while doing IOS-AUDIT-NEW-ios. | SearchFilters gains an EventDayRange (whole Central days). /events/<month>-<year> now opens Search on Events for that month until the month ends, then opens the web archive. /events?from=&to= keeps its days, and a known preset still wins as resolveHubDate does. The range shows as a chip and saves as from/to. Verified with vitest ios parity 12/12, negative-controlled 3x, plus eslint and check-mobile-schema; 19 XCTest cases cover June and November DST boundaries. Not compiled (no Xcode here)."
     },
     {
       "priority": 3,
       "id": "AND-AUDIT-037",
       "title": "Deal Active now reads the phone's clock, not Des Moines time",
-      "passes": false,
+      "passes": true,
       "description": "Deal.isActiveNow (data/model/Deal.kt ~line 82) defaults to OffsetDateTime.now(), which uses the phone's offset. Deal days_of_week and start_time/end_time are Des Moines local, so on a phone outside Central the DealsScreen Active badge and the DealsViewModel activeNowOnly filter use the wrong weekday and minute. Since AND-AUDIT-036 they can also disagree with the restaurant Open badge.",
       "acceptanceCriteria": [
         "isActiveNow evaluates the recurring schedule on the Des Moines wall clock (OffsetDateTime.now(EventSlug.CENTRAL) or an Instant converted to Central)",
         "DealsScreen badge and DealsViewModel activeNowOnly filter both go through it",
         "A JVM test pins a UTC instant that falls on the previous weekday in Central and asserts that weekday's schedule is used"
       ],
-      "notes": "Found in the AND-AUDIT-036 loop, 2026-11-08."
+      "notes": "Found in the AND-AUDIT-036 loop, 2026-11-08. | Deal.isActiveNow now converts the instant to America/Chicago before it takes the weekday and minute. It used to read the phone's offset. A 21:00-02:00 window now runs past midnight, as iOS Deal.isActiveNow does; before, such a window could never match. DealsScreen and DealsViewModel both call it with no argument, so the badge and the filter follow it. DealTest 7/7 pass on a kotlinc 2.2.10 stub harness, and the pre-fix Deal.kt fails exactly the 2 new tests. App module not compiled (no Android SDK), no device check."
     },
     {
       "id": "WEB-QA-058",
@@ -12514,6 +12515,137 @@
       "priority": 3,
       "passes": false,
       "notes": "Found 2026-11-08 by the orchestrator's background smoke run on c0a65429."
+    },
+    {
+      "id": "WEB-UX-068",
+      "title": "Text fields and selects with no accessible name (placeholder only, or a Label not tied to the field)",
+      "description": "A placeholder is not a label: it disappears on the first keystroke, many screen readers skip it, and voice control has nothing to target. A TypeScript-AST scan of src/components and src/pages found 178 Input/Textarea/select/SelectTrigger with no aria-label, aria-labelledby, title, wrapping label, FormControl, or Label htmlFor matching their id. Reader-facing hits: NewsletterSignup hero/modal/default (on article pages and the visitors guide), the /social group planner, and the promotion-planner share link. The rest are admin/CMS screens, mostly a <Label> with no htmlFor above the field, plus some components nothing renders.",
+      "acceptanceCriteria": [
+        "scripts/check-field-names.mjs runs in npm run validate and fails when a file gains an unnamed field",
+        "Live reader-facing fields are named (visible Label via useId where the layout allows, aria-label otherwise)",
+        "Admin/CMS fields are tied to their existing Labels with htmlFor/id",
+        "Dead components with hits are deleted rather than labelled",
+        "Baseline .github/field-names-baseline.json reaches 0"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md"
+    },
+    {
+      "id": "WEB-PERF-069",
+      "title": "/events, /search and /dashboard download zod (11.9 KB gz) to coerce eight saved-filter strings",
+      "description": "As a visitor opening /events, I should not download a schema library the page never uses for validation. src/lib/savedSearchFilters.ts imported zod for a preprocess plus eight z.unknown().transform() fields, and it was the only zod import those three routes statically reached.",
+      "acceptanceCriteria": [
+        "Evidence: src/lib/savedSearchFilters.ts imported { z } from zod; a per-module walk of the /events route closure showed zod/v3 at 11.9 KB gz",
+        "Replace the zod reader with plain code with the same contract (non-object filters read as {}, every key trimmed and whitespace-collapsed or \"\"), and never throw",
+        "A static-graph test fails if /events, /search or /dashboard reaches a runtime zod import again, with a negative control",
+        "measure-route-preload before/after: the three routes lighter, none heavier, critical path unchanged"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "2026-11-08 performance loop 16. /events 205.9 -> 192.5, /search 94.1 -> 81.9, /dashboard 155.4 -> 143.2 KB gz beyond the critical path; summed route JS 9193.5 -> 9149.8; critical path 174.7 unchanged. Re-adding the import fails 3 route cases in routeChunkNoZod.test.ts. The zod version threw on a Date in filters; the plain version does not. | savedSearchFilters now reads saved-search filters with a plain function instead of zod. It was the only zod import on /events, /search and /dashboard, so each route drops 11.9 KB gz: /events 205.9 -> 192.5, /search 94.1 -> 81.9, /dashboard 155.4 -> 143.2 KB gz beyond the critical path (measure-route-preload before/after). No route got heavier and the critical path is unchanged at 174.7. A new graph test (routeChunkNoZod) has detector and walker controls, and re-adding the import fails all 3 route cases. The worktree was branched from 65138139, which has no improvement-loops docs, so before any work it was reset to the rolling-branch head 5524259f."
+    },
+    {
+      "id": "WEB-ADS-031",
+      "title": "/newsletter/confirm is a dead end: no next step after confirming, no form on a spent link",
+      "description": "As a reader who just confirmed my newsletter subscription, I want something to read right away, plus an account offer if I'm signed out. As a reader holding a spent or replaced confirmation link, I want to request a fresh one on that page. Today the page tells me to 'sign up again from any page' and offers only 'Back to home'.",
+      "acceptanceCriteria": [
+        "Success and already-confirmed states link to /events/this-weekend, /events/today and /restaurants/open-now",
+        "A signed-out reader also sees a 'Create a free account' link to /auth?mode=signup; a signed-in reader does not",
+        "Invalid and missing-token states show a compact NewsletterSignup under 'Get a new confirmation link'; the error state shows neither the form nor the next steps",
+        "Vitest covers each state, with negative controls"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Found and done in the 2026-11-08 marketing-growth loop. The new spec is src/pages/__tests__/newsletterConfirmNextSteps.test.tsx (6/6). The old page fails 5/6 of it, and removing the signed-out gate fails 1/6. eslint clean, type-check ratchet 30/30, check-internal-links passes. | Done: /newsletter/confirm used to end at \"Back to home\" in every state. Now success and already-confirmed link to /events/this-weekend, /events/today and /restaurants/open-now, and a signed-out reader also gets a free-account link. An invalid or missing token shows a compact NewsletterSignup so the reader can ask for a fresh link. New vitest 6/6. Negative controls: the old page fails 5/6, and removing the signed-out gate fails 1/6. eslint is clean, the type-check ratchet holds at 30/30, and the related check-* scripts pass. The worktree started on 65138139 (main), not the rolling branch. It had no changes, so I reset it to 5524259f before working."
+    },
+    {
+      "id": "WEB-FEAT-070",
+      "title": "/social badges recently added rows \"For You\" for every visitor",
+      "description": "As a visitor on /social, I need the labels to be true. TrendingContent filled each trending grid from useSimplePersonalization and badged all of those cards \"For You\" with a star. The hook's personal signals were search_analytics (own searches) and user_analytics (activity), and both have an admin-only SELECT policy (is_admin_or_root()). RLS therefore returned [] for every other visitor, and each \"For You\" card was just the most recently added row. For an admin the boost compared a search category with a content type and could never match. A row could also appear in both halves of the grid, and fill cards showed a made-up \"Score: 10\".",
+      "priority": 3,
+      "acceptanceCriteria": [
+        "No card on /social says \"For You\" unless a signal the browser can read chose it",
+        "Fill cards say what they are (\"Recently added\") and show no invented score",
+        "A row already in the trending half is not shown again by the fill",
+        "The browser no longer reads search_analytics or user_analytics for this",
+        "A component test guards all of the above"
+      ],
+      "passes": true,
+      "notes": "useSimplePersonalization was replaced by useRecentContent (TanStack Query, no analytics reads, click insert gated on analyticsGranted). TrendingContent now dedups by type:id, badges fill cards \"Recently added\" and hides the score on them. New trendingContentForYou.test.tsx fails 3/3 before the fix and passes 3/3 after; full vitest 3255/3255; type ratchet 30/30. | /social labelled every fill card \"For You\". The fill came from useSimplePersonalization, which read search_analytics and user_analytics, and both tables are admin-only SELECT, so every non-admin visitor got recently added rows under that badge. The hook is replaced by useRecentContent (TanStack Query, no analytics reads, click insert gated on analyticsGranted). Fill cards now say \"Recently added\", show no invented score and don't repeat a row that's already trending. Verified with a new vitest that fails 3/3 before the fix and passes 3/3 after, full vitest 3255/3255 and the type ratchet at 30/30."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-FEAT-071",
+      "title": "DealManager's venue picker offers merged duplicate restaurants",
+      "description": "The admin DealManager venue search (VENUE_SOURCES.restaurant) does not filter is_merged, so an admin can still link a new deal to a duplicate row that has already been merged. The trigger from WEB-FEAT-069 only fires when a row is merged, not when a deal is later pointed at an already-merged row, so that deal stays on the duplicate. Filter merged rows from the picker (or add a BEFORE INSERT OR UPDATE trigger on deals that resolves entity_id through restaurant_merge_survivor).",
+      "acceptanceCriteria": [
+        "The DealManager restaurant picker does not list rows with is_merged = true",
+        "A deal inserted or updated with entity_id naming a merged restaurant ends up on the kept row, or is refused",
+        "Vitest or a SQL test covers it"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 2,
+      "id": "WEB-PERF-070",
+      "title": "sonner (9.2 KB gz) ships with every public route because 88 files import toast statically",
+      "description": "As a visitor, I should not download the toast library before anything has toasted. ui/sonner.tsx (the Toaster) is already lazy, but 88 modules import `toast` from sonner directly, so it is in the closure of /events, /restaurants, /events/:id, /events/today and most other routes at 9.2 KB gz each.",
+      "acceptanceCriteria": [
+        "Evidence: per-module walk of route closures (generateBundle hook as in scripts/measure-route-preload.mjs) shows node_modules/sonner/dist/index.mjs at 9.24 KB gz on every measured public route",
+        "Route toast calls through a small wrapper that imports sonner on first call, and confirm toasts still render with the lazy Toaster (same module instance)",
+        "measure-route-preload before/after: public routes lighter, none heavier, critical path not above baseline",
+        "A static-graph test with a negative control keeps sonner out of the public route graphs"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by performance loop 16 while measuring WEB-PERF-069."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-070",
+      "title": "swipe_sessions is anon-readable in full, exposing host_user_id and filter_context of every group session",
+      "description": "As a user who hosts a group swipe session, I need my account id and session settings visible only to people joining my session, because swipe_sessions has \"Anyone can read swipe sessions by code\" FOR SELECT USING (true) with no TO clause, so the anon key lists every session's host_user_id, code, mode, filter_context and timing. check-identity-reads does not flag it because host_user_id is not one of its identity columns.",
+      "acceptanceCriteria": [
+        "Enumerate readers: Android GroupSessionRemoteDataSource findByCode/fetchSession (by code and by id), iOS SwipeSessionService lookup by code, plus is_swipe_session_member (SECURITY DEFINER, unaffected)",
+        "Join-by-code needs a non-member to resolve a code to a session, so either add a SECURITY DEFINER lookup_swipe_session(code) RPC and migrate clients before tightening (multi-release, MIN_SUPPORTED_APP_VERSION), or scope the read to members/host and keep a code-lookup path",
+        "Consider teaching check-identity-read-policies.mjs that host_user_id is an identity column, and re-baseline"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while closing WEB-SEC-069."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-064",
+      "title": "temporalRange builds pSEO date windows from the browser's local date, not the Central date",
+      "description": "src/pseo/listingFilters.ts temporalRange keys 'today', 'this-weekend', months and seasons off now.getFullYear/getMonth/getDate in the viewer's zone. pseoEventFilters now reads those keys as Central days, so a visitor outside Central time, or the prerenderer running in UTC after 7 PM CDT, gets tomorrow's window on /x/today. It is the same logic in scripts/lib/pseoShippable.ts attainable(), which slices UTC date keys.",
+      "acceptanceCriteria": [
+        "temporalRange derives its keys from centralDateOf(now) (or centralWindow presets) and the existing listingFilters tests are moved to Central instants",
+        "attainable() in pseoShippable compares Central date keys, not ISO UTC slices",
+        "Vitest covers a UTC-evening instant where the Central and UTC dates differ"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while fixing WEB-SEO-063; left out of that commit to keep it to one concern."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-LEGAL-014",
+      "title": "Six first-party user_analytics writers insert without checking analytics consent",
+      "description": "As a visitor who declined analytics cookies, I need the site to stop recording my clicks. usePageTracking.ts, paywallAnalytics.ts, adAnalytics.ts, sponsored.ts, favoriteAnalytics.ts and advertiserFunnel.ts all insert into user_analytics (session id, user id, user agent, page URL) and none of them calls analyticsGranted(). useAnalytics.ts does gate on consent. Each one needs to be checked: some may be covered by legitimate interest or gated by their caller. Any that isn't should gate the same way useAnalytics does.",
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-069",
+      "title": "/events typeahead reflows as its suggestion groups arrive, scoring up to 0.21 CLS",
+      "description": "As a visitor typing in the /events search box, I need the suggestions list to stop jumping under my cursor. SearchAutocomplete's venue query, title query and 'Search everything' row each render as soon as their own data arrives. Inside the overlay's max-h-80 scroll box, each arrival pushes the rows below it down or out of view, and Chrome counts that as layout shift.",
+      "acceptanceCriteria": [
+        "Evidence (WEB-QA-057, vite build with fixtureBackend, 60 runs): the overlay alone scored 0.057 or 0.074 when its groups rendered in one frame and 0.19 or 0.21 when they rendered in two. Sources were the 'Search everything' row (377 -> 563px) and the Venues group.",
+        "For a real user, keystrokes exclude only shifts within 500ms of the last key. A 300ms debounce plus a Supabase round trip often lands past that window, so field CLS sees this.",
+        "Render the groups together once both queries settle, or reserve their space, so the rows a person is about to click do not move.",
+        "A spec (e.g. search-filters) measures CLS with the overlay visible, using pressSequentially, and stays under 0.1 at 20/20 with --workers=4."
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the reliability lane while fixing WEB-QA-057. The page test now excludes the overlay, so nothing guards this yet."
     }
   ]
 }
