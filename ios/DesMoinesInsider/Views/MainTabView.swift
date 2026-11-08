@@ -339,6 +339,15 @@ struct MainTabView: View {
                 selectedTab = .restaurants
                 if sidebarSelection != .tab(.restaurants) { sidebarSelection = .tab(.restaurants) }
             }
+        case .map(let layers):
+            // EventMapView applies the staged layers when it appears or, if
+            // it already exists, on change (IOS-AUDIT-007).
+            TopPresenter.dismissAll {
+                deepLink.stageMapLink(layers)
+                if selectedTab != .map { programmaticTabChange = true }
+                selectedTab = .map
+                if sidebarSelection != .tab(.map) { sidebarSelection = .tab(.map) }
+            }
         case .tab(let tab):
             // Only flag a change that will fire onChange; an unchanged tab
             // would leave the flag set and swallow the next real tap.

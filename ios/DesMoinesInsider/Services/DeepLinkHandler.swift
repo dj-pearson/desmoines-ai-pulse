@@ -25,6 +25,8 @@ import os
 ///   Neighborhoods hub for a slug the app has no guide for
 /// - `desmoinesinsider.com/best-of/:slug` → That Best Of category, or the
 ///   Best Of hub for a malformed slug
+/// - `desmoinesinsider.com/map?layers=` → the Map tab showing the kinds the
+///   link names, or the web map when it names playgrounds or trails
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
 /// - `com.desmoines.aipulse://auth-callback` → Auth callback (handled by Supabase)
@@ -59,6 +61,8 @@ final class DeepLinkHandler {
         /// The Dining tab narrowed the way a web restaurant landing page is:
         /// /restaurants/open-now, /new, /dietary/<diet> (IOS-AUDIT-FEAT-043).
         case restaurantLanding(RestaurantLinkFilter)
+        /// The Map tab showing the kinds a web /map link names (IOS-AUDIT-007).
+        case map(MapLinkLayers)
         /// The Search tab with this text (IOS-DD-PLATFORM-02).
         case search(query: String)
         /// The Search tab on Events with these words and filters: a filtered
@@ -78,7 +82,20 @@ final class DeepLinkHandler {
     /// (IOS-AUDIT-FEAT-043).
     private(set) var pendingRestaurantLink: RestaurantLinkFilter?
 
+    /// A /map link waiting for the Map tab to apply it, staged the same way
+    /// (IOS-AUDIT-007).
+    private(set) var pendingMapLink: MapLinkLayers?
+
     private init() {}
+
+    func stageMapLink(_ layers: MapLinkLayers) {
+        pendingMapLink = layers
+    }
+
+    func consumeMapLink() -> MapLinkLayers? {
+        defer { pendingMapLink = nil }
+        return pendingMapLink
+    }
 
     func stageRestaurantLink(_ link: RestaurantLinkFilter) {
         pendingRestaurantLink = link
@@ -444,6 +461,20 @@ final class DeepLinkHandler {
         return .bestOfCategory(slug: slug)
     }
 
+    /// /map, the web's Discover map (src/pages/DiscoverMap.tsx), linked from
+    /// the site's bottom nav, header and footer, and with `?layers=` from the
+    /// attraction pages and the Outdoors and playground hubs (IOS-AUDIT-007).
+    /// The Map tab draws the same three default kinds, so it opens there with
+    /// the layers the link names. It used to open the web map in a sheet over
+    /// the app's own Map tab. A link naming playgrounds or trails, which the
+    /// native map has no pins for, still opens on the web.
+    static func mapDestination(_ url: URL) -> Destination {
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let value = items.first { $0.name == "layers" }?.value
+        guard let layers = MapLinkLayers(webValue: value) else { return .web(url) }
+        return .map(layers)
+    }
+
     private func parseUniversalLink(_ url: URL) -> Destination? {
         guard Self.isFirstPartyWebURL(url) else { return nil }
 
@@ -460,6 +491,7 @@ final class DeepLinkHandler {
             guard let first = path.first else { return .tab(.home) }
             if first == "events" { return Self.eventsHubDestination(url) }
             if first == "restaurants" { return .tab(.restaurants) }
+            if first == "map" { return Self.mapDestination(url) }
             // Single-segment Discover parity surfaces, e.g. /trip-planner.
             if let discover = DiscoverDestination(slug: first) {
                 return .discover(discover)
@@ -572,5 +604,49 @@ struct RestaurantLinkFilter: Equatable {
         if openNow && !newOpenings { return .openNow }
         if newOpenings && !openNow { return .newOpenings }
         return nil
+    }
+}
+
+/// Which kinds the Map tab shows when a web /map link opens it
+/// (IOS-AUDIT-007). The web's `layers` parameter, read with its parseLayers
+/// rules (src/pages/DiscoverMap.tsx): absent, empty or all-unknown is the
+/// default three, `none` is nothing, otherwise exactly the keys named.
+/// src/lib/__tests__/iosMapLinkParity.test.ts fails when the web's layer
+/// keys or defaults drift from the two lists here.
+struct MapLinkLayers: Equatable {
+    var events = true
+    var restaurants = true
+    var attractions = true
+
+    /// The web's layer keys the native map has pins for, which are also the
+    /// web's DEFAULT_LAYERS.
+    static let nativeKeys: [String] = ["event", "restaurant", "attraction"]
+    /// The web's layer keys the native map does not draw.
+    static let webOnlyKeys: [String] = ["playground", "trail"]
+
+    init(events: Bool = true, restaurants: Bool = true, attractions: Bool = true) {
+        self.events = events
+        self.restaurants = restaurants
+        self.attractions = attractions
+    }
+
+    /// Nil when the link names a layer only the web draws, so the person sent
+    /// a trail map is never shown a map without trails.
+    init?(webValue: String?) {
+        guard let value = webValue else { return }
+        if value == "none" {
+            events = false
+            restaurants = false
+            attractions = false
+            return
+        }
+        let picked = value.split(separator: ",", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { Self.nativeKeys.contains($0) || Self.webOnlyKeys.contains($0) }
+        guard !picked.isEmpty else { return }
+        if picked.contains(where: { Self.webOnlyKeys.contains($0) }) { return nil }
+        events = picked.contains("event")
+        restaurants = picked.contains("restaurant")
+        attractions = picked.contains("attraction")
     }
 }

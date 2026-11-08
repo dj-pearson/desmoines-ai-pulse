@@ -23,7 +23,8 @@
           "/best-of/*",
           "/music",
           "/sports",
-          "/outdoors"
+          "/outdoors",
+          "/map"
         ]
       }
     ]

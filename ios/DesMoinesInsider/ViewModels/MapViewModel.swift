@@ -52,6 +52,18 @@ final class MapViewModel {
     var showAttractions = true {
         didSet { refreshAttractionAnnotations() }
     }
+    /// Shows exactly the kinds a /map link names (IOS-AUDIT-007). The link
+    /// replaces earlier choices, quick filters included, so the map shows
+    /// what the shared web map shows. Only changed values are assigned, so
+    /// an unchanged kind does not recompute its pins.
+    func apply(_ link: MapLinkLayers) {
+        if showEvents != link.events { showEvents = link.events }
+        if showRestaurants != link.restaurants { showRestaurants = link.restaurants }
+        if showAttractions != link.attractions { showAttractions = link.attractions }
+        if openNowOnly { openNowOnly = false }
+        if walkableOnly { walkableOnly = false }
+    }
+
     /// Quick filter: events on now and restaurants open now (IOS-DD-MAP-13).
     /// Attractions are left alone; they carry no hours.
     var openNowOnly = false {

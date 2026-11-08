@@ -540,6 +540,46 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.consumeDestination(), .bestOfCategory(slug: "best-coffee"))
     }
 
+    // MARK: - /map links (IOS-AUDIT-007)
+
+    func testBareMapLinkOpensTheMapTabWithTheDefaultKinds() {
+        XCTAssertTrue(handler.handle(site("/map")))
+        XCTAssertEqual(handler.consumeDestination(), .map(MapLinkLayers()))
+        // The web's other map state (when, sel, bbox, sort) has no Map tab
+        // equivalent and does not change where the link goes.
+        XCTAssertEqual(dest("/map?when=tonight&sort=near&bbox=-93.7,41.5,-93.5,41.7"), .map(MapLinkLayers()))
+    }
+
+    func testMapLinkLayersFollowTheWebParser() {
+        // Attraction pages and the Attractions hub link /map?layers=attraction.
+        XCTAssertEqual(dest("/map?layers=attraction"),
+                       .map(MapLinkLayers(events: false, restaurants: false, attractions: true)))
+        XCTAssertEqual(dest("/map?layers=event,%20restaurant"),
+                       .map(MapLinkLayers(events: true, restaurants: true, attractions: false)))
+        XCTAssertEqual(dest("/map?layers=none"),
+                       .map(MapLinkLayers(events: false, restaurants: false, attractions: false)))
+        // parseLayers: empty or only unknown keys is the default set.
+        XCTAssertEqual(dest("/map?layers="), .map(MapLinkLayers()))
+        XCTAssertEqual(dest("/map?layers=hotel,bogus"), .map(MapLinkLayers()))
+        XCTAssertEqual(dest("/map?layers=bogus,event"),
+                       .map(MapLinkLayers(events: true, restaurants: false, attractions: false)))
+    }
+
+    func testMapLinkNamingAWebOnlyLayerOpensTheWebMap() {
+        // HUB_PLAYGROUND_MAP_HREF and the Outdoors hub's trail map: the
+        // native map has no playground or trail pins.
+        for path in ["/map?layers=playground", "/map?layers=trail,attraction", "/map?layers=event,playground"] {
+            XCTAssertEqual(dest(path), .web(site(path)), path)
+        }
+    }
+
+    func testMapLinkIsStagedUntilConsumed() {
+        let link = MapLinkLayers(events: false, restaurants: true, attractions: false)
+        handler.stageMapLink(link)
+        XCTAssertEqual(handler.consumeMapLink(), link)
+        XCTAssertNil(handler.consumeMapLink())
+    }
+
     // MARK: - Nothing claimed strands the user (IOS-DD-PLATFORM-02)
 
     func testEveryClaimedPathRoutes() {
@@ -551,6 +591,7 @@ final class DeepLinkHandlerTests: XCTestCase {
             "/neighborhoods", "/neighborhoods/east-village",
             "/events", "/events/today", "/restaurants", "/restaurants/open-now",
             "/restaurants/dietary/vegan", "/trip-planner", "/articles", "/articles/foo",
+            "/map", "/map?layers=playground",
         ]
         for path in paths {
             XCTAssertNotNil(dest(path), path)

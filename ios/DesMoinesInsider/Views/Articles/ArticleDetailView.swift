@@ -280,7 +280,7 @@ struct ArticleDetailView: View {
             guard let def = EventSeries.series(slug: slug) else { return nil }
             return .eventSeries(def)
         // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
-        case .tab, .restaurantLanding, .search, .eventSearch, .web: return nil
+        case .tab, .restaurantLanding, .map, .search, .eventSearch, .web: return nil
         }
     }
 
