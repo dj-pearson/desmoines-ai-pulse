@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. WEB-PERF-071 closed in loop 18.
+None. WEB-PERF-072 closed in loop 19.
 
 What the next loop should know:
 - .content-auto's placeholder is `auto 0 auto calc(26rem + 3px)`: the card is
@@ -35,8 +35,16 @@ What the next loop should know:
   the critical set, and split each chunk's gz across its modules by
   renderedLength. The script must sit inside the repo to resolve `vite`.
   sonner is done (WEB-PERF-070: import `toast` from `@/lib/toast`, never
-  from "sonner"; toastLazy.test.ts enforces it). Next candidate from that
-  walk: @radix-ui/react-select 6.9 KB on /events and /restaurants.
+  from "sonner"; toastLazy.test.ts enforces it). UpgradeModal is done
+  (WEB-PERF-072: open it with openPaywall() from `@/lib/paywallStore`;
+  upgradeModalLazy.test.ts enforces it). Remaining candidates from that walk:
+  @radix-ui/react-select 6.9 KB (+ collection 2.8) on /events, /restaurants
+  and /attractions, only for a closed sort/type trigger, so it needs a
+  static look-alike trigger that swaps to the real Select on first
+  pointerdown/focus/keydown, and the smoke specs that drive those selects
+  must still pass; ShareDialog 2.6 KB on every detail route and EventsPage,
+  opened only on a click, is the simpler next one (same render-only-when-open
+  lazy pattern as GlobalUpgradeModal).
 - A real-browser check of a lazy module needs no hooks into the app: build,
   `vite preview --port <free>`, `grep -l <a string unique to the module>
   dist/assets/*.js`, then in Chrome `import()` that chunk and find the export
@@ -85,3 +93,4 @@ a keydown on document.body to test "?".
 | 2026-11-08 | WEB-PERF-069 | this commit | savedSearchFilters reads saved filters with plain code instead of zod, its only zod import on three routes; /events 205.9 -> 192.5, /search 94.1 -> 81.9, /dashboard 155.4 -> 143.2 KB gz beyond the critical path, none heavier; critical path 174.7 unchanged; graph test with detector and walker controls (3 fail on re-adding the import); story closed |
 | 2026-11-08 | WEB-PERF-070 | this commit | 87 modules import `toast` from new lib/toast.ts, which loads sonner on first call (queued, ids minted and passed through); 64 routes 8.8-9.0 KB gz lighter beyond the critical path (/events 191.2 -> 182.3), none heavier, summed 9,162.7 -> 8,596.1; critical path 174.7 unchanged; graph test with negative control (6 of 9 fail on one reverted import); toast renders in the lazy Toaster in Chrome; story closed |
 | 2026-11-08 | WEB-PERF-071 | this commit | .content-auto placeholder 420px -> auto calc(26rem + 3px), measured from a full card at 390/768/1024/1280 (419/471/523/523px); control under the dietary grid moved 1/51/103px at 390/768/1280 on the old value, 0 now; three smoke-lane tests with negative control (all 3 fail on 420px); dietary/open-now specs 63/63 over 3 repeats; story closed |
+| 2026-11-08 | WEB-PERF-072 | this commit | PremiumGate, PremiumButton, Save/Watch search buttons and TripPlanner open the app-root lazy GlobalUpgradeModal via openPaywall() instead of mounting UpgradeModal; useUpgradeModal deleted; /search -8.3, /search/advanced -7.8, /events -7.2, /trip-planner -7.2 KB gz beyond the critical path (5-8 fewer files each), plus the lazy RatingSystem chunk, none heavier, summed 8,605.3 -> 8,574.1; critical path 174.8 unchanged; graph test with negative control (4 then 3 fail on reverted sources); paywall/search-watch/search-results/trip-planner specs 27/27 in Chrome; story closed |

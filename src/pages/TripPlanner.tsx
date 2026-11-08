@@ -3,10 +3,10 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "@/lib/toast";
+import { openPaywall } from "@/lib/paywallStore";
 import { Baby, Check, DollarSign, Download, Lightbulb, Loader2, Music, Palette, Trash2, TreePine, Utensils, CalendarPlus } from "lucide-react";
 import SEOHead from "@/components/SEOHead";
 import { FAQSection, type FAQItem } from "@/components/FAQSection";
-import { UpgradeModal } from "@/components/UpgradeModal";
 import { AIDisclosureNotice } from "@/components/AIDisclosureBadge";
 import { DateWindowPlanner } from "@/components/trip/DateWindowPlanner";
 import { TripItineraryDays } from "@/components/trip/TripItineraryDays";
@@ -276,7 +276,6 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
   const { selectedTrip, setSelectedTrip, fetchTripDetails, generateItinerary, isGenerating } = planner;
   const { tier, hasFeature, isLoading: subscriptionLoading } = useSubscription();
   const canUseTripPlanner = hasFeature("trip_planner");
-  const [showPaywall, setShowPaywall] = useState(false);
   const [tab, setTab] = useState<PlannerTab>("plan");
   const [focusItinerary, setFocusItinerary] = useState(false);
   const itineraryHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -314,7 +313,7 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
     // Free users get the contextual paywall instead of a failed request
     // (WEB-FEAT-011 / WEB-FEAT-001). The server enforces the tier regardless.
     if (!canUseTripPlanner) {
-      setShowPaywall(true);
+      openPaywall("trip_planner");
       return;
     }
     const preferences: TripPreferences = {
@@ -334,7 +333,7 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
       handleError(error, { component: "TripPlanner", action: "generateItinerary" });
       const code = (error as { code?: string })?.code;
       // The mutation no longer toasts, so this is the one report of a failure.
-      if (code === "quota_exceeded" || code === "upgrade_required") setShowPaywall(true);
+      if (code === "quota_exceeded" || code === "upgrade_required") openPaywall("trip_planner");
       else toast.error("We couldn't generate that itinerary. Please try again.");
     }
   };
@@ -462,7 +461,6 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
         </TabsContent>
       </Tabs>
 
-      <UpgradeModal open={showPaywall} onOpenChange={setShowPaywall} feature="trip_planner" />
     </section>
   );
 }
