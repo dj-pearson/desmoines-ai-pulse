@@ -21,6 +21,10 @@ vi.mock("@/lib/errorHandler", () => ({
   handleError: (...a: unknown[]) => handleError(...a),
 }));
 vi.mock("@/lib/consentLog", () => ({ logConsent: vi.fn() }));
+vi.mock("@/hooks/useAuth", () => ({ useAuthFlags: () => ({ isAuthenticated: false }) }));
+vi.mock("@/hooks/useNewsletterSubscription", () => ({
+  useNewsletterSubscription: () => ({ subscribe: vi.fn(), loading: false }),
+}));
 
 import NewsletterConfirm from "@/pages/NewsletterConfirm";
 import Unsubscribe from "@/pages/Unsubscribe";
