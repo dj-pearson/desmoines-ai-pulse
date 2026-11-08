@@ -22,6 +22,9 @@ import { fetchPublicUrl, PUBLIC_URL_MAX_REDIRECTS, UnsafeFetchError } from '../_
 import { validateURLForSSRF } from '../_shared/validation.ts';
 import { fetchImageAsBase64, fetchPdfAsBase64 } from '../_shared/scraper.ts';
 import { scrapeImageFromWebsite } from '../_shared/imageFallbacks.ts';
+import { scrapeUrl } from '../_shared/scraper.ts';
+import { _clearRobotsCache } from '../_shared/robots.ts';
+import { fetchListingHtml } from '../_shared/eventPageDiscovery.ts';
 
 type Route = () => Response;
 type Call = { url: string; init: RequestInit };
@@ -166,4 +169,101 @@ Deno.test('scrape-restaurant-menus makes no bare fetch() of a restaurant URL', a
   const bare = withoutStrings(src).split('\n').filter((l) => /(^|[^\w.])fetch\(/.test(l));
   assert.deepEqual(bare, [], `bare fetch() calls remain:\n${bare.join('\n')}`);
   assert.ok((src.match(/\bfetchPublicUrl\(/g) ?? []).length >= 2, 'page and sitemap fetches are not both guarded');
+});
+
+// ── scrapeUrl's fetch backend and robots.txt check (WEB-SEC-060) ────────────
+// The fetch backend is scrapeUrl's last-resort fallback for every ingestion
+// path, and the robots.txt check runs before any backend; both ran on our own
+// network with fetch(), which followed redirects. The other backends are
+// switched off here (empty keys), so only those two can reach the stub.
+
+const FETCH_ONLY = { backend: 'fetch' as const, browserlessApiKey: '', browserlessBackupApiKey: '', firecrawlApiKey: '' };
+const notFound: Route = () => new Response('', { status: 404 });
+
+Deno.test('scrapeUrl (fetch backend) makes no request at all for a private URL', async () => {
+  _clearRobotsCache();
+  await withStubbedFetch({}, async (calls) => {
+    const result = await scrapeUrl('http://10.0.0.5/admin', FETCH_ONLY);
+    assert.equal(result.success, false);
+    assert.equal(calls.length, 0, `fetched: ${calls.map((c) => c.url).join(', ')}`);
+  });
+});
+
+Deno.test('scrapeUrl (fetch backend) does not follow a page redirect onto the metadata address', async () => {
+  _clearRobotsCache();
+  await withStubbedFetch(
+    { [`${SITE}/robots.txt`]: notFound, [`${SITE}/events`]: redirect(METADATA) },
+    async (calls) => {
+      const result = await scrapeUrl(`${SITE}/events`, FETCH_ONLY);
+      assert.equal(result.success, false);
+      assert.match(result.error ?? '', /Refused redirect/);
+      assert.ok(calls.every((c) => !c.url.startsWith('http://169.254.')), 'the metadata address was fetched');
+      assert.ok(calls.every((c) => c.init.redirect === 'manual'), 'fetch() was left to follow redirects');
+    },
+  );
+});
+
+Deno.test('the robots.txt check does not follow a redirect onto the metadata address', async () => {
+  _clearRobotsCache();
+  await withStubbedFetch(
+    { [`${SITE}/robots.txt`]: redirect(METADATA), [`${SITE}/listing`]: html('<p>Events</p>') },
+    async (calls) => {
+      const result = await scrapeUrl(`${SITE}/listing`, FETCH_ONLY);
+      // A refused robots.txt reads as "no rules", so the page itself is still scraped.
+      assert.equal(result.success, true);
+      assert.ok(calls.every((c) => !c.url.startsWith('http://169.254.')), 'the metadata address was fetched');
+      // The stub never follows a redirect itself, so the check that matters is
+      // that the robots.txt request was not sent with fetch()'s default follow.
+      const robots = calls.find((c) => c.url === `${SITE}/robots.txt`);
+      assert.equal(robots?.init.redirect, 'manual', 'robots.txt was fetched with redirect: follow');
+    },
+  );
+});
+
+Deno.test('scrapeUrl (fetch backend) still scrapes a public page through a normal redirect', async () => {
+  _clearRobotsCache();
+  await withStubbedFetch(
+    {
+      [`${SITE}/robots.txt`]: notFound,
+      [`${SITE}/calendar`]: redirect(`${SITE}/calendar/`, 301),
+      [`${SITE}/calendar/`]: html('<html><body><h1>Jazz in July</h1><script>x()</script></body></html>'),
+    },
+    async () => {
+      const result = await scrapeUrl(`${SITE}/calendar`, FETCH_ONLY);
+      assert.equal(result.success, true);
+      assert.equal(result.backend, 'fetch');
+      assert.equal(result.text, 'Jazz in July');
+    },
+  );
+});
+
+Deno.test('eventPageDiscovery fetchText refuses a private URL and a redirect to one', async () => {
+  await withStubbedFetch(
+    { [`${SITE}/e/1`]: redirect('http://192.168.0.20/e/1'), [`${SITE}/e/2`]: html('<h1>Show</h1>') },
+    async (calls) => {
+      assert.equal(await fetchListingHtml('http://127.0.0.1:54321/rest/v1/'), null);
+      assert.equal(calls.length, 0, 'loopback was fetched');
+      assert.equal(await fetchListingHtml(`${SITE}/e/1`), null);
+      assert.equal(calls.length, 1, 'the redirect target was fetched');
+      assert.equal(calls[0].init.redirect, 'manual', 'fetch() was left to follow redirects');
+      assert.equal(await fetchListingHtml(`${SITE}/e/2`), '<h1>Show</h1>');
+    },
+  );
+});
+
+Deno.test('scrapeWithFetch, fetchText and the robots.txt fetch make no bare fetch()', async () => {
+  const read = async (path: string) =>
+    withoutStrings(codeOnly(await Deno.readTextFile(new URL(`supabase/functions/_shared/${path}`, REPO))));
+  const scraper = await read('scraper.ts');
+  const start = scraper.indexOf('async function scrapeWithFetch(');
+  const body = scraper.slice(start, scraper.indexOf('\nasync function ', start + 1));
+  assert.ok(start >= 0 && body.length > 0, 'scrapeWithFetch not found');
+  for (const [name, src] of [
+    ['scraper.ts scrapeWithFetch', body],
+    ['eventPageDiscovery.ts', await read('eventPageDiscovery.ts')],
+    ['robots.ts', await read('robots.ts')],
+  ] as const) {
+    const bare = src.split('\n').filter((l) => /(^|[^\w.])fetch\(/.test(l));
+    assert.deepEqual(bare, [], `${name} still calls fetch() directly:\n${bare.join('\n')}`);
+  }
 });

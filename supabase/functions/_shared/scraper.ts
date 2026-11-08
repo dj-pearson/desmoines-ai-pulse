@@ -450,27 +450,37 @@ async function scrapeWithFetch(
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), config.timeout);
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': config.userAgent || '',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-      },
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+    // WEB-SEC-060. This is the backend that runs on our own network, and it is
+    // also the last-resort fallback for every scrapeUrl caller, so the URL can
+    // be a scraped link or an admin-supplied source. fetch() followed redirects,
+    // so a public page answering 302 Location: http://169.254.169.254/ was
+    // fetched and its text handed back to the caller. fetchPublicUrl resolves
+    // the first host and re-checks every hop; a refusal throws into the catch
+    // below like any other fetch failure.
+    let html: string;
+    try {
+      const response = await fetchPublicUrl(url, {
+        headers: {
+          'User-Agent': config.userAgent || '',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      html = await response.text();
+    } finally {
+      clearTimeout(timeoutId);
     }
-    
-    const html = await response.text();
     
     // Extract text content from HTML (simple approach)
     const text = html
