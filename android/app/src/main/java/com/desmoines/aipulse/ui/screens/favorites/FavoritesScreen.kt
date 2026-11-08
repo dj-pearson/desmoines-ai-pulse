@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -34,6 +36,8 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,6 +55,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -58,7 +65,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -74,7 +83,9 @@ import com.desmoines.aipulse.ui.components.FavoritesLimitBanner
 import com.desmoines.aipulse.ui.components.SubscriptionBanner
 import com.desmoines.aipulse.ui.components.BannerStyle
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.util.EventCalendarEntry
 import com.desmoines.aipulse.util.EventTimeText
+import com.desmoines.aipulse.util.minHitTarget
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import java.time.OffsetDateTime
 import java.util.Locale
@@ -93,6 +104,7 @@ fun FavoritesScreen(
     onNavigateToSubscription: () -> Unit = {},
     onRemoveEventFavorite: (String) -> Unit = {},
     onRemoveRestaurantFavorite: (String) -> Unit = {},
+    onAddEventToCalendar: (Event) -> Unit = {},
     onRefresh: () -> Unit = {},
     scrollToTopTrigger: Int = 0,
 ) {
@@ -142,6 +154,7 @@ fun FavoritesScreen(
                         onNavigateToSubscription = onNavigateToSubscription,
                         onRemoveEventFavorite = onRemoveEventFavorite,
                         onRemoveRestaurantFavorite = onRemoveRestaurantFavorite,
+                        onAddEventToCalendar = onAddEventToCalendar,
                     )
                 }
             }
@@ -158,6 +171,7 @@ private fun SavedContent(
     onNavigateToSubscription: () -> Unit,
     onRemoveEventFavorite: (String) -> Unit,
     onRemoveRestaurantFavorite: (String) -> Unit,
+    onAddEventToCalendar: (Event) -> Unit,
 ) {
     LazyColumn(
         state = listState,
@@ -205,6 +219,7 @@ private fun SavedContent(
                         isPast = false,
                         onClick = { onNavigateToEventDetail(event.id) },
                         onRemove = { onRemoveEventFavorite(event.id) },
+                        onAddToCalendar = { onAddEventToCalendar(event) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -387,9 +402,13 @@ private fun FavoriteEventRow(
     onClick: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
+    onAddToCalendar: () -> Unit = {},
 ) {
     val haptic = rememberHapticPerformer()
     val opacity = if (isPast) 0.6f else 1f
+    // Past rows and rows with no parseable date offer no calendar action
+    // (AND-AUDIT-028), the same rule as iOS showsAddToCalendar.
+    val offersCalendar = EventCalendarEntry.forSavedRow(event, isPast) != null
 
     Card(
         modifier = modifier
@@ -398,6 +417,14 @@ private fun FavoriteEventRow(
             .animateContentSize()
             .semantics {
                 contentDescription = "${event.title}${if (isPast) ", past event" else ""}"
+                // TalkBack reaches the row's actions from its actions menu
+                // instead of hunting for the small buttons beside the card.
+                customActions = buildList {
+                    if (offersCalendar) {
+                        add(CustomAccessibilityAction("Add to Calendar") { onAddToCalendar(); true })
+                    }
+                    add(CustomAccessibilityAction("Remove from saved") { onRemove(); true })
+                }
             },
         shape = RoundedCornerShape(14.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -480,20 +507,57 @@ private fun FavoriteEventRow(
                 }
             }
 
-            // Remove button
-            IconButton(
-                onClick = {
-                    haptic.medium()
-                    onRemove()
-                },
-                modifier = Modifier.semantics { contentDescription = "Remove from saved" },
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Favorite,
-                    contentDescription = null,
-                    tint = Color.Red,
-                )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Remove button
+                IconButton(
+                    onClick = {
+                        haptic.medium()
+                        onRemove()
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Remove from saved" },
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = null,
+                        tint = Color.Red,
+                    )
+                }
+                if (offersCalendar) {
+                    SavedEventRowMenu(title = event.title, onAddToCalendar = onAddToCalendar)
+                }
             }
+        }
+    }
+}
+
+/**
+ * Overflow menu on an upcoming Saved event row (AND-AUDIT-028). iOS puts Add
+ * to Calendar in the row's context menu; a visible overflow button is the
+ * Android equivalent, found without knowing to long-press.
+ */
+@Composable
+private fun SavedEventRowMenu(
+    title: String,
+    onAddToCalendar: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.minHitTarget()) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = "More options for $title",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Add to Calendar") },
+                leadingIcon = { Icon(Icons.Filled.Event, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onAddToCalendar()
+                },
+            )
         }
     }
 }

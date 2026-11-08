@@ -257,6 +257,7 @@ internal fun NavGraphBuilder.addTabDestinations(
     composable(Route.Saved.route) {
         val viewModel: FavoritesViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(Unit) {
             viewModel.loadFavorites()
@@ -278,6 +279,12 @@ internal fun NavGraphBuilder.addTabDestinations(
             },
             onRemoveEventFavorite = { eventId -> viewModel.removeEventFavorite(eventId) },
             onRemoveRestaurantFavorite = { restaurantId -> viewModel.removeRestaurantFavorite(restaurantId) },
+            // Same entry and intent as event detail's Add to Calendar (AND-AUDIT-028).
+            onAddEventToCalendar = { event ->
+                com.desmoines.aipulse.util.EventCalendarIntent.build(event)?.let { intent ->
+                    com.desmoines.aipulse.util.EventCalendarIntent.launch(context, intent)
+                }
+            },
             onRefresh = { viewModel.refresh() },
             scrollToTopTrigger = scrollToTopTrigger,
         )

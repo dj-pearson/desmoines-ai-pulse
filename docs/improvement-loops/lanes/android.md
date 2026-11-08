@@ -24,8 +24,17 @@ On an Android build with Google Calendar, tap Add to Calendar on (a) a timed eve
 expecting a 3-hour block in Central time, and (b) a time_tbd or 19:31:58 row, expecting an all-day
 entry on the right date. The trap to look for is (b) landing a day early: all-day intents carry UTC
 midnights by CalendarContract's rule, and a calendar app that ignores EXTRA_EVENT_ALL_DAY would show
-a 6pm/7pm block the evening before. Saved-row parity with iOS (IOS-AUDIT-FEAT-039) is the next story,
-proposed as AND-AUDIT-028; EventCalendarEntry is already shared so it only needs a row action.
+a 6pm/7pm block the evening before.
+
+AND-AUDIT-028 (Saved-row Add to Calendar) is code-complete; one device check closes it. Upcoming Saved
+event rows have an overflow button (MoreVert under the heart) with Add to Calendar and a TalkBack custom
+action of the same name; past rows and rows with no parseable date get neither. The intent and the
+"No calendar app available." toast now live in util/EventCalendarIntent, which event detail also uses.
+On a build: tap the overflow on an upcoming saved row and confirm the calendar insert matches what event
+detail's Add to Calendar produces for the same event; with TalkBack on, confirm the row's actions menu
+lists Add to Calendar and Remove from saved. The trap: the overflow sits inside the card's clickable, so
+if a tap on it opens event detail instead of the menu, the IconButton is not consuming the click.
+Share and Remind Me on Saved rows (also in iOS's context menu) are not built; proposed as a new story.
 
 Still open under AND-AUDIT-026: a device tap on a real push needs a server-side FCM sender (XPLAT-015).
 
@@ -61,3 +70,4 @@ goes empty in the evening, check the date column on those rows before suspecting
 | 2026-11-07 | AND-AUDIT-029 | this commit | TBA rows get a 9am Central day-of reminder ("is today") instead of one an hour before the 19:31:58 / 03:30 placeholder; detail, cards, map popup and Saved rows show "Time TBA" in Des Moines time via a shared EventTimeText. 13 new JVM tests pass on a stub harness (kotlinc 2.2.10), 12 EventCalendarEntry tests still pass; a mutation using the timed rule for every row fails 5, one formatting in the arrival offset fails 1. EventDetailReminderTest additions and app module not compiled (no Android SDK, no mockk in cache); no device check |
 | 2026-11-07 | AND-AUDIT-030 | this commit | Day badge, featured card, related chips, urgency label, map pin, Saved past/upcoming and Weekend grouping read the Des Moines day through EventTimeText; Weekend fetch bounded at Central midnight. 12 new JVM tests pass on a stub harness (kotlinc 2.2.10), 25 existing EventCalendarEntry/EventReminderTiming tests still pass; a mutation reading the UTC day fails 6 of the new 12. WeekendViewModelTest addition and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-031 | this commit | Events tab and Discover date presets are bounded at Des Moines midnights with an offset via EventTimeText.presetBounds (was bare local timestamps PostgREST read as UTC), today comes from America/Chicago, and the upcoming floor is Central midnight. 6 new DatePresetBoundsTest JVM tests pass on a stub harness (kotlinc 2.2.10) with the 37 existing EventCalendarEntry/EventReminderTiming/EventDesMoinesDay tests; a mutation restoring bare local bounds fails 3 of the 6. ViewModels, EventsRemoteDataSource and app module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-028 | this commit | Upcoming Saved event rows offer Add to Calendar from an overflow menu and a TalkBack custom action, built from the same EventCalendarEntry as event detail via a new shared EventCalendarIntent (intent + no-calendar toast); past and undated rows offer neither. 3 new EventCalendarEntryTest JVM tests pass on a stub harness (kotlinc 2.2.10), 46/46 across the four event-time suites; a mutation ignoring isPast fails exactly the past-row test. Compose UI and app module not compiled (no Android SDK); no device check |

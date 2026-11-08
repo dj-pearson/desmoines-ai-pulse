@@ -89,18 +89,11 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
             onToggleFavorite = { viewModel.toggleFavorite() },
             onAddToCalendar = {
                 viewModel.createCalendarIntent()?.let { intent ->
-                    // No calendar app resolves this on some tablets and Android
-                    // Go devices; an unguarded startActivity there is an
-                    // ActivityNotFoundException crash, not a no-op.
-                    runCatching { context.startActivity(intent) }
-                        .onSuccess { viewModel.setCalendarAdded() }
-                        .onFailure {
-                            android.widget.Toast.makeText(
-                                context,
-                                "No calendar app available.",
-                                android.widget.Toast.LENGTH_SHORT,
-                            ).show()
-                        }
+                    // Shows "No calendar app available." instead of crashing
+                    // where nothing resolves the insert (AND-AUDIT-028 shares it).
+                    if (com.desmoines.aipulse.util.EventCalendarIntent.launch(context, intent)) {
+                        viewModel.setCalendarAdded()
+                    }
                 }
             },
             onOpenDirections = {

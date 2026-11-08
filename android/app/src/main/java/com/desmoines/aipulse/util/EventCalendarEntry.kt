@@ -76,6 +76,15 @@ data class EventCalendarEntry(
             )
         }
 
+        /**
+         * The entry a Saved row's Add to Calendar would write, or null when the
+         * row must not offer it (AND-AUDIT-028): a past row, or one with no
+         * parseable date. Same rule as iOS showsAddToCalendar, and the same
+         * entry event detail builds, so the two screens cannot disagree.
+         */
+        fun forSavedRow(event: Event, isPast: Boolean): EventCalendarEntry? =
+            if (isPast) null else from(event)
+
         private fun utcMidnight(day: LocalDate): Long =
             day.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
     }

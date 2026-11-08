@@ -4,7 +4,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.CalendarContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Event
@@ -14,7 +13,7 @@ import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
-import com.desmoines.aipulse.util.EventCalendarEntry
+import com.desmoines.aipulse.util.EventCalendarIntent
 import com.desmoines.aipulse.util.EventReminderTiming
 import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.LocalNotificationService
@@ -257,22 +256,11 @@ class EventDetailViewModel @Inject constructor(
 
     /**
      * Creates a calendar insert intent for the event. The start, end, all-day
-     * flag and time zone come from [EventCalendarEntry], the same rules iOS
-     * uses (AND-AUDIT-027).
+     * flag and time zone come from EventCalendarEntry, the same rules iOS
+     * uses (AND-AUDIT-027); the intent is shared with the Saved tab through
+     * [EventCalendarIntent] (AND-AUDIT-028).
      */
-    fun createCalendarIntent(): Intent? {
-        val entry = _event.value?.let { EventCalendarEntry.from(it) } ?: return null
-        return Intent(Intent.ACTION_INSERT).apply {
-            data = CalendarContract.Events.CONTENT_URI
-            putExtra(CalendarContract.Events.TITLE, entry.title)
-            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, entry.startMillis)
-            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, entry.endMillis)
-            putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, entry.isAllDay)
-            putExtra(CalendarContract.Events.EVENT_TIMEZONE, entry.timeZoneId)
-            putExtra(CalendarContract.Events.EVENT_LOCATION, entry.location)
-            putExtra(CalendarContract.Events.DESCRIPTION, entry.description)
-        }
-    }
+    fun createCalendarIntent(): Intent? = _event.value?.let { EventCalendarIntent.build(it) }
 
     fun setCalendarAdded() {
         _calendarAdded.value = true

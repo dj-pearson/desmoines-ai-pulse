@@ -138,6 +138,26 @@ class EventCalendarEntryTest {
         assertNull(EventCalendarEntry.from(event("TBA")))
     }
 
+    // AND-AUDIT-028: the Saved tab's row action.
+
+    @Test
+    fun `an upcoming saved row offers the same entry event detail builds`() {
+        val e = event("2026-08-13T05:00:00+00:00", timeTbd = true)
+        assertEquals(EventCalendarEntry.from(e), EventCalendarEntry.forSavedRow(e, isPast = false))
+        val timed = event("2026-07-10T00:00:00+00:00", endDate = "2026-07-12T04:00:00+00:00")
+        assertEquals(EventCalendarEntry.from(timed), EventCalendarEntry.forSavedRow(timed, isPast = false))
+    }
+
+    @Test
+    fun `a past saved row offers no calendar entry`() {
+        assertNull(EventCalendarEntry.forSavedRow(event("2026-07-10T00:00:00+00:00"), isPast = true))
+    }
+
+    @Test
+    fun `a saved row with no parseable date offers no calendar entry`() {
+        assertNull(EventCalendarEntry.forSavedRow(event("TBA"), isPast = false))
+    }
+
     @Test
     fun `parsedDate still reads the offset-less forms as UTC`() {
         assertEquals(millis("2026-07-10T19:00:00Z"), event("2026-07-10T19:00:00").parsedDate!!.toInstant().toEpochMilli())
