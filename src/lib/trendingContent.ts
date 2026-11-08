@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { upcomingOrRunningFilter } from '@/lib/eventRunningFilter';
 import {
   ATTRACTION_LIST_COLUMNS,
   EVENT_LIST_COLUMNS,
@@ -65,7 +66,10 @@ function startOfTodayIso(): string {
 export function applyPublicVisibility(type: TrendingContentType, query: any): any {
   switch (type) {
     case 'event':
-      return applyEventVisibility(query).gte('date', startOfTodayIso());
+      // Not over yet, the rule useEvents and the hubs use. A bare
+      // `date >= today` dropped a multi-day run on its second morning, so the
+      // State Fair left "Trending Events" on the days it trended most.
+      return applyEventVisibility(query).or(upcomingOrRunningFilter(startOfTodayIso()));
     case 'restaurant':
       return query.neq('is_merged', true);
     case 'attraction':
