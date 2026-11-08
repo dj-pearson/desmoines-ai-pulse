@@ -4,6 +4,7 @@
  */
 
 import { isCrawlAllowed } from './robots.ts';
+import { fetchPublicUrl } from './fetchGuard.ts';
 
 export type ScraperBackend = 'browserless' | 'fetch' | 'puppeteer' | 'playwright' | 'firecrawl';
 
@@ -815,15 +816,15 @@ export async function fetchPdfAsBase64(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    const response = await fetch(url, {
+    // The PDF link was found on a restaurant's own page, so it is not ours to
+    // trust: fetchPublicUrl resolves the host and re-checks each redirect.
+    const response = await fetchPublicUrl(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/pdf,*/*',
       },
       signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
+    }).finally(() => clearTimeout(timeoutId)); // a refused URL throws; do not leave the timer
 
     if (!response.ok) {
       console.error(`❌ PDF fetch failed: ${response.status}`);
@@ -1020,16 +1021,15 @@ export async function fetchImageAsBase64(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(tryUrl, {
+      // An <img src> from a restaurant page; same rule as fetchPdfAsBase64.
+      const response = await fetchPublicUrl(tryUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           // Request supported formats explicitly — avoid AVIF
           'Accept': 'image/jpeg,image/png,image/webp,image/gif,*/*;q=0.1',
         },
         signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
+      }).finally(() => clearTimeout(timeoutId)); // a refused URL throws; do not leave the timer
 
       if (!response.ok) {
         console.log(`  ❌ Image fetch failed: ${response.status}`);

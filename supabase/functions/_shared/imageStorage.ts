@@ -733,7 +733,7 @@ export async function fetchAndStoreImage(
     console.log(`✅ Image stored: ${cdnUrl}`);
     return cdnUrl;
   } catch (error) {
-    console.error(`❌ fetchAndStoreImage error for ${sourceImageUrl}:`, error.message);
+    console.error(`❌ fetchAndStoreImage error for ${sourceImageUrl}:`, (error as Error).message);
     return null;
   }
 }

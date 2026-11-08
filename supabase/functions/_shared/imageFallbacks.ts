@@ -8,6 +8,7 @@
  */
 
 import { extractImageFromHtml } from "./imageStorage.ts";
+import { fetchPublicUrl } from "./fetchGuard.ts";
 import { placesMediaUrl } from "./placesPhoto.ts";
 
 /**
@@ -82,7 +83,10 @@ export async function findExistingVenueRecord(
  */
 export async function scrapeImageFromWebsite(website: string): Promise<string | null> {
   try {
-    const response = await fetch(website, {
+    // The venue website is a stored or scraped value, not ours: resolve the
+    // host and re-check every redirect, so a 302 cannot reach an internal
+    // address. A refusal throws and lands in the catch below as "no image".
+    const response = await fetchPublicUrl(website, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
