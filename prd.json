@@ -12190,7 +12190,7 @@
       "title": "A newsletter unsubscribe silently stops event reminders the user sets later",
       "description": "send-event-reminders sends as category 'marketing', and _shared/email.ts blocks marketing for any address with an 'unsubscribe' row in email_suppressions, which newsletter_unsubscribe_by_token writes. A user who left the newsletter and then turns on a reminder on an event page gets nothing, and nothing tells them why. Decide whether opted-in per-event reminders get their own category, or whether the reminder switch should warn when the address is suppressed.",
       "passes": true,
-      "notes": "send-event-reminders now sends as \"transactional\" via reminderSendInput/REMINDER_EMAIL_CATEGORY in content.ts, so a newsletter 'unsubscribe' suppression no longer drops reminders the user set; bounce/complaint/manual still block, and the per-event one-click List-Unsubscribe is kept. Verified with 4 new Deno tests that run the real sendEmail against a stub suppression table (2 fail with the old marketing category; content.test.ts passes 18/18), plus type-check:functions, check-edge-types and check-edge-auth."
+      "notes": "send-event-reminders now sends as \"transactional\" via reminderSendInput/REMINDER_EMAIL_CATEGORY in content.ts, so a newsletter 'unsubscribe' suppression no longer drops reminders the user set; bounce/complaint/manual still block, and the per-event one-click List-Unsubscribe is kept. Verified with 4 new Deno tests that run the real sendEmail against a stub suppression table (2 fail with the old marketing category; content.test.ts passes 18/18), plus type-check:functions, check-edge-types and check-edge-auth. | Owner decision 2026-11-08: reminders FOLLOW the newsletter unsubscribe. The round-14 change that sent them as transactional mail was reverted; the silent part moves to WEB-FEAT-065."
     },
     {
       "priority": "low",
@@ -12299,7 +12299,8 @@
         "Scope SELECT to owner plus admin, as a multi-release change if a shipped binary reads other users' rows",
         "identity-read baseline shrinks by one"
       ],
-      "passes": false
+      "passes": true,
+      "notes": " | Fixed 2026-11-08 by the orchestrator at the owner's request: migration 20261108000070 drops \"Users can view all attendance\" and adds \"Admins read all event attendance\" (is_admin()). Owners keep SELECT via the existing FOR ALL own-row policy; counts go through event_attendance_tallies. Every reader enumerated in the migration header; none needs other users' rows and neither mobile binary references the table, so single release. Scratch Postgres 16 with the 2025 policies plus the real tallies migration: anon 3 -> 0 rows, user A 3 -> 1 (own), admin 3 -> 3, tallies unchanged, own-row UPDATE still works, re-apply is a no-op. identity-read baseline 12 -> 11. Needs supabase db push (20260827000002 must apply first; it sorts first)."
     },
     {
       "priority": 3,
@@ -12353,6 +12354,20 @@
       "priority": 3,
       "passes": false,
       "notes": "Found 2026-11-08 by the orchestrator's background smoke run on cd7a7b8a."
+    },
+    {
+      "id": "WEB-FEAT-065",
+      "title": "Tell a newsletter-unsubscribed user that event reminders will not be sent",
+      "description": "Owner decision on WEB-FEAT-063: event reminders follow the newsletter unsubscribe (category marketing, dropped for an address with an 'unsubscribe' row in email_suppressions). Today nothing tells the person, so setting a reminder after leaving the newsletter looks like it worked and then never arrives.",
+      "acceptanceCriteria": [
+        "When a signed-in user sets an event reminder and their address has an 'unsubscribe' suppression, the reminder UI says reminders won't be emailed and offers to resubscribe",
+        "The check reads suppression state through a SECURITY DEFINER RPC that returns a boolean for the caller's own address only",
+        "No change to how reminders are sent: they stay category marketing",
+        "Tests cover suppressed and not-suppressed"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-08 from the owner's WEB-FEAT-063 decision. For the features lane."
     }
   ]
 }

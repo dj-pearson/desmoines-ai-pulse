@@ -4,7 +4,6 @@
   "tables": [
     "content_helpful_votes",
     "discussion_likes",
-    "event_attendance",
     "event_discussion_reactions",
     "event_discussions",
     "event_live_feed",
