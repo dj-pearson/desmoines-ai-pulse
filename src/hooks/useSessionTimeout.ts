@@ -1,33 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useSessionTimeout');
-
-/**
- * Database-backed Session Policy
- */
-interface SessionPolicy {
-  id: string;
-  role_name: string;
-  idle_timeout_minutes: number;
-  absolute_timeout_hours: number;
-  warning_before_expiry_minutes: number;
-  require_mfa_reauth: boolean;
-  allow_remember_me: boolean;
-  remember_me_days: number;
-  is_active: boolean;
-}
 
 /**
  * Session Timeout Configuration
  */
 interface SessionTimeoutConfig {
   /**
-   * Idle timeout in minutes (default: 30 minutes, or from database policy)
+   * Idle timeout in minutes (default: 30 minutes)
    * User will be logged out after this period of inactivity
    */
   idleTimeout?: number;
@@ -50,7 +33,9 @@ interface SessionTimeoutConfig {
   enabled?: boolean;
 
   /**
-   * Whether to use database-backed session policies (default: true)
+   * Accepted and ignored (WEB-QA-048). The policy used to be read from the
+   * get_user_session_policy RPC, which production does not have; the values
+   * above are the policy now. Kept on the type so existing callers compile.
    */
   useDatabasePolicy?: boolean;
 }
@@ -80,14 +65,13 @@ interface SessionTimeoutConfig {
  */
 export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
   const {
-    idleTimeout: configIdleTimeout = 30,
-    warningTime: configWarningTime = 5,
-    maxSessionDuration: configMaxSessionDuration = 8,
+    idleTimeout = 30,
+    warningTime = 5,
+    maxSessionDuration = 8,
     enabled = true,
-    useDatabasePolicy = true,
   } = config;
 
-  const { isAuthenticated, logout, getSessionExpiresAt, getSessionStartedAt, user } = useAuth();
+  const { isAuthenticated, logout, getSessionExpiresAt, getSessionStartedAt } = useAuth();
   const { toast } = useToast();
 
   const [isWarning, setIsWarningState] = useState(false);
@@ -109,27 +93,10 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
   const sessionStartRef = useRef<number>(Date.now());
   const lastActivityRef = useRef<number>(Date.now());
 
-  // Fetch session policy from database
-  const { data: sessionPolicy } = useQuery<SessionPolicy | null>({
-    queryKey: ['session-policy', user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      try {
-        const { data, error } = await supabase
-          .rpc('get_user_session_policy', { p_user_id: user.id });
-        if (error) throw error;
-        return data as SessionPolicy | null;
-      } catch (err) {
-        logger.error('sessionPolicy', 'Error fetching session policy', { error: err });
-        return null;
-      }
-    },
-    // WP5 item 8: `enabled` gates the read too. SessionManager enables this
-    // hook for admins only, but the query ran for every signed-in visitor
-    // regardless, against an RPC production doesn't have.
-    enabled: enabled && !!user && useDatabasePolicy,
-    staleTime: 5 * 60 * 1000,
-  });
+  // WEB-QA-048: no database policy read. useSessionTimeout called the
+  // get_user_session_policy RPC on every admin page load; production has no
+  // such function, so each call failed and the hook fell back to the config
+  // values anyway. Those values are the policy.
 
   // The user_sessions poll (every 60 seconds, for every signed-in user) and
   // the revoke_session / revoke_all_other_sessions / update_session_with_timeout
@@ -137,17 +104,6 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
   // in production (scripts/db-snapshot.json) and nothing rendered what they
   // returned. SecurityCheckup's "Sign out of other devices" is the real
   // control; a device list waits for deferred D11.
-
-  // Use database policy values if available, otherwise fall back to config
-  const idleTimeout = useDatabasePolicy && sessionPolicy?.idle_timeout_minutes
-    ? sessionPolicy.idle_timeout_minutes
-    : configIdleTimeout;
-  const warningTime = useDatabasePolicy && sessionPolicy?.warning_before_expiry_minutes
-    ? sessionPolicy.warning_before_expiry_minutes
-    : configWarningTime;
-  const maxSessionDuration = useDatabasePolicy && sessionPolicy?.absolute_timeout_hours
-    ? sessionPolicy.absolute_timeout_hours
-    : configMaxSessionDuration;
 
   /**
    * Clear all timers
@@ -394,10 +350,5 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
      * Manually trigger logout
      */
     logout: handleTimeout,
-
-    /**
-     * Session policy from database (if using database policies)
-     */
-    sessionPolicy,
   };
 }
