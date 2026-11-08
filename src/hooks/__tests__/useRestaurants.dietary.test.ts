@@ -34,7 +34,7 @@ describe('resolveDietarySelections', () => {
   it('accepts every option the filter UI offers', () => {
     // These are the DIETARY_OPTIONS values in src/lib/restaurantPresets.ts. If the
     // two lists drift, the filter silently stops matching again.
-    const uiValues = ['vegan', 'vegetarian', 'gluten-free', 'keto', 'halal'];
+    const uiValues = ['vegan', 'vegetarian', 'gluten-free', 'keto', 'halal', 'kosher'];
     expect(resolveDietarySelections({ tags: uiValues }).sort()).toEqual([...uiValues].sort());
     for (const value of uiValues) {
       expect(DIETARY_KEYWORDS[value]).toBeDefined();

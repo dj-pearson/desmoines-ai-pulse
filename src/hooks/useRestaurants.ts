@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
 import { RESTAURANT_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
+import { DIETARY_KEYWORDS, dietaryIlikeClauses } from "@/lib/restaurantDiets";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
 import { createLogger } from "@/lib/logger";
@@ -437,16 +438,7 @@ export async function fetchRestaurantList(
 
     // Apply dietary keyword filter (searches description and cuisine fields)
     if (dietarySelections.length > 0) {
-      const orClauses = dietarySelections.flatMap((diet) => {
-        const keywords = DIETARY_KEYWORDS[diet] || [diet];
-        // postgrest-safe: resolveDietarySelections keeps only DIETARY_KEYWORDS keys, so kw is a fixed keyword
-        return keywords.flatMap((kw) => [
-          `description.ilike.%${kw}%`,
-          `cuisine.ilike.%${kw}%`,
-          `name.ilike.%${kw}%`,
-        ]);
-      });
-      query = query.or(orClauses.join(","));
+      query = query.or(dietaryIlikeClauses(dietarySelections).join(","));
     }
 
     switch (sortBy) {
@@ -783,15 +775,11 @@ export function useInfiniteRestaurants(
 /**
  * Dietary selections map to keywords searched across name, description and
  * cuisine. There is no dietary column, so this is a text fan-out - which is
- * also why a dietary filter forces the non-RPC query path.
+ * also why a dietary filter forces the non-RPC query path. The table is the
+ * one /restaurants/dietary uses (WEB-FEAT-054); re-exported for existing
+ * importers.
  */
-export const DIETARY_KEYWORDS: Record<string, string[]> = {
-  vegan: ["vegan"],
-  vegetarian: ["vegetarian", "veggie"],
-  "gluten-free": ["gluten free", "gluten-free", "celiac"],
-  keto: ["keto", "low carb"],
-  halal: ["halal"],
-};
+export { DIETARY_KEYWORDS };
 
 /**
  * WEB-FEAT-032: the dietary filter was wired to a key nothing set.

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { DIETARY_KEYWORDS, resolveDietarySelections } from "@/hooks/useRestaurants";
+import { resolveDietarySelections } from "@/hooks/useRestaurants";
+import { dietaryIlikeClauses } from "@/lib/restaurantDiets";
 import {
   businessStatusLabel,
   formatOpenStatusLine,
@@ -221,14 +222,7 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
   // inside it, rather than relying on how PostgREST combines repeated keys.
   const dietary = resolveDietarySelections(filters);
   if (dietary.length > 0) {
-    const orClauses = dietary.flatMap((diet) =>
-      // postgrest-safe: resolveDietarySelections keeps only DIETARY_KEYWORDS keys, so kw is a fixed keyword
-      (DIETARY_KEYWORDS[diet] || [diet]).flatMap((kw) => [
-        `description.ilike.%${kw}%`,
-        `cuisine.ilike.%${kw}%`,
-        `name.ilike.%${kw}%`,
-      ])
-    );
+    const orClauses = dietaryIlikeClauses(dietary);
     query = query.or(`and(or(${NOT_CLOSED}),or(${orClauses.join(",")}))`);
   } else {
     query = query.or(NOT_CLOSED);
