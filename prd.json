@@ -12513,8 +12513,8 @@
         "20/20 under load"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found 2026-11-08 by the orchestrator's background smoke run on c0a65429."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the orchestrator's background smoke run on c0a65429. | The flake reproduced on a vite build at 4 workers (1/20, 2/60, 2/100). The list had already settled. A probe found the real cause: content-visibility cards (420px placeholder, 495px once rendered) push the button down 74px about three frames after the scroll, so mouseup lands on the section. The spec now waits until the button holds still for 10 frames, then clicks. Result: 200/200 at --repeat-each=200 --workers=4, and the whole spec passes 100/100."
     },
     {
       "id": "WEB-UX-068",
@@ -12529,7 +12529,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md"
+      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md"
     },
     {
       "id": "WEB-PERF-069",
@@ -12584,7 +12584,8 @@
         "A deal inserted or updated with entity_id naming a merged restaurant ends up on the kept row, or is refused",
         "Vitest or a SQL test covers it"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "DealManager's venue search (searchDealVenues in src/lib/dealVenueSearch.ts) now leaves merged restaurants out with not.is.true inside the query. Migration 20261108000097 adds trg_resolve_deal_merged_restaurant, a BEFORE INSERT OR UPDATE OF entity_id, entity_type trigger on deals that resolves a restaurant entity_id through restaurant_merge_survivor. It rewrites the id rather than refusing the save. Verified in PGlite on top of 090: without the migration 3 deals stay on merged rows, with it all 3 reach the survivor, the cycle/attraction/null/unrelated-update rows are untouched, and a rerun is idempotent. Removing the filter turns 1 of the 6 new vitest cases red."
     },
     {
       "priority": 2,
@@ -12597,8 +12598,8 @@
         "measure-route-preload before/after: public routes lighter, none heavier, critical path not above baseline",
         "A static-graph test with a negative control keeps sonner out of the public route graphs"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by performance loop 16 while measuring WEB-PERF-069."
+      "passes": true,
+      "notes": "Found 2026-11-08 by performance loop 16 while measuring WEB-PERF-069. | 87 modules now import toast from new src/lib/toast.ts, which loads sonner on first call (queued in order, ids minted and passed through), so 64 routes are 8.8-9.0 KB gz lighter beyond the critical path (/events 191.2 -> 182.3), none heavier, summed 9,162.7 -> 8,596.1, critical path 174.7 unchanged. Verified with measure-route-preload before/after, toastLazy graph test (negative control: 6 of 9 fail on one reverted import), toast.test.ts, vitest 3312/3312, and a Chrome check that a toast raised through the built wrapper renders in the lazy Toaster."
     },
     {
       "priority": 3,
@@ -12611,7 +12612,7 @@
         "Consider teaching check-identity-read-policies.mjs that host_user_id is an identity column, and re-baseline"
       ],
       "passes": false,
-      "notes": "Found 2026-11-08 while closing WEB-SEC-069."
+      "notes": "Found 2026-11-08 while closing WEB-SEC-069. | Slice 1 of 3. Migration 20261108000096 adds lookup_swipe_session(p_code), SECURITY DEFINER for anon and authenticated, returning one session with host_user_id only for the host and never filter_context. check-identity-reads now counts host_user_id, so swipe_sessions joins the baseline (7 -> 8; it was already exposed and is now visible). Verified on PGlite with the swipe migrations and auth stubs, including a preview of the tightened policy where the RPC still resolves; new offline suite lookup-swipe-session-rpc has 11 checks, 3 of which fail on the invoker/bare-column variant. Not applied to production. Handoff: docs/improvement-loops/lanes/security.md"
     },
     {
       "priority": 3,
@@ -12623,8 +12624,8 @@
         "attainable() in pseoShippable compares Central date keys, not ISO UTC slices",
         "Vitest covers a UTC-evening instant where the Central and UTC dates differ"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while fixing WEB-SEO-063; left out of that commit to keep it to one concern."
+      "passes": true,
+      "notes": "Found 2026-11-08 while fixing WEB-SEO-063; left out of that commit to keep it to one concern. | temporalRange and dayAfter in src/pseo/listingFilters.ts now take their keys from centralDateOf/addCentralDays/centralWeekday, and attainable() in scripts/lib/pseoShippable.ts compares centralDateOf(row.date) against centralDateOf(now) instead of slicing ISO UTC strings. The listingFilters tests now use Central instants and add 8 cases (UTC evening, month end, New Year, leap February, attainable). Against the old code 6 fail under TZ=UTC and 2 under TZ=America/Chicago; with the fix all 52 pass under UTC, Tokyo, Chicago and Los Angeles. vitest src/pseo+lib+hooks 2669/2669, test:offline 65/65, app type ratchet 30/30."
     },
     {
       "priority": 3,
@@ -12646,6 +12647,164 @@
       ],
       "passes": false,
       "notes": "Found 2026-11-08 by the reliability lane while fixing WEB-QA-057. The page test now excludes the overlay, so nothing guards this yet."
+    },
+    {
+      "id": "WEB-FEAT-072",
+      "title": "Homepage hero 'events today' count and the Social Trending tab drop running events",
+      "description": "As a visitor on the State Fair's third morning, I need the hero's 'N events today' line and 'Trending Events' to include the fair. fetchHomepageCounts (today mode) and applyPublicVisibility('event') filtered date >= start of today Central with no end_date arm, so a multi-day run was missing from both after its first day. Meanwhile /events/today, which the hero line links to, lists the run (includeOngoing).",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useHomepageStats.ts fetchHomepageCounts .gte('date', floor); src/lib/trendingContent.ts applyPublicVisibility event branch .gte('date', startOfTodayIso())",
+        "Today-mode count sends upcomingOrRunningFilter(today.start) with date <= today.end; still-to-start mode keeps the bare floor",
+        "Trending/recent event visibility sends upcomingOrRunningFilter(start of today Central)",
+        "Tests evaluate the sent filters against fixture rows (running, ended, tonight, tomorrow) and fail on the old code"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Done 2026-11-08 (events lane). Both reads send upcomingOrRunningFilter. Fixture-evaluating tests 15/15, old code 4/15 fail. vitest 3073/3073, type-check ratchet 30/30. Not run against a live PostgREST. | Before 15:00 the hero's \"N events today\" count (fetchHomepageCounts) and the Social Trending event visibility (applyPublicVisibility) both send upcomingOrRunningFilter(floor) now, so a multi-day run stays counted and listed after its first day, the way /events/today already lists it. The \"still to start\" mode after 15:00 keeps the bare floor on purpose. The fixture-evaluating tests pass 15/15; against the old source 4 of 15 fail. vitest 3073/3073, eslint clean, type-check ratchet 30/30 and the related check-* scripts pass. Not run against a live PostgREST."
+    },
+    {
+      "id": "WEB-ADS-032",
+      "title": "Invites are lost when the email sign-up is confirmed in a different browser",
+      "description": "As a member who shares an invite link, I need my friend counted as my invite even when they confirm their email somewhere else. The ?ref code is kept only in the storage of the browser that opened the link (useReferralCapture). An email sign-up only gets a session in the browser that opens the confirmation link, often the mail app's in-app browser or a phone after signing up on a laptop. That browser has no stored code, so attribute_referral is never called and the invite is lost.",
+      "acceptanceCriteria": [
+        "signUpWithPassword sends the stored referral code as user metadata referral_code, without overriding a value the caller set",
+        "useReferralCapture falls back to user_metadata.referral_code when no code is stored, only while the account is under 24 hours old (attribute_referral's account_too_old window), so page loads stop calling the RPC after that",
+        "A code stored in this browser still wins over the account's",
+        "attribute_referral still decides validity; no new server path",
+        "vitest covers the sign-up write, the fallback, the 24h bound and a malformed value, and fails on the old hook"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed in the 2026-11-08 marketing-growth loop. The new src/lib/referralStorage.ts holds the storage helpers (re-exported from the hook) so authActions does not import AuthContext. Verified with new vitest 9/9 (the old hook fails the metadata case; reverting either half fails its own case), full vitest 3308/3308, eslint, type-check ratchet 30/30, check-imports, check-error-handling, check-supabase-await and check-hook-names. Not exercised against a live Supabase auth confirmation. | Sign-up now writes the stored ?ref code into the account metadata (referral_code, src/lib/referralStorage.ts withStoredReferral). useReferralCapture falls back to that metadata while the account is under 24 hours old, so an email sign-up confirmed in another browser (mail app webview, phone) is still attributed. attribute_referral still decides everything. Verified with new vitest 9/9 (the original hook fails the metadata case; reverting either half fails its own case), full vitest 3308/3308, eslint, type-check ratchet 30/30, check-imports, check-error-handling, check-supabase-await and check-hook-names."
+    },
+    {
+      "id": "WEB-FEAT-073",
+      "title": "Saved-search alert emails unsubscribe the reader from the newsletter and all marketing mail instead of from alerts",
+      "description": "As a reader who gets saved-search alerts, I need the email's Unsubscribe to stop alerts. saved-search-alerts put my newsletter_subscribers token in the footer and List-Unsubscribe, so the inbox button ran newsletter_unsubscribe_by_token: it ended the newsletter and wrote the email_suppressions row that blocks every marketing email. A reader with no newsletter row got no one-click opt-out at all. This is the same defect WEB-FEAT-059 fixed for event reminders.",
+      "acceptanceCriteria": [
+        "The alert email's footer link and List-Unsubscribe one-click target carry ?alerts=<one of the recipient's saved_searches ids>, never the newsletter token",
+        "disable_event_alerts_by_token(p_token) is SECURITY DEFINER with an anon grant. It sets user_email_preferences.event_alerts_enabled = false for the search's owner, creates a missing row with weekly_digest_enabled = false, is idempotent (already_disabled on the second click), refuses malformed or unknown tokens, and writes no suppression row",
+        "email-unsubscribe accepts ?alerts= (POST one-click -> RPC, GET -> 303 to /unsubscribe?alerts=)",
+        "/unsubscribe?alerts= says alerts are off and links /dashboard?tab=saved-searches. An RPC error goes to handleError and shows fixed copy",
+        "Tests fail on the old code and pass after"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "2026-11-08 features lane. Migration 20261108000097 must be applied before the email-unsubscribe and saved-search-alerts deploys. It ran in PGlite with stub tables. 5 new Deno and 3 new vitest cases fail on the old code; Deno 43/43, vitest 3304/3304, type ratchet 30/30. | Saved-search alert emails carried the newsletter token, so their footer link and inbox Unsubscribe button ended the newsletter and (via email_suppressions) all marketing mail, and readers with no newsletter row got no one-click link at all. Now the email carries ?alerts=<reader's saved_searches id>, and the new disable_event_alerts_by_token (migration 20261108000097, which must be applied before the functions deploy) turns off event_alerts_enabled only. A missing prefs row is created with the digest off. email-unsubscribe accepts ?alerts= and /unsubscribe shows the result. Verified: the migration ran in PGlite. The 8 new tests fail on the old code (5 Deno, 3 vitest) and pass after: Deno 43/43, vitest 3304/3304, type ratchet 30/30, check-edge-types shows no new errors."
+    },
+    {
+      "priority": "medium",
+      "id": "IOS-AUDIT-004",
+      "title": "iOS: /stay/near/<venue> links open a hotel detail for the slug \"near\"",
+      "description": "The app claims /stay/* and reads the segment after /stay as a hotel slug. /stay/near/<venue> is the web's hotels-near-a-venue page (SEO-045, src/pages/HotelsNearVenue.tsx). It is in the sitemap and linked from event and venue pages, but on iOS it opened HotelDetail for the slug \"near\", which found nothing. Nothing guarded literal web pages under the other claimed slug prefixes either.",
+      "acceptanceCriteria": [
+        "/stay/near/<venue> opens the web page, since iOS has no screen that lists hotels near a venue",
+        "Bare or malformed /stay/near links open the Stay list, never a hotel detail",
+        "/stay/<hotel-slug> still opens the hotel",
+        "A vitest guard fails when the web adds a literal page under /stay, /restaurants, /attractions, /articles, /neighborhoods or /best-of that iOS would read as a slug"
+      ],
+      "passes": true,
+      "notes": "Added DeepLinkHandler.reservedStaySegments and stayNearDestination, routed ahead of the hotel slug read. New iosLinkSegmentParity.test.ts reads App.tsx, the AASA and the Swift. Verified with vitest 16/16 (negative control fails 2 of 9), eslint and check-mobile-schema; 4 new XCTest cases plus the claimed-path sweep. Not compiled (no Xcode here). | /stay/near/<venue> (SEO-045, in the sitemap and linked from event and venue pages) used to open a hotel detail for the slug \"near\", which found nothing. It now opens the web page, and bare or malformed links open the Stay list. Verified with vitest iosLinkSegmentParity + iosEventLinkParity 16/16 (negative control fails 2 of 9), eslint and check-mobile-schema; 4 new XCTest cases. Not compiled (no Xcode here)."
+    },
+    {
+      "id": "AND-AUDIT-038",
+      "title": "Guide and review dates show the UTC day, so anything posted in the evening is dated tomorrow",
+      "priority": 3,
+      "passes": false,
+      "description": "As a reader, I need a guide's or review's date to match the day it went up in Des Moines. ArticleDetailScreen.formatDate and Review.formattedDate formatted OffsetDateTime.parse(iso) in its own offset, and Postgres sends +00:00, so anything published after 6pm CDT / 7pm CST read as the next day for every reader. A guide with no published_at showed no date at all where iOS falls back to created_at, and Guides list cards showed neither date nor reading time, both of which iOS cards show.",
+      "acceptanceCriteria": [
+        "Article and review dates are the America/Chicago calendar day of the timestamp, accepting +00:00, Z, PostgREST short offsets with microseconds, and bare dates",
+        "Article date uses published_at, else created_at, matching iOS Article.date",
+        "Guides list cards show '<date> · <n> min read' under the title, as iOS cards do",
+        "JVM tests cover an evening publish, the created_at fallback, and an evening review, and a mutation restoring offset-day formatting fails them",
+        "Device check: a guide published in the evening Central time shows the same Central date on the card and on the detail screen"
+      ],
+      "notes": "Article and review dates now come from the Des Moines day via EventSlug.centralDate. Before this they were formatted in the +00:00 offset Postgres sends, so anything posted after 6pm/7pm Central showed tomorrow's date. Articles now fall back to created_at as iOS does, and Guides list cards show date and reading time. 8 new ArticleTest and 1 new ReviewTest JVM tests pass on a stub harness (kotlinc 2.2.10), 14/14 across both suites, and a mutation restoring offset-day formatting fails 6 of them. Compose screens and the app module were not compiled (no Android SDK), and one device check remains (see the lane handoff). Handoff: docs/improvement-loops/lanes/android.md"
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-074",
+      "title": "Home 'This weekend' group misses a festival that opened before the weekend window",
+      "description": "useHomeWeekEvents reads date in [weekend start, Sunday end], so a festival that opened Thursday and runs through Sunday is not under 'This weekend'. Adding a running arm to the same query would let months-long exhibits fill its 9 slots. It needs a second, capped read for runs, like useEventsInRange's ongoing request.",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useHomeWeekEvents.ts readWindow .gte('date', window.start)",
+        "Runs that overlap the window come from a separate capped read and sort after the window's starts",
+        "Test with fixture rows: a Thu-Sun festival appears and a 3-month exhibit does not crowd out starts"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the events lane while fixing the hero count and Trending."
+    },
+    {
+      "priority": 5,
+      "id": "WEB-FEAT-075",
+      "title": "DealManager shows a merged restaurant's name for an existing deal still linked to it",
+      "description": "VenuePicker's linked-venue lookup in src/components/admin/DealManager.tsx reads the linked row by id and shows its name with no sign that it was merged. Until the 20261108000090 backfill is applied to production, an admin editing such a deal sees the duplicate's name and has no prompt to relink. Label a merged link (for example 'merged into <survivor name>') or resolve it to the survivor when the form loads.",
+      "acceptanceCriteria": [
+        "Editing a deal whose entity_id is a merged restaurant shows that it is merged and names the kept row",
+        "Saving the form stores the kept row's id (the 097 trigger already does this server-side)",
+        "A vitest case covers the label"
+      ],
+      "passes": false
+    },
+    {
+      "priority": "high",
+      "id": "WEB-UX-070",
+      "title": "Admin Selects use <SelectItem value=\"\">, which Radix Select 2.x rejects",
+      "description": "PlaygroundManager (the inline edit and bulk edit for restrooms/shade/surface/age range) and SecurityDashboard (the event type and severity filters) render <SelectItem value=\"\">. @radix-ui/react-select ^2.3.7 throws 'A <Select.Item /> must have a value prop that is not an empty string', so these selects probably crash the admin page when opened. Reproduce with a render test, then switch to a sentinel value (e.g. 'unknown' or '__clear__') that maps back to null on save. Grep src for other value=\"\" SelectItems.",
+      "passes": false,
+      "notes": "Seen while doing WEB-UX-068 slice 2; not reproduced yet."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-065",
+      "title": "pSEO this-weekend is Saturday-Sunday and skips to next weekend on Sunday, unlike /events/this-weekend",
+      "description": "src/pseo/listingFilters.ts temporalRange('this-weekend') returns the coming Saturday and Sunday. On a Sunday that is six days out, so /x/this-weekend lists next weekend while the weekend in progress is still on. It also leaves out Friday. centralWindow('this-weekend') in src/lib/timezone.ts, which /events/this-weekend and its FAQ use, is Friday through Sunday and stays on the weekend in progress. The two weekend pages disagree.",
+      "acceptanceCriteria": [
+        "temporalRange('this-weekend') returns centralWindow('this-weekend')'s startDay/endDay (Fri-Sun, in progress on Fri/Sat/Sun)",
+        "listingFilters tests cover Friday, Saturday night and Sunday afternoon Central",
+        "pSEO shippable fingerprints are rechecked, because the weekend window widens"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while fixing WEB-SEO-064. Left out of that commit because it changes which days are listed, not only how the dates are computed."
+    },
+    {
+      "priority": 2,
+      "id": "WEB-FEAT-076",
+      "title": "Flipping the saved-search alerts switch subscribes pre-October accounts to the weekly digest",
+      "description": "useSavedSearchAlerts.setAlertsPref upserts user_email_preferences with only user_id, event_alerts_enabled and updated_at. weekly_digest_enabled defaults to true (20251110000005), and get_weekly_digest_recipients mails every row with that flag set. So an account with no prefs row (anyone who signed up before handle_new_user started seeding one in 20261004000001) is opted into the weekly digest by turning alerts either on or off.",
+      "acceptanceCriteria": [
+        "setAlertsPref never creates a row with weekly_digest_enabled true: insert the row with weekly_digest_enabled false, or update an existing row and insert only when it is missing",
+        "A vitest case with no existing row asserts the write carries weekly_digest_enabled: false, and fails on the current hook",
+        "Consider a one-off check of how many rows have weekly_digest_enabled true with no digest consent; that is an owner decision, not part of the fix"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-PERF-071",
+      "title": "Restaurant grids shift 74px as rows render: the content-visibility placeholder is 420px and a card renders at 495px",
+      "description": "As a visitor scrolling /restaurants/dietary or /restaurants/open-now, I need the page to stay put, because .content-auto (src/index.css) gives every off-screen card a 420px placeholder (contain-intrinsic-size: 0 420px) and a rendered RestaurantCard is 495px at 1280px wide (396px at 390px). Rows around the viewport render a few frames after a scroll and push content: measured on a vite build with the dietary fixture, the Show more button moved from top 333 to 407 and the page grew from 9277 to 9501px about three frames after scrollIntoView, on every run. A tap made during that shift misses, and the shift counts toward CLS.",
+      "acceptanceCriteria": [
+        "Measure rendered card height at 390, 768, 1024 and 1280px with real data (descriptions and dietary chips vary the height), and set the placeholder per breakpoint to match",
+        "Keep content-visibility's style-recalc gain recorded in the index.css comment (114ms -> 27ms)",
+        "A Playwright check: scroll a control under the grid into view and assert it does not move over the next 10 frames. It fails on the current 420px placeholder",
+        "Note: adding the auto keyword alone (contain-intrinsic-size: auto 0 auto 420px) did not change the measured shift"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the reliability lane while fixing WEB-QA-058 (the spec now waits for the shift to settle; the page still shifts)."
+    },
+    {
+      "priority": "low",
+      "id": "IOS-AUDIT-005",
+      "title": "iOS: /events/kids searches the keyword \"kids\" and misses the web's family matches",
+      "description": "DeepLinkHandler.eventDestination sends /events/kids to Search with the text \"kids events\". The parser turns that into the keyword \"kids\" plus the Events tab, and FTS needs the word \"kids\" in the row. The web page uses KIDS_EVENTS_FILTER (src/hooks/useEventLanding.ts): word matches on kid/child/family/toddler/preschool/storytime/teen in the title, kids/family/children in the category, and kids/children/toddlers in enhanced_description. So family storytimes and children's shows go missing on iOS.",
+      "acceptanceCriteria": [
+        "/events/kids opens an iOS list that applies the same or-group as KIDS_EVENTS_FILTER",
+        "A vitest parity check reads the Swift and fails when the word lists drift",
+        "XCTest covers the link mapping"
+      ],
+      "passes": false,
+      "notes": "Found while doing IOS-AUDIT-NEW-ios (stay/near)."
     }
   ]
 }
