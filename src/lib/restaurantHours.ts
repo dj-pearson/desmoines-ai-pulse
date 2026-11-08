@@ -805,6 +805,22 @@ export function isPermanentlyClosedRestaurant(
 }
 
 /**
+ * Is this place's door shut: closed for good, or closed for now (our own
+ * `temporarily_closed` or Google's CLOSED_TEMPORARILY)? The same line the
+ * restaurant page draws before it lists deals (WEB-FEAT-036). A place that
+ * has not opened yet is NOT shut here: a grand-opening offer is still an
+ * offer, which is where this differs from isServingToday.
+ */
+export function isShutRestaurant(
+  row: { status?: string | null; business_status?: string | null } | null | undefined,
+): boolean {
+  if (!row) return false;
+  if (isPermanentlyClosedRestaurant(row)) return true;
+  if (row.status?.trim().toLowerCase() === 'temporarily_closed') return true;
+  return row.business_status?.trim().toUpperCase() === 'CLOSED_TEMPORARILY';
+}
+
+/**
  * Google's business_status values that mean nobody is serving there today.
  * The CHECK on restaurants.status has no temporarily-closed value, so a
  * temporary closure is recorded ONLY here, and Google keeps publishing the

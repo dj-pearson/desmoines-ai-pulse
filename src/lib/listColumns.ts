@@ -230,6 +230,14 @@ export const RESTAURANT_SUGGESTION_COLUMNS =
 export const HAPPY_HOUR_RESTAURANT_COLUMNS = "id, name, slug, status, business_status";
 
 /**
+ * Restaurants behind the deals on /deals and the explore deals row
+ * (fetchDeals). Only what decides whether the door is shut: a deal at a
+ * closed or temporarily closed place is dropped there, as it already was on
+ * the restaurant page and the Happy hour now strip (WEB-FEAT-067).
+ */
+export const DEAL_RESTAURANT_STATUS_COLUMNS = "id, status, business_status";
+
+/**
  * Cards on /restaurants/dietary/:diet (useDietaryRestaurants). What
  * RestaurantCard reads, plus hours_json and business_status: it selected
  * RESTAURANT_LIST_COLUMNS, which has neither, so with a date in `opening` no

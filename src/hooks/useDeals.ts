@@ -2,8 +2,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { handleError } from '@/lib/errorHandler';
 import { createSlug } from '@/lib/slug';
-import { HAPPY_HOUR_RESTAURANT_COLUMNS } from '@/lib/listColumns';
-import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday } from '@/lib/restaurantHours';
+import { DEAL_RESTAURANT_STATUS_COLUMNS, HAPPY_HOUR_RESTAURANT_COLUMNS } from '@/lib/listColumns';
+import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday, isShutRestaurant } from '@/lib/restaurantHours';
 
 export interface Deal {
   id: string;
@@ -68,27 +68,69 @@ function activeWindowFilter(nowIso: string): { start: string; endOr: string } {
   return { start: nowIso, endOr: `end_date.is.null,end_date.gte.${nowIso}` };
 }
 
+/** The fields of a deal's restaurant that decide whether /deals lists it. */
+export interface DealRestaurantStatus {
+  id: string;
+  status: string | null;
+  business_status: string | null;
+}
+
+/**
+ * Drops the deals whose linked restaurant is shut (isShutRestaurant). The
+ * restaurant page shows none for such a place and the Happy hour now strip
+ * skips it, so /deals listing it sent the visitor from "Half-price drafts" to
+ * a page that says Temporarily closed and has no Deals section (WEB-FEAT-067).
+ * A deal with no entity_id, or whose restaurant was not returned, is kept:
+ * the only thing this knows how to say is "that door is shut".
+ */
+export function dropShutRestaurantDeals(deals: Deal[], restaurants: DealRestaurantStatus[]): Deal[] {
+  const shut = new Set(restaurants.filter((r) => isShutRestaurant(r)).map((r) => r.id));
+  if (shut.size === 0) return deals;
+  return deals.filter((d) => !(d.entity_type === 'restaurant' && d.entity_id && shut.has(d.entity_id)));
+}
+
+/**
+ * In-date deals for /deals (and the explore deals row), featured first.
+ * Two reads, because deals.entity_id is polymorphic and has no foreign key to
+ * embed through: the deals, then the status of the restaurants they name. A
+ * failed status read is reported and the deals are listed unfiltered, since a
+ * page of deals with one shut venue in it is better than no page.
+ */
+export async function fetchDeals(category?: string): Promise<Deal[]> {
+  const active = activeWindowFilter(new Date().toISOString());
+  let query = supabase
+    .from('deals')
+    .select(DEAL_LIST_COLUMNS)
+    .lte('start_date', active.start)
+    .or(active.endOr)
+    .order('is_featured', { ascending: false })
+    .order('end_date', { ascending: true });
+
+  if (category && category !== 'all') {
+    query = query.eq('entity_type', category);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const deals = (data ?? []) as unknown as Deal[];
+
+  const ids = uniqueIds(deals, 'restaurant');
+  if (ids.length === 0) return deals;
+  const { data: restaurantRows, error: restaurantError } = await supabase
+    .from('restaurants')
+    .select(DEAL_RESTAURANT_STATUS_COLUMNS)
+    .in('id', ids);
+  if (restaurantError) {
+    handleError(restaurantError, { component: 'useDeals', action: 'fetchRestaurantStatus' });
+    return deals;
+  }
+  return dropShutRestaurantDeals(deals, (restaurantRows ?? []) as unknown as DealRestaurantStatus[]);
+}
+
 export function useDeals(category?: string) {
   return useQuery({
     queryKey: ['deals', category],
-    queryFn: async (): Promise<Deal[]> => {
-      const active = activeWindowFilter(new Date().toISOString());
-      let query = supabase
-        .from('deals')
-        .select(DEAL_LIST_COLUMNS)
-        .lte('start_date', active.start)
-        .or(active.endOr)
-        .order('is_featured', { ascending: false })
-        .order('end_date', { ascending: true });
-
-      if (category && category !== 'all') {
-        query = query.eq('entity_type', category);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as unknown as Deal[];
-    },
+    queryFn: () => fetchDeals(category),
     staleTime: 5 * 60 * 1000,
   });
 }
