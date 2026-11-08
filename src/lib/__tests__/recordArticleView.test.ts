@@ -1,6 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
-import { isAutomatedClient } from "@/lib/recordArticleView";
+import { isAutomatedClient, recordArticleView } from "@/lib/recordArticleView";
+
+const rpc = vi.fn();
+
+vi.mock("@/integrations/supabase/client", () => {
+  // SupabaseClient.rpc reads this.rest, so a detached call throws in the real
+  // client. The stub does the same, or a detached call would pass here.
+  const client = {
+    rest: {},
+    rpc(this: unknown, ...a: unknown[]) {
+      if (this !== client) throw new TypeError("Cannot read properties of undefined (reading 'rest')");
+      return rpc(...a);
+    },
+  };
+  return { supabase: client };
+});
 
 /**
  * WEB-BE-056 AC2. The article view counter.
@@ -74,5 +89,51 @@ describe("the counter is a database function, not a client write", () => {
     // Anonymous readers are the ones counting; without the grant the function
     // exists and refuses everybody who actually reads an article.
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.increment_article_view\(text\) TO anon/);
+  });
+});
+
+describe("recordArticleView (WEB-SEO-062)", () => {
+  const realNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const setNavigator = (webdriver: boolean, userAgent: string) =>
+    Object.defineProperty(globalThis, "navigator", {
+      value: { webdriver, userAgent },
+      configurable: true,
+    });
+
+  beforeEach(() => {
+    rpc.mockReset();
+    setNavigator(false, CHROME);
+  });
+
+  afterEach(() => {
+    if (realNavigator) Object.defineProperty(globalThis, "navigator", realNavigator);
+  });
+
+  it("calls increment_article_view on the client, not a detached rpc", () => {
+    rpc.mockReturnValue(Promise.resolve({ error: null }));
+    expect(() => recordArticleView("best-tacos")).not.toThrow();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("increment_article_view", { p_slug: "best-tacos" });
+  });
+
+  it("swallows a rejected count, so a failed write never reaches the page", () => {
+    let rejected = false;
+    rpc.mockReturnValue({
+      then(_ok: unknown, onRejected?: (e: unknown) => void) {
+        rejected = true;
+        onRejected?.(new Error("PGRST202"));
+        return Promise.resolve();
+      },
+    });
+    expect(() => recordArticleView("best-tacos")).not.toThrow();
+    expect(rejected).toBe(true);
+  });
+
+  it("does not count automated clients or an empty slug", () => {
+    setNavigator(true, CHROME);
+    recordArticleView("best-tacos");
+    setNavigator(false, CHROME);
+    recordArticleView("");
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
