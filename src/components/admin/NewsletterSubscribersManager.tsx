@@ -7,7 +7,6 @@ import {
   Mail,
   Search,
   UserMinus,
-  UserPlus,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -54,12 +53,25 @@ import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+/**
+ * WEB-ADS-029. 'pending' joined the status CHECK with double opt-in
+ * (20260918000002) and this page never learned it: a pending row rendered as
+ * "Unsubscribed" and offered a one-click Re-subscribe that wrote
+ * status = 'active'. send-newsletter-campaign mails every active row, so that
+ * click mailed an address whose owner never confirmed it (possibly a stranger
+ * who typed it into the signup form), with no consent_records row and the
+ * confirm token still live. The same button overrode an explicit opt-out.
+ *
+ * The only way back to 'active' is the subscriber's own click on the emailed
+ * link (newsletter_confirm_by_token), because that click is the consent
+ * record. This page can only take people off the list.
+ */
 interface NewsletterSubscriber {
   id: string;
   email: string;
   first_name: string | null;
   source: string | null;
-  status: "active" | "unsubscribed" | "bounced";
+  status: "active" | "pending" | "unsubscribed" | "bounced";
   subscribed_at: string;
   unsubscribed_at: string | null;
   utm_source: string | null;
@@ -67,7 +79,7 @@ interface NewsletterSubscriber {
   utm_campaign: string | null;
 }
 
-type StatusFilter = "all" | "active" | "unsubscribed" | "bounced";
+type StatusFilter = "all" | NewsletterSubscriber["status"];
 const PAGE_SIZE = 50;
 
 function StatusBadge({ status }: { status: NewsletterSubscriber["status"] }) {
@@ -78,6 +90,16 @@ function StatusBadge({ status }: { status: NewsletterSubscriber["status"] }) {
         className="text-[10px] gap-1 border-green-500 text-green-600"
       >
         Active
+      </Badge>
+    );
+  if (status === "pending")
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] gap-1 border-amber-500 text-amber-700"
+        title="Signed up, has not clicked the confirmation link"
+      >
+        Awaiting confirmation
       </Badge>
     );
   if (status === "bounced")
@@ -224,37 +246,38 @@ export default function NewsletterSubscribersManager() {
     });
   }
 
-  async function setStatus(
-    ids: string[],
-    next: NewsletterSubscriber["status"],
-  ) {
+  async function unsubscribe(ids: string[]) {
     if (ids.length === 0) return;
+    const next = "unsubscribed";
     setBusy(true);
     try {
       // Typed as the table's own Update row. Record<string, unknown> is an
       // index signature, which supabase-js 2.85+ rejects on an update because
       // it promises nothing about the keys - and a key the table lacks comes
       // back PGRST204 with the write silently lost.
-      const patch: Database["public"]["Tables"]["newsletter_subscribers"]["Update"] = { status: next };
-      if (next === "unsubscribed") {
-        patch.unsubscribed_at = new Date().toISOString();
-      } else if (next === "active") {
-        patch.unsubscribed_at = null;
-      }
+      const patch: Database["public"]["Tables"]["newsletter_subscribers"]["Update"] = {
+        status: next,
+        unsubscribed_at: new Date().toISOString(),
+      };
       // .select("id") returns the rows the update actually touched. RLS that
       // denies an UPDATE does not error, it matches nothing, so without this
       // a refused change was reported as done.
+      //
+      // Active rows only. A bulk selection can hold bounced rows, and
+      // rewriting one to 'unsubscribed' throws away the fact that the mailbox
+      // does not exist; a pending row was never on the list to leave.
       const { data: updated, error } = await supabase
         .from("newsletter_subscribers")
         .update(patch)
         .in("id", ids)
+        .eq("status", "active")
         .select("id");
       if (error) throw error;
       const changed = (updated ?? []).map((r) => r.id);
 
       if (changed.length === 0) {
         toast.error(
-          "No subscribers were updated. Your account may not have permission to change them.",
+          "No subscribers were updated. Only active subscribers can be unsubscribed, and your account needs admin access.",
         );
         setBulkUnsub(false);
         return;
@@ -269,7 +292,7 @@ export default function NewsletterSubscribersManager() {
 
       if (changed.length < ids.length) {
         toast.warning(
-          `${changed.length} of ${ids.length} subscribers set to ${next}. The rest were not changed.`,
+          `${changed.length} of ${ids.length} subscribers set to ${next}. The rest were not active and were left as they were.`,
         );
       } else {
         toast.success(
@@ -282,7 +305,7 @@ export default function NewsletterSubscribersManager() {
     } catch (err) {
       handleError(err, {
         component: "NewsletterSubscribersManager",
-        action: "setStatus",
+        action: "unsubscribe",
       });
       toast.error("Status update failed");
     } finally {
@@ -374,6 +397,7 @@ export default function NewsletterSubscribersManager() {
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="pending">Awaiting confirmation</SelectItem>
               <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
               <SelectItem value="bounced">Bounced</SelectItem>
             </SelectContent>
@@ -523,23 +547,14 @@ export default function NewsletterSubscribersManager() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setStatus([r.id], "unsubscribed")}
+                            onClick={() => unsubscribe([r.id])}
                             disabled={busy}
                             title="Unsubscribe"
+                            aria-label={`Unsubscribe ${r.email}`}
                           >
-                            <UserMinus className="h-3.5 w-3.5" />
+                            <UserMinus className="h-3.5 w-3.5" aria-hidden="true" />
                           </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setStatus([r.id], "active")}
-                            disabled={busy}
-                            title="Re-subscribe"
-                          >
-                            <UserPlus className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
@@ -548,6 +563,12 @@ export default function NewsletterSubscribersManager() {
             </TableBody>
           </Table>
         </div>
+
+        <p className="mt-3 text-xs text-muted-foreground">
+          Only the subscriber can put an address back on the list, by clicking
+          the confirmation link we email them. That click is the consent record,
+          so there is no re-subscribe here.
+        </p>
 
         <div className="flex items-center justify-between mt-4 text-sm">
           <div className="text-muted-foreground">
@@ -581,15 +602,16 @@ export default function NewsletterSubscribersManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Unsubscribe selected?</AlertDialogTitle>
             <AlertDialogDescription>
-              Sets status = "unsubscribed" on {selectedIds.length} row
-              {selectedIds.length === 1 ? "" : "s"} and writes an audit log
-              entry. Subscribers can opt back in via the website at any time.
+              Sets status = "unsubscribed" on the active rows among{" "}
+              {selectedIds.length} selected and writes an audit log entry.
+              Pending, bounced and already unsubscribed rows are left as they
+              are. Subscribers can opt back in from the website at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => setStatus(selectedIds, "unsubscribed")}
+              onClick={() => unsubscribe(selectedIds)}
               disabled={busy}
             >
               Unsubscribe
