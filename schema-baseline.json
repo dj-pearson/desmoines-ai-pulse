@@ -16,7 +16,6 @@
     "table|src/components/cms/EnhancedArticleEditor.tsx|author_profiles",
     "table|src/hooks/useTripPlanner.ts|trip_plan_items",
     "table|src/hooks/useTripPlanner.ts|trip_plans",
-    "table|src/pages/AdminRefunds.tsx|payments",
     "table|supabase/functions/_shared/agents/billing-selfservice.ts|payments",
     "table|supabase/functions/_shared/agents/fraud-abuse-detector.ts|payments",
     "table|supabase/functions/_shared/agents/fraud-abuse-detector.ts|usage_events",
