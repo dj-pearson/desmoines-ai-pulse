@@ -11162,7 +11162,8 @@
         "Both popover inputs are associated with their labels (shared Label + useId)",
         "A vitest spec fails on the old code and passes on the new"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "RichTextEditor Link URL and Image URL popover inputs now use the shared Label with htmlFor/useId ids (plus type=\"url\"). New richTextEditorPopoverLabels.test.tsx fails 3/3 on old code (label with no associated control), passes 3/3; vitest 3039/3039, type ratchet 32/32, eslint clean, check-icon-button-names 0, check-ui-craft 3 <= 7. Note: the worktree was created on main (113 commits behind); it was reset to claude/continuous-improvement-loops-76i72u (07c7732f) before work, so the commit sits on the rolling branch tip."
     },
     {
       "priority": 3,
@@ -11626,7 +11627,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Slice 1 done 2026-11-08 (reliability lane): AC1 and AC2. The check found 9 tests. search-filters' 6 now assert (restaurant search debounce, Clear all resets q, q reaches the URL, the live region announces the term, the search input stays put and CLS < 0.1) or are deleted (the loading indicator test). search-filters is 29/29 on a vite build and 87/87 with --repeat-each=3, and three negative controls in src fail exactly the targeted tests. AC3 and AC4 are open; see the reliability lane handoff. | Slice 1 of 2. The new npm run check-e2e-assertions runs in validate and pr-checks. It fails any test in a required lane (the smoke testMatch, and the a11y testMatch plus its grep) that has no expect, no expect*/assert* call and no throw, and it follows local and tests/support helpers transitively. It found 9 such tests. search-filters' 6 now assert or are deleted; the 3 in performance.spec are baselined. Verified on a vite build: search-filters 29/29, and 87/87 with --repeat-each=3. Three negative controls in src fail exactly the 3 targeted tests, the old spec trips the check 6 times, and the offline suite passes 28/28. Handoff: docs/improvement-loops/lanes/reliability.md"
+      "notes": "Slice 1 done 2026-11-08 (reliability lane): AC1 and AC2. The check found 9 tests. search-filters' 6 now assert (restaurant search debounce, Clear all resets q, q reaches the URL, the live region announces the term, the search input stays put and CLS < 0.1) or are deleted (the loading indicator test). search-filters is 29/29 on a vite build and 87/87 with --repeat-each=3, and three negative controls in src fail exactly the targeted tests. AC3 and AC4 are open; see the reliability lane handoff. | Slice 1 of 2. The new npm run check-e2e-assertions runs in validate and pr-checks. It fails any test in a required lane (the smoke testMatch, and the a11y testMatch plus its grep) that has no expect, no expect*/assert* call and no throw, and it follows local and tests/support helpers transitively. It found 9 such tests. search-filters' 6 now assert or are deleted; the 3 in performance.spec are baselined. Verified on a vite build: search-filters 29/29, and 87/87 with --repeat-each=3. Three negative controls in src fail exactly the 3 targeted tests, the old spec trips the check 6 times, and the offline suite passes 28/28. Handoff: docs/improvement-loops/lanes/reliability.md | Slice 2: the three baselined performance.spec tests in the required smoke lane now assert (render-blocking app stylesheet that lands before FCP, same-origin images WebP/AVIF/SVG, and a gated-backend aria-busy loading state that clears from the viewport), so the e2e-assertions baseline went from 3 to 0. Verified on a vite build: performance.spec passed 84/84 with --repeat-each=3, and the three negative controls (non-blocking stylesheet, logo without its WebP source, TonightRail without aria-busy) each failed their test. Handoff: docs/improvement-loops/lanes/reliability.md"
     },
     {
       "priority": 3,
@@ -11638,8 +11639,8 @@
         "The legacy branch also matches rows whose end_date is on or after today's floor, in one or() group",
         "A vitest test with a recording client asserts the end_date arm"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane while fixing the window-less landings. Not changed."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane while fixing the window-less landings. Not changed. | DONE 2026-11-08. useEventBySlug's legacy dateless branch now sends useEvents' upcomingOrRunningFilter (one or=date.gte,end_date.gte group at start of today CT) instead of a bare date floor, so a festival's legacy URL keeps resolving for the rest of the run. The dated-slug window is unchanged. Verified with the new src/hooks/__tests__/useEventBySlug.running.test.ts (recording client, 4/4, red 3/4 before the fix, negative control 3/4), vitest across src/hooks, src/pages, src/components/events and src/lib (2548/2548), eslint, the type-check ratchet (32/32) and four check-* scripts. Not run against a live PostgREST."
     },
     {
       "priority": 4,
@@ -11663,8 +11664,8 @@
         "The status uses resolveOpenStatus(hours_json, hoursTextOf(opening), at) and is overridden by businessStatusLabel for a non-serving business_status",
         "Test with a production-shaped row plus a negative control"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while shipping WEB-FEAT-044 (grep for resolveOpenStatus(undefined). Not yet reproduced against DiscoverMap's projection."
+      "passes": true,
+      "notes": "Found 2026-11-08 while shipping WEB-FEAT-044 (grep for resolveOpenStatus(undefined). Not yet reproduced against DiscoverMap's projection. | /discover-map restaurant pins now select DISCOVER_MAP_RESTAURANT_COLUMNS, which adds hours_json and business_status and is checked by check-list-columns (16/16). They're evaluated by discoverMapRestaurantStatus (resolveOpenStatus(hours_json, hoursTextOf(opening)), with businessStatusLabel taking precedence), so production rows show under Now/Tonight, CLOSED_TEMPORARILY reads \"Temporarily closed\" and drops out of Now/Tonight, and CLOSED_PERMANENTLY loses its pin. 8 new tests use a production-shaped row; a negative control turns 3 red. vitest 3044/3044, type-check ratchet 32/32, eslint clean."
     },
     {
       "priority": 3,
@@ -11676,8 +11677,8 @@
         "The hero review summary links to #reviews once the widget exists",
         "A smoke test asserts the widget mounts and the summary link resolves"
       ],
-      "passes": false,
-      "notes": "Found in the WEB-SEO-056 loop, 2026-11-08; not changed there. It touches review UX, so the features lane may own it."
+      "passes": true,
+      "notes": "Found in the WEB-SEO-056 loop, 2026-11-08; not changed there. It touches review UX, so the features lane may own it. | PlaygroundDetails now mounts RatingSystem for content_type playground under #reviews (lazy + DeferredWidget, as on AttractionDetails) and the hero review average links to #reviews. Smoke playground-detail adds a test that clicks the summary, lands on #reviews, sees the widget mount and every user_ratings query scoped to this playground; it and the href assertion fail on the old page; 33/33 across playground-detail, attraction-detail, playgrounds-hub against a vite build."
     },
     {
       "priority": 3,
@@ -11715,7 +11716,168 @@
         "Both have TalkBack custom actions",
         "A JVM test pins which rows offer the reminder"
       ],
-      "notes": "Found in the AND-AUDIT-028 loop, 2026-11-08."
+      "notes": "Found in the AND-AUDIT-028 loop, 2026-11-08. | Slice 1 of 2 (2026-11-08): every Saved event row, past ones included, offers Share in its overflow menu and as a TalkBack action. Event detail and Saved now share util/EventShareText, whose text ends with SITE_URL/events/<id> as iOS's does (Android's share text had no link before). 5 new EventShareTextTest JVM tests pass on a stub kotlinc 2.2.10 harness (51/51 with the four event-time suites) and a mutation dropping the link fails 2. Compose UI and app module not compiled (no Android SDK), no device check. The reminder toggle (AC2, AC4) is the handoff. Handoff: docs/improvement-loops/lanes/android.md"
+    },
+    {
+      "id": "WEB-PERF-064",
+      "title": "Forced vendor-dates manual chunk ships all of date-fns to 114 of 159 lazy imports and skews Rollup's grouping of app modules",
+      "description": "vite.config.ts forced every date-fns/date-fns-tz module into one vendor-dates chunk (36 KB minified, 10.3 KB gz). A manual chunk is all-or-nothing, so any route that formats one date downloads every date function the app uses. The forced chunk also changed how Rollup grouped and merged shared app modules: admin and policy routes ended up preloading eventsHubQuery, restaurantHours, tonightPairings and useCampaigns without needing them. Radix and three.js were un-forced for the same reason earlier (WEB-PERF-042 and the vendor-ui note).",
+      "acceptanceCriteria": [
+        "manualChunks no longer returns a chunk name for date-fns or date-fns-tz",
+        "Per-route JS beyond the critical path, summed over every lazy route in App.tsx, goes down; record before and after",
+        "Critical-path JS stays within the bundle-budget tolerance",
+        "A test calls the real manualChunks function and fails if date-fns (or radix, three, recharts, lucide) is forced into a chunk again, with a positive control for the vendors that are still forced"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "2026-11-08 (performance lane, loop 10). Removed the vendor-dates manualChunks branch. Summed per-route JS beyond the critical path (route chunk plus its __vite__mapDeps preload list, minus vendor-react, vendor-react-ecosystem and vendor-supabase), one build each way: 131 routes 11,779 -> 10,840 KB gz (78 better, 36 worse by 0.5-5.5 KB, 17 the same); 89 public routes 6,033 -> 5,727. /pricing 73.3 -> 52.4, /contact 90.2 -> 66.7, /auth 106.5 -> 83.0, /articles 107.4 -> 96.8, /restaurants/:id 160.9 -> 155.8, /events/:id 174.8 -> 170.4, / 78.8 -> 77.9; worst regression /hotels 102.8 -> 108.3, from the experimentalMinChunkSize merge folding a different set of small modules into chunks it imports. Critical path 174.9 -> 175.0 KB. src/__tests__/manualChunks.test.ts calls the real manualChunks function (8 pass; re-adding the date-fns line fails 3). vitest 3044/3044. In Chrome against vite preview: 24 route loads, no page errors, no failed chunks. | Removed the forced vendor-dates manual chunk from vite.config.ts. Per-route JS beyond the critical path (route chunk plus its preload list, minus the three vendors), summed over every lazy route in App.tsx with one build each way, went from 11,779 to 10,840 KB gz: 78 routes better, 36 worse by 0.5-5.5 KB, public routes 6,033 to 5,727. Critical path is unchanged (175.0 KB). It's pinned by src/__tests__/manualChunks.test.ts, which has a negative control: re-adding the date-fns line fails 3 of its 8 tests. 24 route loads in Chrome against vite preview showed no page errors and no failed chunks."
+    },
+    {
+      "id": "WEB-SEC-062",
+      "title": "check-edge-auth counts the bare word 'signature' as a caller check, so log-error passed as guarded",
+      "description": "As the owner, I need the service-role sweep to flag every function that verifies no caller. Accepting any occurrence of 'signature' let log-error (service role, public, no caller check) and any function holding a signature variable pass as guarded.",
+      "priority": 3,
+      "acceptanceCriteria": [
+        "VERIFIES_CALLER no longer contains the bare word 'signature'",
+        "play-rtdn-webhook still counts as guarded, on its named OIDC verifiers (verifyOidcToken, checkPubSubOidcClaims)",
+        "log-error is in .github/edge-auth-baseline.json with a DO NOT GUARD note listing its callers",
+        "A counter-test plants a service-role function holding a 'signature' variable and asserts the sweep flags it; it fails with the word restored"
+      ],
+      "passes": true,
+      "notes": "2026-11-08: Done. Removed 'signature' from scripts/check-edge-auth.mjs and named verifyOidcToken and checkPubSubOidcClaims instead. log-error is baselined with a DO NOT GUARD note (4 -> 5 entries; nothing new became unguarded, the sweep just stopped hiding one). The checker now honours EDGE_AUTH_ROOT. New scripts/__tests__/edge-auth-check.test.mjs: 7 checks, 3 fail with the word restored. check-edge-auth OK, test:offline 63/63. | check-edge-auth treated the bare word \"signature\" as a caller check. That let log-error pass as guarded: it runs as service role, it's public, it verifies nobody, and it happens to compute an error cluster signature. The word is gone, play-rtdn-webhook's real OIDC verifiers are named in its place, and log-error is now baselined with a DO NOT GUARD note that lists its callers. Verified with a new counter-test, edge-auth-check.test.mjs: 7/7 pass, and 3 fail when \"signature\" is put back. check-edge-auth OK, test:offline 63/63."
+    },
+    {
+      "id": "WEB-ADS-025",
+      "title": "Newsletter sends re-mail readers after a killed run: delivery rows written only at the end, send_now capped at 1000 and not resumable",
+      "description": "As a newsletter reader, I should get each campaign once. send-newsletter-campaign (send_now) and dispatch-scheduled-newsletters inserted every newsletter_deliveries row only after the last send. When an edge function was killed part-way it left no rows, reclaim_stuck_newsletter_campaigns put the campaign back to 'scheduled', and the resume mailed the whole list again. A list too long to finish in one invocation got killed at the same point each time, so it repeated every 15 minutes. send_now also read recipients without a range, which capped the list at 1000. A killed send_now had no scheduled_for, so the claim RPC never picked it up again.",
+      "acceptanceCriteria": [
+        "Delivery rows are written after every batch, so a run killed part-way leaves a row for every reader it mailed, apart from the batch in flight",
+        "A resume skips recorded readers, and totals include earlier runs",
+        "A failed delivery-row write stops the send and marks the campaign failed with partial counts",
+        "Recipients and prior deliveries are read in 1000-row pages in both functions",
+        "send_now inserts its row with scheduled_for and claimed_at set to now, so a killed run gets reclaimed and resumed",
+        "Response shapes unchanged; vitest covers kill, resume, failed record and paging, with a negative control"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed in the 2026-11-08 marketing-growth loop. Shared loop in supabase/functions/_shared/newsletterDispatch.ts. src/lib/__tests__/newsletterDispatch.test.ts 10/10; the negative control (end-of-run insert) fails 3/10. Full vitest 3046/3046. Not executed on Deno or SES. Owner: deploy send-newsletter-campaign and dispatch-scheduled-newsletters. | Done in code. Newsletter sends now share _shared/newsletterDispatch.ts. It writes newsletter_deliveries after every batch (it used to write them once, after the last send, so a killed run left no rows and the resume mailed everyone again), stops the send when a write fails, and reads more than PostgREST's 1000-row cap in pages. send_now is stamped due and claimed, so a killed run gets resumed. Verified with new vitest 10/10 (the negative control with an end-of-run insert fails 3/10), full vitest 3046/3046, eslint, type-check ratchet 32/32, check-edge-auth/types/deno-lanes/pins. Not executed on Deno or SES. Owner: deploy send-newsletter-campaign and dispatch-scheduled-newsletters."
+    },
+    {
+      "id": "WEB-FEAT-055",
+      "title": "Two stale Deno contract tests failed on every run of the edge test job, skipping every step after them",
+      "description": "supabase/functions/_tests/client-contract.test.ts failed because iOS (XPLAT-007) joined Android in calling export-user-data, and that function had no MULTI_CLIENT entry. supabase/functions/_tests/session-timeout-policy.test.ts still grepped SessionManager for `enabled: isAdmin && !isAdminLoading`, which WEB-PERF-061 replaced with an early return and a lazy AdminSessionTimeout. subscription-sync-tests.yml runs its deno steps in sequence, so the first failure skipped every later contract test.",
+      "acceptanceCriteria": [
+        "export-user-data has a MULTI_CLIENT entry listing both mobile callers",
+        "every listed client is asserted to still call its function",
+        "export-user-data is asserted to read nothing from the request body and to take the id from the authenticated user",
+        "session-timeout-policy asserts the early-return admin gate and that only SessionManager loads AdminSessionTimeout",
+        "both test files pass under Deno"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Both files failed before and pass after under Deno 2.1.4 with a local std-assert shim (8/8, 6/6); two mutation checks were caught. 155 of 165 workflow deno steps pass locally; the other 10 are blocked by network or runtime. | Fixed two drifted tests in subscription-sync-tests.yml that failed on every run. client-contract had no MULTI_CLIENT entry for export-user-data once iOS joined Android as a caller. session-timeout-policy still grepped for the enabled: gate that WEB-PERF-061 replaced. The job runs steps in sequence, so these failures skipped every later step. Added an export-user-data entry, a check that each listed client still calls its function, a check that the export never reads the request body, and a check that AdminSessionTimeout has only one importer. Both files failed before and pass after under Deno 2.1.4, and two deliberate breakages (mutations) were each caught."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-045",
+      "title": "/events/series/<slug> links open an empty event detail on iOS",
+      "description": "As someone sent a link to an annual event's series page (e.g. /events/series/panda-fest, in the sitemap and linked from every edition's web page), I need the iOS app to show that page. Today the app claims /events/*, reads \"series\" as an event slug and opens an event detail that finds nothing. The App Clip reads the same set and has the same problem.",
+      "acceptanceCriteria": [
+        "/events/series/<slug> with a well-formed lowercase slug opens that page in the in-app web view (no native series screen exists)",
+        "Bare /events/series and malformed series slugs open Home, never an empty detail",
+        "EventSlug.linkId rejects \"series\", so the App Clip falls back to highlights",
+        "A vitest fails when a literal /events/<segment> route in src/App.tsx is missing from EventSlug.landingSegments, or when that set names a route that no longer exists"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed 2026-11-08 (ios lane). DeepLinkHandler.eventSeriesDestination opens /events/series/<slug> on the web, and \"series\" was added to EventSlug.landingSegments. vitest src/lib/__tests__/iosEventLinkParity.test.ts has 3 tests and is negative-controlled. 5 new XCTest cases; not compiled (no Xcode here). | /events/series/<slug> links now open that annual-event page in SafariView. Before, the app read \"series\" as an event slug and opened an empty detail screen. Bare or malformed series links open Home, and \"series\" is now in EventSlug.landingSegments, which the App Clip shares. The new vitest iosEventLinkParity.test.ts (3 tests, negative-controlled) fails if any literal /events/<segment> route in App.tsx is missing from that Swift set or stale in it. There are 5 new XCTest cases; not compiled (no Xcode here)."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-063",
+      "title": "Admin filter labels sit beside a Select/date picker with no association",
+      "description": "src/components/ContentTable.tsx 'Sort by:' and src/components/admin/SearchTrafficDashboard.tsx 'Platform:' and 'Date Range:' render a bare <label> next to a Radix SelectTrigger or DatePickerWithRange with no htmlFor, so those controls are announced without their label.",
+      "acceptanceCriteria": [
+        "Each label is associated with its control (shared Label + useId, id on SelectTrigger; DatePickerWithRange gets an id or aria-labelledby passthrough)",
+        "A vitest spec fails on the old code and passes on the new"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-PERF-065",
+      "title": "experimentalMinChunkSize merge makes routes preload app modules they never import",
+      "description": "With experimentalMinChunkSize: 1000, Rollup merges small shared chunks into larger ones. A route that imports the merged chunk then preloads every module in it. After WEB-PERF-064, /hotels preloads eventsHubQuery (3.5 KB gz), useEventLanding (2.5) and useProximitySearch (2.0). Before that change, admin pages preloaded restaurantHours, tonightPairings and useCampaigns the same way. 36 routes got 0.5-5.5 KB heavier from that reshuffle alone.",
+      "acceptanceCriteria": [
+        "For the 10 highest-traffic public routes, list the preloaded chunks that contain no module the route reaches statically",
+        "Try candidate fixes (another minChunkSize value with the trade measured as in the vite.config comment, or a targeted manualChunks/output.experimentalMinChunkSize change) and record the per-route sums before and after",
+        "Critical path does not grow beyond tolerance"
+      ],
+      "passes": false,
+      "notes": "Found in the WEB-PERF-064 loop. The measuring method is in docs/improvement-loops/lanes/performance.md."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-PERF-066",
+      "title": "Preload dependency arrays are about a quarter of the entry chunk",
+      "description": "The entry chunk carries __vite__mapDeps: 16.6 KB of chunk file names and 28.5 KB of per-import index arrays (7,652 refs across 159 lazy imports). Removing both cuts the entry's gzip from 55.5 to 41.7 KB, so about 13.7 KB gz of the 54.2 KB entry is preload bookkeeping. Each route lists about 48 deps on average. vendor-react, vendor-react-ecosystem and vendor-supabase appear in almost every list even though index.html already modulepreloads all three.",
+      "acceptanceCriteria": [
+        "Use build.modulePreload.resolveDependencies to drop deps that index.html already modulepreloads; measure the entry gz before and after",
+        "Assess whether any further trimming (for example keeping only direct deps) is worth the route-navigation waterfall it adds, with a measured navigation comparison, before shipping it",
+        "check-bundle-budget ratchets down"
+      ],
+      "passes": false,
+      "notes": "Found in the WEB-PERF-064 loop by stripping mapDeps from the built entry and re-gzipping. Dropping the three vendors removes only 468 refs, so on its own it is a small win."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-SEC-063",
+      "title": "log-error stores body.userId unverified, so an anonymous caller can attribute an error row to any user",
+      "description": "As a user, I need error_events rows tied to my id to come from me, because error_events is listed in _shared/userDataTables.ts and so appears in data export and deletion. log-error is public (verify_jwt=false) and copies any UUID-shaped body.userId into error_events.user_id.",
+      "acceptanceCriteria": [
+        "user_id is set only from a verified bearer (auth.getUser) or from a machine caller; an anonymous body.userId is dropped",
+        "The web errorHandler and the iOS CrashUploader/ErrorSink still deliver errors without a session",
+        "A Deno test shows an anonymous request with a foreign userId stores user_id null"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while baselining log-error in check-edge-auth. Not fixed."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-ADS-026",
+      "title": "send_now sends inside the admin's HTTP request; large lists should hand off to the dispatcher",
+      "description": "send-newsletter-campaign send_now loops over every recipient inside one request, five at a time. A list of a few thousand runs past the edge wall-clock limit, so the admin sees a timeout and the dispatcher finishes the send 15 minutes later. Above a size threshold, send_now should insert the row as scheduled now and return straight away, and the admin UI should then show progress from newsletter_deliveries.",
+      "acceptanceCriteria": [
+        "Above N recipients, send_now returns a queued response without sending in the request",
+        "NewsletterCampaignsManager handles the queued response and shows delivered counts as they arrive",
+        "Response stays backward compatible (delivered, failed, recipient_count present)"
+      ],
+      "passes": false,
+      "notes": "Found during the 2026-11-08 marketing-growth loop while fixing per-batch delivery recording."
+    },
+    {
+      "priority": 3,
+      "id": "IOS-AUDIT-FEAT-046",
+      "title": "Native annual-event series screen on iOS",
+      "description": "/events/series/<slug> opens in the in-app web view because iOS has no series screen. On the web, EventSeriesPage lists this year's edition and past ones by matching normalised titles against EVENT_SERIES (src/lib/eventSeries.ts, 20 editorial series). A native screen would keep the person in the app and let them save or calendar the next edition.",
+      "acceptanceCriteria": [
+        "iOS has the EVENT_SERIES list (slug, name, aliases, venueIncludes) with a parity test against src/lib/eventSeries.ts",
+        "/events/series/<slug> opens a native screen showing the current or next edition and past ones by year",
+        "An unknown slug still opens the web page"
+      ],
+      "passes": false,
+      "notes": "Follow-up to IOS-AUDIT-FEAT-045, which routed these links to the web view."
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-034",
+      "title": "Restaurant, attraction and hotel share text carries no link",
+      "passes": false,
+      "description": "RestaurantDetailViewModel, AttractionDetailViewModel and HotelDetailViewModel build share text ending \"Found on Des Moines Insider\" with no URL, the same gap AND-AUDIT-033 fixed for events. iOS shares a shareURL for restaurants and attractions. AttractionDetailViewModel already has webUrl(), and DeepLinkHandler routes /restaurants/<id>, /attractions/<id> and /stay/<id> back into the app.",
+      "acceptanceCriteria": [
+        "Each of the three share texts ends with its SITE_URL page, matching the path iOS shares",
+        "A JVM test pins each URL format"
+      ],
+      "notes": "Found in the AND-AUDIT-033 loop, 2026-11-08."
     }
   ]
 }
