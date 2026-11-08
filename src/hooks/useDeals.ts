@@ -2,7 +2,11 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { handleError } from '@/lib/errorHandler';
 import { createSlug } from '@/lib/slug';
-import { DEAL_RESTAURANT_STATUS_COLUMNS, HAPPY_HOUR_RESTAURANT_COLUMNS } from '@/lib/listColumns';
+import {
+  DEAL_RESTAURANT_STATUS_COLUMNS,
+  DEAL_VENUE_RESTAURANT_COLUMNS,
+  HAPPY_HOUR_RESTAURANT_COLUMNS,
+} from '@/lib/listColumns';
 import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday, isShutRestaurant } from '@/lib/restaurantHours';
 
 export interface Deal {
@@ -329,14 +333,99 @@ export function useClaimDeal() {
   });
 }
 
+/** A restaurant row as the /deals venue links read it. */
+export interface DealVenueRestaurant {
+  id: string;
+  slug: string | null;
+  is_merged?: boolean | null;
+  merged_into?: string | null;
+}
+
 /**
- * Venue links for a page of deals: one batched query per entity type.
+ * The page a restaurant deal links to. A deal curated against a duplicate
+ * that was later merged follows merged_into to the kept row (WEB-FEAT-069):
+ * the duplicate's page only redirects there, and the kept row's Deals section
+ * lists deals by its own id. A merged row whose survivor was not returned
+ * keeps its own link, which still redirects, rather than losing the link.
+ */
+export function restaurantVenueLinks(
+  rows: DealVenueRestaurant[],
+  survivors: DealVenueRestaurant[] = [],
+): Record<string, string> {
+  const byId = new Map<string, DealVenueRestaurant>();
+  for (const row of [...rows, ...survivors]) byId.set(row.id, row);
+  const links: Record<string, string> = {};
+  for (const row of rows) {
+    const survivor =
+      row.is_merged && row.merged_into && row.merged_into !== row.id ? byId.get(row.merged_into) : undefined;
+    const target = survivor ?? row;
+    links[`restaurant:${row.id}`] = `/restaurants/${target.slug || target.id}`;
+  }
+  return links;
+}
+
+/** The survivors a page of restaurant rows points at that it does not already hold. */
+function missingSurvivorIds(rows: DealVenueRestaurant[]): string[] {
+  const have = new Set(rows.map((r) => r.id));
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.is_merged && row.merged_into && !have.has(row.merged_into)) ids.add(row.merged_into);
+  }
+  return [...ids].sort();
+}
+
+/**
+ * Venue links for a page of deals: one batched query per entity type, plus
+ * one for the survivors of merged restaurants.
  * restaurants carry a slug (falls back to id, as RestaurantsTonightStrip
  * does); attractions have no stored slug yet (plan D2), so their route slug is
  * derived from the name the same way the attractions pages build it; hotels
  * link /stay/<slug> (hotels.slug is in the 2026-08-24 snapshot) and a hotel
  * without a slug gets no link rather than a guessed one.
  */
+export async function fetchDealVenueLinks(deals: Deal[] | undefined): Promise<Record<string, string>> {
+  const restaurantIds = uniqueIds(deals, 'restaurant');
+  const attractionIds = uniqueIds(deals, 'attraction');
+  const hotelIds = uniqueIds(deals, 'hotel');
+  const [restaurants, attractions, hotels] = await Promise.all([
+    restaurantIds.length
+      ? supabase.from('restaurants').select(DEAL_VENUE_RESTAURANT_COLUMNS).in('id', restaurantIds)
+      : Promise.resolve({ data: [], error: null }),
+    attractionIds.length
+      ? supabase.from('attractions').select('id, name').in('id', attractionIds)
+      : Promise.resolve({ data: [], error: null }),
+    hotelIds.length
+      ? supabase.from('hotels').select('id, slug').in('id', hotelIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (restaurants.error) throw restaurants.error;
+  if (attractions.error) throw attractions.error;
+  if (hotels.error) throw hotels.error;
+
+  const restaurantRows = (restaurants.data ?? []) as unknown as DealVenueRestaurant[];
+  let survivors: DealVenueRestaurant[] = [];
+  const survivorIds = missingSurvivorIds(restaurantRows);
+  if (survivorIds.length) {
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select(DEAL_VENUE_RESTAURANT_COLUMNS)
+      .in('id', survivorIds);
+    // The duplicate's own link still reaches the kept page by redirect, so a
+    // failed survivor read costs a hop, not the links.
+    if (error) handleError(error, { component: 'useDeals', action: 'fetchMergedSurvivors' });
+    else survivors = (data ?? []) as unknown as DealVenueRestaurant[];
+  }
+
+  const links: Record<string, string> = restaurantVenueLinks(restaurantRows, survivors);
+  for (const row of (attractions.data ?? []) as Array<{ id: string; name: string | null }>) {
+    if (row.name) links[`attraction:${row.id}`] = `/attractions/${createSlug(row.name)}`;
+  }
+  for (const row of (hotels.data ?? []) as Array<{ id: string; slug: string | null }>) {
+    if (row.slug) links[`hotel:${row.id}`] = `/stay/${row.slug}`;
+  }
+  return links;
+}
+
 export function useDealVenueLinks(deals: Deal[] | undefined) {
   const restaurantIds = uniqueIds(deals, 'restaurant');
   const attractionIds = uniqueIds(deals, 'attraction');
@@ -345,34 +434,7 @@ export function useDealVenueLinks(deals: Deal[] | undefined) {
   return useQuery({
     queryKey: ['deals', 'venues', restaurantIds, attractionIds, hotelIds],
     enabled: restaurantIds.length > 0 || attractionIds.length > 0 || hotelIds.length > 0,
-    queryFn: async (): Promise<Record<string, string>> => {
-      const links: Record<string, string> = {};
-      const [restaurants, attractions, hotels] = await Promise.all([
-        restaurantIds.length
-          ? supabase.from('restaurants').select('id, slug').in('id', restaurantIds)
-          : Promise.resolve({ data: [], error: null }),
-        attractionIds.length
-          ? supabase.from('attractions').select('id, name').in('id', attractionIds)
-          : Promise.resolve({ data: [], error: null }),
-        hotelIds.length
-          ? supabase.from('hotels').select('id, slug').in('id', hotelIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      if (restaurants.error) throw restaurants.error;
-      if (attractions.error) throw attractions.error;
-      if (hotels.error) throw hotels.error;
-
-      for (const row of (restaurants.data ?? []) as Array<{ id: string; slug: string | null }>) {
-        links[`restaurant:${row.id}`] = `/restaurants/${row.slug || row.id}`;
-      }
-      for (const row of (attractions.data ?? []) as Array<{ id: string; name: string | null }>) {
-        if (row.name) links[`attraction:${row.id}`] = `/attractions/${createSlug(row.name)}`;
-      }
-      for (const row of (hotels.data ?? []) as Array<{ id: string; slug: string | null }>) {
-        if (row.slug) links[`hotel:${row.id}`] = `/stay/${row.slug}`;
-      }
-      return links;
-    },
+    queryFn: () => fetchDealVenueLinks(deals),
     staleTime: 10 * 60 * 1000,
   });
 }

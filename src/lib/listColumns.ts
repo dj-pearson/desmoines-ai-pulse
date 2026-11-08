@@ -238,6 +238,14 @@ export const HAPPY_HOUR_RESTAURANT_COLUMNS = "id, name, slug, status, business_s
 export const DEAL_RESTAURANT_STATUS_COLUMNS = "id, status, business_status";
 
 /**
+ * Restaurants a /deals card links to (fetchDealVenueLinks). is_merged and
+ * merged_into are there so a deal curated against a duplicate that was later
+ * merged links to the row it was merged into, not to the duplicate, whose
+ * page redirects to a survivor with no Deals section for it (WEB-FEAT-069).
+ */
+export const DEAL_VENUE_RESTAURANT_COLUMNS = "id, slug, is_merged, merged_into";
+
+/**
  * Cards on /restaurants/dietary/:diet (useDietaryRestaurants). What
  * RestaurantCard reads, plus hours_json and business_status: it selected
  * RESTAURANT_LIST_COLUMNS, which has neither, so with a date in `opening` no

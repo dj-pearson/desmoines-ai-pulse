@@ -48,6 +48,7 @@ const TABLE_FOR = {
   BREWERY_TRAIL_COLUMNS: 'restaurants',
   HAPPY_HOUR_RESTAURANT_COLUMNS: 'restaurants',
   DEAL_RESTAURANT_STATUS_COLUMNS: 'restaurants',
+  DEAL_VENUE_RESTAURANT_COLUMNS: 'restaurants',
   DIETARY_RESTAURANT_COLUMNS: 'restaurants',
   RESTAURANT_DETAIL_EXTRA_COLUMNS: 'restaurants',
 };
