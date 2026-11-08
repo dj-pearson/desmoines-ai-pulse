@@ -317,6 +317,7 @@ final class SearchViewModel {
                 category: f.category?.rawValue,
                 cities: f.areas.isEmpty ? nil : f.areas.map(\.rawValue),
                 freeOnly: f.freeOnly,
+                kidsOnly: f.kidsOnly,
                 dateStart: window?.start,
                 dateEnd: window?.end,
                 limit: 20
@@ -333,13 +334,13 @@ final class SearchViewModel {
         }
     }
 
-    /// Restaurants have no dates or price-free rule, so a query that is only
-    /// "tonight" or "free" does not search them; a query with no words runs
-    /// only for an area or Open Now.
+    /// Restaurants have no dates, price-free or kids rule, so a query that is
+    /// only "tonight", "free" or the /events/kids link does not search them; a
+    /// query with no words runs only for an area or Open Now.
     static func searchesRestaurants(_ query: ParsedSearch) -> Bool {
         let f = query.filters
         guard query.keywords.isEmpty else { return true }
-        if f.datePreset != nil || f.dayRange != nil || f.freeOnly || f.category != nil { return false }
+        if f.datePreset != nil || f.dayRange != nil || f.freeOnly || f.category != nil || f.kidsOnly { return false }
         return !f.areas.isEmpty || f.openNow
     }
 

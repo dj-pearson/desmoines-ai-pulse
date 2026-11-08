@@ -320,7 +320,7 @@ final class DeepLinkHandler {
         case "this-weekend": return .discover(.weekend)
         case "today": return .search(query: "today")
         case "free": return .search(query: "free events")
-        case "kids": return .search(query: "kids events")
+        case "kids": return kidsDestination
         case "west-des-moines", "ankeny", "urbandale", "johnston", "altoona", "clive", "windsor-heights", "waukee":
             return .search(query: "events in " + raw.replacingOccurrences(of: "-", with: " "))
         case "near-me": return .tab(.map)
@@ -332,6 +332,16 @@ final class DeepLinkHandler {
         if let id = EventSlug.linkId(raw) { return .event(id: id) }
         AppLogger.nav.warning("Rejected invalid event link: \(raw.prefix(50))")
         return .tab(.home)
+    }
+
+    /// /events/kids opens Search on Events with the web's kids-and-family rule
+    /// (IOS-AUDIT-005, KIDS_EVENTS_FILTER). It used to search the text "kids
+    /// events", which full-text search reads as the word "kids", so a family
+    /// storytime or a children's show with no "kids" in its text was missing.
+    static var kidsDestination: Destination {
+        var filters = SearchFilters(tabHint: .events)
+        filters.kidsOnly = true
+        return .eventSearch(query: "", filters: filters)
     }
 
     /// /events/series/<slug>, the web's annual-event page (IOS-AUDIT-FEAT-045,

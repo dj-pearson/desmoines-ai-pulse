@@ -295,6 +295,26 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/Bad%20Slug"), .tab(.home))
     }
 
+    // MARK: - /events/kids (IOS-AUDIT-005)
+
+    func testKidsLinkOpensEventsSearchWithTheKidsFilter() {
+        var filters = SearchFilters(tabHint: .events)
+        filters.kidsOnly = true
+        XCTAssertEqual(dest("/events/kids"), .eventSearch(query: "", filters: filters))
+        // It used to search the text "kids events", which FTS reads as the
+        // keyword "kids" and misses a storytime with no "kids" in it.
+        XCTAssertNotEqual(dest("/events/kids"), .search(query: "kids events"))
+    }
+
+    func testKidsLinkIgnoresWebQueryKeys() {
+        guard case .eventSearch(let query, let filters) = dest("/events/kids?utm_source=newsletter") else {
+            return XCTFail("expected eventSearch")
+        }
+        XCTAssertEqual(query, "")
+        XCTAssertTrue(filters.kidsOnly)
+        XCTAssertEqual(filters.chips, [.kids])
+    }
+
     // MARK: - Landing pages that used to open Home (IOS-AUDIT-002)
 
     private func site(_ path: String) -> URL {

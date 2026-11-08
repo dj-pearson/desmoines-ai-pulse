@@ -16,10 +16,16 @@ struct SearchFilters: Equatable {
     /// The tab the words point at ("restaurants", "open now"). Not a filter:
     /// it only chooses which tab is shown first.
     var tabHint: SearchViewModel.SearchTab?
+    /// Kids and family events only: the web's /events/kids rule
+    /// (EventsService.kidsEventsFilter, IOS-AUDIT-005). Set by that link,
+    /// never parsed from typed words, so "kids" typed in the field stays a
+    /// keyword.
+    var kidsOnly = false
 
     /// True when nothing here narrows a query. `tabHint` does not count.
     var isEmpty: Bool {
         datePreset == nil && dayRange == nil && !freeOnly && !openNow && areas.isEmpty && category == nil
+            && !kidsOnly
     }
 
     /// `self`, with every field `explicit` sets taking precedence.
@@ -38,6 +44,7 @@ struct SearchFilters: Equatable {
         if !explicit.areas.isEmpty { out.areas = explicit.areas }
         if let category = explicit.category { out.category = category }
         if let hint = explicit.tabHint { out.tabHint = hint }
+        if explicit.kidsOnly { out.kidsOnly = true }
         return out
     }
 }
@@ -250,6 +257,7 @@ enum SearchFilterChip: Hashable, Identifiable {
     case openNow
     case area(LocationArea)
     case category(EventCategory)
+    case kids
 
     var id: String {
         switch self {
@@ -259,6 +267,7 @@ enum SearchFilterChip: Hashable, Identifiable {
         case .openNow: return "open-now"
         case .area(let area): return "area-\(area.rawValue)"
         case .category(let category): return "category-\(category.rawValue)"
+        case .kids: return "kids"
         }
     }
 
@@ -270,6 +279,7 @@ enum SearchFilterChip: Hashable, Identifiable {
         case .openNow: return "Open now"
         case .area(let area): return area.displayName
         case .category(let category): return category.displayName
+        case .kids: return "Kids & family"
         }
     }
 }
@@ -284,6 +294,7 @@ extension SearchFilters {
         if openNow { out.append(.openNow) }
         out += areas.map { .area($0) }
         if let category { out.append(.category(category)) }
+        if kidsOnly { out.append(.kids) }
         return out
     }
 
@@ -301,6 +312,7 @@ extension SearchFilters {
         case .openNow: out.openNow = false
         case .area(let area): out.areas.removeAll { $0 == area }
         case .category: out.category = nil
+        case .kids: out.kidsOnly = false
         }
         return out
     }

@@ -27,6 +27,8 @@ actor EventsService {
         var category: String?
         var cities: [String]?
         var freeOnly: Bool = false
+        /// Kids and family only (IOS-AUDIT-005): `kidsEventsFilter`.
+        var kidsOnly: Bool = false
         var dateStart: Date?
         var dateEnd: Date?
         var isFeatured: Bool?
@@ -107,6 +109,11 @@ actor EventsService {
             orGroups.append(Self.freePriceFilter)
         }
 
+        // Kids and family: the web's /events/kids or-group (IOS-AUDIT-005).
+        if query.kidsOnly {
+            orGroups.append(Self.kidsEventsFilter)
+        }
+
         if let combined = Self.combineOrGroups(orGroups) {
             request = request.or(combined)
         }
@@ -168,6 +175,20 @@ actor EventsService {
     /// Mirrors src/lib/eventPrice.ts FREE_PRICE_FILTER byte for byte: says
     /// "free" and names no non-zero dollar amount, or is exactly $0 / 0.
     static let freePriceFilter = "and(price.ilike.%free%,price.not.match.[$] *[1-9]),price.eq.$0,price.eq.0"
+
+    /// Mirrors KIDS_EVENTS_FILTER in src/hooks/useEventLanding.ts byte for
+    /// byte (IOS-AUDIT-005): family words as whole words in the title, kids /
+    /// family / children in the category, and only plural or explicit child
+    /// words in enhanced_description (a "family-owned brewery" is not a kids
+    /// event). `imatch` is PostgREST's ~*, and [[:<:]] / [[:>:]] are Postgres
+    /// word boundaries. The patterns are double-quoted because PostgREST
+    /// reserves ":" and parentheses inside an or() value.
+    /// src/lib/__tests__/iosKidsEventsParity.test.ts fails when the two drift.
+    static let kidsEventsFilter = [
+        #"title.imatch."[[:<:]](kids?|child|children|family|families|toddlers?|preschool|storytime|story time|teens?)[[:>:]]""#,
+        #"category.imatch."[[:<:]](kids?|family|children)[[:>:]]""#,
+        #"enhanced_description.imatch."[[:<:]](kids|children|toddlers)[[:>:]]""#,
+    ].joined(separator: ",")
 
     /// "Not over yet", three arms, as notOverFilter in
     /// src/components/events/eventsHubQuery.ts: started in the last two hours
