@@ -71,6 +71,23 @@ export function eventsLowerBoundISO(): string {
 }
 
 /**
+ * The PostgREST `or=` group that keeps an event on this list: it starts today
+ * (Central) or later, OR it is a run whose end_date is today or later.
+ *
+ * This list filtered `date >= today` alone, so a multi-day event fell off it on
+ * its second morning even though it was still on. Site search goes through this
+ * hook (useKeywordResults), so on day three of the State Fair a search for
+ * "state fair" found nothing while the hubs and the calendar, which already read
+ * end_date (eventsHubQuery notOverFilter, useEventsInRange), listed it. The
+ * subscribed .ics feeds had the same gap and were fixed the same way
+ * (WEB-FEAT-041). A row with no end_date matches only on its own date, so a
+ * past one-night show stays off.
+ */
+export function upcomingOrRunningFilter(lowerBoundIso: string): string {
+  return `date.gte.${lowerBoundIso},end_date.gte.${lowerBoundIso}`;
+}
+
+/**
  * Standalone fetcher so TanStack Query owns caching, dedup and retries
  * (WEB-PERF-013).
  *
@@ -79,7 +96,7 @@ export function eventsLowerBoundISO(): string {
  * cached across navigations, and a filter change could leave an in-flight
  * response from the previous filters to land last and win.
  */
-async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
+export async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
   const today = eventsLowerBoundISO();
   logger.info('fetchEvents', 'Fetching events', { from: today });
 
@@ -94,7 +111,9 @@ async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
       withAdminColumns(EVENT_LIST_COLUMNS, filters.includeAdminFields),
       countOption(filters.countMode ?? "exact")
     )
-    .gte("date", today) // Today (Central) and later
+    // Starts today (Central) or later, or is still running. The only or= on
+    // this query; a second .or() would be a second param.
+    .or(upcomingOrRunningFilter(today))
     .neq("is_merged", true) // Hide rows merged into a duplicate (WEB-AUTO-005)
     .neq("is_hidden", true) // Hide soft-hidden stale events (WEB-AUTO-006)
     // WEB-BE-034. THERE ARE TWO UNPUBLISH SWITCHES ON `events` AND THIS SURFACE
