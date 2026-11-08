@@ -15,7 +15,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSubmitEvent, useUpdateEvent, type UserSubmittedEvent } from "@/hooks/useUserSubmittedEvents";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { FormErrorSummary, useFormErrors } from "./ui/form-error-summary";
 import { EVENT_CATEGORIES } from "@/lib/eventCategories";

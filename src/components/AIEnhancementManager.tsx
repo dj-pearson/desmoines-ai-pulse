@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle, XCircle, RefreshCw, Play, FileText, AlertTriangle, Bot } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getErrorMessage } from "@/lib/errorHandler";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { formatDistanceToNow } from "date-fns";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";

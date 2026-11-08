@@ -28,7 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 type HotelInsert = Database["public"]["Tables"]["hotels"]["Insert"];

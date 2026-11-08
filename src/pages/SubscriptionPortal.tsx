@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { AlertCircle, Check, CreditCard, Crown, Receipt, RefreshCw, Sparkles } from "lucide-react";
 import {
   Card,

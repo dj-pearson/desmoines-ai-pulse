@@ -49,7 +49,7 @@ import {
   type SendNowAnswer,
 } from "@/lib/newsletterSendProgress";
 import { SecurityUtils } from "@/lib/securityUtils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 interface CampaignRow {
   id: string;

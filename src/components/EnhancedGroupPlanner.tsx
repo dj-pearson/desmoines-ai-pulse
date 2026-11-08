@@ -11,7 +11,7 @@ import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
 import { useEvents } from "@/hooks/useEvents";
 import { CheckCircle, XCircle, PlusCircle, MessageCircle, Camera, Star } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { formatEventPart } from "@/lib/timezone";

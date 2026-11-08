@@ -5,7 +5,7 @@ import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from './useAuth';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { handleError } from '@/lib/errorHandler';
 import {
   EVENT_LIST_COLUMNS,

@@ -20,7 +20,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ExternalLink, Link2, Link2Off, Save, RotateCcw, Search } from "lucide-react";
 import { SafeExternalLink } from "@/components/SafeExternalLink";
 

@@ -83,7 +83,7 @@ import { useHotelFilterOptions, useHotels } from "@/hooks/useHotels";
 import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];

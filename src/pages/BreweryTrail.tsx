@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Beer, CheckCircle2, Circle, Star } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import SEOHead from '@/components/SEOHead';
 import ItemListSchema from '@/components/schema/ItemListSchema';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';

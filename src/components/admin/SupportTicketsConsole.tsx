@@ -24,7 +24,7 @@ import { useSupportTickets, useReclassifyTicket, type SupportTicket } from "@/ho
 import { useAuth } from "@/contexts/AuthContext";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const PRIORITY_TONE: Record<string, string> = {
   urgent: "bg-destructive text-destructive-foreground",

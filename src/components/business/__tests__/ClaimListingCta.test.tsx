@@ -11,7 +11,7 @@ import { MemoryRouter } from "react-router-dom";
  */
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), info: vi.fn(), error: vi.fn() }));
-vi.mock("sonner", () => ({ toast }));
+vi.mock("@/lib/toast", () => ({ toast }));
 
 const handleError = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/errorHandler", () => ({ handleError }));

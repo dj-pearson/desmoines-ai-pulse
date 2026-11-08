@@ -24,7 +24,7 @@ import {
   type KbPassage,
 } from "@/hooks/useSupportKb";
 import { handleError } from "@/lib/errorHandler";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const EMPTY: Partial<KbArticle> = { title: "", content: "", source: "", category: "" };
 

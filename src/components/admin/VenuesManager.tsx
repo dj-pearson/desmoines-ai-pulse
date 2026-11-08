@@ -39,7 +39,7 @@ import {
 import { Plus, Edit, Trash2, MapPin, Phone, Globe, Search, Building2, Users, CheckCircle2, XCircle, Navigation, RefreshCw, ArrowRight, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   useKnownVenues,
   useCreateVenue,

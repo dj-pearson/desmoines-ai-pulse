@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertTriangle, Globe, Loader2, RotateCcw, Target, Plus, BarChart3, FileText } from "lucide-react";
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useArticles } from '@/hooks/useArticles';
 import GenerateArticleButton from '@/components/GenerateArticleButton';

@@ -49,7 +49,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { SecurityUtils } from "@/lib/securityUtils";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 interface Submission {

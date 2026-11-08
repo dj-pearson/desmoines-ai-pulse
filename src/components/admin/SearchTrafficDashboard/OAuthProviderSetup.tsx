@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { BarChart3, Search, Globe, Link2, ExternalLink, CheckCircle2, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { storage } from "@/lib/safeStorage";
 import { createLogger } from '@/lib/logger';
 

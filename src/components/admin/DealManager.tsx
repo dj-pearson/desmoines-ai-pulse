@@ -77,7 +77,7 @@ import {
   toCentralInput,
 } from "@/lib/dealFormTime";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { MoreVertical } from "lucide-react";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 

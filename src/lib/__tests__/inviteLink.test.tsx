@@ -21,7 +21,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuthState: () => ({ user: null }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }));
+vi.mock("@/lib/toast", () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
 const { inviteLink } = await import("@/lib/referralCode");
 const { readStoredReferral, REFERRAL_STORAGE_KEY, useReferralCapture } = await import(

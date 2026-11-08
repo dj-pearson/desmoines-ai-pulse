@@ -56,7 +56,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 type PlaygroundUpdate = Database["public"]["Tables"]["playgrounds"]["Update"];

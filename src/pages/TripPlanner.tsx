@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, type
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Baby, Check, DollarSign, Download, Lightbulb, Loader2, Music, Palette, Trash2, TreePine, Utensils, CalendarPlus } from "lucide-react";
 import SEOHead from "@/components/SEOHead";
 import { FAQSection, type FAQItem } from "@/components/FAQSection";

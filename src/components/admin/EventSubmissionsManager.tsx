@@ -71,7 +71,7 @@ import { recordAdminAudit } from "@/lib/adminAudit";
 import { handleError } from "@/lib/errorHandler";
 import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 import { safeWebUrl } from "@/lib/reservations";
 

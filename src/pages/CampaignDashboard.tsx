@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { BarChart3, Pause, Play, Plus, Receipt, RefreshCw, Upload, X } from "lucide-react";
 import { BusinessLayout } from "@/components/business/BusinessLayout";
 import { ConfirmCampaignAction } from "@/components/campaigns/ConfirmCampaignAction";

@@ -8,7 +8,7 @@ import { useCrmBoard, useCrmAction, useProposal, CRM_STAGES, type CrmOpportunity
 import { useAuth } from "@/contexts/AuthContext";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 // One hue per stage, carried by a dot beside the column label rather than a
 // thick top border: the border fought the card's rounded corners, and the dot

@@ -16,7 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { WizardForm } from '@/components/event-promotion-planner/WizardForm';
 import { TimelineView } from '@/components/event-promotion-planner/TimelineView';
 import { EmailCaptureModal } from '@/components/event-promotion-planner/EmailCaptureModal';

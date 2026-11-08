@@ -22,7 +22,7 @@ vi.mock("@/hooks/useContentFavorites", () => ({
 }));
 vi.mock("@/lib/paywallStore", () => ({ openPaywall: () => {} }));
 vi.mock("@/lib/favoriteAnalytics", () => ({ logFavoriteFunnelEvent: () => {} }));
-vi.mock("sonner", () => ({ toast: Object.assign(() => {}, { success: () => {} }) }));
+vi.mock("@/lib/toast", () => ({ toast: Object.assign(() => {}, { success: () => {} }) }));
 
 import { FavoriteButton } from "@/components/FavoriteButton";
 

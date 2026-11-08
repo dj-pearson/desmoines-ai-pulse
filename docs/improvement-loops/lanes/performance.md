@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. WEB-PERF-069 closed in loop 16.
+None. WEB-PERF-070 closed in loop 17.
 
 What the next loop should know:
 - The rest of the entry's __vite__mapDeps (about 13 KB gz) is the routes' own
@@ -28,9 +28,14 @@ What the next loop should know:
   measure-route-preload.mjs does, take the route chunk's chunkClosure minus
   the critical set, and split each chunk's gz across its modules by
   renderedLength. The script must sit inside the repo to resolve `vite`.
-  Next candidates from that walk: sonner is 9.2 KB gz on every public route
-  (88 files import `toast` from it statically, while the Toaster itself is
-  lazy); @radix-ui/react-select 6.9 KB on /events and /restaurants.
+  sonner is done (WEB-PERF-070: import `toast` from `@/lib/toast`, never
+  from "sonner"; toastLazy.test.ts enforces it). Next candidate from that
+  walk: @radix-ui/react-select 6.9 KB on /events and /restaurants.
+- A real-browser check of a lazy module needs no hooks into the app: build,
+  `vite preview --port <free>`, `grep -l <a string unique to the module>
+  dist/assets/*.js`, then in Chrome `import()` that chunk and find the export
+  by shape (mangled names). That is how the lazy toast was confirmed to render
+  in the lazy Toaster.
 - Entry chunk, by module, after this loop: App.tsx 46 KB raw (route table),
   tailwind-merge 20 KB, react-helmet-async 11.8 KB (HelmetProvider and Helmet
   are one module), AuthContext 9.9 KB. Measure with a sourcemap walk
@@ -72,3 +77,4 @@ a keydown on document.body to test "?".
 | 2026-11-08 | WEB-PERF-066 | this commit | AC3: AccessibilityWidget announces via new lib/announce (useAccessibility out of the entry, two duplicate announcers merged) and the shortcut listener is a lazy headless component; critical path 175.8 -> 174.7 KB gz, baseline ratcheted 174.9 -> 174.7; static-graph test with negative control (2 fail on revert). AC2 assessed, not shipped: direct-deps-only cuts 36/8,018 refs (0.2 KB gz) because rollup hoists transitive imports; target-only costs a full RTT per navigation. Story closed |
 | 2026-11-08 | WEB-PERF-068 | this commit | Heavy-preload check extracted to findHeavyPreloads and exempts CRITICAL_PATH_CHUNKS by chunk name; a clean build goes from 1 warning (vendor-supabase 216 KB) to 0; critical path 174.7 unchanged; test with negative controls (no exemption: 2 fail; prefix match: 1 fail); story closed |
 | 2026-11-08 | WEB-PERF-069 | this commit | savedSearchFilters reads saved filters with plain code instead of zod, its only zod import on three routes; /events 205.9 -> 192.5, /search 94.1 -> 81.9, /dashboard 155.4 -> 143.2 KB gz beyond the critical path, none heavier; critical path 174.7 unchanged; graph test with detector and walker controls (3 fail on re-adding the import); story closed |
+| 2026-11-08 | WEB-PERF-070 | this commit | 87 modules import `toast` from new lib/toast.ts, which loads sonner on first call (queued, ids minted and passed through); 64 routes 8.8-9.0 KB gz lighter beyond the critical path (/events 191.2 -> 182.3), none heavier, summed 9,162.7 -> 8,596.1; critical path 174.7 unchanged; graph test with negative control (6 of 9 fail on one reverted import); toast renders in the lazy Toaster in Chrome; story closed |

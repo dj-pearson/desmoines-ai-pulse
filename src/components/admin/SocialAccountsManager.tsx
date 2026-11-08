@@ -54,7 +54,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type Platform = "twitter" | "facebook" | "instagram" | "linkedin";
 

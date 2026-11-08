@@ -26,7 +26,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 const toastSuccess = vi.fn();
 const toastInfo = vi.fn();
 const toastError = vi.fn();
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: {
     success: (...a: unknown[]) => toastSuccess(...a),
     info: (...a: unknown[]) => toastInfo(...a),

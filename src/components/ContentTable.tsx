@@ -28,7 +28,7 @@ import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Edit, Trash2, Search, Filter, Star, Plus, AlertTriangle, Brain, FileText, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Download, LayoutGrid, List, CheckCircle2, AlertCircle, XCircle, Globe, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useDomainHighlights } from "@/hooks/useDomainHighlights";
 import EventDataEnhancer from "./EventDataEnhancer";
 import { useWriteupGenerator } from "@/hooks/useWriteupGenerator";

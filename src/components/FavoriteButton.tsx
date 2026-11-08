@@ -6,7 +6,7 @@ import {
   type FavoriteContentType,
 } from "@/hooks/useContentFavorites";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useSyncExternalStore } from "react";
 import { useAuthFlags } from "@/contexts/AuthContext";
 import { openPaywall } from "@/lib/paywallStore";

@@ -11,7 +11,7 @@ import {
 import { isRpcMissing } from "@/hooks/useMyBusinessClaims";
 import { handleError } from "@/lib/errorHandler";
 import { describeClaimFailure } from "@/lib/claimFailure";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { BadgeCheck, Building2, Clock } from "lucide-react";
 
 interface ClaimListingCtaProps {

@@ -76,7 +76,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: { from: () => builder() },
 }));
 vi.mock("@/lib/adminAudit", () => ({ recordAdminAudit: vi.fn(() => Promise.resolve()) }));
-vi.mock("sonner", () => ({
+vi.mock("@/lib/toast", () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 

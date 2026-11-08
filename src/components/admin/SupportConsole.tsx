@@ -24,7 +24,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const STATUSES = ["new", "ai_handling", "awaiting_user", "escalated", "assigned", "resolved", "closed"];
 

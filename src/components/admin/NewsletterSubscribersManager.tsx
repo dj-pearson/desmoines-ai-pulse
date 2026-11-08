@@ -51,7 +51,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { recordAdminAudit } from "@/lib/adminAudit";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 /**
  * WEB-ADS-029. 'pending' joined the status CHECK with double opt-in

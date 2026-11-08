@@ -31,7 +31,7 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { id: "u1", email: "reader@example.com" }, isAuthenticated: true }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@/lib/toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { EventReminderSettings } from "@/components/EventReminderSettings";
 

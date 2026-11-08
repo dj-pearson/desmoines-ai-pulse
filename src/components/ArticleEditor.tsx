@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 import { OptimizedImage } from "@/components/OptimizedImage";

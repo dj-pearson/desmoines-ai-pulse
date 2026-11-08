@@ -43,7 +43,7 @@ import { Loader2, Plus, Send, Edit, Trash2, Globe, Bot, Repeat, Settings, Play, 
 import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { SafeExternalLink } from "@/components/SafeExternalLink";

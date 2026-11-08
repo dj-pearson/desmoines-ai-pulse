@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { CheckCircle, XCircle, AlertTriangle, Eye, Tag, User, Mail, Phone, Globe, DollarSign } from "lucide-react";
 import { useAllSubmittedEvents, useReviewEvent } from "@/hooks/useUserSubmittedEvents";
 import { format } from "date-fns";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { safeWebUrl } from "@/lib/reservations";
