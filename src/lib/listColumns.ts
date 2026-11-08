@@ -230,6 +230,17 @@ export const RESTAURANT_SUGGESTION_COLUMNS =
 export const HAPPY_HOUR_RESTAURANT_COLUMNS = "id, name, slug, status, business_status";
 
 /**
+ * Cards on /restaurants/dietary/:diet (useDietaryRestaurants). What
+ * RestaurantCard reads, plus hours_json and business_status: it selected
+ * RESTAURANT_LIST_COLUMNS, which has neither, so with a date in `opening` no
+ * card said "Open until", a CLOSED_TEMPORARILY place read as an ordinary
+ * listing, and a Google CLOSED_PERMANENTLY row could not be told apart
+ * (WEB-FEAT-064).
+ */
+export const DIETARY_RESTAURANT_COLUMNS =
+  "id, slug, name, description, cuisine, rating, price_range, location, city, image_url, phone, website, status, business_status, opening, hours_json, opening_date, opening_timeframe, is_sponsored, sponsored_until";
+
+/**
  * The four columns needed to DERIVE an event slug, and nothing else
  * (WEB-PERF-035 AC2).
  *

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { DIETARY_RESTAURANT_COLUMNS } from "@/lib/listColumns";
+import { isPermanentlyClosedRestaurant, isServingToday } from "@/lib/restaurantHours";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { DIETS, type Diet } from "@/lib/restaurantDiets";
 import type { RestaurantCardProps } from "@/components/RestaurantCard";
@@ -59,6 +60,20 @@ export function dietOrClause(diet: Diet): string {
 export type DietaryRestaurantRow = RestaurantCardProps["restaurant"];
 
 /**
+ * What the page lists from what the query returned. A place closed for good
+ * leaves: the server filter only spells status = 'closed', and a Google
+ * CLOSED_PERMANENTLY row or a 'permanently_closed' status gets through it.
+ * A place nobody is serving at today (CLOSED_TEMPORARILY, opening soon) stays,
+ * since its card says so, but sorts after every place that is serving, so the
+ * first row of a diet page is somewhere you can eat. Name order holds within
+ * each group.
+ */
+export function dietaryListRows(rows: readonly DietaryRestaurantRow[]): DietaryRestaurantRow[] {
+  const listed = rows.filter((row) => !isPermanentlyClosedRestaurant(row));
+  return [...listed.filter((row) => isServingToday(row)), ...listed.filter((row) => !isServingToday(row))];
+}
+
+/**
  * Restaurants that mention a diet, keyed on the diet so a slow Vegan response
  * cannot land after a Keto click and overwrite it. Disabled (no request) when
  * no diet is selected.
@@ -72,7 +87,7 @@ export function useDietaryRestaurants(diet: Diet | null) {
       if (!diet) return [];
       const { data, error } = await supabase
         .from("restaurants")
-        .select(RESTAURANT_LIST_COLUMNS)
+        .select(DIETARY_RESTAURANT_COLUMNS)
         // Hide rows merged into a duplicate (WEB-AUTO-005) and places that
         // have closed for good. status is nullable, and neq("status", "closed")
         // would drop every NULL row too (NULL <> 'closed' is not true), so the
@@ -83,7 +98,7 @@ export function useDietaryRestaurants(diet: Diet | null) {
         .order("name")
         .limit(DIETARY_FETCH_LIMIT);
       if (error) throw error;
-      return (data ?? []) as unknown as DietaryRestaurantRow[];
+      return dietaryListRows((data ?? []) as DietaryRestaurantRow[]);
     },
   });
 }
