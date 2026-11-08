@@ -7,7 +7,7 @@ This folder holds **versioned GitHub Rulesets** (not classic branch protection r
 | Ruleset | Branch pattern | Block delete | Block force-push | Require PR | Required approvals |
 |---|---|---|---|---|---|
 | `protect-main` | `main` | ✅ | ✅ | ✅ | 1 |
-| `protect-develop` | `develop` | ✅ | ✅ | ✅ | 1 |
+| `protect-develop` | `develop` | ✅ | ✅ | ❌ (direct commits are the workflow; see CLAUDE.md) | n/a |
 | `protect-release` | `release/*` | ✅ | ✅ | ✅ | 1 |
 | `protect-hotfix` | `hotfix/*` | ✅ | ✅ | ❌ (direct commits OK; gate is the PR into `main`) | n/a |
 
@@ -15,11 +15,11 @@ Repository admins (`actor_id: 5`, `RepositoryRole`) can bypass `always` — i.e.
 
 ### Required approvals
 
-`protect-main`, `protect-develop`, and `protect-release` require **1 approving review** (WEB-CI-001). Because GitHub won't let you approve your own PR, a genuine solo merge with no other reviewer available goes through the admin `bypass_actors` path — keep that for the solo case only, and let real reviews gate everything else. Automated/Copilot review can satisfy this if enabled.
+`protect-main` and `protect-release` require **1 approving review** (WEB-CI-001). `protect-develop` requires neither a PR nor checks since 2026-11-08: work is committed to `develop` directly, and CI runs on the push instead of gating it. Its only rules are no deletion and no force-push. Because GitHub won't let you approve your own PR, a genuine solo merge with no other reviewer available goes through the admin `bypass_actors` path — keep that for the solo case only, and let real reviews gate everything else. Automated/Copilot review can satisfy this if enabled.
 
 ### Required status checks
 
-The three protected rulesets require the `pr-checks.yml` validation checks to pass before merge:
+`protect-main` and `protect-release` require the `pr-checks.yml` validation checks to pass before merge (a required check on `develop` would block direct pushes, so it has none):
 
 ```jsonc
 {

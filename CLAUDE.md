@@ -284,26 +284,25 @@ row came from the RPC with one, so the page said $70 and the row said $66.50.
 Two formulas for one price is a bug generator. Same rule for subscriptions -
 `create-subscription-checkout` owns the plan and the amount.
 
-### Branch first, code second
+### Work goes straight to develop
 
-Before writing or pushing code on any non-trivial task, **confirm the target branch with the user**. Map the request phrasing to a branch type:
+**All non-emergency work commits or merges to `develop` directly, with no PR.** This is the owner's standing decision (2026-11-08): the PR step on `develop` cost a day of red, mutually blocking PRs and gave no review in return, because there is one person to approve. It applies to every kind of change: features, fixes, docs, chores, dependency bumps. A short-lived work branch is fine for something large; merge it into `develop` yourself when it is done instead of opening a PR.
 
-| Phrase the user used | Target branch | Branched from |
-|---|---|---|
-| "production bug", "live site is broken", "users are seeing X right now", "hotfix" | `hotfix/<short-slug>` | `main` |
-| "new feature", "add", "build", "let's prototype", "experimental" | `claude/<slug>` or `feat/<slug>` | `develop` |
-| "release prep", "cut a release", "ship v1.4", "submit to App Store" | `release/x.y.z` | `develop` |
-| "fix on develop", "fix the staging bug", "in-flight feature is broken" | `fix/<slug>` (off `develop`) | `develop` |
-| "docs", "update README", "tweak CLAUDE.md" | `docs/<slug>` | `develop` (or `main` if it's a hotfix-style doc correction) |
-| "chore", "bump deps", "rename folder" | `chore/<slug>` | `develop` |
+Before you push to `develop`, run what the PR checks would have run on the change: `npm run validate`, the unit tests for what you touched, and the Deno suite for any edge function you touched. CI still runs on every push to `develop`, and a red `develop` is yours to fix next.
 
-If ambiguous (e.g. "fix the events page" — is it broken in prod, or only on develop?), **ask** before branching. Never assume.
+| Phrase the user used | Where it goes |
+|---|---|
+| "production bug", "live site is broken", "users are seeing X right now", "hotfix" | `hotfix/<short-slug>` from `main`, PR into `main`, then merge `main` into `develop` |
+| "release prep", "cut a release", "ship v1.4", "submit to App Store" | `release/x.y.z` from `develop` |
+| Anything else | Commit to `develop` |
+
+If it is unclear whether something is a production emergency or ordinary work, **ask**. Otherwise don't ask which branch: it is `develop`.
 
 ### Never do these (rulesets will block, but don't try)
 
 - Force-push to `main`, `develop`, `release/*`, or `hotfix/*`.
 - Delete `main`, `develop`, `release/*`, or `hotfix/*`.
-- Commit directly to `main` or `develop` — always via PR.
+- Commit directly to `main`; it changes only through a PR from `release/x.y.z` or `hotfix/*`. (`develop` is the opposite: commit to it directly, see above.)
 - Merge `develop` straight to `main` — releases go through `release/x.y.z` (or `hotfix/*` for emergencies).
 - Skip pre-commit / CI hooks with `--no-verify` (see top of this file).
 - Ship a destructive DB migration (DROP COLUMN, NOT NULL tightening, enum value removal, RPC arg removal) in the same release that introduces the new shape. See **Backward Compatibility** below.
@@ -317,19 +316,19 @@ This project has **three live client surfaces** (web, iOS app, Android app) and 
 | Branch / pattern | Deploys to | Purpose |
 |---|---|---|
 | `main` | **Web prod** (Cloudflare Pages auto-deploys on push). Tagged releases trigger mobile store submissions via `workflow_dispatch`. | Production. Merge-only, never commit directly. Every merge is a deployable state. |
-| `develop` | Web preview / staging (Cloudflare Pages preview deploys per commit). Internal-only mobile builds (TestFlight internal / Play internal track) cut from here on demand. | Long-lived integration branch. All non-emergency work lands here first. |
+| `develop` | Web preview / staging (Cloudflare Pages preview deploys per commit). Internal-only mobile builds (TestFlight internal / Play internal track) cut from here on demand. | Long-lived integration branch. All non-emergency work is committed or merged here directly, without a PR. |
 | `release/x.y.z` | Web prod **candidate** (preview URL); mobile store submission candidate (TestFlight external / Play closed testing). | Release stabilization: only bug fixes, version bumps, store metadata. No new features. Tag `vX.Y.Z` on merge to `main`. |
 | `hotfix/<slug>` | Direct fast-path to prod, skipping queued features on `develop`. Web deploys when merged to `main`; mobile may need an out-of-band store submission. | Emergency-only. Branch from `main`, PR into `main` AND `develop`. |
-| `claude/<slug>`, `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` | PR previews only. | Work branches. Branch from `develop`, PR back to `develop`. |
+| `claude/<slug>`, `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` | Nothing. | Optional, for large changes only. Branch from `develop` and merge back into `develop` yourself; no PR. |
 
 ### Rules of thumb
 
 - **Hotfixes branch from `main`, not `develop`.** `develop` may contain unreleased features you don't want to ship as part of a hotfix. After merging the hotfix to `main`, also merge `main` → `develop` (or cherry-pick the hotfix into `develop`) so the fix isn't lost on the next release.
-- **Web ships independently of mobile.** A web-only change goes through the normal `feat/* → develop → release/x.y.z → main` flow and deploys to Cloudflare Pages on merge to `main`. Mobile workflows are `workflow_dispatch`-only and don't trigger.
+- **Web ships independently of mobile.** A web-only change goes through the normal `develop → release/x.y.z → main` flow and deploys to Cloudflare Pages on merge to `main`. Mobile workflows are `workflow_dispatch`-only and don't trigger.
 - **Mobile review in flight ≠ frozen web.** While iOS/Android are in App Store/Play review, keep cutting `release/*` for web on the same cadence — just don't bump the mobile binary version until the previous one clears review.
 - **Tag releases on `main`.** Pattern: `vX.Y.Z` (web), `ios-vX.Y.Z+build`, `android-vX.Y.Z+code`. Mobile release workflows take version inputs explicitly; tags are documentation, not triggers.
 - **`develop` → `main` is only legal via a `release/x.y.z` branch.** Don't open a `develop` → `main` PR directly.
-- **`release/x.y.z` accepts merges only from `develop`** (cut point) and small fix-up PRs branched from `release/x.y.z` itself. No `feat/*` PRs into `release/*`.
+- **`release/x.y.z` accepts merges only from `develop`** (cut point) and small fix-up PRs branched from `release/x.y.z` itself. No feature work goes into `release/*`.
 - **`MIN_SUPPORTED_APP_VERSION`** (defined in `supabase/functions/_shared/`, see Backward Compatibility) is load-bearing — older iOS/Android binaries still in the wild rely on the backend keeping shapes they read.
 
 ### Conventional commits
