@@ -330,14 +330,27 @@ export default defineConfig(({ command, mode }) => {
           // at runtime ("Cannot access 'X' before initialization").
           // Let Vite handle them automatically via its own code-splitting.
 
-          // Rich text editing
-          if (
-            id.includes("tiptap") ||
-            id.includes("@tiptap/") ||
-            id.includes("prosemirror")
-          ) {
-            return "vendor-editor";
-          }
+          // No vendor-editor chunk (WEB-PERF-067). Tiptap and prosemirror were
+          // forced together "to isolate the editor", and the only thing that
+          // imports them, cms/RichTextEditor.tsx, is already lazy, so the chunk
+          // isolated nothing. What it did instead: Rollup moves an unassigned
+          // dependency of a forced chunk's modules INTO that chunk, and
+          // fast-equals is a dependency of both @tiptap/react and recharts
+          // (via react-smooth). So every recharts page - AdminAgents,
+          // AdminAnalyticsPage, AdminRefunds, CampaignAnalytics - imported the
+          // whole editor (~122 KB gz) for one 1 KB equality helper. The
+          // includes("tiptap") test also caught src/components/cms/
+          // tiptap-styles.css, which put AdminArticleEditor's own stylesheet
+          // in the chunk and dragged it there too.
+          // Measured with scripts/measure-route-preload.mjs, gz summed over
+          // the 137 lazy imports in App.tsx: unused passengers 614.8 -> 0,
+          // routes 9,743 -> 9,121, critical path unchanged at 176.0. Only
+          // those five routes moved, each 123-125 KB lighter:
+          //     AdminArticleEditor 230.6 -> 105.3   AdminAnalytics 392.6 -> 269.2
+          //     AdminAgents 309.2 -> 185.9   AdminRefunds 291.9 -> 168.6
+          //     CampaignAnalytics 288.7 -> 165.4
+          // Tiptap now travels with RichTextEditor's own lazy chunk.
+          // Pinned by src/__tests__/manualChunks.test.ts.
 
           // No date-fns chunk (WEB-PERF-064). `if (id.includes("date-fns"))
           // return "vendor-dates"` was the last library forced together that is
@@ -401,8 +414,8 @@ export default defineConfig(({ command, mode }) => {
         //     /restaurants 173.7 -> 152.0   /events 220.3 -> 204.0
         //     /events/:id 168.0 -> 154.6    /restaurants/:id 152.2 -> 139.1
         //     /trip-planner 157.7 -> 131.3  / 76.2 -> 70.5   /hotels 105.9 -> 87.7
-        // The 615 left is the forced vendor-editor chunk on admin pages, not
-        // merging. The cost is 441 more files summed over routes (/ 47 -> 62,
+        // The 615 left was the forced vendor-editor chunk on admin pages, not
+        // merging; WEB-PERF-067 removed it and the unused column is now 0. The cost is 441 more files summed over routes (/ 47 -> 62,
         // /events 130 -> 150), fetched in parallel as one modulepreload batch
         // over HTTP/2, and +1.1 KB on the critical path: the entry's
         // __vite__mapDeps arrays name 79 more chunk files (WEB-PERF-066).

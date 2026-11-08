@@ -7,9 +7,8 @@ import viteConfig from "../../vite.config";
  * WEB-PERF-064. A manual chunk is all-or-nothing: the moment any route needs
  * one module from it, that route downloads every module in it. That is only a
  * fair trade for libraries every page already loads before it can render
- * (React, the router and query client, Supabase) and for one deliberately
- * isolated editor bundle. Everything else should travel with the chunk that
- * imports it.
+ * (React, the router and query client, Supabase). Everything else should
+ * travel with the chunk that imports it.
  *
  * Three libraries were forced together and each cost every route: Radix
  * (vendor-ui), three.js/recharts/d3, and last date-fns (vendor-dates, fetched
@@ -53,6 +52,15 @@ describe("manualChunks (WEB-PERF-064)", () => {
     ["three", nm("three/build/three.module.js")],
     ["recharts", nm("recharts/es6/index.js")],
     ["lucide", nm("lucide-react/dist/esm/icons/map.js")],
+    // WEB-PERF-067: the forced vendor-editor chunk absorbed fast-equals (shared
+    // by @tiptap/react and recharts), so four recharts admin pages imported
+    // ~122 KB gz of editor for it; the substring test also caught the app's own
+    // tiptap-styles.css. RichTextEditor is lazy, so tiptap needs no chunk.
+    ["tiptap", nm("@tiptap/core/dist/index.js")],
+    ["tiptap react", nm("@tiptap/react/dist/index.js")],
+    ["prosemirror", nm("prosemirror-view/dist/index.js")],
+    ["fast-equals", nm("fast-equals/dist/esm/index.mjs")],
+    ["app tiptap stylesheet", "/repo/src/components/cms/tiptap-styles.css"],
   ])("leaves %s to Rollup", (_name, id) => {
     expect(chunkFor(id)).toBeUndefined();
   });
@@ -61,8 +69,9 @@ describe("manualChunks (WEB-PERF-064)", () => {
 describe("experimentalMinChunkSize (WEB-PERF-065)", () => {
   // Any value above Rollup's default of 1 merges small chunks into a chunk
   // their importers share, so a route downloads modules it never runs. At 1000
-  // that was 1,892 KB gz summed over the lazy routes; at 1 it is 615, all of
-  // it the forced vendor-editor chunk. vite.config.ts has the table.
+  // that was 1,892 KB gz summed over the lazy routes; at 1 it was 615, all of
+  // it the forced vendor-editor chunk, and 0 once WEB-PERF-067 removed that.
+  // vite.config.ts has the table.
   it("does not merge small chunks into shared ones", () => {
     const resolved =
       typeof viteConfig === "function"
