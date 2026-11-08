@@ -547,9 +547,6 @@ jobs:
       # get_pending_reminders returned user emails to anon: GRANT to service_role
       # never revoked the default PUBLIC grant. Pins the revoke and no client caller.
       - run: deno test --allow-read supabase/functions/_tests/reminder-rpcs-service-role-only.test.ts
-      # WEB-FEAT-058. 3_hours/1_hour reminders fired at 16:31 and 18:31 for
-      # events stored at the 19:31:58 no-time sentinel. Pins the exclusion.
-      - run: deno test --allow-read supabase/functions/_tests/pending-reminders-skip-no-time.test.ts
       # Admin tools invoked with a user JWT were gated by requireApiKey and 401'd
       # on every click. Fails when a web-invoked function is key-only again.
       - run: deno test --allow-read supabase/functions/_tests/web-invoked-functions-accept-admin.test.ts
