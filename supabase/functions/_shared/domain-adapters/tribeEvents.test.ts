@@ -32,10 +32,25 @@ async function withFetch<T>(handler: Handler, run: () => Promise<T>): Promise<T>
     );
     // deno-lint-ignore no-explicit-any
   }) as any;
+  // fetchAllowed goes through fetchPublicUrl (WEB-SEC-061), which resolves the
+  // host before fetching and fails closed when it cannot. Answer the lookup
+  // with a public literal so the suite still needs no --allow-net.
+  const originalResolve = Deno.resolveDns;
+  Object.defineProperty(Deno, "resolveDns", {
+    configurable: true,
+    writable: true,
+    value: (_host: string, type: string) =>
+      Promise.resolve(type === "A" ? ["93.184.216.34"] : []),
+  });
   try {
     return await run();
   } finally {
     globalThis.fetch = original;
+    Object.defineProperty(Deno, "resolveDns", {
+      configurable: true,
+      writable: true,
+      value: originalResolve,
+    });
   }
 }
 

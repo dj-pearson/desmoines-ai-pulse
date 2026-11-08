@@ -25,6 +25,7 @@ import { scrapeImageFromWebsite } from '../_shared/imageFallbacks.ts';
 import { scrapeUrl } from '../_shared/scraper.ts';
 import { _clearRobotsCache } from '../_shared/robots.ts';
 import { fetchListingHtml } from '../_shared/eventPageDiscovery.ts';
+import { fetchAllowed } from '../_shared/domain-adapters/adapterFetch.ts';
 
 type Route = () => Response;
 type Call = { url: string; init: RequestInit };
@@ -265,5 +266,65 @@ Deno.test('scrapeWithFetch, fetchText and the robots.txt fetch make no bare fetc
   ] as const) {
     const bare = src.split('\n').filter((l) => /(^|[^\w.])fetch\(/.test(l));
     assert.deepEqual(bare, [], `${name} still calls fetch() directly:\n${bare.join('\n')}`);
+  }
+});
+
+// -- WEB-SEC-061: the domain adapters' fetch and the link-content probes --
+
+Deno.test('adapter fetchAllowed refuses a private URL without fetching it', async () => {
+  _clearRobotsCache();
+  await withStubbedFetch({}, async (calls) => {
+    assert.equal(await fetchAllowed('http://10.0.0.5/events'), null);
+    assert.equal(calls.length, 0, 'a private host was fetched');
+  });
+});
+
+Deno.test('adapter fetchAllowed returns null on a public 302 onto the metadata address', async () => {
+  _clearRobotsCache();
+  await withStubbedFetch(
+    { [`${SITE}/robots.txt`]: notFound, [`${SITE}/events/`]: redirect(METADATA) },
+    async (calls) => {
+      assert.equal(await fetchAllowed(`${SITE}/events/`), null);
+      assert.ok(calls.every((c) => !c.url.startsWith('http://169.254.')), 'the metadata address was fetched');
+      const page = calls.find((c) => c.url === `${SITE}/events/`);
+      assert.equal(page?.init.redirect, 'manual', 'fetch() was left to follow redirects');
+    },
+  );
+});
+
+Deno.test('adapter fetchAllowed follows a normal redirect and keeps the adapter headers', async () => {
+  _clearRobotsCache();
+  await withStubbedFetch(
+    {
+      [`${SITE}/robots.txt`]: notFound,
+      [`${SITE}/events`]: redirect(`${SITE}/events/`, 301),
+      [`${SITE}/events/`]: html('<h1>Listing</h1>'),
+    },
+    async (calls) => {
+      const res = await fetchAllowed(`${SITE}/events`, { headers: { Referer: `${SITE}/` } });
+      assert.ok(res, 'a public page through a same-site redirect was refused');
+      assert.equal(await res.text(), '<h1>Listing</h1>');
+      const last = calls[calls.length - 1];
+      assert.equal(last.url, `${SITE}/events/`);
+      const headers = new Headers(last.init.headers);
+      assert.ok(headers.get('user-agent'), 'the adapter User-Agent was dropped on the redirect hop');
+      assert.equal(headers.get('referer'), `${SITE}/`);
+    },
+  );
+});
+
+Deno.test('adapter fetchAllowed still throws on a network error, not only on a refusal', async () => {
+  _clearRobotsCache();
+  // No route for the page: the stub rejects the way a reset connection does.
+  await withStubbedFetch({ [`${SITE}/robots.txt`]: notFound }, async () => {
+    await assert.rejects(() => fetchAllowed(`${SITE}/gone`), /unexpected fetch/);
+  });
+});
+
+Deno.test('adapterFetch.ts and link-content-monitor.ts make no bare fetch()', async () => {
+  for (const path of ['domain-adapters/adapterFetch.ts', 'agents/link-content-monitor.ts']) {
+    const src = withoutStrings(codeOnly(await Deno.readTextFile(new URL(`supabase/functions/_shared/${path}`, REPO))));
+    const bare = src.split('\n').filter((l) => /(^|[^\w.])fetch\(|globalThis\.fetch\(/.test(l));
+    assert.deepEqual(bare, [], `${path} still calls fetch() directly:\n${bare.join('\n')}`);
   }
 });
