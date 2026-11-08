@@ -96,8 +96,17 @@ export function useKeyboardShortcuts({
       // accidental navigation when clicking filters, searching, or using modals
       if (isInteractiveElement(target)) return;
 
-      // Show keyboard shortcuts help (? works from anywhere except when typing)
-      if (event.key === "?" && !event.shiftKey) {
+      // Show keyboard shortcuts help (? works from anywhere except when typing).
+      // Shift is not checked: on a US layout "?" is Shift+/, so a real keyboard
+      // always sends shiftKey true with it (WEB-UX-067). Matching on event.key
+      // also covers layouts where "?" has its own key. Ctrl/Cmd/Alt + ? are
+      // left to the browser.
+      if (
+        event.key === "?" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
         event.preventDefault();
         onShowHelp?.();
         return;
