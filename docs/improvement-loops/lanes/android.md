@@ -88,6 +88,15 @@ device check closes it: open an attraction from a favorite or notification whose
 (so the screen opens by UUID and shows not-found), tap Open on web, and confirm the in-app web view shows
 the attractions listing rather than the web's not-found page.
 
+AND-AUDIT-036 (restaurant open-now in Des Moines time) is code-complete and JVM-tested. Restaurant.isOpenNow
+now reads Instant.now() converted to America/Chicago through isOpenAt, so the Restaurants list badge, the
+Restaurants Open now filter and the Discover Open now filter all evaluate business_hours on the Central
+clock (they all call isOpenNow, which used LocalDateTime.now() in the phone's zone). One device check
+closes it: set the phone to Pacific time, open Restaurants when a place opened within the last two
+hours Central, and confirm the badge reads Open (it read Closed before). The trap: Deal.isActiveNow
+still uses OffsetDateTime.now() in the phone's zone, so the Deals tab's Active now filter can disagree
+with the restaurant badge on a phone outside Central until that gets the same fix.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -106,3 +115,4 @@ the attractions listing rather than the web's not-found page.
 | 2026-11-08 | AND-AUDIT-034 | this commit | Restaurant, attraction and hotel shares now end with their site page (/restaurants/<slug or id>, /attractions/<slug or name slug>, /stay/<slug>) through a shared PlaceShareLinks, matching the event share shape; Attraction and Hotel decode slug. 8 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation linking restaurants by id and dropping the attraction name fallback fails 2. ViewModels, models and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-035 | this commit | Attraction Open on web no longer builds /attractions/<uuid> (the web resolves by slug only, so a UUID-opened not-found screen sent users to a web 404): it uses the loaded row's slug or name slug, else a non-UUID opened value, else the /attractions listing, via a new PlaceShareLinks.attractionWebUrl. 3 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10), 11/11 in the suite; a mutation dropping the UUID guard fails exactly the no-UUID test. ViewModel, DetailDestinations and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-032 | this commit | Trip planner start and end dates count from the Des Moines day via a new TripDates.range (EventTimeText.desMoinesToday of the phone's instant), not LocalDate.now(), so a phone on UTC after 7pm Central no longer sends generate-itinerary tomorrow as "today". 4 new TripDatesTest JVM tests pass on a stub harness (kotlinc 2.2.10) with the 52 existing event-time tests; a mutation restoring the device day fails exactly the 2 cross-zone tests. TripPlannerViewModel and app module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-036 | this commit | Restaurant open/closed now reads the Des Moines wall clock: isOpenNow converts Instant.now() to America/Chicago via a new isOpenAt (was LocalDateTime.now() in the phone's zone), so the list badge and the Restaurants and Discover Open now filters agree with business_hours on any phone. 5 new RestaurantOpenNowTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation reading the instant in UTC fails exactly the 4 cross-zone tests. App module not compiled (no Android SDK); no device check |
