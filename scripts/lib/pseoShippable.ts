@@ -37,7 +37,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORY_FILTERS, dayAfter, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../src/pseo/listingFilters';
+import { CATEGORY_FILTERS, pseoEventFilters, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../src/pseo/listingFilters';
 import { classifySlugs } from './pseoRouteClaims.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -70,20 +70,18 @@ export function renderedQuery(entityType, dims, nowIso) {
   p.set('select', 'id');
 
   if (entityType === 'events') {
-    p.append('date', `gte.${nowIso}`);
+    // The date window and the location match come from the same builder the
+    // component calls (WEB-SEO-063): still on today or overlapping the temporal
+    // window, ANDed with the place, in one or=.
+    const dates = pseoEventFilters(
+      { temporalSlug: temporal?.slug, locationName: location?.name },
+      new Date(nowIso),
+    );
+    p.set('or', `(${dates.or})`);
+    if (dates.lte) p.append('date', `lte.${dates.lte}`);
     p.append('is_hidden', 'neq.true');
     p.set('order', 'date.asc');
-    if (location) {
-      p.set('or', `(city.ilike.*${location.name}*,location.ilike.*${location.name}*,venue.ilike.*${location.name}*)`);
-    }
     if (cat?.entity === 'events') p.append(cat.column, `imatch.${cat.pattern}`);
-    if (temporal) {
-      const range = temporalRange(temporal.slug);
-      if (range) {
-        p.append('date', `gte.${range.from}`);
-        p.append('date', `lt.${dayAfter(range.to)}`);
-      }
-    }
     return ['events', p];
   }
 

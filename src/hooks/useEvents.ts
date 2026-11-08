@@ -7,6 +7,7 @@ import { Database } from "@/integrations/supabase/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { countOption, type CountMode } from "@/lib/listCount";
 import { centralDayStartUtcISO } from "@/lib/timezone";
+import { upcomingOrRunningFilter } from "@/lib/eventRunningFilter";
 
 const logger = createLogger("useEvents");
 
@@ -70,22 +71,9 @@ export function eventsLowerBoundISO(): string {
   return centralDayStartUtcISO();
 }
 
-/**
- * The PostgREST `or=` group that keeps an event on this list: it starts today
- * (Central) or later, OR it is a run whose end_date is today or later.
- *
- * This list filtered `date >= today` alone, so a multi-day event fell off it on
- * its second morning even though it was still on. Site search goes through this
- * hook (useKeywordResults), so on day three of the State Fair a search for
- * "state fair" found nothing while the hubs and the calendar, which already read
- * end_date (eventsHubQuery notOverFilter, useEventsInRange), listed it. The
- * subscribed .ics feeds had the same gap and were fixed the same way
- * (WEB-FEAT-041). A row with no end_date matches only on its own date, so a
- * past one-night show stays off.
- */
-export function upcomingOrRunningFilter(lowerBoundIso: string): string {
-  return `date.gte.${lowerBoundIso},end_date.gte.${lowerBoundIso}`;
-}
+// Moved to src/lib/eventRunningFilter.ts so pure modules can share it;
+// re-exported for the callers that import it from here.
+export { upcomingOrRunningFilter };
 
 /**
  * Standalone fetcher so TanStack Query owns caching, dedup and retries

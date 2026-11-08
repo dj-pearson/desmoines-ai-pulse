@@ -10,6 +10,9 @@
  * a plain node script import it.
  */
 import { isNeighborhoodSlug } from '../lib/neighborhoodBoundaries';
+import { upcomingOrRunningFilter } from '../lib/eventRunningFilter';
+import { sanitizePostgrestPattern } from '../lib/postgrestPattern';
+import { centralWindow, upcomingFloorUtc } from '../lib/timezone';
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -160,4 +163,49 @@ export function temporalRange(slug: string, now: Date = new Date()): { from: str
     return { from: ymd(start < today ? today : start), to: ymd(end) };
   }
   return null;
+}
+
+/**
+ * WEB-SEO-063. The date half of a pSEO events listing, as PostgREST filters:
+ * one `or=` body and an optional inclusive upper bound on `date`.
+ *
+ * The listing used to send `date >= now()`, which dropped two kinds of event
+ * that are still on:
+ *   - a run that started before today (a festival vanished on its second day),
+ *   - an untimed event, stored at the 19:31:58 Central sentinel, which vanished
+ *     at 7:31 PM on its own day.
+ * The floor is now the start of today in Central time (upcomingFloorUtc) and a
+ * row also qualifies while its end_date is at or after it, the same group
+ * /events and site search send. With a temporal dimension the window is an
+ * overlap: started by the window's end, not over before its start. The window's
+ * days are Central days, so "today" no longer includes last night's 7 PM show
+ * (00:00 UTC is still yesterday in Des Moines).
+ *
+ * The location match shares the one `or=`: a second .or() is a second `or`
+ * query param, and PostgREST does not promise to AND duplicates.
+ *
+ * Shared by PseoLiveListings and scripts/lib/pseoShippable.ts (the inventory
+ * gate), so the two count the same rows.
+ */
+export function pseoEventFilters(
+  opts: { temporalSlug?: string; locationName?: string },
+  now: Date = new Date(),
+): { or: string; lte: string | null } {
+  let lower = upcomingFloorUtc(now);
+  let lte: string | null = null;
+  const range = opts.temporalSlug ? temporalRange(opts.temporalSlug, now) : null;
+  if (range) {
+    const w = centralWindow({ kind: 'range', from: range.from, to: range.to }, now);
+    if (w.start > lower) lower = w.start;
+    lte = w.end;
+  }
+  const running = upcomingOrRunningFilter(lower);
+  if (!opts.locationName) return { or: running, lte };
+  // venue is in the OR because that is where a neighbourhood name actually
+  // lands on this table - events.city is NULL on 1,243 of 1,249 rows, so the
+  // city arm almost never fires. Same fields EventsByLocation.tsx matches.
+  // A name with a comma ("Ankeny, IA") would end the or() clause and 400.
+  const place = sanitizePostgrestPattern(opts.locationName);
+  const where = `city.ilike.%${place}%,location.ilike.%${place}%,venue.ilike.%${place}%`;
+  return { or: `and(or(${running}),or(${where}))`, lte };
 }

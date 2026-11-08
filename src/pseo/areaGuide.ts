@@ -21,6 +21,8 @@ import {
   type NeighborhoodBoundary,
 } from '../lib/neighborhoodBoundaries';
 import { isVisitableStatus } from '../lib/restaurantHours';
+import { upcomingOrRunningFilter } from '../lib/eventRunningFilter';
+import { upcomingFloorUtc } from '../lib/timezone';
 
 /**
  * pSEO pages that render as an area guide. For these, PseoPage ignores the
@@ -156,6 +158,8 @@ export interface AreaEventRow {
   date: string | null;
   event_start_utc: string | null;
   time_tbd: boolean | null;
+  /** Last moment of a multi-day run; null for a single date. */
+  end_date?: string | null;
   venue: string | null;
   location: string | null;
   latitude: number | null;
@@ -164,6 +168,30 @@ export interface AreaEventRow {
 
 function startMs(e: AreaEventRow): number {
   return Date.parse(e.event_start_utc ?? e.date ?? '');
+}
+
+/**
+ * WEB-SEO-063. The events read's date filters: still on today (Central), or a
+ * run whose end_date has not passed, and starting before the lookahead ends.
+ *
+ * It sent `date >= now() AND date < now() + 30d`, so a festival dropped off the
+ * guide on its second day and an untimed event (stored at the 19:31:58 Central
+ * sentinel) dropped off at 7:31 PM on its own day. Same group /events sends.
+ */
+export function areaEventsWindow(now: Date = new Date()): { or: string; before: string } {
+  return {
+    or: upcomingOrRunningFilter(upcomingFloorUtc(now)),
+    before: new Date(now.getTime() + AREA_LOOKAHEAD_DAYS * 86_400_000).toISOString(),
+  };
+}
+
+/** Client half of the same rule: starts today or later, or has not ended. */
+function stillOn(e: AreaEventRow, floorMs: number): boolean {
+  const start = startMs(e);
+  if (!Number.isFinite(start)) return false;
+  if (start >= floorMs) return true;
+  const end = e.end_date ? Date.parse(e.end_date) : NaN;
+  return Number.isFinite(end) && end >= floorMs;
 }
 
 /**
@@ -177,10 +205,11 @@ export function splitAreaEvents(
   now: Date = new Date(),
 ): { thisWeek: AreaEventRow[]; later: AreaEventRow[] } {
   const weekEnd = now.getTime() + AREA_WEEK_DAYS * 86_400_000;
+  const floorMs = Date.parse(upcomingFloorUtc(now));
   const inside = rows
     .filter((e) => e.latitude != null && e.longitude != null)
     .filter((e) => pointInPolygon([Number(e.latitude), Number(e.longitude)], polygon))
-    .filter((e) => Number.isFinite(startMs(e)) && startMs(e) >= now.getTime())
+    .filter((e) => stillOn(e, floorMs))
     .sort((a, b) => startMs(a) - startMs(b));
   const thisWeek = inside.filter((e) => startMs(e) < weekEnd);
   const later =
