@@ -10,11 +10,16 @@ import { runJob } from '../_shared/jobRunner.ts'
 import { isPlacesMediaUrl, GOOGLE_ATTRIBUTION_TEXT } from '../_shared/placesPhoto.ts'
 import {
   buildHoursOnlyUpdate,
+  buildStaleRefreshUpdate,
+  failedLookupCountsAsCheck,
   HOURS_ONLY_FIELD_MASK,
   normalizeBusinessStatus,
   normalizeOpeningHours,
+  parseStaleDays,
+  staleHoursCutoff,
+  staleHoursFilter,
 } from '../_shared/placeHours.ts'
-import type { BusinessStatus, StoredHours } from '../_shared/placeHours.ts'
+import type { BusinessStatus, StaleRefreshUpdate, StoredHours } from '../_shared/placeHours.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -193,6 +198,117 @@ async function refreshHoursOnly(
   )
 }
 
+/**
+ * WEB-FEAT-079. `hoursOnly: true, staleDays: N` re-reads hours and
+ * status for rows that HAVE hours whose last check is older than N days,
+ * oldest check first. The fill mode above never revisits a row, so without
+ * this a place's hours and business_status were frozen at the first fetch.
+ *
+ * Same two-field mask and the same two columns as the fill mode, plus
+ * hours_checked_at (migration 20261108000099), written on every answer Places
+ * gives so a place with no hours is not re-read at the head of every batch.
+ * A Places error other than 404 is not a check; the row is retried next run.
+ * No cursor: each run's writes move the rows it read out of the stale set.
+ */
+async function refreshStaleHours(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  googleApiKey: string,
+  batchSize: number,
+  staleDays: number,
+  corsHeaders: Record<string, string>,
+  req: Request,
+): Promise<Response> {
+  const cutoff = staleHoursCutoff(staleDays)
+  const { data: rows, error: fetchError } = await supabase
+    .from('restaurants')
+    .select('id, name, google_place_id')
+    .not('google_place_id', 'is', null)
+    .not('hours_json', 'is', null)
+    .or(staleHoursFilter(cutoff))
+    .order('hours_checked_at', { ascending: true, nullsFirst: true })
+    .order('id', { ascending: true })
+    .limit(batchSize)
+  if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
+
+  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string }>
+  let updated = 0
+  let noHours = 0
+  let gone = 0
+  const errors: Array<{ id: string; name: string; error: string }> = []
+
+  const job = await runJob('bulk-update-restaurants-hours', async (ctx) => {
+    for (const row of targets) {
+      try {
+        const res = await fetchWithTimeout(
+          `https://places.googleapis.com/v1/places/${encodeURIComponent(row.google_place_id)}`,
+          { method: 'GET', headers: { 'X-Goog-Api-Key': googleApiKey, 'X-Goog-FieldMask': HOURS_ONLY_FIELD_MASK } },
+        )
+        let update: StaleRefreshUpdate
+        if (res.ok) {
+          update = buildStaleRefreshUpdate(await res.json())
+          if (!('hours_json' in update)) noHours++
+        } else if (failedLookupCountsAsCheck(res.status)) {
+          gone++
+          update = { hours_checked_at: new Date().toISOString() }
+        } else {
+          errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
+          continue
+        }
+        const { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
+        if (updateError) errors.push({ id: row.id, name: row.name, error: updateError.message })
+        else updated++
+      } catch (error) {
+        errors.push({ id: row.id, name: row.name, error: error instanceof Error ? error.message : String(error) })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    ctx.processed(updated)
+    ctx.failed(errors.length)
+    ctx.meta({
+      mode: 'hoursOnly-stale',
+      staleDays,
+      noHours,
+      gone,
+      sources: { 'google-places': { fetched: targets.length, inserted: updated, duplicates: 0, errors: errors.length } },
+    })
+  })
+
+  if (!job.ok) {
+    return new Response(
+      JSON.stringify({ success: false, error: job.error ?? 'Hours refresh failed', runId: job.runId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
+    )
+  }
+
+  await writeAuditLog(supabase, {
+    eventType: 'admin_action',
+    actorId: null,
+    action: 'bulk_update_restaurants_hours',
+    resource: 'restaurants',
+    severity: 'low',
+    ipAddress: auditIp(req),
+    details: { mode: 'stale', staleDays, processed: targets.length, updated, noHours, gone, errors: errors.length },
+  })
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      runId: job.runId,
+      message: 'Stale hours refresh completed',
+      mode: 'hoursOnly-stale',
+      staleDays,
+      processed: targets.length,
+      updated,
+      noHours,
+      gone,
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined,
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+  )
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   const corsResponse = handleCors(req);
@@ -228,13 +344,19 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null } = await req.json()
+    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null } = await req.json()
     // Each row is a paid Google Places lookup, and batchSize went straight into
     // .limit(). 50 is the admin form's own max (RestaurantBulkUpdater.tsx).
     const batchSize = Math.min(Math.max(Math.floor(Number(rawBatchSize)) || 10, 1), 50)
 
     // SEO-054: hours and status only, for rows with a place id and no hours.
     if (hoursOnly === true) {
+      // WEB-FEAT-079: with staleDays, re-read rows that already
+      // have hours. Optional field; absent keeps the fill behaviour.
+      const staleDays = parseStaleDays(rawStaleDays)
+      if (staleDays !== null) {
+        return await refreshStaleHours(supabase, googleApiKey, batchSize, staleDays, corsHeaders, req)
+      }
       const cursor = typeof afterId === 'string' && /^[0-9a-f-]{36}$/i.test(afterId) ? afterId : null
       return await refreshHoursOnly(supabase, googleApiKey, batchSize, cursor, corsHeaders, req)
     }

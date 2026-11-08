@@ -180,3 +180,78 @@ export function buildHoursOnlyUpdate(
   if (status) update.business_status = status;
   return Object.keys(update).length > 0 ? update : null;
 }
+
+/**
+ * WEB-FEAT-079. Re-reading hours that are already stored.
+ *
+ * THE GAP. Every writer of hours_json fills a row once: the hours-only mode
+ * targets `hours_json IS NULL`, and the full enrichment skips rows whose
+ * `enhanced` is 'completed'. So a place that changed its hours, or that Google
+ * now marks CLOSED_TEMPORARILY / CLOSED_PERMANENTLY, kept the answer from the
+ * day it was first filled. Every open-now badge and every closed-place filter
+ * on the site reads those two columns, so their accuracy decayed with the age
+ * of the fetch.
+ *
+ * `staleDays` on the hours-only request turns it into a refresh of rows whose
+ * last check is older than that many days. "Last check" is
+ * restaurants.hours_checked_at, written on every answer Places gives, so a
+ * place Google no longer has hours for (or no longer knows) is not re-read at
+ * the head of every batch. A row the fill mode wrote before that column
+ * existed has no check time; its hours_json.fetchedAt stands in.
+ */
+export const HOURS_STALE_MIN_DAYS = 7;
+export const HOURS_STALE_MAX_DAYS = 365;
+
+/**
+ * The requested staleness window in whole days, or null for "not a refresh".
+ * Out-of-range values are clamped rather than refused: the caller asked for a
+ * refresh, and a window under a week would re-buy the same Place Details
+ * answers for no new information.
+ */
+export function parseStaleDays(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === false) return null;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.max(n, HOURS_STALE_MIN_DAYS), HOURS_STALE_MAX_DAYS);
+}
+
+/** The ISO instant before which a check counts as stale. */
+export function staleHoursCutoff(days: number, now: Date = new Date()): string {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * PostgREST `or` for "checked before the cutoff, or never checked and fetched
+ * before it". Both values are ISO-8601 UTC strings, so the text comparison on
+ * hours_json->>fetchedAt orders the same way the instants do.
+ */
+export function staleHoursFilter(cutoffIso: string): string {
+  return `hours_checked_at.lt.${cutoffIso},and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.${cutoffIso})`;
+}
+
+export interface StaleRefreshUpdate extends HoursOnlyUpdate {
+  hours_checked_at: string;
+}
+
+/**
+ * The columns a refresh writes for one Place Details answer. Always records
+ * the check. Writes hours and status only when Places gave usable ones, so a
+ * response without hours never blanks hours the row already has: null hours
+ * mean "unknown", and the stored ones still say when they were fetched.
+ */
+export function buildStaleRefreshUpdate(
+  details: unknown,
+  checkedAt: string = new Date().toISOString(),
+): StaleRefreshUpdate {
+  return { ...(buildHoursOnlyUpdate(details, checkedAt) ?? {}), hours_checked_at: checkedAt };
+}
+
+/**
+ * Whether a failed Place Details call still counts as a check. 404 is Google
+ * saying the place id is gone, an answer that will not change on retry; a
+ * quota, auth or server error says nothing about the place and is retried on
+ * the next run.
+ */
+export function failedLookupCountsAsCheck(status: number): boolean {
+  return status === 404;
+}
