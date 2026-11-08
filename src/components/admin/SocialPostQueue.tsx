@@ -499,7 +499,7 @@ export default function SocialPostQueue() {
                       <TableCell className="w-32">
                         <div className="flex flex-wrap gap-1 justify-end">
                           {tone === "failed" && (
-                            <Button
+                            <Button aria-label={`Retry ${p.post_title ?? "post"}`}
                               size="sm"
                               variant="outline"
                               disabled={busyId === p.id}
@@ -514,7 +514,7 @@ export default function SocialPostQueue() {
                           )}
                           {tone === "draft" && (
                             <>
-                              <Button
+                              <Button aria-label={`Reschedule ${p.post_title ?? "post"}`}
                                 size="sm"
                                 variant="outline"
                                 disabled={busyId === p.id}
@@ -531,7 +531,7 @@ export default function SocialPostQueue() {
                               >
                                 <CalendarClock className="h-3 w-3" />
                               </Button>
-                              <Button
+                              <Button aria-label={`Cancel ${p.post_title ?? "post"}`}
                                 size="sm"
                                 variant="outline"
                                 className="text-destructive"

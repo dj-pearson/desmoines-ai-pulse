@@ -274,7 +274,7 @@ export function AIConfigurationManager() {
                       <TableCell className="text-xs">{model.context_window?.toLocaleString()}</TableCell>
                       <TableCell className="text-xs">{model.max_output_tokens?.toLocaleString()}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button
+                        <Button aria-label={`Test ${model.model_name}`}
                           size="sm"
                           variant="outline"
                           onClick={() => testAIModel(model.model_id)}
@@ -282,7 +282,7 @@ export function AIConfigurationManager() {
                         >
                           <TestTube className="h-3 w-3" />
                         </Button>
-                        <Button
+                        <Button aria-label={`Delete ${model.model_name}`}
                           size="sm"
                           variant="ghost"
                           onClick={() => deleteModel(model.id)}

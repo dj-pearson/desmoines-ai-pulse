@@ -416,14 +416,14 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
                                   Use
                                 </Button>
                               )}
-                              <Button
+                              <Button aria-label={`Edit ${source.name}`}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => openEditDialog(source)}
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
-                              <Button
+                              <Button aria-label={`Delete ${source.name}`}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleDelete(source.id)}

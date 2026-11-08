@@ -569,7 +569,7 @@ export default function ScraperConfigWizard({
                                 <code className="text-xs bg-gray-100 px-1 rounded">
                                   {selector as string}
                                 </code>
-                                <Button
+                                <Button aria-label={`Copy ${field} selector`}
                                   size="sm"
                                   variant="ghost"
                                   onClick={() =>

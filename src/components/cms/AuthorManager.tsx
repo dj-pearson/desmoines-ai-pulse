@@ -461,7 +461,7 @@ export function AuthorManager() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button
+                        <Button aria-label={`Edit ${author.display_name}`}
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenDialog(author)}
@@ -470,7 +470,7 @@ export function AuthorManager() {
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button aria-label={`Delete ${author.display_name}`} variant="ghost" size="sm">
                               <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </AlertDialogTrigger>

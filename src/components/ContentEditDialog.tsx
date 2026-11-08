@@ -520,7 +520,7 @@ export default function ContentEditDialog({
                   }
                 }}
               />
-              <Button
+              <Button aria-label={`Add ${field.label}`}
                 type="button"
                 size="sm"
                 onClick={() => handleArrayAdd(field.key)}
@@ -532,7 +532,7 @@ export default function ContentEditDialog({
               {(value || []).map((item: string, index: number) => (
                 <Badge key={index} variant="secondary" className="flex items-center gap-1">
                   {item}
-                  <Button
+                  <Button aria-label={`Remove ${item}`}
                     type="button"
                     size="sm"
                     variant="ghost"

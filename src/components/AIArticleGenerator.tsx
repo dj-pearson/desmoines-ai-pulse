@@ -533,7 +533,7 @@ const AIArticleGenerator: React.FC = () => {
                         placeholder="Add keyword..."
                         onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
                       />
-                      <Button onClick={handleAddKeyword} size="sm">
+                      <Button aria-label="Add keyword" onClick={handleAddKeyword} size="sm">
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
@@ -541,7 +541,7 @@ const AIArticleGenerator: React.FC = () => {
                       {settings.targetKeywords.map((keyword) => (
                         <Badge key={keyword} variant="secondary" className="gap-1">
                           {keyword}
-                          <button onClick={() => handleRemoveKeyword(keyword)}>
+                          <button aria-label={`Remove keyword ${keyword}`} onClick={() => handleRemoveKeyword(keyword)}>
                             <X className="h-3 w-3" />
                           </button>
                         </Badge>

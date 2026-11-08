@@ -254,7 +254,7 @@ export function MenuItemsViewer({
                       Restore
                     </Button>
                   )}
-                  <Button
+                  <Button aria-label={`Delete version ${v.version}`}
                     variant="ghost"
                     size="sm"
                     className="h-6 text-xs text-destructive hover:text-destructive"

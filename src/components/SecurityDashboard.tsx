@@ -237,7 +237,7 @@ export default function SecurityDashboard() {
                   <Button onClick={applyFilters} className="flex-1">
                     Apply
                   </Button>
-                  <Button onClick={exportEvents} variant="outline" size="sm">
+                  <Button aria-label="Export security events as CSV" onClick={exportEvents} variant="outline" size="sm">
                     <Download className="h-4 w-4" />
                   </Button>
                 </div>

@@ -300,7 +300,7 @@ const SocialMediaManager = () => {
                           )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
+                              <Button aria-label="Delete post" variant="outline" size="sm">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
@@ -792,7 +792,7 @@ const SocialMediaManager = () => {
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
+                              <Button aria-label={`Delete webhook ${webhook.name}`} variant="outline" size="sm">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>

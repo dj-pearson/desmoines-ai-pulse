@@ -54,3 +54,45 @@ describe("files fixed in WEB-UX-056 slice 1", () => {
     expect(findUnnamedIconButtons(source, file)).toEqual([]);
   });
 });
+
+describe("files fixed in WEB-UX-056 slice 2", () => {
+  const fixed = [
+    "src/components/admin/MediaLibrary.tsx",
+    "src/components/admin/MenuItemsViewer.tsx",
+    "src/components/admin/SocialAccountsManager.tsx",
+    "src/components/admin/SocialPostQueue.tsx",
+    "src/components/admin/VenuesManager.tsx",
+    "src/components/AIArticleGenerator.tsx",
+    "src/components/AIConfigurationManager.tsx",
+    "src/components/ArticlesManager.tsx",
+    "src/components/CatchDesmoinUrlExtractor.tsx",
+    "src/components/cms/AuthorManager.tsx",
+    "src/components/ContentEditDialog.tsx",
+    "src/components/ContentEditor.tsx",
+    "src/components/ContentQueue.tsx",
+    "src/components/crm/CrmContactDetail.tsx",
+    "src/components/DataQualityDashboard.tsx",
+    "src/components/DomainHighlightManager.tsx",
+    "src/components/EventEditor.tsx",
+    "src/components/media/VideoUpload.tsx",
+    "src/components/ScraperConfigWizard.tsx",
+    "src/components/SecurityDashboard.tsx",
+    "src/components/SocialMediaManager.tsx",
+    "src/components/URLSourceManager.tsx",
+    "src/components/WebsiteAnalysisDialog.tsx",
+  ];
+
+  it.each(fixed)("%s has no unnamed icon button", (file) => {
+    const source = readFileSync(resolve(__dirname, "../../..", file), "utf8");
+    expect(findUnnamedIconButtons(source, file)).toEqual([]);
+  });
+
+  it("names the media library view toggle and reports which view is on", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../../..", "src/components/admin/MediaLibrary.tsx"),
+      "utf8",
+    );
+    expect(source).toContain('aria-label="Grid view" aria-pressed={viewMode === "grid"}');
+    expect(source).toContain('aria-label="List view" aria-pressed={viewMode === "list"}');
+  });
+});

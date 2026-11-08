@@ -416,14 +416,14 @@ export function MediaLibrary({
 
         {/* View toggle */}
         <div className="flex border rounded-md">
-          <Button
+          <Button aria-label="Grid view" aria-pressed={viewMode === "grid"}
             variant={viewMode === "grid" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => setViewMode("grid")}
           >
             <Grid className="h-4 w-4" />
           </Button>
-          <Button
+          <Button aria-label="List view" aria-pressed={viewMode === "list"}
             variant={viewMode === "list" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => setViewMode("list")}

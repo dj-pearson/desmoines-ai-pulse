@@ -216,7 +216,7 @@ export function DataQualityDashboard({
                           </Button>
                         )}
                         {onViewItem && (
-                          <Button
+                          <Button aria-label={`Open ${quality.contentType} with ${issue.field} issue`}
                             size="sm"
                             variant="ghost"
                             onClick={() => onViewItem(quality.contentType, issue.contentId)}

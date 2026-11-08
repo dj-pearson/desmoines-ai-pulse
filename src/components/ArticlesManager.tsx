@@ -341,7 +341,7 @@ export default function ArticlesManager() {
                         
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button aria-label={`Delete ${article.title}`} variant="ghost" size="sm">
                               <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </AlertDialogTrigger>

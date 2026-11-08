@@ -195,7 +195,7 @@ export default function CatchDesmoinUrlExtractor() {
                 {remainingCount ?? '-'}
               </Badge>
             )}
-            <Button
+            <Button aria-label="Refresh remaining count"
               variant="ghost"
               size="sm"
               onClick={fetchRemainingCount}

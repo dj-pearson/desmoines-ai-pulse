@@ -122,7 +122,7 @@ export default function EventEditor({
               Update event information that was incorrectly scraped
             </CardDescription>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button aria-label="Close editor" variant="ghost" size="sm" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>

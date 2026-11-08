@@ -1069,7 +1069,7 @@ export default function VenuesManager() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button
+                          <Button aria-label={`Edit ${venue.name}`}
                             size="sm"
                             variant="outline"
                             onClick={() => handleEdit(venue)}
@@ -1084,6 +1084,7 @@ export default function VenuesManager() {
                             >
                               <SafeExternalLink
                                 fallback={null}
+                                aria-label={`${venue.name} website (opens in new tab)`}
                                 href={venue.website}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -1092,7 +1093,7 @@ export default function VenuesManager() {
                               </SafeExternalLink>
                             </Button>
                           )}
-                          <Button
+                          <Button aria-label={`Delete ${venue.name}`}
                             size="sm"
                             variant="destructive"
                             onClick={() => handleDelete(venue)}

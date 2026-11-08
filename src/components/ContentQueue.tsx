@@ -366,7 +366,7 @@ export function ContentQueue() {
                               </Button>
                             </>
                           )}
-                          <Button
+                          <Button aria-label={`View ${item.content_type} submission`}
                             size="sm"
                             variant="ghost"
                             onClick={() => setSelectedItem(item)}

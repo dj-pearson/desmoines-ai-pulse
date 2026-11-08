@@ -346,7 +346,7 @@ export function CrmContactDetail({ contactId, onBack }: CrmContactDetailProps) {
                       onChange={(e) => setNewNote(e.target.value)}
                       rows={2}
                     />
-                    <Button onClick={handleAddNote} disabled={!newNote.trim()}>
+                    <Button aria-label="Add note" onClick={handleAddNote} disabled={!newNote.trim()}>
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
