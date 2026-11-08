@@ -98,6 +98,12 @@ const VERIFIES_CALLER = new RegExp(
   'i',
 );
 
+/**
+ * A function that resolves the caller only to label what it stores, and serves
+ * every caller anyway, says so with this line. It is counted as unguarded.
+ */
+const ATTRIBUTION_ONLY = /^\s*\/\/\s*edge-auth:\s*attribution-only\b/m;
+
 const names = readdirSync(FUNCTIONS, { withFileTypes: true })
   .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
   .map((d) => d.name)
@@ -132,7 +138,13 @@ for (const name of names) {
     .replace(/(['"`])Access-Control-Allow-Headers\1\s*:\s*(['"`])[^'"`]*\2/gi, ' ');
   if (!PRIVILEGED.test(src)) continue;
   privileged++;
-  if (!VERIFIES_CALLER.test(src)) unguarded.push(name);
+  // ATTRIBUTION IS NOT A GATE. log-error calls auth.getUser to find out WHO
+  // filed an error (WEB-SEC-063), then files it either way; anyone may still
+  // call it. Without this the getUser call made the sweep report log-error as
+  // newly guarded. The marker is read from the raw source, comments included,
+  // and it can only move a function INTO the unguarded list, which then needs
+  // a baseline entry, so writing it never hides anything.
+  if (ATTRIBUTION_ONLY.test(raw) || !VERIFIES_CALLER.test(src)) unguarded.push(name);
 }
 
 // A SCAN THAT MATCHED NOTHING IS NOT A CLEAN CODEBASE. Several checks in this

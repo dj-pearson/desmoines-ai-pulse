@@ -108,6 +108,27 @@ console.log('real verifiers still count');
   ck('exit 0', r.code === 0, r.out);
 }
 
+console.log('getUser marked attribution-only is not a caller check');
+{
+  const r = sweep({
+    'sink/index.ts':
+      SERVICE +
+      '// edge-auth: attribution-only\n' +
+      'const { data } = await db.auth.getUser(token);\n' +
+      'await db.from("error_events").insert({ user_id: data?.user?.id ?? null });\n',
+  });
+  ck('flags the sink', flags(r, 'sink'), r.out);
+}
+
+console.log('the marker in prose mid-line does not trigger');
+{
+  const r = sweep({
+    'user/index.ts':
+      SERVICE + 'const { data } = await db.auth.getUser(token); // not edge-auth: attribution-only\n',
+  });
+  ck('exit 0', r.code === 0, r.out);
+}
+
 console.log('the real tree passes against its baseline');
 {
   const env = { ...process.env };
