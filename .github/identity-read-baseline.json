@@ -8,7 +8,6 @@
     "event_photos",
     "event_reviews",
     "event_tips",
-    "swipe_session_participants",
     "user_subscriptions"
   ]
 }
