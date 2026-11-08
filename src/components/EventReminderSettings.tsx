@@ -8,6 +8,8 @@ import { useEventReminders, type ReminderType } from '@/hooks/useEventReminders'
 import { Skeleton } from '@/components/ui/skeleton';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { signInHref } from '@/components/header/navigationConfig';
+import { ReminderEmailsUnsubscribedNotice } from '@/components/ReminderEmailsUnsubscribedNotice';
+import { useAuth } from '@/hooks/useAuth';
 
 interface EventReminderSettingsProps {
   eventId: string;
@@ -25,8 +27,10 @@ export function EventReminderSettings({ eventId, className = '' }: EventReminder
     isReminderEnabled,
     toggleReminder,
     isTogglingReminder,
+    emailsUnsubscribed,
   } = useEventReminders(eventId);
   const location = useLocation();
+  const { user } = useAuth();
 
   if (!isAuthenticated) {
     return (
@@ -104,6 +108,7 @@ export function EventReminderSettings({ eventId, className = '' }: EventReminder
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {emailsUnsubscribed && <ReminderEmailsUnsubscribedNotice email={user?.email} />}
         {reminderOptions.map((option) => {
           const enabled = isReminderEnabled(option.type);
           return (
@@ -132,7 +137,7 @@ export function EventReminderSettings({ eventId, className = '' }: EventReminder
           );
         })}
 
-        {anyEnabled && (
+        {anyEnabled && !emailsUnsubscribed && (
           <div className="mt-4 pt-4 border-t">
             <p className="text-sm text-muted-foreground flex items-start gap-2">
               <Bell className="h-4 w-4 mt-0.5 flex-shrink-0" />
