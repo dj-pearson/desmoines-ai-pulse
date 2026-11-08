@@ -23,7 +23,7 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
 import { Star, ArrowLeft, Navigation, Check, Zap, TreePine } from "lucide-react";
-import { useState } from "react";
+import { lazy, useState } from "react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
@@ -32,6 +32,7 @@ import { splashPadReason, toddlerReason } from "@/lib/playgroundHub";
 import { buildPlaygroundFaqs } from "@/lib/playgroundFaqs";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
 import { useReviewAggregate } from "@/hooks/useReviewAggregate";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import {
   formatMilesAway,
   suburbFromLocation,
@@ -39,6 +40,13 @@ import {
   useSameAgePlaygrounds,
   type PlaygroundCard,
 } from "@/hooks/usePlaygrounds";
+
+// WEB-SEO-058: the reviews the hero average is computed from. Below the fold
+// and fires its own requests, so lazy defers the chunk and DeferredWidget
+// defers the mount until the reader scrolls near it, as on AttractionDetails.
+const RatingSystem = lazy(() =>
+  import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
+);
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
@@ -274,10 +282,12 @@ export default function PlaygroundDetails() {
                   <div className="flex flex-wrap items-center gap-3 text-white/90">
                     {/* WEB-SEO-056: the review average with its count, or
                         nothing. playgrounds.rating is not shown: a model read
-                        it off a crawled page and nothing says whose it is. */}
+                        it off a crawled page and nothing says whose it is.
+                        WEB-SEO-058: it links to the reviews it summarises. */}
                     {reviewAggregate && (
-                      <div
-                        className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1"
+                      <a
+                        href="#reviews"
+                        className="flex min-h-11 items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 hover:bg-white/30"
                         data-review-summary=""
                       >
                         <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
@@ -286,7 +296,7 @@ export default function PlaygroundDetails() {
                           {" "}from {reviewAggregate.total_ratings}{" "}
                           {reviewAggregate.total_ratings === 1 ? "review" : "reviews"}
                         </span>
-                      </div>
+                      </a>
                     )}
                     {playground.age_range && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
@@ -437,6 +447,14 @@ export default function PlaygroundDetails() {
             latitude={playground.latitude}
             longitude={playground.longitude}
           />
+
+          {/* Ratings and reviews (WEB-SEO-058). Without this nobody could
+              review a playground, so the hero average above never appeared. */}
+          <div id="reviews" className="mb-8 scroll-mt-20">
+            <DeferredWidget minHeight={240} label="Ratings and reviews">
+              <RatingSystem contentType="playground" contentId={playground.id} showReviews />
+            </DeferredWidget>
+          </div>
 
           {/* Playground-Specific FAQ */}
           <Card className="rounded-2xl mb-8 overflow-hidden">

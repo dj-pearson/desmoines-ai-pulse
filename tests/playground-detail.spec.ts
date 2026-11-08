@@ -22,6 +22,8 @@ import { centralDay } from './support/fixtureClock';
  *  7. playgrounds.rating is never shown, in the hero or on a side card; the
  *     hero shows the content_rating_aggregates review average or nothing, and
  *     no side query selects or orders by rating (WEB-SEO-056).
+ *  8. The page mounts the review widget under #reviews for content_type
+ *     playground, and the hero average links to it (WEB-SEO-058).
  *
  * The fixture backend does not filter; playgrounds and events are answered
  * here with page.route AFTER installFixtureBackend, which wins the match.
@@ -137,6 +139,20 @@ async function installPlayground(page: Page, detail: Record<string, unknown>): P
   });
   await page.route('**/rest/v1/events**', (route) => fulfil(route, [NEARBY_EVENT]));
   return seen;
+}
+
+/** A whole content_rating_aggregates row: RatingSystem reads every column. */
+function aggregateRow(average: number, total: number) {
+  return {
+    id: '33000000-0000-0000-0000-000000000002',
+    content_type: 'playground',
+    content_id: DOWNTOWN.id,
+    average_rating: average,
+    weighted_average: average,
+    total_ratings: total,
+    rating_distribution: { '1': 0, '2': 0, '3': 1, '4': 1, '5': 1 },
+    last_updated: '2026-01-01T00:00:00Z',
+  };
 }
 
 /** The page's own text, without the site header and footer. */
@@ -299,13 +315,46 @@ test.describe('/playgrounds/:slug (explore pass 2 WP4)', () => {
     await page.route('**/rest/v1/content_rating_aggregates**', (route) => {
       const url = decodeURIComponent(route.request().url());
       expect(url).toContain('content_type=eq.playground');
-      return fulfil(route, [{ average_rating: 4.2, total_ratings: 3 }]);
+      return fulfil(route, [aggregateRow(4.2, 3)]);
     });
 
     await page.goto('/playgrounds/fixture-downtown-playground');
     const summary = page.locator('[data-review-summary]');
     await expect(summary).toHaveText('4.2 from 3 reviews');
+    await expect(summary).toHaveAttribute('href', '#reviews');
     await expect(page.getByText('4.5')).toHaveCount(0);
+  });
+
+  test('the review widget mounts under #reviews for this playground', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installPlayground(page, DOWNTOWN);
+    await page.route('**/rest/v1/content_rating_aggregates**', (route) =>
+      fulfil(route, [aggregateRow(4.2, 3)]),
+    );
+    const ratingQueries: string[] = [];
+    await page.route('**/rest/v1/user_ratings**', (route) => {
+      ratingQueries.push(decodeURIComponent(route.request().url()));
+      return fulfil(route, []);
+    });
+
+    await page.goto('/playgrounds/fixture-downtown-playground');
+    const summary = page.locator('[data-review-summary]');
+    await expect(summary).toHaveText('4.2 from 3 reviews');
+
+    // The link resolves: exactly one #reviews target, and following it
+    // brings the deferred widget into view, which mounts it.
+    await expect(page.locator('#reviews')).toHaveCount(1);
+    await summary.click();
+    await expect(page).toHaveURL(/#reviews$/);
+    const widget = page.locator('#reviews');
+    await expect(widget.getByText('User Ratings')).toBeVisible();
+    await expect(widget.getByText('Based on 3 reviews')).toBeVisible();
+
+    expect(ratingQueries.length).toBeGreaterThan(0);
+    for (const u of ratingQueries) {
+      expect(u).toContain('content_type=eq.playground');
+      expect(u).toContain(`content_id=eq.${DOWNTOWN.id}`);
+    }
   });
 
   test('a failed fetch offers Retry and sets no noindex', async ({ page }) => {
