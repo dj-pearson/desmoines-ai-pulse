@@ -114,6 +114,24 @@ describe("normalizeSavedSearch", () => {
     expect(n.q).toBe("blues");
   });
 
+  it("reads filters that are a string, an array, a Date or carry non-string values as empty (WEB-PERF-069)", () => {
+    for (const filters of ["jazz", ["jazz"], 42, new Date(0)]) {
+      expect(normalizeSavedSearch({ search_type: "event_list", filters }).label).toBe("Every new event");
+    }
+    const n = normalizeSavedSearch({
+      search_type: "event_list",
+      filters: { q: 7, category: ["Music"], location: null, price: { v: "free" } },
+    });
+    expect(n.label).toBe("Every new event");
+    expect(n.href).toBe("/events");
+  });
+
+  it("trims and collapses whitespace in every key (WEB-PERF-069)", () => {
+    const n = normalizeSavedSearch({ search_type: "event_list", filters: { q: "  live \n  jazz ", price: " free " } });
+    expect(n.q).toBe("live jazz");
+    expect(n.label).toBe("'live jazz' - Free");
+  });
+
   it("infers events from the iOS tab when search_type is absent", () => {
     expect(normalizeSavedSearch({ filters: { query: "jazz", tab: "Events" } }).kind).toBe("events");
     expect(normalizeSavedSearch({ filters: { query: "jazz" } }).kind).toBe("other");
