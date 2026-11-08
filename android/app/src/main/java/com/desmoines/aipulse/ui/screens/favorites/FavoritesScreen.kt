@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -105,6 +106,7 @@ fun FavoritesScreen(
     onRemoveEventFavorite: (String) -> Unit = {},
     onRemoveRestaurantFavorite: (String) -> Unit = {},
     onAddEventToCalendar: (Event) -> Unit = {},
+    onShareEvent: (Event) -> Unit = {},
     onRefresh: () -> Unit = {},
     scrollToTopTrigger: Int = 0,
 ) {
@@ -155,6 +157,7 @@ fun FavoritesScreen(
                         onRemoveEventFavorite = onRemoveEventFavorite,
                         onRemoveRestaurantFavorite = onRemoveRestaurantFavorite,
                         onAddEventToCalendar = onAddEventToCalendar,
+                        onShareEvent = onShareEvent,
                     )
                 }
             }
@@ -172,6 +175,7 @@ private fun SavedContent(
     onRemoveEventFavorite: (String) -> Unit,
     onRemoveRestaurantFavorite: (String) -> Unit,
     onAddEventToCalendar: (Event) -> Unit,
+    onShareEvent: (Event) -> Unit,
 ) {
     LazyColumn(
         state = listState,
@@ -220,6 +224,7 @@ private fun SavedContent(
                         onClick = { onNavigateToEventDetail(event.id) },
                         onRemove = { onRemoveEventFavorite(event.id) },
                         onAddToCalendar = { onAddEventToCalendar(event) },
+                        onShare = { onShareEvent(event) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -273,6 +278,7 @@ private fun SavedContent(
                         isPast = true,
                         onClick = { onNavigateToEventDetail(event.id) },
                         onRemove = { onRemoveEventFavorite(event.id) },
+                        onShare = { onShareEvent(event) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -403,6 +409,7 @@ private fun FavoriteEventRow(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
     onAddToCalendar: () -> Unit = {},
+    onShare: () -> Unit = {},
 ) {
     val haptic = rememberHapticPerformer()
     val opacity = if (isPast) 0.6f else 1f
@@ -423,6 +430,8 @@ private fun FavoriteEventRow(
                     if (offersCalendar) {
                         add(CustomAccessibilityAction("Add to Calendar") { onAddToCalendar(); true })
                     }
+                    // Every row, past ones too, as iOS's Saved context menu does (AND-AUDIT-033).
+                    add(CustomAccessibilityAction("Share") { onShare(); true })
                     add(CustomAccessibilityAction("Remove from saved") { onRemove(); true })
                 }
             },
@@ -522,23 +531,30 @@ private fun FavoriteEventRow(
                         tint = Color.Red,
                     )
                 }
-                if (offersCalendar) {
-                    SavedEventRowMenu(title = event.title, onAddToCalendar = onAddToCalendar)
-                }
+                SavedEventRowMenu(
+                    title = event.title,
+                    offersCalendar = offersCalendar,
+                    onAddToCalendar = onAddToCalendar,
+                    onShare = onShare,
+                )
             }
         }
     }
 }
 
 /**
- * Overflow menu on an upcoming Saved event row (AND-AUDIT-028). iOS puts Add
- * to Calendar in the row's context menu; a visible overflow button is the
- * Android equivalent, found without knowing to long-press.
+ * Overflow menu on a Saved event row. iOS puts these in the row's context
+ * menu; a visible overflow button is the Android equivalent, found without
+ * knowing to long-press. Share is on every row (AND-AUDIT-033); Add to
+ * Calendar only where [offersCalendar] (AND-AUDIT-028: upcoming rows with a
+ * parseable date).
  */
 @Composable
 private fun SavedEventRowMenu(
     title: String,
+    offersCalendar: Boolean,
     onAddToCalendar: () -> Unit,
+    onShare: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -550,12 +566,22 @@ private fun SavedEventRowMenu(
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (offersCalendar) {
+                DropdownMenuItem(
+                    text = { Text("Add to Calendar") },
+                    leadingIcon = { Icon(Icons.Filled.Event, contentDescription = null) },
+                    onClick = {
+                        expanded = false
+                        onAddToCalendar()
+                    },
+                )
+            }
             DropdownMenuItem(
-                text = { Text("Add to Calendar") },
-                leadingIcon = { Icon(Icons.Filled.Event, contentDescription = null) },
+                text = { Text("Share") },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
                 onClick = {
                     expanded = false
-                    onAddToCalendar()
+                    onShare()
                 },
             )
         }

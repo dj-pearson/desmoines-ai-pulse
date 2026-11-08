@@ -285,6 +285,16 @@ internal fun NavGraphBuilder.addTabDestinations(
                     com.desmoines.aipulse.util.EventCalendarIntent.launch(context, intent)
                 }
             },
+            // Same text and link as event detail's Share (AND-AUDIT-033).
+            onShareEvent = { event ->
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, com.desmoines.aipulse.util.EventShareText.text(event))
+                }
+                context.startActivity(
+                    android.content.Intent.createChooser(shareIntent, com.desmoines.aipulse.util.EventShareText.CHOOSER_TITLE),
+                )
+            },
             onRefresh = { viewModel.refresh() },
             scrollToTopTrigger = scrollToTopTrigger,
         )

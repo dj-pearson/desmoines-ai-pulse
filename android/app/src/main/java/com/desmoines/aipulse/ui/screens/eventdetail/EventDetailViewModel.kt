@@ -15,7 +15,7 @@ import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.util.EventCalendarIntent
 import com.desmoines.aipulse.util.EventReminderTiming
-import com.desmoines.aipulse.util.EventTimeText
+import com.desmoines.aipulse.util.EventShareText
 import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -273,17 +273,9 @@ class EventDetailViewModel @Inject constructor(
 
     // MARK: - Share
 
+    /** Built by [EventShareText], which the Saved tab shares too (AND-AUDIT-033). */
     val shareText: String
-        get() {
-            val event = _event.value ?: return ""
-            val parts = mutableListOf(event.title)
-            EventTimeText.dayText(event, "MMM d, yyyy")?.let { day ->
-                val time = EventTimeText.timeText(event)
-                parts.add(if (event.hasSpecificTime) "$day $time" else "$day (${EventTimeText.TIME_TBA})")
-            }
-            parts.add("at ${event.displayLocation}")
-            return parts.joinToString(" - ") + "\n\nFound on Des Moines Insider"
-        }
+        get() = _event.value?.let { EventShareText.text(it) } ?: ""
 
     // MARK: - Directions
 

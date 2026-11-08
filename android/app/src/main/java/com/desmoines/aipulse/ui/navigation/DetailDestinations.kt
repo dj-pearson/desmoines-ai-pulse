@@ -84,7 +84,7 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, viewModel.shareText)
                 }
-                context.startActivity(Intent.createChooser(shareIntent, "Share Event"))
+                context.startActivity(Intent.createChooser(shareIntent, com.desmoines.aipulse.util.EventShareText.CHOOSER_TITLE))
             },
             onToggleFavorite = { viewModel.toggleFavorite() },
             onAddToCalendar = {
