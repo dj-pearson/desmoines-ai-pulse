@@ -43,7 +43,12 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// EDGE_AUTH_ROOT points the sweep at another tree. Only the counter-test sets
+// it (scripts/__tests__/edge-auth-check.test.mjs), so it can plant a function
+// and watch this exit 1.
+const ROOT = process.env.EDGE_AUTH_ROOT
+  ? resolve(process.env.EDGE_AUTH_ROOT)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FUNCTIONS = join(ROOT, 'supabase', 'functions');
 const BASELINE = join(ROOT, '.github', 'edge-auth-baseline.json');
 const WRITE = process.argv.includes('--write');
@@ -78,7 +83,17 @@ const VERIFIES_CALLER = new RegExp(
     // checked in _shared/appleJws.ts, so the webhook's own source only names
     // the helper.
     'verifyAppleJWS',
-    'signature',
+    // Google Pub/Sub push (play-rtdn-webhook): the OIDC token's RS256
+    // signature, then issuer, audience and service-account email in
+    // _shared/pubsubOidc.ts.
+    'verifyOidcToken',
+    'checkPubSubOidcClaims',
+    // NOT the bare word "signature". It was in this list until 2026-11-08 and
+    // it let log-error count as guarded: log-error is a public sink that
+    // computes an error *cluster* signature (errorSignature) and checks no
+    // caller at all. Any function holding a variable called `signature` -
+    // one that signs an outgoing JWT, say - passed the same way. A verifier is
+    // named above or it does not count.
   ].join('|'),
   'i',
 );
