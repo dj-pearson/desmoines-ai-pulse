@@ -8972,8 +8972,8 @@
         "Empty state says no verified specials rather than returning a keyword-matched list"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them.\n\nPARTIALLY ADDRESSED 2026-09-09; STILL OPEN. The false claims are gone; the data is not built.\n\nSHIPPED: the FAQ and body copy no longer assert 'happy hour deals (3-6 PM)' or 'half-price appetizers' as fact, and the Happy Hour smart preset is removed. That preset filtered on tags:['Happy Hour'], and `filters.tags` is never applied to any restaurant query - so the chip promised drinks and deals and returned an unfiltered list.\n\nNOT SHIPPED, and deliberately: restaurant_specials plus an admin CRUD surface. Unlike WEB-FEAT-024, where Google Places supplies `reservable` automatically, there is NO source for happy-hour schedules - checked against the Places API (New) field reference, it publishes servesBeer/servesWine/servesCocktails but nothing about happy-hour times. So the table would be empty on the day it shipped and stay empty until someone builds an editor and types the data in. That is a product commitment to ongoing curation, not a schema task, and it should be decided before the table exists."
+      "passes": true,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them.\n\nPARTIALLY ADDRESSED 2026-09-09; STILL OPEN. The false claims are gone; the data is not built.\n\nSHIPPED: the FAQ and body copy no longer assert 'happy hour deals (3-6 PM)' or 'half-price appetizers' as fact, and the Happy Hour smart preset is removed. That preset filtered on tags:['Happy Hour'], and `filters.tags` is never applied to any restaurant query - so the chip promised drinks and deals and returned an unfiltered list.\n\nNOT SHIPPED, and deliberately: restaurant_specials plus an admin CRUD surface. Unlike WEB-FEAT-024, where Google Places supplies `reservable` automatically, there is NO source for happy-hour schedules - checked against the Places API (New) field reference, it publishes servesBeer/servesWine/servesCocktails but nothing about happy-hour times. So the table would be empty on the day it shipped and stay empty until someone builds an editor and types the data in. That is a product commitment to ongoing curation, not a schema task, and it should be decided before the table exists. | 2026-11-08: Decided against a separate restaurant_specials table. The deals table (days_of_week/start_time/end_time, entity_id, edited in DealManager) already holds this data, so /restaurants now shows a \"Happy hour now\" strip (src/components/restaurants/RestaurantsHappyHourStrip.tsx, fetchHappyHourCandidates/happyHourNow in src/hooks/useDeals.ts). It lists in-date restaurant deals with a time window that are running at this Des Moines minute, one row per restaurant, and drops deals at closed or temporarily closed places (HAPPY_HOUR_RESTAURANT_COLUMNS, check-list-columns 17/17). The strip is hidden when nothing is running, on a failed read (handleError) and in the prerender. Verified: 9 new tests, and the negative control turns 2 red. vitest 3122/3122, type-check ratchet 32/32, eslint clean. Production was not probed."
     },
     {
       "id": "WEB-FEAT-026",
@@ -11226,8 +11226,8 @@
         "Either drop the database-policy read (useDatabasePolicy default false, config values only) or ship the RPC as a migration",
         "No request to get_user_session_policy from an admin session"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 by the features lane. Assign the next free WEB-FEAT number after 041."
+      "passes": true,
+      "notes": "Found 2026-11-07 by the features lane. Assign the next free WEB-FEAT number after 041. | useSessionTimeout no longer reads get_user_session_policy (missing in production). It sent that RPC on every admin page load and then fell back to its config values anyway; now the config values are the policy, and useDatabasePolicy is kept on the type but ignored. The new vitest src/components/auth/__tests__/AdminSessionTimeout.noPolicyRpc.test.tsx failed before the change (rpc called once) and passes after. schema-baseline went 37 -> 36 and the app type ratchet 32 -> 30, both re-baselined. Note: the worktree was cut from main instead of the rolling branch, so it was reset to 384635cf before any work. Handoff: docs/improvement-loops/lanes/reliability.md"
     },
     {
       "priority": 3,
@@ -11866,19 +11866,19 @@
         "An unknown slug still opens the web page"
       ],
       "passes": false,
-      "notes": "Follow-up to IOS-AUDIT-FEAT-045, which routed these links to the web view. | Slice 1 of 2: ios/DesMoinesInsider/Models/EventSeries.swift now holds the web's 20 EVENT_SERIES entries (every field) and ports normaliseEventTitle, seriesForEvent, getEventSeries and seriesTitlePatterns. That meets AC1. vitest src/lib/__tests__/iosEventSeriesParity.test.ts fails on any list drift and runs the 14 EventSeriesTests.normaliseCases pairs through the web normaliser; the negative control failed both tests. 7 new XCTest cases, not compiled (no Xcode here). AC2/AC3 (the screen and the deep-link switch) are in the lane handoff. Note: this worktree started 126 commits behind the rolling branch, so it was reset to 2c0e98d9 (claude/continuous-improvement-loops-76i72u) before any work was done. Handoff: docs/improvement-loops/lanes/ios.md"
+      "notes": "Follow-up to IOS-AUDIT-FEAT-045, which routed these links to the web view. | Slice 1 of 2: ios/DesMoinesInsider/Models/EventSeries.swift now holds the web's 20 EVENT_SERIES entries (every field) and ports normaliseEventTitle, seriesForEvent, getEventSeries and seriesTitlePatterns. That meets AC1. vitest src/lib/__tests__/iosEventSeriesParity.test.ts fails on any list drift and runs the 14 EventSeriesTests.normaliseCases pairs through the web normaliser; the negative control failed both tests. 7 new XCTest cases, not compiled (no Xcode here). AC2/AC3 (the screen and the deep-link switch) are in the lane handoff. Note: this worktree started 126 commits behind the rolling branch, so it was reset to 2c0e98d9 (claude/continuous-improvement-loops-76i72u) before any work was done. Handoff: docs/improvement-loops/lanes/ios.md | Slice 2 of 3. EventSeriesSchedule ports the web's buildSeriesView, isModeratorHidden and isLinkable, and EventsService.fetchSeriesRows ports the useEventSeriesPage read, which keeps hidden and archived rows on purpose. 12 XCTest cases replay the web's eventSeriesView.test.ts rows and answers but were not compiled or run (no Xcode here). The vitest parity test now fails if that read filters is_hidden/archived_at or its limit drifts (negative-controlled), 6/6 pass. NOTE: this worktree was created from main (65138139), which lacks the lane docs and the slice-1 EventSeries.swift, so the empty branch was reset onto the rolling branch 384635cf before work; the commit is parented there and should be cherry-picked onto the rolling branch. Handoff: docs/improvement-loops/lanes/ios.md"
     },
     {
       "priority": 3,
       "id": "AND-AUDIT-034",
       "title": "Restaurant, attraction and hotel share text carries no link",
-      "passes": false,
+      "passes": true,
       "description": "RestaurantDetailViewModel, AttractionDetailViewModel and HotelDetailViewModel build share text ending \"Found on Des Moines Insider\" with no URL, the same gap AND-AUDIT-033 fixed for events. iOS shares a shareURL for restaurants and attractions. AttractionDetailViewModel already has webUrl(), and DeepLinkHandler routes /restaurants/<id>, /attractions/<id> and /stay/<id> back into the app.",
       "acceptanceCriteria": [
         "Each of the three share texts ends with its SITE_URL page, matching the path iOS shares",
         "A JVM test pins each URL format"
       ],
-      "notes": "Found in the AND-AUDIT-033 loop, 2026-11-08."
+      "notes": "Found in the AND-AUDIT-033 loop, 2026-11-08. | Restaurant, attraction and hotel share text now ends \"Found on Des Moines Insider: <url>\" via a shared util/PlaceShareLinks: /restaurants/<slug or id> (as iOS shareURL), /attractions/<slug> with a createSlug(name) fallback and never the id (the web resolves by slug only), and /stay/<slug> with no link if the slug is missing. Attraction and Hotel now decode the optional slug. 8 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation that links restaurants by id and drops the name fallback fails 2. View models and the app module were not compiled (no Android SDK), and there was no device check. Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "WEB-FEAT-056",
@@ -11919,15 +11919,16 @@
         "Make that import lazy, or stop forcing vendor-editor (and update the remove-lazy-preloads pattern list in vite.config.ts if the name goes away)",
         "sumWasteKb drops from 615 and the critical path stays within tolerance"
       ],
-      "passes": false,
-      "notes": "Found in the WEB-PERF-065 loop with scripts/measure-route-preload.mjs."
+      "passes": true,
+      "notes": "Found in the WEB-PERF-065 loop with scripts/measure-route-preload.mjs. | Removed the forced vendor-editor manual chunk. Rollup had pulled fast-equals (shared by @tiptap/react and recharts) into it, plus src/components/cms/tiptap-styles.css, so four recharts admin pages and AdminArticleEditor each imported about 122 KB gz of editor. measure-route-preload: sumWasteKb 614.8 -> 0, routes 9,743 -> 9,121 KB gz, only those five routes moved (each 123-125 KB lighter), critical path unchanged at 176.0. Pinned in manualChunks.test.ts (4 fail with the chunk restored), and all six chunks import cleanly in Chrome."
     },
     {
       "priority": 3,
       "id": "WEB-FEAT-058",
       "title": "get_pending_reminders queues 3-hour and 1-hour reminders for events with no announced time",
       "description": "As a user with a reminder on an event whose source gave no time, I should not get 'in 3 hours' and 'in 1 hour' emails timed against the 19:31:58 ingest sentinel. get_pending_reminders computes its windows from COALESCE(event_start_utc, date), so these fire at 16:31 and 18:31 Central. The email copy now says 'is today', but the sends themselves are noise. The RPC (or toggle_event_reminder) should skip or refuse hour-level reminders for sentinel rows. That needs a CREATE OR REPLACE with the same signature, so it stays backward-compatible.",
-      "passes": false
+      "passes": true,
+      "notes": "Migration 20261108000040 (CREATE OR REPLACE get_pending_reminders, same signature/return shape, grants restated) skips the 3_hours and 1_hour arms when events.time_tbd or the Central wall clock is 19:31:58; 1_day unchanged. send-event-reminders filters with content.ts shouldSendReminder() so the rule holds before the apply. Verified on a scratch Postgres 16 with now() pinned (old returns untimed+tbd rows in both hour windows in CST and CDT, new returns only timed; real migration chain keeps service_role-only grants), content.test.ts 13/13 under a node shim with a 12/13 negative control. Migration not yet applied to production."
     },
     {
       "priority": 3,
@@ -11935,6 +11936,170 @@
       "title": "The event-reminder unsubscribe link unsubscribes the newsletter, not the reminders",
       "description": "send-event-reminders takes the footer's unsubscribe token from newsletter_subscribers by email. Clicking it ends the newsletter while reminders keep coming, and a user who isn't subscribed to the newsletter gets no token at all. Reminders need their own one-click opt-out, or the footer should link to the reminders tab on /my-events.",
       "passes": false
+    },
+    {
+      "id": "WEB-UX-064",
+      "title": "/submit-event labels name nothing: category select, date picker, custom tag field and tag rows have no programmatic label",
+      "description": "As a screen-reader user submitting an event, every field should say what it is. On EventSubmissionForm, 'Category *' pointed htmlFor at an id no element had, so the Radix trigger was read by its value alone. 'Event Date *' and 'Add Custom Tag' had no htmlFor. 'Popular Tags' and 'Selected Tags' were labels over button rows that never said which tags were on (WCAG 1.3.1 / 4.1.2).",
+      "acceptanceCriteria": [
+        "getByLabelText('Category *') returns the combobox",
+        "The date button's accessible name is the label plus the chosen date ('Event Date * Pick a date' when empty)",
+        "getByLabelText('Add Custom Tag') returns the input",
+        "Popular Tags and Selected Tags are role=group named by their heading; popular tag toggles expose aria-pressed",
+        "The image upload error is announced (role=alert)",
+        "A vitest spec fails on the old form and passes on the new one"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed in EventSubmissionForm.tsx. The new eventSubmissionLabels.test.tsx fails 4/4 on the old code and passes 4/4 now. vitest 3117/3117, type ratchet 32/32, check-icon-button-names 0, check-ui-craft 3 <= 7. | The /submit-event form (also used in the dashboard Submissions tab) now gives the Category trigger id=\"category\". The date button is aria-labelledby its label plus itself, so the picked date stays in its name. The custom tag input has a label. The Popular and Selected tag rows are role=\"group\" with headings, and the popular toggles carry aria-pressed. The upload error is role=\"alert\". The new eventSubmissionLabels.test.tsx fails 4/4 on the old form and passes 4/4 now. vitest 3117/3117, type ratchet 32/32, eslint 0 errors, check-icon-button-names 0, check-ui-craft 3 <= 7."
+    },
+    {
+      "id": "WEB-SEC-064",
+      "title": "check-edge-auth counts an optional auth.getUser call, or an outgoing x-api-key header, as a caller check",
+      "description": "As the platform owner, I need the edge-auth sweep to list every service-role function that serves any caller. Right now it accepts any auth.getUser call as a gate, and the bare header name x-api-key too, so public functions that read an optional bearer only to label a row or pick a tier pass as guarded. A new function with that shape would pass the same way.",
+      "acceptanceCriteria": [
+        "A service-role function whose only verifier is auth.getUser, and which answers no 401 or 403 in any non-test .ts file in its own directory, is counted as unguarded",
+        "x-api-key counts as a caller check only when read from the request (headers.get), not when sent as an outgoing header such as Anthropic's",
+        "Every function the change surfaces is read and either guarded or baselined with a note naming its callers and bounds",
+        "Counter-tests in scripts/__tests__/edge-auth-check.test.mjs fail against the previous checker"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "2026-11-08 round 12 (security lane). The sweep had been counting five public functions as guarded: track-ad-event, nlp-search, support-chat, get-sponsored-pick and check-login-attempt. support-chat also matched on its outgoing Anthropic x-api-key header. All five are public by design, so each went into .github/edge-auth-baseline.json (5 -> 10) with a DO NOT GUARD note. No function code changed. edge-auth-check.test.mjs went 9 -> 19 checks, and 8 of them fail on the old checker; check-edge-auth OK, test:offline 63/63, eslint clean. | check-edge-auth counted any auth.getUser call as a caller check, and also the bare header name x-api-key. Because of that, five public service-role functions passed as guarded while refusing nobody: track-ad-event, nlp-search, support-chat, get-sponsored-pick and check-login-attempt. Now a function whose only verifier is getUser must answer 401/403 in a non-test file in its own directory, and x-api-key counts only when read with headers.get. The five were read one by one; all are public by design, so the baseline goes 5 -> 10 with a DO NOT GUARD note for each. Verified by edge-auth-check.test.mjs going 9 -> 19 checks (8 fail on the old checker), check-edge-auth OK, test:offline 63/63 and eslint clean."
+    },
+    {
+      "id": "WEB-SEO-059",
+      "title": "Event pages publish model-written geo_faq as the site's FAQPage, unlabelled",
+      "description": "As the platform owner, I need AI-written event answers kept out of FAQPage JSON-LD, because generate-seo-content writes events.geo_faq with a model and EventDetails rendered it through FAQSection with showSchema on and no AI label. Every event with generated SEO content was publishing model text as our factual FAQPage. That's the format answer engines quote verbatim, and the restaurant page already rules it out (src/lib/restaurantFaqs.ts, eat-drink pass 2 WP3.1).",
+      "acceptanceCriteria": [
+        "EventDetails no longer renders geo_faq through FAQSection, and no FAQPage is emitted from an event's geo fields",
+        "geo_summary, geo_key_facts and geo_faq stay visible and carry the AI-assisted badge, the same wording the About This Event heading uses",
+        "A vitest render test asserts no ld+json and no FAQPage, plus a source guard that EventDetails has no <FAQSection>",
+        "The event-detail smoke spec asserts the Q&A is visible and labelled and that no ld+json block contains FAQPage or the question text",
+        "supabase/functions/_tests/brand-identity-consistency.test.ts asserts the same rule"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "DONE 2026-11-08 (improvement loop, seo-geo lane). New src/components/events/EventAiAnswers.tsx. Vitest 5/5, its source guard red on the old page. Smoke event-detail: the new test is red on an old-page build and green now. eslint clean, app type ratchet 32/32, check-duplicate-schema 0 duplicates, faq-single-emitter 1/1. Deno test updated, not run (no deno in the container). Hotel pages still pass hotels.geo_faq to FAQSection with schema. Those rows come from the admin HotelEditDialog, so whether they count as first-party is a separate question and I left them alone. | Event pages passed model-written geo_faq (generate-seo-content) to FAQSection with showSchema on and no label, publishing AI text as the site's FAQPage against the restaurant page's WP3.1 rule; new src/components/events/EventAiAnswers.tsx renders Quick Facts and the Q&A visibly under an AI-assisted badge with no JSON-LD. Verified by vitest EventAiAnswers 5/5 (source guard red on the old page) and a new event-detail smoke test that is red on an old-page vite build and green now; the Deno brand-identity guard was updated but not run (no deno)."
+    },
+    {
+      "id": "WEB-ADS-027",
+      "title": "Advertiser funnel has no step events, so drop-off between /advertise, checkout and payment is unmeasurable",
+      "description": "As the owner growing the advertiser side, I need to know where businesses leave the self-serve funnel. The subscription funnel logs funnel_* steps to user_analytics and has an admin chart; /advertise, PayCampaignButton, AdvertiseCancel and AdvertiseSuccess logged nothing, so AOS-PROSPECT-007 had no baseline and no way to tell form, checkout and card drop-off apart.",
+      "acceptanceCriteria": [
+        "Steps logged to user_analytics (content_type 'campaign', content_id = campaign uuid): ad_funnel_advertise_viewed, ad_funnel_campaign_saved, ad_funnel_checkout_started (source advertise | campaign_page), ad_funnel_checkout_cancelled, ad_funnel_payment_confirmed",
+        "Nothing written and no session id stored without analytics consent",
+        "No amount, total or price in any row (server decides money)",
+        "payment_confirmed only after verify-campaign-payment reports paid; success and cancel landing events count once per campaign per tab",
+        "Admin /admin/analytics Funnel tab shows the advertiser funnel; a failed count shows an error state, not 'No funnel data yet'",
+        "vitest covering consent, row shape, once-guard and paid gate, with negative controls"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found during the 2026-11-08 marketing-growth loop; every other open WEB-ADS story waits on an owner action. Done: src/lib/advertiserFunnel.ts, wired into Advertise.tsx, PayCampaignButton.tsx, AdvertiseCancel.tsx, AdvertiseSuccess.tsx; useConversionFunnelData takes a funnel kind and throws on a failed count; ConversionFunnelChart renders both funnels. New vitest 9/9 (3 negative controls), full vitest 3122/3122, eslint, type-check ratchet 32/32, check-error-handling, check-false-empty-state, check-supabase-await, check-imports, check-schema, check-unknown-tables, check-internal-links. Open question, not a blocker: anonymous rows (advertise_viewed before sign-in) land only if the user_analytics INSERT policy accepts user_id null, the same question favoriteAnalytics.ts records; signed-in steps are unaffected. | Advertiser funnel now logs advertise_viewed, campaign_saved, checkout_started (from /advertise and PayCampaignButton), checkout_cancelled and payment_confirmed (only after verify-campaign-payment says paid, once per campaign per tab) to user_analytics behind analytics consent with no amount, and /admin/analytics Funnel tab charts it; a failed funnel count now shows an error instead of \"No funnel data yet\". Verified with new vitest 9/9 (three negative controls each failing its own case), full vitest 3122/3122, eslint, type-check ratchet 32/32 and the related check-* scripts."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-FEAT-060",
+      "title": "RESTAURANT_TAGS offers a 'Happy Hour' tag (and Takeout/Delivery/Outdoor Seating/Family Friendly/Date Night) that no restaurant query applies",
+      "description": "useRestaurantFilterOptions in src/hooks/useRestaurants.ts returns RESTAURANT_TAGS. RestaurantFilters.tsx renders them as toggleable '#tag' badges, but resolveDietarySelections keeps only dietary vocabulary from filters.tags, so a non-dietary tag filters nothing. RestaurantFilters is not mounted on /restaurants today, so the tags are dead code that would come back as a fake filter if the component were reused.",
+      "acceptanceCriteria": [
+        "Remove the non-dietary RESTAURANT_TAGS, or back each one with a real column filter (e.g. Places servesTakeout/delivery/outdoorSeating if stored)",
+        "No filter UI offers a tag that the query ignores",
+        "A unit test asserts every offered tag changes the query"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-065",
+      "title": "/csat comment and /social friend-email fields are named only by placeholder",
+      "description": "The Csat.tsx comment Textarea and the Social.tsx 'Enter friend's email' Input have no label, aria-label or id. Once someone types, the field has no name (WCAG 1.3.1 / 3.3.2 / 4.1.2).",
+      "acceptanceCriteria": [
+        "Each field has a visible Label tied to it with htmlFor/useId",
+        "A vitest spec fails on the old code and passes on the new"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-066",
+      "title": "DataQualityDashboard section headers are mouse-only toggles",
+      "description": "DataQualityDashboard.tsx renders each content-type section header as a CardHeader with onClick and no button, so keyboard users can't expand or collapse a section.",
+      "acceptanceCriteria": [
+        "Each section has a real button with aria-expanded that toggles it",
+        "A vitest spec covers keyboard toggling"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 4,
+      "id": "WEB-PERF-068",
+      "title": "remove-lazy-preloads warns on every build that the critical-path vendor-supabase chunk is preloaded",
+      "description": "Every vite build prints 'vendor-supabase-*.js is 216 KB and is preloaded from index.html'. vendor-supabase is on the critical path by design, so the heavy-preload assertion in vite.config.ts fires on every good build, which teaches people to ignore the one warning meant to catch a real regression (a lazy chunk preloaded from the entry HTML).",
+      "acceptanceCriteria": [
+        "The heavy-preload check in the remove-lazy-preloads plugin no longer warns on a normal build",
+        "It still warns when a non-critical chunk over the threshold is preloaded (negative control in a test)",
+        "Critical path unchanged"
+      ],
+      "passes": false,
+      "notes": "Seen in the WEB-PERF-067 loop on every build and measure run."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-065",
+      "title": "track-ad-event accepts a click's impression_id without checking it belongs to the same campaign, and stores unbounded user_agent/page_url/referrer_url",
+      "description": "As an advertiser, I need click rows to link only to impressions of my own campaign, and I need tracking rows to have a size limit. Today any caller can attach another campaign's impression_id to a click, and the text fields are stored at whatever length the caller sends (bounded only by 120 requests per 15 minutes per IP per campaign).",
+      "acceptanceCriteria": [
+        "impression_id on a click is stored only when that impression has the same campaign_id and creative_id, otherwise null",
+        "user_agent, page_url and referrer_url are truncated to a fixed length before insert",
+        "Deno test covers both"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while reading track-ad-event for WEB-SEC-064; not fixed."
+    },
+    {
+      "priority": 2,
+      "id": "WEB-QA-052",
+      "title": "event-detail smoke test 'a dateless slug redirects to the dated one' fails on an unchanged tree",
+      "description": "As the platform owner, I need the required smoke lane to be green, because tests/event-detail.spec.ts:305 fails against a local vite build of 384635cf: /events/jazz-night stays on /events/jazz-night and never redirects to /events/jazz-night-2026-10-01. It fails the same way with or without the WEB-SEO event FAQ change. The cause could be the dateless-slug lookup in useEventBySlug or the spec's serveEvents predicate matcher; I didn't establish which.",
+      "acceptanceCriteria": [
+        "Reproduce with PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test -c playwright.smoke.config.ts tests/event-detail.spec.ts --project=chromium-desktop -g dateless",
+        "Find whether the page or the fixture matcher is wrong, and fix that one",
+        "The test passes without being loosened"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the seo-geo loop. Placeholder VITE_SUPABASE_* build, vite preview on 127.0.0.1:4173 (IPv6 listen fails in the container). Not investigated past reproduction."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-060",
+      "title": "Hotel pages emit FAQPage from hotels.geo_faq without saying who wrote it",
+      "description": "As the platform owner, I need to know whether hotels.geo_faq is first-party before it ships as FAQPage. HotelDetails passes it to FAQSection with schema on. Restaurants and now events keep AI-written geo_faq out of FAQPage. Hotel rows are edited in HotelEditDialog, but nothing records whether that text is typed by an admin or pasted from a model.",
+      "acceptanceCriteria": [
+        "Establish where hotels.geo_faq rows come from (admin entry, a generator, an import)",
+        "If any are model-written, render them like EventAiAnswers: labelled AI-assisted, no FAQPage"
+      ],
+      "passes": false,
+      "notes": "Filed 2026-11-08 by the seo-geo loop while fixing the event case."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-QA-053",
+      "note": "Already fixed in code by 392b022f (WEB-FEAT-055): session-timeout-policy.test.ts now asserts the early return 'if (!isAdmin || isAdminLoading) return null;' and the lazy AdminSessionTimeout mount, which matches SessionManager.tsx. The only thing left is running it under Deno (subscription-sync-tests.yml:563) and closing the story; Deno isn't available in this container.",
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-035",
+      "title": "Attraction 'Open on web' builds /attractions/<uuid>, which the web 404s",
+      "passes": false,
+      "description": "AttractionDetailViewModel.webUrl() returns SITE_URL/attractions/<lastId>, where lastId is whatever the screen was opened with. In-app lists, favorites and notifications pass the row UUID, but AttractionDetails.tsx resolves /attractions/:slug by slug (or createSlug(name)) only, so the not-found screen's Open on web action sends a UUID-opened attraction to a 404. PlaceShareLinks.attractionUrl(slug, name) (AND-AUDIT-034) already builds the right URL once the row is loaded.",
+      "acceptanceCriteria": [
+        "webUrl() uses the loaded attraction's slug or name slug when it has one, and the opened value only when it is not a UUID",
+        "A JVM test pins that a UUID is never placed in an /attractions/ URL"
+      ],
+      "notes": "Found in the AND-AUDIT-034 loop, 2026-11-08."
     }
   ]
 }
