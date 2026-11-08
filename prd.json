@@ -11187,8 +11187,8 @@
         "If it is not first-party, drop the FAQ answer and place:rating, or attribute the source in the visible answer",
         "A test pins the decision"
       ],
-      "passes": false,
-      "notes": "Found in the WEB-SEO-053 loop, 2026-11-07; not changed there."
+      "passes": true,
+      "notes": "Found in the WEB-SEO-053 loop, 2026-11-07; not changed there. | playgrounds.rating is model-extracted (ai-crawler and firecrawl-scraper store item.rating || null from crawled pages; enhance-content asks a model to fill it), so the playground FAQ moved to src/lib/playgroundFaqs.ts with no rating answer and EnhancedPlaygroundSEO dropped place:rating. playgroundFaqs test 5/5 with its source guards failing on the old page, vitest src/components+lib+pages 2336/2336, app type ratchet 32/32, eslint clean, check-schema-dupes green. Worktree was created at origin/main; I reset it to claude/continuous-improvement-loops-76i72u (2dec4e9b) before working, so the commit sits on the rolling branch."
     },
     {
       "priority": 3,
@@ -11213,8 +11213,8 @@
         "check-schema-usage fails when a baseline entry names a file that does not exist or a reference no longer found",
         "Re-freeze schema-baseline.json so it shrinks and never grows"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 by the features lane; reliability lane owns WEB-QA. Assign the next free WEB-QA number."
+      "passes": true,
+      "notes": "Found 2026-11-07 by the features lane; reliability lane owns WEB-QA. Assign the next free WEB-QA number. | check-schema-usage.mjs now exits 1 when schema-baseline.json lists an entry the scan no longer produces. The baseline held 21 such entries (58 total, 37 live), and re-adding user_sessions to useSessionTimeout.ts passed the ratchet. The baseline is re-frozen 58 -> 37. Verified with a new offline suite, schema-baseline-stale (9 cases, including the committed baseline against the real scan), and with negative controls: the old baseline fails both the suite and check-schema, and a re-added user_sessions query is reported. Handoff: docs/improvement-loops/lanes/reliability.md"
     },
     {
       "priority": 4,
@@ -11238,8 +11238,8 @@
         "The day the list is showing stays discoverable while scrolling (e.g. the day header folds into the filter bar, or the filter bar collapses on scroll down)",
         "After the fix, the reliability lane promotes layout-integrity into playwright.smoke.config.ts testMatch and removes it from .github/e2e-lane-baseline.json (WEB-CI-028)"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 by the reliability lane while running layout-integrity for WEB-CI-028. Files: src/pages/EventsPage.tsx and the events day-group header (sticky top-[calc(4rem_+_var(--events-bar-h,0px))]). Use the next free WEB-UX id if 058 was taken in the same round."
+      "passes": true,
+      "notes": "Found 2026-11-07 by the reliability lane while running layout-integrity for WEB-CI-028. Files: src/pages/EventsPage.tsx and the events day-group header (sticky top-[calc(4rem_+_var(--events-bar-h,0px))]). Use the next free WEB-UX id if 058 was taken in the same round. | Duplicate of WEB-UX-061, closed with it on 2026-11-08."
     },
     {
       "priority": 3,
@@ -11351,7 +11351,7 @@
         "Deno test covers the skip"
       ],
       "passes": false,
-      "notes": "Found 2026-11-07 while sizing WEB-BE-051. Not started."
+      "notes": "Found 2026-11-07 while sizing WEB-BE-051. Not started. | Slice 1 of 2, 2026-11-08. The adapter interface now takes an optional { knownSourceIds }. catchdesmoines drops known listing ids before the 100-page detail budget (selectDetailUrls/catchDetailId), and runAdapters keeps an all-known run from falling through to Claude. Migration 20261108000010 adds events.source_detail_url (nullable, backfilled, partial index). Run under a node shim because the container has no deno binary: catchdesmoines-detail 12/12 and dispatch 8/8, and both negative controls failed as they should. No caller passes known ids yet. Slice 2 (write the column, build the set) waits on the migration being applied. Handoff: docs/improvement-loops/lanes/events.md"
     },
     {
       "priority": 3,
@@ -11363,8 +11363,8 @@
         "Implementation matches the decision in both SearchAutocomplete and useEntitySuggestions",
         "Vitest pins the chosen behaviour"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 by the restaurants lane while fixing advanced search; not changed because a typed name lookup arguably should reach the closed notice."
+      "passes": true,
+      "notes": "Found 2026-11-07 by the restaurants lane while fixing advanced search; not changed because a typed name lookup arguably should reach the closed notice. | Decision recorded in src/lib/restaurantSuggestions.ts: both typeaheads (SearchAutocomplete and useEntitySuggestions) now keep a place closed for good. They label it \"Permanently closed\" (CLOSED_TEMPORARILY gets \"Temporarily closed\") in place of the cuisine and sort it after every place still serving. Each query fetches 10 rows and shows 5, so a closed match can't push an open one out. The projection is RESTAURANT_SUGGESTION_COLUMNS, covered by check-list-columns. Verified with 6 new vitest cases; reverting the two call sites turns 3 red. Full vitest 2964/2964, type-check ratchet 32/32, eslint 0 errors."
     },
     {
       "priority": 3,
@@ -11384,8 +11384,8 @@
         "Entry-chunk static-graph test pins lib/security/types.ts out",
         "check-bundle-budget baseline ratcheted"
       ],
-      "passes": false,
-      "notes": "Filed from the performance lane audit 2026-11-07; not started."
+      "passes": true,
+      "notes": "Filed from the performance lane audit 2026-11-07; not started. | 2026-11-08 loop 8 (performance lane). ProtectedRoute's role/permission half now lives in src/components/auth/RoutePermissionGate.tsx behind React.lazy, which fails closed. The shared screens moved to auth/RouteGateScreens.tsx. usePermission, useSecurityContext and lib/security left the entry chunk: index 57.2 -> 55.2 KB gz, critical path 178 -> 175.8 KB, baseline ratcheted. Pinned by src/__tests__/entryChunkPermissionGate.test.ts (the negative control fails 8 cases when a static import is added back). Two new ProtectedRoute tests cover grant and deny through the lazy gate. Note: this worktree was created from main (65138139), not the rolling branch. It was reset to 2dec4e9b first so the commit cherry-picks onto claude/continuous-improvement-loops-76i72u."
     },
     {
       "priority": 2,
@@ -11398,8 +11398,8 @@
         "Extend supabase/functions/_tests/public-url-fetch.test.ts with stubbed-fetch cases for both",
         "Run the scraper-* Deno suites in CI, since they need deno.land and cannot run in the cloud container"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 while doing the menu-scraper SSRF story. Left out of that commit because scrapeWithFetch serves every ingestion path and needs its callers enumerated first."
+      "passes": true,
+      "notes": "Found 2026-11-07 while doing the menu-scraper SSRF story. Left out of that commit because scrapeWithFetch serves every ingestion path and needs its callers enumerated first. | Three fetches used fetch() with redirect: follow: scrapeWithFetch (scrapeUrl's own-network backend and every caller's last-resort fallback), the robots.txt fetch that scrapeUrl runs before any backend, and eventPageDiscovery fetchText. All three now go through fetchPublicUrl. I enumerated the scrapeUrl callers and none of them checks redirect hops. public-url-fetch.test.ts goes from 10 to 16 tests, and all 6 new ones fail against the unfixed files. venueProfile.test.ts now stubs Deno.resolveDns. 17 scraper/adapter Deno suites (190 tests) pass under deno 2.5.6, and type-check:functions is clean. Not deployed."
     },
     {
       "priority": 2,
@@ -11410,20 +11410,21 @@
         "layout-integrity's sticky test passes for /events at 375x667 with the 30% bar unchanged",
         "layout-integrity.spec.ts joins the smoke testMatch and leaves .github/e2e-lane-baseline.json"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "On phones (<768px), the /events results bar now slides away on scroll down once pinned. It comes back on scroll up or when focus enters it, and it publishes --events-bar-h 0 while away so the day header stays visible under the site header. Verified: layout-integrity 23/24 -> 24/24 on a vite build, with the sticky test going from 40.78% to under 30% and its threshold unchanged. The spec joined the smoke testMatch, which empties the e2e orphan baseline. New eventsStickyBarTuck.test.tsx fails 2/6 on the old code and passes 6/6 now. vitest 2964/2964. WEB-UX-059 is a duplicate of this story and can close with it."
     },
     {
       "priority": 2,
       "id": "AND-AUDIT-031",
       "title": "Events tab and Discover date presets query UTC days, so Today drops tonight's 7pm+ shows",
-      "passes": false,
+      "passes": true,
       "description": "As a user filtering events by Today, This Weekend or a date preset, I need the range to be the Des Moines day. EventsViewModel (line ~340) and DiscoverViewModel (ISO = ISO_LOCAL_DATE_TIME) format DatePreset.dateRange as bare local timestamps. PostgREST compares those with the timestamptz events.date as UTC, so Today runs from 7pm yesterday to 7pm today Central: tonight's 7pm+ shows go missing and last night's late shows show up. AND-AUDIT-030 fixed the same bug for the Weekend tab with EventTimeText.centralMidnight.",
       "acceptanceCriteria": [
         "Every date preset range sent to PostgREST from Events and Discover is bounded at Des Moines midnights and carries an offset",
         "The preset's today is LocalDate.now(America/Chicago), not the device zone",
         "A JVM test pins the Today bounds for a CDT and a CST date"
       ],
-      "notes": "Found in the AND-AUDIT-030 loop, 2026-11-07."
+      "notes": "Found in the AND-AUDIT-030 loop, 2026-11-07. | The Events tab and Discover date presets now send bounds at Des Moines midnights with an offset, via DateFilterPreset.dayRange(today) and EventTimeText.presetBounds; today comes from America/Chicago, and the upcoming floor in EventsRemoteDataSource.todayIso is Central midnight. 6 new DatePresetBoundsTest JVM tests (CDT and CST Today, the November fall-back) pass on a stub harness (kotlinc 2.2.10), and a mutation restoring bare local bounds fails 3 of them. The ViewModels, data source and app module were not compiled (no Android SDK), and there was no device check. Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "priority": 4,
@@ -11435,8 +11436,140 @@
         "schema-baseline entries for useUsage removed",
         "npm run validate exits 0"
       ],
+      "passes": true,
+      "notes": "Found 2026-11-07 by the features lane, not done. | Deleted src/components/UsageDisplay.tsx and src/hooks/useUsage.ts (398 lines; nothing imported UsageDisplay, useUsage was imported only by it) and hand-removed their 3 schema-baseline entries and 1 select-star site (count 113->112). validate exit 0, vitest 2958/2958, type ratchet 32/32. Note: the worktree started on main, so it was reset to claude/continuous-improvement-loops-76i72u (2dec4e9b) before work; the commit sits on that base."
+    },
+    {
+      "id": "WEB-ADS-022",
+      "title": "A reader who unsubscribes and signs up again never gets another newsletter: the unsubscribe suppression outlives the confirmed resubscribe",
+      "description": "As a reader who unsubscribed and later came back through the signup form, I need the confirmation click to actually restart the weekly digest. newsletter_unsubscribe_by_token (20261002000002) writes an 'unsubscribe' row to email_suppressions and _shared/email.ts isBlocked() drops every marketing send to that address. newsletter-subscribe upserts the row back to pending, the transactional confirm mail gets through, and newsletter_confirm_by_token flips it to active, but nothing removed the suppression, so every digest was dropped as suppressed while NewsletterConfirm told the reader the next digest would arrive.",
+      "acceptanceCriteria": [
+        "Evidence: supabase/migrations/20261002000002_unsubscribe_adds_suppression.sql (insert), supabase/functions/_shared/email.ts isBlocked (marketing blocked on unsubscribe), supabase/migrations/20260918000002_newsletter_double_optin.sql (confirm RPC never touches email_suppressions)",
+        "newsletter_confirm_by_token deletes the confirming address's own reason='unsubscribe' suppression only after the status update matches a row; bounce, complaint and manual rows are untouched",
+        "Same signature, return shape and grants, so NewsletterConfirm.tsx is unchanged",
+        "A backfill lifts the unsubscribe suppression for readers already active again (status active, unsubscribed_at NULL, source unsubscribe_token or backfill_newsletter_status)",
+        "Exercised against Postgres; vitest pins the delete, its scope, its ordering and the backfill; migration checks pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "2026-11-08 marketing-growth loop. Migration 20261108000037. Reproduced on PGlite (Postgres 16): old function leaves a returning reader active and suppressed; fixed function lifts it, keeps still-unsubscribed, bounced and manual rows, re-unsubscribe re-suppresses, re-apply is a no-op; negative control without the reason filter wipes bounce and manual rows. src/lib/__tests__/newsletterResubscribeSuppression.test.ts 6/6 with three negative controls; full vitest 2964/2964; type-check ratchet 32/32; check-migrations-parse, check-migration-order, check-migration-drift, check-schema. OWNER: apply 20261108000037. | Done in code: migration 20261108000037 re-creates newsletter_confirm_by_token (same signature/return/grants) so a confirmed resubscribe deletes the address's own 'unsubscribe' row in email_suppressions (bounce/complaint/manual kept), plus a scoped backfill for readers already active again; before this, a returning reader was active but every digest was dropped as suppressed. Reproduced and fixed on PGlite (Postgres 16) with the real migrations, negative control without the reason filter wipes bounce/manual rows; new vitest 6/6 (3 negative controls), full vitest 2964/2964, migration checks green. Owner: apply 20261108000037."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-043",
+      "title": "Restaurant landing links (/restaurants/open-now, /new, /dietary/<diet>) open the Dining tab unfiltered",
+      "description": "As someone sent a Des Moines Insider 'open now' or 'vegan restaurants' link, I want the app to show that filtered list, not every restaurant. The AASA claims /restaurants/*, but DeepLinkHandler treated open-now, new and dietary as reserved segments and returned .tab(.restaurants) with no filter.",
+      "acceptanceCriteria": [
+        "/restaurants/open-now opens Dining with Open Now on (the Open Now preset chip lit)",
+        "/restaurants/new opens Dining with New & coming soon on",
+        "/restaurants/dietary/<diet> opens Dining with exactly that diet when it is a key of RestaurantsService.dietaryKeywords; open-now's ?diet= and the legacy /restaurants/dietary?diet= are read as on the web",
+        "A diet with no Dining key (kosher), an unknown diet and the bare /restaurants/dietary still open the plain Dining tab",
+        "The link replaces earlier filters, and opening the same link twice does not toggle the filter off",
+        "Works on cold launch (tab not yet shown) and warm (tab already built)",
+        "Unit tests cover parsing and the view-model application"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "DONE 2026-11-08 (ios lane). New Destination.restaurantLanding(RestaurantLinkFilter). MainTabView stages the filter on DeepLinkHandler and switches tabs. RestaurantsView consumes it in .task and onChange, and RestaurantsViewModel.applyLink applies it as one bulk update. 7 new XCTest cases plus 1 updated; not compiled (no Xcode in cloud sessions). Known gaps: kosher is a web diet the iOS Dining filter lacks, and a detail screen already pushed on the Dining stack stays on top of the newly filtered list. | /restaurants/open-now, /new and /dietary/<diet> links (plus open-now's ?diet= and the legacy ?diet= index) now open Dining with Open Now, New & coming soon or that diet applied. Before, they opened the tab with no filter. The link replaces earlier filters and never toggles off, and kosher (no Dining key) still opens the plain tab. 7 new XCTest cases plus 1 updated; not compiled (no Xcode here); check-mobile-schema and check-privacy-manifest pass. The worktree was created from main (65138139), which has no docs/improvement-loops, so it was reset to the rolling branch head 2dec4e9b before work began."
+    },
+    {
+      "priority": 2,
+      "id": "WEB-QA-049",
+      "title": "check-edge-types fails on the rolling branch: public-url-fetch.test.ts gained 2 TS2345 errors",
+      "description": "supabase/functions/_tests/public-url-fetch.test.ts:69 and :78 pass a Promise<Response> where the assertion helper expects () => Promise<unknown>. That makes npm run check-edge-types exit 1 on claude/continuous-improvement-loops-76i72u at 2dec4e9b. The file came from WEB-SEC-059 (bfb45d0a).",
+      "acceptanceCriteria": [
+        "Wrap the two calls in arrow functions so the rejects assertion actually awaits the call",
+        "npm run check-edge-types exits 0"
+      ],
       "passes": false,
-      "notes": "Found 2026-11-07 by the features lane, not done."
+      "notes": "Found 2026-11-08 by the events lane while verifying WEB-BE-060."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-061",
+      "title": "domain-adapters/adapterFetch.ts and the agent-runner probes outside link-content-monitor may still follow redirects with bare fetch()",
+      "description": "As the platform owner, I need every fetch of a URL we did not choose to go through fetchPublicUrl. WEB-SEC-059/060 covered scraper.ts, robots.ts, eventPageDiscovery, imageFallbacks and the menu scraper; the domain adapters' shared adapterFetch helper was not audited in that pass.",
+      "acceptanceCriteria": [
+        "Audit _shared/domain-adapters/adapterFetch.ts and every remaining fetch( in _shared/ that takes a scraped or stored URL",
+        "Swap any that follow redirects to fetchPublicUrl (or safeFetch with an allowlist where the host is fixed)",
+        "Extend public-url-fetch.test.ts with a stubbed-fetch case per swapped caller"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while doing WEB-SEC-060; not audited in that commit."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-056",
+      "title": "Playground pages still show the unsourced playgrounds.rating as a star badge",
+      "description": "WEB-SEO-055 removed playgrounds.rating from FAQPage and place:rating because the column holds a number a model read off a crawled page, with no record of whose rating it was. PlaygroundDetails still renders it as a star badge in the hero (playground.rating.toFixed(1)) and on the nearby/same-age cards (item.rating). Attractions replaced the same badge with the content_rating_aggregates review average.",
+      "acceptanceCriteria": [
+        "The hero and nearby-card badges show a first-party review average (content_rating_aggregates for content_type playground) or nothing",
+        "A test pins that playgrounds.rating is not rendered",
+        "The 'NULL ratings first' nearby ordering, if still keyed on rating, is checked"
+      ],
+      "passes": false,
+      "notes": "Found in the WEB-SEO-055 loop, 2026-11-08; not changed there."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-ADS-023",
+      "title": "/unsubscribe has no way back for an accidental unsubscribe",
+      "description": "As a reader who clicked unsubscribe by mistake (or whose forwarded digest a colleague clicked), I need the /unsubscribe success and already-unsubscribed states to offer a resubscribe form. Today the page ends at 'Back to home'. newsletter-subscribe already handles a returning address with a fresh double opt-in, and with WEB-ADS-022 applied the confirm now restarts delivery, so this is a front-end-only change in src/pages/Unsubscribe.tsx using NewsletterSignup variant compact.",
+      "acceptanceCriteria": [
+        "Success and already states show 'Unsubscribed by mistake?' with a compact NewsletterSignup; invalid and error states do not",
+        "Copy says a confirmation link comes first, matching NEWSLETTER_CONFIRM_BODY",
+        "Vitest covers which states show the form"
+      ],
+      "passes": false,
+      "notes": "Found during the 2026-11-08 marketing-growth loop. Depends on WEB-ADS-022 being applied, otherwise a resubscriber confirms and still gets nothing."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-ADS-024",
+      "title": "Newsletter confirm and unsubscribe pages print the raw Postgres/PostgREST error message to readers",
+      "description": "src/pages/NewsletterConfirm.tsx and src/pages/Unsubscribe.tsx render error.message from the RPC inside the alert ('Something went wrong (...)'), and neither routes the error through handleError. A reader sees internal text such as a PostgREST code; ops sees nothing.",
+      "acceptanceCriteria": [
+        "Both pages call handleError with component/action and show fixed copy without the raw message",
+        "Vitest asserts the raw message is not rendered"
+      ],
+      "passes": false,
+      "notes": "Found during the 2026-11-08 marketing-growth loop."
+    },
+    {
+      "priority": 3,
+      "id": "IOS-AUDIT-FEAT-044",
+      "title": "iOS Dining diet filter lacks kosher and keto's 'ketogenic' keyword, unlike the web's DIETS",
+      "description": "src/hooks/useDietaryRestaurants.ts DIETS has six diets (kosher included) and keto matches 'ketogenic'. RestaurantsService.dietaryKeywords and the DietaryPill options have five and no 'ketogenic', so /restaurants/dietary/kosher can only open the unfiltered tab and keto finds fewer rows than on the web.",
+      "acceptanceCriteria": [
+        "RestaurantsService.dietaryKeywords matches the web's DIETS ids and keywords",
+        "DietaryPill offers Kosher",
+        "/restaurants/dietary/kosher opens Dining with kosher applied",
+        "A test asserts the iOS keyword table equals the web's"
+      ],
+      "passes": false,
+      "notes": "Found while routing restaurant landing links (2026-11-08)."
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-032",
+      "title": "Trip planner start date uses the device day, not the Des Moines day",
+      "passes": false,
+      "description": "TripPlannerViewModel line ~216 computes the trip start as LocalDate.now().plusDays(offset). On a phone set to another zone, or near midnight, that is a different day from the Des Moines day that events and the itinerary refer to. EventTimeText.desMoinesToday() is the helper to reuse.",
+      "acceptanceCriteria": [
+        "The trip start date is computed from EventTimeText.desMoinesToday()",
+        "A JVM test pins the start day for a UTC clock after 7pm Central"
+      ],
+      "notes": "Found in the AND-AUDIT-031 loop, 2026-11-08."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-UX-062",
+      "title": "WEB-UX-059 and WEB-UX-061 are the same /events sticky-chrome story filed twice",
+      "description": "As the ui-ux lane, I need one story for the /events chrome that covers 41% of a 375x667 screen. prd.json has it twice (059 says sticky, 061 says fixed), and two lanes could fix it twice.",
+      "acceptanceCriteria": [
+        "Close one as a duplicate of the other, and carry its notes across"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the reliability lane while checking the WEB-CI-028 handoff."
     }
   ]
 }
