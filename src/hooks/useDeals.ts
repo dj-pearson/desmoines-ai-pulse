@@ -2,6 +2,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { handleError } from '@/lib/errorHandler';
 import { createSlug } from '@/lib/slug';
+import { HAPPY_HOUR_RESTAURANT_COLUMNS } from '@/lib/listColumns';
+import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday } from '@/lib/restaurantHours';
 
 export interface Deal {
   id: string;
@@ -125,6 +127,111 @@ export function useRestaurantDeals(restaurantId: string | undefined) {
     enabled: !!restaurantId,
     staleTime: 5 * 60 * 1000,
   });
+}
+
+/** The restaurant fields the Happy hour now strip links and filters on. */
+export interface HappyHourRestaurant {
+  id: string;
+  name: string | null;
+  slug: string | null;
+  status: string | null;
+  business_status: string | null;
+}
+
+export interface HappyHourCandidate {
+  deal: Deal;
+  restaurant: HappyHourRestaurant;
+}
+
+/** Upper bound on in-date timed restaurant deals read for the hub strip. */
+const HAPPY_HOUR_DEAL_LIMIT = 200;
+
+/**
+ * Every in-date restaurant deal with a daily time window, paired with a
+ * restaurant someone can eat at today (WEB-FEAT-025). The time window is the
+ * point: a happy hour is "3-6 PM", and only a deal with start_time/end_time
+ * can be said to be running now. This is the editorial data DealManager
+ * already curates; there is no second specials table to keep in step.
+ *
+ * Two reads, because deals.entity_id is polymorphic and has no foreign key to
+ * embed through. A deal whose restaurant is missing, closed for good or
+ * temporarily closed is dropped: a happy hour at a door that is shut is not an
+ * offer. A failed read is reported and answered with nothing, so the strip
+ * hides rather than claiming there is no happy hour anywhere.
+ */
+export async function fetchHappyHourCandidates(): Promise<HappyHourCandidate[]> {
+  const active = activeWindowFilter(new Date().toISOString());
+  const { data: dealRows, error: dealError } = await supabase
+    .from('deals')
+    .select(DEAL_LIST_COLUMNS)
+    .eq('entity_type', 'restaurant')
+    .not('entity_id', 'is', null)
+    .not('start_time', 'is', null)
+    .not('end_time', 'is', null)
+    .lte('start_date', active.start)
+    .or(active.endOr)
+    .order('is_featured', { ascending: false })
+    .order('end_date', { ascending: true })
+    .limit(HAPPY_HOUR_DEAL_LIMIT);
+  if (dealError) {
+    handleError(dealError, { component: 'useHappyHourNow', action: 'fetchDeals' });
+    return [];
+  }
+  const deals = (dealRows ?? []) as unknown as Deal[];
+  const ids = [...new Set(deals.map((d) => d.entity_id).filter((id): id is string => !!id))].sort();
+  if (ids.length === 0) return [];
+
+  const { data: restaurantRows, error: restaurantError } = await supabase
+    .from('restaurants')
+    .select(HAPPY_HOUR_RESTAURANT_COLUMNS)
+    .in('id', ids)
+    .or(NOT_CLOSED_RESTAURANT_FILTER);
+  if (restaurantError) {
+    handleError(restaurantError, { component: 'useHappyHourNow', action: 'fetchRestaurants' });
+    return [];
+  }
+  const byId = new Map<string, HappyHourRestaurant>();
+  for (const row of (restaurantRows ?? []) as unknown as HappyHourRestaurant[]) {
+    if (isServingToday(row)) byId.set(row.id, row);
+  }
+  const candidates: HappyHourCandidate[] = [];
+  for (const deal of deals) {
+    const restaurant = deal.entity_id ? byId.get(deal.entity_id) : undefined;
+    if (restaurant) candidates.push({ deal, restaurant });
+  }
+  return candidates;
+}
+
+export function useHappyHourCandidates(enabled = true) {
+  return useQuery({
+    queryKey: ['deals', 'restaurant', 'happy-hour'],
+    queryFn: fetchHappyHourCandidates,
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * The candidates running at `now` on the Des Moines clock, one row per
+ * restaurant (its first live deal in query order, so a featured one wins),
+ * at most `max`. Recomputed by the caller each minute, so a happy hour leaves
+ * the strip the minute it ends.
+ */
+export function happyHourNow(
+  candidates: HappyHourCandidate[] | undefined,
+  now: Date,
+  max = 5,
+): HappyHourCandidate[] {
+  const seen = new Set<string>();
+  const rows: HappyHourCandidate[] = [];
+  for (const candidate of candidates ?? []) {
+    if (rows.length >= max) break;
+    if (seen.has(candidate.restaurant.id)) continue;
+    if (!isDealLiveAt(candidate.deal, now)) continue;
+    seen.add(candidate.restaurant.id);
+    rows.push(candidate);
+  }
+  return rows;
 }
 
 /**

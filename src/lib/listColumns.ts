@@ -222,6 +222,14 @@ export const RESTAURANT_SUGGESTION_COLUMNS =
   "id, name, cuisine, slug, status, business_status";
 
 /**
+ * Restaurants behind the Happy hour now strip on /restaurants
+ * (fetchHappyHourCandidates). The link needs name and slug; status and
+ * business_status are how a deal at a closed or temporarily closed place is
+ * kept off the strip (WEB-FEAT-025).
+ */
+export const HAPPY_HOUR_RESTAURANT_COLUMNS = "id, name, slug, status, business_status";
+
+/**
  * The four columns needed to DERIVE an event slug, and nothing else
  * (WEB-PERF-035 AC2).
  *

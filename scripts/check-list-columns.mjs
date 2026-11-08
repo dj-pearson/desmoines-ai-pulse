@@ -46,6 +46,7 @@ const TABLE_FOR = {
   ARTICLE_HUB_RESTAURANT_COLUMNS: 'restaurants',
   RESTAURANT_SUGGESTION_COLUMNS: 'restaurants',
   BREWERY_TRAIL_COLUMNS: 'restaurants',
+  HAPPY_HOUR_RESTAURANT_COLUMNS: 'restaurants',
   RESTAURANT_DETAIL_EXTRA_COLUMNS: 'restaurants',
 };
 
