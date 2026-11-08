@@ -27,9 +27,7 @@ import { AFFILIATE_DISCLOSURE, hotelClassStars, hotelRateLabel, resolveBooking, 
 import { telHref } from "@/lib/reservations";
 import { AiAnswersList } from "@/components/AiAnswersList";
 import { HotelNearbyEvents } from "@/components/hotels/HotelNearbyEvents";
-
-const HOTEL_FAQ_TOOLTIP =
-  "Written with AI from the hotel's own site and travel listings. Confirm rates, fees and policies with the hotel.";
+import { HotelAbout, HOTEL_AI_TOOLTIP } from "@/components/hotels/HotelAbout";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -142,8 +140,6 @@ export default function HotelDetails() {
     hotel.seo_description?.trim() ||
     hotel.short_description ||
     `${hotel.name} in ${hotel.area || hotel.city}.${hotel.price_range ? ` Price range: ${hotel.price_range}.` : ""} Book your stay in Des Moines.`;
-  const keyFacts = (hotel.geo_key_facts ?? []).map((f) => f.trim()).filter(Boolean);
-  const geoSummary = hotel.geo_summary?.trim() || null;
   // A Google Places photo is shown on the page with its credit, but not handed
   // to share previews or structured data: those copies are cached by other
   // people for as long as they like, carry no credit, and outlive the 30 days
@@ -327,27 +323,8 @@ export default function HotelDetails() {
                 />
               </div>
 
-              {/* Description */}
-              {(hotel.description || geoSummary || keyFacts.length > 0) && (
-                <section>
-                  <h2 className="text-xl font-semibold mb-3">About This Hotel</h2>
-                  {hotel.description && (
-                    <p className="text-muted-foreground leading-relaxed whitespace-pre-line max-w-prose">
-                      {hotel.description}
-                    </p>
-                  )}
-                  {geoSummary && geoSummary !== hotel.description?.trim() && (
-                    <p className="mt-3 text-muted-foreground leading-relaxed max-w-prose">{geoSummary}</p>
-                  )}
-                  {keyFacts.length > 0 && (
-                    <ul className="mt-4 list-disc pl-5 space-y-1 text-muted-foreground max-w-prose">
-                      {keyFacts.map((fact) => (
-                        <li key={fact}>{fact}</li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              )}
+              {/* Model-written copy, labelled (WEB-SEO-061). */}
+              <HotelAbout description={hotel.description} geoSummary={hotel.geo_summary} keyFacts={hotel.geo_key_facts} />
 
               {/* Pass-2 WP2 item 7: this week's events within a mile. Renders
                   nothing without coordinates (D9) or during prerender. */}
@@ -380,7 +357,7 @@ export default function HotelDetails() {
               <AiAnswersList
                 title={`Questions about ${hotel.name}`}
                 faq={hotel.geo_faq}
-                tooltip={HOTEL_FAQ_TOOLTIP}
+                tooltip={HOTEL_AI_TOOLTIP}
                 headingId="hotel-ai-answers"
                 headingClassName="text-xl font-semibold"
               />
