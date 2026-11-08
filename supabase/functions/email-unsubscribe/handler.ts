@@ -19,10 +19,18 @@
  * (newsletter_unsubscribe_by_token), which since 20261002000002 also writes
  * the email_suppressions row every marketing sender checks. One definition of
  * "unsubscribed", whichever door the reader used.
+ *
+ * WEB-FEAT-059: an event-reminder email carries ?reminder=<user_event_reminders.id>
+ * instead. Same two doors (POST one-click, GET to the page), but the work is
+ * cancel_event_reminders_by_token, which deletes that user's unsent reminders
+ * for that one event and leaves the newsletter and every other email alone.
  */
 
 /** 48 lowercase hex, the shape the RPC validates. */
 export const TOKEN_RE = /^[0-9a-f]{48}$/;
+
+/** A user_event_reminders.id: a v4 uuid, lowercase after normalising. */
+export const REMINDER_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export type UnsubscribeRpc = (token: string) => Promise<{
   data: unknown;
@@ -31,6 +39,8 @@ export type UnsubscribeRpc = (token: string) => Promise<{
 
 export interface HandlerDeps {
   rpc: UnsubscribeRpc;
+  /** cancel_event_reminders_by_token. Same call shape as rpc. */
+  cancelReminders?: UnsubscribeRpc;
   siteUrl: string;
 }
 
@@ -45,6 +55,7 @@ export async function handleUnsubscribe(req: Request, deps: HandlerDeps): Promis
   if (req.method !== "POST" && req.method !== "GET") return json(405, { error: "Method not allowed" });
 
   const url = new URL(req.url);
+  if (url.searchParams.has("reminder")) return handleReminder(req, url, deps);
   const token = (url.searchParams.get("token") ?? "").trim().toLowerCase();
 
   if (req.method === "GET") {
@@ -64,4 +75,26 @@ export async function handleUnsubscribe(req: Request, deps: HandlerDeps): Promis
   const row = (Array.isArray(data) ? data[0] : data) as { success?: boolean; already_unsubscribed?: boolean } | null;
   if (!row?.success) return json(404, { error: "Unknown unsubscribe token" });
   return json(200, { ok: true, already_unsubscribed: !!row.already_unsubscribed });
+}
+
+async function handleReminder(req: Request, url: URL, deps: HandlerDeps): Promise<Response> {
+  const token = (url.searchParams.get("reminder") ?? "").trim().toLowerCase();
+
+  if (req.method === "GET") {
+    const page = `${deps.siteUrl.replace(/\/+$/, "")}/unsubscribe?reminder=${encodeURIComponent(token)}`;
+    return new Response(null, { status: 303, headers: { Location: page, "Cache-Control": "no-store" } });
+  }
+
+  if (!REMINDER_TOKEN_RE.test(token)) return json(400, { error: "Invalid reminder token" });
+  if (!deps.cancelReminders) return json(503, { error: "Try again later" });
+
+  const { data, error } = await deps.cancelReminders(token);
+  if (error) {
+    console.error("[email-unsubscribe] cancel reminders failed:", error.message);
+    return json(503, { error: "Try again later" });
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as { success?: boolean; cancelled?: number } | null;
+  if (!row?.success) return json(404, { error: "Unknown reminder token" });
+  return json(200, { ok: true, cancelled: Number(row.cancelled ?? 0) });
 }

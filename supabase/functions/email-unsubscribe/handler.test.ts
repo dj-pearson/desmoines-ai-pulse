@@ -53,3 +53,61 @@ Deno.test("GET hands the reader to the /unsubscribe page and does not unsubscrib
   assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?token=${TOKEN}`);
   assertEquals(calls.length, 0);
 });
+
+// WEB-FEAT-059: a reminder email's ?reminder= link stops that event's
+// reminders and never touches the newsletter RPC.
+const REMINDER = "3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b";
+
+function reminderDeps() {
+  const newsletter = rpcReturning([{ success: true }]);
+  const reminders = rpcReturning([{ success: true, cancelled: 2, event_title: "Jazz in July" }]);
+  return {
+    newsletter,
+    reminders,
+    deps: { rpc: newsletter.rpc, cancelReminders: reminders.rpc, siteUrl: "https://desmoinesinsider.com" },
+  };
+}
+
+Deno.test("POST ?reminder= cancels that event's reminders, not the newsletter", async () => {
+  const { newsletter, reminders, deps: d } = reminderDeps();
+  const res = await handleUnsubscribe(
+    new Request(`${FN}?reminder=${REMINDER.toUpperCase()}`, { method: "POST", body: "List-Unsubscribe=One-Click" }),
+    d,
+  );
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { ok: true, cancelled: 2 });
+  assertEquals(reminders.calls, [REMINDER]);
+  assertEquals(newsletter.calls.length, 0);
+});
+
+Deno.test("POST ?reminder= with a malformed id never reaches the database", async () => {
+  const { newsletter, reminders, deps: d } = reminderDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?reminder=nope`, { method: "POST" }), d);
+  assertEquals(res.status, 400);
+  assertEquals(reminders.calls.length + newsletter.calls.length, 0);
+  await res.body?.cancel();
+});
+
+Deno.test("POST ?reminder= unknown is 404, a database error is 503", async () => {
+  const base = { rpc: rpcReturning(null).rpc, siteUrl: "https://desmoinesinsider.com" };
+  const unknown = await handleUnsubscribe(
+    new Request(`${FN}?reminder=${REMINDER}`, { method: "POST" }),
+    { ...base, cancelReminders: rpcReturning([{ success: false, cancelled: 0 }]).rpc },
+  );
+  assertEquals(unknown.status, 404);
+  await unknown.body?.cancel();
+  const down = await handleUnsubscribe(
+    new Request(`${FN}?reminder=${REMINDER}`, { method: "POST" }),
+    { ...base, cancelReminders: rpcReturning(null, { message: "PGRST202" }).rpc },
+  );
+  assertEquals(down.status, 503);
+  await down.body?.cancel();
+});
+
+Deno.test("GET ?reminder= hands the reader to the page with the reminder id", async () => {
+  const { reminders, deps: d } = reminderDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?reminder=${REMINDER}`), d);
+  assertEquals(res.status, 303);
+  assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?reminder=${REMINDER}`);
+  assertEquals(reminders.calls.length, 0);
+});

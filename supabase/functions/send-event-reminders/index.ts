@@ -221,14 +221,6 @@ View event details: ${eventUrl}
 Don't miss out! We'll see you there!
     `.trim();
 
-    // Look up this recipient's unsubscribe token so the footer renders a
-    // one-click unsubscribe link that complies with CAN-SPAM §5(a)(5).
-    const { data: subscriberRow } = await supabase
-      .from("newsletter_subscribers")
-      .select("unsubscribe_token")
-      .eq("email", reminder.user_email.toLowerCase().trim())
-      .maybeSingle();
-
     const rendered = renderEmail({
       bodyHtml,
       bodyText,
@@ -237,8 +229,12 @@ Don't miss out! We'll see you there!
       category: "marketing",
       recipient: {
         email: reminder.user_email,
-        unsubscribeToken: subscriberRow?.unsubscribe_token ?? null,
-        preferencesPath: "/profile?tab=settings",
+        // WEB-FEAT-059: the footer link and the one-click header cancel this
+        // event's remaining reminders (cancel_event_reminders_by_token). They
+        // used to carry the newsletter token, so stopping a reminder ended
+        // the newsletter and every other marketing email instead.
+        reminderToken: reminder.reminder_id,
+        preferencesPath: "/my-events?tab=reminders",
       },
     });
     const sent = await sendEmail(

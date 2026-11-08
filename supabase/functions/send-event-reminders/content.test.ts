@@ -132,3 +132,10 @@ Deno.test("the sender uses this module and no longer escapes the subject", async
   assert(!/subject\s*=\s*`[^`]*escapeHtml/.test(src), "subject is not HTML-escaped");
   assert(!src.includes("function createSlug"), "the dateless slug builder is gone");
 });
+
+Deno.test("the footer opt-out is this reminder's, not the newsletter's (WEB-FEAT-059)", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assert(src.includes("reminderToken: reminder.reminder_id"), "renderEmail gets the reminder id");
+  assert(!src.includes("newsletter_subscribers"), "no newsletter token lookup");
+  assert(!src.includes("unsubscribeToken:"), "no newsletter token in the footer");
+});

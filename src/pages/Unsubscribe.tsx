@@ -7,6 +7,10 @@
  * `newsletter_unsubscribe_by_token` SECURITY DEFINER RPC which validates the
  * token format, updates the newsletter subscriber row, and returns a simple
  * success / already-unsubscribed boolean.
+ *
+ * An event-reminder email links here with ?reminder=<id> instead (WEB-FEAT-059).
+ * That stops the remaining reminders for that one event and leaves the
+ * newsletter alone; see src/lib/reminderOptOut.ts.
  */
 
 import { useEffect, useState } from "react";
@@ -24,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { logConsent } from "@/lib/consentLog";
+import { cancelRemindersByToken } from "@/lib/reminderOptOut";
 import {
   CheckCircle2,
   AlertCircle,
@@ -31,17 +36,39 @@ import {
   MailX,
 } from "lucide-react";
 
-type Status = "loading" | "success" | "already" | "invalid" | "error";
+type Status = "loading" | "success" | "already" | "reminders" | "invalid" | "error";
 
 export default function Unsubscribe() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
+  const reminderToken = params.get("reminder");
   const [status, setStatus] = useState<Status>("loading");
+  const [reminderEvent, setReminderEvent] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
+    async function runReminder(id: string) {
+      const result = await cancelRemindersByToken(id);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "cancelRemindersByToken" });
+        setStatus("error");
+        return;
+      }
+      if (result.kind === "invalid") {
+        setStatus("invalid");
+        return;
+      }
+      setReminderEvent(result.eventTitle);
+      setStatus("reminders");
+    }
+
     async function run() {
+      if (reminderToken !== null) {
+        await runReminder(reminderToken);
+        return;
+      }
       if (!token) {
         setStatus("invalid");
         return;
@@ -93,7 +120,7 @@ export default function Unsubscribe() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, reminderToken]);
 
   return (
     <>
@@ -131,6 +158,22 @@ export default function Unsubscribe() {
                   marketing emails from Des Moines Insider. Transactional emails
                   (like receipts and security alerts) may still be sent to keep
                   your account safe.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {status === "reminders" && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  {reminderEvent
+                    ? `Reminders for ${reminderEvent} are off.`
+                    : "Reminders for this event are off."}{" "}
+                  Your other reminders and any newsletter you get are unchanged.{" "}
+                  <Link to="/my-events?tab=reminders" className="underline">
+                    See your reminders
+                  </Link>
+                  .
                 </AlertDescription>
               </Alert>
             )}

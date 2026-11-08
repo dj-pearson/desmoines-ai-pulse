@@ -144,6 +144,11 @@ const PENDING_MIGRATIONS = [
   // pending window shows exactly what the page showed before.
   { rpc: 'get_site_audience_metrics', migration: '20261107000071' },
   { rpc: 'renew_campaign', migration: '20260920000004' },
+  // The reminder email's one-click opt-out (WEB-FEAT-059), called by
+  // src/lib/reminderOptOut.ts from /unsubscribe?reminder=. Until it is applied
+  // the page shows its fixed "something went wrong" copy and the edge function
+  // answers 503, so mailbox providers retry the one-click POST.
+  { rpc: 'cancel_event_reminders_by_token', migration: '20261108000047' },
   // Business listing claims (WEB-ADS-009). The table read is cast, so only the
   // RPC is visible to this scanner; both are listed so the "landed" check asks
   // for them back once the types carry them. useBusinessClaim treats a 42P01 on
