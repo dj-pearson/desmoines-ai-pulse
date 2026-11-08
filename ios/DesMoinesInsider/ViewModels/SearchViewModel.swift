@@ -308,7 +308,9 @@ final class SearchViewModel {
     private func searchEvents(_ query: ParsedSearch) async -> Result<Leg<Event>, Error> {
         let f = query.filters
         let keywords = query.keywords
-        let window = f.datePreset?.range(now: Date())
+        // A day range (a month page, a ?from=&to= link) and a preset are never
+        // both set; SearchFilters.merged keeps whichever came last.
+        let window = f.dayRange?.window() ?? f.datePreset?.range(now: Date())
         do {
             let response = try await events.fetchEvents(query: .init(
                 searchText: keywords.isEmpty ? nil : keywords,
@@ -337,7 +339,7 @@ final class SearchViewModel {
     static func searchesRestaurants(_ query: ParsedSearch) -> Bool {
         let f = query.filters
         guard query.keywords.isEmpty else { return true }
-        if f.datePreset != nil || f.freeOnly || f.category != nil { return false }
+        if f.datePreset != nil || f.dayRange != nil || f.freeOnly || f.category != nil { return false }
         return !f.areas.isEmpty || f.openNow
     }
 

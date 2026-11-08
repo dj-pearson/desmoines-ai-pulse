@@ -285,9 +285,51 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/date-night"), .web(site("/events/date-night")))
     }
 
-    func testMonthArchiveLinkOpensTheWebPage() {
+    // MARK: - Month archive and day ranges (IOS-AUDIT-003)
+
+    private func monthSearch(_ slug: String) -> DeepLinkHandler.Destination {
+        var filters = SearchFilters(tabHint: .events)
+        filters.dayRange = EventDayRange(monthSlug: slug)
+        return .eventSearch(query: "", filters: filters)
+    }
+
+    private func utc(_ iso: String) -> Date {
+        ISO8601DateFormatter().date(from: iso)!
+    }
+
+    func testMonthArchiveLinkSearchesThatMonthUntilItIsOver() {
+        let url = site("/events/june-2026")
+        let before = utc("2026-05-15T12:00:00Z")
+        let lastMinute = utc("2026-07-01T04:59:00Z") // 11:59pm June 30, Central
+        let over = utc("2026-07-01T05:00:00Z")       // midnight July 1, Central
+        XCTAssertEqual(DeepLinkHandler.eventDestination("june-2026", url: url, now: before), monthSearch("june-2026"))
+        XCTAssertEqual(DeepLinkHandler.eventDestination("june-2026", url: url, now: lastMinute), monthSearch("june-2026"))
+        // Search hides events that are over, so a past month opens the archive.
+        XCTAssertEqual(DeepLinkHandler.eventDestination("june-2026", url: url, now: over), .web(url))
+    }
+
+    func testPastMonthLinkStillOpensTheWebPage() {
+        // June 2026 is over on any clock this test runs on.
         XCTAssertEqual(dest("/events/june-2026"), .web(site("/events/june-2026")))
-        XCTAssertEqual(dest("/events/december-2027"), .web(site("/events/december-2027")))
+    }
+
+    func testDayRangeLinkKeepsItsDates() {
+        var june = SearchFilters(tabHint: .events)
+        june.dayRange = EventDayRange(from: "2026-06-01", to: "2026-06-30")
+        XCTAssertEqual(dest("/events?from=2026-06-01&to=2026-06-30"), .eventSearch(query: "", filters: june))
+
+        var oneDay = SearchFilters(freeOnly: true, tabHint: .events)
+        oneDay.dayRange = EventDayRange(from: "2026-06-05", to: nil)
+        XCTAssertEqual(dest("/events?from=2026-06-05&price=free"), .eventSearch(query: "", filters: oneDay))
+    }
+
+    func testDayRangeLinkFollowsTheWebsPrecedence() {
+        // A known preset wins over from/to.
+        var today = SearchFilters(tabHint: .events)
+        today.datePreset = .today
+        XCTAssertEqual(dest("/events?preset=today&from=2026-06-01&to=2026-06-30"), .eventSearch(query: "", filters: today))
+        // An unparseable from is no date filter, and with nothing else that is Home.
+        XCTAssertEqual(dest("/events?from=someday&to=2026-06-30"), .tab(.home))
     }
 
     func testMonthLikeSlugsThatAreNotMonthPagesAreUnchanged() {

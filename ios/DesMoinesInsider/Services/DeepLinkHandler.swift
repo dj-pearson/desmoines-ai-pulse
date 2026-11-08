@@ -6,7 +6,8 @@ import os
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id-or-slug` → Event detail
 /// - `desmoinesinsider.com/events/near-me` → Map tab; `/events/date-night`
-///   and `/events/<month>-<year>` → the web page
+///   → the web page; `/events/<month>-<year>` → Search on Events for that
+///   month, or the web page once the month is over
 /// - `desmoinesinsider.com/events/series/:slug` → that annual-event series
 ///   natively, or on the web for a slug the app does not know
 /// - `desmoinesinsider.com/search?q=` → Search tab with the query
@@ -288,13 +289,12 @@ final class DeepLinkHandler {
     ///
     /// Every web landing page has a case here (IOS-AUDIT-002). /events/near-me
     /// opens the Map tab, the app's nearby-events surface. /events/date-night
-    /// and the monthly archive (/events/june-2026, linked from MonthLinks on
-    /// the events pages and listed in the sitemap) have no native screen, so
-    /// they open on the web. All three used to open Home, which shows neither
+    /// has no native screen, so it opens on the web. The monthly archive is
+    /// `monthDestination`. All three used to open Home, which shows neither
     /// what is near nor that month. Only bare "series" still lands on Home;
     /// src/lib/__tests__/iosEventLinkParity.test.ts fails when a landing
     /// segment has no case here.
-    static func eventDestination(_ raw: String, url: URL) -> Destination {
+    static func eventDestination(_ raw: String, url: URL, now: Date = Date()) -> Destination {
         switch raw {
         case "this-weekend": return .discover(.weekend)
         case "today": return .search(query: "today")
@@ -306,7 +306,7 @@ final class DeepLinkHandler {
         case "date-night": return .web(url)
         default: break
         }
-        if EventSlug.isMonthPage(raw) { return .web(url) }
+        if EventSlug.isMonthPage(raw) { return monthDestination(raw, url: url, now: now) }
         if EventSlug.landingSegments.contains(raw) { return .tab(.home) }
         if let id = EventSlug.linkId(raw) { return .event(id: id) }
         AppLogger.nav.warning("Rejected invalid event link: \(raw.prefix(50))")
@@ -329,14 +329,29 @@ final class DeepLinkHandler {
         return .web(url)
     }
 
+    /// /events/<month>-<yyyy> (linked from MonthLinks on the events pages and
+    /// listed in the sitemap) opens Search on Events limited to that month in
+    /// Central time (IOS-AUDIT-003). A month that is already over still opens
+    /// the web page: Search never lists an event that has ended
+    /// (EventsService.notOverFilter), so it would show nothing, while the web
+    /// archive lists what happened.
+    static func monthDestination(_ raw: String, url: URL, now: Date) -> Destination {
+        guard let range = EventDayRange(monthSlug: raw), !range.hasEnded(now: now) else { return .web(url) }
+        var filters = SearchFilters(tabHint: .events)
+        filters.dayRange = range
+        return .eventSearch(query: "", filters: filters)
+    }
+
     /// Bare /events with the hub's filter keys (IOS-AUDIT-FEAT-041). The web
     /// writes every filter into the URL (EventsPage.tsx), the saved-search
     /// alert email links there with them (savedSearchMatch.ts deepLink), and
     /// the hub's own tiles link /events?category=Festival. All of these used
     /// to open Home with the filters dropped. `q` wins over `search`, the
     /// alias the old WebSite SearchAction used, as it does on the web.
-    /// `from`/`to`, `sort`, `near`, `view`, `page` and utm keys have no
-    /// Search equivalent and are ignored. No filter at all is still Home.
+    /// `from`/`to` set a day range when there is no known `preset`
+    /// (IOS-AUDIT-003; they used to be dropped). `sort`, `near`, `view`,
+    /// `page` and utm keys have no Search equivalent and are ignored. No
+    /// filter at all is still Home.
     static func eventsHubDestination(_ url: URL) -> Destination {
         var keys: [String: String] = [:]
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []

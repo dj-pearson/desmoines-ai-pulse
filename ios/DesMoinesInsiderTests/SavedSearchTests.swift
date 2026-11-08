@@ -144,6 +144,23 @@ final class SavedSearchTests: XCTestCase {
         XCTAssertNil(filters.category)
     }
 
+    func testDayRangeIsSavedAndReadBackWithTheWebKeys() throws {
+        // IOS-AUDIT-003: the alert job reads from/to when there is no preset.
+        var parsed = SearchQueryParser.parse("jazz")
+        parsed.filters.dayRange = EventDayRange(monthSlug: "june-2026")
+        let filters = SavedSearchFilters.forSave(query: "jazz", tab: "Events", parsed: parsed)
+        XCTAssertNil(filters.preset)
+        XCTAssertEqual(filters.from, "2026-06-01")
+        XCTAssertEqual(filters.to, "2026-06-30")
+
+        let search = try decode("""
+        { "id": "r1", "user_id": "u1", "name": "x", "search_type": "event_list",
+          "filters": { "q": "jazz", "from": "2026-06-01", "to": "2026-06-30" } }
+        """)
+        XCTAssertEqual(search.structuredFilters.dayRange, EventDayRange(from: "2026-06-01", to: "2026-06-30"))
+        XCTAssertEqual(search.filters.from, "2026-06-01")
+    }
+
     func testTonightSavedAsTodayReRunsAsTonight() throws {
         let search = try decode("""
         { "id": "t1", "user_id": "u1", "name": "x", "search_type": "event_list",

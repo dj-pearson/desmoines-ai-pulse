@@ -146,6 +146,10 @@ struct SavedSearchFilters: Codable, Hashable {
     var price: String?
     var category: String?
     var location: String?
+    /// A day range as the web writes it (IOS-AUDIT-003); the alert job reads
+    /// these when there is no `preset` (savedSearchMatch.ts).
+    var from: String?
+    var to: String?
 
     init(
         query: String,
@@ -155,7 +159,9 @@ struct SavedSearchFilters: Codable, Hashable {
         preset: String? = nil,
         price: String? = nil,
         category: String? = nil,
-        location: String? = nil
+        location: String? = nil,
+        from: String? = nil,
+        to: String? = nil
     ) {
         self.query = query
         self.tab = tab
@@ -165,10 +171,12 @@ struct SavedSearchFilters: Codable, Hashable {
         self.price = price
         self.category = category
         self.location = location
+        self.from = from
+        self.to = to
     }
 
     enum CodingKeys: String, CodingKey {
-        case query, tab, q, preset, price, category, location
+        case query, tab, q, preset, price, category, location, from, to
         case alertsEnabled = "alerts_enabled"
     }
 
@@ -183,6 +191,8 @@ struct SavedSearchFilters: Codable, Hashable {
         price = try? c.decodeIfPresent(String.self, forKey: .price)
         category = try? c.decodeIfPresent(String.self, forKey: .category)
         location = try? c.decodeIfPresent(String.self, forKey: .location)
+        from = try? c.decodeIfPresent(String.self, forKey: .from)
+        to = try? c.decodeIfPresent(String.self, forKey: .to)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -195,6 +205,8 @@ struct SavedSearchFilters: Codable, Hashable {
         try c.encodeIfPresent(price, forKey: .price)
         try c.encodeIfPresent(category, forKey: .category)
         try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(from, forKey: .from)
+        try c.encodeIfPresent(to, forKey: .to)
     }
 
     /// The filters for a new save: the typed words under `query` (as iOS
@@ -210,7 +222,9 @@ struct SavedSearchFilters: Codable, Hashable {
             preset: f.datePreset.flatMap { SearchQueryParser.presetSlug[$0] },
             price: f.freeOnly ? "free" : nil,
             category: f.category?.rawValue,
-            location: f.areas.first.flatMap { SearchQueryParser.areaSlugs[$0] }
+            location: f.areas.first.flatMap { SearchQueryParser.areaSlugs[$0] },
+            from: f.dayRange?.first,
+            to: f.dayRange?.last
         )
     }
 }

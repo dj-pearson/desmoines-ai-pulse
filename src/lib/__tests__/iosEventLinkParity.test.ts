@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { EVENT_SERIES, seriesPath } from "../eventSeries";
+import { MONTH_SLUGS } from "../monthPages";
 
 /**
  * IOS-AUDIT-FEAT-045. The iOS app claims /events/* (apple-app-site-association)
@@ -17,6 +18,7 @@ import { EVENT_SERIES, seriesPath } from "../eventSeries";
 const APP = "src/App.tsx";
 const EVENT_SLUG = "ios/DesMoinesInsider/Services/EventSlug.swift";
 const DEEP_LINK = "ios/DesMoinesInsider/Services/DeepLinkHandler.swift";
+const DAY_RANGE = "ios/DesMoinesInsider/Models/EventDayRange.swift";
 
 /** The literal first segment of every `/events/<segment>...` route. */
 function webEventSegments(): Set<string> {
@@ -65,8 +67,33 @@ describe("iOS event links know the web's /events pages (IOS-AUDIT-FEAT-045)", ()
     expect(cased.size, "no case literals parsed from eventDestination").toBeGreaterThan(5);
     const unrouted = [...iosLandingSegments()].filter((s) => s !== "series" && !cased.has(s));
     expect(unrouted).toEqual([]);
-    // Month pages open on the web rather than Home.
-    expect(fn.slice(0, fn.indexOf("\n    }\n"))).toMatch(/if EventSlug\.isMonthPage\(raw\) \{ return \.web\(url\) \}/);
+    // Month pages go to monthDestination rather than Home.
+    expect(fn.slice(0, fn.indexOf("\n    }\n"))).toMatch(
+      /if EventSlug\.isMonthPage\(raw\) \{ return monthDestination\(raw, url: url, now: now\) \}/,
+    );
+  });
+
+  // IOS-AUDIT-003. A month that has not ended opens Search limited to its
+  // days; one that has ended opens the web archive, since Search hides
+  // events that are over. Either way, never Home.
+  it("a month page opens Search for that month, or the web once it is over", () => {
+    const src = readFileSync(DEEP_LINK, "utf8");
+    const start = src.indexOf("static func monthDestination(");
+    expect(start, `monthDestination not found in ${DEEP_LINK}`).toBeGreaterThan(-1);
+    const fn = src.slice(start);
+    const body = fn.slice(0, fn.indexOf("\n    }\n"));
+    expect(body).toMatch(/guard let range = EventDayRange\(monthSlug: raw\), !range\.hasEnded\(now: now\) else \{ return \.web\(url\) \}/);
+    expect(body).toMatch(/filters\.dayRange = range/);
+    expect(body).toMatch(/return \.eventSearch\(query: "", filters: filters\)/);
+    expect(body).not.toMatch(/\.tab\(\.home\)/);
+  });
+
+  it("EventDayRange reads month slugs with the web's month names, in order", () => {
+    const src = readFileSync(DAY_RANGE, "utf8");
+    const block = src.match(/static let monthSlugs = \[([\s\S]*?)\]/);
+    expect(block, `monthSlugs literal not found in ${DAY_RANGE}`).not.toBeNull();
+    const ios = [...block![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(ios).toEqual([...MONTH_SLUGS]);
   });
 
   it("every series URL has the slug shape DeepLinkHandler opens on the web", () => {

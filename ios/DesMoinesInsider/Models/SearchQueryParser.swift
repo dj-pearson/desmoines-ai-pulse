@@ -6,6 +6,9 @@ import Foundation
 /// chip, a category tile, a Siri intent or a saved search.
 struct SearchFilters: Equatable {
     var datePreset: DateFilterPreset?
+    /// Specific days, from a `?from=&to=` link or a month page
+    /// (IOS-AUDIT-003). Never set together with `datePreset`.
+    var dayRange: EventDayRange?
     var freeOnly = false
     var openNow = false
     var areas: [LocationArea] = []
@@ -16,13 +19,20 @@ struct SearchFilters: Equatable {
 
     /// True when nothing here narrows a query. `tabHint` does not count.
     var isEmpty: Bool {
-        datePreset == nil && !freeOnly && !openNow && areas.isEmpty && category == nil
+        datePreset == nil && dayRange == nil && !freeOnly && !openNow && areas.isEmpty && category == nil
     }
 
     /// `self`, with every field `explicit` sets taking precedence.
     func merged(with explicit: SearchFilters) -> SearchFilters {
         var out = self
-        if let preset = explicit.datePreset { out.datePreset = preset }
+        if let preset = explicit.datePreset {
+            out.datePreset = preset
+            out.dayRange = nil
+        }
+        if let range = explicit.dayRange {
+            out.dayRange = range
+            out.datePreset = nil
+        }
         if explicit.freeOnly { out.freeOnly = true }
         if explicit.openNow { out.openNow = true }
         if !explicit.areas.isEmpty { out.areas = explicit.areas }
@@ -235,6 +245,7 @@ enum SearchQueryParser {
 /// One removable filter, as the chip row under the tab picker shows it.
 enum SearchFilterChip: Hashable, Identifiable {
     case date(DateFilterPreset)
+    case days(EventDayRange)
     case free
     case openNow
     case area(LocationArea)
@@ -243,6 +254,7 @@ enum SearchFilterChip: Hashable, Identifiable {
     var id: String {
         switch self {
         case .date(let preset): return "date-\(preset.rawValue)"
+        case .days(let range): return "days-\(range.first)-\(range.last)"
         case .free: return "free"
         case .openNow: return "open-now"
         case .area(let area): return "area-\(area.rawValue)"
@@ -253,6 +265,7 @@ enum SearchFilterChip: Hashable, Identifiable {
     var label: String {
         switch self {
         case .date(let preset): return preset.rawValue
+        case .days(let range): return range.label
         case .free: return "Free"
         case .openNow: return "Open now"
         case .area(let area): return area.displayName
@@ -266,6 +279,7 @@ extension SearchFilters {
     var chips: [SearchFilterChip] {
         var out: [SearchFilterChip] = []
         if let datePreset { out.append(.date(datePreset)) }
+        if let dayRange { out.append(.days(dayRange)) }
         if freeOnly { out.append(.free) }
         if openNow { out.append(.openNow) }
         out += areas.map { .area($0) }
@@ -282,6 +296,7 @@ extension SearchFilters {
         var out = self
         switch chip {
         case .date: out.datePreset = nil
+        case .days: out.dayRange = nil
         case .free: out.freeOnly = false
         case .openNow: out.openNow = false
         case .area(let area): out.areas.removeAll { $0 == area }
@@ -356,7 +371,8 @@ extension SearchFilters {
     }
 
     /// The filter keys the web's /events hub reads - `category`, `location`
-    /// (or `area`), `price` and `preset` - as search filters. One reader for
+    /// (or `area`), `price`, `preset`, and `from`/`to` when there is no known
+    /// preset (IOS-AUDIT-003) - as search filters. One reader for
     /// a saved_searches row the web wrote and for a shared /events?... link,
     /// so the two cannot drift. `query` is the search words, used only so a
     /// "tonight" search stays tonight: tonight has no preset of its own on
@@ -373,6 +389,9 @@ extension SearchFilters {
                 preset = .tonight
             }
             datePreset = preset
+        }
+        if datePreset == nil {
+            dayRange = EventDayRange(from: Self.webValue(keys["from"]), to: Self.webValue(keys["to"]))
         }
         if Self.webValue(keys["price"])?.lowercased() == "free" {
             freeOnly = true
