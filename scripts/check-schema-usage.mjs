@@ -46,7 +46,8 @@
  *   node scripts/check-schema-usage.mjs --all      # report everything, ignore baseline
  *   node scripts/check-schema-usage.mjs --update   # re-freeze the baseline
  *   node scripts/check-schema-usage.mjs --json     # machine-readable
- * Exits 1 if any un-baselined reference is found.
+ * Exits 1 if any un-baselined reference is found, or if the baseline holds an
+ * entry the scan no longer produces (WEB-QA-047).
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -778,6 +779,21 @@ function scanFile(file, schema, findings) {
  */
 const fingerprint = (f) => `${f.kind}|${f.file}|${f.name}`;
 
+/**
+ * WEB-QA-047: baseline entries the scan no longer produces. A stale entry is
+ * not harmless bookkeeping. Its fingerprint is kind|file|name, so when a file
+ * is deleted, or a hook stops calling an RPC, the entry keeps a pre-approved
+ * slot for that exact reference: put `user_sessions` back into
+ * useSessionTimeout.ts and the ratchet stays green. 21 such slots had built up
+ * by 2026-11-08, for five deleted files and two hooks that had dropped calls.
+ * Failing on them is what makes "this list must only ever SHRINK" hold without
+ * anyone remembering to run --update after a deletion.
+ */
+export function staleBaselineEntries(baseline, findings) {
+  const live = new Set(findings.map(fingerprint));
+  return [...baseline].filter((entry) => !live.has(entry)).sort();
+}
+
 function loadBaseline() {
   try {
     return new Set(JSON.parse(readFileSync(BASELINE, 'utf8')).findings);
@@ -1028,10 +1044,25 @@ function main() {
 
   const baseline = showAll ? new Set() : loadBaseline();
   const findings = all.filter((f) => !baseline.has(fingerprint(f)));
+  const stale = showAll ? [] : staleBaselineEntries(baseline, all);
 
   if (asJson) {
-    console.log(JSON.stringify({ findings, total: all.length, baselined: all.length - findings.length }, null, 2));
-    process.exit(findings.length ? 1 : 0);
+    console.log(
+      JSON.stringify({ findings, stale, total: all.length, baselined: all.length - findings.length }, null, 2)
+    );
+    process.exit(findings.length || stale.length ? 1 : 0);
+  }
+
+  if (stale.length) {
+    console.error(
+      `check-schema-usage: schema-baseline.json holds ${stale.length} entr${stale.length === 1 ? 'y' : 'ies'} ` +
+      'the scan no longer finds (the file was deleted or the reference removed):'
+    );
+    for (const entry of stale) console.error(`  ${entry}`);
+    console.error(
+      'Each one would let that exact reference come back without failing this check. ' +
+      'Run `npm run check-schema:update` and commit the smaller baseline.\n'
+    );
   }
 
   console.log(
@@ -1047,7 +1078,7 @@ function main() {
     if (!showAll && baseline.size) {
       console.log(`Baseline still holds ${baseline.size} finding(s) — run with --all to see them.`);
     }
-    process.exit(0);
+    process.exit(stale.length ? 1 : 0);
   }
 
   const drift = loadDriftAttribution();
