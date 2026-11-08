@@ -30,6 +30,12 @@ import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { sendEmail } from "../_shared/email.ts";
 import { newsletterEmail } from "../_shared/emailTemplates.ts";
 import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
+import {
+  DeliveryRecordError,
+  dispatchNewsletter,
+  type DispatchResult,
+  loadAllPages,
+} from "../_shared/newsletterDispatch.ts";
 
 const FROM_ADDRESS = Deno.env.get("NEWSLETTER_FROM")
   ?? "Des Moines Insider <events@desmoinesinsider.com>";
@@ -48,16 +54,19 @@ async function resolveSegment(
   supabase: ReturnType<typeof createClient>,
   segment: Segment,
 ): Promise<Recipient[]> {
-  let q = supabase
-    .from("newsletter_subscribers")
-    .select("email, first_name, unsubscribe_token")
-    .eq("status", "active");
-  if (segment.sources && segment.sources.length > 0) {
-    q = q.in("source", segment.sources);
-  }
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as Recipient[];
+  // Paginated: one unranged select stops at PostgREST's 1000-row cap, so a
+  // list past 1000 was counted as 1000 and the rest were never sent to.
+  return await loadAllPages<Recipient>(async (from, to) => {
+    let q = supabase
+      .from("newsletter_subscribers")
+      .select("email, first_name, unsubscribe_token")
+      .eq("status", "active");
+    if (segment.sources && segment.sources.length > 0) {
+      q = q.in("source", segment.sources);
+    }
+    const { data, error } = await q.order("email", { ascending: true }).range(from, to);
+    return { data: data as Recipient[] | null, error };
+  });
 }
 
 async function sendOne(
@@ -198,6 +207,13 @@ serve(async (req) => {
       const recipients = await resolveSegment(supabase, seg);
       const status =
         action === "schedule" ? "scheduled" : "sending";
+      // send_now is stamped as claimed now and due now. If this invocation is
+      // killed mid-send, reclaim_stuck_newsletter_campaigns flips the row back
+      // to 'scheduled' and claim_scheduled_newsletter_campaigns only picks up
+      // rows with a scheduled_for - without one the campaign sat in
+      // 'scheduled' forever, half sent. With one, the dispatcher resumes it
+      // and skips everyone this run recorded.
+      const nowIso = new Date().toISOString();
       const { data: campaign, error: insertError } = await supabase
         .from("newsletter_campaigns")
         .insert({
@@ -206,7 +222,8 @@ serve(async (req) => {
           body_html,
           segment: seg,
           status,
-          scheduled_for: action === "schedule" ? scheduled_for : null,
+          scheduled_for: action === "schedule" ? scheduled_for : nowIso,
+          claimed_at: action === "schedule" ? null : nowIso,
           recipient_count: recipients.length,
           sent_by: user.id,
         })
@@ -229,68 +246,39 @@ serve(async (req) => {
         );
       }
 
-      // send_now — dispatch and tally outcomes. EMAIL-WEBHOOK-001: also
-      // record one newsletter_deliveries row per recipient with the
-      // SES message id (column resend_message_id) so ses-events can correlate
-      // subsequent engagement events back to this campaign.
-      let delivered = 0;
-      let failed = 0;
-      const errors: string[] = [];
-      const deliveryRows: Array<{
-        campaign_id: string;
-        email: string;
-        resend_message_id: string | null;
-        status: string;
-        error_message: string | null;
-      }> = [];
-      // Cap concurrency to stay under the provider's send rate.
-      const batchSize = 5;
-      for (let i = 0; i < recipients.length; i += batchSize) {
-        const batch = recipients.slice(i, i + batchSize);
-        const settled = await Promise.allSettled(
-          batch.map((r) => sendOne(supabase, r, subject, body_html, preheader ?? null, campaign.id)),
-        );
-        settled.forEach((s, idx) => {
-          const recipient = batch[idx];
-          if (s.status === "fulfilled") {
-            delivered++;
-            deliveryRows.push({
-              campaign_id: campaign.id,
-              email: recipient.email,
-              resend_message_id: s.value.message_id,
-              status: "queued",
-              error_message: null,
-            });
-          } else {
-            failed++;
-            const reason = s.reason instanceof Error
-              ? s.reason.message
-              : String(s.reason);
-            if (errors.length < 5) errors.push(reason);
-            deliveryRows.push({
-              campaign_id: campaign.id,
-              email: recipient.email,
-              resend_message_id: null,
-              status: "bounced",
-              error_message: reason.slice(0, 500),
-            });
-          }
+      // send_now - dispatch and tally outcomes. EMAIL-WEBHOOK-001: one
+      // newsletter_deliveries row per recipient with the SES message id
+      // (column resend_message_id) so ses-events can correlate engagement
+      // events back to this campaign. dispatchNewsletter writes them after
+      // every batch, so a run killed part-way leaves a record a resume can
+      // skip; a failed write stops the send (see _shared/newsletterDispatch.ts).
+      let result: DispatchResult;
+      try {
+        result = await dispatchNewsletter({
+          campaignId: campaign.id,
+          recipients,
+          attempted: new Map(),
+          batchSize: 5, // stay under the provider's send rate
+          send: (r) => sendOne(supabase, r, subject, body_html, preheader ?? null, campaign.id),
+          recordDeliveries: async (rows) => {
+            const { error } = await supabase.from("newsletter_deliveries").insert(rows);
+            return { error: error ? error.message : null };
+          },
         });
+      } catch (err) {
+        if (!(err instanceof DeliveryRecordError)) throw err;
+        await supabase
+          .from("newsletter_campaigns")
+          .update({
+            status: "failed",
+            delivered: err.delivered,
+            failed: err.failed,
+            error_message: err.message.slice(0, 500),
+          })
+          .eq("id", campaign.id);
+        throw err;
       }
-
-      if (deliveryRows.length > 0) {
-        const { error: deliveriesError } = await supabase
-          .from("newsletter_deliveries")
-          .insert(deliveryRows);
-        if (deliveriesError) {
-          console.error(
-            "newsletter_deliveries insert failed:",
-            deliveriesError.message,
-          );
-          // Don't fail the whole send — the deliveries table is for
-          // tracking only; the actual emails already went out.
-        }
-      }
+      const { delivered, failed, errors } = result;
 
       const finalStatus = failed === 0
         ? "sent"
