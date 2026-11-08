@@ -8,7 +8,11 @@
 
 ## Handoff
 
-None. (When a loop splits work, write here: story id, what's done, what's next, files, traps.)
+**IOS-AUDIT-FEAT-046** (native annual-event series screen), slice 1 of 2 done.
+
+- Done: `ios/DesMoinesInsider/Models/EventSeries.swift` holds the web's EVENT_SERIES (all 20, every field) plus ports of `normaliseEventTitle`, `seriesForEvent`, `getEventSeries` and `seriesTitlePatterns`. vitest `src/lib/__tests__/iosEventSeriesParity.test.ts` fails on any list drift and runs each pair in `EventSeriesTests.normaliseCases` through the web normaliser. AC1 is met.
+- Next (slice 2): an `EventSeriesView` + view model that queries `events` with `.or(EventSeries.titlePatterns(def).joined(separator: ","))`, keeps rows where `EventSeries.series(title:venue:location:)` returns this def, and groups by Central year into the current/next edition and past years. Port the selection rules from `src/lib/eventSeriesView.ts` (`buildSeriesView`, `isModeratorHidden`, `isLinkable`) and the query from `src/hooks/useEventSeriesPage.ts` (it selects `is_hidden, hidden_at, archived_at, source_url_broken` on purpose: past editions are hidden rows and still count). Then make `DeepLinkHandler.eventSeriesDestination` return a native destination when `EventSeries.series(slug:)` knows the slug and keep `.web(url)` for unknown slugs (AC3); update the guard parse in `iosEventLinkParity.test.ts` if that function's shape changes.
+- Trap: the App Clip compiles `EventSlug.swift` but not Models/, so keep `EventSeries` out of anything the Clip shares.
 
 ## Loop log
 
@@ -24,3 +28,4 @@ None. (When a loop splits work, write here: story id, what's done, what's next, 
 | 2026-11-08 | IOS-AUDIT-FEAT-043 | this commit | `/restaurants/open-now`, `/new` and `/dietary/<diet>` (plus open-now's `?diet=` and the legacy `?diet=` index) open Dining with Open Now, New & coming soon or that diet applied, were the unfiltered tab; the link replaces earlier filters and never toggles off; kosher (no Dining key) still opens the plain tab; 7 new unit tests; not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-FEAT-044 | this commit | Dining diet keywords now copy the web's DIETS (the `/restaurants/dietary` table) instead of DIETARY_KEYWORDS: Kosher added to the table and the Dietary pill, keto also matches "ketogenic"; `/restaurants/dietary/kosher` opens Dining with kosher applied, was the plain tab; vitest `iosDietaryParity.test.ts` reads the Swift and fails on drift (negative-controlled); 3 new XCTest cases; not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-FEAT-045 | this commit | `/events/series/<slug>` (the 20 annual-event pages, in the sitemap and linked from every edition) opens that page on the web, was an event detail for the slug "series" that found nothing; bare or malformed series links open Home; "series" added to `EventSlug.landingSegments`, which the App Clip shares; vitest `iosEventLinkParity.test.ts` fails when a literal `/events/<segment>` route is missing from or stale in that set (negative-controlled); 5 new XCTest cases; not compiled (no Xcode here) |
+| 2026-11-08 | IOS-AUDIT-FEAT-046 (slice 1) | this commit | iOS has the web's 20 annual event series and ports of its title normaliser and matcher, for the native series screen; vitest `iosEventSeriesParity.test.ts` fails on list drift and checks the Swift normaliser cases against the web (negative-controlled); 7 new XCTest cases; screen and routing are the handoff; not compiled (no Xcode here) |
