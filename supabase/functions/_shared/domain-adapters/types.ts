@@ -41,11 +41,33 @@ export interface AdapterResult {
   items: AdapterEvent[];
   adapter: string;
   error?: string;
+  /**
+   * Listings the adapter found but did not fetch because the caller said they
+   * are already stored (AdapterFetchOptions.knownSourceIds). A run that skips
+   * everything it found returns zero items and is still a success: the
+   * dispatcher must not read that as "this adapter does not apply" and hand
+   * the URL to the Browserless + Claude path.
+   */
+  skippedKnown?: number;
+}
+
+export interface AdapterFetchOptions {
+  /**
+   * Source-side ids the caller already has rows for (WEB-BE-060). An adapter
+   * that understands ids skips those listings; one that does not ignores this.
+   * The id's meaning is per adapter: for catchdesmoines it is the Simpleview
+   * listing id from `/event/<slug>/<id>/`.
+   */
+  knownSourceIds?: ReadonlySet<string>;
 }
 
 export interface DomainAdapter {
   name: string;
   matches(url: string): boolean;
   supports(category: string): boolean;
-  fetch(url: string, category: string): Promise<AdapterResult>;
+  fetch(
+    url: string,
+    category: string,
+    options?: AdapterFetchOptions,
+  ): Promise<AdapterResult>;
 }

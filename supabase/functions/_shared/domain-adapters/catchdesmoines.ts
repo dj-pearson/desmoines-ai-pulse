@@ -27,13 +27,19 @@
  */
 
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+import type {
+  AdapterEvent,
+  AdapterFetchOptions,
+  AdapterResult,
+  DomainAdapter,
+} from "./types.ts";
 import { scrapeUrl } from "../scraper.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
 import {
   extractExternalUrlFallback,
   normalizeUrl,
   parseLdJsonEvent,
+  selectDetailUrls,
   toAdapterEvent,
 } from "./catchdesmoinesParse.ts";
 
@@ -73,7 +79,11 @@ export const catchdesmoinesAdapter: DomainAdapter = {
     return category === "events";
   },
 
-  async fetch(url: string, _category: string): Promise<AdapterResult> {
+  async fetch(
+    url: string,
+    _category: string,
+    options?: AdapterFetchOptions,
+  ): Promise<AdapterResult> {
     console.log(`🏛️ [catchdesmoines] Discovering events from ${url}`);
 
     const detailUrls = await discoverEventUrls(url);
@@ -89,7 +99,18 @@ export const catchdesmoinesAdapter: DomainAdapter = {
       `📌 [catchdesmoines] ${detailUrls.size} unique event URL(s) to fetch`,
     );
 
-    const urls = Array.from(detailUrls).slice(0, MAX_DETAIL_PAGES);
+    // Stored listings are dropped before the budget is applied, so the 100
+    // detail fetches go to events the database does not have yet.
+    const { toFetch: urls, skippedKnown } = selectDetailUrls(
+      detailUrls,
+      options?.knownSourceIds,
+      MAX_DETAIL_PAGES,
+    );
+    if (skippedKnown > 0) {
+      console.log(
+        `⏭️ [catchdesmoines] skipping ${skippedKnown} already-stored listing(s)`,
+      );
+    }
     const items: AdapterEvent[] = [];
 
     for (let i = 0; i < urls.length; i += DETAIL_CONCURRENCY) {
@@ -103,7 +124,7 @@ export const catchdesmoinesAdapter: DomainAdapter = {
     console.log(
       `✅ [catchdesmoines] ${items.length} events parsed from ${urls.length} detail pages`,
     );
-    return { success: true, items, adapter: "catchdesmoines" };
+    return { success: true, items, adapter: "catchdesmoines", skippedKnown };
   },
 };
 

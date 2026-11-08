@@ -11,7 +11,11 @@
  *   2. Import it here and add it to the `ADAPTERS` array
  */
 
-import type { AdapterResult, DomainAdapter } from "./types.ts";
+import type {
+  AdapterFetchOptions,
+  AdapterResult,
+  DomainAdapter,
+} from "./types.ts";
 import { runAdapters } from "./dispatch.ts";
 import { milbAdapter } from "./milb.ts";
 import { seatgeekAdapter } from "./seatgeek.ts";
@@ -27,7 +31,12 @@ import { venueProfileAdapter } from "./venueProfile.ts";
 // path (Browserless residential add-on, ScrapingBee, etc.) is in place.
 // import { hyveetixAdapter } from "./hyveetix.ts";
 
-export type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+export type {
+  AdapterEvent,
+  AdapterFetchOptions,
+  AdapterResult,
+  DomainAdapter,
+} from "./types.ts";
 
 /**
  * Order matters: every adapter whose `matches` returns true is attempted in this
@@ -67,6 +76,7 @@ const ADAPTERS: DomainAdapter[] = [
 export function tryDomainAdapter(
   url: string,
   category: string,
+  options?: AdapterFetchOptions,
 ): Promise<AdapterResult | null> {
-  return runAdapters(ADAPTERS, url, category);
+  return runAdapters(ADAPTERS, url, category, options);
 }
