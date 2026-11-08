@@ -64,6 +64,13 @@ class DeepLinkHandler @Inject constructor() {
          * [pendingRestaurantsOpenNow] until RestaurantsViewModel applies it.
          */
         data object RestaurantsOpenNow : Destination()
+
+        /**
+         * Search on Events with the kids-and-family filter on: /events/kids
+         * (iOS kidsDestination, AND-AUDIT-041). The flag waits in
+         * [pendingKidsEvents] until SearchViewModel applies it.
+         */
+        data object KidsEvents : Destination()
     }
 
     enum class TabDestination {
@@ -96,6 +103,10 @@ class DeepLinkHandler @Inject constructor() {
     // reason: the Dining view model may not exist when MainScreen navigates.
     private val _pendingRestaurantsOpenNow = MutableStateFlow(false)
     val pendingRestaurantsOpenNow: StateFlow<Boolean> = _pendingRestaurantsOpenNow.asStateFlow()
+
+    // An /events/kids link, held for SearchViewModel for the same reason.
+    private val _pendingKidsEvents = MutableStateFlow(false)
+    val pendingKidsEvents: StateFlow<Boolean> = _pendingKidsEvents.asStateFlow()
 
     /**
      * Attempts to parse a URL into a navigation destination.
@@ -171,10 +182,18 @@ class DeepLinkHandler @Inject constructor() {
         return pending
     }
 
+    /** Consumes an /events/kids link's filter: true once, then false. */
+    fun consumeKidsEvents(): Boolean {
+        val pending = _pendingKidsEvents.value
+        _pendingKidsEvents.value = false
+        return pending
+    }
+
     /** Internal, not private, so JVM tests can publish without an android.net.Uri. */
     internal fun publish(destination: Destination) {
         if (destination is Destination.Search) _pendingSearchQuery.value = destination.query
         if (destination is Destination.RestaurantsOpenNow) _pendingRestaurantsOpenNow.value = true
+        if (destination is Destination.KidsEvents) _pendingKidsEvents.value = true
         _pendingDestination.value = destination
     }
 
@@ -385,7 +404,8 @@ class DeepLinkHandler @Inject constructor() {
                 "today" -> return Destination.Search("today")
                 "tonight" -> return Destination.Search("tonight")
                 "free" -> return Destination.Search("free events")
-                "kids" -> return Destination.Search("kids events")
+                // The web's kids-and-family rule, not the text "kids events".
+                "kids" -> return Destination.KidsEvents
                 // The Map tab is the app's nearby-events surface (iOS .tab(.map)).
                 "near-me" -> return Destination.Tab(TabDestination.MAP)
                 // /events/series/:slug has no native screen.

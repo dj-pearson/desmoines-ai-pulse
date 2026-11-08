@@ -4,6 +4,7 @@ import com.desmoines.aipulse.util.DeepLinkHandler.Destination
 import com.desmoines.aipulse.util.DeepLinkHandler.TabDestination
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -42,5 +43,30 @@ class DeepLinkPendingFilterTest {
 
         assertEquals(Destination.RestaurantsOpenNow, handler.consumeDestination())
         assertTrue(handler.pendingRestaurantsOpenNow.value)
+    }
+
+    // /events/kids hands its filter to SearchViewModel the same way (AND-AUDIT-041).
+
+    @Test
+    fun `a kids link holds the filter until it is consumed once`() {
+        val handler = DeepLinkHandler()
+        handler.publish(Destination.KidsEvents)
+
+        assertEquals(Destination.KidsEvents, handler.pendingDestination.value)
+        assertTrue(handler.pendingKidsEvents.value)
+        assertTrue(handler.consumeKidsEvents())
+        assertFalse(handler.consumeKidsEvents())
+    }
+
+    @Test
+    fun `a kids link sets no search text, and a search link no kids filter`() {
+        val handler = DeepLinkHandler()
+        handler.publish(Destination.KidsEvents)
+        assertNull(handler.pendingSearchQuery.value)
+        assertFalse(handler.pendingRestaurantsOpenNow.value)
+
+        val other = DeepLinkHandler()
+        other.publish(Destination.Search("kids events"))
+        assertFalse(other.pendingKidsEvents.value)
     }
 }

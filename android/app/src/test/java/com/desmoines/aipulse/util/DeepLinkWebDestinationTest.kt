@@ -73,7 +73,7 @@ class DeepLinkWebDestinationTest {
         assertEquals(Destination.Search("today"), web("/events/today"))
         assertEquals(Destination.Search("tonight"), web("/events/tonight"))
         assertEquals(Destination.Search("free events"), web("/events/free"))
-        assertEquals(Destination.Search("kids events"), web("/events/kids"))
+        assertEquals(Destination.KidsEvents, web("/events/kids"))
         assertEquals(Destination.Search("events in west des moines"), web("/events/west-des-moines"))
         assertEquals(Destination.Search("events in ankeny"), web("/events/ankeny"))
         assertEquals(Destination.Tab(TabDestination.MAP), web("/events/near-me"))

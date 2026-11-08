@@ -178,9 +178,10 @@ fun MainScreen(
                     launchSingleTop = true
                 }
             }
-            // The query itself waits in DeepLinkHandler.pendingSearchQuery
+            // The query (or the /events/kids filter) waits in DeepLinkHandler
             // until SearchViewModel picks it up.
-            is DeepLinkHandler.Destination.Search -> {
+            is DeepLinkHandler.Destination.Search,
+            is DeepLinkHandler.Destination.KidsEvents -> {
                 navController.navigate(Route.Search.route) {
                     popUpTo(navController.graph.findStartDestination().id) {
                         saveState = true

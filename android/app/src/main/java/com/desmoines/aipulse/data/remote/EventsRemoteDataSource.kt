@@ -4,6 +4,7 @@ import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.EventSlug
+import com.desmoines.aipulse.util.KidsEventsFilter
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -27,6 +28,8 @@ data class EventsQuery(
     val dateStart: String? = null,
     val dateEnd: String? = null,
     val isFeatured: Boolean? = null,
+    /** The web's /events/kids rule, [KidsEventsFilter] (AND-AUDIT-041). */
+    val kidsOnly: Boolean = false,
     val limit: Int = Config.DEFAULT_PAGE_SIZE,
     val offset: Int = 0,
 )
@@ -93,6 +96,13 @@ class EventsRemoteDataSource @Inject constructor(
                 // Featured only
                 if (query.isFeatured == true) {
                     eq("is_featured", true)
+                }
+
+                // Kids and family: the web's KIDS_EVENTS_FILTER or-group.
+                if (query.kidsOnly) {
+                    or {
+                        KidsEventsFilter.ARMS.forEach { imatch(it.column, it.pattern) }
+                    }
                 }
             }
 

@@ -124,6 +124,16 @@ because Android has no new-openings or dietary filter. One device check closes i
 the Open now chip is on both times. The trap: if it is on only the second time, the view model is being
 created after MainScreen consumed the destination and the pending flag is not surviving until init.
 
+AND-AUDIT-041 (/events/kids runs the kids rule) is code-complete and JVM-tested. /events/kids now opens Search
+with a removable "Kids & family" chip (Destination.KidsEvents; the flag waits in pendingKidsEvents until
+SearchViewModel applies and consumes it) and lists upcoming events matching the web's KIDS_EVENTS_FILTER,
+sent as one supabase-kt or { imatch } group from util/KidsEventsFilter (held equal to the web by
+src/lib/__tests__/androidKidsEventsParity.test.ts). It used to full-text search "kids events". One device
+check closes it: open /events/kids (adb am start) and confirm a storytime or children's show with no
+"kids" in its title is listed, then remove the chip and confirm Search returns to suggestions. The trap:
+if the list is empty and logcat shows a PostgREST 400 "failed to parse logic tree", the double quotes
+around each pattern are not reaching the URL intact; the colons and parentheses inside need them.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -147,3 +157,4 @@ created after MainScreen consumed the destination and the pending flag is not su
 | 2026-11-08 | AND-AUDIT-038 | this commit | Article and review dates read the Des Moines day via EventSlug.centralDate (were formatted in the +00:00 offset, so evening posts showed tomorrow); articles fall back to created_at like iOS, and Guides cards now show date and reading time. 8 new ArticleTest and 1 new ReviewTest JVM tests pass on a stub harness (kotlinc 2.2.10), 14/14 across both suites; a mutation restoring offset-day formatting fails 5 of the article tests and the new review test. Compose screens and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-039 | this commit | Guide reading time rounds up (ceil of words / 200, min 1) to match web readTimeLabel and iOS readingMinutes; it truncated, so 201-399 word guides read one minute short on cards and detail. 3 new MarkdownParserTest JVM tests pass on a stub harness (kotlinc 2.2.10), 17/17 across MarkdownParserTest and ArticleTest; restoring truncation fails exactly 2 (rounding boundaries, newline/tab split). App module not compiled (no Android SDK); no device check needed beyond reading a card |
 | 2026-11-08 | AND-AUDIT-040 | this commit | /restaurants/open-now opens Dining with Open now on (was the unfiltered tab) and /events/near-me opens the Map tab (was Home), matching iOS. 3 new DeepLinkPendingFilterTest JVM tests pass with the 55 existing DeepLink tests (58/58) on a stub harness (kotlinc 2.2.10); a mutation dropping the pending flag and the near-me case fails the 3 expected tests. RestaurantsViewModel tests, MainScreen and app module not compiled (no Android SDK, no mockk in cache); no device check |
+| 2026-11-08 | AND-AUDIT-041 | this commit | /events/kids opens Search with a Kids & family filter that sends the web's KIDS_EVENTS_FILTER as one or-group (was a full-text search for "kids events", which missed storytimes and children's shows); the chip removes it, and the fuzzy fallback is skipped so adult events cannot return. 6 new JVM tests (4 KidsEventsFilterTest, 2 DeepLinkPendingFilterTest) pass with the updated DeepLink suites, 58/58 on a stub harness (kotlinc 2.2.10); a mutation restoring the text search and dropping "family" fails 3. New vitest parity test 4/4, fails on the same mutation. SearchViewModel, SearchScreen, EventsRemoteDataSource and app module not compiled (no Android SDK); no device check |

@@ -54,6 +54,7 @@ import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -99,6 +100,7 @@ fun SearchScreen(
     onSearchTextChanged: (String) -> Unit = {},
     onTabSelected: (SearchTab) -> Unit = {},
     onClearSearch: () -> Unit = {},
+    onClearKidsFilter: () -> Unit = {},
     onSaveCurrentSearch: () -> Unit = {},
     onRerunSavedSearch: (com.desmoines.aipulse.data.model.SavedSearch) -> Unit = {},
     onToggleSavedSearchAlerts: (com.desmoines.aipulse.data.model.SavedSearch) -> Unit = {},
@@ -137,6 +139,11 @@ fun SearchScreen(
             )
         }
 
+        // The /events/kids filter (AND-AUDIT-041), removable on its own.
+        if (state.kidsOnly) {
+            KidsFilterChip(onRemove = { haptics.light(); onClearKidsFilter() })
+        }
+
         // Save the active query as a saved search.
         if (state.hasSearched && state.searchText.isNotBlank()) {
             Row(
@@ -157,7 +164,7 @@ fun SearchScreen(
 
         // Content
         when {
-            state.searchText.isEmpty() && !state.hasSearched -> {
+            state.searchText.isEmpty() && !state.hasSearched && !state.kidsOnly -> {
                 val suggestionsViewModel: SearchSuggestionsViewModel = hiltViewModel()
                 val recentSearches by suggestionsViewModel.recentSearches.collectAsStateWithLifecycle()
                 val recentlyViewed by suggestionsViewModel.recentlyViewed.collectAsStateWithLifecycle()
@@ -195,7 +202,11 @@ fun SearchScreen(
                 EmptyStateView(
                     icon = Icons.Outlined.SearchOff,
                     title = "No Results",
-                    message = "Try a different search term.",
+                    message = if (state.kidsOnly) {
+                        "No kids and family events match. Try removing the filter."
+                    } else {
+                        "Try a different search term."
+                    },
                     actionTitle = "Clear",
                     onAction = onClearSearch,
                 )
@@ -260,6 +271,38 @@ private fun SearchBar(
             unfocusedBorderColor = Color.Transparent,
         ),
     )
+}
+
+// endregion
+
+// region Kids Filter
+
+@Composable
+private fun KidsFilterChip(onRemove: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.SpacingMd)) {
+        InputChip(
+            selected = true,
+            onClick = onRemove,
+            label = { Text("Kids & family") },
+            leadingIcon = {
+                Icon(
+                    Icons.Filled.FamilyRestroom,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+            },
+            trailingIcon = {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+            },
+            modifier = Modifier.semantics {
+                contentDescription = "Kids and family filter on. Double tap to remove."
+            },
+        )
+    }
 }
 
 // endregion
