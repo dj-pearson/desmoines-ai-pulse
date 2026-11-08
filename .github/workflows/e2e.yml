@@ -223,8 +223,8 @@ jobs:
     timeout-minutes: 30
     env:
       CI: 'true'
-      # Use repo secrets when present; fall back to placeholders so the Vite dev
-      # server boots even without backend creds (structural tests still run).
+      # Use repo secrets when present; fall back to placeholders so the build
+      # succeeds even without backend creds (structural tests still run).
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
       VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
@@ -245,30 +245,47 @@ jobs:
       - name: Install Playwright Chromium + system deps
         run: npx playwright install --with-deps chromium
 
-      # --global-timeout is what makes this lane usable. The step is
-      # continue-on-error, so a failing suite is absorbed by design - but the
-      # broad suites do not finish inside the 30-minute JOB timeout, and a
-      # job cancelled by timeout is not something continue-on-error can
-      # absorb. Every run of this lane has been cancelled, so it has produced
-      # a permanent red mark and no report at all.
+      # A PRODUCTION BUILD and Playwright's default workers, via
+      # playwright.broad.config.ts (WEB-CI-037). With playwright.config.ts
+      # this was one worker against a cold dev server, and every run stopped
+      # at the 25-minute --global-timeout below with 13 to 103 of 608 tests
+      # never started, the tail of mobile-responsive on mobile-chrome among
+      # them - while the job showed green.
       #
-      # At 25 minutes Playwright stops itself, writes the report for what it
-      # did run, and exits non-zero - which continue-on-error then swallows.
-      # The lane goes from "cancelled, no artifact" to "green, partial report",
-      # which is the difference between a signal and a habit of ignoring one.
-      # Five minutes of headroom is left for the upload step.
+      # --global-timeout stays as the backstop. The step is continue-on-error,
+      # so a failing suite is absorbed by design, but a job cancelled by its
+      # 30-minute timeout is not, and leaves no report. At 25 minutes
+      # Playwright stops itself and writes the report for what it did run.
+      # The next step says so in the job summary instead of leaving it green.
       - name: Run critical E2E suites (Chromium only)
+        id: broad
         continue-on-error: true
         run: >-
+          set -o pipefail;
           npx playwright test
+          --config=playwright.broad.config.ts
           --global-timeout=1500000
           tests/accessibility.spec.ts
           tests/links-and-buttons.spec.ts
           tests/forms.spec.ts
           tests/mobile-responsive.spec.ts
-          --project=chromium-desktop
-          --project=mobile-chrome
-          --grep-invert "Automated Accessibility Testing with Axe"
+          2>&1 | tee broad-output.txt
+
+      # continue-on-error makes the job green whatever happened, so the counts
+      # go where a reader looks. "did not run" means the global timeout hit
+      # and the lane only checked part of what it names.
+      - name: Summarise the broad suites
+        if: always()
+        run: |
+          {
+            echo "### Broad suites (quarantined): step outcome ${{ steps.broad.outcome }}"
+            echo '```'
+            grep -E '^ +[0-9]+ (passed|failed|flaky|skipped|interrupted|did not run)' broad-output.txt || echo 'no Playwright summary found'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -qE '^ +[0-9]+ did not run' broad-output.txt; then
+            echo "::warning title=Broad suites incomplete::Playwright hit --global-timeout; some tests never ran."
+          fi
 
       - name: Upload Playwright report
         if: always()
