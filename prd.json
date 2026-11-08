@@ -12046,8 +12046,8 @@
         "It still warns when a non-critical chunk over the threshold is preloaded (negative control in a test)",
         "Critical path unchanged"
       ],
-      "passes": false,
-      "notes": "Seen in the WEB-PERF-067 loop on every build and measure run."
+      "passes": true,
+      "notes": "Seen in the WEB-PERF-067 loop on every build and measure run. | The heavy-preload check in remove-lazy-preloads now lives in an exported findHeavyPreloads() that skips CRITICAL_PATH_CHUNKS (vendor-react, vendor-react-ecosystem, vendor-supabase), matched on chunk name rather than filename prefix. A clean vite build went from 1 warning (vendor-supabase 216 KB) to 0, and the critical path is unchanged at 174.7 KB. heavyPreloads.test.ts covers both halves and pins CRITICAL_PATH_CHUNKS to what manualChunks forces; negative controls on the real function fail as expected (no exemption: 2 tests fail; prefix match: 1 fails)."
     },
     {
       "priority": 3,
@@ -12173,8 +12173,8 @@
         "Label the model-written blocks on HotelDetails with AIDisclosureBadge as EventAiAnswers does for Quick Facts",
         "Check whether HotelSchema publishes any of that text as structured-data fact (description) and decide whether that is acceptable"
       ],
-      "passes": false,
-      "notes": "Filed 2026-11-08 by the seo-geo loop while fixing WEB-SEO-060."
+      "passes": true,
+      "notes": "Filed 2026-11-08 by the seo-geo loop while fixing WEB-SEO-060. | The hotels-content.json agent batch wrote description, short_description, geo_summary and geo_key_facts for all 124 rows, and nothing else writes those fields. \"About This Hotel\" now lives in src/components/hotels/HotelAbout.tsx and always shows an AI-assisted badge; it has to be unconditional because no column records who wrote the text. HotelSchema keeps `description`, the same way the Event node carries AI-enhanced text, and geo_summary/geo_key_facts appear in no schema node. Verified with vitest HotelAbout 5/5 (the source guard fails on the old page) and a new stay-pass2 smoke test that fails on an old-page vite build and passes now; stay + stay-pass2 are 18/18."
     },
     {
       "priority": 2,
@@ -12273,7 +12273,8 @@
         "Give the scan an explicit timeout or make it cheaper so it passes reliably in the full run",
         "Three consecutive full runs pass"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "Reproduced: the src/ scan took 2.2s alone and 2.7-3.8s in full runs (5s timeout), and failed 2/2 with \"Test timed out in 5000ms\" at 7.2s under 16 CPU burners. checkSource now skips without parsing any file that has neither `like.` nor a backslash. That is exact: 182 of 1,015 files are parsed, with the same findings as a full parse over src/ (0) and supabase/functions/ (13). The test also gets an explicit 15s timeout. Result: 3/3 pass under the same burners, full vitest 3214/3214 three runs in a row with the scan at 955-1391ms, and the negative control (skip narrowed to /like\\./) fails both new tests. Handoff: docs/improvement-loops/lanes/reliability.md"
     },
     {
       "priority": 3,
@@ -12285,8 +12286,8 @@
         "Typing \"?\" in an input or textarea still does nothing",
         "A test presses \"?\" the way a real keyboard sends it (shiftKey true) and asserts the dialog opens"
       ],
-      "passes": false,
-      "notes": "Found in the WEB-PERF-066 loop (performance lane) while checking the lazy KeyboardShortcutListener in Chrome."
+      "passes": true,
+      "notes": "Found in the WEB-PERF-066 loop (performance lane) while checking the lazy KeyboardShortcutListener in Chrome. | use-keyboard-shortcuts.ts now opens help on key \"?\" with no Ctrl/Cmd/Alt instead of requiring !shiftKey (US \"?\" is Shift+/), still ignored in inputs. New src/hooks/__tests__/keyboardShortcutsHelp.test.tsx (listener + real KeyboardShortcutsModal, keydown with shiftKey true) fails 1/3 on old code, passes 3/3; vitest 3214/3215 (postgrestFilters scan timed out under load, 12/12 alone), type ratchet 30/30, eslint clean."
     },
     {
       "priority": 2,
@@ -12313,8 +12314,8 @@
         "Exercised on a local Postgres stub: an admin-role activation fails, the confirm RPC still activates, re-apply is a no-op",
         "Tightening an RLS write: confirm no shipped client (web admin only) relies on the activation path before release"
       ],
-      "passes": false,
-      "notes": "Found during the 2026-11-08 marketing-growth loop (WEB-ADS-029). Needs a migration and an owner apply."
+      "passes": true,
+      "notes": "Found during the 2026-11-08 marketing-growth loop (WEB-ADS-029). Needs a migration and an owner apply. | Done in code: migration 20261108000083 adds a SECURITY INVOKER BEFORE INSERT OR UPDATE trigger on newsletter_subscribers that refuses a fresh 'active' (42501) from anon/authenticated, so admin sessions can no longer activate unconfirmed addresses via PostgREST while newsletter_confirm_by_token (SECURITY DEFINER), service_role and postgres still can. Reproduced and fixed on local Postgres 16 (admin pending/unsubscribed/bounced -> active refused after, admin unsubscribe/bounce/edit-active allowed, confirm RPC activates with token spend and consent row, re-apply no-op; two trigger negative controls fail), new vitest 6/6 with three negative controls, full vitest 3218/3218. Owner: apply 20261108000083."
     },
     {
       "priority": 3,
@@ -12333,14 +12334,14 @@
       "priority": 2,
       "id": "AND-AUDIT-036",
       "title": "Restaurant open-now reads the phone's clock, not Des Moines time",
-      "passes": false,
+      "passes": true,
       "description": "Restaurant.isOpenNow (data/model/Restaurant.kt ~line 119) defaults to java.time.LocalDateTime.now(), which is the device's zone. business_hours are Des Moines local hours, so a visitor whose phone is still on Eastern or Pacific time, or on UTC, sees the wrong open/closed badge. The Open now filters in RestaurantsViewModel and DiscoverViewModel also include or drop the wrong places. The day-of-week can also be off by one near midnight.",
       "acceptanceCriteria": [
         "isOpenNow evaluates against the Des Moines wall clock (LocalDateTime.now(EventSlug.CENTRAL), or a ZonedDateTime instant converted to Central)",
         "RestaurantsScreen badge, RestaurantsViewModel open-now filter and DiscoverViewModel open-now filter all go through the same Central-time evaluation",
         "A JVM test pins a UTC instant (e.g. 02:00 UTC, which is 9pm Central the previous weekday) and asserts the previous weekday's hours are used"
       ],
-      "notes": "Found in the AND-AUDIT-032 loop, 2026-11-08."
+      "notes": "Found in the AND-AUDIT-032 loop, 2026-11-08. | Restaurant.isOpenNow now converts Instant.now() to America/Chicago through a new isOpenAt (it used LocalDateTime.now() in the phone's zone), so the Restaurants badge and the Restaurants and Discover Open now filters share one Central-time evaluation. 5 new RestaurantOpenNowTest JVM tests pass on a stub harness (kotlinc 2.2.10), and a UTC-reading mutation fails exactly the 4 cross-zone tests; the app module was not compiled (no Android SDK) and there's no device check yet. The worktree started on 65138139 (a main hotfix), not the rolling branch, so it was reset to claude/continuous-improvement-loops-76i72u (47102cca) before any work and the commit sits on that. Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "WEB-QA-057",
@@ -12366,8 +12367,153 @@
         "Tests cover suppressed and not-suppressed"
       ],
       "priority": 2,
+      "passes": true,
+      "notes": "Filed 2026-11-08 from the owner's WEB-FEAT-063 decision. For the features lane. | The event reminder card now asks a new no-argument SECURITY DEFINER RPC, my_reminder_emails_unsubscribed (migration 20261108000081, authenticated only, reads the caller's own auth.users address), and when it returns true it says reminders won't be emailed, drops the \"We'll send you\" line, shows a \"Reminder saved, but not emailed\" toast and offers Resubscribe via newsletter-subscribe. Sending is unchanged (still marketing). The migration ran twice in PGlite (true/false/bounce-only false/no session false, anon denied). The new vitest file passes 6/6 and all 6 fail against the old hook and card."
+    },
+    {
+      "id": "WEB-FEAT-066",
+      "title": "Advanced search drops a multi-day event from its second day",
+      "description": "As a visitor using /search/advanced or re-running a saved search, I need an event that is still running to show up. searchEvents filtered date >= max(start of today Central, the 'from' date) with no end_date arm, so on the State Fair's third morning 'state fair' found the Grandstand concert and not the fair, and a 'from' date inside a festival weekend dropped the festival. /events and site search already keep running events (WEB-FEAT-045).",
+      "acceptanceCriteria": [
+        "searchEvents sends upcomingOrRunningFilter(max(floor, from)) instead of a bare date floor",
+        "The text match and the window travel in one or= param as and(or(window),or(text)), never two .or() calls",
+        "The 'to' bound (date <= end of that Central day) is unchanged, so a dated search is an overlap test",
+        "A vitest evaluates the sent filters against fixture rows: running run kept, ended run and last year's edition excluded, text and window ANDed"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "DONE 2026-11-08 (events lane). useAdvancedSearch.searchEvents now sends upcomingOrRunningFilter folded with the text match as and(or(window),or(text)). New src/hooks/__tests__/useAdvancedSearch.running.test.ts 5/5; old code 1/5; negative control (window ORed with text) 3/5. vitest useAdvancedSearch + src/components/__tests__ 306/306, eslint clean, type-check ratchet 30/30, check-imports, check-list-columns, check-event-unpublish, check-event-time-tz, check-supabase-await, check-postgrest-filters pass. Not run against a live PostgREST. Same bare floor remains in nlp-search/search.ts (:531, :551) and the pSEO reads (PseoLiveListings, useAreaEvents), not touched. | useAdvancedSearch.searchEvents (/search/advanced, saved searches) used a bare date >= max(today, from) floor; it now sends upcomingOrRunningFilter at that bound, ANDed with the text match in one or= group, so a running State Fair or festival weekend stays in results. New useAdvancedSearch.running.test.ts 5/5 (old code 1/5, OR-instead-of-AND control 3/5); eslint, type-check ratchet 30/30 and the six event/PostgREST check scripts pass; not run against a live PostgREST."
+    },
+    {
+      "id": "WEB-FEAT-067",
+      "title": "/deals lists deals at restaurants that are closed for good or temporarily closed",
+      "description": "The restaurant page (venuePageDeals) shows no deals for a shut place, and the Happy hour now strip skips it. /deals and the explore deals row (useDeals) still listed them, and the strip links to /deals?category=restaurant&when=now, so the surfaces disagreed and a visitor could follow a deal to a page reading Temporarily closed with no Deals section.",
+      "acceptanceCriteria": [
+        "useDeals drops a restaurant deal whose restaurant is closed, permanently_closed, temporarily_closed, or Google CLOSED_TEMPORARILY / CLOSED_PERMANENTLY",
+        "Restaurants that have not opened yet (opening_soon, announced) keep their deals",
+        "Deals with no entity_id, non-restaurant deals, and deals whose restaurant is not returned are kept",
+        "A failed restaurant status read goes to handleError and the deals are listed unfiltered",
+        "The status projection is registered with check-list-columns",
+        "Vitest covers the filter with a negative control"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "fetchDeals + dropShutRestaurantDeals + isShutRestaurant; DEAL_RESTAURANT_STATUS_COLUMNS under check-list-columns 19/19. 7 new tests (2 go red with the filter removed), vitest 3219/3219, type-check ratchet 30/30, deals/things-to-do-hub/restaurants-hub specs 35/35. | /deals and the explore deals row (both use useDeals) now drop a deal whose restaurant is shut. fetchDeals reads DEAL_RESTAURANT_STATUS_COLUMNS for the restaurants the deals name, and dropShutRestaurantDeals applies isShutRestaurant, the same line the restaurant page draws (closed, temporarily_closed, Google CLOSED_*). Places that haven't opened yet keep their deals, and a failed status read lists the deals unfiltered via handleError. Verified with 7 new vitest tests (the negative control turns 2 red), full vitest 3219/3219, type-check ratchet 30/30, check-list-columns 19/19, and the deals, things-to-do-hub and restaurants-hub specs 35/35 on a production build."
+    },
+    {
+      "id": "WEB-SEC-068",
+      "title": "Anyone with the anon key can list who liked or voted on what (discussion_likes, photo_likes, content_helpful_votes)",
+      "description": "As a user, I need my likes and helpful votes kept private to me, because each of the three tables had a SELECT USING (true) policy with no TO clause, so the bundled anon key could walk every account's reactions with timestamps.",
+      "acceptanceCriteria": [
+        "Drop \"Anyone can view discussion likes\", \"Anyone can view photo likes\" and \"Users can view all helpful votes\"",
+        "Enumerate readers across web, iOS, Android, edge and SQL; no shipped client may lose a read it relies on",
+        "Owners keep reading their own rows; the likes tables need a new owner SELECT, because a DELETE ... WHERE goes through SELECT policies and a drop-only change turns unlike into a silent zero-row delete",
+        "Admins can read all rows",
+        "Reproduce before and after on Postgres with the original policies",
+        "identity-read baseline shrinks by the three tables; user_subscriptions stays until WEB-SEC-054's production probe"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Migration 20261108000080. Readers: none in src/, ios/ or android/; edge only _shared/userDataTables.ts (service role); toggle_discussion_like and update_user_reputation are SECURITY DEFINER. Local Postgres 16: anon 2/2/2 -> 0/0/0, owner own only, admin all, unlike/toggle/vote update unchanged, re-apply no-op; drop-only control gave unlike deleted=0. Baseline 11 -> 8. check-identity-reads exits 1 with the migration removed. test:offline 64/64. Not applied to production from here. | Migration 20261108000080 drops the USING (true) SELECT policies on discussion_likes, photo_likes and content_helpful_votes (anon could list who liked or voted on what). It adds an owner read on the two likes tables, which had none, so a drop alone would have made the PostgREST unlike delete 0 rows. It also adds an admin read on all three. Readers enumerated (none in src/ios/android; edge reads as service role; the SQL readers are SECURITY DEFINER). Reproduced and verified on local Postgres 16: anon 2/2/2 -> 0/0/0, owner sees own rows only, admin sees all, unlike/toggle RPC/vote update unchanged, re-apply no-op, drop-only control gives deleted=0. identity-read baseline 11 -> 8 by hand, keeping user_subscriptions. Not applied to production."
+    },
+    {
+      "id": "IOS-AUDIT-002",
+      "title": "iOS: /events/near-me, /events/date-night and month-archive links open Home",
+      "description": "The app claims /events/* in the AASA. DeepLinkHandler.eventDestination listed near-me, date-night and the /events/<month>-<year> archive (in the sitemap and linked from MonthLinks) as landing segments with no route, so they fell through to .tab(.home). Home shows neither nearby events nor that month. Fix: near-me opens the Map tab (the nearby-events surface), and date-night and month pages open the web page in SafariView, since neither has a native screen. Bare /events/series remains the only segment that lands on Home.",
+      "acceptanceCriteria": [
+        "/events/near-me (with or without query) opens the Map tab",
+        "/events/date-night and /events/<month>-<yyyy> open the web page via .web(url)",
+        "Month-like event slugs (june-bug-2026, june-2026-concert) still open the event",
+        "Every EventSlug.landingSegments entry except series routes somewhere other than Home (XCTest)",
+        "vitest iosEventLinkParity fails when a landing segment has no case in eventDestination"
+      ],
+      "priority": "low",
+      "passes": true,
+      "notes": "/events/near-me links now open the Map tab, and /events/date-night and month-archive links open the web page. All three used to open Home. Verified with 6 new XCTest cases (not compiled, since there is no Xcode here) and vitest iosEventLinkParity plus iosEventSeriesParity, 8/8 passing. The new parity case was negative-controlled twice. | /events/near-me links now open the Map tab, and /events/date-night and month-archive links (/events/june-2026) open the web page. All three used to open Home. Verified with 6 new XCTest cases in DeepLinkHandlerTests (not compiled, since there is no Xcode here) and vitest iosEventLinkParity plus iosEventSeriesParity, 8/8 passing. The new parity case was negative-controlled twice."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-068",
+      "title": "Natural-language search (nlp-search) drops running events, with or without a 'when' window",
+      "description": "supabase/functions/nlp-search/search.ts applies q.gte('date', window.start).lte('date', window.end) for a 'when' facet (:531) and b.gte('date', centralTodayStartUtc(now)) with no window (:551), with no end_date arm, so 'things to do this weekend' omits a festival that opened Friday and 'state fair' on day three omits the fair.",
+      "acceptanceCriteria": [
+        "Both reads send date.gte.<lower>,end_date.gte.<lower> (overlap with window.end kept)",
+        "A Deno or node-shim test evaluates the sent filters against fixture rows",
+        "Response shape unchanged"
+      ],
       "passes": false,
-      "notes": "Filed 2026-11-08 from the owner's WEB-FEAT-063 decision. For the features lane."
+      "notes": "Found 2026-11-08 by the events lane while fixing advanced search; not touched."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-063",
+      "title": "pSEO event listings and neighborhood guides drop running and untimed events at now()",
+      "description": "PseoLiveListings.fetchListings filters .gte('date', new Date().toISOString()) and useAreaEvents filters .gte('date', now) .lt('date', until), so a festival vanishes from pSEO landing pages on day two and an untimed event (19:31:58 sentinel) vanishes at 7:31 PM on its own day.",
+      "acceptanceCriteria": [
+        "Both reads use upcomingOrRunningFilter(upcomingFloorUtc()) (temporal range kept as an overlap)",
+        "Vitest evaluates the sent filters against fixture rows"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the events lane; src/pseo is seo-geo's, so left for that lane."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-FEAT-069",
+      "title": "/deals links a deal to a merged duplicate restaurant page",
+      "description": "useDealVenueLinks resolves deals.entity_id to restaurants.slug without checking is_merged, so a deal curated against a duplicate row that was later merged links to the duplicate rather than the kept restaurant. Check whether merged rows keep a pointer to the survivor and link there.",
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-069",
+      "title": "swipe_session_participants is anon-readable while iOS and Android read it",
+      "description": "As a user in a group swipe session, I need my participation visible only to the session's members, because swipe_session_participants is still on the identity-read baseline with a public SELECT and both mobile apps read it directly, so tightening it is a multi-release change.",
+      "acceptanceCriteria": [
+        "Enumerate the reads in ios/.../SwipeSessionService.swift and android/.../GroupSessionRemoteDataSource.kt",
+        "Scope SELECT to members of the same session (a SECURITY DEFINER membership helper, so the policy does not recurse) plus admins, and only if every shipped binary reads only its own sessions",
+        "If a shipped binary reads beyond that, add an RPC first and wait for MIN_SUPPORTED_APP_VERSION"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while closing the likes and votes exposure. Not started."
+    },
+    {
+      "priority": "low",
+      "id": "IOS-AUDIT-003",
+      "title": "iOS: month-archive links need a native month view (custom date range in SearchFilters)",
+      "description": "/events/<month>-<year> now opens the web page because SearchFilters has date presets only and no from/to range. That same gap means /events?from=&to= links drop their dates (eventsHubDestination ignores from/to). Adding a custom date range to SearchFilters would let both open natively in Search on Events.",
+      "acceptanceCriteria": [
+        "SearchFilters carries an optional date range that Search applies to events",
+        "/events/june-2026 and /events?from=2026-06-01&to=2026-06-30 open Search on Events limited to that range",
+        "XCTest covers range parsing and the month-boundary days in Central time"
+      ],
+      "passes": false,
+      "notes": "Found while doing IOS-AUDIT-NEW-ios."
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-037",
+      "title": "Deal Active now reads the phone's clock, not Des Moines time",
+      "passes": false,
+      "description": "Deal.isActiveNow (data/model/Deal.kt ~line 82) defaults to OffsetDateTime.now(), which uses the phone's offset. Deal days_of_week and start_time/end_time are Des Moines local, so on a phone outside Central the DealsScreen Active badge and the DealsViewModel activeNowOnly filter use the wrong weekday and minute. Since AND-AUDIT-036 they can also disagree with the restaurant Open badge.",
+      "acceptanceCriteria": [
+        "isActiveNow evaluates the recurring schedule on the Des Moines wall clock (OffsetDateTime.now(EventSlug.CENTRAL) or an Instant converted to Central)",
+        "DealsScreen badge and DealsViewModel activeNowOnly filter both go through it",
+        "A JVM test pins a UTC instant that falls on the previous weekday in Central and asserts that weekday's schedule is used"
+      ],
+      "notes": "Found in the AND-AUDIT-036 loop, 2026-11-08."
+    },
+    {
+      "id": "WEB-QA-058",
+      "title": "restaurants-dietary 'Show more reveals the fetched rows' needs a retry in the full smoke run",
+      "description": "Round 14's background smoke run (810 tests, chromium-desktop) needed one retry on tests/restaurants-dietary.spec.ts:94. It passes 5/5 alone with --repeat-each=5, so it is load-dependent, not a regression from WEB-FEAT-064.",
+      "acceptanceCriteria": [
+        "Reproduce with --repeat-each=20 --workers=4",
+        "Wait on the settled list (row count or a stable hook) before clicking Show more",
+        "20/20 under load"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-11-08 by the orchestrator's background smoke run on c0a65429."
     }
   ]
 }
