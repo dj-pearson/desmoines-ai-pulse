@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. IOS-AUDIT-003 gave Search a custom day range, so month pages and `/events?from=&to=` open natively; `/events/date-night` is the one landing page left on the web. A month that has ended still opens the web archive, because Search never lists events that are over.
+None. `/events/date-night` and `/stay/near/<venue>` are the two shared pages that still open on the web. `/events/kids` searches the keyword "kids", which misses the web's family, storytime and children matches (KIDS_EVENTS_FILTER); that is the next parity gap worth a story. `iosLinkSegmentParity.test.ts` now fails when the web adds a literal page under any claimed slug prefix.
 
 ## Loop log
 
@@ -30,3 +30,4 @@ None. IOS-AUDIT-003 gave Search a custom day range, so month pages and `/events?
 | 2026-11-08 | IOS-AUDIT-001 | this commit | an archived past edition opened from a series screen (or an /events/<id> link to one) shows "This event has already happened", was "no longer available" over its content; on PGRST116 the detail takes the web's second look (classifyUnlisted) via `EventsService.fetchArchivedEvent`, hidden and merged rows stay unavailable; 8 new XCTest cases; not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-002 | this commit | `/events/near-me` opens the Map tab, `/events/date-night` and the month archive (`/events/june-2026`, in the sitemap and MonthLinks) open the web page; all three opened Home; 6 new XCTest cases, vitest `iosEventLinkParity` fails when a landing segment has no case in eventDestination (negative-controlled twice); not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-003 | this commit | `/events/<month>-<year>` opens Search on Events limited to that month in Central time (was the web page) until the month is over; `/events?from=&to=` keeps its days (were dropped), a known `preset` still wins as on the web; range shows as a removable chip and saves as `from`/`to`, which the alert job reads; 19 XCTest cases (one replaces the old month-page test) incl. DST month boundaries; vitest parity guards the month route and the month names (negative-controlled 3x); not compiled (no Xcode here) |
+| 2026-11-08 | IOS-AUDIT-004 | this commit | `/stay/near/<venue>` (SEO-045 hotels-near-a-venue, in the sitemap, linked from event and venue pages) opens the web page, was a hotel detail for the slug "near" that found nothing; bare or malformed links open the Stay list; 4 new XCTest cases plus the claimed-path sweep; vitest `iosLinkSegmentParity.test.ts` fails when the web adds a literal page under /stay, /restaurants, /attractions, /articles, /neighborhoods or /best-of that iOS would read as a slug (negative-controlled); not compiled (no Xcode here) |

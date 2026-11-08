@@ -18,6 +18,8 @@ import os
 ///   the Dining tab with that filter set
 /// - `desmoinesinsider.com/attractions/:id-or-slug` → Attraction detail
 /// - `desmoinesinsider.com/stay/:id-or-slug` → Hotel detail
+/// - `desmoinesinsider.com/stay/near/:venue` → the web page (no native
+///   hotels-near-a-venue screen)
 /// - `desmoinesinsider.com/articles/:id-or-slug` → Article reader
 /// - `desmoinesinsider.com/neighborhoods/:slug` → Neighborhood guide, or the
 ///   Neighborhoods hub for a slug the app has no guide for
@@ -232,6 +234,25 @@ final class DeepLinkHandler {
         attractionLinkId(raw)
     }
 
+    /// Path segments under /stay/ that are pages on the web, not hotels.
+    static let reservedStaySegments: Set<String> = ["near"]
+
+    /// /stay/near/<venue>, the web's hotels-near-a-venue page (SEO-045,
+    /// src/pages/HotelsNearVenue.tsx), opens on the web: the app has no
+    /// screen that lists hotels by distance from a venue. These URLs are in
+    /// the sitemap and linked from event and venue pages, so they get
+    /// shared. "near" used to pass slugOrUUID and open a hotel detail for
+    /// the slug "near", which found nothing. Bare or malformed /stay/near
+    /// links open the Stay list. Nil for any other segment: that is a hotel.
+    static func stayNearDestination(_ path: [String], url: URL) -> Destination? {
+        guard path.count >= 2, reservedStaySegments.contains(path[1]) else { return nil }
+        guard path.count == 3, UUID(uuidString: path[2]) == nil, slugOrUUID(path[2]) != nil else {
+            AppLogger.nav.warning("Rejected invalid stay/near link: \(path.joined(separator: "/").prefix(80))")
+            return .discover(.stay)
+        }
+        return .web(url)
+    }
+
     /// /restaurants/open-now, /restaurants/new and /restaurants/dietary[/<diet>]
     /// (IOS-AUDIT-FEAT-043). These used to open the Dining tab unfiltered, so
     /// a shared "open now" or "vegan" page showed every restaurant. The
@@ -440,6 +461,7 @@ final class DeepLinkHandler {
             AppLogger.nav.warning("Rejected invalid attraction link: \(rawId.prefix(50))")
             return .tab(.home)
         case "stay":
+            if let near = Self.stayNearDestination(path, url: url) { return near }
             // /stay/<slug> is the web's hotel page (IOS-DD-GUIDES-22).
             if let id = Self.slugOrUUID(rawId) { return .hotel(id: id) }
             AppLogger.nav.warning("Rejected invalid hotel link: \(rawId.prefix(50))")

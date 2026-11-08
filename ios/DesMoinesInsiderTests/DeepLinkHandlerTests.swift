@@ -177,6 +177,33 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.consumeDestination(), .article(id: "best-patios-2026"))
     }
 
+    // MARK: - /stay/near/<venue> is a web page, not a hotel (IOS-AUDIT-004)
+
+    func testStayNearVenueOpensTheWebPage() {
+        let url = URL(string: "https://desmoinesinsider.com/stay/near/wells-fargo-arena")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .web(url))
+    }
+
+    func testStayNearIsNeverReadAsAHotelSlug() {
+        let url = URL(string: "https://desmoinesinsider.com/stay/near/principal-park")!
+        XCTAssertNotEqual(handler.destination(for: url), .hotel(id: "near"))
+    }
+
+    func testBareOrMalformedStayNearOpensTheStayList() {
+        for path in ["/stay/near", "/stay/near/Not%20A%20Slug", "/stay/near/a/b",
+                     "/stay/near/550e8400-e29b-41d4-a716-446655440000"] {
+            let url = URL(string: "https://desmoinesinsider.com\(path)")!
+            XCTAssertEqual(handler.destination(for: url), .discover(.stay), path)
+        }
+    }
+
+    func testStayHotelSlugStillOpensTheHotel() {
+        let path = ["stay", "surety-hotel"]
+        let url = URL(string: "https://desmoinesinsider.com/stay/surety-hotel")!
+        XCTAssertNil(DeepLinkHandler.stayNearDestination(path, url: url))
+    }
+
     func testBadArticleSegmentFallsBackToArticlesHub() {
         XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/articles/Not%20A%20Slug")!))
         XCTAssertEqual(handler.consumeDestination(), .discover(.articles))
@@ -461,7 +488,7 @@ final class DeepLinkHandlerTests: XCTestCase {
         let paths = [
             "/search", "/search?q=brunch", "/search/advanced",
             "/attractions", "/attractions/science-center-of-iowa",
-            "/stay", "/stay/hotel-x", "/weekend", "/deals", "/best-of", "/best-of/brunch",
+            "/stay", "/stay/hotel-x", "/stay/near/wells-fargo-arena", "/weekend", "/deals", "/best-of", "/best-of/brunch",
             "/music", "/sports", "/outdoors",
             "/neighborhoods", "/neighborhoods/east-village",
             "/events", "/events/today", "/restaurants", "/restaurants/open-now",
