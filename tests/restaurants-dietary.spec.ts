@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
@@ -57,6 +57,42 @@ function json(route: Route, rows: unknown[]) {
   return route.fulfill({ status: 200, contentType: 'application/json', headers, body: JSON.stringify(rows) });
 }
 
+/**
+ * Click a control below the card grid once it has stopped moving.
+ *
+ * The cards are `content-visibility: auto` with a 420px placeholder, and a
+ * rendered card is 495px at 1280px wide. Scrolling to a control under the grid
+ * renders the rows around it about three frames later, which pushes it down
+ * 74px (measured: top 333 -> 407, page 9277 -> 9501px, every run). Playwright's
+ * "stable" check compares two consecutive frames, so it can pass before that
+ * shift; under load the shift then lands between mousedown and mouseup, the
+ * mouseup hits the section, and no click fires (WEB-QA-058: 2 of 60 at four
+ * workers, the button left focused and the list at 36).
+ */
+async function clickWhenSettled(control: Locator) {
+  await control.scrollIntoViewIfNeeded();
+  await expect
+    .poll(
+      () =>
+        control.evaluate(
+          (el) =>
+            new Promise<number>((resolve) => {
+              const start = el.getBoundingClientRect().top;
+              let frames = 0;
+              const tick = () => {
+                frames += 1;
+                if (frames < 10) requestAnimationFrame(tick);
+                else resolve(Math.abs(el.getBoundingClientRect().top - start));
+              };
+              requestAnimationFrame(tick);
+            }),
+        ),
+      { message: 'the control should hold still for 10 frames after it is scrolled into view' },
+    )
+    .toBe(0);
+  await control.click();
+}
+
 async function setup(page: Page, count: number) {
   await installFixtureBackend(page);
   const rows = Array.from({ length: count }, (_, i) => restaurant(i));
@@ -97,7 +133,7 @@ test.describe('/restaurants/dietary', () => {
 
     await expect(page.getByRole('heading', { level: 2, name: 'Mentions vegan (50)' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 3, name: /^Vegan Place / })).toHaveCount(36);
-    await page.getByRole('button', { name: 'Show 14 more' }).click();
+    await clickWhenSettled(page.getByRole('button', { name: 'Show 14 more' }));
     await expect(page.getByRole('heading', { level: 3, name: /^Vegan Place / })).toHaveCount(50);
     await expect(page.locator('[data-dietary-more]')).toContainText('Showing 50 of 50');
   });
