@@ -110,9 +110,10 @@ Review.formattedDate now take the Des Moines day through EventSlug.centralDate (
 offset Postgres sends, so anything posted after 6pm/7pm Central was dated tomorrow), an article with no
 published_at falls back to created_at as iOS does, and Guides list cards now show "<date> · <n> min read"
 under the title as iOS cards do. One device check closes it: open Guides and a guide published in the
-evening Central and confirm card and detail show the same, Central, date. The trap: reading time on Android
-still truncates (words / 200, MarkdownParserTest pins it) where iOS and web round up, so a 399-word guide
-reads 1 min here and 2 on iOS; that is a separate parity call, not this bug.
+evening Central and confirm card and detail show the same, Central, date. Reading time now rounds up as
+iOS and web do (AND-AUDIT-039), so a 399-word guide reads 2 min on all three; if a card and the web
+disagree by one minute, check the word split (web and Android split on any whitespace, iOS on space,
+newline and tab only) before suspecting the rounding.
 
 ## Loop log
 
@@ -135,3 +136,4 @@ reads 1 min here and 2 on iOS; that is a separate parity call, not this bug.
 | 2026-11-08 | AND-AUDIT-036 | this commit | Restaurant open/closed now reads the Des Moines wall clock: isOpenNow converts Instant.now() to America/Chicago via a new isOpenAt (was LocalDateTime.now() in the phone's zone), so the list badge and the Restaurants and Discover Open now filters agree with business_hours on any phone. 5 new RestaurantOpenNowTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation reading the instant in UTC fails exactly the 4 cross-zone tests. App module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-037 | this commit | Deal Active now reads the Des Moines clock: isActiveNow converts the instant to America/Chicago before taking weekday and minute (was the phone offset via OffsetDateTime.now()), and a 21:00-02:00 window now runs past midnight as on iOS (it could never match). 2 new DealTest JVM tests pass on a stub harness (kotlinc 2.2.10), 7/7 in the suite; the pre-fix Deal.kt fails exactly the 2 new tests. Existing recurring test inputs moved from Z to -05:00 so they still mean 4pm Central. DealsScreen, DealsViewModel and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-038 | this commit | Article and review dates read the Des Moines day via EventSlug.centralDate (were formatted in the +00:00 offset, so evening posts showed tomorrow); articles fall back to created_at like iOS, and Guides cards now show date and reading time. 8 new ArticleTest and 1 new ReviewTest JVM tests pass on a stub harness (kotlinc 2.2.10), 14/14 across both suites; a mutation restoring offset-day formatting fails 5 of the article tests and the new review test. Compose screens and app module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-039 | this commit | Guide reading time rounds up (ceil of words / 200, min 1) to match web readTimeLabel and iOS readingMinutes; it truncated, so 201-399 word guides read one minute short on cards and detail. 3 new MarkdownParserTest JVM tests pass on a stub harness (kotlinc 2.2.10), 17/17 across MarkdownParserTest and ArticleTest; restoring truncation fails exactly 2 (rounding boundaries, newline/tab split). App module not compiled (no Android SDK); no device check needed beyond reading a card |

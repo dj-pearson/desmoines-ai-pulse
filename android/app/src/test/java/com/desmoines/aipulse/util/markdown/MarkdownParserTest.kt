@@ -52,6 +52,30 @@ class MarkdownParserTest {
     @Test
     fun `reading time is words over 200 wpm, min 1`() {
         assertEquals(1, MarkdownParser.readingMinutes("just a few words"))
-        assertEquals(2, MarkdownParser.readingMinutes(List(400) { "word" }.joinToString(" ")))
+        assertEquals(2, MarkdownParser.readingMinutes(words(400)))
     }
+
+    // Web (Math.ceil) and iOS (.rounded(.up)) both round up; these pin the
+    // boundaries where truncation disagreed with them (AND-AUDIT-039).
+    @Test
+    fun `reading time rounds up like web and iOS`() {
+        assertEquals(1, MarkdownParser.readingMinutes(words(200)))
+        assertEquals(2, MarkdownParser.readingMinutes(words(201)))
+        assertEquals(2, MarkdownParser.readingMinutes(words(399)))
+        assertEquals(3, MarkdownParser.readingMinutes(words(401)))
+    }
+
+    @Test
+    fun `empty or whitespace content still reads one minute`() {
+        assertEquals(1, MarkdownParser.readingMinutes(""))
+        assertEquals(1, MarkdownParser.readingMinutes("  \n\t  "))
+    }
+
+    @Test
+    fun `newlines and tabs separate words like spaces`() {
+        val body = List(201) { "word" }.joinToString("\n\t")
+        assertEquals(2, MarkdownParser.readingMinutes(body))
+    }
+
+    private fun words(n: Int): String = List(n) { "word" }.joinToString(" ")
 }
