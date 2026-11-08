@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
@@ -213,8 +212,7 @@ class TripPlannerViewModel @Inject constructor(
 
     private fun recomputeDates() {
         val state = _uiState.value
-        val start = LocalDate.now().plusDays(state.startOffsetDays.toLong())
-        val end = start.plusDays((state.lengthDays - 1).toLong())
+        val (start, end) = TripDates.range(state.startOffsetDays, state.lengthDays)
         _uiState.update { it.copy(startDate = start.format(isoDate), endDate = end.format(isoDate)) }
     }
 }
