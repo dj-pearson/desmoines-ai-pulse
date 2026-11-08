@@ -69,7 +69,7 @@ Deno.test('fetchPublicUrl refuses a first host that resolves to a private addres
       : validateURLForSSRF(u, { allowedProtocols: ['http:', 'https:'] });
   await withStubbedFetch({}, async (calls) => {
     await assert.rejects(
-      fetchPublicUrl('https://menu.example.com/', {}, { validateHop: resolver }),
+      () => fetchPublicUrl('https://menu.example.com/', {}, { validateHop: resolver }),
       (err: unknown) => err instanceof UnsafeFetchError && /private/.test((err as Error).message),
     );
     assert.equal(calls.length, 0, 'the host was fetched before it was checked');
@@ -78,7 +78,7 @@ Deno.test('fetchPublicUrl refuses a first host that resolves to a private addres
 
 Deno.test('fetchPublicUrl refuses a public 302 onto the metadata address', async () => {
   await withStubbedFetch({ [`${SITE}/`]: redirect(METADATA) }, async (calls) => {
-    await assert.rejects(fetchPublicUrl(`${SITE}/`), UnsafeFetchError);
+    await assert.rejects(() => fetchPublicUrl(`${SITE}/`), UnsafeFetchError);
     assert.equal(calls.length, 1, 'the metadata address was fetched');
     assert.equal(calls[0].init.redirect, 'manual');
   });
