@@ -5,6 +5,8 @@ import os
 ///
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id-or-slug` → Event detail
+/// - `desmoinesinsider.com/events/near-me` → Map tab; `/events/date-night`
+///   and `/events/<month>-<year>` → the web page
 /// - `desmoinesinsider.com/events/series/:slug` → that annual-event series
 ///   natively, or on the web for a slug the app does not know
 /// - `desmoinesinsider.com/search?q=` → Search tab with the query
@@ -283,7 +285,16 @@ final class DeepLinkHandler {
     /// /events/<segment>: a landing page, an event id or slug, or Home
     /// (IOS-DD-PLATFORM-01). The web builds every event URL as
     /// <title>-<yyyy-mm-dd>, so a UUID-only check sent all of them to Home.
-    static func eventDestination(_ raw: String) -> Destination {
+    ///
+    /// Every web landing page has a case here (IOS-AUDIT-002). /events/near-me
+    /// opens the Map tab, the app's nearby-events surface. /events/date-night
+    /// and the monthly archive (/events/june-2026, linked from MonthLinks on
+    /// the events pages and listed in the sitemap) have no native screen, so
+    /// they open on the web. All three used to open Home, which shows neither
+    /// what is near nor that month. Only bare "series" still lands on Home;
+    /// src/lib/__tests__/iosEventLinkParity.test.ts fails when a landing
+    /// segment has no case here.
+    static func eventDestination(_ raw: String, url: URL) -> Destination {
         switch raw {
         case "this-weekend": return .discover(.weekend)
         case "today": return .search(query: "today")
@@ -291,9 +302,12 @@ final class DeepLinkHandler {
         case "kids": return .search(query: "kids events")
         case "west-des-moines", "ankeny", "urbandale", "johnston", "altoona", "clive", "windsor-heights", "waukee":
             return .search(query: "events in " + raw.replacingOccurrences(of: "-", with: " "))
+        case "near-me": return .tab(.map)
+        case "date-night": return .web(url)
         default: break
         }
-        if EventSlug.landingSegments.contains(raw) || EventSlug.isMonthPage(raw) { return .tab(.home) }
+        if EventSlug.isMonthPage(raw) { return .web(url) }
+        if EventSlug.landingSegments.contains(raw) { return .tab(.home) }
         if let id = EventSlug.linkId(raw) { return .event(id: id) }
         AppLogger.nav.warning("Rejected invalid event link: \(raw.prefix(50))")
         return .tab(.home)
@@ -394,7 +408,7 @@ final class DeepLinkHandler {
         switch type {
         case "events":
             if let series = Self.eventSeriesDestination(path, url: url) { return series }
-            return Self.eventDestination(rawId)
+            return Self.eventDestination(rawId, url: url)
         case "restaurants":
             // The web's canonical restaurant URL is /restaurants/:slug, so a
             // shared link is usually a slug (IOS-DD-RESTAURANTS-09). Landing

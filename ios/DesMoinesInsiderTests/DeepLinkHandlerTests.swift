@@ -265,9 +265,55 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/free"), .search(query: "free events"))
         XCTAssertEqual(dest("/events/west-des-moines"), .search(query: "events in west des moines"))
         XCTAssertEqual(dest("/events/this-weekend"), .discover(.weekend))
-        XCTAssertEqual(dest("/events/near-me"), .tab(.home))
-        XCTAssertEqual(dest("/events/june-2026"), .tab(.home))
         XCTAssertEqual(dest("/events/Bad%20Slug"), .tab(.home))
+    }
+
+    // MARK: - Landing pages that used to open Home (IOS-AUDIT-002)
+
+    private func site(_ path: String) -> URL {
+        URL(string: "https://desmoinesinsider.com\(path)")!
+    }
+
+    func testNearMeLinkOpensTheMap() {
+        XCTAssertEqual(dest("/events/near-me"), .tab(.map))
+        // The web's own state (origin, radius) has no Map equivalent; the
+        // link still opens the Map rather than Home.
+        XCTAssertEqual(dest("/events/near-me?from=ankeny&r=10"), .tab(.map))
+    }
+
+    func testDateNightLinkOpensTheWebPage() {
+        XCTAssertEqual(dest("/events/date-night"), .web(site("/events/date-night")))
+    }
+
+    func testMonthArchiveLinkOpensTheWebPage() {
+        XCTAssertEqual(dest("/events/june-2026"), .web(site("/events/june-2026")))
+        XCTAssertEqual(dest("/events/december-2027"), .web(site("/events/december-2027")))
+    }
+
+    func testMonthLikeSlugsThatAreNotMonthPagesAreUnchanged() {
+        // Not a month name, or not a bare <month>-<yyyy>: an event slug.
+        XCTAssertEqual(dest("/events/june-bug-2026"), .event(id: "june-bug-2026"))
+        XCTAssertEqual(dest("/events/june-2026-concert"), .event(id: "june-2026-concert"))
+        // Capitalised is malformed for a slug and not a month page either.
+        XCTAssertEqual(dest("/events/June-2026"), .tab(.home))
+    }
+
+    func testBareSeriesIsTheOnlyLandingSegmentThatOpensHome() {
+        for segment in EventSlug.landingSegments.sorted() {
+            let destination = dest("/events/\(segment)")
+            if segment == "series" {
+                XCTAssertEqual(destination, .tab(.home), segment)
+            } else {
+                XCTAssertNotEqual(destination, .tab(.home), segment)
+            }
+        }
+    }
+
+    func testLandingLinksAreRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(site("/events/near-me")))
+        XCTAssertEqual(handler.consumeDestination(), .tab(.map))
+        XCTAssertTrue(handler.handle(site("/events/may-2026")))
+        XCTAssertEqual(handler.consumeDestination(), .web(site("/events/may-2026")))
     }
 
     // MARK: - Event series (IOS-AUDIT-FEAT-045)

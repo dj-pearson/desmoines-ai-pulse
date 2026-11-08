@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. IOS-AUDIT-001 closed the known limit IOS-AUDIT-FEAT-046 left: an archived past edition now opens as a past event.
+None. IOS-AUDIT-002 gave every /events landing segment a destination other than Home except bare `series`. Still open in the same area: the month archive and date-night open on the web; a native month view needs a custom date range in `SearchFilters`, which has presets only.
 
 ## Loop log
 
@@ -28,3 +28,4 @@ None. IOS-AUDIT-001 closed the known limit IOS-AUDIT-FEAT-046 left: an archived 
 | 2026-11-08 | IOS-AUDIT-FEAT-046 (slice 2) | this commit | the series screen's data layer: `EventSeriesSchedule` ports the web's buildSeriesView rules (current and past editions, sweep-hidden listed unlinked, moderator-hidden dropped, archived linked, one row per day) and `EventsService.fetchSeriesRows` the web's series read; 12 new XCTest cases taken from the web's own cases; vitest parity now guards that read (negative-controlled); screen and routing are the handoff; not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-FEAT-046 (slice 3) | this commit | `/events/series/<slug>` for the 20 known series opens a native series screen (this year's dates or "<year> date not announced yet", past years newest first with the web's date line), was the web page; an unknown well-formed slug still opens the web; rows open with the Event the series read carries, so archived editions open and sweep-hidden ones are plain text; article links route there too; 11 new XCTest cases, vitest parity guards the routing (negative-controlled); not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-001 | this commit | an archived past edition opened from a series screen (or an /events/<id> link to one) shows "This event has already happened", was "no longer available" over its content; on PGRST116 the detail takes the web's second look (classifyUnlisted) via `EventsService.fetchArchivedEvent`, hidden and merged rows stay unavailable; 8 new XCTest cases; not compiled (no Xcode here) |
+| 2026-11-08 | IOS-AUDIT-002 | this commit | `/events/near-me` opens the Map tab, `/events/date-night` and the month archive (`/events/june-2026`, in the sitemap and MonthLinks) open the web page; all three opened Home; 6 new XCTest cases, vitest `iosEventLinkParity` fails when a landing segment has no case in eventDestination (negative-controlled twice); not compiled (no Xcode here) |

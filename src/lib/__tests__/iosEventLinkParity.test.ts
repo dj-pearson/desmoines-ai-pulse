@@ -47,6 +47,28 @@ describe("iOS event links know the web's /events pages (IOS-AUDIT-FEAT-045)", ()
     expect(stale).toEqual([]);
   });
 
+  // IOS-AUDIT-002. A landing segment with no case in eventDestination
+  // falls through to Home: /events/near-me, /date-night and the month
+  // archive all did. Bare "series" is the one segment meant to land there
+  // (/events/series/<slug> is handled before eventDestination is called).
+  it("every iOS landing segment except bare series has its own case in eventDestination", () => {
+    const src = readFileSync(DEEP_LINK, "utf8");
+    const start = src.indexOf("static func eventDestination(");
+    expect(start, `eventDestination not found in ${DEEP_LINK}`).toBeGreaterThan(-1);
+    const fn = src.slice(start);
+    const sw = fn.slice(0, fn.indexOf("default: break"));
+    const cased = new Set(
+      [...sw.matchAll(/^\s*case ((?:"[^"]+",?\s*)+):/gm)].flatMap((m) =>
+        [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]),
+      ),
+    );
+    expect(cased.size, "no case literals parsed from eventDestination").toBeGreaterThan(5);
+    const unrouted = [...iosLandingSegments()].filter((s) => s !== "series" && !cased.has(s));
+    expect(unrouted).toEqual([]);
+    // Month pages open on the web rather than Home.
+    expect(fn.slice(0, fn.indexOf("\n    }\n"))).toMatch(/if EventSlug\.isMonthPage\(raw\) \{ return \.web\(url\) \}/);
+  });
+
   it("every series URL has the slug shape DeepLinkHandler opens on the web", () => {
     const src = readFileSync(DEEP_LINK, "utf8");
     const fn = src.slice(src.indexOf("static func eventSeriesDestination"));
