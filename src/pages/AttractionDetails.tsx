@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { DetailBreadcrumb } from "@/components/seo/DetailBreadcrumb";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
@@ -480,25 +480,19 @@ export default function AttractionDetails() {
           `${attraction.type} ${BRAND.city}`,
         ].filter(Boolean) as string[]}
         modifiedTime={attraction.updated_at}
-        breadcrumbs={[
-          { name: "Home", url: "/" },
-          { name: "Attractions", url: "/attractions" },
-          { name: attraction.type, url: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-          { name: attraction.name, url: `/attractions/${attractionSlug}` },
-        ]}
       />
 
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-6 max-w-6xl">
-          {/* Breadcrumb Navigation */}
-          <Breadcrumbs
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Attractions", href: "/attractions" },
-              { label: attraction.type, href: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-              { label: attraction.name },
-            ]}
+          {/* WEB-SEO-054: nav and BreadcrumbList from one list. The old trail
+              had a {type} crumb at /attractions?type=..., which canonicalizes
+              to /attractions, so the schema named two items for one page. */}
+          <DetailBreadcrumb
             className="mb-4"
+            crumbs={[
+              { name: "Attractions", path: "/attractions" },
+              { name: attraction.name, path: `/attractions/${attractionSlug}` },
+            ]}
           />
 
           {/* Top Actions Bar: the page's one Share control. */}
