@@ -24,7 +24,8 @@ if (!inFile) {
   process.exit(2);
 }
 
-const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+const git = (...args) =>
+  execFileSync("git", args, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
 const tryGit = (...args) => {
   try {
     git(...args);
