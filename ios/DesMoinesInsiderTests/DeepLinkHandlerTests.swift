@@ -42,10 +42,46 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.consumeDestination(), .restaurant(id: "zombie-burger-drink-lab"))
     }
 
-    func testRestaurantLandingPageOpensTheTab() {
+    func testRestaurantLandingPageOpensTheFilteredTab() {
         let url = URL(string: "https://desmoinesinsider.com/restaurants/open-now")!
         XCTAssertTrue(handler.handle(url))
-        XCTAssertEqual(handler.consumeDestination(), .tab(.restaurants))
+        XCTAssertEqual(handler.consumeDestination(), .restaurantLanding(RestaurantLinkFilter(openNow: true)))
+    }
+
+    // MARK: - Restaurant landing pages (IOS-AUDIT-FEAT-043)
+
+    func testRestaurantLandingLinksCarryTheirFilter() {
+        XCTAssertEqual(dest("/restaurants/new"), .restaurantLanding(RestaurantLinkFilter(newOpenings: true)))
+        XCTAssertEqual(dest("/restaurants/dietary/vegan"), .restaurantLanding(RestaurantLinkFilter(diet: "vegan")))
+        XCTAssertEqual(dest("/restaurants/dietary/gluten-free"), .restaurantLanding(RestaurantLinkFilter(diet: "gluten-free")))
+        // The web's open-now diet filter and the legacy ?diet= index form.
+        XCTAssertEqual(dest("/restaurants/open-now?diet=Halal"),
+                       .restaurantLanding(RestaurantLinkFilter(openNow: true, diet: "halal")))
+        XCTAssertEqual(dest("/restaurants/dietary?diet=keto"), .restaurantLanding(RestaurantLinkFilter(diet: "keto")))
+    }
+
+    func testDietTheDiningFilterLacksOpensTheUnfilteredTab() {
+        // Kosher is a web diet with no Dining filter key; an unknown diet and
+        // the bare index have nothing to narrow by either.
+        XCTAssertEqual(dest("/restaurants/dietary/kosher"), .tab(.restaurants))
+        XCTAssertEqual(dest("/restaurants/dietary/paleo"), .tab(.restaurants))
+        XCTAssertEqual(dest("/restaurants/dietary"), .tab(.restaurants))
+        // An unknown open-now diet drops the diet, not the open-now filter.
+        XCTAssertEqual(dest("/restaurants/open-now?diet=paleo"), .restaurantLanding(RestaurantLinkFilter(openNow: true)))
+    }
+
+    func testLandingLinkPresetIsOnlyAnExactMatch() {
+        XCTAssertEqual(RestaurantLinkFilter(openNow: true).preset, .openNow)
+        XCTAssertEqual(RestaurantLinkFilter(newOpenings: true).preset, .newOpenings)
+        XCTAssertNil(RestaurantLinkFilter(openNow: true, diet: "vegan").preset)
+        XCTAssertNil(RestaurantLinkFilter(diet: "vegan").preset)
+    }
+
+    func testRestaurantLinkIsStagedUntilConsumed() {
+        let link = RestaurantLinkFilter(diet: "vegan")
+        handler.stageRestaurantLink(link)
+        XCTAssertEqual(handler.consumeRestaurantLink(), link)
+        XCTAssertNil(handler.consumeRestaurantLink())
     }
 
     func testMalformedRestaurantSlugOpensTheTab() {

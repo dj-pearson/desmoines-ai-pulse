@@ -275,7 +275,7 @@ struct ArticleDetailView: View {
         // (IOS-AUDIT-FEAT-040).
         case .bestOfCategory(let slug): return .bestOfCategory(slug)
         // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
-        case .tab, .search, .eventSearch, .web: return nil
+        case .tab, .restaurantLanding, .search, .eventSearch, .web: return nil
         }
     }
 

@@ -9,6 +9,8 @@ import os
 /// - `desmoinesinsider.com/events?q=&category=&location=&price=&preset=` →
 ///   Search tab on Events with those filters; bare `/events` → Home
 /// - `desmoinesinsider.com/restaurants/:id-or-slug` → Restaurant detail
+/// - `desmoinesinsider.com/restaurants/open-now`, `/new`, `/dietary/:diet` →
+///   the Dining tab with that filter set
 /// - `desmoinesinsider.com/attractions/:id-or-slug` → Attraction detail
 /// - `desmoinesinsider.com/stay/:id-or-slug` → Hotel detail
 /// - `desmoinesinsider.com/articles/:id-or-slug` → Article reader
@@ -44,6 +46,9 @@ final class DeepLinkHandler {
         /// (IOS-AUDIT-FEAT-040). Only ever a well-formed lowercase slug; whether
         /// an active category has it is answered when the link opens.
         case bestOfCategory(slug: String)
+        /// The Dining tab narrowed the way a web restaurant landing page is:
+        /// /restaurants/open-now, /new, /dietary/<diet> (IOS-AUDIT-FEAT-043).
+        case restaurantLanding(RestaurantLinkFilter)
         /// The Search tab with this text (IOS-DD-PLATFORM-02).
         case search(query: String)
         /// The Search tab on Events with these words and filters: a filtered
@@ -57,7 +62,22 @@ final class DeepLinkHandler {
         case web(URL)
     }
 
+    /// A restaurant landing link waiting for the Dining list to apply it.
+    /// MainTabView stages it and switches tabs; RestaurantsView consumes it,
+    /// so a link that arrives before the tab has ever been shown still lands
+    /// (IOS-AUDIT-FEAT-043).
+    private(set) var pendingRestaurantLink: RestaurantLinkFilter?
+
     private init() {}
+
+    func stageRestaurantLink(_ link: RestaurantLinkFilter) {
+        pendingRestaurantLink = link
+    }
+
+    func consumeRestaurantLink() -> RestaurantLinkFilter? {
+        defer { pendingRestaurantLink = nil }
+        return pendingRestaurantLink
+    }
 
     // MARK: - Parse URL
 
@@ -204,6 +224,30 @@ final class DeepLinkHandler {
         attractionLinkId(raw)
     }
 
+    /// /restaurants/open-now, /restaurants/new and /restaurants/dietary[/<diet>]
+    /// (IOS-AUDIT-FEAT-043). These used to open the Dining tab unfiltered, so
+    /// a shared "open now" or "vegan" page showed every restaurant. The
+    /// open-now page also reads `?diet=`, and the dietary index the legacy
+    /// `?diet=` form, as the web does (OpenNowRestaurants.tsx,
+    /// DietaryRestaurants.tsx). A diet the Dining filter has no key for
+    /// (kosher), and the bare index, open the tab unfiltered. Nil for any
+    /// other segment: that is a restaurant, not a landing page.
+    static func restaurantLandingDestination(_ path: [String], url: URL) -> Destination? {
+        guard path.count >= 2, reservedRestaurantSegments.contains(path[1]) else { return nil }
+        let queryDiet = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "diet" })?.value
+        switch path[1] {
+        case "open-now":
+            return .restaurantLanding(RestaurantLinkFilter(openNow: true, diet: RestaurantLinkFilter.diet(queryDiet)))
+        case "new":
+            return .restaurantLanding(RestaurantLinkFilter(newOpenings: true))
+        default:
+            let raw = path.count >= 3 ? path[2] : queryDiet
+            guard let diet = RestaurantLinkFilter.diet(raw) else { return .tab(.restaurants) }
+            return .restaurantLanding(RestaurantLinkFilter(diet: diet))
+        }
+    }
+
     /// Validates and returns the ID, or nil if invalid (logging the rejection).
     private func validatedId(_ id: String, source: String) -> String? {
         if isValidId(id) { return id }
@@ -332,7 +376,9 @@ final class DeepLinkHandler {
         case "restaurants":
             // The web's canonical restaurant URL is /restaurants/:slug, so a
             // shared link is usually a slug (IOS-DD-RESTAURANTS-09). Landing
-            // pages such as /restaurants/open-now are not restaurants.
+            // pages such as /restaurants/open-now are not restaurants; they
+            // narrow the list instead (IOS-AUDIT-FEAT-043).
+            if let landing = Self.restaurantLandingDestination(path, url: url) { return landing }
             if let id = Self.restaurantLinkId(rawId) { return .restaurant(id: id) }
             AppLogger.nav.warning("Rejected invalid restaurant link: \(rawId.prefix(50))")
             return .tab(.restaurants)
@@ -394,5 +440,32 @@ final class DeepLinkHandler {
             return nil
         default: return nil
         }
+    }
+}
+
+/// What a web restaurant landing page narrows the Dining list to
+/// (IOS-AUDIT-FEAT-043). Built only by `DeepLinkHandler`, so `diet` is always
+/// a key of `RestaurantsService.dietaryKeywords`.
+struct RestaurantLinkFilter: Equatable {
+    var openNow = false
+    var newOpenings = false
+    var diet: String?
+
+    /// The diet a URL value names, if the Dining filter has it: trimmed and
+    /// lowercased like the web's dietFromParam, then an exact key match, so
+    /// a stray value can never reach the server's keyword or-group.
+    static func diet(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let slug = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return RestaurantsService.dietaryKeywords[slug] == nil ? nil : slug
+    }
+
+    /// The preset chip this link is exactly, so it shows lit; nil when a
+    /// diet is added on top, since no preset describes that.
+    var preset: RestaurantPreset? {
+        guard diet == nil else { return nil }
+        if openNow && !newOpenings { return .openNow }
+        if newOpenings && !openNow { return .newOpenings }
+        return nil
     }
 }

@@ -317,6 +317,16 @@ struct MainTabView: View {
             // Same path, carrying the /events link's filters as explicit
             // ones (IOS-AUDIT-FEAT-041).
             TopPresenter.dismissAll { intentDispatcher.pending = .filteredSearch(text: query, filters: filters) }
+        case .restaurantLanding(let link):
+            // RestaurantsView applies the staged filter when it appears or,
+            // if it already exists, on change (IOS-AUDIT-FEAT-043). Any sheet
+            // is dismissed first so the filtered list is not hidden behind it.
+            TopPresenter.dismissAll {
+                deepLink.stageRestaurantLink(link)
+                if selectedTab != .restaurants { programmaticTabChange = true }
+                selectedTab = .restaurants
+                if sidebarSelection != .tab(.restaurants) { sidebarSelection = .tab(.restaurants) }
+            }
         case .tab(let tab):
             // Only flag a change that will fire onChange; an unchanged tab
             // would leave the flag set and swallow the next real tap.
