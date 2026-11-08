@@ -235,7 +235,8 @@ export default function AllInclusiveDashboard({ onViewEventDetails }: AllInclusi
   // Rows the server returned, before the browser dropped any. "Show more" asks
   // for another page only when the last one came back full.
   const fetchedCount: Record<Kind, number> = {
-    event: eventsQuery.events.length,
+    // Starts only: the few runs carried into the weekend never page.
+    event: eventsQuery.startCount,
     restaurant: openingRows.length,
     attraction: attractionRows.length,
     playground: playgroundRows.length,
