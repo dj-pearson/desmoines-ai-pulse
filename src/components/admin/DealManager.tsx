@@ -67,6 +67,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DEAL_VENUE_SOURCES,
+  fetchLinkedDealVenue,
+  mergedLinkNote,
   searchDealVenues,
   type DealVenueOption as VenueOption,
 } from "@/lib/dealVenueSearch";
@@ -260,6 +262,12 @@ interface VenuePickerProps {
   entityId: string | null;
   /** Called with the picked venue, or null when the link is cleared. */
   onPick: (venue: VenueOption | null) => void;
+  /**
+   * Called with the kept row's id when the linked restaurant turns out to be
+   * a merged duplicate, so saving stores the kept row (WEB-FEAT-075). Only
+   * entity_id changes; the business name the admin sees is left alone.
+   */
+  onResolveMerged: (keptId: string) => void;
 }
 
 /**
@@ -267,37 +275,38 @@ interface VenuePickerProps {
  * form had no way to set entity_id, so no deal saved from the admin ever got
  * a venue link on /deals.
  */
-function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
+export function VenuePicker({ entityType, entityId, onPick, onResolveMerged }: VenuePickerProps) {
   const source = DEAL_VENUE_SOURCES[entityType];
   const [term, setTerm] = useState("");
   const debounced = useDebounce(term, 250);
   const [options, setOptions] = useState<VenueOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [linked, setLinked] = useState<VenueOption | null>(null);
+  // The merged duplicate the deal was stored against, or the stored row when
+  // its kept row could not be found. Cleared when the admin picks or unlinks.
+  const [mergeNote, setMergeNote] = useState<string | null>(null);
 
   // Name of the venue already linked, for an existing deal.
   useEffect(() => {
     if (!source || !entityId) {
       setLinked(null);
+      setMergeNote(null);
       return;
     }
     if (linked?.id === entityId) return;
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from(source.table)
-          .select(`id, name, ${source.place}`)
-          .eq("id", entityId)
-          .maybeSingle();
-        if (error) throw error;
+        const found = await fetchLinkedDealVenue(entityType, entityId);
         if (cancelled) return;
-        const row = data as unknown as Record<string, string | null> | null;
-        setLinked(
-          row
-            ? { id: entityId, name: row.name ?? entityId, place: row[source.place] ?? null }
-            : { id: entityId, name: "Linked row not found", place: null },
-        );
+        if (!found) {
+          setLinked({ id: entityId, name: "Linked row not found", place: null });
+          setMergeNote(null);
+          return;
+        }
+        setLinked(found.venue);
+        setMergeNote(mergedLinkNote(found));
+        if (found.mergedFrom && found.venue.id !== entityId) onResolveMerged(found.venue.id);
       } catch (err) {
         handleError(err, { component: "DealManager", action: "loadLinkedVenue" });
       }
@@ -305,7 +314,9 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
     return () => {
       cancelled = true;
     };
-  }, [source, entityId, linked?.id]);
+    // onResolveMerged is a fresh closure every render; the lookup depends on the link alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, entityType, entityId, linked?.id]);
 
   useEffect(() => {
     const q = debounced.trim();
@@ -350,7 +361,15 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
               <span className="text-muted-foreground"> - {linked.place}</span>
             ) : null}
           </span>
-          <Button type="button" size="sm" variant="ghost" onClick={() => onPick(null)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setMergeNote(null);
+              onPick(null);
+            }}
+          >
             Unlink
           </Button>
         </div>
@@ -359,6 +378,11 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
           No venue linked. The deal will show the business name as plain text.
         </p>
       )}
+      {entityId && mergeNote ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          {mergeNote}
+        </p>
+      ) : null}
       <Input
         id="d-venue"
         value={term}
@@ -380,6 +404,7 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
                   className="w-full px-3 py-2 text-left hover:bg-accent"
                   onClick={() => {
                     setLinked(o);
+                    setMergeNote(null);
                     setTerm("");
                     setOptions([]);
                     onPick(o);
@@ -1100,6 +1125,9 @@ export default function DealManager() {
                         // Prefill from the picked row; the field stays editable.
                         business_name: venue ? venue.name : editing.business_name,
                       })
+                    }
+                    onResolveMerged={(keptId) =>
+                      setEditing((prev) => (prev ? { ...prev, entity_id: keptId } : prev))
                     }
                   />
                 </div>

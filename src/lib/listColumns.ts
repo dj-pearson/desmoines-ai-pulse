@@ -246,6 +246,13 @@ export const DEAL_RESTAURANT_STATUS_COLUMNS = "id, status, business_status";
 export const DEAL_VENUE_RESTAURANT_COLUMNS = "id, slug, is_merged, merged_into";
 
 /**
+ * The restaurant an existing deal is linked to, as DealManager's venue picker
+ * reads it (fetchLinkedDealVenue). is_merged and merged_into let the picker
+ * say the link is a merged duplicate and name the kept row (WEB-FEAT-075).
+ */
+export const DEAL_LINKED_RESTAURANT_COLUMNS = "id, name, location, is_merged, merged_into";
+
+/**
  * Cards on /restaurants/dietary/:diet (useDietaryRestaurants). What
  * RestaurantCard reads, plus hours_json and business_status: it selected
  * RESTAURANT_LIST_COLUMNS, which has neither, so with a date in `opening` no
