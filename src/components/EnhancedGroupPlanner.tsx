@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,7 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
   const [notes, setNotes] = useState('');
   const [invitedMembers, setInvitedMembers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const notesHeadingId = useId();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   const filteredEvents = events.filter(event =>
@@ -224,6 +225,8 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
               <div className="space-y-4">
                 <div>
                   <Input
+                    type="search"
+                    aria-label="Search events by title or location"
                     placeholder="Search events by title or location..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -389,9 +392,10 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
               <div className="h-full flex flex-col">
                 <div className="flex items-center gap-2 mb-4">
                   <MessageCircle className="w-5 h-5" />
-                  <h3 className="font-medium">Group Planning Notes</h3>
+                  <h3 id={notesHeadingId} className="font-medium">Group Planning Notes</h3>
                 </div>
                 <Textarea
+                  aria-labelledby={notesHeadingId}
                   placeholder="Add notes, ideas, or plans for your group events..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}

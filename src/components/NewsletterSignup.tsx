@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNewsletterSubscription, NewsletterPreferences } from "@/hooks/useNewsletterSubscription";
@@ -44,6 +45,9 @@ export function NewsletterSignup({
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  // Placeholders vanish on the first keystroke and are not a name (WEB-UX-068).
+  const firstNameId = useId();
+  const emailId = useId();
   const [preferences, setPreferences] = useState<NewsletterPreferences>({
     weekly_digest: true,
     event_alerts: true,
@@ -164,6 +168,8 @@ export function NewsletterSignup({
             <Input
               type="email"
               placeholder="your@email.com"
+              aria-label="Email address"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -198,20 +204,29 @@ export function NewsletterSignup({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Input
-              type="text"
-              placeholder="First name (optional)"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-            />
-            <Input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={firstNameId}>First name (optional)</Label>
+              <Input
+                id={firstNameId}
+                type="text"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={emailId}>Email</Label>
+              <Input
+                id={emailId}
+                type="email"
+                placeholder="your@email.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           {showPreferences && (
@@ -265,19 +280,28 @@ export function NewsletterSignup({
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Input
-              type="text"
-              placeholder="First name (optional)"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-            />
-            <Input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor={firstNameId}>First name (optional)</Label>
+              <Input
+                id={firstNameId}
+                type="text"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={emailId}>Email</Label>
+              <Input
+                id={emailId}
+                type="email"
+                placeholder="your@email.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           {showPreferences && (

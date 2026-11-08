@@ -107,7 +107,7 @@ export function SocialShare({ referralCode, onShare }: SocialShareProps) {
                 </DialogDescription>
               </DialogHeader>
               <div className="flex gap-2">
-                <Input value={shareUrl} readOnly className="flex-1" />
+                <Input value={shareUrl} readOnly aria-label="Link to share" className="flex-1" />
                 <Button onClick={handleCopyLink} aria-label={copied ? "Link copied" : "Copy link"}>
                   {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
                 </Button>
