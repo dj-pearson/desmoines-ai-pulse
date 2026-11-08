@@ -466,6 +466,10 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/sponsored-listing-link-guard.test.ts
       - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
       - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
+      # Event-reminder emails HTML-escaped the subject ("Tacos &amp; Tequila"),
+      # linked a dateless slug, and printed the 19:31:58 no-time sentinel as a
+      # start time. Pins the plain subject, canonical link and date-only line.
+      - run: deno test --allow-read supabase/functions/send-event-reminders/content.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into
       # tables with no INSERT policy, so RLS refused every write and every
       # advertiser dashboard read zero. Pins the server-side write path, the bot
