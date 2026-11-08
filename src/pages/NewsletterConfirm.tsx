@@ -192,7 +192,7 @@ export default function NewsletterConfirm() {
                 <h2 id="confirm-fresh-link-heading" className="text-sm font-semibold">
                   Get a new confirmation link
                 </h2>
-                <NewsletterSignup variant="compact" source="website" />
+                <NewsletterSignup variant="compact" source="confirm_page" />
               </section>
             )}
 

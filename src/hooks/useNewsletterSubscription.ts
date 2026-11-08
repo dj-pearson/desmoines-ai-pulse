@@ -4,6 +4,7 @@ import { toast } from "@/lib/toast";
 import { createLogger } from "@/lib/logger";
 import { NEWSLETTER_RETRY_MESSAGE } from "@/content/newsletterCopy";
 import { resolveCampaignAttribution } from "@/lib/campaignAttribution";
+import type { NewsletterSource } from "@/lib/newsletterSources";
 
 const log = createLogger("useNewsletterSubscription");
 
@@ -17,7 +18,7 @@ export interface NewsletterPreferences {
 export interface NewsletterSubscribeData {
   email: string;
   firstName?: string;
-  source?: 'website' | 'popup' | 'footer' | 'checkout' | 'hero';
+  source?: NewsletterSource;
   preferences?: Partial<NewsletterPreferences>;
 }
 

@@ -21,7 +21,7 @@ export function ReminderEmailsUnsubscribedNotice({ email }: ReminderEmailsUnsubs
 
   const resubscribe = async () => {
     if (!email) return;
-    const ok = await subscribe({ email, source: 'website' });
+    const ok = await subscribe({ email, source: 'reminder_notice' });
     if (ok) setSent(true);
   };
 

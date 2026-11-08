@@ -13,6 +13,7 @@ import {
   NEWSLETTER_CONFIRM_HEADING,
   NEWSLETTER_CONFIRM_BODY,
 } from "@/content/newsletterCopy";
+import type { NewsletterSource } from "@/lib/newsletterSources";
 
 /*
  * Copy rule (explore pass 2 WP6 item 4): say only what the weekly send holds.
@@ -24,7 +25,8 @@ import {
 
 interface NewsletterSignupProps {
   variant?: 'default' | 'compact' | 'hero' | 'footer' | 'modal';
-  source?: 'website' | 'popup' | 'footer' | 'checkout' | 'hero';
+  /** Which form this is; each placement passes its own (WEB-ADS-033). */
+  source?: NewsletterSource;
   showPreferences?: boolean;
   className?: string;
   title?: string;

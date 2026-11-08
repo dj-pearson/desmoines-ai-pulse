@@ -73,7 +73,20 @@ function normalizeEmail(raw: unknown): string | null {
   return email;
 }
 
-const ALLOWED_SOURCES = ["website", "popup", "footer", "checkout", "hero"];
+// Keep in step with src/lib/newsletterSources.ts (a vitest compares them).
+// Anything else is stored as 'website'; widening this list is safe in one
+// release, narrowing it would flatten what older clients send (WEB-ADS-033).
+const ALLOWED_SOURCES = [
+  "website",
+  "popup",
+  "footer",
+  "checkout",
+  "hero",
+  "article",
+  "visitors_guide",
+  "confirm_page",
+  "reminder_notice",
+];
 
 function buildConfirmEmail(email: string, confirmUrl: string, firstName: string | null) {
   const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : "Hi,";
