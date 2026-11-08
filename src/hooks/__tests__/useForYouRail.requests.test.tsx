@@ -41,6 +41,10 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'user-1' } }) }));
 vi.mock('@/hooks/useUserPreferences', () => ({ useUserPreferences: () => ({ preferences: null }) }));
+// The rail reads the hook as "./useProfile"; vi.mock resolves both to one module.
+vi.mock('@/hooks/useProfile', () => ({
+  useProfile: () => ({ profile: { communication_preferences: { event_recommendations: true } }, isLoading: false }),
+}));
 vi.mock('@/hooks/useHomeShownIds', () => ({
   FOR_YOU_RAIL_KEY: ['for-you-rail'],
   useHomeShownIds: () => ({ tonight: new Set<string>(), forYou: new Set<string>() }),

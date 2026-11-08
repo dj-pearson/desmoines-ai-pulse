@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { Loader2, XCircle } from "lucide-react";
@@ -14,6 +15,8 @@ import { readAuthCallbackError, type AuthFlow } from "@/lib/authCallbackError";
 import { getSafeRedirectUrl } from "@/lib/redirectSafety";
 import { takeAuthNext } from "@/lib/authReturn";
 import { logConsent } from "@/lib/consentLog";
+import { mergeConsentKeys } from "@/lib/communicationPreferences";
+import { queryKeys } from "@/lib/queryKeys";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/policyVersions";
 
 const log = createLogger("AuthCallback");
@@ -324,6 +327,29 @@ function FinishSetup({ onDone, onDecline }: FinishSetupProps) {
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const queryClient = useQueryClient();
+
+  /**
+   * The answer also goes on the profile, where the settings switch and the
+   * For You rail read it. Only the consent row was written, so a Google or
+   * Apple user who ticked "personalized suggestions" found the switch off and
+   * got the trending rail. Email sign-up puts the key there through
+   * user_metadata; this is the OAuth equivalent. Never throws: the consent
+   * row is the record, and the switch can be set again from settings.
+   */
+  const savePersonalizationChoice = async (granted: boolean): Promise<void> => {
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const userId = data.session?.user.id;
+      if (!userId) return;
+      await mergeConsentKeys(userId, { event_recommendations: granted });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.user.profile(userId) });
+    } catch (error) {
+      handleError(error, { component: "AuthCallback", action: "savePersonalizationChoice" }, ErrorSeverity.WARNING);
+    }
+  };
+
   const ageError = submitted && !atLeast13;
   const termsError = submitted && !terms;
 
@@ -356,6 +382,7 @@ function FinishSetup({ onDone, onDecline }: FinishSetupProps) {
         source: "signup",
         metadata: { writer: "oauth_finish_setup" },
       }),
+      savePersonalizationChoice(personalization),
     ]);
     setSaving(false);
     onDone();

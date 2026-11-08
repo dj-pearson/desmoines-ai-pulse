@@ -13,32 +13,12 @@ import { handleError } from "@/lib/errorHandler";
 import { logConsent, type ConsentType } from "@/lib/consentLog";
 import { INTERESTS } from "@/lib/interests";
 import { cn } from "@/lib/utils";
-
-/**
- * The consent keys this file owns in profiles.communication_preferences.
- *
- * sms_notifications is no longer shown or written: no SMS sender exists, so a
- * switch for it controlled nothing. A stored value is left where it is.
- */
-export type ConsentKey = "email_notifications" | "event_recommendations";
+import { readOptIn, type ConsentKey } from "@/lib/communicationPreferences";
 
 const CONSENT_TYPE: Record<ConsentKey, ConsentType> = {
   email_notifications: "marketing_email",
   event_recommendations: "personalization_ai",
 };
-
-/**
- * ONLY AN EXPLICIT true IS AN OPT-IN (account plan WP5 item 5).
- *
- * This read `?? true`, so every account without the key - every Google and
- * Apple sign-up, which never passes through the sign-up form's unticked boxes -
- * rendered as opted in, and pressing Save for an unrelated interest wrote that
- * opt-in to the row. Sign-up leaves both unticked; so does this.
- */
-export function readOptIn(bag: unknown, key: ConsentKey): boolean {
-  if (!bag || typeof bag !== "object") return false;
-  return (bag as Record<string, unknown>)[key] === true;
-}
 
 /**
  * Write changed consent keys (and optionally interests) without disturbing the
@@ -263,7 +243,8 @@ export default function PreferencesManager() {
               Personalized suggestions
             </Label>
             <p className="text-sm text-muted-foreground">
-              Lets us use the events and places you save to suggest others.
+              Lets us use the events you swipe on and save to pick your For You rail. Off, the rail
+              shows what's trending.
             </p>
           </div>
           <Switch
