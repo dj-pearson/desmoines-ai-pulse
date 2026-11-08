@@ -10,7 +10,8 @@ import {
 } from '@/lib/listColumns';
 import { createLogger } from '@/lib/logger';
 import { applyEventVisibility } from '@/lib/eventQuery';
-import { CENTRAL_TIMEZONE } from '@/lib/timezone';
+import { CENTRAL_TIMEZONE, upcomingFloorUtc } from '@/lib/timezone';
+import { upcomingOrRunningFilter } from '@/hooks/useEvents';
 import { formatInTimeZone } from 'date-fns-tz';
 
 const logger = createLogger('useTrending');
@@ -263,8 +264,13 @@ export function useTrending(options: FallbackConfig = {}) {
     ] = await Promise.all([
       wants('event')
         ? applyEventVisibility(
-            supabase.from('events').select(EVENT_LIST_COLUMNS).gte('date', new Date().toISOString()),
+            supabase.from('events').select(EVENT_LIST_COLUMNS),
           )
+            // Starts today (Central) or later, or is a run still going
+            // (WEB-FEAT-062). A bare `date >= now` dropped the State Fair
+            // after its first morning, a show that began ten minutes ago,
+            // and every untimed event (19:31:58 sentinel) after 7:31 PM.
+            .or(upcomingOrRunningFilter(upcomingFloorUtc()))
             .order('date')
             .limit(6)
         : skip,

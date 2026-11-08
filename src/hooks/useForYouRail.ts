@@ -7,6 +7,8 @@ import { useUserPreferences } from "./useUserPreferences";
 import { FOR_YOU_RAIL_KEY, useHomeShownIds } from "./useHomeShownIds";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { upcomingFloorUtc } from "@/lib/timezone";
+import { upcomingOrRunningFilter } from "./useEvents";
 import { knownPicks, rerankByPicks, withoutIds, type Reranked } from "@/lib/forYouRerank";
 
 const log = createLogger("useForYouRail");
@@ -75,10 +77,15 @@ export interface UseForYouRailResult {
 /** Columns for the anonymous read: the list projection plus the ranking signal. */
 const FOR_YOU_COLUMNS = `${EVENT_LIST_COLUMNS}, trending_score`;
 
-async function fetchTrendingRows(limit: number): Promise<ForYouRecommendation[]> {
+/** Exported for the unit tests. */
+export async function fetchTrendingRows(limit: number): Promise<ForYouRecommendation[]> {
   const { data, error } = await applyEventVisibility(
-    supabase.from("events").select(FOR_YOU_COLUMNS).gte("date", new Date().toISOString()),
+    supabase.from("events").select(FOR_YOU_COLUMNS),
   )
+    // Upcoming or still running, the window every events list uses
+    // (WEB-FEAT-062). `date >= now` dropped a multi-day run on its second
+    // morning, which is when it trends hardest.
+    .or(upcomingOrRunningFilter(upcomingFloorUtc()))
     .order("trending_score", { ascending: false, nullsFirst: false })
     .order("date", { ascending: true })
     .limit(limit);

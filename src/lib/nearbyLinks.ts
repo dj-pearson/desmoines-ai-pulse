@@ -35,6 +35,7 @@ export interface NearbyEventRow {
   latitude: Coord;
   longitude: Coord;
   date?: string | null;
+  end_date?: string | null;
   is_merged?: boolean | null;
   is_hidden?: boolean | null;
   archived_at?: string | null;
@@ -96,14 +97,22 @@ export function selectNearbyRestaurants<T extends NearbyRestaurantRow>(
 }
 
 /**
- * The one definition of a visible event (src/lib/eventQuery.ts) plus "has not
- * started yet": not merged, not hidden, not archived, and dated at or after
- * `now`. A row with no date is not upcoming.
+ * The one definition of a visible event (src/lib/eventQuery.ts) plus "not
+ * over yet": not merged, not hidden, not archived, and either dated at or
+ * after `now` or a run whose end_date is at or after `now`. A row with no
+ * date is not upcoming. A one-night show that already started stays off:
+ * with no end_date there is no telling whether it is still on.
+ *
+ * The run arm is WEB-FEAT-062: the State Fair dropped off every "nearby"
+ * rail at the fairgrounds after its first morning.
  */
 export function isLinkableUpcomingEvent(row: NearbyEventRow, now: Date): boolean {
   if (row.is_merged === true || row.is_hidden === true || row.archived_at) return false;
   const at = row.date ? Date.parse(row.date) : NaN;
-  return Number.isFinite(at) && at >= now.getTime();
+  if (!Number.isFinite(at)) return false;
+  if (at >= now.getTime()) return true;
+  const end = row.end_date ? Date.parse(row.end_date) : NaN;
+  return Number.isFinite(end) && end >= now.getTime();
 }
 
 /**
@@ -140,7 +149,8 @@ export function selectNearbyEvents<T extends NearbyEventRow>(
  */
 export const NEARBY_RESTAURANT_SCAN_COLUMNS =
   "id, latitude, longitude, status, business_status, is_merged, cuisine";
-export const NEARBY_EVENT_SCAN_COLUMNS = "id, latitude, longitude, date, is_merged, is_hidden, archived_at";
+export const NEARBY_EVENT_SCAN_COLUMNS =
+  "id, latitude, longitude, date, end_date, is_merged, is_hidden, archived_at";
 
 /**
  * `rows` in the order of `ids`, dropping any id with no row (deleted between
