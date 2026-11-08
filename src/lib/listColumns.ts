@@ -194,6 +194,14 @@ export const ARTICLE_HUB_RESTAURANT_COLUMNS =
   "id, slug, name, status, business_status, cuisine, opening, hours_json";
 
 /**
+ * Restaurant typeahead rows (SearchAutocomplete, useEntitySuggestions). status
+ * and business_status are what label a place closed for good and rank it last
+ * instead of offering it like any other (WEB-FEAT-048).
+ */
+export const RESTAURANT_SUGGESTION_COLUMNS =
+  "id, name, cuisine, slug, status, business_status";
+
+/**
  * The four columns needed to DERIVE an event slug, and nothing else
  * (WEB-PERF-035 AC2).
  *
