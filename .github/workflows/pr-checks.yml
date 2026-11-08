@@ -628,6 +628,11 @@ jobs:
       - name: No Deno suite is run by no lane
         run: node scripts/check-deno-lanes.mjs
 
+      # And the lane re-runs when a file its suites read changes: its
+      # pull_request paths filter covers every file a suite names (WEB-QA-055).
+      - name: Deno lane paths filter covers what its suites read
+        run: node scripts/check-deno-lane-paths.mjs
+
       - name: Service-role functions verify their caller
         run: node scripts/check-edge-auth.mjs
 

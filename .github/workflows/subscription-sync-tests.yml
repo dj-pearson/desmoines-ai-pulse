@@ -21,20 +21,27 @@ on:
       # The contract has two ends. Watching only the server half is how
       # delete-user-account drifted: the edge function was changed and the
       # clients were not, and nothing here ran when a client changed either.
-      - 'ios/DesMoinesInsider/**'
-      - 'android/app/src/main/java/**'
-      - 'src/hooks/useSubscription.ts'
-      - 'src/hooks/__tests__/useSubscription.test.ts'
-      # WEB-FEAT-019: the double opt-in test reads the newsletter hook and the
-      # config.toml entry that makes the signup endpoint public, so a change to
-      # either has to run this suite.
-      - 'src/hooks/useNewsletterSubscription.ts'
-      - 'src/hooks/__tests__/useNewsletterSubscription.test.ts'
+      #
+      # WEB-QA-055: the suites read far more than this list used to name. It
+      # listed about 25 files; the suites read about 145 outside
+      # supabase/functions, and several walk whole trees (client-contract walks
+      # src/, ios/ and android/; oauth-role-sync-self-only walks src/;
+      # no-embedded-credentials walks scripts/ and docs/). A PR touching only a
+      # read file ran nothing, which is how session-timeout-policy.test.ts went
+      # stale on a SessionManager.tsx rewrite (WEB-QA-051). The globs below are
+      # what the suites read, and scripts/check-deno-lane-paths.mjs (validate,
+      # pr-checks) fails when a suite reads a file this filter does not watch.
+      - 'src/**'
+      - 'ios/**'
+      - 'android/**'
+      - 'scripts/**'
+      - 'docs/**'
+      - 'package.json'
+      - '.gitleaks.toml'
       - 'supabase/config.toml'
-      - 'src/components/SubscriptionPlatformBreakdown.tsx'
       # The IndexNow key file. Its contents have to match INDEXNOW_KEY exactly
       # or every submission 403s, and the file lives nowhere near the function
-      # that depends on it — so a PR touching only public/ must run this suite.
+      # that depends on it - so a PR touching only public/ must run this suite.
       - 'public/*.txt'
       # The GitHub Actions crawler posts its own heartbeat row into
       # automation_job_runs (WEB-BE-043) - nothing inside Supabase can observe
@@ -44,28 +51,7 @@ on:
       - 'crawlers/event_detail.py'
       # CLAUDE.md is asserted by ingest-coordinates.test.ts (WEB-BE-050).
       - 'CLAUDE.md'
-      # The canonical category vocabulary and its browser mirror (WEB-BE-049).
-      - 'src/lib/eventCategories.*'
-      - 'src/components/EventSubmissionForm.tsx'
       - '.github/workflows/subscription-sync-tests.yml'
-      # Search plan WP6: nlp-search/search.test.ts compares against the free
-      # filter string and the example list, and savedSearchMatch.test.ts against
-      # the area list, so a change to any of the three has to run this suite.
-      - 'src/lib/eventPrice.ts'
-      - 'src/hooks/useNLPSearch.ts'
-      - 'src/lib/eventAreas.ts'
-      # Pricing plan WP6: plan-features-truthful.test.ts reads the benefit lines
-      # from planBenefits.ts and scans every premium surface for withdrawn
-      # claims, so a change to any of them has to run this suite. The two new
-      # billing tests live under supabase/functions/ and are already covered.
-      - 'src/lib/planBenefits.ts'
-      - 'src/pages/Pricing.tsx'
-      - 'src/components/UpgradeModal.tsx'
-      - 'src/pages/SubscriptionSuccess.tsx'
-      - 'src/pages/SubscriptionPortal.tsx'
-      # NON_CORE_REVIEW_2026-09 WP4: Terms lists plan features from
-      # planBenefits.ts and the same test now scans it.
-      - 'src/pages/Terms.tsx'
 
 concurrency:
   group: subscription-sync-${{ github.head_ref }}
