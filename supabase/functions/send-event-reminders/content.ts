@@ -17,7 +17,46 @@
  *      only and is "today" or "tomorrow".
  */
 import { centralWallClockFromUtc, CENTRAL_TZ } from "../_shared/centralTime.ts";
+import type { EmailCategory, SendEmailInput } from "../_shared/email.ts";
 import { eventPath } from "../_shared/savedSearchMatch.ts";
+
+/**
+ * WEB-FEAT-063: the category a reminder is sent under.
+ *
+ * It was "marketing". _shared/email.ts drops marketing for any address with an
+ * 'unsubscribe' row in email_suppressions, and the newsletter unsubscribe
+ * writes that row, so someone who left the newsletter and then set a reminder
+ * on an event page got nothing and was never told why.
+ *
+ * A reminder is a message the user asked for, about one event, at a time they
+ * chose. "transactional" is what email.ts already has for that: a bounce, a
+ * complaint or a manual block still stops it, a newsletter unsubscribe does
+ * not. It still carries its own List-Unsubscribe (the per-event one-click
+ * cancel from WEB-FEAT-059) and the full footer, because renderEmail is still
+ * called with category "marketing". email_log's CHECK allows only the two
+ * existing categories, which is why this is not a third one.
+ */
+export const REMINDER_EMAIL_CATEGORY: EmailCategory = "transactional";
+
+export const REMINDER_FROM = "Des Moines Insider <events@desmoinesinsider.com>";
+
+/** The sendEmail input for one reminder; the body is rendered by the caller. */
+export function reminderSendInput(
+  r: { user_email: string; event_id: string; reminder_type: string },
+  msg: { subject: string; html: string; text: string; headers: Record<string, string> },
+): SendEmailInput {
+  return {
+    to: r.user_email,
+    from: REMINDER_FROM,
+    subject: msg.subject,
+    html: msg.html,
+    text: msg.text,
+    category: REMINDER_EMAIL_CATEGORY,
+    template: `event_reminder_${r.reminder_type}`,
+    headers: msg.headers,
+    ref: { type: "event", id: String(r.event_id) },
+  };
+}
 
 /**
  * The Central wall-clock time ingest stamps on a day with no stated time.

@@ -9,6 +9,7 @@ import { sendEmail } from "../_shared/email.ts";
 import { requireAdminOrApiKey, timingSafeEqual } from "../_shared/apiKeyAuth.ts";
 import {
   reminderEventUrl,
+  reminderSendInput,
   reminderSubject,
   reminderWhen,
   reminderWhere,
@@ -237,18 +238,15 @@ Don't miss out! We'll see you there!
         preferencesPath: "/my-events?tab=reminders",
       },
     });
+    // WEB-FEAT-063: sent as transactional (see REMINDER_EMAIL_CATEGORY), so a
+    // newsletter unsubscribe no longer swallows a reminder the user set.
     const sent = await sendEmail(
-      {
-        to: reminder.user_email,
-        from: "Des Moines Insider <events@desmoinesinsider.com>",
+      reminderSendInput(reminder, {
         subject,
         html: rendered.html,
         text: rendered.text,
-        category: "marketing",
-        template: `event_reminder_${reminder.reminder_type}`,
         headers: listUnsubscribeHeaders(rendered),
-        ref: { type: "event", id: String(reminder.event_id) },
-      },
+      }),
       { supabase },
     );
     if (!sent.ok) throw new Error(`Reminder not sent: ${sent.error}`);

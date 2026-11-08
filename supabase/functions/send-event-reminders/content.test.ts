@@ -1,17 +1,21 @@
 /**
- * Event-reminder email content (WEB-FEAT-057).
+ * Event-reminder email content (WEB-FEAT-057), and the category it is sent
+ * under (WEB-FEAT-063).
  * Run with: deno test --allow-read supabase/functions/send-event-reminders/content.test.ts
  */
 import {
   NO_TIME_MARKER,
+  REMINDER_EMAIL_CATEGORY,
   type ReminderContentInput,
   reminderEventUrl,
+  reminderSendInput,
   reminderSubject,
   reminderWhen,
   reminderWhere,
   shouldSendReminder,
   timingPhrase,
 } from "./content.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 function assertEquals<T>(actual: T, expected: T, msg = ""): void {
   const a = JSON.stringify(actual);
@@ -138,4 +142,83 @@ Deno.test("the footer opt-out is this reminder's, not the newsletter's (WEB-FEAT
   assert(src.includes("reminderToken: reminder.reminder_id"), "renderEmail gets the reminder id");
   assert(!src.includes("newsletter_subscribers"), "no newsletter token lookup");
   assert(!src.includes("unsubscribeToken:"), "no newsletter token in the footer");
+});
+
+// WEB-FEAT-063: a reminder is mail the user asked for on one event, so leaving
+// the newsletter must not stop it. It went out as "marketing", and email.ts
+// drops marketing for any address with an 'unsubscribe' row in
+// email_suppressions, which the newsletter unsubscribe writes.
+
+function suppressionDb(rows: Array<{ email: string; reason: string }>) {
+  const logged: Array<Record<string, unknown>> = [];
+  const client = {
+    from(_table: string) {
+      return {
+        select() {
+          return {
+            in(_col: string, emails: string[]) {
+              return Promise.resolve({ data: rows.filter((r) => emails.includes(r.email)), error: null });
+            },
+          };
+        },
+        insert(batch: Array<Record<string, unknown>>) {
+          logged.push(...batch);
+          return Promise.resolve({ error: null });
+        },
+      };
+    },
+  };
+  return { client, logged };
+}
+
+const sendInput = () =>
+  reminderSendInput(
+    { user_email: "Reader@Example.com", event_id: "evt-1", reminder_type: "1_day" },
+    {
+      subject: "Reminder: Tacos & Tequila starts tomorrow",
+      html: "<p>hi</p>",
+      text: "hi",
+      headers: {
+        "List-Unsubscribe": "<https://x.supabase.co/functions/v1/email-unsubscribe?reminder=r1>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+    },
+  );
+
+// No SES credentials: sendEmail stops after the suppression check and logs
+// "skipped", so these tests never sign a request or touch the network.
+const NO_SES = (_k: string) => undefined;
+
+Deno.test("reminder: sent as transactional, keeping its one-click header, template and ref", () => {
+  const input = sendInput();
+  assertEquals(REMINDER_EMAIL_CATEGORY, "transactional");
+  assertEquals(input.category, "transactional");
+  assertEquals(input.template, "event_reminder_1_day");
+  assertEquals(input.from, "Des Moines Insider <events@desmoinesinsider.com>");
+  assertEquals(input.ref, { type: "event", id: "evt-1" });
+  assert(String(input.headers?.["List-Unsubscribe"]).includes("reminder=r1"), "keeps the reminder one-click link");
+});
+
+Deno.test("reminder: a newsletter unsubscribe does not suppress it", async () => {
+  const { client, logged } = suppressionDb([{ email: "reader@example.com", reason: "unsubscribe" }]);
+  const res = await sendEmail(sendInput(), { env: NO_SES, supabase: client });
+  assertEquals(res.suppressed, []);
+  assertEquals(logged.map((r) => r.status), ["skipped"]);
+});
+
+Deno.test("reminder: a bounce, complaint or manual block still suppresses it", async () => {
+  for (const reason of ["bounce", "complaint", "manual"]) {
+    const { client, logged } = suppressionDb([{ email: "reader@example.com", reason }]);
+    const res = await sendEmail(sendInput(), { env: NO_SES, supabase: client });
+    assertEquals(res.error, "all recipients suppressed", reason);
+    assertEquals(logged.map((r) => r.status), ["suppressed"], reason);
+  }
+});
+
+Deno.test("reminder: index.ts sends through reminderSendInput, not a marketing literal", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assert(src.includes("reminderSendInput("), "index.ts builds the send with reminderSendInput");
+  const call = src.slice(src.indexOf("await sendEmail("));
+  const args = call.slice(0, call.indexOf("{ supabase }"));
+  assert(!/category:\s*"marketing"/.test(args), "the sendEmail call carries no marketing category");
 });
