@@ -70,15 +70,16 @@ Deno.serve(async (req) => {
     let verifiedUserId: string | null = null;
     if (!internal && shouldVerifyBearer(presented.bearer, Deno.env.get("SUPABASE_ANON_KEY"))) {
       try {
-        const { data } = await supabase.auth.getUser(presented.bearer!);
-        verifiedUserId = data?.user?.id ?? null;
+        const { data, error: authError } = await supabase.auth.getUser(presented.bearer!);
+        // A token that fails verification files the error unattributed.
+        verifiedUserId = authError ? null : (data?.user?.id ?? null);
       } catch {
         verifiedUserId = null;
       }
     }
     const userId = resolveErrorUserId(body.userId, { internal, verifiedUserId });
 
-    await supabase.from("error_events").insert({
+    const { error: insertError } = await supabase.from("error_events").insert({
       signature,
       message_redacted: messageRedacted,
       component: component || null,
@@ -88,6 +89,10 @@ Deno.serve(async (req) => {
       source,
       user_id: userId,
     });
+    if (insertError) {
+      // Best-effort sink: report the failure, never fail the caller.
+      console.error("[log-error] insert failed:", insertError.message);
+    }
   } catch (err) {
     console.error("[log-error] insert failed:", err instanceof Error ? err.message : String(err));
     // Best-effort: never fail the caller on a sink hiccup.
