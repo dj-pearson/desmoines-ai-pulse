@@ -16,6 +16,8 @@ import { EVENT_SERIES, normaliseEventTitle } from "../eventSeries";
 
 const SERIES = "ios/DesMoinesInsider/Models/EventSeries.swift";
 const TESTS = "ios/DesMoinesInsiderTests/EventSeriesTests.swift";
+const SERVICE = "ios/DesMoinesInsider/Services/EventsService.swift";
+const WEB_HOOK = "src/hooks/useEventSeriesPage.ts";
 
 /** Swift string literal body to its value: \" \\ and \u{hex} only. */
 function unescapeSwift(body: string): string {
@@ -94,5 +96,25 @@ describe("iOS annual event series match the web (IOS-AUDIT-FEAT-046)", () => {
     for (const [title, normalised] of iosNormaliseCases()) {
       expect(normaliseEventTitle(title), title).toBe(normalised);
     }
+  });
+
+  it("the series read keeps hidden and archived rows, drops merged ones, and caps like the web", () => {
+    // A past edition is a row the stale sweep hid. If the iOS read filtered
+    // is_hidden or archived_at the way every other list does, the screen
+    // would show no past years and EventSeriesSchedule would never see a
+    // sweep-hidden row to list without a link.
+    const src = readFileSync(SERVICE, "utf8");
+    const start = src.indexOf("func fetchSeriesRows(");
+    expect(start, `fetchSeriesRows not found in ${SERVICE}`).toBeGreaterThan(-1);
+    const body = src.slice(start, src.indexOf("\n    }\n", start));
+    expect(body).toContain('.neq("is_merged", value: true)');
+    expect(body).toContain("EventSeries.titlePatterns(def)");
+    expect(body).not.toMatch(/is_hidden|archived_at/);
+
+    const iosLimit = src.match(/static let seriesRowLimit = (\d+)/);
+    const webLimit = readFileSync(WEB_HOOK, "utf8").match(/const SERIES_ROW_LIMIT = (\d+)/);
+    expect(iosLimit, `seriesRowLimit not found in ${SERVICE}`).not.toBeNull();
+    expect(webLimit, `SERIES_ROW_LIMIT not found in ${WEB_HOOK}`).not.toBeNull();
+    expect(iosLimit![1]).toBe(webLimit![1]);
   });
 });

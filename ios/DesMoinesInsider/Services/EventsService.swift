@@ -413,6 +413,38 @@ actor EventsService {
         }
     }
 
+    // MARK: - Event Series (IOS-AUDIT-FEAT-046)
+
+    /// Most rows one series read returns, as the web's SERIES_ROW_LIMIT:
+    /// several years of even a nightly series.
+    static let seriesRowLimit = 200
+
+    /// Every row of one annual series, for its native screen. A port of the
+    /// web's useEventSeriesPage query.
+    ///
+    /// This read deliberately keeps hidden and archived rows: a past edition
+    /// is exactly a row the stale sweep hid, and `EventSeriesSchedule.build`
+    /// decides per row whether to list it, link it or drop it. Merged
+    /// duplicates are excluded, since their survivor is the row that counts.
+    /// The title filter is the web's loose ilike per alias; `build` applies
+    /// the exact match.
+    func fetchSeriesRows(_ def: EventSeriesDef) async throws -> [SeriesEventRow] {
+        let patterns = EventSeries.titlePatterns(def)
+        guard !patterns.isEmpty else { return [] }
+        return try await withRetry { [self] in
+            let client = try db()
+            let response = try await client
+                .from("events")
+                .select()
+                .neq("is_merged", value: true)
+                .or(patterns.joined(separator: ","))
+                .order("date", ascending: true)
+                .limit(Self.seriesRowLimit)
+                .execute()
+            return try JSONDecoder().decode(LossySeriesRows.self, from: response.data).rows
+        }
+    }
+
     // MARK: - Search Events (Fuzzy Fallback)
 
     func fuzzySearchEvents(query: String, limit: Int = 20) async throws -> [Event] {
