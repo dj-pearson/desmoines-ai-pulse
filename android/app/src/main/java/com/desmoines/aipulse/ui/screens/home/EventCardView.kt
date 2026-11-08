@@ -61,7 +61,7 @@ import com.desmoines.aipulse.ui.theme.GlassIntensity
 import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
 import com.desmoines.aipulse.ui.theme.glassSurface
-import java.time.OffsetDateTime
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -189,9 +189,9 @@ fun EventCardView(
                 }
 
                 // Date badge at bottom right
-                event.parsedDate?.let { date ->
+                EventTimeText.desMoinesDay(event)?.let { day ->
                     DateBadge(
-                        date = date,
+                        day = day,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(10.dp)
@@ -375,7 +375,8 @@ fun EventCardView(
  */
 @Composable
 fun DateBadge(
-    date: OffsetDateTime,
+    /** The Des Moines day (EventTimeText.desMoinesDay), not the UTC day the row arrives in. */
+    day: LocalDate,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -390,19 +391,19 @@ fun DateBadge(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("EEE", UiFormatLocale)).uppercase(),
+            text = day.format(DateTimeFormatter.ofPattern("EEE", UiFormatLocale)).uppercase(),
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("d")),
+            text = day.format(DateTimeFormatter.ofPattern("d")),
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("MMM", UiFormatLocale)).uppercase(),
+            text = day.format(DateTimeFormatter.ofPattern("MMM", UiFormatLocale)).uppercase(),
             fontSize = 9.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant

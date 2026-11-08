@@ -1,7 +1,6 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
 import com.desmoines.aipulse.util.EventTimeText
-import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -96,7 +95,6 @@ import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.StatusSuccess
 import com.desmoines.aipulse.util.rememberHapticPerformer
-import java.time.format.DateTimeFormatter
 
 /**
  * Event Detail screen matching iOS EventDetailView.swift.
@@ -974,9 +972,9 @@ private fun RelatedEventCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        event.parsedDate?.let { date ->
+        EventTimeText.dayText(event, "MMM d")?.let { dayText ->
             Text(
-                text = date.format(DateTimeFormatter.ofPattern("MMM d", UiFormatLocale)),
+                text = dayText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -33,10 +33,16 @@ AND-AUDIT-029 (TBA reminders) is code-complete; one device check closes it. On a
 time_tbd or 19:31:58 row before 9am on its day, tap Remind Me, and confirm the notification arrives at
 9:00 Central reading "<title> is today", then reboot and confirm BootCompletedReceiver replays it at
 9:00 (the record now carries triggerAtMillis; records from older installs fall back to an hour before).
-The same loop moved the detail date block, event card, map popup and Saved row to Des Moines time;
-other sites still format parsedDate in the +00:00 offset it arrives with (DateBadge, FeaturedEventCard,
-related-event chips, urgencyLabel, Weekend grouping), so a 7pm show can read as the next day there.
-That is proposed as AND-AUDIT-030; route each through EventTimeText.
+
+AND-AUDIT-030 (Des Moines days everywhere) is code-complete and JVM-tested. The day badge, featured
+card, related chips, featured-card label, urgencyLabel, map pin colour, Saved past/upcoming split and
+Weekend grouping now read the Des Moines day via EventTimeText, and the Weekend fetch is bounded at
+Central midnights with an offset. One device check closes it: open Weekend on a Saturday with a 7pm+
+show and confirm it sits under Saturday (it used to sit under Sunday, and a 7pm+ Sunday show was not
+fetched at all). Same bug, not fixed here, proposed as AND-AUDIT-031: the Events tab and Discover date
+presets (EventsViewModel, DiscoverViewModel, DatePreset.dateRange in AppEnums.kt) send bare
+ISO_LOCAL_DATE_TIME bounds that PostgREST reads as UTC, so "Today" starts at 7pm yesterday Central and
+drops tonight's 7pm+ shows. EventTimeText.centralMidnight is the fix to reuse.
 
 ## Loop log
 
@@ -48,3 +54,4 @@ That is proposed as AND-AUDIT-030; route each through EventTimeText.
 | 2026-11-07 | XPLAT-012 | this commit | Android offers Continue with Apple via the Supabase browser OAuth flow web uses; return lands as AuthCallback.OAuth and is exchanged on the guarded path. 20 AuthCallbackRouter JVM tests pass on a stub harness (4 new; kotlinc 2.2.10), a mutation disabling flow=oauth fails exactly the 4; AuthViewModelTest additions and app module not compiled (no Android SDK, no mockk in cache) |
 | 2026-11-07 | AND-AUDIT-027 | this commit | Add to Calendar now uses iOS's rules via a shared EventCalendarEntry: end_date or 3h (was a fixed 2h), all-day on the Des Moines day for time_tbd / 19:31:58 / SeatGeek 03:30 / bare dates, Central time zone. Event decodes end_date, time_tbd, source. 12 JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation making every row timed fails 7. App module not compiled (no Android SDK); no device check |
 | 2026-11-07 | AND-AUDIT-029 | this commit | TBA rows get a 9am Central day-of reminder ("is today") instead of one an hour before the 19:31:58 / 03:30 placeholder; detail, cards, map popup and Saved rows show "Time TBA" in Des Moines time via a shared EventTimeText. 13 new JVM tests pass on a stub harness (kotlinc 2.2.10), 12 EventCalendarEntry tests still pass; a mutation using the timed rule for every row fails 5, one formatting in the arrival offset fails 1. EventDetailReminderTest additions and app module not compiled (no Android SDK, no mockk in cache); no device check |
+| 2026-11-07 | AND-AUDIT-030 | this commit | Day badge, featured card, related chips, urgency label, map pin, Saved past/upcoming and Weekend grouping read the Des Moines day through EventTimeText; Weekend fetch bounded at Central midnight. 12 new JVM tests pass on a stub harness (kotlinc 2.2.10), 25 existing EventCalendarEntry/EventReminderTiming tests still pass; a mutation reading the UTC day fails 6 of the new 12. WeekendViewModelTest addition and app module not compiled (no Android SDK); no device check |

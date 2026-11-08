@@ -8,6 +8,8 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.util.EventSlug
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
@@ -20,7 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.OffsetDateTime
+import java.time.ZonedDateTime
 import javax.inject.Inject
 
 private const val TAG = "FavoritesViewModel"
@@ -154,14 +156,13 @@ class FavoritesViewModel @Inject constructor(
             // Fetch full event objects and split into upcoming/past
             favoritesRepository.fetchFavoriteEvents(_favoriteEventIds.value).onSuccess { allEvents ->
                 if (!favoritesFetch.isCurrent(token)) return@launch
-                val now = OffsetDateTime.now()
+                // A TBA row stays Upcoming through its Des Moines day (AND-AUDIT-030).
+                val now = ZonedDateTime.now(EventSlug.CENTRAL)
                 _upcomingEvents.value = allEvents.filter { event ->
-                    val date = event.parsedDate ?: return@filter true
-                    !date.isBefore(now)
+                    EventTimeText.hasPassed(event, now) != true
                 }
                 _pastEvents.value = allEvents.filter { event ->
-                    val date = event.parsedDate ?: return@filter false
-                    date.isBefore(now)
+                    EventTimeText.hasPassed(event, now) == true
                 }
             }.onFailure {
                 if (!favoritesFetch.isCurrent(token)) return@launch

@@ -1,7 +1,7 @@
 package com.desmoines.aipulse.data.model
 
 import com.desmoines.aipulse.util.EventSlug
-import com.desmoines.aipulse.util.UiFormatLocale
+import com.desmoines.aipulse.util.EventTimeText
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -9,7 +9,6 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
-import java.time.temporal.ChronoUnit
 
 /**
  * Event data model matching the Supabase `events` table.
@@ -120,29 +119,17 @@ data class Event(
         }
 
     /**
-     * Urgency label: "Today", "Tomorrow", or "In X days" (up to 7 days).
-     * Returns null if date is unparseable or too far out.
+     * Urgency label: "Today", "Tomorrow", or "In X days" (up to 7 days), by
+     * Des Moines day. Returns null if date is unparseable or too far out.
      */
     val urgencyLabel: String?
-        get() {
-            val eventDate = parsedDate?.toLocalDate() ?: return null
-            val today = LocalDate.now()
-            val days = ChronoUnit.DAYS.between(today, eventDate)
-            return when {
-                days == 0L -> "Today"
-                days == 1L -> "Tomorrow"
-                days in 2..7 -> "In $days days"
-                else -> null
-            }
-        }
+        get() = EventTimeText.urgencyLabel(this)
 
-    /** Full accessibility label for a featured card (title, category, date, price). */
+    /** Full accessibility label for a featured card (title, category, Des Moines date, price). */
     val featuredCardAccessibilityLabel: String
         get() {
             val parts = mutableListOf(title, eventCategory.displayName)
-            parsedDate?.let {
-                parts.add(it.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", UiFormatLocale)))
-            }
+            EventTimeText.dayText(this, "EEEE, MMMM d")?.let { parts.add(it) }
             if (isFree) {
                 parts.add("Free event")
             } else if (!price.isNullOrEmpty()) {
