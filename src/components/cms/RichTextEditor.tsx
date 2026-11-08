@@ -6,9 +6,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { Toggle } from '@/components/ui/toggle';
@@ -58,6 +59,8 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const linkUrlId = useId();
+  const imageUrlId = useId();
 
   const editor = useEditor({
     extensions: [
@@ -339,8 +342,10 @@ export function RichTextEditor({
           </PopoverTrigger>
           <PopoverContent className="w-80">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Link URL</label>
+              <Label htmlFor={linkUrlId}>Link URL</Label>
               <Input
+                id={linkUrlId}
+                type="url"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 placeholder="https://example.com"
@@ -372,8 +377,10 @@ export function RichTextEditor({
           </PopoverTrigger>
           <PopoverContent className="w-80">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Image URL</label>
+              <Label htmlFor={imageUrlId}>Image URL</Label>
               <Input
+                id={imageUrlId}
+                type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 placeholder="https://example.com/image.jpg"
