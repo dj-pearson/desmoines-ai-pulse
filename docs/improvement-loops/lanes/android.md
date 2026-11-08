@@ -81,6 +81,13 @@ trap: an attraction whose name collides with another gets a -2 slug from migrati
 if the shared link opens the wrong attraction, the slug column is not in production yet and the name
 fallback is in play.
 
+AND-AUDIT-035 (attraction Open on web) is code-complete and JVM-tested. The not-found screen's Open on web
+now goes to the loaded row's /attractions/<slug or name slug>, else the opened value if it is a slug, else
+the /attractions listing, through PlaceShareLinks.attractionWebUrl; a UUID never reaches the path. One
+device check closes it: open an attraction from a favorite or notification whose row has been deleted
+(so the screen opens by UUID and shows not-found), tap Open on web, and confirm the in-app web view shows
+the attractions listing rather than the web's not-found page.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -97,3 +104,4 @@ fallback is in play.
 | 2026-11-08 | AND-AUDIT-033 | this commit | Slice 1 of 2: every Saved event row offers Share (overflow item and TalkBack action), and event detail and Saved share one EventShareText whose text now ends with the event page SITE_URL/events/<id>, as iOS shares (it had no link). 5 new EventShareTextTest JVM tests pass on a stub harness (kotlinc 2.2.10), 51/51 across five event-time suites; a mutation dropping the link fails 2. Reminder toggle is the handoff. Compose UI and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-033 | this commit | Slice 2 of 2: upcoming Saved rows offer Remind me / Remove reminder (overflow item and TalkBack action) with detail's timing, so TBA rows get the 9am Central day-of reminder; POST_NOTIFICATIONS asked in the Saved destination, refusals shown in a new Saved snackbar. Detail and Saved share EventReminderTiming.offersReminder / refusedMessage. 6 new EventReminderTimingTest JVM tests pass on a stub harness (kotlinc 2.2.10), 57/57 across five event-time suites; a mutation dropping the past-row guard fails exactly the past-row test. EventDetailReminderTest, Compose UI and app module not compiled (no Android SDK, no mockk in cache); no device check |
 | 2026-11-08 | AND-AUDIT-034 | this commit | Restaurant, attraction and hotel shares now end with their site page (/restaurants/<slug or id>, /attractions/<slug or name slug>, /stay/<slug>) through a shared PlaceShareLinks, matching the event share shape; Attraction and Hotel decode slug. 8 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation linking restaurants by id and dropping the attraction name fallback fails 2. ViewModels, models and app module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-035 | this commit | Attraction Open on web no longer builds /attractions/<uuid> (the web resolves by slug only, so a UUID-opened not-found screen sent users to a web 404): it uses the loaded row's slug or name slug, else a non-UUID opened value, else the /attractions listing, via a new PlaceShareLinks.attractionWebUrl. 3 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10), 11/11 in the suite; a mutation dropping the UUID guard fails exactly the no-UUID test. ViewModel, DetailDestinations and app module not compiled (no Android SDK); no device check |

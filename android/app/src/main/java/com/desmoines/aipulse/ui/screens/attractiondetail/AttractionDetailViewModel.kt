@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.data.remote.EntityNotFoundException
 import com.desmoines.aipulse.data.repository.AttractionsRepository
-import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.LocationService
 import com.desmoines.aipulse.util.PlaceShareLinks
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -70,10 +69,15 @@ class AttractionDetailViewModel @Inject constructor(
     }
 
     /**
-     * The page on the web for the id or slug this screen was opened with. A
-     * slug the app can't resolve may still open there (AND-OVH-022).
+     * The page on the web for this attraction. A slug the app can't resolve
+     * may still open there (AND-OVH-022), but the web resolves by slug only,
+     * so a UUID the screen was opened with is never placed in the path; with
+     * no slug to go on it opens the /attractions listing (AND-AUDIT-035).
      */
-    fun webUrl(): String? = lastId?.let { "${Config.SITE_URL}/attractions/${Uri.encode(it)}" }
+    fun webUrl(): String {
+        val loaded = _attraction.value
+        return PlaceShareLinks.attractionWebUrl(loaded?.slug, loaded?.name, lastId)
+    }
 
     /**
      * Formatted distance from user's location to this attraction.

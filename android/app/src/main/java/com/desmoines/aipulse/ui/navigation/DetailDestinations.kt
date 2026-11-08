@@ -262,9 +262,7 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
             // In the app's web view: an ACTION_VIEW on desmoinesinsider.com is
             // an App Link and would bounce straight back to this screen.
             onOpenOnWeb = {
-                viewModel.webUrl()?.let { url ->
-                    navController.navigate(Route.WebView.createRoute(url)) { launchSingleTop = true }
-                }
+                navController.navigate(Route.WebView.createRoute(viewModel.webUrl())) { launchSingleTop = true }
             },
         )
     }

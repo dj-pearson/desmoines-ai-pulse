@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.util
 
+import com.desmoines.aipulse.data.remote.SlugLookup
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -33,6 +34,22 @@ object PlaceShareLinks {
         val key = slug?.takeIf { it.isNotBlank() } ?: EventSlug.slugify(name).takeIf { it.isNotEmpty() }
         return key?.let { page("attractions", it) }
     }
+
+    /**
+     * Where an attraction screen's "Open on web" goes (AND-AUDIT-035): the
+     * loaded row's page when there is one, else the value the screen was
+     * opened with if it is a slug, else the /attractions listing.
+     *
+     * Lists, favorites and notifications open the screen with the row UUID,
+     * and the web resolves /attractions/<key> by slug only, so placing that
+     * UUID in the path sent a not-found attraction straight to a web 404. The
+     * listing is the honest fallback: the button never goes nowhere, and a
+     * UUID never reaches an /attractions/ path.
+     */
+    fun attractionWebUrl(slug: String?, name: String?, openedWith: String?): String =
+        attractionUrl(slug, name)
+            ?: openedWith?.takeIf { it.isNotBlank() && !SlugLookup.isUuid(it) }?.let { page("attractions", it) }
+            ?: "${Config.SITE_URL}/attractions"
 
     fun hotelUrl(slug: String?): String? =
         slug?.takeIf { it.isNotBlank() }?.let { page("stay", it) }
