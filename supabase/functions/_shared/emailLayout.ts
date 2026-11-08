@@ -50,6 +50,15 @@ export interface EmailRecipient {
    */
   reminderToken?: string | null;
   /**
+   * WEB-FEAT-073: a saved_searches.id belonging to the recipient, on a
+   * saved-search alert email. When set (and reminderToken is not), the footer
+   * link and the one-click header turn off that user's event alerts
+   * (disable_event_alerts_by_token) instead of unsubscribing the newsletter,
+   * and unsubscribeToken is ignored. Same reasoning as reminderToken: the
+   * inbox button on an alert should stop alerts, not every marketing email.
+   */
+  alertsToken?: string | null;
+  /**
    * Optional per-email unsubscribe path. If the link should cancel a specific
    * kind of email (e.g. event reminders only) rather than all marketing,
    * pass `?tab=settings` or `/profile?tab=settings`.
@@ -90,6 +99,9 @@ export function buildUnsubscribeUrl(recipient: EmailRecipient): string {
   if (recipient.reminderToken) {
     return `${SITE_URL}/unsubscribe?reminder=${encodeURIComponent(recipient.reminderToken)}`;
   }
+  if (recipient.alertsToken) {
+    return `${SITE_URL}/unsubscribe?alerts=${encodeURIComponent(recipient.alertsToken)}`;
+  }
   if (recipient.unsubscribeToken) {
     return `${SITE_URL}/unsubscribe?token=${encodeURIComponent(
       recipient.unsubscribeToken
@@ -124,6 +136,18 @@ export function buildOneClickReminderUrl(
   if (!reminderToken || !supabaseUrl) return null;
   return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?reminder=${encodeURIComponent(reminderToken)}`;
 }
+
+/** The one-click target for a saved-search alert email: email-unsubscribe?alerts=. */
+export function buildOneClickAlertsUrl(
+  alertsToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!alertsToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?alerts=${encodeURIComponent(alertsToken)}`;
+}
+
+/** Where a saved-search alert's footer sends the reader to manage alerts. */
+const SAVED_SEARCHES_PATH = "/dashboard?tab=saved-searches";
 
 function readSupabaseUrl(): string | undefined {
   try {
@@ -161,6 +185,18 @@ function renderMarketingFooterHtml(recipient: EmailRecipient): string {
         <a href="${SITE_URL}/my-events?tab=reminders" style="color:#666;text-decoration:underline;">
           reminders</a>.
       </p>`
+    : recipient.alertsToken
+    ? `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because you turned on alerts for a saved
+        search on ${escapeHtml(POSTAL_ADDRESS.name)}. You can
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          turn off saved-search alerts in one click
+        </a>
+        or manage your
+        <a href="${SITE_URL}${SAVED_SEARCHES_PATH}" style="color:#666;text-decoration:underline;">
+          saved searches</a>.
+      </p>`
     : `
       <p style="margin:0 0 8px;">
         You're receiving this email because you signed up for updates from
@@ -197,6 +233,10 @@ function renderMarketingFooterText(recipient: EmailRecipient): string {
     ? `You're receiving this email because you set a reminder for this event on ${POSTAL_ADDRESS.name}.
 Stop reminders for this event (one click): ${unsubscribeUrl}
 Your reminders: ${SITE_URL}/my-events?tab=reminders`
+    : recipient.alertsToken
+    ? `You're receiving this email because you turned on alerts for a saved search on ${POSTAL_ADDRESS.name}.
+Turn off saved-search alerts (one click): ${unsubscribeUrl}
+Your saved searches: ${SITE_URL}${SAVED_SEARCHES_PATH}`
     : `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
 Unsubscribe (one click): ${unsubscribeUrl}
 Email preferences: ${SITE_URL}/profile?tab=settings`;
@@ -286,6 +326,8 @@ export function renderEmail(opts: RenderEmailOptions): RenderedEmail {
     // List-Unsubscribe-Post is only claimed when there is one.
     const oneClick = opts.recipient.reminderToken
       ? buildOneClickReminderUrl(opts.recipient.reminderToken)
+      : opts.recipient.alertsToken
+      ? buildOneClickAlertsUrl(opts.recipient.alertsToken)
       : buildOneClickUnsubscribeUrl(opts.recipient.unsubscribeToken);
     if (!oneClick) return { html, text, listUnsubscribe: MAILTO_UNSUBSCRIBE };
     return {

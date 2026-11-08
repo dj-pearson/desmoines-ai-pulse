@@ -154,6 +154,12 @@ const PENDING_MIGRATIONS = [
   // src/lib/reminderEmailSuppression.ts, which answers false on PGRST202, so
   // the reminder card reads as it did before until this is applied.
   { rpc: 'my_reminder_emails_unsubscribed', migration: '20261108000081' },
+  // The one-click "turn off saved-search alerts" link (WEB-FEAT-073),
+  // called by src/lib/alertsOptOut.ts from /unsubscribe?alerts= and by
+  // email-unsubscribe. Until it is applied the page shows its fixed "something
+  // went wrong" copy and the edge function answers 503, so mailbox providers
+  // retry the one-click POST.
+  { rpc: 'disable_event_alerts_by_token', migration: '20261108000097' },
   // Business listing claims (WEB-ADS-009). The table read is cast, so only the
   // RPC is visible to this scanner; both are listed so the "landed" check asks
   // for them back once the types carry them. useBusinessClaim treats a 42P01 on

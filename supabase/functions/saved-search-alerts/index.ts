@@ -69,10 +69,6 @@ interface PrefRow {
   event_alerts_enabled: boolean | null;
 }
 
-interface SubscriberRow {
-  unsubscribe_token: string | null;
-}
-
 type Supa = ReturnType<typeof createClient>;
 
 serve(async (req) => {
@@ -159,6 +155,10 @@ serve(async (req) => {
 
     // 3. Per-user accumulation of matched searches.
     const perUser = new Map<string, AlertGroup[]>();
+    // One of the user's own matched search ids, for the opt-out link. Any of
+    // them names the same user, which is all disable_event_alerts_by_token
+    // needs.
+    const optOutSearch = new Map<string, string>();
     const matchedSearchIds = new Set<string>();
     for (const s of searches) {
       const since = windowStart.get(s.id) ?? now.getTime();
@@ -170,6 +170,7 @@ serve(async (req) => {
         const list = perUser.get(s.user_id) ?? [];
         list.push({ name: s.name, link: deepLink(s.filters, SITE_URL), events: matched });
         perUser.set(s.user_id, list);
+        if (!optOutSearch.has(s.user_id)) optOutSearch.set(s.user_id, s.id);
       }
     }
 
@@ -246,18 +247,16 @@ serve(async (req) => {
         const allGroups = perUser.get(uid) ?? [];
         const groups = allGroups.map((g) => ({ ...g, events: g.events.slice(0, MAX_EVENTS_PER_SEARCH) }));
 
-        // Best-effort: the token only personalises the unsubscribe link, and
-        // renderEmail still emits a working generic one without it. Logged so a
-        // run that quietly drops every token is visible (WEB-BE-032 AC3).
-        const { data: sub, error: subError } = await supabase
-          .from("newsletter_subscribers")
-          .select("unsubscribe_token")
-          .eq("email", email.toLowerCase().trim())
-          .maybeSingle();
-        if (subError) {
-          console.warn(`[saved-search-alerts] unsubscribe token read failed: ${subError.message}`);
-        }
-        const token = (sub as SubscriberRow | null)?.unsubscribe_token ?? null;
+        // WEB-FEAT-073: the opt-out is the alert's own, not the
+        // newsletter's. This used to look up the reader's
+        // newsletter_subscribers token and put it in the footer and the
+        // List-Unsubscribe header, so the inbox Unsubscribe button on an alert
+        // ended the newsletter and, through email_suppressions, every other
+        // marketing email - and a reader with no newsletter row got no
+        // one-click opt-out at all. The token is a saved_searches.id of theirs;
+        // disable_event_alerts_by_token turns off their event alerts and
+        // nothing else.
+        const alertsToken = optOutSearch.get(uid) ?? null;
 
         // Distinct events across all of this user's matches: one event that
         // fits two searches is one new event, not two.
@@ -267,7 +266,7 @@ serve(async (req) => {
           bodyHtml: html,
           bodyText: text,
           category: "marketing",
-          recipient: { email, unsubscribeToken: token, preferencesPath: "/dashboard?tab=saved-searches" },
+          recipient: { email, alertsToken, preferencesPath: "/dashboard?tab=saved-searches" },
         });
 
         const sent = await sendEmail(

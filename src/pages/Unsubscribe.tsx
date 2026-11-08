@@ -11,6 +11,10 @@
  * An event-reminder email links here with ?reminder=<id> instead (WEB-FEAT-059).
  * That stops the remaining reminders for that one event and leaves the
  * newsletter alone; see src/lib/reminderOptOut.ts.
+ *
+ * A saved-search alert email links here with ?alerts=<saved search id>
+ * (WEB-FEAT-073). That turns off the reader's event alerts and leaves
+ * the newsletter alone; see src/lib/alertsOptOut.ts.
  */
 
 import { useEffect, useState } from "react";
@@ -29,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { logConsent } from "@/lib/consentLog";
 import { cancelRemindersByToken } from "@/lib/reminderOptOut";
+import { disableAlertsByToken } from "@/lib/alertsOptOut";
 import {
   CheckCircle2,
   AlertCircle,
@@ -36,12 +41,13 @@ import {
   MailX,
 } from "lucide-react";
 
-type Status = "loading" | "success" | "already" | "reminders" | "invalid" | "error";
+type Status = "loading" | "success" | "already" | "reminders" | "alerts" | "invalid" | "error";
 
 export default function Unsubscribe() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const reminderToken = params.get("reminder");
+  const alertsToken = params.get("alerts");
   const [status, setStatus] = useState<Status>("loading");
   const [reminderEvent, setReminderEvent] = useState<string | null>(null);
 
@@ -64,9 +70,24 @@ export default function Unsubscribe() {
       setStatus("reminders");
     }
 
+    async function runAlerts(id: string) {
+      const result = await disableAlertsByToken(id);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "disableAlertsByToken" });
+        setStatus("error");
+        return;
+      }
+      setStatus(result.kind === "invalid" ? "invalid" : "alerts");
+    }
+
     async function run() {
       if (reminderToken !== null) {
         await runReminder(reminderToken);
+        return;
+      }
+      if (alertsToken !== null) {
+        await runAlerts(alertsToken);
         return;
       }
       if (!token) {
@@ -120,7 +141,7 @@ export default function Unsubscribe() {
     return () => {
       cancelled = true;
     };
-  }, [token, reminderToken]);
+  }, [token, reminderToken, alertsToken]);
 
   return (
     <>
@@ -172,6 +193,20 @@ export default function Unsubscribe() {
                   Your other reminders and any newsletter you get are unchanged.{" "}
                   <Link to="/my-events?tab=reminders" className="underline">
                     See your reminders
+                  </Link>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {status === "alerts" && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  Saved-search alerts are off. Your saved searches, any
+                  newsletter you get and your other emails are unchanged.{" "}
+                  <Link to="/dashboard?tab=saved-searches" className="underline">
+                    Manage saved searches
                   </Link>
                   .
                 </AlertDescription>

@@ -239,3 +239,13 @@ Deno.test("the email escapes what it prints", () => {
   assert(html.includes("q=a&amp;b=c"), "href escaped");
   assert(text.includes("/events/rock-roll-2026-09-26?"), "text version links the event");
 });
+
+// WEB-FEAT-073: the alert email's opt-out is the alert's own. The job
+// used to look up the newsletter token and pass it as unsubscribeToken, so the
+// inbox Unsubscribe button on an alert ended the newsletter and all marketing.
+Deno.test("saved-search-alerts: the opt-out turns off alerts, never the newsletter", async () => {
+  const source = await Deno.readTextFile(new URL("../saved-search-alerts/index.ts", import.meta.url));
+  assert(/recipient:\s*\{[^}]*\balertsToken\b/.test(source), "renderEmail recipient carries alertsToken");
+  assert(!/unsubscribeToken\s*:/.test(source), "no newsletter token on the alert email");
+  assert(!source.includes('from("newsletter_subscribers")'), "no newsletter token lookup");
+});

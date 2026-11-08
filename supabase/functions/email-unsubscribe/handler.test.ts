@@ -111,3 +111,61 @@ Deno.test("GET ?reminder= hands the reader to the page with the reminder id", as
   assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?reminder=${REMINDER}`);
   assertEquals(reminders.calls.length, 0);
 });
+
+// WEB-FEAT-073: a saved-search alert's ?alerts= link turns off event
+// alerts and never touches the newsletter RPC.
+const ALERTS = "7a1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e";
+
+function alertsDeps() {
+  const newsletter = rpcReturning([{ success: true, already_unsubscribed: false }]);
+  const alerts = rpcReturning([{ success: true, already_disabled: false }]);
+  return {
+    newsletter,
+    alerts,
+    deps: { rpc: newsletter.rpc, disableAlerts: alerts.rpc, siteUrl: "https://desmoinesinsider.com" },
+  };
+}
+
+Deno.test("POST ?alerts= turns off event alerts, not the newsletter", async () => {
+  const { newsletter, alerts, deps: d } = alertsDeps();
+  const res = await handleUnsubscribe(
+    new Request(`${FN}?alerts=${ALERTS.toUpperCase()}`, { method: "POST", body: "List-Unsubscribe=One-Click" }),
+    d,
+  );
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { ok: true, already_disabled: false });
+  assertEquals(alerts.calls, [ALERTS]);
+  assertEquals(newsletter.calls.length, 0);
+});
+
+Deno.test("POST ?alerts= with a malformed id never reaches the database", async () => {
+  const { newsletter, alerts, deps: d } = alertsDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?alerts=nope`, { method: "POST" }), d);
+  assertEquals(res.status, 400);
+  await res.body?.cancel();
+  assertEquals(alerts.calls.length + newsletter.calls.length, 0);
+});
+
+Deno.test("POST ?alerts= unknown is 404, a database error is 503", async () => {
+  const base = { rpc: rpcReturning(null).rpc, siteUrl: "https://desmoinesinsider.com" };
+  const unknown = await handleUnsubscribe(
+    new Request(`${FN}?alerts=${ALERTS}`, { method: "POST" }),
+    { ...base, disableAlerts: rpcReturning([{ success: false, already_disabled: false }]).rpc },
+  );
+  assertEquals(unknown.status, 404);
+  await unknown.body?.cancel();
+  const down = await handleUnsubscribe(
+    new Request(`${FN}?alerts=${ALERTS}`, { method: "POST" }),
+    { ...base, disableAlerts: rpcReturning(null, { message: "PGRST202" }).rpc },
+  );
+  assertEquals(down.status, 503);
+  await down.body?.cancel();
+});
+
+Deno.test("GET ?alerts= hands the reader to the page with the search id", async () => {
+  const { alerts, deps: d } = alertsDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?alerts=${ALERTS}`), d);
+  assertEquals(res.status, 303);
+  assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?alerts=${ALERTS}`);
+  assertEquals(alerts.calls.length, 0);
+});
