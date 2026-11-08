@@ -41,6 +41,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
+import {
+  deliveredLabel,
+  isInFlight,
+  SEND_PROGRESS_POLL_MS,
+  sendNowToast,
+  type SendNowAnswer,
+} from "@/lib/newsletterSendProgress";
 import { SecurityUtils } from "@/lib/securityUtils";
 import { toast } from "sonner";
 
@@ -124,9 +131,39 @@ export default function NewsletterCampaignsManager() {
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Successful delivery rows recorded so far, per in-flight campaign id.
+  const [deliveredSoFar, setDeliveredSoFar] = useState<Map<string, number>>(
+    new Map(),
+  );
 
-  async function load() {
-    setLoading(true);
+  async function loadProgress(campaigns: CampaignRow[]) {
+    const now = new Date();
+    const inFlight = campaigns.filter((c) => isInFlight(c, now));
+    const next = new Map<string, number>();
+    await Promise.all(
+      inFlight.map(async (c) => {
+        const { count, error } = await supabase
+          .from("newsletter_deliveries")
+          .select("id", { count: "exact", head: true })
+          .eq("campaign_id", c.id)
+          .is("error_message", null);
+        // A failed count leaves the stored figure in the cell rather than a
+        // wrong "0 so far".
+        if (error) {
+          handleError(error, {
+            component: "NewsletterCampaignsManager",
+            action: "loadProgress",
+          });
+          return;
+        }
+        next.set(c.id, count ?? 0);
+      }),
+    );
+    setDeliveredSoFar(next);
+  }
+
+  async function load(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) setLoading(true);
     try {
       const { data, error } = await supabase
         .from("newsletter_campaigns")
@@ -136,21 +173,37 @@ export default function NewsletterCampaignsManager() {
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      setRows((data ?? []) as unknown as CampaignRow[]);
+      const campaigns = (data ?? []) as unknown as CampaignRow[];
+      setRows(campaigns);
+      await loadProgress(campaigns);
     } catch (err) {
       handleError(err, {
         component: "NewsletterCampaignsManager",
         action: "load",
       });
-      toast.error("Failed to load campaigns");
+      // A background refresh that fails keeps the table it has; only the
+      // first load tells the admin.
+      if (!opts.silent) toast.error("Failed to load campaigns");
     } finally {
-      setLoading(false);
+      if (!opts.silent) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
   }, []);
+
+  // Re-read while anything is queued or sending, so a send handed to the
+  // dispatcher shows its count climbing and then its final status.
+  const anyInFlight = rows.some((r) => isInFlight(r));
+  useEffect(() => {
+    if (!anyInFlight) return;
+    const timer = setInterval(() => {
+      load({ silent: true });
+    }, SEND_PROGRESS_POLL_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyInFlight]);
 
   function resetForm() {
     setSubject("");
@@ -242,29 +295,25 @@ export default function NewsletterCampaignsManager() {
     }
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke<{
-        ok: boolean;
-        delivered?: number;
-        failed?: number;
-        recipient_count?: number;
-      }>("send-newsletter-campaign", {
-        body: {
-          action,
-          subject,
-          preheader: preheader || undefined,
-          body_html: body,
-          segment: buildSegment(),
-          scheduled_for:
-            action === "schedule"
-              ? new Date(scheduledAt).toISOString()
-              : undefined,
+      const { data, error } = await supabase.functions.invoke<SendNowAnswer>(
+        "send-newsletter-campaign",
+        {
+          body: {
+            action,
+            subject,
+            preheader: preheader || undefined,
+            body_html: body,
+            segment: buildSegment(),
+            scheduled_for:
+              action === "schedule"
+                ? new Date(scheduledAt).toISOString()
+                : undefined,
+          },
         },
-      });
+      );
       if (error) throw error;
       if (action === "send_now" && data?.ok) {
-        toast.success(
-          `Delivered ${data.delivered ?? 0} of ${data.recipient_count ?? 0}; ${data.failed ?? 0} failed`,
-        );
+        toast.success(sendNowToast(data));
       } else if (action === "schedule") {
         toast.success("Campaign scheduled");
       }
@@ -397,7 +446,7 @@ export default function NewsletterCampaignsManager() {
                       {r.recipient_count.toLocaleString()}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums">
-                      {r.delivered.toLocaleString()}
+                      {deliveredLabel(r, deliveredSoFar.get(r.id))}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums">
                       {r.opens.toLocaleString()}

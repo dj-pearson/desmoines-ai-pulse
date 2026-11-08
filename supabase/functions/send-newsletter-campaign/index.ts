@@ -12,6 +12,10 @@
  *   - send_test     { subject, preheader, body_html }
  *                                    → sends to the calling admin only
  *   - send_now      { subject, preheader, body_html, segment }
+ *                                    → sends in this request up to
+ *                                      SEND_NOW_INLINE_LIMIT recipients; above
+ *                                      that, queues the campaign as due now and
+ *                                      answers { queued: true } straight away
  *   - schedule      { subject, preheader, body_html, segment, scheduled_for }
  *
  * Segment shape: { sources?: string[] }  // [] / undefined = all active
@@ -35,6 +39,7 @@ import {
   dispatchNewsletter,
   type DispatchResult,
   loadAllPages,
+  sendNowMode,
 } from "../_shared/newsletterDispatch.ts";
 
 const FROM_ADDRESS = Deno.env.get("NEWSLETTER_FROM")
@@ -205,8 +210,13 @@ serve(async (req) => {
       // Persist the campaign row first.
       const seg: Segment = segment ?? {};
       const recipients = await resolveSegment(supabase, seg);
+      // A large send_now is handed to dispatch-scheduled-newsletters instead
+      // of looping inside this request (WEB-ADS-026). It is written exactly
+      // like a schedule for now: 'scheduled', due now, unclaimed, so the next
+      // cron claim picks it up.
+      const queued = action === "send_now" && sendNowMode(recipients.length) === "queue";
       const status =
-        action === "schedule" ? "scheduled" : "sending";
+        action === "schedule" || queued ? "scheduled" : "sending";
       // send_now is stamped as claimed now and due now. If this invocation is
       // killed mid-send, reclaim_stuck_newsletter_campaigns flips the row back
       // to 'scheduled' and claim_scheduled_newsletter_campaigns only picks up
@@ -223,7 +233,7 @@ serve(async (req) => {
           segment: seg,
           status,
           scheduled_for: action === "schedule" ? scheduled_for : nowIso,
-          claimed_at: action === "schedule" ? null : nowIso,
+          claimed_at: action === "schedule" || queued ? null : nowIso,
           recipient_count: recipients.length,
           sent_by: user.id,
         })
@@ -237,6 +247,29 @@ serve(async (req) => {
             ok: true,
             campaign_id: campaign.id,
             scheduled_for,
+            recipient_count: recipients.length,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (queued) {
+        // Same keys as an inline send_now answer, so a caller that only reads
+        // delivered / failed / recipient_count keeps working; queued says the
+        // counts are zero because nothing has been sent yet, not because
+        // everything failed. 200, not 202: the inline answer is 200 and a
+        // client branching on the status should not see a new one.
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            queued: true,
+            campaign_id: campaign.id,
+            scheduled_for: nowIso,
+            delivered: 0,
+            failed: 0,
             recipient_count: recipients.length,
           }),
           {

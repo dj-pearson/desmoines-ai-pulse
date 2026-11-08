@@ -190,6 +190,8 @@ describe("both senders use the shared loop", () => {
   it("send_now is stamped due and claimed, so a killed run is resumable", () => {
     const src = strip("supabase/functions/send-newsletter-campaign/index.ts");
     expect(src).toMatch(/scheduled_for:\s*action === "schedule" \? scheduled_for : nowIso/);
-    expect(src).toMatch(/claimed_at:\s*action === "schedule" \? null : nowIso/);
+    // An inline send_now is claimed; a queued one (WEB-ADS-026) is left
+    // unclaimed for the dispatcher, like a schedule.
+    expect(src).toMatch(/claimed_at:\s*action === "schedule" \|\| queued \? null : nowIso/);
   });
 });

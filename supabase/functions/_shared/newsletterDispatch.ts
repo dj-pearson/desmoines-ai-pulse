@@ -144,3 +144,23 @@ export async function dispatchNewsletter<R extends NewsletterRecipient>(
 
   return { delivered, failed, skipped, errors };
 }
+
+/**
+ * WEB-ADS-026. send_now sends inside the admin's HTTP request, five at a time.
+ * Each batch is a round trip to SES plus a newsletter_deliveries insert, so a
+ * list of a few thousand runs past the edge wall-clock limit: the admin sees a
+ * timeout, the run is killed, and reclaim resumes it 15 minutes later. Above
+ * this many recipients send_now writes the campaign as due now and returns;
+ * dispatch-scheduled-newsletters (pg_cron, every minute) claims it in its own
+ * invocation. 250 is 50 batches, well inside the limit at a second a batch.
+ */
+export const SEND_NOW_INLINE_LIMIT = 250;
+
+export type SendNowMode = "inline" | "queue";
+
+export function sendNowMode(
+  recipientCount: number,
+  limit: number = SEND_NOW_INLINE_LIMIT,
+): SendNowMode {
+  return recipientCount > limit ? "queue" : "inline";
+}
