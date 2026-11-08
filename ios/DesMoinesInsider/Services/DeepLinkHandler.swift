@@ -229,8 +229,8 @@ final class DeepLinkHandler {
     /// a shared "open now" or "vegan" page showed every restaurant. The
     /// open-now page also reads `?diet=`, and the dietary index the legacy
     /// `?diet=` form, as the web does (OpenNowRestaurants.tsx,
-    /// DietaryRestaurants.tsx). A diet the Dining filter has no key for
-    /// (kosher), and the bare index, open the tab unfiltered. Nil for any
+    /// DietaryRestaurants.tsx). An unknown diet, and the bare index, open
+    /// the tab unfiltered; kosher has a key since IOS-AUDIT-FEAT-044. Nil for any
     /// other segment: that is a restaurant, not a landing page.
     static func restaurantLandingDestination(_ path: [String], url: URL) -> Destination? {
         guard path.count >= 2, reservedRestaurantSegments.contains(path[1]) else { return nil }

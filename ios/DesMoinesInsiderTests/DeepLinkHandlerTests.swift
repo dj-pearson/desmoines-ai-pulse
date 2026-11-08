@@ -58,12 +58,15 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/restaurants/open-now?diet=Halal"),
                        .restaurantLanding(RestaurantLinkFilter(openNow: true, diet: "halal")))
         XCTAssertEqual(dest("/restaurants/dietary?diet=keto"), .restaurantLanding(RestaurantLinkFilter(diet: "keto")))
+        // IOS-AUDIT-FEAT-044: kosher was the one web diet with no Dining key
+        // and opened the plain tab.
+        XCTAssertEqual(dest("/restaurants/dietary/kosher"), .restaurantLanding(RestaurantLinkFilter(diet: "kosher")))
+        XCTAssertEqual(dest("/restaurants/open-now?diet=kosher"),
+                       .restaurantLanding(RestaurantLinkFilter(openNow: true, diet: "kosher")))
     }
 
     func testDietTheDiningFilterLacksOpensTheUnfilteredTab() {
-        // Kosher is a web diet with no Dining filter key; an unknown diet and
-        // the bare index have nothing to narrow by either.
-        XCTAssertEqual(dest("/restaurants/dietary/kosher"), .tab(.restaurants))
+        // An unknown diet and the bare index have nothing to narrow by.
         XCTAssertEqual(dest("/restaurants/dietary/paleo"), .tab(.restaurants))
         XCTAssertEqual(dest("/restaurants/dietary"), .tab(.restaurants))
         // An unknown open-now diet drops the diet, not the open-now filter.
