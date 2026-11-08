@@ -185,6 +185,16 @@ export const RESTAURANT_MAP_POINT_COLUMNS =
   "id, name, slug, latitude, longitude, cuisine, opening, hours_json, price_range, rating, image_url, phone, status, business_status";
 
 /**
+ * Restaurant pins on /discover-map. It selected `opening` alone and called
+ * resolveOpenStatus(undefined, opening), and production stores a date in
+ * `opening`, so under Now and Tonight every restaurant was "hours unknown" and
+ * held back, and with no business_status a CLOSED_TEMPORARILY place could
+ * never be ruled out (WEB-FEAT-053). discoverMapRestaurantStatus reads both.
+ */
+export const DISCOVER_MAP_RESTAURANT_COLUMNS =
+  "id, slug, name, latitude, longitude, description, cuisine, rating, opening, hours_json, status, business_status, is_merged";
+
+/**
  * Restaurants under a food article (pickHubRestaurants in useArticles). It
  * selected `opening` alone for hours, which production stores as a date, so
  * the block could never say "Open now", and it had no business_status, so a
