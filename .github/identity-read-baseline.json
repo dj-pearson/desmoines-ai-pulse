@@ -2,9 +2,7 @@
   "_comment": "Tables carrying an identity column (user_id and friends) whose SELECT policy is USING(true) for public/anon - anyone with the bundled anon key can read who did what. WEB-SEC-025 AC7. Whether each is public BY DESIGN is a product decision per table, so this list is triage, not a vulnerability list. It must only ever SHRINK. Tightening one is a multi-release deprecation when a shipped mobile binary reads it (CLAUDE.md). user_subscriptions STAYS LISTED UNTIL PRODUCTION IS PROBED (WEB-SEC-054): \"Service role can manage all subscriptions\" (20251225000000, FOR ALL USING(true) with no TO clause) was dropped and recreated TO service_role by 20260612000001_rls_audit_fixes.sql inside a DO block with EXECUTE format(...). The check now expands that loop and reports user_subscriptions as Down 1. Remove the entry (--write) only after the anon key gets [] from /rest/v1/user_subscriptions?select=id&limit=1; until then a new public read on it would pass, which is the cost of not trusting the parser over production. swipe_sessions JOINED WHEN host_user_id BECAME AN IDENTITY COLUMN (WEB-SEC-070): its USING (true) read predates the check recognising the column, so the list did not grow, the check stopped missing it. It leaves once both apps resolve join codes through lookup_swipe_session() and MIN_SUPPORTED_APP_VERSION excludes the binaries that read the table by code.",
   "generated": "2026-11-08",
   "tables": [
-    "event_discussion_reactions",
     "event_discussions",
-    "event_live_feed",
     "event_photos",
     "event_reviews",
     "event_tips",
