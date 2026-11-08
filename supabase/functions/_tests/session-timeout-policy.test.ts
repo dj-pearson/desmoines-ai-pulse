@@ -48,9 +48,40 @@ Deno.test('a deliberate logout still revokes every device', async () => {
 });
 
 Deno.test('the idle policy is scoped to admins', async () => {
+  // WEB-PERF-061 moved the hook behind a lazy boundary: SessionManager no longer
+  // passes `enabled: isAdmin && !isAdminLoading`, it returns null for everyone
+  // else and mounts AdminSessionTimeout, which calls the hook with
+  // `enabled: true`. The gate is now the early return, so that is what is
+  // asserted. This test kept matching the old `enabled:` expression and failed
+  // from that commit on, which also skipped every later step in its CI job.
   const mgr = codeOnly(await read('src/components/auth/SessionManager.tsx'));
-  assert(/enabled: isAdmin && !isAdminLoading/.test(mgr), 'admins only, and not mid-check');
-  assertFalse(/enabled: true/.test(mgr), 'it must not apply to every signed-in visitor');
+  assert(
+    /if \(!isAdmin \|\| isAdminLoading\) return null;/.test(mgr),
+    'admins only, and not mid-check: SessionManager must return null before the admin check resolves true',
+  );
+  assert(/<AdminSessionTimeout\s*\/>/.test(mgr), 'the admin policy is mounted from SessionManager');
+  assertFalse(/useSessionTimeout\(/.test(mgr), 'the hook must not run ungated in SessionManager');
+
+  // AdminSessionTimeout hard-codes `enabled: true`, which is only safe while
+  // SessionManager is its one mount point. Any other importer would apply the
+  // 30-minute timeout to whoever renders it.
+  const importers: string[] = [];
+  async function walk(dir: URL): Promise<void> {
+    for await (const entry of Deno.readDir(dir)) {
+      const child = new URL(`${entry.name}${entry.isDirectory ? '/' : ''}`, dir);
+      if (entry.isDirectory) {
+        if (entry.name !== '__tests__') await walk(child);
+      } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+        const src = codeOnly(await Deno.readTextFile(child));
+        if (/['"][^'"]*\/AdminSessionTimeout['"]/.test(src)) importers.push(child.pathname.split('/src/')[1]);
+      }
+    }
+  }
+  await walk(new URL('src/', REPO));
+  assert(
+    importers.length === 1 && importers[0] === 'components/auth/SessionManager.tsx',
+    `AdminSessionTimeout must be loaded only by SessionManager, found: ${importers.join(', ')}`,
+  );
 });
 
 Deno.test('session age comes from the session, not from page load', async () => {
