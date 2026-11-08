@@ -15,6 +15,7 @@ import {
 } from '@/lib/listColumns';
 import { escapeLikePattern, sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 import { centralWindow, upcomingFloorUtc } from '@/lib/timezone';
+import { isPermanentlyClosedRestaurant, NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
 
 /**
  * The filters /search/advanced can actually apply (search plan WP4 item 2).
@@ -293,7 +294,17 @@ async function searchEvents(f: AdvancedSearchFilters): Promise<SearchResult[]> {
 }
 
 async function searchRestaurants(f: AdvancedSearchFilters): Promise<SearchResult[]> {
-  let query = supabase.from('restaurants').select(RESTAURANT_LIST_COLUMNS).limit(50);
+  // The same two rules as every other restaurant list: a row merged into its
+  // duplicate (WEB-AUTO-005) and a place closed for good (SEO-059) are not
+  // places to send anyone. In the query, so the 50-row cap is spent on live
+  // places; a closed place keeps its rating, so a rating filter or sort used
+  // to put it first.
+  let query = supabase
+    .from('restaurants')
+    .select(RESTAURANT_LIST_COLUMNS)
+    .neq('is_merged', true)
+    .or(NOT_CLOSED_RESTAURANT_FILTER)
+    .limit(50);
 
   if (f.query) {
     const q = sanitizePostgrestPattern(f.query);
@@ -312,7 +323,9 @@ async function searchRestaurants(f: AdvancedSearchFilters): Promise<SearchResult
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? []).map((restaurant) => ({
+  // The query only spells status = 'closed'; 'permanently_closed' and
+  // 'closed_permanently' rows still arrive and are dropped here.
+  return (data ?? []).filter((restaurant) => !isPermanentlyClosedRestaurant(restaurant)).map((restaurant) => ({
     id: restaurant.id,
     type: 'restaurant' as const,
     title: restaurant.name,
