@@ -93,9 +93,17 @@ now reads Instant.now() converted to America/Chicago through isOpenAt, so the Re
 Restaurants Open now filter and the Discover Open now filter all evaluate business_hours on the Central
 clock (they all call isOpenNow, which used LocalDateTime.now() in the phone's zone). One device check
 closes it: set the phone to Pacific time, open Restaurants when a place opened within the last two
-hours Central, and confirm the badge reads Open (it read Closed before). The trap: Deal.isActiveNow
-still uses OffsetDateTime.now() in the phone's zone, so the Deals tab's Active now filter can disagree
-with the restaurant badge on a phone outside Central until that gets the same fix.
+hours Central, and confirm the badge reads Open (it read Closed before). Deals now read the same clock
+(AND-AUDIT-037).
+
+AND-AUDIT-037 (deal Active now in Des Moines time) is code-complete and JVM-tested. Deal.isActiveNow reads
+the instant in America/Chicago before taking the weekday and minute, so the Deals tab's Active badge and
+its Active now filter (both call it with no argument) follow the Des Moines clock, and a window whose end
+is before its start (21:00-02:00) runs past midnight on the day it starts, as iOS does. One device check
+closes it: set the phone to UTC, open Deals after 7pm Central on a weekday with a weekday happy hour that
+ended at 6pm, and confirm it is not marked Active (it used to read the next day's schedule). The trap: a
+deal row with start_time but no end_time is treated as all day on its scheduled days, as before and as
+iOS does; if one looks active at the wrong hour, check for a missing end_time before suspecting the zone.
 
 ## Loop log
 
@@ -116,3 +124,4 @@ with the restaurant badge on a phone outside Central until that gets the same fi
 | 2026-11-08 | AND-AUDIT-035 | this commit | Attraction Open on web no longer builds /attractions/<uuid> (the web resolves by slug only, so a UUID-opened not-found screen sent users to a web 404): it uses the loaded row's slug or name slug, else a non-UUID opened value, else the /attractions listing, via a new PlaceShareLinks.attractionWebUrl. 3 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10), 11/11 in the suite; a mutation dropping the UUID guard fails exactly the no-UUID test. ViewModel, DetailDestinations and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-032 | this commit | Trip planner start and end dates count from the Des Moines day via a new TripDates.range (EventTimeText.desMoinesToday of the phone's instant), not LocalDate.now(), so a phone on UTC after 7pm Central no longer sends generate-itinerary tomorrow as "today". 4 new TripDatesTest JVM tests pass on a stub harness (kotlinc 2.2.10) with the 52 existing event-time tests; a mutation restoring the device day fails exactly the 2 cross-zone tests. TripPlannerViewModel and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-036 | this commit | Restaurant open/closed now reads the Des Moines wall clock: isOpenNow converts Instant.now() to America/Chicago via a new isOpenAt (was LocalDateTime.now() in the phone's zone), so the list badge and the Restaurants and Discover Open now filters agree with business_hours on any phone. 5 new RestaurantOpenNowTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation reading the instant in UTC fails exactly the 4 cross-zone tests. App module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-037 | this commit | Deal Active now reads the Des Moines clock: isActiveNow converts the instant to America/Chicago before taking weekday and minute (was the phone offset via OffsetDateTime.now()), and a 21:00-02:00 window now runs past midnight as on iOS (it could never match). 2 new DealTest JVM tests pass on a stub harness (kotlinc 2.2.10), 7/7 in the suite; the pre-fix Deal.kt fails exactly the 2 new tests. Existing recurring test inputs moved from Z to -05:00 so they still mean 4pm Central. DealsScreen, DealsViewModel and app module not compiled (no Android SDK); no device check |
