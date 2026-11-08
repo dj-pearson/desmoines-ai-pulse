@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Performance Testing Suite
@@ -12,6 +13,30 @@ import { test, expect } from '@playwright/test';
  * - Image optimization
  * - Network performance
  */
+
+/**
+ * The smoke lane builds with placeholder VITE_SUPABASE_*, so without help
+ * every hub measures a failed fetch and its error branch rather than the page
+ * a visitor gets (WEB-CI-028). fixtureBackend answers PostgREST with rows, and
+ * consent is seeded so the cookie banner is not part of what CLS and LCP see.
+ *
+ * The clock is deliberately NOT pinned, unlike layout-integrity.spec.ts:
+ * page.clock fakes `performance` too, and with it installed
+ * performance.getEntriesByType('resource') comes back empty, so the vitals
+ * and byte-budget tests below would measure nothing and pass.
+ */
+const CONSENT = { version: '2026-04-13', essential: true, preferences: true, analytics: false, advertising: false };
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((consent) => {
+    try {
+      localStorage.setItem('cookie-consent', JSON.stringify({ ...consent, timestamp: new Date().toISOString() }));
+    } catch {
+      /* private mode: the banner shows and CLS includes it */
+    }
+  }, CONSENT);
+  await installFixtureBackend(page);
+});
 
 const pages = [
   { path: '/', name: 'homepage' },
@@ -32,7 +57,7 @@ interface PerformanceMetrics {
   loadComplete: number;
 }
 
-async function getWebVitals(page: any): Promise<PerformanceMetrics> {
+async function getWebVitals(page: Page): Promise<PerformanceMetrics> {
   return await page.evaluate(() => {
     return new Promise<PerformanceMetrics>((resolve) => {
       const metrics: Partial<PerformanceMetrics> = {};
@@ -198,13 +223,29 @@ test.describe('Resource Loading', () => {
     await page.goto('/', { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
 
-    console.log('Resource Stats:', resourceStats);
+    // JS as it crossed the wire (gzipped by vite preview here, by Cloudflare in
+    // production), from Resource Timing rather than response bodies, which are
+    // decoded.
+    const scriptGzipBytes = await page.evaluate(() =>
+      (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+        .filter((e) => e.initiatorType === 'script' || /\.js(\?|$)/.test(e.name))
+        .reduce((sum, e) => sum + e.encodedBodySize, 0),
+    );
+    const scriptGzipKB = scriptGzipBytes / 1024;
 
-    // Reasonable limits for a modern web app
-    // Note: In dev mode, Vite serves modules individually which increases file count
-    // In production, these are bundled into fewer chunks with lazy loading
-    // Threshold increased to 100 to account for dev mode + lazy loaded chunks
-    expect(resourceStats.scripts, 'Should not load excessive JS files').toBeLessThan(100);
+    console.log('Resource Stats:', resourceStats, `JS on the wire: ${scriptGzipKB.toFixed(1)} KB`);
+
+    // The budget is BYTES, not files. This used to assert fewer than 100 JS
+    // files, a bar written for the dev server, and it failed every build at
+    // 111-114 (2026-11-07): vite.config.ts sets experimentalMinChunkSize to
+    // 1000 on purpose, trading more small chunks for 8.2 KB less on every
+    // first paint (WEB-PERF, measured there). A file-count bar argues with that
+    // decision; it does not catch the regression it was meant to, a heavy
+    // library landing on the home page. CLAUDE.md's bundle target is 500 KB
+    // gzipped; the home page measured 423 KB on 2026-11-07. Zero means
+    // Resource Timing recorded nothing, which would make this pass vacuously.
+    expect(scriptGzipBytes, 'Resource Timing must see the scripts it is budgeting').toBeGreaterThan(0);
+    expect(scriptGzipKB, 'Home page JS should stay under the 500 KB gzipped bundle target').toBeLessThan(500);
     expect(resourceStats.stylesheets, 'Should not load excessive CSS files').toBeLessThan(20);
 
     // Total page size should be reasonable (in bytes)
