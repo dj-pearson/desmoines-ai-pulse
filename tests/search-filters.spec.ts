@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { installFixtureBackend } from './support/fixtureBackend';
+import { fixtureEvents, installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Search and Filter Functionality Testing Suite
@@ -90,6 +90,41 @@ test.beforeEach(async ({ page }) => {
   await installFixtureBackend(page);
 });
 
+/**
+ * States the backend's answer for one events search term, on top of the
+ * fixture backend (which returns every row whatever the query says).
+ *
+ * /events searches server-side (textSearch on search_vector), so "the list
+ * shows what the search found" can only be checked if the spec decides what
+ * the search found. Returns the matching request URLs, so a test can also
+ * assert that the term reached the query. A count-only query is a HEAD
+ * request and gets no body (fixtureBackend.ts explains why that matters).
+ */
+async function answerEventSearch(page: Page, term: string, rows: unknown[]): Promise<string[]> {
+  const seen: string[] = [];
+  const pattern = new RegExp(`search_vector=[^&]*${term}`, 'i');
+  await page.route('**/rest/v1/events?**', (route) => {
+    const url = decodeURIComponent(route.request().url());
+    if (!pattern.test(url)) return route.fallback();
+    seen.push(url);
+    const isHead = route.request().method() === 'HEAD';
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-expose-headers': 'content-range',
+        'content-range': rows.length > 0 ? `0-${rows.length - 1}/${rows.length}` : '*/0',
+      },
+      body: isHead ? '' : JSON.stringify(rows),
+    });
+  });
+  return seen;
+}
+
+/** Event card TITLE links (see 'events page filters should work correctly'). */
+const eventCards = (page: Page) => page.locator('h3 > a[href^="/events/"], h4 > a[href^="/events/"]');
+
 test.describe('Search Bar Discovery', () => {
   for (const page of pagesWithSearch) {
     test(`${page.name} should have a search input`, async ({ page: pw }) => {
@@ -122,10 +157,8 @@ test.describe('Search Behavior - Proper Debouncing', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      console.log('No search input found on events page');
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     // Track only actual DATA queries during search.
     //
@@ -209,58 +242,47 @@ test.describe('Search Behavior - Proper Debouncing', () => {
 
 test.describe('Search Results', () => {
   test('events search should return relevant results', async ({ page }) => {
+    // It counted '[data-testid*="result"], article, .card', which this app
+    // never renders, logged "Found 0 results" on the build, and asserted only
+    // inside `if (resultsCount > 0)` - so it passed with search broken
+    // (WEB-QA-050). Now the backend's answer for "music" is two rows, and the
+    // list must show exactly those two and none of the unsearched list.
+    const musicRows = fixtureEvents()
+      .slice(0, 2)
+      .map((row, i) => ({ ...row, title: i === 0 ? 'Music on the Riverfront' : 'Chamber Music Evening' }));
+    const searched = await answerEventSearch(page, 'music', musicRows);
+
     await page.goto('/events', { waitUntil: 'networkidle' });
-
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Fixture Event 3', exact: true })).toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
-
-    // Search for something specific
     await searchInput.fill('music');
-    await page.waitForTimeout(800); // Wait for debounce
 
-    // Check if results are displayed
-    const resultsCount = await page.locator('[data-testid*="result"], article, .card').count();
-
-    console.log(`Found ${resultsCount} results for "music"`);
-
-    if (resultsCount > 0) {
-      // Check if results contain the search term
-      const firstResult = page.locator('[data-testid*="result"], article, .card').first();
-      const resultText = await firstResult.textContent();
-
-      console.log('First result snippet:', resultText?.substring(0, 100));
-
-      // Result should be relevant (contain search term or related content)
-      // This is a soft check - just ensuring results are displayed
-      expect(resultsCount).toBeGreaterThan(0);
-    }
+    await expect(eventCards(page)).toHaveCount(2, { timeout: 5000 });
+    await expect(eventCards(page).nth(0)).toHaveText(/music/i);
+    await expect(eventCards(page).nth(1)).toHaveText(/music/i);
+    await expect(page.getByRole('link', { name: 'Fixture Event 3', exact: true })).toHaveCount(0);
+    expect(searched.length, 'the search term never reached the events query').toBeGreaterThan(0);
   });
 
   test('search should show "no results" message when appropriate', async ({ page }) => {
+    // Asserted the message only `if (noResultsMessage > 0)`, so a search that
+    // rendered nothing at all - no cards, no message - passed (WEB-QA-050).
+    // The backend now answers this term with no rows, and the empty state
+    // must name it.
+    const term = 'xyzabc123nonexistent';
+    const searched = await answerEventSearch(page, term, []);
+
     await page.goto('/events', { waitUntil: 'networkidle' });
-
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    await searchInput.fill(term);
 
-    // Search for something that definitely won't exist
-    await searchInput.fill('xyzabc123nonexistent');
-    await page.waitForTimeout(800);
-
-    // Should show no results message
-    const noResultsMessage = await page.locator(
-      'text=/no results|no events|not found|no matches/i'
-    ).count();
-
-    if (noResultsMessage > 0) {
-      console.log('Properly displays "no results" message');
-      expect(noResultsMessage).toBeGreaterThan(0);
-    }
+    await expect(page.getByText(`No results for "${term}"`)).toBeVisible({ timeout: 5000 });
+    await expect(eventCards(page)).toHaveCount(0);
+    expect(searched.length, 'the search term never reached the events query').toBeGreaterThan(0);
   });
 
   test('clearing search should restore all results', async ({ page }) => {
@@ -268,9 +290,8 @@ test.describe('Search Results', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     // Get initial count
     const initialCount = await page.locator('[data-testid*="result"], article, .card').count();
@@ -359,10 +380,8 @@ test.describe('Filter Functionality', () => {
       .locator('input[type="search"], input[placeholder*="search" i], input[aria-label*="search" i]')
       .first();
 
-    if ((await searchInput.count()) === 0) {
-      console.log('No search input on events page');
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     const initialCount = await cards().count();
     expect(initialCount, 'events page should render event cards before filtering').toBeGreaterThan(0);
@@ -383,37 +402,66 @@ test.describe('Filter Functionality', () => {
   });
 
   test('multiple filters should work together', async ({ page }) => {
+    // Looked for 'select, input[type="checkbox"]', which this app never
+    // renders, so it returned early on every run; and its one assertion was
+    // `toBeDefined()` on a number (WEB-QA-050). Now: pick a cuisine, then a
+    // price, and assert the second did not drop the first - both stay in the
+    // URL, and the list query asks for both at once. Whether the server then
+    // narrows correctly is get_rotated_restaurants' job, not this page's; the
+    // fixture backend does not filter on purpose.
+    // The Cuisine popover lists the get_restaurant_filter_options facet, which
+    // the fixture backend does not answer (it lists no cuisines), so the
+    // facet is stated here with the fixture rows' two cuisines.
+    await page.route('**/rest/v1/rpc/get_restaurant_filter_options*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify({
+          cuisines: [
+            { cuisine: 'American', count: 6 },
+            { cuisine: 'Italian', count: 6 },
+          ],
+          locations: [],
+        }),
+      })
+    );
+
+    const rpcBodies: Record<string, unknown>[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && req.url().includes('/rest/v1/rpc/get_rotated_restaurants')) {
+        rpcBodies.push(JSON.parse(req.postData() || '{}'));
+      }
+    });
+
     await page.goto('/restaurants', { waitUntil: 'networkidle' });
+    // The first-visit cookie banner sits over the popover's lower options and
+    // takes the click, so answer it the way a visitor would.
+    await page.getByRole('button', { name: 'Reject non-essential', exact: true }).click();
 
-    const filters = await page.locator('select, input[type="checkbox"]').all();
+    await page.getByRole('button', { name: /^Cuisine/ }).click();
+    await page.getByRole('button', { name: /^Italian/ }).click();
+    await expect(page.getByRole('button', { name: /^Italian/ })).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/[?&]cuisine=Italian/, { timeout: 5000 });
 
-    if (filters.length < 2) {
-      console.log('Not enough filters to test combination');
-      return;
-    }
+    await page.getByRole('button', { name: /^Price/ }).click();
+    await page.getByRole('button', { name: /^\$\$\s*moderate/ }).click();
+    await page.keyboard.press('Escape');
 
-    console.log(`Found ${filters.length} filters`);
+    await expect(async () => {
+      const params = new URL(page.url()).searchParams;
+      expect(params.get('cuisine')).toBe('Italian');
+      expect(params.get('price')).toBe('$$');
+    }).toPass({ timeout: 5000 });
 
-    const initialCount = await page.locator('[data-testid*="result"], article, .card').count();
-
-    // Apply first filter
-    await filters[0].click();
-    await page.waitForTimeout(500);
-
-    const afterFirstFilter = await page.locator('[data-testid*="result"], article, .card').count();
-
-    // Apply second filter
-    if (filters[1]) {
-      await filters[1].click();
-      await page.waitForTimeout(500);
-
-      const afterSecondFilter = await page.locator('[data-testid*="result"], article, .card').count();
-
-      console.log(`Initial: ${initialCount}, After 1st filter: ${afterFirstFilter}, After 2nd: ${afterSecondFilter}`);
-
-      // Multiple filters should be able to narrow results
-      expect(afterSecondFilter).toBeDefined();
-    }
+    await expect(async () => {
+      const both = rpcBodies.filter(
+        (b) =>
+          JSON.stringify(b.cuisine_filter) === '["Italian"]' && JSON.stringify(b.price_filter) === '["$$"]'
+      );
+      expect(both.length, `no list query carried both filters: ${JSON.stringify(rpcBodies.slice(-3))}`).toBeGreaterThan(0);
+    }).toPass({ timeout: 5000 });
   });
 
   test('filters should have clear/reset functionality', async ({ page }) => {
@@ -450,19 +498,15 @@ test.describe('Search URL Parameters', () => {
   });
 
   test('should respect search parameters from URL', async ({ page }) => {
-    // Try to navigate with search parameter
+    // Asserted only when the input existed AND already held the term, so a
+    // page that ignored ?q= passed (WEB-QA-050). Now the input must show it
+    // and the first list query must already search for it.
+    const searched = await answerEventSearch(page, 'music', fixtureEvents().slice(0, 1));
     await page.goto('/events?q=music', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() > 0) {
-      const searchValue = await searchInput.inputValue();
-
-      if (searchValue.includes('music')) {
-        console.log('Search input correctly populated from URL parameter');
-        expect(searchValue).toContain('music');
-      }
-    }
+    await expect(searchInput).toHaveValue('music');
+    expect(searched.length, '?q=music never reached the events query').toBeGreaterThan(0);
   });
 });
 
@@ -472,9 +516,8 @@ test.describe('Search Accessibility', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     const ariaAttributes = await searchInput.evaluate(el => ({
       role: el.getAttribute('role'),
@@ -530,9 +573,8 @@ test.describe('Mobile Search Experience', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     // Check search input size
     const inputSize = await searchInput.boundingBox();
@@ -633,7 +675,7 @@ test.describe('URL-synced filter state', () => {
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('jazz');
     // Wait past the 300ms debounce, then assert the URL carries the query.
@@ -646,7 +688,7 @@ test.describe('URL-synced filter state', () => {
     await page.goto('/events?q=music', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+    await expect(searchInput).toBeVisible();
 
     await expect(searchInput).toHaveValue('music');
   });
@@ -655,7 +697,7 @@ test.describe('URL-synced filter state', () => {
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('coffee');
     await expect(async () => {
@@ -671,13 +713,18 @@ test.describe('URL-synced filter state', () => {
   });
 
   test('a shared filtered URL is reproducible (deep link)', async ({ page }) => {
+    await answerEventSearch(page, 'festival', fixtureEvents().slice(0, 1));
     // Open a pre-filtered link the way a shared URL would arrive.
     await page.goto('/events?q=festival', { waitUntil: 'networkidle' });
     expect(new URL(page.url()).searchParams.get('q')).toBe('festival');
 
+    // The value check sat behind `if (count() > 0)`, so a page with no
+    // search box passed (WEB-QA-050). The link must also reproduce the
+    // RESULTS: the list shows the backend's answer for the term, not the
+    // unfiltered calendar.
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() > 0) {
-      await expect(searchInput).toHaveValue('festival');
-    }
+    await expect(searchInput).toHaveValue('festival');
+    await expect(eventCards(page)).toHaveCount(1);
+    await expect(eventCards(page).first()).toHaveText('Jazz Night at the Fixture');
   });
 });
