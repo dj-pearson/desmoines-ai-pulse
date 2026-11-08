@@ -187,7 +187,7 @@ Hooks for AI-powered features and recommendations.
 | `useEnhancedRecommendations` | Enhanced recommendations with ML | `{ topPicks, forYou }` |
 | `useEventRecommendations` | Event-specific recommendations | `{ similar, recommended }` |
 | `useSmartRecommendations` | Smart recommendations engine | `{ getRecommendations }` |
-| `useSimplePersonalization` | Lightweight personalization | `{ preferences, suggest }` |
+| `useRecentContent` | Recently added rows that fill the Social trending grids (not personalized) | `{ items, isLoading, trackClick }` |
 | `useSmartCalendar` | AI-powered calendar suggestions | `{ suggestions, conflicts }` |
 | `useWriteupGenerator` | AI content/writeup generation | `{ generate, isGenerating }` |
 

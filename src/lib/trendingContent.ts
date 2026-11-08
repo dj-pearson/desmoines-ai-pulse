@@ -11,7 +11,7 @@ import { centralDayStartUtcISO, createEventSlugWithCentralTime } from '@/lib/tim
 
 /**
  * Shared reads for the Social "Trending" tab (TrendingContent, fed by
- * useTrending in useTrendingContent.ts and by useSimplePersonalization).
+ * useTrending in useTrendingContent.ts and by useRecentContent).
  *
  * Both hooks fetched content rows with select('*') and no visibility filter,
  * so a past, hidden, merged or archived event could appear under "Trending

@@ -28,7 +28,6 @@
     "src/hooks/useRestaurantMenu.ts": 2,
     "src/hooks/useRestaurants.ts": 2,
     "src/hooks/useSecurityContext.ts": 2,
-    "src/hooks/useSimplePersonalization.ts": 2,
     "src/hooks/useSystemMonitoring.ts": 1,
     "src/hooks/useTrendingContent.ts": 1,
     "src/hooks/useTripPlanner.ts": 1,

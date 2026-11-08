@@ -1,5 +1,5 @@
 {
-  "count": 112,
+  "count": 110,
   "sites": [
     "src/hooks/useAIConfiguration.ts:24",
     "src/hooks/useAIModels.ts:30",
@@ -75,8 +75,6 @@
     "src/hooks/useSeasonalGuides.ts:47",
     "src/hooks/useSecurityAudit.ts:108",
     "src/hooks/useSessionTimeout.ts:144",
-    "src/hooks/useSimplePersonalization.ts:204",
-    "src/hooks/useSimplePersonalization.ts:258",
     "src/hooks/useSocialFeatures.ts:139",
     "src/hooks/useSocialMediaManager.ts:53",
     "src/hooks/useSocialMediaManager.ts:82",
