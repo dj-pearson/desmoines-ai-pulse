@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
+import { announceToScreenReader } from "@/lib/announce";
 
 /**
  * Hook that manages focus when route changes for accessibility.
@@ -102,39 +103,3 @@ function getPageTitle(): string {
 
   return `Navigated to ${pageName}`;
 }
-
-/**
- * Announces a message to screen readers using a live region
- */
-function announceToScreenReader(
-  message: string,
-  priority: "polite" | "assertive" = "polite"
-) {
-  const announcement = document.createElement("div");
-  announcement.setAttribute("aria-live", priority);
-  announcement.setAttribute("aria-atomic", "true");
-  announcement.setAttribute("role", "status");
-  announcement.className = "sr-only";
-  announcement.style.cssText = `
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  `;
-  announcement.textContent = message;
-
-  document.body.appendChild(announcement);
-
-  // Remove after screen reader has had time to read it
-  setTimeout(() => {
-    if (document.body.contains(announcement)) {
-      document.body.removeChild(announcement);
-    }
-  }, 1500);
-}
-

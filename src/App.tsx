@@ -3,14 +3,20 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
-import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { lazyOrNothing } from "@/lib/lazyOrNothing";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation, useNavigationType } from "react-router-dom";
 const KeyboardShortcutsModal = lazyWithRetry(() =>
   import("@/components/KeyboardShortcutsModal").then((m) => ({ default: m.KeyboardShortcutsModal })),
+);
+// Headless and lazy (WEB-PERF-066): the shortcut table stays out of the entry
+// chunk. lazyOrNothing, not lazyWithRetry: a failed fetch should cost the
+// shortcuts for one page view, not reload the page.
+const KeyboardShortcutListener = lazy(
+  lazyOrNothing(() => import("@/components/KeyboardShortcutListener")),
 );
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
@@ -347,14 +353,14 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   // Track page views for analytics dashboard
   usePageTracking();
 
-  useKeyboardShortcuts({
-    enabled: true,
-    onShowHelp: () => setShowShortcutsModal(true),
-  });
+  const showHelp = useCallback(() => setShowShortcutsModal(true), []);
 
   return (
     <div>
       {children}
+      <Suspense fallback={null}>
+        <KeyboardShortcutListener onShowHelp={showHelp} />
+      </Suspense>
       {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
           first time someone presses "?" rather than by every visitor. */}
       {showShortcutsModal && (

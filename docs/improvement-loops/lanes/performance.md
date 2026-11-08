@@ -8,46 +8,38 @@
 
 ## Handoff
 
-WEB-PERF-066, slice 1 of 2 done in loop 13 (story stays open).
-vite.config.ts's preloadAlreadyLoaded() is a modulePreload.resolveDependencies
-that drops, from each dynamic import's preload list, every chunk already in the
-HOST chunk's static closure (Vite only excludes the host itself). Needs the
-chunk graph, which resolveDependencies is not given, so a plugin captures the
-bundle in generateBundle with order "pre" (ahead of vite:build-import-analysis).
-check-bundle-budget now fails if the built entry's mapDeps names a chunk
-index.html loads, which is what catches that ordering silently breaking
-(negative control: the pre-change dist fails it).
-Measured: entry refs 8,381 -> 7,905, entry 55.4 -> 55.2 KB gz (level 9); the
-30 lazy chunks that host imports drop 1,660 -> 792 refs; gz over all 31 hosts
-427.6 -> 422.7. 20 routes plus four router clicks in Chrome, 2,917 asset
-requests, 0 failed, 0 page errors.
+None. WEB-PERF-066 closed in loop 14.
 
-What is left of WEB-PERF-066:
-- AC2: the remaining ~13 KB gz of mapDeps is the routes' own closures. The only
-  cut left is "direct deps only", which turns one parallel preload batch into
-  a waterfall per import level. The AC wants a measured navigation comparison
-  before shipping it: build both, then in Chrome throttle with CDP
-  Network.emulateNetworkConditions (e.g. 150 ms RTT) and time a click from /
-  to /events and /restaurants. Ship it only if navigation does not get slower.
-- AC3: the bundle baseline is 174.9 but builds measure 175.8 (WEB-PERF-065 added
-  1.1 inside tolerance), so this slice cannot ratchet it; it only shrank the
-  gap. It needs ~0.9 KB more off the critical path before --update moves it.
-
-Other candidate, not started: WEB-PERF-068 (remove-lazy-preloads warns on
-every build that critical-path vendor-supabase is preloaded).
+What the next loop should know:
+- The rest of the entry's __vite__mapDeps (about 13 KB gz) is the routes' own
+  closures, and it cannot be cut without a waterfall. Rollup hoists transitive
+  imports, so a lazy route chunk already imports its whole closure directly:
+  a "direct deps only" build cut 36 of 8,018 refs and 0.2 KB gz. The only
+  bigger cut is "target only", which costs one full RTT on every navigation
+  by construction. Not worth re-measuring unless the chunking changes.
+- Next candidate: WEB-PERF-068 (remove-lazy-preloads warns on every build that
+  critical-path vendor-supabase is preloaded). The open WEB-PERF stories 023,
+  031, 034 and 035 are still waiting on a migration or live data.
+- Entry chunk, by module, after this loop: App.tsx 46 KB raw (route table),
+  tailwind-merge 20 KB, react-helmet-async 11.8 KB (HelmetProvider and Helmet
+  are one module), AuthContext 9.9 KB. Measure with a sourcemap walk
+  (source-map-js eachMapping, sum generated columns per source) before
+  guessing.
 
 Measuring routes is one command: `node scripts/measure-route-preload.mjs
 [--min-chunk N] [--out f.json]` (needs placeholder VITE_SUPABASE_URL/ANON_KEY/
-SITE_URL); diff two --out files. Any forced manual chunk silently absorbs
-shared dependencies; do not add a fourth for a lazy library (WEB-PERF-067).
+SITE_URL, exported in the same shell as the build); diff two --out files. Any
+forced manual chunk silently absorbs shared dependencies; do not add a fourth
+for a lazy library (WEB-PERF-067).
 
 Earlier notes still hold: eagerGraph.ts is the static-graph walker for
 entry-chunk tests (write `import type`, not `import { type X }`); headless
 app-root lazy components use src/lib/lazyOrNothing.ts. /usr/bin/google-chrome
 exists in the container, so `chromium.launch({ channel: "chrome" })` against
 `vite preview --host 127.0.0.1` can load routes and `import()` chunks even
-though Playwright's own browsers are not installed. The open WEB-PERF stories
-(023, 031, 034, 035) are still waiting on a migration or live data.
+though Playwright's own browsers are not installed. Playwright's
+keyboard.press("?") sends shiftKey, which the shortcut hook rejects; dispatch
+a keydown on document.body to test "?".
 
 ## Loop log
 
@@ -66,3 +58,4 @@ though Playwright's own browsers are not installed. The open WEB-PERF stories
 | 2026-11-08 | WEB-PERF-065 | this commit | experimentalMinChunkSize 1000 -> 1; per-route JS 10,853 -> 9,734 KB gz summed over 137 lazy routes, unused passengers 1,892 -> 615; 131 lighter, none heavier >0.2 KB; critical path 174.9 -> 176.0 (in tolerance); new scripts/measure-route-preload.mjs; test with negative control; 24 routes clean in Chrome; story closed |
 | 2026-11-08 | WEB-PERF-067 | this commit | Forced vendor-editor chunk removed (it absorbed fast-equals, shared with recharts, and the app's tiptap-styles.css); unused passengers 614.8 -> 0, routes 9,743 -> 9,121 KB gz, five admin routes 123-125 KB lighter, none heavier; critical path 176.0 unchanged; manualChunks test with negative control (4 fail on re-adding); six chunks import clean in Chrome; story closed |
 | 2026-11-08 | WEB-PERF-066 | this commit | Preload lists drop chunks the importing chunk already loaded (modulePreload.resolveDependencies + bundle capture); entry refs 8,381 -> 7,905, lazy hosts 1,660 -> 792, entry 55.4 -> 55.2 KB gz; check-bundle-budget guards it (pre-change dist fails); 20 routes clean in Chrome; story stays open for AC2/AC3 |
+| 2026-11-08 | WEB-PERF-066 | this commit | AC3: AccessibilityWidget announces via new lib/announce (useAccessibility out of the entry, two duplicate announcers merged) and the shortcut listener is a lazy headless component; critical path 175.8 -> 174.7 KB gz, baseline ratcheted 174.9 -> 174.7; static-graph test with negative control (2 fail on revert). AC2 assessed, not shipped: direct-deps-only cuts 36/8,018 refs (0.2 KB gz) because rollup hoists transitive imports; target-only costs a full RTT per navigation. Story closed |

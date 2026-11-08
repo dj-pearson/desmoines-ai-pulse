@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { announceToScreenReader as announce, type AnnouncePriority } from "@/lib/announce";
 
 /**
  * Custom hook for accessibility utilities
@@ -51,19 +52,10 @@ export function useAccessibility() {
   /**
    * Announces content to screen readers
    */
-  const announceToScreenReader = useCallback((message: string, priority: 'polite' | 'assertive' = 'polite') => {
-    const announcement = document.createElement('div');
-    announcement.setAttribute('aria-live', priority);
-    announcement.setAttribute('aria-atomic', 'true');
-    announcement.setAttribute('class', 'sr-only');
-    announcement.textContent = message;
-    
-    document.body.appendChild(announcement);
-    
-    setTimeout(() => {
-      document.body.removeChild(announcement);
-    }, 1000);
-  }, []);
+  const announceToScreenReader = useCallback(
+    (message: string, priority: AnnouncePriority = 'polite') => announce(message, priority),
+    [],
+  );
 
   /**
    * Manages focus restoration after modal/dialog closes
