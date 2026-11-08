@@ -25,9 +25,11 @@ import { isPlacesPhotoCopy } from "@/lib/placesPhotoCredit";
 import { STATUS_BADGE } from "@/lib/categoryStyles";
 import { AFFILIATE_DISCLOSURE, hotelClassStars, hotelRateLabel, resolveBooking, safeWebUrl } from "@/lib/hotelBooking";
 import { telHref } from "@/lib/reservations";
-import { FAQSection } from "@/components/FAQSection";
-import { readGeoFaq } from "@/lib/restaurantMeta";
+import { AiAnswersList } from "@/components/AiAnswersList";
 import { HotelNearbyEvents } from "@/components/hotels/HotelNearbyEvents";
+
+const HOTEL_FAQ_TOOLTIP =
+  "Written with AI from the hotel's own site and travel listings. Confirm rates, fees and policies with the hotel.";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -142,7 +144,6 @@ export default function HotelDetails() {
     `${hotel.name} in ${hotel.area || hotel.city}.${hotel.price_range ? ` Price range: ${hotel.price_range}.` : ""} Book your stay in Des Moines.`;
   const keyFacts = (hotel.geo_key_facts ?? []).map((f) => f.trim()).filter(Boolean);
   const geoSummary = hotel.geo_summary?.trim() || null;
-  const faqs = readGeoFaq(hotel.geo_faq);
   // A Google Places photo is shown on the page with its credit, but not handed
   // to share previews or structured data: those copies are cached by other
   // people for as long as they like, carry no credit, and outlive the 30 days
@@ -371,12 +372,18 @@ export default function HotelDetails() {
                 </section>
               )}
 
-              {/* FAQSection renders the questions and emits the FAQPage block
-                  (through toJsonLd) in one place, so the schema can't outlive
-                  the visible copy (SEO-003, faq-single-emitter.test.mjs). */}
-              {faqs.length > 0 && (
-                <FAQSection faqs={faqs} title={`Questions about ${hotel.name}`} />
-              )}
+              {/* geo_faq on every hotel row came from an agent content batch
+                  (scripts/content-fill/hotels-content.json, model-written from
+                  AAA and brand pages), not an editor. So it is shown, labelled
+                  AI-assisted, and kept out of FAQPage JSON-LD, as on event and
+                  restaurant pages (WEB-SEO-060). */}
+              <AiAnswersList
+                title={`Questions about ${hotel.name}`}
+                faq={hotel.geo_faq}
+                tooltip={HOTEL_FAQ_TOOLTIP}
+                headingId="hotel-ai-answers"
+                headingClassName="text-xl font-semibold"
+              />
 
               {/* Gallery */}
               {hotel.gallery_urls && hotel.gallery_urls.length > 0 && (

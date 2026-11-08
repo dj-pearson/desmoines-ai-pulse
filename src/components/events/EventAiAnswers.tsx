@@ -1,5 +1,5 @@
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
-import { readGeoFaq } from "@/lib/restaurantMeta";
+import { AiAnswersList } from "@/components/AiAnswersList";
 
 /**
  * The event's GEO fields (WEB-SEO-059): geo_summary, geo_key_facts and geo_faq.
@@ -13,9 +13,9 @@ import { readGeoFaq } from "@/lib/restaurantMeta";
  * to pass geo_faq to FAQSection with showSchema on and no label, so every event
  * with generated SEO content shipped model text as our FAQPage.
  *
- * So this renders a plain <dl>, no FAQSection and no JSON-LD, under the same
- * AI-assisted badge the "About This Event" heading already uses for enhanced
- * descriptions.
+ * So this renders the Q&A through AiAnswersList (a plain <dl>, no FAQSection
+ * and no JSON-LD) under the same AI-assisted badge the "About This Event"
+ * heading already uses for enhanced descriptions.
  */
 
 interface EventAiAnswersProps {
@@ -31,7 +31,6 @@ const TOOLTIP =
 export function EventAiAnswers({ title, summary, keyFacts, faq }: EventAiAnswersProps) {
   const cleanSummary = summary?.trim() || null;
   const facts = (keyFacts ?? []).map((f) => (typeof f === "string" ? f.trim() : "")).filter(Boolean);
-  const answers = readGeoFaq(faq);
 
   return (
     <>
@@ -53,24 +52,13 @@ export function EventAiAnswers({ title, summary, keyFacts, faq }: EventAiAnswers
           )}
         </section>
       )}
-      {answers.length > 0 && (
-        <section aria-labelledby="event-ai-answers" className="bg-card rounded-2xl border p-6 md:p-8">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 id="event-ai-answers" className="text-xl font-bold">
-              {title}: Questions and Answers
-            </h2>
-            <AIDisclosureBadge label="AI-assisted" tooltip={TOOLTIP} />
-          </div>
-          <dl className="mt-4 divide-y divide-border">
-            {answers.map((item) => (
-              <div key={item.question} className="py-3">
-                <dt className="font-medium text-foreground">{item.question}</dt>
-                <dd className="mt-1 max-w-prose text-muted-foreground">{item.answer}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      )}
+      <AiAnswersList
+        title={`${title}: Questions and Answers`}
+        faq={faq}
+        tooltip={TOOLTIP}
+        headingId="event-ai-answers"
+        className="bg-card rounded-2xl border p-6 md:p-8"
+      />
     </>
   );
 }
