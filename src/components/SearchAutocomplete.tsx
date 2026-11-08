@@ -11,6 +11,7 @@ import { escapeLikePattern } from '@/lib/postgrestPattern';
 import { createEventSlugWithCentralTime, upcomingFloorUtc } from '@/lib/timezone';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { restaurantFilterOptionsQuery } from '@/hooks/useRestaurants';
+import { upcomingOrRunningFilter } from '@/hooks/useEvents';
 import { matchCuisines } from '@/lib/restaurantPresets';
 import { RESTAURANT_SUGGESTION_COLUMNS } from '@/lib/listColumns';
 import {
@@ -117,7 +118,7 @@ export function SearchAutocomplete({
         supabase.from('events').select('venue')
       )
         .ilike('venue', `%${term}%`)
-        .gte('date', upcomingFloorUtc())
+        .or(upcomingOrRunningFilter(upcomingFloorUtc()))
         .order('date', { ascending: true })
         .limit(VENUE_SCAN_ROWS);
       if (error) log.error('suggestions', 'Venue suggestion query failed', { contentType, error });
@@ -146,15 +147,18 @@ export function SearchAutocomplete({
 
       if (contentType === 'events') {
         // Same visibility rule as every list (is_merged / is_hidden /
-        // archived_at), and the upcoming floor is the start of today in
-        // Central, so a show that began at 7pm is still offered at 9pm.
+        // archived_at). The floor is the start of today in Central, so a show
+        // that began at 7pm is still offered at 9pm, and a run whose end_date
+        // has not passed is kept: a bare `date >= today` dropped the State
+        // Fair on its second morning while /search listed it
+        // (WEB-FEAT-061). The venue scan above uses the same group.
         const { data, error } = await applyEventVisibility(
           supabase
             .from('events')
             .select('id, title, venue, date, event_start_utc, event_start_local')
         )
           .ilike('title', searchTerm)
-          .gte('date', upcomingFloorUtc())
+          .or(upcomingOrRunningFilter(upcomingFloorUtc()))
           .order('date', { ascending: true })
           .limit(5);
         // A search that FAILED and a search with no matches both render as
