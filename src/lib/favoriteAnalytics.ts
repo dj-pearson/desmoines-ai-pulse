@@ -2,10 +2,15 @@
  * Guest-favorites funnel logging (WEB-FEAT-006). Writes to the same
  * user_analytics table the subscription funnel uses, so guest-save ->
  * wall-hit -> signup conversion is queryable.
+ *
+ * Analytics consent gates it like the paywall and advertiser funnels
+ * (WEB-LEGAL-014): without it nothing is written and no session id is stored.
+ * The favorite itself is saved either way; only the funnel row is skipped.
  */
 import { supabase } from "@/integrations/supabase/client";
 import { storage } from "@/lib/safeStorage";
 import { createLogger } from "@/lib/logger";
+import { analyticsGranted } from "@/lib/analyticsConsent";
 
 const log = createLogger("favoriteAnalytics");
 const SESSION_KEY = "dmi-session-id";
@@ -32,6 +37,8 @@ export function logFavoriteFunnelEvent(
   userId?: string | null,
   details?: Record<string, unknown>
 ): void {
+  if (!analyticsGranted()) return;
+
   void (async () => {
     try {
       // CAPTURE THE ERROR. PostgREST returns RLS and schema failures IN THE
