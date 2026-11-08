@@ -211,17 +211,30 @@ All colors MUST be HSL. Touch targets minimum 44px.
    * but any future assertion written against `document.body.innerText` on these
    * pages will only see what is near the viewport.
    *
-   * `contain-intrinsic-size` supplies a placeholder size for skipped cards so
-   * the scrollbar stays stable; it is a deliberate estimate of rendered card
-   * height, not an exact value.
+   * `contain-intrinsic-size` is the height a skipped card takes up, and it
+   * has to match a rendered RestaurantCard or the page moves when cards near
+   * the viewport render (WEB-PERF-071). It was a flat 420px while a card
+   * renders at 419/471/523px at 390/768/1280px wide: the root font-size steps
+   * 16 -> 18 -> 20px at md and lg, and the card is sized in rem. So after a
+   * scroll the rows around the viewport grew and pushed a control under the
+   * grid down 74px a few frames later, enough for a tap to miss.
+   *
+   * Measured with a full card (name on one line, rating, cuisine, a
+   * description that fills its two-line clamp, address), the height is
+   * 26rem + 3px at every breakpoint, the 3px being the 1px borders. A card with
+   * a one-line description is 1.42rem shorter and one with none 3.6rem shorter,
+   * so this is the common case, not every case. `auto` keeps a card's real
+   * height once it has rendered, so scrolling back up does not shift either.
+   * Adding `auto` to the old 420px alone did not change the first-render
+   * shift; the number was the problem.
    *
    * If a grid ever needs to render many hundreds of rows, revisit
-   * @tanstack/react-virtual — DOM node count, which this does not reduce, is
+   * @tanstack/react-virtual: DOM node count, which this does not reduce, is
    * the ceiling this approach does not raise.
    */
   .content-auto {
     content-visibility: auto;
-    contain-intrinsic-size: 0 420px;
+    contain-intrinsic-size: auto 0 auto calc(26rem + 3px);
   }
 
   /* Mobile-first touch targets */

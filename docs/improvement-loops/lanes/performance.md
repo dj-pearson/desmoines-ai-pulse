@@ -8,9 +8,15 @@
 
 ## Handoff
 
-None. WEB-PERF-070 closed in loop 17.
+None. WEB-PERF-071 closed in loop 18.
 
 What the next loop should know:
+- .content-auto's placeholder is `auto 0 auto calc(26rem + 3px)`: the card is
+  sized in rem and the root font-size steps 16/18/20px at md/lg, so one rem
+  value matches 419/471/523px. If RestaurantCard gains or loses a line, re-run
+  the "holds still" tests in restaurants-dietary.spec.ts; they read the start
+  position in the same task as the scroll, because scrolling with Playwright
+  first let the 1280px shift land before the measurement began.
 - The rest of the entry's __vite__mapDeps (about 13 KB gz) is the routes' own
   closures, and it cannot be cut without a waterfall. Rollup hoists transitive
   imports, so a lazy route chunk already imports its whole closure directly:
@@ -78,3 +84,4 @@ a keydown on document.body to test "?".
 | 2026-11-08 | WEB-PERF-068 | this commit | Heavy-preload check extracted to findHeavyPreloads and exempts CRITICAL_PATH_CHUNKS by chunk name; a clean build goes from 1 warning (vendor-supabase 216 KB) to 0; critical path 174.7 unchanged; test with negative controls (no exemption: 2 fail; prefix match: 1 fail); story closed |
 | 2026-11-08 | WEB-PERF-069 | this commit | savedSearchFilters reads saved filters with plain code instead of zod, its only zod import on three routes; /events 205.9 -> 192.5, /search 94.1 -> 81.9, /dashboard 155.4 -> 143.2 KB gz beyond the critical path, none heavier; critical path 174.7 unchanged; graph test with detector and walker controls (3 fail on re-adding the import); story closed |
 | 2026-11-08 | WEB-PERF-070 | this commit | 87 modules import `toast` from new lib/toast.ts, which loads sonner on first call (queued, ids minted and passed through); 64 routes 8.8-9.0 KB gz lighter beyond the critical path (/events 191.2 -> 182.3), none heavier, summed 9,162.7 -> 8,596.1; critical path 174.7 unchanged; graph test with negative control (6 of 9 fail on one reverted import); toast renders in the lazy Toaster in Chrome; story closed |
+| 2026-11-08 | WEB-PERF-071 | this commit | .content-auto placeholder 420px -> auto calc(26rem + 3px), measured from a full card at 390/768/1024/1280 (419/471/523/523px); control under the dietary grid moved 1/51/103px at 390/768/1280 on the old value, 0 now; three smoke-lane tests with negative control (all 3 fail on 420px); dietary/open-now specs 63/63 over 3 repeats; story closed |

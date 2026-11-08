@@ -19,7 +19,11 @@ function restaurant(i: number) {
     created_at: ISO,
     cuisine: 'Vegan',
     data_quality_score: 80,
-    description: 'Vegan bowls.',
+    // Long enough to fill the card's two-line clamp at every width, like most
+    // real rows. The .content-auto placeholder is sized to that card
+    // (WEB-PERF-071); a one-line description is 1.42rem shorter.
+    description:
+      'A neighborhood spot with grain bowls, tofu banh mi and a rotating soup, plus vegan pastries on weekends and a short local beer list.',
     enhanced: false,
     google_place_id: null,
     image_url: null,
@@ -58,37 +62,50 @@ function json(route: Route, rows: unknown[]) {
 }
 
 /**
- * Click a control below the card grid once it has stopped moving.
+ * How far a control moves over the 10 frames after it is scrolled into view.
  *
- * The cards are `content-visibility: auto` with a 420px placeholder, and a
- * rendered card is 495px at 1280px wide. Scrolling to a control under the grid
- * renders the rows around it about three frames later, which pushes it down
- * 74px (measured: top 333 -> 407, page 9277 -> 9501px, every run). Playwright's
- * "stable" check compares two consecutive frames, so it can pass before that
- * shift; under load the shift then lands between mousedown and mouseup, the
- * mouseup hits the section, and no click fires (WEB-QA-058: 2 of 60 at four
- * workers, the button left focused and the list at 36).
+ * The cards are `content-visibility: auto`, so rows near the viewport render a
+ * few frames after a scroll. When the placeholder was a flat 420px and a card
+ * rendered at 495px, the control under the grid moved 74px about three frames
+ * later (top 333 -> 407, page 9277 -> 9501px, every run). Playwright's
+ * "stable" check compares two consecutive frames and can pass before that.
+ *
+ * With `scroll`, the scroll happens in the page and the start position is read
+ * in the same task, before any frame renders the newly visible rows. Scrolling
+ * with Playwright first lets the shift land before the measurement starts: at
+ * 1280px the old placeholder passed that way.
+ */
+function movementOver10Frames(control: Locator, scroll = false) {
+  return control.evaluate(
+    (el, scrollFirst) =>
+      new Promise<number>((resolve) => {
+        if (scrollFirst) el.scrollIntoView({ block: 'center' });
+        const start = el.getBoundingClientRect().top;
+        let frames = 0;
+        const tick = () => {
+          frames += 1;
+          if (frames < 10) requestAnimationFrame(tick);
+          else resolve(Math.abs(el.getBoundingClientRect().top - start));
+        };
+        requestAnimationFrame(tick);
+      }),
+    scroll,
+  );
+}
+
+/**
+ * Click a control below the card grid once it has stopped moving. Under load a
+ * late shift landing between mousedown and mouseup means the mouseup hits the
+ * section and no click fires (WEB-QA-058: 2 of 60 at four workers, the button
+ * left focused and the list at 36). The page should no longer shift
+ * (WEB-PERF-071, asserted below); this keeps the click honest if it ever does.
  */
 async function clickWhenSettled(control: Locator) {
   await control.scrollIntoViewIfNeeded();
   await expect
-    .poll(
-      () =>
-        control.evaluate(
-          (el) =>
-            new Promise<number>((resolve) => {
-              const start = el.getBoundingClientRect().top;
-              let frames = 0;
-              const tick = () => {
-                frames += 1;
-                if (frames < 10) requestAnimationFrame(tick);
-                else resolve(Math.abs(el.getBoundingClientRect().top - start));
-              };
-              requestAnimationFrame(tick);
-            }),
-        ),
-      { message: 'the control should hold still for 10 frames after it is scrolled into view' },
-    )
+    .poll(() => movementOver10Frames(control), {
+      message: 'the control should hold still for 10 frames after it is scrolled into view',
+    })
     .toBe(0);
   await control.click();
 }
@@ -137,6 +154,23 @@ test.describe('/restaurants/dietary', () => {
     await expect(page.getByRole('heading', { level: 3, name: /^Vegan Place / })).toHaveCount(50);
     await expect(page.locator('[data-dietary-more]')).toContainText('Showing 50 of 50');
   });
+
+  // WEB-PERF-071. One measurement, not a poll: the first scroll is the one a
+  // visitor makes. 390, 768 and 1280 cover the three root font-sizes the
+  // placeholder's rem has to track. On the old 420px placeholder it moved
+  // 1, 51 and 103px at those widths.
+  for (const width of [390, 768, 1280]) {
+    test(`the control under the grid holds still once scrolled to (${width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await setup(page, 50);
+      await page.goto('/restaurants/dietary/vegan');
+      await expect(page.getByRole('heading', { level: 3, name: /^Vegan Place / })).toHaveCount(36);
+      await page.evaluate(() => document.fonts.ready);
+
+      const more = page.getByRole('button', { name: 'Show 14 more' });
+      expect(await movementOver10Frames(more, true), 'pixels the control moved over 10 frames').toBeLessThan(1);
+    });
+  }
 
   test('a full fetch says "first 100"', async ({ page }) => {
     await setup(page, 100);
