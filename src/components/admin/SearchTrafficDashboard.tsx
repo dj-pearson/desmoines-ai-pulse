@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BarChart3, TrendingDown, Search, Globe, Link2, RefreshCw, Download, Settings, AlertCircle, CheckCircle2, Eye, MousePointer, Activity, Target, Zap, ArrowUpRight, ArrowDownRight, Trash2 } from "lucide-react";
@@ -49,6 +50,9 @@ export function SearchTrafficDashboard() {
   });
   const [syncing, setSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const platformTriggerId = useId();
+  const dateRangeLabelId = useId();
+  const dateRangeButtonId = useId();
 
   useEffect(() => {
     loadConnectedProviders();
@@ -663,9 +667,9 @@ export function SearchTrafficDashboard() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Platform:</label>
+                <Label htmlFor={platformTriggerId}>Platform:</Label>
                 <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-                  <SelectTrigger className="w-[240px]">
+                  <SelectTrigger id={platformTriggerId} className="w-[240px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -679,8 +683,14 @@ export function SearchTrafficDashboard() {
                 </Select>
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Date Range:</label>
+                <Label id={dateRangeLabelId} htmlFor={dateRangeButtonId}>
+                  Date Range:
+                </Label>
+                {/* Labelled by the label AND the button, so the chosen range
+                    stays in the name instead of being replaced by it. */}
                 <DatePickerWithRange
+                  id={dateRangeButtonId}
+                  aria-labelledby={`${dateRangeLabelId} ${dateRangeButtonId}`}
                   date={dateRange}
                   onDateChange={(range) => range && setDateRange(range)}
                 />

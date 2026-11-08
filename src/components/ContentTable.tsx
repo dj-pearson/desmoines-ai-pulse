@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useId } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import {
   Select,
   SelectContent,
@@ -416,6 +417,7 @@ export default function ContentTable({
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const [showDataEnhancer, setShowDataEnhancer] = useState(false);
   const [compactView, setCompactView] = useState(false);
+  const sortTriggerId = useId();
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<string>("date");
@@ -928,11 +930,14 @@ export default function ContentTable({
 
             {/* Sort Controls */}
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+              <Label
+                htmlFor={sortTriggerId}
+                className="text-gray-700 whitespace-nowrap"
+              >
                 Sort by:
-              </label>
+              </Label>
               <Select value={sortField} onValueChange={setSortField}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger id={sortTriggerId} className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
