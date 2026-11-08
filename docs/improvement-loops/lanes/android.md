@@ -39,10 +39,15 @@ card, related chips, featured-card label, urgencyLabel, map pin colour, Saved pa
 Weekend grouping now read the Des Moines day via EventTimeText, and the Weekend fetch is bounded at
 Central midnights with an offset. One device check closes it: open Weekend on a Saturday with a 7pm+
 show and confirm it sits under Saturday (it used to sit under Sunday, and a 7pm+ Sunday show was not
-fetched at all). Same bug, not fixed here, proposed as AND-AUDIT-031: the Events tab and Discover date
-presets (EventsViewModel, DiscoverViewModel, DatePreset.dateRange in AppEnums.kt) send bare
-ISO_LOCAL_DATE_TIME bounds that PostgREST reads as UTC, so "Today" starts at 7pm yesterday Central and
-drops tonight's 7pm+ shows. EventTimeText.centralMidnight is the fix to reuse.
+fetched at all).
+
+AND-AUDIT-031 (preset bounds) is code-complete and JVM-tested. Events tab and Discover presets now go
+through EventTimeText.presetBounds (Central midnights with offset, today from America/Chicago), and the
+"upcoming" floor in EventsRemoteDataSource.todayIso is Central midnight instead of the device day at
+UTC midnight. One device check closes it: after 7pm Central, pick Today on the Events tab and confirm a
+tonight 7pm+ show is listed and last night's 7pm+ show is not. The trap: the floor change also drops
+last night's late shows from Featured, Related and Nearby until midnight, which is intended; if a list
+goes empty in the evening, check the date column on those rows before suspecting the bound.
 
 ## Loop log
 
@@ -55,3 +60,4 @@ drops tonight's 7pm+ shows. EventTimeText.centralMidnight is the fix to reuse.
 | 2026-11-07 | AND-AUDIT-027 | this commit | Add to Calendar now uses iOS's rules via a shared EventCalendarEntry: end_date or 3h (was a fixed 2h), all-day on the Des Moines day for time_tbd / 19:31:58 / SeatGeek 03:30 / bare dates, Central time zone. Event decodes end_date, time_tbd, source. 12 JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation making every row timed fails 7. App module not compiled (no Android SDK); no device check |
 | 2026-11-07 | AND-AUDIT-029 | this commit | TBA rows get a 9am Central day-of reminder ("is today") instead of one an hour before the 19:31:58 / 03:30 placeholder; detail, cards, map popup and Saved rows show "Time TBA" in Des Moines time via a shared EventTimeText. 13 new JVM tests pass on a stub harness (kotlinc 2.2.10), 12 EventCalendarEntry tests still pass; a mutation using the timed rule for every row fails 5, one formatting in the arrival offset fails 1. EventDetailReminderTest additions and app module not compiled (no Android SDK, no mockk in cache); no device check |
 | 2026-11-07 | AND-AUDIT-030 | this commit | Day badge, featured card, related chips, urgency label, map pin, Saved past/upcoming and Weekend grouping read the Des Moines day through EventTimeText; Weekend fetch bounded at Central midnight. 12 new JVM tests pass on a stub harness (kotlinc 2.2.10), 25 existing EventCalendarEntry/EventReminderTiming tests still pass; a mutation reading the UTC day fails 6 of the new 12. WeekendViewModelTest addition and app module not compiled (no Android SDK); no device check |
+| 2026-11-08 | AND-AUDIT-031 | this commit | Events tab and Discover date presets are bounded at Des Moines midnights with an offset via EventTimeText.presetBounds (was bare local timestamps PostgREST read as UTC), today comes from America/Chicago, and the upcoming floor is Central midnight. 6 new DatePresetBoundsTest JVM tests pass on a stub harness (kotlinc 2.2.10) with the 37 existing EventCalendarEntry/EventReminderTiming/EventDesMoinesDay tests; a mutation restoring bare local bounds fails 3 of the 6. ViewModels, EventsRemoteDataSource and app module not compiled (no Android SDK); no device check |

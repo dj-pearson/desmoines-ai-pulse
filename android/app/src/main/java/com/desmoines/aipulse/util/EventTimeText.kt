@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.util
 
+import com.desmoines.aipulse.data.model.DateFilterPreset
 import com.desmoines.aipulse.data.model.Event
 import java.time.LocalDate
 import java.time.ZonedDateTime
@@ -109,6 +110,20 @@ object EventTimeText {
      */
     fun centralMidnight(day: LocalDate): String =
         day.atStartOfDay(EventSlug.CENTRAL).toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
+    /** Today on the Des Moines clock, whatever zone the phone is set to. */
+    fun desMoinesToday(now: ZonedDateTime = ZonedDateTime.now(EventSlug.CENTRAL)): LocalDate =
+        now.withZoneSameInstant(EventSlug.CENTRAL).toLocalDate()
+
+    /**
+     * PostgREST bounds (gte start, lt end) for a date preset, each a Central
+     * midnight with its offset (AND-AUDIT-031). Used by the Events tab and
+     * Discover, so "Today" keeps tonight's 7pm+ shows and drops last night's.
+     */
+    fun presetBounds(preset: DateFilterPreset, today: LocalDate = desMoinesToday()): Pair<String, String> {
+        val (first, end) = preset.dayRange(today)
+        return centralMidnight(first) to centralMidnight(end)
+    }
 
     private fun formatter(pattern: String): DateTimeFormatter = DateTimeFormatter.ofPattern(pattern, UiFormatLocale)
 }

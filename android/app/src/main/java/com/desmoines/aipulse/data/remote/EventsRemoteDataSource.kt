@@ -14,7 +14,6 @@ import io.github.jan.supabase.postgrest.query.filter.TextSearchType
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,11 +53,12 @@ class EventsRemoteDataSource @Inject constructor(
     private fun db(): SupabaseClient =
         supabaseClient ?: throw IllegalStateException("Supabase client is not configured.")
 
-    private fun todayIso(): String {
-        val today = LocalDate.now()
-        return today.atStartOfDay().atOffset(ZoneOffset.UTC)
-            .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-    }
+    /**
+     * The "upcoming" floor: midnight starting today in Des Moines. It was the
+     * device's day at UTC midnight, which is 7pm the evening before in Central,
+     * so last night's late shows stayed in every list until 7pm (AND-AUDIT-031).
+     */
+    private fun todayIso(): String = centralDayStartIso(LocalDate.now(EventSlug.CENTRAL))
 
     // region Fetch Events
 
