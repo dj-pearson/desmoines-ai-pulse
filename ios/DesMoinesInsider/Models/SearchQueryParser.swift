@@ -192,17 +192,26 @@ enum SearchQueryParser {
     // MARK: - Saved-search slugs (supabase/functions/_shared/savedSearchMatch.ts)
 
     /// The `preset` value the web and the alert job understand. Tonight has no
-    /// preset of its own there, so it saves as today.
+    /// preset of its own there, so it saves as today. This Month has none
+    /// either, and saves with no date rather than a different window.
     static let presetSlug: [DateFilterPreset: String] = [
         .tonight: "today", .today: "today", .tomorrow: "tomorrow", .thisWeekend: "this-weekend",
+        .thisWeek: "this-week", .nextWeek: "next-week", .next7Days: "next-7-days",
     ]
 
-    /// The inverse of `presetSlug`, for a row the web wrote.
+    /// The inverse of `presetSlug`, for a row or link the web wrote: the six
+    /// HUB_DATE_PRESETS keys of src/components/events/eventsHubQuery.ts, plus
+    /// the `next_7_days` spelling SmartFilters once put in links
+    /// (IOS-AUDIT-FEAT-042; this-week, next-week and next-7-days used to read
+    /// as no date filter).
     static func preset(slug: String) -> DateFilterPreset? {
         switch slug.lowercased() {
         case "today": return .today
         case "tomorrow": return .tomorrow
         case "this-weekend": return .thisWeekend
+        case "this-week": return .thisWeek
+        case "next-week": return .nextWeek
+        case "next-7-days", "next_7_days": return .next7Days
         default: return nil
         }
     }

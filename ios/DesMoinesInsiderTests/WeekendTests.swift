@@ -114,6 +114,40 @@ final class WeekendTests: XCTestCase {
         XCTAssertEqual(range.start, ct(2026, 9, 27))
     }
 
+    // MARK: - This week, next week, next 7 days match the web (IOS-AUDIT-FEAT-042)
+    //
+    // centralWindow() in src/lib/timezone.ts: weeks run Monday to Sunday.
+    // 2026-09-21 is a Monday, 09-24 a Thursday, 09-27 a Sunday.
+
+    private func assertRange(
+        _ preset: DateFilterPreset, now: Date, start: Date, end: Date,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let range = preset.range(now: now, calendar: centralCalendar)
+        XCTAssertEqual(range.start, start, "\(preset) start", file: file, line: line)
+        XCTAssertEqual(range.end, end, "\(preset) end", file: file, line: line)
+    }
+
+    func testThisWeekRunsThroughSunday() {
+        assertRange(.thisWeek, now: ct(2026, 9, 24, hour: 21), start: ct(2026, 9, 24), end: ct(2026, 9, 28))
+        assertRange(.thisWeek, now: ct(2026, 9, 21, hour: 9), start: ct(2026, 9, 21), end: ct(2026, 9, 28))
+    }
+
+    func testThisWeekOnSundayIsJustToday() {
+        assertRange(.thisWeek, now: ct(2026, 9, 27, hour: 10), start: ct(2026, 9, 27), end: ct(2026, 9, 28))
+    }
+
+    func testNextWeekIsNextMondayToSunday() {
+        for day in [21, 24, 26, 27] {
+            assertRange(.nextWeek, now: ct(2026, 9, day, hour: 12), start: ct(2026, 9, 28), end: ct(2026, 10, 5))
+        }
+    }
+
+    func testNext7DaysIsTodayAndTheSixAfter() {
+        assertRange(.next7Days, now: ct(2026, 9, 24, hour: 21), start: ct(2026, 9, 24), end: ct(2026, 10, 1))
+        assertRange(.next7Days, now: ct(2026, 9, 27, hour: 10), start: ct(2026, 9, 27), end: ct(2026, 10, 4))
+    }
+
     func testTonightTitleFollowsTheClock() {
         XCTAssertEqual(HomeRailsView.tonightTitle(hour: 9), "Today")
         XCTAssertEqual(HomeRailsView.tonightTitle(hour: 18), "Tonight")

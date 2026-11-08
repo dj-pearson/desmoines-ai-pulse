@@ -302,8 +302,14 @@ enum DateFilterPreset: String, CaseIterable, Identifiable {
     case today = "Today"
     case tomorrow = "Tomorrow"
     case thisWeekend = "This Weekend"
+    /// Today through Sunday, the web hub's `this-week` (IOS-AUDIT-FEAT-042).
+    /// On a Sunday that is just today.
     case thisWeek = "This Week"
+    /// Next Monday through Sunday, the web hub's `next-week`.
     case nextWeek = "Next Week"
+    /// Today and the six days after it, the web hub's `next-7-days`. This was
+    /// `.thisWeek`'s window before the web's labels were matched.
+    case next7Days = "Next 7 Days"
     case thisMonth = "This Month"
 
     var id: String { rawValue }
@@ -340,13 +346,25 @@ enum DateFilterPreset: String, CaseIterable, Identifiable {
             let w = WeekendWindow.current(now: now, calendar: calendar)
             return (w.fridayStart, w.mondayStart)
         case .thisWeek:
-            return (startOfToday, day(7))
+            return (startOfToday, day(Self.daysToSunday(now: now, calendar: calendar) + 1))
         case .nextWeek:
-            return (day(7), day(14))
+            let monday = Self.daysToSunday(now: now, calendar: calendar) + 1
+            return (day(monday), day(monday + 7))
+        case .next7Days:
+            return (startOfToday, day(7))
         case .thisMonth:
             let end = calendar.date(byAdding: .month, value: 1, to: startOfToday) ?? day(30)
             return (startOfToday, end)
         }
+    }
+
+    /// Days from today to this week's Sunday, with weeks running Monday to
+    /// Sunday as in centralWindow() (src/lib/timezone.ts): 0 on a Sunday, 6 on
+    /// a Monday. Read from the weekday number, so the calendar's firstWeekday
+    /// (Sunday in the US locale) cannot move it.
+    private static func daysToSunday(now: Date, calendar: Calendar) -> Int {
+        let weekday = calendar.component(.weekday, from: now) // 1 = Sunday ... 7 = Saturday
+        return weekday == 1 ? 0 : 8 - weekday
     }
 }
 

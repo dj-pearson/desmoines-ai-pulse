@@ -159,6 +159,20 @@ final class SavedSearchTests: XCTestCase {
         XCTAssertEqual(search.structuredFilters.datePreset, .today)
     }
 
+    func testWebWeekPresetsKeepTheirWindow() throws {
+        // A web save with one of these used to run on iOS with no date at all.
+        let cases: [(String, DateFilterPreset)] = [
+            ("this-week", .thisWeek), ("next-week", .nextWeek),
+            ("next-7-days", .next7Days), ("next_7_days", .next7Days),
+        ]
+        for (slug, preset) in cases {
+            let search = try decode("""
+            { "id": "w", "user_id": "u1", "name": "x", "filters": { "q": "jazz", "preset": "\(slug)" } }
+            """)
+            XCTAssertEqual(search.structuredFilters.datePreset, preset, slug)
+        }
+    }
+
     // MARK: - Alert eligibility (IOS-DD-SEARCH-10)
 
     func testSearchTypeUsesEventResults() {

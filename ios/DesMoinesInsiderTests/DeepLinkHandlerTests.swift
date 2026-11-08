@@ -324,6 +324,19 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events?category=Festival"), .eventSearch(query: "", filters: festivals))
     }
 
+    func testWeekPresetLinksKeepTheirDates() {
+        // The hub's This week / Next week / Next 7 days chips (IOS-AUDIT-FEAT-042).
+        let cases: [(String, DateFilterPreset)] = [
+            ("this-week", .thisWeek), ("next-week", .nextWeek),
+            ("next-7-days", .next7Days), ("next_7_days", .next7Days),
+        ]
+        for (slug, preset) in cases {
+            var expected = SearchFilters(tabHint: .events)
+            expected.datePreset = preset
+            XCTAssertEqual(dest("/events?preset=\(slug)"), .eventSearch(query: "", filters: expected), slug)
+        }
+    }
+
     func testSavedSearchAlertEmailLinkKeepsWordsAndArea() {
         // savedSearchMatch.ts deepLink(): q, location, preset, sort, then utm keys.
         let link = "/events?q=jazz&location=west-des-moines&preset=today&sort=date_asc"

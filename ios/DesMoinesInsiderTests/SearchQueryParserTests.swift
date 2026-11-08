@@ -88,6 +88,22 @@ final class SearchQueryParserTests: XCTestCase {
         XCTAssertEqual(SearchQueryParser.presetSlug[.tonight], "today")
     }
 
+    func testEveryWebHubPresetMaps() {
+        // HUB_DATE_PRESETS in src/components/events/eventsHubQuery.ts (IOS-AUDIT-FEAT-042).
+        XCTAssertEqual(SearchQueryParser.preset(slug: "this-week"), .thisWeek)
+        XCTAssertEqual(SearchQueryParser.preset(slug: "next-week"), .nextWeek)
+        XCTAssertEqual(SearchQueryParser.preset(slug: "next-7-days"), .next7Days)
+        XCTAssertEqual(SearchQueryParser.preset(slug: "next_7_days"), .next7Days, "SmartFilters' old spelling")
+        XCTAssertNil(SearchQueryParser.preset(slug: "this-month"), "the web has no this-month window")
+    }
+
+    func testEverySavedSlugReadsBackAsTheSamePreset() {
+        for (preset, slug) in SearchQueryParser.presetSlug where preset != .tonight {
+            XCTAssertEqual(SearchQueryParser.preset(slug: slug), preset, slug)
+        }
+        XCTAssertNil(SearchQueryParser.presetSlug[.thisMonth])
+    }
+
     // MARK: - Removing a chip
 
     func testRemovingAChipStripsItsWords() {
