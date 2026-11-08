@@ -106,8 +106,45 @@ for (const r of results) {
       }
     }
   }
+  // Two lanes can pick the same next migration version in parallel (round 17:
+  // two 20261108000097 files). Move this commit's new migration to the next
+  // free version and rewrite references to the old version in its files.
+  const versionMoves = [];
+  const added = git("diff", "--cached", "--name-only", "--diff-filter=A")
+    .split("\n")
+    .filter((f) => /^supabase\/migrations\/\d{14}_.+\.sql$/.test(f));
+  for (const f of added) {
+    const version = f.slice("supabase/migrations/".length, "supabase/migrations/".length + 14);
+    const all = git("ls-files", "supabase/migrations").split("\n");
+    const clash = all.some((g) => g !== f && g.startsWith(`supabase/migrations/${version}_`));
+    if (!clash) continue;
+    const used = new Set(all.map((g) => g.slice("supabase/migrations/".length, "supabase/migrations/".length + 14)));
+    let next = BigInt(version) + 1n;
+    while (used.has(String(next))) next += 1n;
+    const to = f.replace(version, String(next));
+    git("mv", f, to);
+    versionMoves.push({ from: version, to: String(next) });
+    for (const g of git("diff", "--cached", "--name-only").split("\n").filter(Boolean)) {
+      if (g.startsWith("supabase/migrations/") && g !== to) continue;
+      let text;
+      try {
+        text = readFileSync(g, "utf8");
+      } catch {
+        continue;
+      }
+      if (text.includes(version)) {
+        writeFileSync(g, text.split(version).join(String(next)));
+        git("add", g);
+      }
+    }
+  }
+
   let msg = git("log", "-1", "--format=%B", sha);
   if (rename) msg = msg.split(rename.from).join(rename.to);
+  for (const m of versionMoves) {
+    msg = msg.split(m.from).join(m.to);
+    console.log(`  ${label}: migration ${m.from} taken, moved to ${m.to}`);
+  }
   execFileSync("git", ["commit", "-q", "--allow-empty", "-F", "-"], { input: `${msg}\n` });
   console.log(`ok   ${label}${rename ? `  ${rename.from} -> ${rename.to}` : ""}`);
   landed.push(r);

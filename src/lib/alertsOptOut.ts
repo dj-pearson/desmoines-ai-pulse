@@ -5,7 +5,7 @@
  * disable_event_alerts_by_token turns off the recipient's event alerts (the
  * master switch on /dashboard?tab=saved-searches) and nothing else: the
  * newsletter, their saved searches and every other email stay. No sign-in
- * needed. It is not in the generated types until migration 20261108000097 is
+ * needed. It is not in the generated types until migration 20261108000098 is
  * applied, so the call goes through a narrowed signature
  * (scripts/check-schema-usage.mjs lists it in PENDING_MIGRATIONS).
  */

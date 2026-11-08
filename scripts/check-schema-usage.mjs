@@ -159,7 +159,7 @@ const PENDING_MIGRATIONS = [
   // email-unsubscribe. Until it is applied the page shows its fixed "something
   // went wrong" copy and the edge function answers 503, so mailbox providers
   // retry the one-click POST.
-  { rpc: 'disable_event_alerts_by_token', migration: '20261108000097' },
+  { rpc: 'disable_event_alerts_by_token', migration: '20261108000098' },
   // Business listing claims (WEB-ADS-009). The table read is cast, so only the
   // RPC is visible to this scanner; both are listed so the "landed" check asks
   // for them back once the types carry them. useBusinessClaim treats a 42P01 on
