@@ -11827,7 +11827,7 @@
         "check-bundle-budget ratchets down"
       ],
       "passes": false,
-      "notes": "Found in the WEB-PERF-064 loop by stripping mapDeps from the built entry and re-gzipping. Dropping the three vendors removes only 468 refs, so on its own it is a small win."
+      "notes": "Found in the WEB-PERF-064 loop by stripping mapDeps from the built entry and re-gzipping. Dropping the three vendors removes only 468 refs, so on its own it is a small win. | 2026-11-08 slice 1 (AC1): vite.config.ts preloadAlreadyLoaded() is a modulePreload.resolveDependencies that drops every dep in the host chunk's static closure, using a bundle captured by a generateBundle order \"pre\" plugin. Entry refs went 8,381 -> 7,905 and entry gz 55.4 -> 55.2 KB; lazy hosts went 1,660 -> 792 refs; gz over all 31 hosts 427.6 -> 422.7 KB. check-bundle-budget now fails if the entry's mapDeps names a chunk index.html loads (the pre-change dist fails it). New vitest has a negative control (3/8 fail). 20 routes plus router clicks loaded clean in Chrome. AC2 (direct-deps-only, needs a throttled navigation comparison) and AC3 (baseline 174.9 vs measured 175.8, so it can't ratchet yet) remain open. Handoff: docs/improvement-loops/lanes/performance.md"
     },
     {
       "priority": 4,
@@ -11865,8 +11865,8 @@
         "/events/series/<slug> opens a native screen showing the current or next edition and past ones by year",
         "An unknown slug still opens the web page"
       ],
-      "passes": false,
-      "notes": "Follow-up to IOS-AUDIT-FEAT-045, which routed these links to the web view. | Slice 1 of 2: ios/DesMoinesInsider/Models/EventSeries.swift now holds the web's 20 EVENT_SERIES entries (every field) and ports normaliseEventTitle, seriesForEvent, getEventSeries and seriesTitlePatterns. That meets AC1. vitest src/lib/__tests__/iosEventSeriesParity.test.ts fails on any list drift and runs the 14 EventSeriesTests.normaliseCases pairs through the web normaliser; the negative control failed both tests. 7 new XCTest cases, not compiled (no Xcode here). AC2/AC3 (the screen and the deep-link switch) are in the lane handoff. Note: this worktree started 126 commits behind the rolling branch, so it was reset to 2c0e98d9 (claude/continuous-improvement-loops-76i72u) before any work was done. Handoff: docs/improvement-loops/lanes/ios.md | Slice 2 of 3. EventSeriesSchedule ports the web's buildSeriesView, isModeratorHidden and isLinkable, and EventsService.fetchSeriesRows ports the useEventSeriesPage read, which keeps hidden and archived rows on purpose. 12 XCTest cases replay the web's eventSeriesView.test.ts rows and answers but were not compiled or run (no Xcode here). The vitest parity test now fails if that read filters is_hidden/archived_at or its limit drifts (negative-controlled), 6/6 pass. NOTE: this worktree was created from main (65138139), which lacks the lane docs and the slice-1 EventSeries.swift, so the empty branch was reset onto the rolling branch 384635cf before work; the commit is parented there and should be cherry-picked onto the rolling branch. Handoff: docs/improvement-loops/lanes/ios.md"
+      "passes": true,
+      "notes": "Follow-up to IOS-AUDIT-FEAT-045, which routed these links to the web view. | Slice 1 of 2: ios/DesMoinesInsider/Models/EventSeries.swift now holds the web's 20 EVENT_SERIES entries (every field) and ports normaliseEventTitle, seriesForEvent, getEventSeries and seriesTitlePatterns. That meets AC1. vitest src/lib/__tests__/iosEventSeriesParity.test.ts fails on any list drift and runs the 14 EventSeriesTests.normaliseCases pairs through the web normaliser; the negative control failed both tests. 7 new XCTest cases, not compiled (no Xcode here). AC2/AC3 (the screen and the deep-link switch) are in the lane handoff. Note: this worktree started 126 commits behind the rolling branch, so it was reset to 2c0e98d9 (claude/continuous-improvement-loops-76i72u) before any work was done. Handoff: docs/improvement-loops/lanes/ios.md | Slice 2 of 3. EventSeriesSchedule ports the web's buildSeriesView, isModeratorHidden and isLinkable, and EventsService.fetchSeriesRows ports the useEventSeriesPage read, which keeps hidden and archived rows on purpose. 12 XCTest cases replay the web's eventSeriesView.test.ts rows and answers but were not compiled or run (no Xcode here). The vitest parity test now fails if that read filters is_hidden/archived_at or its limit drifts (negative-controlled), 6/6 pass. NOTE: this worktree was created from main (65138139), which lacks the lane docs and the slice-1 EventSeries.swift, so the empty branch was reset onto the rolling branch 384635cf before work; the commit is parented there and should be cherry-picked onto the rolling branch. Handoff: docs/improvement-loops/lanes/ios.md | Slice 3 of 3: the 20 known /events/series/<slug> links now open a native EventSeriesView (EventSeriesViewModel over fetchSeriesRows + EventSeriesSchedule, with current/unannounced/past sections and retry), and unknown well-formed slugs still open the web page. MainTabView, ArticleDetailView and ItineraryDetailView handle the new Destination.eventSeries. Verified with vitest iOS parity 9/9 (the new routing assertion was negative-controlled) and 11 new XCTest cases, but none of it was compiled because there is no Xcode here. Note: the worktree was created from main, so it was reset to the rolling branch head 3e67b8aa first, and the commit sits on that."
     },
     {
       "priority": 3,
@@ -11935,7 +11935,8 @@
       "id": "WEB-FEAT-059",
       "title": "The event-reminder unsubscribe link unsubscribes the newsletter, not the reminders",
       "description": "send-event-reminders takes the footer's unsubscribe token from newsletter_subscribers by email. Clicking it ends the newsletter while reminders keep coming, and a user who isn't subscribed to the newsletter gets no token at all. Reminders need their own one-click opt-out, or the footer should link to the reminders tab on /my-events.",
-      "passes": false
+      "passes": true,
+      "notes": "Reminder emails now carry their user_event_reminders.id instead of the newsletter token. The old link also wrote an email_suppressions row that stopped all marketing mail. The new cancel_event_reminders_by_token RPC (migration 20261108000047) deletes only that event's unsent reminders; email-unsubscribe accepts ?reminder= and /unsubscribe?reminder= shows the result. Verified on a local Postgres (2 cancelled, other event and other user untouched, repeat click succeeds), with a new vitest suite (3 of 5 failed before, 5/5 after) and Deno 33/33. Full vitest 3152/3152. Needs the migration applied: until then the page shows its error copy and the one-click POST returns 503. The worktree started on stale commit 65138139, so it was reset to the rolling branch head 3e67b8aa before any work."
     },
     {
       "id": "WEB-UX-064",
@@ -12008,7 +12009,8 @@
         "No filter UI offers a tag that the query ignores",
         "A unit test asserts every offered tag changes the query"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "Restaurant filter tags are now only the diet ids (RESTAURANT_FILTER_TAGS from DIETARY_KEYWORDS). /restaurants reads ?tags= through appliedRestaurantTags, so an old ?tags=Happy%20Hour link no longer shows a chip and filter count over the unfiltered list. RestaurantFilters drops any tag no query applies. The new useRestaurants.filterTags test runs fetchRestaurantList with every offered tag and asserts the query differs from the untagged baseline; restoring the retired tags (negative control) turns 5 of 7 tests red. vitest 3152/3154 (2 load timeouts that pass when run alone), type-check ratchet 30/30, eslint clean."
     },
     {
       "priority": 3,
@@ -12019,7 +12021,8 @@
         "Each field has a visible Label tied to it with htmlFor/useId",
         "A vitest spec fails on the old code and passes on the new"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "/csat comment Textarea and /social friend-email Input now have visible shadcn Labels tied by htmlFor/useId (email input is type=\"email\", no autocomplete). New placeholderOnlyFields.test.tsx fails 2/2 on old code, passes 2/2; vitest 3149/3149, type ratchet 30/30, eslint 0 errors. Note: the worktree was created at 65138139 (not the rolling branch), so it was reset to claude/continuous-improvement-loops-76i72u (8202945a) before work; the commit sits on that tip."
     },
     {
       "priority": 3,
@@ -12055,8 +12058,8 @@
         "user_agent, page_url and referrer_url are truncated to a fixed length before insert",
         "Deno test covers both"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while reading track-ad-event for WEB-SEC-064; not fixed."
+      "passes": true,
+      "notes": "Found 2026-11-08 while reading track-ad-event for WEB-SEC-064; not fixed. | Done 2026-11-08: track-ad-event now stores a click's impression_id only when ad_impressions has it with the same campaign_id and creative_id (else, or on lookup failure, null), and cuts impression user_agent/page_url/referrer_url to 512/2048/2048 with non-strings stored as null; truncate, never refuse, so request shape, statuses and the 120/15min limit are unchanged. Logic in _shared/adEventFilters.ts; ad-event-tracking.test.ts 9 -> 14 (deno 14/14; the source-shape test fails on the unfixed index.ts), check-edge-auth OK, type-check:functions clean, check-edge-types no new errors; not deployed. Handoff: docs/improvement-loops/lanes/security.md"
     },
     {
       "priority": 2,
@@ -12080,8 +12083,8 @@
         "Establish where hotels.geo_faq rows come from (admin entry, a generator, an import)",
         "If any are model-written, render them like EventAiAnswers: labelled AI-assisted, no FAQPage"
       ],
-      "passes": false,
-      "notes": "Filed 2026-11-08 by the seo-geo loop while fixing the event case."
+      "passes": true,
+      "notes": "Filed 2026-11-08 by the seo-geo loop while fixing the event case. | hotels.geo_faq is model-written (all 124 rows from the scripts/content-fill/hotels-content.json agent batch, paraphrased from AAA/brand pages); HotelDetails now renders it through a new shared AiAnswersList (labelled AI-assisted, no JSON-LD) that EventAiAnswers also uses, instead of FAQSection with FAQPage. New stay-pass2 smoke test is red on an old-page build and green now (stay, stay-pass2, event-detail 28/28 against a vite build); vitest AiAnswersList 4/4 with a source guard, src/components+pages+lib 2467/2467."
     },
     {
       "priority": 4,
@@ -12094,13 +12097,13 @@
       "priority": 3,
       "id": "AND-AUDIT-035",
       "title": "Attraction 'Open on web' builds /attractions/<uuid>, which the web 404s",
-      "passes": false,
+      "passes": true,
       "description": "AttractionDetailViewModel.webUrl() returns SITE_URL/attractions/<lastId>, where lastId is whatever the screen was opened with. In-app lists, favorites and notifications pass the row UUID, but AttractionDetails.tsx resolves /attractions/:slug by slug (or createSlug(name)) only, so the not-found screen's Open on web action sends a UUID-opened attraction to a 404. PlaceShareLinks.attractionUrl(slug, name) (AND-AUDIT-034) already builds the right URL once the row is loaded.",
       "acceptanceCriteria": [
         "webUrl() uses the loaded attraction's slug or name slug when it has one, and the opened value only when it is not a UUID",
         "A JVM test pins that a UUID is never placed in an /attractions/ URL"
       ],
-      "notes": "Found in the AND-AUDIT-034 loop, 2026-11-08."
+      "notes": "Found in the AND-AUDIT-034 loop, 2026-11-08. | AttractionDetailViewModel.webUrl() now goes through a new PlaceShareLinks.attractionWebUrl: the loaded row's slug or name slug, else the opened value only when it is not a UUID, else the /attractions listing, so a UUID-opened not-found screen no longer sends users to a web 404. 3 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10), 11/11 in the suite, and a mutation dropping the UUID guard fails exactly the no-UUID test. The view model, DetailDestinations and the app module were not compiled (no Android SDK), and there was no device check. Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "WEB-QA-054",
@@ -12112,8 +12115,90 @@
         "Pass 20 consecutive runs with --repeat-each under --workers=4"
       ],
       "priority": 3,
+      "passes": true,
+      "notes": "Found 2026-11-08 by the orchestrator while gating round 12; a bisect over the session blamed a docs-only commit, which is how the flake was identified. | Root cause reproduced: locator.evaluate takes two round trips (resolve, then evaluate), and the list renders before the sponsored lead answers. Under load, row 000 was bound first, then rows 7 and 40 were pinned above it, so it measured 1360px (holding the handle across that commit gives 553 -> 1360 exactly). The phone tests now wait for row 7 to lead, then measure the title and its new data-event-card root in one evaluate. A new test holds the sponsored response for 1.5s. events-hub-list passed 180/180 with --repeat-each=20 --workers=4 on a vite build, and both negative controls fail as they should."
+    },
+    {
+      "id": "WEB-FEAT-061",
+      "title": "Both search typeaheads drop a multi-day event on its second day",
+      "description": "As a visitor typing an event name, I need the dropdown to offer an event that is still running. The homepage hero typeahead (useEntitySuggestions) and the /events search box (SearchAutocomplete, title and venue reads) filtered date >= start of today (Central) with no end_date arm. So on the State Fair's third morning, 'state fair' offered nothing in either dropdown, while the /search results page (useKeywordResults -> useEvents, fixed in WEB-FEAT-045) listed it.",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useEntitySuggestions.ts events read and src/components/SearchAutocomplete.tsx venue and title reads used .gte('date', upcomingFloorUtc())",
+        "All three reads send useEvents' upcomingOrRunningFilter(upcomingFloorUtc()), keeping the visibility predicate and the soonest-first order",
+        "A test evaluates the sent filters against fixture rows: a run that started two days ago is offered, while runs that are over (last year's, ended yesterday) and hidden rows are not",
+        "Negative control: the old bare floor on any one read turns the test red"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Done 2026-11-08 by the events lane. src/hooks/__tests__/searchSuggestions.running.test.tsx failed 3/5 before the fix and passes 5/5 after; the negative control (venue read back to the bare floor) fails 1/5. eslint 0 errors, type-check ratchet 30/30, check-postgrest-filters, check-event-unpublish, check-list-columns, check-supabase-await, check-imports and check-event-time-tz all pass. Not run against a live PostgREST. | useEntitySuggestions (homepage hero) and SearchAutocomplete (/events title and venue reads) filtered date >= start of today CT with no end_date arm, so a multi-day run disappeared from both typeaheads on its second day; all three reads now send useEvents' upcomingOrRunningFilter. New searchSuggestions.running.test.tsx, which evaluates the sent filters against fixture rows, failed 3/5 before the fix and passes 5/5 after; the negative control (bare floor put back on the venue read) fails 1/5. eslint, the type-check ratchet (30/30) and the related check-* scripts pass. Not run against a live PostgREST."
+    },
+    {
+      "id": "WEB-ADS-028",
+      "title": "Claim button shows raw Postgres errors and stays pressable on an already-claimed listing",
+      "description": "As a business owner claiming my listing, I need a failed claim to tell me what happened in plain words. ClaimListingCta toasted err.message verbatim: 'claim_listing: this listing is already claimed', 'duplicate key value violates unique constraint business_claims_one_verified_owner' when two owners raced, or 'Failed to fetch'. After an already-claimed refusal it kept offering the same button. useClaimListing threw new Error(error.message), which dropped PostgREST's code, so the two 23505 cases could not be told apart.",
+      "acceptanceCriteria": [
+        "Evidence: src/components/business/ClaimListingCta.tsx (toast.error(err.message)), src/hooks/useBusinessClaim.ts (throw new Error(error.message)), supabase/migrations/20260920000005_business_claims.sql (RAISE texts, business_claims_one_verified_owner and business_claims_one_open_per_user)",
+        "No toast from the claim button carries server text; each failure kind has fixed owner copy",
+        "An already-claimed listing replaces the button with a contact line and is not reported through handleError",
+        "A 23505 on the user's own open claim says the claim is in",
+        "Unexpected failures are reported through handleError with component/action and show fixed copy, and the button stays",
+        "PGRST202 still reads as 'Claims open soon'",
+        "vitest covers each kind, with negative controls"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "2026-11-08 marketing-growth loop. src/lib/claimFailure.ts (describeClaimFailure and ClaimListingError) and the CTA/hook changes. New vitest 8/8 (5 of 6 CTA cases failed on the old code); negative controls: hook back to new Error(message) fails 1/2, no button swap fails 2/6. Full vitest 3155/3155, eslint 0 errors, type-check ratchet 30/30, check-error-handling, check-internal-links, check-imports, check-false-empty-state. Not run against a live claim_listing. | The claim button showed PostgREST's own text to owners (\"claim_listing: this listing is already claimed\", a unique-index name when two owners verified at once, \"Failed to fetch\") and kept offering the button after an already-claimed refusal. Now src/lib/claimFailure.ts maps each failure to copy written for owners. An already-claimed listing swaps the button for a contact-us line, a double press that hit the user's own open claim says the claim is in, and anything else goes through handleError with fixed copy. useClaimListing throws ClaimListingError, which keeps the code and details. Verified with new vitest 8/8 (5 of the 6 CTA cases failed on the old code) plus two negative controls; full vitest 3155/3155."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-062",
+      "title": "Several event reads use a bare now() floor with no end_date arm: useTrending, useForYouRail, useHomeSnapshot, useNearbyListings, useTeams",
+      "description": "These reads filter .gte('date', new Date().toISOString()). That drops a multi-day run after its first start instant, an event that began minutes ago, and an untimed event (19:31:58 sentinel) after 7:31 PM on its own day. They should use upcomingOrRunningFilter with the Central-day floor, unless a reader needs future-only rows on purpose (say why in a comment).",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useTrending.ts:266, useForYouRail.ts:80, useHomeSnapshot.ts:215, useNearbyListings.ts:89, useTeams.ts:108",
+        "Each read either sends upcomingOrRunningFilter(upcomingFloorUtc()) or carries a comment explaining why it needs future-only rows",
+        "Fixture-evaluating test per changed hook, with a negative control"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-061",
+      "title": "Hotel description, geo_summary and geo_key_facts are agent-written and shown unlabelled",
+      "description": "As the platform owner, I need readers told when hotel copy is model-written. The same scripts/content-fill/hotels-content.json batch that wrote geo_faq also wrote description, short_description, geo_summary and geo_key_facts for all 124 hotels, and the About This Hotel section on HotelDetails shows them with no AI-assisted label, unlike the event page's Quick Facts block.",
+      "acceptanceCriteria": [
+        "Decide which hotel fields are model-written (the batch has a sources and unsupported field per row) and record it",
+        "Label the model-written blocks on HotelDetails with AIDisclosureBadge as EventAiAnswers does for Quick Facts",
+        "Check whether HotelSchema publishes any of that text as structured-data fact (description) and decide whether that is acceptable"
+      ],
       "passes": false,
-      "notes": "Found 2026-11-08 by the orchestrator while gating round 12; a bisect over the session blamed a docs-only commit, which is how the flake was identified."
+      "notes": "Filed 2026-11-08 by the seo-geo loop while fixing WEB-SEO-060."
+    },
+    {
+      "priority": 2,
+      "id": "WEB-SEO-062",
+      "title": "recordArticleView calls a detached supabase.rpc, which throws on every article detail view",
+      "description": "src/lib/recordArticleView.ts does `const rpc = supabase.rpc as unknown as (...)` and then calls rpc(...). SupabaseClient.rpc reads this.rest, so a detached call throws TypeError \"Cannot read properties of undefined (reading 'rest')\" (confirmed in node against the installed supabase-js). It runs synchronously inside a useEffect in useArticleBySlug (src/hooks/useArticles.ts:583) for every real visitor, before the .then rejection handler can catch anything. So the view counter never counts, and the throw escapes the effect. Fix: supabase.rpc.bind(supabase), plus a test whose stub rejects detached calls (see src/pages/__tests__/unsubscribeReminder.test.tsx for one).",
+      "passes": false
+    },
+    {
+      "priority": 4,
+      "id": "WEB-FEAT-063",
+      "title": "A newsletter unsubscribe silently stops event reminders the user sets later",
+      "description": "send-event-reminders sends as category 'marketing', and _shared/email.ts blocks marketing for any address with an 'unsubscribe' row in email_suppressions, which newsletter_unsubscribe_by_token writes. A user who left the newsletter and then turns on a reminder on an event page gets nothing, and nothing tells them why. Decide whether opted-in per-event reminders get their own category, or whether the reminder switch should warn when the address is suppressed.",
+      "passes": false
+    },
+    {
+      "priority": "low",
+      "id": "IOS-AUDIT-001",
+      "title": "iOS: archived past edition opened from a series screen shows 'no longer available'",
+      "description": "EventSeriesView opens an archived past edition with the row's own Event (fetchEvent(id:) refuses archived rows). EventDetailViewModel.loadEvent(_ prefetched:) still runs a background refreshFromServer, gets PGRST116, and sets isUnavailable, so the 'no longer available' note appears over the past event's content. The web shows archived editions as a past-event page. Fix: let the detail know the row is archived (or skip the refresh for an archived prefetched row) and label it as a past event instead.",
+      "acceptance_criteria": [
+        "Opening an archived edition from EventSeriesView shows its content with a past-event label, not the unavailable note",
+        "Live events opened anywhere else keep the existing refresh and unavailable behaviour",
+        "XCTest covers both paths using EventDetailProviding"
+      ],
+      "passes": false
     }
   ]
 }
