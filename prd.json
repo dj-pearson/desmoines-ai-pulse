@@ -12101,6 +12101,19 @@
         "A JVM test pins that a UUID is never placed in an /attractions/ URL"
       ],
       "notes": "Found in the AND-AUDIT-034 loop, 2026-11-08."
+    },
+    {
+      "id": "WEB-QA-054",
+      "title": "events-hub-list 'the first card starts on the first screen' (phone) fails under a loaded full smoke run",
+      "description": "In a full 810-test smoke run on chromium-desktop with default workers, the phone test measured the first card at 1360px (limit 560). The same test passed 3/3 alone at both b3ea0e8 and 8202945a, and the next full run passed with no retries, so it is load-dependent, not a code regression. The screenshot shows the sponsored card at ~500px; the measured element is lower, so the title-to-card walk (closest('.rounded-xl, [class*=\"card\"]')) or a late-loading sponsored slot likely picks a different card under load.",
+      "acceptanceCriteria": [
+        "Measure the first card by a stable hook (data-testid on the card root) rather than a class-name walk",
+        "Wait for the sponsored slot to settle (present or absent) before measuring",
+        "Pass 20 consecutive runs with --repeat-each under --workers=4"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-11-08 by the orchestrator while gating round 12; a bisect over the session blamed a docs-only commit, which is how the flake was identified."
     }
   ]
 }

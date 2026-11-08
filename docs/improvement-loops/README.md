@@ -101,6 +101,15 @@ restart it from `develop` (or `main` if there is no `develop`).
    `node scripts/apply-loop-results.mjs <landed.json>`.
 5. Add a row to the round log, commit `docs(prd): record improvement-loop round N`,
    push, and remove the agent worktrees (`git worktree remove --force`).
+6. Smoke lane, in the background while the next round's agents work:
+   `npx vite build` (placeholder `VITE_SUPABASE_*`), then
+   `npx playwright test -c <config> --project=chromium-desktop --retries=1`
+   against the pushed head (about 18 minutes for 810 tests). Use a config that
+   serves on its own port, not 4173, so it never reuses a lane agent's preview
+   server; `playwright.smoke.config.ts` reads `PLAYWRIGHT_TEST_BASE_URL` but its
+   webServer port is fixed. A failure is fixed or its lane commit reverted in
+   the next merge. Rounds 10-12 shipped a required-lane break (WEB-QA-052) that
+   validate and vitest cannot see.
 
 ### Continuous mode
 
