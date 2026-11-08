@@ -148,3 +148,4 @@ that lock as the remote branch `loops-lock`.
 | 2026-11-08 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits, all by script; 11 closed. validate exit 0, vitest 3252/3252, edge checks clean; round-14 smoke 809 passed, 1 flaky |
 | 2026-11-08 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits, all by script; 10 closed, 1 split. validate exit 0, vitest 3299/3299, edge checks clean; round-15 smoke 811 passed, 0 flaky |
 | 2026-11-08 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 8 closed, 3 split; duplicate migration version fixed (097 -> 098) and the merge script now renumbers. validate exit 0, vitest 3361/3361, edge checks clean; round-16 smoke 811 passed, 0 flaky |
+| 2026-11-08 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits, all by script; 9 closed, 2 split. validate exit 0, vitest 3427/3427, edge checks clean; round-17 smoke 811 passed, 0 flaky |

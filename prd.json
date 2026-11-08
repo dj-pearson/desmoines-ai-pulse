@@ -12328,7 +12328,7 @@
         "Document running the lane locally via npm i deno in README Checks by area"
       ],
       "passes": false,
-      "notes": "Found 2026-11-08 by the reliability lane: 73/166 lane steps pass locally, all 93 failures are network-blocked imports."
+      "notes": "Found 2026-11-08 by the reliability lane: 73/166 lane steps pass locally, all 93 failures are network-blocked imports. | Slice 1 (AC1, AC3) of WEB-CI-036. 90 Deno suites moved from deno.land/std asserts to jsr:@std/assert@1, which deno.lock already resolves, and check-deno-lanes now fails any suite that imports straight from deno.land or esm.sh. That took the lane from 72/166 to 160/166 locally on Deno 2.9.6. The newly runnable steps turned up one real red test: nlp-search's upcomingOrRunningFilter drift guard still read useEvents.ts after WEB-SEO-063 moved the string to src/lib/eventRunningFilter.ts. It now reads the lib and checks that useEvents imports from it, and both negative controls fail as they should. The loop README now says how to run the lane in a container. Note: this worktree was created from main, so before working I reset it to the rolling branch head 58976fc1 so the commit cherry-picks cleanly. Handoff: docs/improvement-loops/lanes/reliability.md"
     },
     {
       "priority": 2,
@@ -12529,7 +12529,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md"
+      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 3 named 34 admin/CMS fields across 8 files: CategoryTagManager, PartnershipsManager, AdminCampaigns, SupportTicketsConsole, SupportConsole, HotelManager, AttractionManager and ActivityLogViewer. Dialog Labels now have htmlFor/id, and filter searches and Selects have aria-label. The check-field-names baseline went from 123 to 89. The new adminFieldNamesSlice3.test.tsx fails 9/9 on the old code and passes 9/9. Full vitest is 3370/3370 and the type ratchet is 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md"
     },
     {
       "id": "WEB-PERF-069",
@@ -12632,7 +12632,8 @@
       "id": "WEB-LEGAL-014",
       "title": "Six first-party user_analytics writers insert without checking analytics consent",
       "description": "As a visitor who declined analytics cookies, I need the site to stop recording my clicks. usePageTracking.ts, paywallAnalytics.ts, adAnalytics.ts, sponsored.ts, favoriteAnalytics.ts and advertiserFunnel.ts all insert into user_analytics (session id, user id, user agent, page URL) and none of them calls analyticsGranted(). useAnalytics.ts does gate on consent. Each one needs to be checked: some may be covered by legitimate interest or gated by their caller. Any that isn't should gate the same way useAnalytics does.",
-      "passes": false
+      "passes": true,
+      "notes": "adAnalytics, sponsored and favoriteAnalytics, plus useExperiment (which the story didn't name), inserted user_analytics rows and stored a session id without analytics consent. All four now return early unless analyticsGranted(). usePageTracking, paywallAnalytics and advertiserFunnel already gated through hasConsent('analytics'). New analyticsWriterConsent.test.ts has 13 tests: both directions for each writer, plus a src/ scan that strips comments and refuses an empty result. 6 of them fail on the unfixed code. Full vitest 3374/3374, type-check ratchet 30/30, eslint clean. Handoff: docs/improvement-loops/lanes/security.md"
     },
     {
       "priority": 3,
@@ -12731,8 +12732,8 @@
         "Runs that overlap the window come from a separate capped read and sort after the window's starts",
         "Test with fixture rows: a Thu-Sun festival appears and a 3-month exhibit does not crowd out starts"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane while fixing the hero count and Trending."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane while fixing the hero count and Trending. | useHomeWeekEvents now runs two reads per band: the starts read (limit-sized, unchanged) and a read for runs (`date < window.start AND end_date >= window.start`, ordered by end_date, capped at HOME_WEEK_RUNNING_LIMIT=3) appended after the starts. A Thu-Sun festival now shows under \"This weekend\", and a long exhibit can't push a start off the page. The hook returns startCount, which AllInclusiveDashboard's \"Show more\" compares with the limit. Verified with new useHomeWeekEvents.running.test.tsx, which applies each read's filters, order and limit to fixture rows: 5/5. The old hook fails 4 of 5 (reproduced red) and the negative control (runs before starts) fails 3 of 5. vitest src/hooks src/components src/lib passes 3034/3034. Not run against a live PostgREST."
     },
     {
       "priority": 5,
@@ -12744,7 +12745,8 @@
         "Saving the form stores the kept row's id (the 097 trigger already does this server-side)",
         "A vitest case covers the label"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "DealManager's VenuePicker now loads an existing deal's link through fetchLinkedDealVenue (src/lib/dealVenueSearch.ts, DEAL_LINKED_RESTAURANT_COLUMNS, check-list-columns 21/21). It follows merged_into to the kept row: 10 hops, cycle-safe, the same bound restaurant_merge_survivor uses. For a merged link it shows \"Was linked to <duplicate> (merged into <kept>). Saving links <kept>.\" and moves the form's entity_id to the kept row without touching business_name. A cycle or a missing kept row gets its own label. 12 new vitest cases (9 lib, 3 picker render). A negative control that removes the resolve and the note turns 2 of 3 picker tests red; removing the resolve alone turns 1 red. vitest 2099/2099 across src/lib, src/components/admin and useDeals; type-check ratchet 30/30; eslint clean."
     },
     {
       "priority": "high",
@@ -12764,8 +12766,8 @@
         "listingFilters tests cover Friday, Saturday night and Sunday afternoon Central",
         "pSEO shippable fingerprints are rechecked, because the weekend window widens"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while fixing WEB-SEO-064. Left out of that commit because it changes which days are listed, not only how the dates are computed."
+      "passes": true,
+      "notes": "Found 2026-11-08 while fixing WEB-SEO-064. Left out of that commit because it changes which days are listed, not only how the dates are computed. | temporalRange('this-weekend') now returns centralWindow('this-weekend') startDay/endDay (Fri-Sun, the weekend in progress on Fri/Sat/Sun), so /x/this-weekend agrees with /events/this-weekend; the start-of-today floor still drops past days, and the page copy says \"Friday through Sunday this weekend\". New Thu/Fri/Sat-night/Sun-afternoon/Sun-11PM/Mon cases are 10 red on the old code; src/pseo is 105/105 in four time zones, test:pseo-shippable and test:pseo-coverage pass. Live shippable fingerprints were not rechecked because there are no Supabase credentials."
     },
     {
       "priority": 2,
@@ -12777,7 +12779,8 @@
         "A vitest case with no existing row asserts the write carries weekly_digest_enabled: false, and fails on the current hook",
         "Consider a one-off check of how many rows have weekly_digest_enabled true with no digest consent; that is an owner decision, not part of the fix"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "setAlertsPref now updates an existing user_email_preferences row and inserts only when missing, with weekly_digest_enabled false (ON CONFLICT DO NOTHING, re-update on a lost race); useEmailPreferences' insert also defaults the digest off. New vitest against a stateful fake table: 2 of 5 failed before, 5/5 after; vitest 3366/3366, type ratchet 30/30. Existing rows the old switch created with the digest on are left for an owner decision (AC3)."
     },
     {
       "priority": 3,
@@ -12790,8 +12793,8 @@
         "A Playwright check: scroll a control under the grid into view and assert it does not move over the next 10 frames. It fails on the current 420px placeholder",
         "Note: adding the auto keyword alone (contain-intrinsic-size: auto 0 auto 420px) did not change the measured shift"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the reliability lane while fixing WEB-QA-058 (the spec now waits for the shift to settle; the page still shifts)."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the reliability lane while fixing WEB-QA-058 (the spec now waits for the shift to settle; the page still shifts). | The .content-auto placeholder went from a flat 420px to `auto 0 auto calc(26rem + 3px)`. That number comes from measuring a full card (two-line description, rating, cuisine, address) at 390/768/1024/1280px: 419/471/523/523px. The card is sized in rem and the root font-size steps 16/18/20px, so one rem value fits every breakpoint. On the old value the \"Show 14 more\" control under the dietary grid moved 1/51/103px at 390/768/1280; it now moves 0. Three new smoke-lane tests in restaurants-dietary.spec.ts cover this. All three fail when the old 420px is patched back into the build, and the dietary and open-now specs pass 63/63 over 3 repeats."
     },
     {
       "priority": "low",
@@ -12803,8 +12806,61 @@
         "A vitest parity check reads the Swift and fails when the word lists drift",
         "XCTest covers the link mapping"
       ],
+      "passes": true,
+      "notes": "Found while doing IOS-AUDIT-NEW-ios (stay/near). | /events/kids opens iOS Search on Events with SearchFilters.kidsOnly, sent as EventsService.kidsEventsFilter (byte-for-byte KIDS_EVENTS_FILTER) with a removable Kids & family chip. Before, it searched the text \"kids events\", which FTS read as the keyword \"kids\". Verified by vitest iosKidsEventsParity.test.ts (reads the Swift, negative-controlled) and 8 new XCTest cases; not compiled (no Xcode here)."
+    },
+    {
+      "id": "WEB-ADS-033",
+      "title": "Newsletter signups from every on-site form except the footer are recorded as source 'website', so nobody can tell which form converts",
+      "description": "As the person deciding where to put newsletter signup forms, I need newsletter_subscribers.source to name the form a reader used. ArticleDetails, VisitorsGuide, NewsletterConfirm's retry form and ReminderEmailsUnsubscribedNotice all sent 'website', and newsletter-subscribe's ALLOWED_SOURCES only knew website/popup/footer/checkout/hero, so /admin's Source column could only say footer or somewhere else.",
+      "acceptanceCriteria": [
+        "Each on-site form passes its own source: article, visitors_guide, confirm_page, reminder_notice",
+        "One typed client list (src/lib/newsletterSources.ts) used by NewsletterSignup and useNewsletterSubscription",
+        "newsletter-subscribe ALLOWED_SOURCES widened to the same list (additive; existing values kept)",
+        "A vitest compares the server and client lists and pins each placement's source, with negative controls",
+        "eslint, type-check ratchet, type-check:functions, check-edge-auth, check-edge-types pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Found and done in the 2026-11-08 marketing-growth loop. New vitest 9/9; the old server list fails 1/9 and the old callers fail 5/9. Owner: deploy newsletter-subscribe. Until then the new names are stored as 'website', as before. | Done in code. Every on-site newsletter form except the footer used to send source 'website'. Now each form names itself: article, visitors_guide, confirm_page and reminder_notice, listed in src/lib/newsletterSources.ts. newsletter-subscribe's ALLOWED_SOURCES is widened to the same list. That change is additive, and until the function is deployed the new names are stored as 'website'. Verified by a new vitest file, 9/9 passing, with two negative controls (the old server list fails 1/9, the old callers fail 5/9), plus 3016/3016 across src/lib, src/components/__tests__, src/pages and src/hooks, eslint, the type-check ratchet (30/30), type-check:functions, check-edge-auth and check-edge-types. Owner: deploy newsletter-subscribe."
+    },
+    {
+      "id": "AND-AUDIT-039",
+      "title": "Guide reading time truncates on Android, so 201-399 word guides read a minute shorter than on web and iOS",
+      "priority": 3,
+      "passes": true,
+      "description": "As a reader moving between the app and the site, I need a guide's reading time to say the same thing everywhere. MarkdownParser.readingMinutes computed (words / 200).coerceAtLeast(1) with integer division, while web readTimeLabel (src/lib/articleHubs.ts) uses Math.ceil and iOS Article.readingMinutes rounds up, so a 399-word guide read '1 min read' on Android Guides cards and detail and '2 min read' on web and iOS.",
+      "acceptanceCriteria": [
+        "readingMinutes rounds up: ceil(words / 200), never less than 1",
+        "Unit tests pin the 200/201/399/401 boundaries, empty or whitespace-only content, and newline/tab word splitting",
+        "Guides list card meta (Article.metaLine) and ArticleDetailScreen both read the same function, so both change together"
+      ],
+      "notes": "Done 2026-11-08 (android lane). Rounds up via (words + 199) / 200, minimum 1. 3 new MarkdownParserTest JVM tests; 17/17 across MarkdownParserTest and ArticleTest on a stub harness (kotlinc 2.2.10). Restoring truncation fails exactly 2. App module not compiled (no Android SDK). | MarkdownParser.readingMinutes now rounds words / 200 up, with a minimum of 1, to match web readTimeLabel (Math.ceil) and iOS Article.readingMinutes (.rounded(.up)). Before this it truncated, so guides of 201-399 words read one minute short on Android cards and detail. Verified on a JVM stub harness (kotlinc 2.2.10, JUnit 5.10.2): 17/17 pass across MarkdownParserTest and ArticleTest, 3 of them new, and restoring truncation fails exactly 2. App module not compiled (no Android SDK). Worktree was created at main (65138139), which lacks docs/improvement-loops, so it was reset to rolling-branch head 58976fc1 before any work."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-UX-071",
+      "title": "Home 'This weekend' card for a festival carried in from Thursday shows its Thursday start date instead of 'Ongoing, through Sun'",
+      "description": "Since WEB-FEAT-074, useHomeWeekEvents appends runs that started before the weekend window. AllInclusiveDashboard renders every card's `when` with formatEventDateShort(row), so a festival that opened Thursday reads as a Thursday event under 'This weekend'. useEventsInRange already has ongoingLabel() for this case.",
+      "acceptanceCriteria": [
+        "Evidence: src/components/AllInclusiveDashboard.tsx event card `when: formatEventDateShort(row)`",
+        "A row whose Central start day is before the band's first day shows 'Ongoing, through <end>' (reuse ongoingLabel)",
+        "Test: a Thu-Sun festival card under This weekend reads 'Ongoing, through Oct 11'"
+      ],
       "passes": false,
-      "notes": "Found while doing IOS-AUDIT-NEW-ios (stay/near)."
+      "notes": "Found 2026-11-08 by the events lane while fixing WEB-FEAT-074."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-077",
+      "title": "user_email_preferences.weekly_digest_enabled still defaults to true, so any writer that omits it opts the user into the digest",
+      "description": "The column default from 20251110000005 is true. WEB-FEAT-076 fixed the two client writers, and handle_new_user names the column, but the default remains a trap for any future insert path (edge function, admin tool, native app). A separate question is the rows the old alerts switch already created with the digest on and no marketing consent.",
+      "acceptanceCriteria": [
+        "A migration sets the column default to false (affects new rows only; additive per the backward-compatibility rules)",
+        "A count of rows with weekly_digest_enabled true, created before 20261004000001, whose user gave no email_marketing_consent, is reported to the owner; flipping them is an owner decision",
+        "check-migrations-parse and check-migration-order pass"
+      ],
+      "passes": false
     }
   ]
 }
