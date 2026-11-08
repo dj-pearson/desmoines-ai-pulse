@@ -445,6 +445,7 @@ export default function HotelManager() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search hotels"
               value={searchInput}
               onChange={(e) => {
                 setSearchInput(e.target.value);
@@ -461,7 +462,7 @@ export default function HotelManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by hotel type">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -480,7 +481,7 @@ export default function HotelManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by affiliate link">
               <SelectValue placeholder="Affiliate link" />
             </SelectTrigger>
             <SelectContent>
@@ -490,7 +491,7 @@ export default function HotelManager() {
             </SelectContent>
           </Select>
           <Select value={sortBy} onValueChange={(v: SortKey) => setSortBy(v)}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Sort hotels">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>

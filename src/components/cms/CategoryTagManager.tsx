@@ -351,6 +351,7 @@ export function CategoryTagManager() {
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search categories and tags"
             placeholder="Search categories or tags..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -565,14 +566,14 @@ export function CategoryTagManager() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Color</Label>
+                  <Label htmlFor="category-color">Color</Label>
                   <Select
                     value={categoryForm.color}
                     onValueChange={(value) =>
                       setCategoryForm((prev) => ({ ...prev, color: value }))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="category-color">
                       <SelectValue>
                         <div className="flex items-center gap-2">
                           <span
@@ -601,8 +602,9 @@ export function CategoryTagManager() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Sort Order</Label>
+                  <Label htmlFor="category-sort-order">Sort Order</Label>
                   <Input
+                    id="category-sort-order"
                     type="number"
                     value={categoryForm.sort_order}
                     onChange={(e) =>
@@ -613,7 +615,7 @@ export function CategoryTagManager() {
               </div>
 
               <div className="space-y-2">
-                <Label>Parent Category</Label>
+                <Label htmlFor="category-parent">Parent Category</Label>
                 <Select
                   value={categoryForm.parent_id || 'none'}
                   onValueChange={(value) =>
@@ -623,7 +625,7 @@ export function CategoryTagManager() {
                     }))
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="category-parent">
                     <SelectValue placeholder="Select parent category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -695,12 +697,12 @@ export function CategoryTagManager() {
               </div>
 
               <div className="space-y-2">
-                <Label>Color</Label>
+                <Label htmlFor="tag-color">Color</Label>
                 <Select
                   value={tagForm.color}
                   onValueChange={(value) => setTagForm((prev) => ({ ...prev, color: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="tag-color">
                     <SelectValue>
                       <div className="flex items-center gap-2">
                         <span

@@ -374,6 +374,7 @@ export default function PartnershipsManager() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search partnership requests"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search business, email, type…"
@@ -381,7 +382,7 @@ export default function PartnershipsManager() {
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by stage">
               <SelectValue placeholder="Stage" />
             </SelectTrigger>
             <SelectContent>
@@ -394,7 +395,7 @@ export default function PartnershipsManager() {
             </SelectContent>
           </Select>
           <Select value={tierFilter} onValueChange={setTierFilter}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by desired tier">
               <SelectValue placeholder="Desired tier" />
             </SelectTrigger>
             <SelectContent>
@@ -578,14 +579,17 @@ export default function PartnershipsManager() {
               <div className="space-y-4 mt-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <Label
+                      htmlFor="partnership-stage"
+                      className="text-xs uppercase tracking-wide text-muted-foreground"
+                    >
                       Stage
                     </Label>
                     <Select
                       value={detail.status ?? "pending"}
                       onValueChange={(v) => updateDetail({ status: v })}
                     >
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger id="partnership-stage" className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -598,14 +602,17 @@ export default function PartnershipsManager() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <Label
+                      htmlFor="partnership-desired-tier"
+                      className="text-xs uppercase tracking-wide text-muted-foreground"
+                    >
                       Desired tier
                     </Label>
                     <Select
                       value={detail.desired_tier ?? ""}
                       onValueChange={(v) => updateDetail({ desired_tier: v })}
                     >
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger id="partnership-desired-tier" className="mt-1">
                         <SelectValue placeholder="—" />
                       </SelectTrigger>
                       <SelectContent>

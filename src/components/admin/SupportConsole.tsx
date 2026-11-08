@@ -171,12 +171,12 @@ function TicketDetail({ id, onBack }: { id: string; onBack: () => void }) {
           </Button>
           {canned && canned.length > 0 && (
             <Select onValueChange={(v) => { const c = canned.find((x) => x.id === v); if (c) setReply((r) => (r ? r + "\n\n" : "") + c.body); }}>
-              <SelectTrigger className="h-9 w-[180px]"><SelectValue placeholder="Insert canned…" /></SelectTrigger>
+              <SelectTrigger aria-label="Insert a canned reply" className="h-9 w-[180px]"><SelectValue placeholder="Insert canned…" /></SelectTrigger>
               <SelectContent>{canned.map((c) => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
             </Select>
           )}
         </div>
-        <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={4} placeholder="Type a reply (editable AI/canned text)…" />
+        <Textarea aria-label="Reply to user" value={reply} onChange={(e) => setReply(e.target.value)} rows={4} placeholder="Type a reply (editable AI/canned text)…" />
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={async () => { if (!reply.trim()) return; await run({ action: "send_reply", id, body: reply, status: "awaiting_user" }, "Reply sent."); setReply(""); }}
@@ -199,7 +199,7 @@ function TicketDetail({ id, onBack }: { id: string; onBack: () => void }) {
         {/* Internal note + merge */}
         <div className="flex flex-wrap items-end gap-2 pt-1">
           <div className="flex-1">
-            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Internal note (not shown to user)" />
+            <Input aria-label="Internal note (not shown to user)" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Internal note (not shown to user)" />
           </div>
           <Button variant="ghost" size="sm" onClick={async () => { if (!note.trim()) return; await run({ action: "add_note", id, body: note }, "Note added."); setNote(""); }} disabled={action.isPending || !note.trim()}>
             <StickyNote className="mr-2 h-4 w-4" /> Add note
@@ -207,7 +207,7 @@ function TicketDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex-1">
-            <Input value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} placeholder="Merge into ticket id (canonical)" />
+            <Input aria-label="Merge into ticket id" value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} placeholder="Merge into ticket id (canonical)" />
           </div>
           <Button variant="ghost" size="sm" onClick={() => mergeInto.trim() && run({ action: "merge", id, into: mergeInto.trim() }, "Ticket merged.")} disabled={action.isPending || !mergeInto.trim()}>
             <GitMerge className="mr-2 h-4 w-4" /> Merge duplicate

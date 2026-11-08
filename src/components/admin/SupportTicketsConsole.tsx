@@ -130,30 +130,30 @@ export default function SupportTicketsConsole() {
           {editing && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Priority</Label>
+                <Label htmlFor="ticket-priority">Priority</Label>
                 <Select value={editing.priority ?? "normal"} onValueChange={(v) => setEditing({ ...editing, priority: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="ticket-priority"><SelectValue /></SelectTrigger>
                   <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Sentiment</Label>
+                <Label htmlFor="ticket-sentiment">Sentiment</Label>
                 <Select value={editing.sentiment ?? "neutral"} onValueChange={(v) => setEditing({ ...editing, sentiment: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="ticket-sentiment"><SelectValue /></SelectTrigger>
                   <SelectContent>{SENTIMENTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Urgency</Label>
+                <Label htmlFor="ticket-urgency">Urgency</Label>
                 <Select value={editing.urgency ?? "low"} onValueChange={(v) => setEditing({ ...editing, urgency: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="ticket-urgency"><SelectValue /></SelectTrigger>
                   <SelectContent>{URGENCIES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Category</Label>
+                <Label htmlFor="ticket-category">Category</Label>
                 <Select value={editing.category ?? "general"} onValueChange={(v) => setEditing({ ...editing, category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="ticket-category"><SelectValue /></SelectTrigger>
                   <SelectContent>{["billing", "account", "content", "technical", "feedback", "general"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
