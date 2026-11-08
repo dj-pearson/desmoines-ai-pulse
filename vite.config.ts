@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv, Plugin } from "vite";
+import type { OutputBundle } from "rollup";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import fs from "node:fs";
@@ -157,12 +158,97 @@ function removeLazyPreloads(): Plugin {
   };
 }
 
+/**
+ * Drop preload deps the importing chunk has already loaded (WEB-PERF-066).
+ *
+ * For every dynamic import Vite lists the target chunk plus its whole static
+ * import closure, and only excludes the importing chunk itself. Everything the
+ * importer statically imports is already evaluated by the time its code can
+ * reach the import() call, so naming it again preloads nothing; it is bytes
+ * in the importer. In the entry that meant vendor-react, vendor-react-ecosystem
+ * and vendor-supabase in almost every one of its 160 __vite__mapDeps arrays,
+ * though index.html loads all three before the entry runs. Lazy chunks that
+ * import further lazy chunks carry the same repeats for their own imports.
+ *
+ * Only deps in the HOST's static closure go. Trimming deps that the target
+ * would discover itself (for example keeping only direct deps) is a different
+ * trade: it turns one parallel preload batch into a waterfall per level.
+ */
+export function staticImportClosure(
+  importsOf: (fileName: string) => readonly string[] | undefined,
+  start: string
+): Set<string> {
+  const seen = new Set<string>();
+  const stack = [start];
+  while (stack.length) {
+    const file = stack.pop() as string;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    stack.push(...(importsOf(file) ?? []));
+  }
+  return seen;
+}
+
+export function dropAlreadyLoadedDeps(
+  deps: readonly string[],
+  loaded: ReadonlySet<string>
+): string[] {
+  return deps.filter((dep) => !loaded.has(dep));
+}
+
+/**
+ * resolveDependencies is called from inside vite:build-import-analysis's
+ * generateBundle with only (url, deps, { hostId }), not the chunk graph, so a
+ * plugin captures the bundle first. order "pre" puts its generateBundle ahead
+ * of Vite's. If that ever stops holding, resolveDependencies returns deps
+ * unchanged (a no-op, never a broken preload), and check-bundle-budget's
+ * "already loaded" assertion fails the build check.
+ */
+export function preloadAlreadyLoaded(): {
+  plugin: Plugin;
+  resolveDependencies: (
+    url: string,
+    deps: string[],
+    context: { hostId: string; hostType: "html" | "js" }
+  ) => string[];
+} {
+  let bundle: OutputBundle | undefined;
+  const closures = new Map<string, Set<string>>();
+  const importsOf = (fileName: string) => {
+    const out = bundle?.[fileName];
+    return out && out.type === "chunk" ? out.imports : undefined;
+  };
+  return {
+    plugin: {
+      name: "preload-already-loaded",
+      apply: "build",
+      generateBundle: {
+        order: "pre",
+        handler(_options, outputBundle) {
+          bundle = outputBundle;
+          closures.clear();
+        },
+      },
+    },
+    resolveDependencies(_url, deps, { hostId, hostType }) {
+      if (!bundle || hostType !== "js" || !importsOf(hostId)) return deps;
+      let loaded = closures.get(hostId);
+      if (!loaded) {
+        loaded = staticImportClosure(importsOf, hostId);
+        closures.set(hostId, loaded);
+      }
+      return dropAlreadyLoadedDeps(deps, loaded);
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 // Force rebuild: 2025-01-18
 export default defineConfig(({ command, mode }) => {
   // Vite only exposes .env values on `import.meta.env` inside app code, so the
   // config has to load them itself to validate index.html placeholders.
   const loadedEnv = loadEnv(mode, process.cwd(), "");
+  const preloadTrim = preloadAlreadyLoaded();
   return {
   base: "/",
   server: {
@@ -173,6 +259,7 @@ export default defineConfig(({ command, mode }) => {
     assertHtmlEnvPlaceholders(loadedEnv), // Fail clearly on missing %VAR% (WEB-CI-022)
     injectBuildTimestamp(), // Add timestamp to prevent HTML caching
     removeLazyPreloads(), // Remove vendor-maps/vendor-three from preload list
+    preloadTrim.plugin, // Captures the bundle for modulePreload below (WEB-PERF-066)
     react({
       babel: {
         plugins: [
@@ -224,6 +311,8 @@ export default defineConfig(({ command, mode }) => {
     cssCodeSplit: true,
     minify: "esbuild", // Use esbuild - faster and more reliable than terser
     target: "es2020",
+    // WEB-PERF-066: drop preload deps the importing chunk already loaded.
+    modulePreload: { resolveDependencies: preloadTrim.resolveDependencies },
     // No esbuild options here: `build.esbuild` isn't a Vite option, so the
     // drop list that sat here was ignored and every console.* shipped. It
     // lives at the top level now (see `esbuild` below this block).
