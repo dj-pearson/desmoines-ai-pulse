@@ -1,51 +1,30 @@
-import React, { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import React, { Suspense, lazy, useRef, useState } from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "@/lib/toast";
-import {
-  Facebook,
-  Twitter,
-  Mail,
-  MessageSquare,
-  Copy,
-} from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { createLogger } from '@/lib/logger';
-import { buildShareUrls, SHARE_BUTTON_CLASSES } from '@/lib/shareLinks';
+import { lazyOrNothing } from "@/lib/lazyOrNothing";
+import type { ShareDialogPanelProps } from "@/components/ShareDialogPanel";
 
-const log = createLogger('ShareDialog');
-
-function LinkedInIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-    </svg>
-  );
-}
-
-function WhatsAppIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.893 3.488"/>
-    </svg>
-  );
-}
-
-interface ShareOption {
-  name: string;
-  icon: React.ComponentType<{ className?: string }>;
-  url: string;
-  color: string;
-}
+/**
+ * WEB-PERF-073. This module is the Share trigger only. The dialog itself
+ * (Radix Dialog, Input, Label, five lucide icons, the share-URL builder) lives
+ * in ShareDialogPanel and is fetched on the first click, the way
+ * GlobalUpgradeModal loads UpgradeModal. Every detail route and every
+ * EventCard renders this trigger, and almost nobody presses it.
+ *
+ * React.lazy fetches when the component renders, so the panel is not rendered
+ * until the first open. After that it stays mounted with open toggling, which
+ * keeps Radix's close animation and costs a closed Dialog (renders nothing).
+ *
+ * lazyOrNothing: a failed chunk fetch (usually one purged after a deploy)
+ * leaves Share doing nothing for this page view instead of throwing the whole
+ * detail page into its error boundary.
+ */
+const ShareDialogPanel = lazy(
+  lazyOrNothing<ShareDialogPanelProps>(() =>
+    import("@/components/ShareDialogPanel").then((m) => ({ default: m.ShareDialogPanel })),
+  ),
+);
 
 interface ShareDialogProps {
   title: string;
@@ -66,11 +45,6 @@ interface ShareDialogProps {
 
 export type ShareKind = "event" | "article";
 
-const SHARE_COPY: Record<ShareKind, { noun: string; suffix: string }> = {
-  event: { noun: "event", suffix: "Des Moines Events" },
-  article: { noun: "article", suffix: "Des Moines Insider" },
-};
-
 export default function ShareDialog({
   title,
   description,
@@ -82,16 +56,9 @@ export default function ShareDialog({
   itemName,
 }: ShareDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const copy = SHARE_COPY[kind];
-  const noun = copy.noun;
-  const Noun = noun.charAt(0).toUpperCase() + noun.slice(1);
+  const [hasOpened, setHasOpened] = useState(false);
+  const triggerRef = useRef<HTMLElement>(null);
 
-  // Create better sharing content
-  const shareTitle = `${title} - ${copy.suffix}`;
-  const safeDescription = description ?? "";
-  const shareDescription = safeDescription.slice(0, 150) + (safeDescription.length > 150 ? '...' : '');
-  const shareText = `Check out this ${noun}: ${title}`;
-  const shareUrls = buildShareUrls({ shareTitle, shareDescription, shareText, noun, url });
   // Names the item so a list of cards is not 30 identical "Share" buttons.
   // Starts with the visible "Share" (WCAG 2.5.3 label-in-name). Articles say
   // "article" because ArticleDetails has a trigger whose visible text is
@@ -100,154 +67,47 @@ export default function ShareDialog({
   const triggerLabel =
     kind === "article" ? `Share article: ${itemName ?? title}` : `Share ${itemName ?? title}`;
 
-  const shareOptions: ShareOption[] = [
-    {
-      name: "Facebook",
-      icon: Facebook,
-      url: shareUrls.facebook,
-      color: SHARE_BUTTON_CLASSES.facebook,
+  // What Radix's DialogTrigger used to set, minus aria-controls: the content
+  // has no id until the panel has loaded. Typed as button attributes so
+  // type="button" survives; Slot's own props are HTMLElement-wide.
+  const triggerProps: React.ButtonHTMLAttributes<HTMLButtonElement> & { "data-state": string } = {
+    type: "button",
+    "aria-label": triggerLabel,
+    "aria-haspopup": "dialog",
+    "aria-expanded": isOpen,
+    "data-state": isOpen ? "open" : "closed",
+    onClick: () => {
+      setHasOpened(true);
+      setIsOpen(true);
     },
-    {
-      name: "X (Twitter)",
-      icon: Twitter,
-      url: shareUrls.x,
-      color: SHARE_BUTTON_CLASSES.x,
-    },
-    {
-      name: "LinkedIn",
-      icon: LinkedInIcon,
-      url: shareUrls.linkedin,
-      color: SHARE_BUTTON_CLASSES.linkedin,
-    },
-    {
-      name: "WhatsApp",
-      icon: WhatsAppIcon,
-      url: shareUrls.whatsapp,
-      color: SHARE_BUTTON_CLASSES.whatsapp,
-    },
-    {
-      name: "Email",
-      icon: Mail,
-      url: shareUrls.email,
-      color: SHARE_BUTTON_CLASSES.email,
-    },
-    {
-      name: "SMS",
-      icon: MessageSquare,
-      url: shareUrls.sms,
-      color: SHARE_BUTTON_CLASSES.sms,
-    },
-  ];
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copied to clipboard!");
-      onShare?.();
-      setIsOpen(false);
-    } catch (error) {
-      toast.error("Failed to copy link");
-    }
-  };
-
-  const handleNativeShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: shareTitle,
-          text: shareText,
-          url: url,
-        });
-        onShare?.();
-        setIsOpen(false);
-      } catch (error) {
-        // User cancelled sharing or error occurred
-        log.debug('nativeShare', 'Native share cancelled or failed', { data: error });
-      }
-    }
-  };
-
-  const handleShareClick = (shareUrl: string) => {
-    // Add a small delay to ensure the URL is properly constructed
-    setTimeout(() => {
-      window.open(shareUrl, "_blank", "width=600,height=400,scrollbars=yes,resizable=yes");
-    }, 100);
-    onShare?.();
-    setIsOpen(false);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild aria-label={triggerLabel}>
+    <>
+      <Slot ref={triggerRef} {...triggerProps}>
         {trigger || (
           <Button variant="outline" size="sm" className={className}>
             <SpriteIcon name="share-2" className="h-4 w-4 mr-2" />
             Share
           </Button>
         )}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Share {Noun}</DialogTitle>
-          <DialogDescription>
-            Share this {noun} with your friends and family
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {/* Social Media Buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            {shareOptions.map((option) => (
-              <Button
-                key={option.name}
-                onClick={() => handleShareClick(option.url)}
-                className={`flex items-center justify-center transition-all duration-200 transform hover:scale-105 ${option.color} shadow-sm hover:shadow-md dark:brightness-90`}
-                size="sm"
-              >
-                <option.icon className="h-4 w-4" />
-                <span className="ml-2 font-medium">{option.name}</span>
-              </Button>
-            ))}
-          </div>
-
-          {/* Native Share (if available) */}
-          {navigator.share && (
-            <Button
-              onClick={handleNativeShare}
-              variant="outline"
-              className="w-full border-dashed hover:border-solid transition-all duration-200"
-              size="sm"
-            >
-              <SpriteIcon name="share-2" className="h-4 w-4 mr-2" />
-              More Share Options
-            </Button>
-          )}
-
-          {/* Copy Link Section */}
-          <div className="space-y-2 pt-4 border-t border-border">
-            <Label htmlFor="share-url" className="text-sm font-medium">Share Link</Label>
-            <div className="flex gap-2">
-              <Input
-                id="share-url"
-                value={url}
-                readOnly
-                className="flex-1 bg-muted/50 font-mono text-sm"
-                onClick={(e) => e.currentTarget.select()}
-              />
-              <Button
-                onClick={copyToClipboard}
-                variant="outline"
-                size="sm"
-                className="flex-shrink-0 hover:bg-primary hover:text-primary-foreground transition-colors"
-                aria-label="Copy link to clipboard"
-              >
-                <Copy className="h-4 w-4" aria-hidden="true" />
-                <span className="sr-only">Copy link</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </Slot>
+      {hasOpened && (
+        // No fallback: a spinner for the few frames before the dialog appears
+        // is worse than nothing.
+        <Suspense fallback={null}>
+          <ShareDialogPanel
+            open={isOpen}
+            onOpenChange={setIsOpen}
+            title={title}
+            description={description}
+            url={url}
+            kind={kind}
+            onShare={onShare}
+            returnFocusTo={triggerRef}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }

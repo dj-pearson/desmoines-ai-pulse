@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ShareDialog from "@/components/ShareDialog";
 import { Button } from "@/components/ui/button";
 import { buildShareUrls, SHARE_BUTTON_CLASSES } from "@/lib/shareLinks";
@@ -96,5 +96,42 @@ describe("ShareDialog trigger", () => {
     );
     const button = screen.getByRole("button", { name: "Share article: Best Patios" });
     expect(button.getAttribute("aria-label")?.toLowerCase()).toContain("share article");
+  });
+});
+
+describe("ShareDialog lazy panel (WEB-PERF-073)", () => {
+  it("renders no dialog until the trigger is pressed, then opens it", async () => {
+    render(<ShareDialog title="Jazz Night" description="d" url="https://x.test/e" />);
+    const button = screen.getByRole("button", { name: "Share Jazz Night" });
+    expect(button).toHaveAttribute("aria-haspopup", "dialog");
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(button);
+
+    expect(await screen.findByRole("dialog", { name: "Share Event" })).toBeInTheDocument();
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("textbox", { name: "Share Link" })).toHaveValue("https://x.test/e");
+  });
+
+  it("uses the article wording and returns focus to the trigger on close", async () => {
+    render(
+      <ShareDialog
+        kind="article"
+        title="Best Patios"
+        description="d"
+        url="https://x.test/a"
+        trigger={<Button>Share Article</Button>}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Share article: Best Patios" });
+    fireEvent.click(button);
+    await screen.findByRole("dialog", { name: "Share Article" });
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(button).toHaveFocus());
+    expect(button).toHaveAttribute("aria-expanded", "false");
   });
 });
