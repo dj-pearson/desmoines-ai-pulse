@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Hotel
 import com.desmoines.aipulse.data.repository.HotelsRepository
 import com.desmoines.aipulse.util.LocationService
+import com.desmoines.aipulse.util.PlaceShareLinks
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -109,14 +110,14 @@ class HotelDetailViewModel @Inject constructor(
         return Intent(Intent.ACTION_VIEW, uri)
     }
 
-    /** Share text matching the other detail screens. */
+    /** Share text matching the other detail screens, ending with the /stay/<slug> page (AND-AUDIT-034). */
     val shareText: String
         get() {
             val hotel = _hotel.value ?: return ""
             var text = hotel.name
             hotel.area?.takeIf { it.isNotBlank() }?.let { text += " — $it" }
             hotel.starRating?.let { text += " ⭐ ${String.format(Locale.US, "%.1f", it)}" }
-            text += "\n\nFound on Des Moines Insider"
+            text += "\n\n" + PlaceShareLinks.footer(PlaceShareLinks.hotelUrl(hotel.slug))
             return text
         }
 }

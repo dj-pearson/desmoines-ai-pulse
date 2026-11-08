@@ -72,6 +72,15 @@ tonight 7pm+ show is listed and last night's 7pm+ show is not. The trap: the flo
 last night's late shows from Featured, Related and Nearby until midnight, which is intended; if a list
 goes empty in the evening, check the date column on those rows before suspecting the bound.
 
+AND-AUDIT-034 (place share links) is code-complete and JVM-tested. Restaurant, attraction and hotel share
+text now ends "Found on Des Moines Insider: <url>" via util/PlaceShareLinks: /restaurants/<slug or id>,
+/attractions/<slug> (falling back to the name slug while the slug column may be absent), /stay/<slug>
+(no link without a slug). Attraction and Hotel decode `slug` now. One device check closes it: share each
+of the three from detail and tap the link on a phone with the app; it should reopen the same screen. The
+trap: an attraction whose name collides with another gets a -2 slug from migration 20260919000008, so
+if the shared link opens the wrong attraction, the slug column is not in production yet and the name
+fallback is in play.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -87,3 +96,4 @@ goes empty in the evening, check the date column on those rows before suspecting
 | 2026-11-08 | AND-AUDIT-028 | this commit | Upcoming Saved event rows offer Add to Calendar from an overflow menu and a TalkBack custom action, built from the same EventCalendarEntry as event detail via a new shared EventCalendarIntent (intent + no-calendar toast); past and undated rows offer neither. 3 new EventCalendarEntryTest JVM tests pass on a stub harness (kotlinc 2.2.10), 46/46 across the four event-time suites; a mutation ignoring isPast fails exactly the past-row test. Compose UI and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-033 | this commit | Slice 1 of 2: every Saved event row offers Share (overflow item and TalkBack action), and event detail and Saved share one EventShareText whose text now ends with the event page SITE_URL/events/<id>, as iOS shares (it had no link). 5 new EventShareTextTest JVM tests pass on a stub harness (kotlinc 2.2.10), 51/51 across five event-time suites; a mutation dropping the link fails 2. Reminder toggle is the handoff. Compose UI and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-033 | this commit | Slice 2 of 2: upcoming Saved rows offer Remind me / Remove reminder (overflow item and TalkBack action) with detail's timing, so TBA rows get the 9am Central day-of reminder; POST_NOTIFICATIONS asked in the Saved destination, refusals shown in a new Saved snackbar. Detail and Saved share EventReminderTiming.offersReminder / refusedMessage. 6 new EventReminderTimingTest JVM tests pass on a stub harness (kotlinc 2.2.10), 57/57 across five event-time suites; a mutation dropping the past-row guard fails exactly the past-row test. EventDetailReminderTest, Compose UI and app module not compiled (no Android SDK, no mockk in cache); no device check |
+| 2026-11-08 | AND-AUDIT-034 | this commit | Restaurant, attraction and hotel shares now end with their site page (/restaurants/<slug or id>, /attractions/<slug or name slug>, /stay/<slug>) through a shared PlaceShareLinks, matching the event share shape; Attraction and Hotel decode slug. 8 new PlaceShareLinksTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation linking restaurants by id and dropping the attraction name fallback fails 2. ViewModels, models and app module not compiled (no Android SDK); no device check |
