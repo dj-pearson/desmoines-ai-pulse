@@ -10,6 +10,7 @@ import {
 } from "@/hooks/useBusinessClaim";
 import { isRpcMissing } from "@/hooks/useMyBusinessClaims";
 import { handleError } from "@/lib/errorHandler";
+import { describeClaimFailure } from "@/lib/claimFailure";
 import { toast } from "sonner";
 import { BadgeCheck, Building2, Clock } from "lucide-react";
 
@@ -44,6 +45,7 @@ export function ClaimListingCta({ listingType, listingId, listingName }: ClaimLi
   const claimListing = useClaimListing();
   const [busy, setBusy] = useState(false);
   const [claimsUnavailable, setClaimsUnavailable] = useState(false);
+  const [claimedByOther, setClaimedByOther] = useState(false);
   const here = `${location.pathname}${location.search}`;
 
   if (claim?.status === "verified") {
@@ -96,7 +98,15 @@ export function ClaimListingCta({ listingType, listingId, listingName }: ClaimLi
             details right.
           </p>
         </div>
-        {claimsUnavailable ? (
+        {claimedByOther ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            Someone has already verified this listing.{" "}
+            <Link to="/contact" className="font-medium text-primary underline-offset-4 hover:underline">
+              Contact us
+            </Link>{" "}
+            if that should be you.
+          </p>
+        ) : claimsUnavailable ? (
           <p className="text-sm text-muted-foreground" role="status">
             Claims open soon.
           </p>
@@ -120,14 +130,26 @@ export function ClaimListingCta({ listingType, listingId, listingName }: ClaimLi
                   toast.info("Claims open soon. We aren't taking them yet.");
                   return;
                 }
+                // Never the server's text: it carries the function name, an
+                // index name or "Failed to fetch" (src/lib/claimFailure.ts).
+                const failure = describeClaimFailure(err);
+                if (failure.kind === "already_claimed") {
+                  // An expected refusal, not a fault. Stop offering a button
+                  // that can only fail the same way again.
+                  setClaimedByOther(true);
+                  toast.error(failure.message);
+                  return;
+                }
+                if (failure.kind === "own_claim_open") {
+                  toast.info(failure.message);
+                  return;
+                }
                 handleError(err, {
                   component: "ClaimListingCta",
                   action: "claimListing",
-                  metadata: { listingType, listingId },
+                  metadata: { listingType, listingId, failure: failure.kind },
                 });
-                // The function refuses an already-claimed listing by name, and
-                // that message is the useful one to show.
-                toast.error(err instanceof Error ? err.message : "That did not work.");
+                toast.error(failure.message);
               } finally {
                 setBusy(false);
               }
