@@ -12,6 +12,7 @@ import {
   reminderSubject,
   reminderWhen,
   reminderWhere,
+  shouldSendReminder,
   timingPhrase,
 } from "./content.ts";
 
@@ -86,18 +87,25 @@ serve(async (req) => {
       );
     }
 
-    if (!reminders || reminders.length === 0) {
+    // Hour-level reminders for an event with no announced time are dropped
+    // here as well as in the RPC (WEB-FEAT-058). They are left pending, not
+    // claimed, so the RPC's "event hasn't started" filter retires them.
+    const fetched = (reminders ?? []) as Reminder[];
+    const sendable = fetched.filter(shouldSendReminder);
+    const skippedUntimed = fetched.length - sendable.length;
+
+    if (sendable.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No reminders to send", count: 0 }),
+        JSON.stringify({ message: "No reminders to send", count: 0, skipped_untimed: skippedUntimed }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Found ${reminders.length} reminders to send`);
+    console.log(`Found ${sendable.length} reminders to send (${skippedUntimed} untimed skipped)`);
 
     // Send emails for each reminder
     const results = await Promise.allSettled(
-      reminders.map((reminder: Reminder) => sendReminderEmail(reminder, supabase))
+      sendable.map((reminder: Reminder) => sendReminderEmail(reminder, supabase))
     );
 
     // Count successes and failures
@@ -107,11 +115,12 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         message: "Reminder batch processed",
-        total: reminders.length,
+        total: sendable.length,
+        skipped_untimed: skippedUntimed,
         successes,
         failures,
         results: results.map((r, i) => ({
-          reminder_id: reminders[i].reminder_id,
+          reminder_id: sendable[i].reminder_id,
           status: r.status,
           error: r.status === "rejected" ? r.reason : null,
         })),

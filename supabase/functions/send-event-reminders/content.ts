@@ -50,6 +50,22 @@ export function hasStatedTime(r: Pick<ReminderContentInput, "event_start_utc" | 
   return centralWallClockFromUtc(d).slice(11) !== NO_TIME_MARKER;
 }
 
+/**
+ * WEB-FEAT-058: whether this reminder is worth sending at all. A 3-hour or
+ * 1-hour reminder is timed against the start, so for an event with no
+ * announced time it fires against the 19:31:58 sentinel and says nothing the
+ * 1-day one did not. get_pending_reminders skips those rows from migration
+ * 20261108000040; this is the same rule on the sender, so it also holds
+ * before that migration is applied. time_tbd is not in the RPC's return
+ * shape, which is why only the marker is checked here.
+ */
+export function shouldSendReminder(
+  r: Pick<ReminderContentInput, "reminder_type" | "event_start_utc" | "event_date">,
+): boolean {
+  if (r.reminder_type === "3_hours" || r.reminder_type === "1_hour") return hasStatedTime(r);
+  return true;
+}
+
 /** "starts tomorrow", "starts in 3 hours"; "is today" when there is no time. */
 export function timingPhrase(r: Pick<ReminderContentInput, "reminder_type" | "event_start_utc" | "event_date">): string {
   if (!hasStatedTime(r)) {

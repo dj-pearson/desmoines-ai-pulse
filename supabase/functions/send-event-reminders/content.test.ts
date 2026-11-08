@@ -9,6 +9,7 @@ import {
   reminderSubject,
   reminderWhen,
   reminderWhere,
+  shouldSendReminder,
   timingPhrase,
 } from "./content.ts";
 
@@ -82,6 +83,34 @@ Deno.test("timing phrase does not promise an hour nobody announced", () => {
   assertEquals(timingPhrase(reminder({ reminder_type: "3_hours" })), "starts in 3 hours");
   assertEquals(timingPhrase(reminder({ reminder_type: "1_hour" })), "starts in 1 hour");
   assertEquals(timingPhrase(reminder({ reminder_type: "weekly" })), "is coming up");
+});
+
+Deno.test("hour-level reminders are not sent for an event with no announced time (WEB-FEAT-058)", () => {
+  const base = { event_start_utc: NO_TIME_UTC, event_date: NO_TIME_UTC };
+  assertEquals(shouldSendReminder(reminder({ ...base, reminder_type: "3_hours" })), false, "3_hours untimed");
+  assertEquals(shouldSendReminder(reminder({ ...base, reminder_type: "1_hour" })), false, "1_hour untimed");
+  assertEquals(shouldSendReminder(reminder({ ...base, reminder_type: "1_day" })), true, "1_day untimed still goes");
+  assertEquals(shouldSendReminder(reminder({ reminder_type: "3_hours" })), true, "3_hours timed");
+  assertEquals(shouldSendReminder(reminder({ reminder_type: "1_hour" })), true, "1_hour timed");
+  assertEquals(shouldSendReminder(reminder({ reminder_type: "1_day" })), true, "1_day timed");
+});
+
+Deno.test("the sender filters with shouldSendReminder before claiming", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assert(/\.filter\(shouldSendReminder\)/.test(src), "index.ts filters fetched reminders");
+  assert(src.includes("sendable.map("), "only the filtered list is sent");
+});
+
+Deno.test("get_pending_reminders skips untimed events in the hour windows (WEB-FEAT-058)", async () => {
+  const sql = await Deno.readTextFile(
+    new URL("../../migrations/20261108000040_pending_reminders_skip_untimed_hour_windows.sql", import.meta.url),
+  );
+  assert(sql.includes("create or replace function public.get_pending_reminders(reminder_window text default '1_hour'::text)"), "same signature");
+  const marker = `= '${NO_TIME_MARKER}'`;
+  assertEquals(sql.split(marker).length - 1, 2, "both hour arms test the marker");
+  assertEquals(sql.split("COALESCE(e.time_tbd, false)").length - 1, 2, "both hour arms test time_tbd");
+  assert(sql.includes("REVOKE EXECUTE ON FUNCTION public.get_pending_reminders(text) FROM PUBLIC, anon, authenticated;"), "grants restated");
+  assert(sql.includes("GRANT EXECUTE ON FUNCTION public.get_pending_reminders(text) TO service_role;"), "service_role keeps it");
 });
 
 Deno.test("where: venue with address, address alone, duplicates, and neither", () => {
