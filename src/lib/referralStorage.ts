@@ -88,3 +88,36 @@ export function referralFromAccount(
   if (!Number.isFinite(created) || now - created >= REFERRAL_ATTRIBUTION_WINDOW_MS) return null;
   return code;
 }
+
+/**
+ * safeStorage key set when a visitor closes the invite welcome strip
+ * (WEB-ADS-034). New; not renamed from anything.
+ */
+export const INVITE_BANNER_DISMISSED_KEY = "dmi_invite_banner_dismissed";
+
+export function isInviteBannerDismissed(): boolean {
+  return storage.get<boolean>(INVITE_BANNER_DISMISSED_KEY) === true;
+}
+
+export function dismissInviteBanner(): void {
+  storage.set<boolean>(INVITE_BANNER_DISMISSED_KEY, true);
+}
+
+/**
+ * Whether to show the invite welcome strip. An invited visitor who is signed
+ * out and has not closed it sees it; the auth page is skipped because the
+ * visitor is already where the strip would send them. `invited` means this
+ * session opened a well-formed ?ref link, not merely that a code is stored:
+ * a code kept for 30 days is for attribution, and greeting every later visit
+ * as "a friend sent you" would be nagging.
+ */
+export function shouldOfferInvite(input: {
+  invited: boolean;
+  dismissed: boolean;
+  signedIn: boolean;
+  authLoading: boolean;
+  pathname: string;
+}): boolean {
+  if (!input.invited || input.dismissed || input.signedIn || input.authLoading) return false;
+  return !/^\/auth(\/|$)/.test(input.pathname);
+}
