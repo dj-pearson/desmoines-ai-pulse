@@ -15,6 +15,7 @@ import {
 } from '@/lib/listColumns';
 import { escapeLikePattern, sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 import { centralWindow, upcomingFloorUtc } from '@/lib/timezone';
+import { upcomingOrRunningFilter } from '@/hooks/useEvents';
 import { isPermanentlyClosedRestaurant, NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
 
 /**
@@ -246,17 +247,28 @@ export function withSearchParams(prev: URLSearchParams, filters: AdvancedSearchF
  *  every render and re-fire consumer effects that depend on it. */
 const EMPTY_RESULTS: SearchResult[] = [];
 
-async function searchEvents(f: AdvancedSearchFilters): Promise<SearchResult[]> {
+/** Exported for src/hooks/__tests__/useAdvancedSearch.running.test.ts. */
+export async function searchEvents(f: AdvancedSearchFilters): Promise<SearchResult[]> {
   // Central day boundaries: an event at 7pm Central on the 1st is 00:00 UTC
   // on the 2nd, and a UTC-date window drops it.
   const floor = upcomingFloorUtc();
   const start = f.dateRange.start
     ? centralWindow({ kind: 'single', date: f.dateRange.start }).start
     : floor;
+  // Starts at or after the lower bound, or is still running at it. A bare
+  // `date >= lower` dropped a multi-day run from its second day (the State
+  // Fair on day three, a festival weekend picked as "from Saturday") while
+  // /events and site search kept it (WEB-FEAT-066). With a "to" date this is
+  // an overlap test: started by the end, not over before the start.
+  const running = upcomingOrRunningFilter(start > floor ? start : floor);
+  // One or= for the window and the text match: a second .or() is a second
+  // `or` query param, and PostgREST does not promise to AND duplicates.
+  const q = f.query ? sanitizePostgrestPattern(f.query) : '';
+  const text = q ? `title.ilike.%${q}%,venue.ilike.%${q}%,location.ilike.%${q}%` : null;
   let query = supabase
     .from('events')
     .select(EVENT_LIST_COLUMNS)
-    .gte('date', start > floor ? start : floor)
+    .or(text ? `and(or(${running}),or(${text}))` : running)
     .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
     // WEB-BE-034: archived_at is the other unpublish switch.
     .is('archived_at', null)
@@ -265,10 +277,6 @@ async function searchEvents(f: AdvancedSearchFilters): Promise<SearchResult[]> {
 
   if (f.dateRange.end) {
     query = query.lte('date', centralWindow({ kind: 'single', date: f.dateRange.end }).end);
-  }
-  if (f.query) {
-    const q = sanitizePostgrestPattern(f.query);
-    query = query.or(`title.ilike.%${q}%,venue.ilike.%${q}%,location.ilike.%${q}%`);
   }
   if (f.location) {
     query = query.ilike('location', `%${escapeLikePattern(f.location)}%`);
