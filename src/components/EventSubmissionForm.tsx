@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { CalendarIcon, X, Plus, Info, Upload, ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { pickedDayToSubmissionDate } from "@/lib/submissionDate";
 import { useSubmitEvent, useUpdateEvent, type UserSubmittedEvent } from "@/hooks/useUserSubmittedEvents";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { toast } from "@/lib/toast";
@@ -167,7 +168,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
     try {
       const eventData = {
         ...data,
-        date: selectedDate?.toISOString(),
+        date: selectedDate ? pickedDayToSubmissionDate(selectedDate) : undefined,
         tags: selectedTags,
         image_url: uploadedImageUrl || data.image_url || null,
       };
