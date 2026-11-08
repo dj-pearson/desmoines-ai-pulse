@@ -65,6 +65,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DEAL_VENUE_SOURCES,
+  searchDealVenues,
+  type DealVenueOption as VenueOption,
+} from "@/lib/dealVenueSearch";
 import { handleError } from "@/lib/errorHandler";
 import {
   fromCentralInput,
@@ -136,31 +141,7 @@ const ENTITY_TYPES = ["restaurant", "attraction", "hotel", "event", "activity"];
 const DEAL_TYPES = ["percentage", "dollar_off", "bogo", "free_item", "package"];
 const PAGE_SIZE = 25;
 
-/**
- * Entity types whose deals can point at a venue page (explore pass 2 WP6
- * item 2). useDealVenueLinks resolves entity_id against the same three
- * tables, so a deal linked here gets a venue link on /deals.
- */
-const VENUE_SOURCES: Record<
-  string,
-  { table: "restaurants" | "attractions" | "hotels"; place: string; label: string }
-> = {
-  restaurant: { table: "restaurants", place: "location", label: "restaurant" },
-  attraction: { table: "attractions", place: "location", label: "attraction" },
-  hotel: { table: "hotels", place: "city", label: "hotel" },
-};
-const LINKABLE_TYPES = Object.keys(VENUE_SOURCES);
-
-interface VenueOption {
-  id: string;
-  name: string;
-  place: string | null;
-}
-
-/** % and _ are ilike wildcards; a venue name like "100% Pure" should match itself. */
-function escapeIlike(term: string): string {
-  return term.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
+const LINKABLE_TYPES = Object.keys(DEAL_VENUE_SOURCES);
 
 function statusOf(deal: Deal): "active" | "upcoming" | "expired" {
   const now = new Date();
@@ -287,7 +268,7 @@ interface VenuePickerProps {
  * a venue link on /deals.
  */
 function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
-  const source = VENUE_SOURCES[entityType];
+  const source = DEAL_VENUE_SOURCES[entityType];
   const [term, setTerm] = useState("");
   const debounced = useDebounce(term, 250);
   const [options, setOptions] = useState<VenueOption[]>([]);
@@ -336,20 +317,9 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
     setSearching(true);
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from(source.table)
-          .select(`id, name, ${source.place}`)
-          .ilike("name", `%${escapeIlike(q)}%`)
-          .order("name")
-          .limit(8);
-        if (error) throw error;
+        const found = await searchDealVenues(entityType, q);
         if (cancelled) return;
-        const rows = (data ?? []) as unknown as Array<Record<string, string | null>>;
-        setOptions(
-          rows
-            .filter((r) => r.id && r.name)
-            .map((r) => ({ id: r.id as string, name: r.name as string, place: r[source.place] ?? null })),
-        );
+        setOptions(found);
       } catch (err) {
         handleError(err, { component: "DealManager", action: "searchVenues" });
       } finally {
@@ -359,7 +329,7 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
     return () => {
       cancelled = true;
     };
-  }, [source, debounced]);
+  }, [source, entityType, debounced]);
 
   if (!source) {
     return (
