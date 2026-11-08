@@ -60,3 +60,23 @@ export function referralCountLabel(stats: { signedUp: number; subscribed: number
   if (stats.signedUp === 1) return `${signed} through your link so far and went on to subscribe.`;
   return `${signed} through your link so far; ${paid} went on to subscribe.`;
 }
+
+/** utm_* an invite link carries (WEB-ADS-021). */
+export const INVITE_UTM_SOURCE = 'referral';
+export const INVITE_UTM_MEDIUM = 'invite';
+
+/**
+ * The share link on the invite card. `ref` is what useReferralCapture reads;
+ * the utm pair is what campaignAttribution reads, so a newsletter signup that
+ * came through a friend's invite is stored as utm_source=referral rather than
+ * as no campaign at all. A bare ?ref link sent before this change still works:
+ * the capture never needed the utm pair.
+ */
+export function inviteLink(baseUrl: string, code: string): string {
+  const params = new URLSearchParams({
+    ref: code,
+    utm_source: INVITE_UTM_SOURCE,
+    utm_medium: INVITE_UTM_MEDIUM,
+  });
+  return `${baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
+}

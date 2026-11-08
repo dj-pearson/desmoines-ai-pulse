@@ -19,7 +19,7 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 
 const { InviteFriendsCard } = await import("@/components/account/InviteFriendsCard");
 
-const LINK = "https://desmoinesinsider.com/?ref=ABCD2345";
+const LINK = "https://desmoinesinsider.com/?ref=ABCD2345&utm_source=referral&utm_medium=invite";
 const writeText = vi.fn<(text: string) => Promise<void>>();
 
 function setShare(fn: ((data: ShareData) => Promise<void>) | undefined) {

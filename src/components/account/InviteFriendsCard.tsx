@@ -7,7 +7,7 @@ import { useReferralStats } from "@/hooks/useReferralStats";
 import { BRAND } from "@/lib/brandConfig";
 import { shareWithOutcome } from "@/lib/capacitorUtils";
 import { ErrorSeverity, handleError } from "@/lib/errorHandler";
-import { referralCountLabel } from "@/lib/referralCode";
+import { inviteLink, referralCountLabel } from "@/lib/referralCode";
 
 /**
  * "Invite friends" on the profile page (plan WP6). Shows the user's share link
@@ -25,6 +25,9 @@ import { referralCountLabel } from "@/lib/referralCode";
  * The button appears only where navigator.share exists. A closed sheet is the
  * member's answer and changes nothing (their clipboard included); a sheet that
  * cannot open falls back to copying, so the press still does something.
+ *
+ * The link carries utm_source=referral&utm_medium=invite (WEB-ADS-021) so
+ * invite traffic shows up as a campaign in signup attribution.
  */
 export function InviteFriendsCard() {
   const { data } = useReferralStats();
@@ -33,7 +36,7 @@ export function InviteFriendsCard() {
 
   if (!data) return null;
 
-  const link = `${BRAND.baseUrl}/?ref=${data.referralCode}`;
+  const link = inviteLink(BRAND.baseUrl, data.referralCode);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   const copy = async () => {
