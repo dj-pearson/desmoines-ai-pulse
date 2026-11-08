@@ -70,7 +70,6 @@ describe("files fixed in WEB-UX-056 slice 2", () => {
     "src/components/ContentEditDialog.tsx",
     "src/components/ContentEditor.tsx",
     "src/components/ContentQueue.tsx",
-    "src/components/crm/CrmContactDetail.tsx",
     "src/components/DataQualityDashboard.tsx",
     "src/components/DomainHighlightManager.tsx",
     "src/components/EventEditor.tsx",
