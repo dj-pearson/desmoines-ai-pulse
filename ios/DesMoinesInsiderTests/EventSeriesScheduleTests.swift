@@ -134,6 +134,28 @@ final class EventSeriesScheduleTests: XCTestCase {
         XCTAssertEqual(schedule.current?.lastDay, "2026-11-06")
     }
 
+    // MARK: - Labels (slice 3), the web test's own answers
+
+    func testEditionDateLabelMatchesTheWeb() throws {
+        let rows = ["07", "14", "21", "28"].map { d in
+            row("Jazz in July 2026: Night \(d)", "2026-07-\(d)", venue: "Hoyt Sherman Place",
+                isHidden: true, hiddenAt: "2026-08-05T00:00:00Z")
+        }
+        let schedule = EventSeriesSchedule.build(try series("jazz-in-july"), rows: rows, now: now)
+        let edition = try XCTUnwrap(schedule.past.first)
+        XCTAssertEqual(EventSeriesSchedule.editionDateLabel(edition), "Tuesday, July 7 to Tuesday, July 28, 2026")
+        XCTAssertEqual(EventSeriesSchedule.unannouncedLabel(try XCTUnwrap(schedule.unannouncedYear)),
+                       "2027 date not announced yet")
+    }
+
+    func testEditionDateLabelForOneDayAndAcrossAYear() {
+        let one = SeriesEdition(year: 2026, instances: [], venues: [], firstDay: "2026-10-02", lastDay: "2026-10-02")
+        XCTAssertEqual(EventSeriesSchedule.editionDateLabel(one), "Friday, October 2, 2026")
+        let span = SeriesEdition(year: 2026, instances: [], venues: [], firstDay: "2026-12-31", lastDay: "2027-01-01")
+        XCTAssertEqual(EventSeriesSchedule.editionDateLabel(span), "Thursday, December 31, 2026 to Friday, January 1, 2027")
+        XCTAssertEqual(EventSeriesSchedule.dayWords("2026-10-02", pattern: "EEE, MMM d"), "Fri, Oct 2")
+    }
+
     func testNoRowsIsAnUnannouncedThisYear() throws {
         let schedule = EventSeriesSchedule.build(try series("eerie-evenings"), rows: [], now: now)
         XCTAssertNil(schedule.current)

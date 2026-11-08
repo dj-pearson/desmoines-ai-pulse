@@ -133,6 +133,9 @@ struct MainTabView: View {
         /// One Best Of category by slug (IOS-AUDIT-FEAT-040).
         /// BestOfCategoryLinkView looks it up and falls back to the hub.
         case bestOfCategory(String)
+        /// One annual event series (IOS-AUDIT-FEAT-046). Static definition;
+        /// EventSeriesView reads its rows.
+        case eventSeries(EventSeriesDef)
         /// A first-party page with no native screen, in SafariView
         /// (IOS-DD-PLATFORM-02).
         case web(URL)
@@ -147,6 +150,7 @@ struct MainTabView: View {
             case .discover(let d): return "discover-\(d.rawValue)"
             case .neighborhood(let n): return "neighborhood-\(n.slug)"
             case .bestOfCategory(let slug): return "best-of-\(slug)"
+            case .eventSeries(let def): return "event-series-\(def.slug)"
             case .web(let url): return "web-\(url.absoluteString)"
             }
         }
@@ -307,6 +311,14 @@ struct MainTabView: View {
                 present(.discover(.neighborhoods))
             }
         case .bestOfCategory(let slug): present(.bestOfCategory(slug))
+        case .eventSeries(let slug):
+            // DeepLinkHandler only emits a slug EventSeries knows; the web
+            // page is the fallback should that ever drift.
+            if let def = EventSeries.series(slug: slug) {
+                present(.eventSeries(def))
+            } else if let url = URL(string: EventSeries.pathPrefix + slug, relativeTo: Config.siteURL)?.absoluteURL {
+                present(.web(url))
+            }
         case .web(let url): present(.web(url))
         case .search(let query):
             // Through the intent path, so Search applies it the way it
@@ -645,6 +657,8 @@ struct DeepLinkResolverView: View {
             NeighborhoodDetailView(neighborhood: neighborhood)
         case .bestOfCategory(let slug):
             BestOfCategoryLinkView(slug: slug)
+        case .eventSeries(let def):
+            EventSeriesView(def: def)
         case .web(let url):
             SafariView(url: url).ignoresSafeArea()
         case .event, .restaurant, .attraction, .hotel, .article:
@@ -717,7 +731,7 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): path = "attractions/\(id)"
         case .hotel(let id): path = "stay/\(id)"
         case .article(let id): path = "articles/\(id)"
-        case .discover, .neighborhood, .bestOfCategory, .web: return nil
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web: return nil
         }
         return URL(string: path, relativeTo: Config.siteURL)?.absoluteURL
     }
@@ -730,13 +744,13 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): return "attraction-\(id)"
         case .hotel(let id): return "hotel-\(id)"
         case .article(let id): return "article-\(id)"
-        case .discover, .neighborhood, .bestOfCategory, .web: return nil
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web: return nil
         }
     }
 
     private func resolve() async {
         switch presentation {
-        case .discover, .neighborhood, .bestOfCategory, .web:
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web:
             return // rendered directly
         case .event, .restaurant, .attraction, .hotel, .article:
             break
@@ -777,7 +791,7 @@ struct DeepLinkResolverView: View {
                 return .article(try await ArticlesService.shared.fetchArticle(id: id))
             }
             return .article(try await ArticlesService.shared.fetchArticle(slug: id))
-        case .discover, .neighborhood, .bestOfCategory, .web:
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web:
             return .loading
         }
     }

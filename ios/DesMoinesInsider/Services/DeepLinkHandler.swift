@@ -5,8 +5,8 @@ import os
 ///
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id-or-slug` → Event detail
-/// - `desmoinesinsider.com/events/series/:slug` → that annual-event page on
-///   the web (no native screen)
+/// - `desmoinesinsider.com/events/series/:slug` → that annual-event series
+///   natively, or on the web for a slug the app does not know
 /// - `desmoinesinsider.com/search?q=` → Search tab with the query
 /// - `desmoinesinsider.com/events?q=&category=&location=&price=&preset=` →
 ///   Search tab on Events with those filters; bare `/events` → Home
@@ -48,6 +48,9 @@ final class DeepLinkHandler {
         /// (IOS-AUDIT-FEAT-040). Only ever a well-formed lowercase slug; whether
         /// an active category has it is answered when the link opens.
         case bestOfCategory(slug: String)
+        /// One annual event series (IOS-AUDIT-FEAT-046). Only ever a slug
+        /// `EventSeries.series(slug:)` knows.
+        case eventSeries(slug: String)
         /// The Dining tab narrowed the way a web restaurant landing page is:
         /// /restaurants/open-now, /new, /dietary/<diet> (IOS-AUDIT-FEAT-043).
         case restaurantLanding(RestaurantLinkFilter)
@@ -297,16 +300,18 @@ final class DeepLinkHandler {
     }
 
     /// /events/series/<slug>, the web's annual-event page (IOS-AUDIT-FEAT-045,
-    /// src/pages/EventSeriesPage.tsx). It lists this year's edition and past
-    /// ones by matching titles, and the app has no screen for that, so it
-    /// opens on the web. It used to read "series" as an event slug and open
-    /// an event detail that found nothing. These URLs are in the sitemap and
-    /// linked from every edition's web page, so they are shared. A malformed
-    /// slug, or bare /events/series, falls through to eventDestination, where
-    /// "series" is a landing segment and opens Home.
+    /// src/pages/EventSeriesPage.tsx). A slug in `EventSeries.all` opens the
+    /// native series screen (IOS-AUDIT-FEAT-046); a well-formed slug the app
+    /// does not know yet (the web added a series) opens on the web. It used
+    /// to read "series" as an event slug and open an event detail that found
+    /// nothing. These URLs are in the sitemap and linked from every edition's
+    /// web page, so they are shared. A malformed slug, or bare
+    /// /events/series, falls through to eventDestination, where "series" is
+    /// a landing segment and opens Home.
     static func eventSeriesDestination(_ path: [String], url: URL) -> Destination? {
         guard path.count == 3, path[1] == "series", path[2].count <= 120,
               path[2].range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else { return nil }
+        if let def = EventSeries.series(slug: path[2]) { return .eventSeries(slug: def.slug) }
         return .web(url)
     }
 

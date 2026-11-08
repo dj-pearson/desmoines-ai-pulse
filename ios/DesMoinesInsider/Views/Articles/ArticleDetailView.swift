@@ -274,6 +274,11 @@ struct ArticleDetailView: View {
         // A guide linking a Best Of category opens it natively
         // (IOS-AUDIT-FEAT-040).
         case .bestOfCategory(let slug): return .bestOfCategory(slug)
+        // A guide linking an annual event opens the series natively
+        // (IOS-AUDIT-FEAT-046); an unknown slug falls back to the web.
+        case .eventSeries(let slug):
+            guard let def = EventSeries.series(slug: slug) else { return nil }
+            return .eventSeries(def)
         // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
         case .tab, .restaurantLanding, .search, .eventSearch, .web: return nil
         }

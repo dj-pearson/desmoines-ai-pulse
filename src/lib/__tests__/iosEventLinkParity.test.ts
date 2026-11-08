@@ -60,4 +60,20 @@ describe("iOS event links know the web's /events pages (IOS-AUDIT-FEAT-045)", ()
       expect(shape.test(def.slug), def.slug).toBe(true);
     }
   });
+
+  it("a known series opens the native screen, and every place that routes a link handles it (IOS-AUDIT-FEAT-046)", () => {
+    const src = readFileSync(DEEP_LINK, "utf8");
+    const fn = src.slice(src.indexOf("static func eventSeriesDestination"));
+    const body = fn.slice(0, fn.indexOf("\n    }\n"));
+    expect(body).toMatch(/if let def = EventSeries\.series\(slug: path\[2\]\) \{ return \.eventSeries\(slug: def\.slug\) \}/);
+    expect(body).toMatch(/return \.web\(url\)/);
+    // The resolver sheet renders it, the router presents it, and an article
+    // link maps it; a case missing from any of them would not compile, but
+    // one routed to nil would silently open the web page instead.
+    const tab = readFileSync("ios/DesMoinesInsider/Views/MainTabView.swift", "utf8");
+    expect(tab).toMatch(/case \.eventSeries\(let def\):\s*EventSeriesView\(def: def\)/);
+    expect(tab).toMatch(/case \.eventSeries\(let slug\):[\s\S]{0,300}present\(\.eventSeries\(def\)\)/);
+    const article = readFileSync("ios/DesMoinesInsider/Views/Articles/ArticleDetailView.swift", "utf8");
+    expect(article).toMatch(/case \.eventSeries\(let slug\):[\s\S]{0,200}return \.eventSeries\(def\)/);
+  });
 });

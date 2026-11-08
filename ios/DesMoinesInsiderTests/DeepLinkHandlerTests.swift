@@ -272,12 +272,24 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     // MARK: - Event series (IOS-AUDIT-FEAT-045)
 
-    func testEventSeriesLinkOpensOnTheWeb() {
-        // Was .event(id: "series"): a detail screen that found nothing.
-        let url = URL(string: "https://desmoinesinsider.com/events/series/panda-fest")!
-        XCTAssertEqual(handler.destination(for: url), .web(url))
+    func testKnownEventSeriesLinkOpensTheNativeSeries() {
+        // Was .event(id: "series"), a detail screen that found nothing, then
+        // the web page (IOS-AUDIT-FEAT-045); now the native screen (046).
+        XCTAssertEqual(dest("/events/series/panda-fest"), .eventSeries(slug: "panda-fest"))
         let tracked = URL(string: "https://www.desmoinesinsider.com/events/series/cloris-awards?utm_source=share")!
-        XCTAssertEqual(handler.destination(for: tracked), .web(tracked))
+        XCTAssertEqual(handler.destination(for: tracked), .eventSeries(slug: "cloris-awards"))
+    }
+
+    func testEverySeriesTheAppKnowsOpensNatively() {
+        for def in EventSeries.all {
+            XCTAssertEqual(dest(EventSeries.path(def)), .eventSeries(slug: def.slug), def.slug)
+        }
+    }
+
+    func testUnknownWellFormedSeriesLinkStillOpensOnTheWeb() {
+        // A series the web added after this build shipped.
+        let url = URL(string: "https://desmoinesinsider.com/events/series/some-new-festival")!
+        XCTAssertEqual(handler.destination(for: url), .web(url))
     }
 
     func testMalformedOrBareEventSeriesLinkOpensHome() {
@@ -296,7 +308,7 @@ final class DeepLinkHandlerTests: XCTestCase {
     func testEventSeriesLinkIsRoutedNotJustParsed() {
         let url = URL(string: "https://desmoinesinsider.com/events/series/jazz-in-july")!
         XCTAssertTrue(handler.handle(url))
-        XCTAssertEqual(handler.consumeDestination(), .web(url))
+        XCTAssertEqual(handler.consumeDestination(), .eventSeries(slug: "jazz-in-july"))
     }
 
     // MARK: - Neighborhood guides (IOS-AUDIT-FEAT-038)

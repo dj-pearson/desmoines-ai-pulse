@@ -57,4 +57,11 @@ final class ArticleLinkRouteTests: XCTestCase {
         let presentation = ArticleDetailView.nativePresentation(for: .bestOfCategory(slug: "best-pizza"))
         XCTAssertEqual(presentation?.id, "best-of-best-pizza")
     }
+
+    func testEventSeriesLinkOpensNatively() {
+        // IOS-AUDIT-FEAT-046: a guide that links /events/series/<slug>.
+        let presentation = ArticleDetailView.nativePresentation(for: .eventSeries(slug: "panda-fest"))
+        XCTAssertEqual(presentation?.id, "event-series-panda-fest")
+        XCTAssertNil(ArticleDetailView.nativePresentation(for: .eventSeries(slug: "not-a-series")))
+    }
 }

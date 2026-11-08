@@ -130,6 +130,33 @@ enum EventSeriesSchedule {
         row.event.parsedDate.map(centralDay)
     }
 
+    /// A Central yyyy-MM-dd in words, e.g. "Friday, October 2, 2026". A port
+    /// of the web's centralDayWords, which reads the day at 17:00 UTC so the
+    /// Central date is that same day.
+    static func dayWords(_ day: String, pattern: String = "EEEE, MMMM d, yyyy") -> String {
+        guard let instant = DateParser.parse("\(day)T17:00:00Z") else { return day }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = DesMoinesTime.calendar
+        f.timeZone = DesMoinesTime.timeZone
+        f.dateFormat = pattern
+        return f.string(from: instant)
+    }
+
+    /// "Friday, October 2, 2026", or "Thursday, July 30 to Sunday, August 2,
+    /// 2026" for an edition over several days (the web's editionDateLabel).
+    static func editionDateLabel(_ edition: SeriesEdition) -> String {
+        if edition.firstDay == edition.lastDay { return dayWords(edition.firstDay) }
+        let sameYear = edition.firstDay.prefix(4) == edition.lastDay.prefix(4)
+        let from = dayWords(edition.firstDay, pattern: sameYear ? "EEEE, MMMM d" : "EEEE, MMMM d, yyyy")
+        return "\(from) to \(dayWords(edition.lastDay))"
+    }
+
+    /// What the page says when no edition is current (the web's unannouncedLabel).
+    static func unannouncedLabel(_ year: Int) -> String {
+        "\(year) date not announced yet"
+    }
+
     /// True when a person, not the stale sweep, hid this row.
     static func isModeratorHidden(_ row: SeriesEventRow) -> Bool {
         guard row.isHidden == true else { return false }
