@@ -118,8 +118,8 @@ describe('pseoEventFilters - no temporal dimension', () => {
 });
 
 describe('pseoEventFilters - temporal dimension is an overlap', () => {
-  // Friday 2026-10-02, 3:00 PM CDT. Same calendar date in UTC and Central, so
-  // temporalRange's local-date keys agree whatever TZ the test runs in.
+  // Friday 2026-10-02, 3:00 PM CDT. temporalRange keys are Central dates
+  // (WEB-SEO-064), so this holds whatever TZ the test runs in.
   const AFTERNOON = new Date('2026-10-02T20:00:00Z');
 
   it('today keeps the running festival and tonight, not last night or next week', () => {

@@ -38,6 +38,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORY_FILTERS, pseoEventFilters, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../src/pseo/listingFilters';
+import { centralDateOf } from '../../src/lib/timezone';
 import { classifySlugs } from './pseoRouteClaims.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -146,8 +147,11 @@ function locationText(table, row) {
 export function attainable(entityType, dims, data, now) {
   let rows = data[entityType];
   if (entityType === 'events') {
-    const todayKey = now.toISOString().slice(0, 10);
-    rows = rows.filter((e) => e.date && String(e.date).slice(0, 10) >= todayKey);
+    // WEB-SEO-064: Central date keys on both sides. An ISO slice is the UTC
+    // date, which is tomorrow from 7 PM CDT and puts a 9 PM show on the wrong
+    // day, so the ceiling and temporalRange's Central windows disagreed.
+    const todayKey = centralDateOf(now);
+    rows = rows.filter((e) => e.date && centralDateOf(String(e.date)) >= todayKey);
   }
   if (dims.category) {
     rows = rows.filter((r) => attainableCategoryMatch(dims.category.slug, entityType, r));
@@ -160,7 +164,7 @@ export function attainable(entityType, dims, data, now) {
     const range = temporalRange(dims.temporal.slug, now);
     if (range) {
       rows = rows.filter((r) => {
-        const key = String(r.date).slice(0, 10);
+        const key = centralDateOf(String(r.date));
         return key >= range.from && key <= range.to;
       });
     }

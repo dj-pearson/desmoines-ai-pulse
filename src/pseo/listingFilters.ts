@@ -12,7 +12,7 @@
 import { isNeighborhoodSlug } from '../lib/neighborhoodBoundaries';
 import { upcomingOrRunningFilter } from '../lib/eventRunningFilter';
 import { sanitizePostgrestPattern } from '../lib/postgrestPattern';
-import { centralWindow, upcomingFloorUtc } from '../lib/timezone';
+import { addCentralDays, centralDateOf, centralWeekday, centralWindow, upcomingFloorUtc } from '../lib/timezone';
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -96,20 +96,13 @@ export function resolveEntityType(contentSlug?: string, categorySlug?: string): 
   return 'events';
 }
 
-function ymd(d: Date): string {
-  const m = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
 /**
  * The calendar day after a YYYY-MM-DD key, for an exclusive upper bound.
  * temporalRange's `to` is the last day INCLUDED; events.date is timestamptz,
  * so a query must stop before the next day starts, not at midnight of `to`.
  */
 export function dayAfter(key: string): string {
-  const [y, m, d] = key.split('-').map(Number);
-  return ymd(new Date(y, m - 1, d + 1));
+  return addCentralDays(key, 1);
 }
 
 /**
@@ -134,17 +127,30 @@ const SEASON_MONTHS: Record<string, [number, number]> = {
   winter: [11, 1],
 };
 
-export function temporalRange(slug: string, now: Date = new Date()): { from: string; to: string } | null {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const pad2 = (n: number): string => String(n).padStart(2, '0');
 
-  if (slug === 'today') return { from: ymd(today), to: ymd(today) };
+/** First day of a month as a YYYY-MM-DD key; month is 0-based, may overflow. */
+function monthFirst(year: number, month0: number): string {
+  const y = year + Math.floor(month0 / 12);
+  const m = ((month0 % 12) + 12) % 12;
+  return `${y}-${pad2(m + 1)}-01`;
+}
+
+/**
+ * WEB-SEO-064. Every key is a CENTRAL calendar date. This used to read
+ * now.getFullYear/getMonth/getDate, the runtime's local date, while
+ * pseoEventFilters turns the keys into Central days. The prerenderer and the
+ * inventory gate run in UTC, so from 7 PM CDT (6 PM CST) /x/today was
+ * tomorrow's window, and a visitor in another zone got their own date.
+ */
+export function temporalRange(slug: string, now: Date = new Date()): { from: string; to: string } | null {
+  const today = centralDateOf(now);
+
+  if (slug === 'today') return { from: today, to: today };
 
   if (slug === 'this-weekend') {
-    const sat = new Date(today);
-    sat.setDate(today.getDate() + ((6 - today.getDay() + 7) % 7));
-    const sun = new Date(sat);
-    sun.setDate(sat.getDate() + 1);
-    return { from: ymd(sat), to: ymd(sun) };
+    const sat = addCentralDays(today, (6 - centralWeekday(today) + 7) % 7);
+    return { from: sat, to: addCentralDays(sat, 1) };
   }
 
   const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june',
@@ -155,12 +161,14 @@ export function temporalRange(slug: string, now: Date = new Date()): { from: str
   if (!span) return null;
 
   const [startMonth, endMonth] = span;
-  for (let year = today.getFullYear(); year <= today.getFullYear() + 1; year++) {
+  const thisYear = Number(today.slice(0, 4));
+  for (let year = thisYear; year <= thisYear + 1; year++) {
     const endYear = endMonth < startMonth ? year + 1 : year;
-    const start = new Date(year, startMonth, 1);
-    const end = new Date(endYear, endMonth + 1, 0); // day 0 of next month = last day
+    const start = monthFirst(year, startMonth);
+    // The day before the first of the following month is the last day.
+    const end = addCentralDays(monthFirst(endYear, endMonth + 1), -1);
     if (end < today) continue;
-    return { from: ymd(start < today ? today : start), to: ymd(end) };
+    return { from: start < today ? today : start, to: end };
   }
   return null;
 }

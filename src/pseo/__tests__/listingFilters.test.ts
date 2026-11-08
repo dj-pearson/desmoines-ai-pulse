@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { CATEGORY_FILTERS, temporalRange } from '../listingFilters';
+import { CATEGORY_FILTERS, dayAfter, temporalRange } from '../listingFilters';
+import { attainable } from '../../../scripts/lib/pseoShippable';
 
 /**
  * These two filters were the reason 244 published pSEO pages rendered listings
@@ -10,7 +11,10 @@ import { CATEGORY_FILTERS, temporalRange } from '../listingFilters';
  * both are cheap to pin down here.
  */
 
-const AUG_23 = new Date(2026, 7, 23); // a Sunday
+// Noon CDT on Sunday 2026-08-23. An instant, not new Date(2026, 7, 23): that
+// is midnight in whatever zone the test runs in, which is the bug WEB-SEO-064
+// fixed.
+const AUG_23 = new Date('2026-08-23T17:00:00Z');
 
 describe('temporalRange', () => {
   it('today is a single day', () => {
@@ -47,6 +51,75 @@ describe('temporalRange', () => {
   it('returns null for a slug with no window, so no filter is applied', () => {
     expect(temporalRange('date-night', AUG_23)).toBeNull();
     expect(temporalRange('', AUG_23)).toBeNull();
+  });
+});
+
+describe('temporalRange uses the Central date (WEB-SEO-064)', () => {
+  // 9 PM CDT Sunday 2026-08-23 is 02:00Z Monday the 24th. The prerenderer and
+  // the inventory gate run in UTC, so the old local-date code gave Monday here.
+  const SUNDAY_EVENING = new Date('2026-08-24T02:00:00Z');
+
+  it('today is the Central day, not the UTC day', () => {
+    expect(temporalRange('today', SUNDAY_EVENING)).toEqual({ from: '2026-08-23', to: '2026-08-23' });
+  });
+
+  it('this-weekend counts from the Central weekday', () => {
+    // 8 PM CDT Saturday 2026-08-29 is 01:00Z Sunday. Read as Sunday, the old
+    // code jumped to the following weekend while Saturday night was still on.
+    const SATURDAY_EVENING = new Date('2026-08-30T01:00:00Z');
+    expect(temporalRange('this-weekend', SATURDAY_EVENING)).toEqual({ from: '2026-08-29', to: '2026-08-30' });
+  });
+
+  it('a month in progress clamps to the Central day on the last evening of the month', () => {
+    // 8 PM CDT 2026-08-31 is 01:00Z September 1st: August is not over yet.
+    const LAST_EVENING = new Date('2026-09-01T01:00:00Z');
+    expect(temporalRange('august', LAST_EVENING)).toEqual({ from: '2026-08-31', to: '2026-08-31' });
+    expect(temporalRange('summer', LAST_EVENING)).toEqual({ from: '2026-08-31', to: '2026-08-31' });
+    expect(temporalRange('september', LAST_EVENING)).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+  });
+
+  it('new year: the year comes from the Central date', () => {
+    // 7 PM CST 2026-12-31 is 01:00Z 2027-01-01. December 2026 is still on.
+    const NYE = new Date('2027-01-01T01:00:00Z');
+    expect(temporalRange('december', NYE)).toEqual({ from: '2026-12-31', to: '2026-12-31' });
+    expect(temporalRange('winter', NYE)).toEqual({ from: '2026-12-31', to: '2027-02-28' });
+    expect(temporalRange('january', NYE)).toEqual({ from: '2027-01-01', to: '2027-01-31' });
+  });
+
+  it('winter ends on Feb 29 in a leap year', () => {
+    expect(temporalRange('winter', new Date('2027-06-01T17:00:00Z'))).toEqual({ from: '2027-12-01', to: '2028-02-29' });
+  });
+
+  it('dayAfter crosses month and year ends', () => {
+    expect(dayAfter('2026-08-31')).toBe('2026-09-01');
+    expect(dayAfter('2028-02-28')).toBe('2028-02-29');
+    expect(dayAfter('2026-12-31')).toBe('2027-01-01');
+  });
+});
+
+describe('attainable() compares Central date keys (WEB-SEO-064)', () => {
+  const SUNDAY_EVENING = new Date('2026-08-24T02:00:00Z'); // 9 PM CDT Sun 08-23
+  const events = [
+    // 8 PM CDT tonight, stored as 01:00Z Monday. A UTC slice calls it Monday.
+    { id: 'tonight', date: '2026-08-24T01:00:00Z' },
+    // 6 PM CDT tonight, 23:00Z Sunday: the same Central day.
+    { id: 'earlier-tonight', date: '2026-08-23T23:00:00Z' },
+    // Noon CDT Monday.
+    { id: 'monday', date: '2026-08-24T17:00:00Z' },
+    // 8 PM CDT Saturday 08-22: over.
+    { id: 'last-night', date: '2026-08-23T01:00:00Z' },
+  ];
+  const data = { events, restaurants: [], attractions: [] };
+  const ids = (rows: Array<{ id: string }>) => rows.map((r) => r.id).sort();
+
+  it('today keeps both of tonight\'s events and not Monday\'s', () => {
+    const rows = attainable('events', { temporal: { slug: 'today' } }, data, SUNDAY_EVENING);
+    expect(ids(rows)).toEqual(['earlier-tonight', 'tonight']);
+  });
+
+  it('the upcoming floor is the Central day, so last night is dropped and tonight is kept', () => {
+    const rows = attainable('events', {}, data, SUNDAY_EVENING);
+    expect(ids(rows)).toEqual(['earlier-tonight', 'monday', 'tonight']);
   });
 });
 
