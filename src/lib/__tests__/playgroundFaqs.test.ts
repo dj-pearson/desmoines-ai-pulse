@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildPlaygroundFaqs } from "@/lib/playgroundFaqs";
+import { PLAYGROUND_CARD_COLUMNS } from "@/hooks/usePlaygrounds";
 
 // WEB-SEO-055. playgrounds.rating is written by the ai-crawler and
 // firecrawl-scraper playground paths as `rating: item.rating || null` - a
@@ -56,5 +57,28 @@ describe("the playground page publishes no unsourced rating", () => {
     const src = readFileSync("src/components/EnhancedPlaygroundSEO.tsx", "utf8");
     expect(src).not.toMatch(/name="place:rating"/);
     expect(src).not.toMatch(/aggregateRating\s*:/);
+  });
+});
+
+// WEB-SEO-056. The same number may not reach the page as a star badge either.
+// The hero shows the content_rating_aggregates review average or nothing.
+describe("no playground page renders playgrounds.rating", () => {
+  const unsourced = /\b(playground|item)\.rating\b/;
+
+  it("PlaygroundDetails reads the hero rating from the review aggregate", () => {
+    const src = readFileSync("src/pages/PlaygroundDetails.tsx", "utf8");
+    expect(src).not.toMatch(unsourced);
+    expect(src).toContain('useReviewAggregate("playground", playground?.id');
+  });
+
+  it("the hub cards print no rating", () => {
+    const src = readFileSync("src/pages/Playgrounds.tsx", "utf8");
+    expect(src).not.toMatch(unsourced);
+  });
+
+  it("the side lists neither select nor order by rating", () => {
+    expect(PLAYGROUND_CARD_COLUMNS.split(/,\s*/)).not.toContain("rating");
+    const hook = readFileSync("src/hooks/usePlaygrounds.ts", "utf8");
+    expect(hook).not.toMatch(/\.order\(\s*"rating"/);
   });
 });

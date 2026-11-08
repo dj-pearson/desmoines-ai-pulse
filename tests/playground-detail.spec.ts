@@ -19,6 +19,9 @@ import { centralDay } from './support/fixtureClock';
  *     (item 10), and the page renders no "Playground Not Found".
  *  6. A failed fetch is a Retry with no noindex (WEB-SEO-040); a missing row
  *     is "Playground Not Found" as the page's one h1, with noindex.
+ *  7. playgrounds.rating is never shown, in the hero or on a side card; the
+ *     hero shows the content_rating_aggregates review average or nothing, and
+ *     no side query selects or orders by rating (WEB-SEO-056).
  *
  * The fixture backend does not filter; playgrounds and events are answered
  * here with page.route AFTER installFixtureBackend, which wins the match.
@@ -255,6 +258,54 @@ test.describe('/playgrounds/:slug (explore pass 2 WP4)', () => {
     await expect(page.locator('[data-playground-side-card]').first()).toBeVisible();
     await expect(page.getByText('Playground Not Found')).toHaveCount(0);
     await expect(page.getByText(/dawn to dusk/i)).toHaveCount(0);
+  });
+
+  test('no unsourced rating: the hero shows the review average or nothing', async ({ page }) => {
+    await installFixtureBackend(page);
+    // DOWNTOWN carries rating 4.5; the side card gets 3.9.
+    await page.route('**/rest/v1/playgrounds**', (route) => {
+      const url = decodeURIComponent(route.request().url());
+      if (/[?&](slug|id)=eq\./.test(url)) return fulfil(route, [DOWNTOWN]);
+      return fulfil(route, [{ ...NEIGHBOUR, rating: 3.9 }]);
+    });
+    const seen: string[] = [];
+    await page.route('**/rest/v1/playgrounds**', (route) => {
+      seen.push(decodeURIComponent(route.request().url()));
+      return route.fallback();
+    });
+    await page.route('**/rest/v1/events**', (route) => fulfil(route, [NEARBY_EVENT]));
+    await page.route('**/rest/v1/content_rating_aggregates**', (route) => fulfil(route, []));
+
+    await page.goto('/playgrounds/fixture-downtown-playground');
+    await expect(page.getByRole('heading', { level: 1, name: 'Fixture Downtown Playground' })).toBeVisible();
+    await expect(page.locator('[data-playground-side-card]').first()).toBeVisible();
+
+    const text = await pageBodyText(page);
+    expect(text).not.toContain('4.5');
+    expect(text).not.toContain('3.9');
+    await expect(page.locator('[data-review-summary]')).toHaveCount(0);
+
+    const side = seen.filter((u) => !/[?&](slug|id)=eq\./.test(u) && u.includes('select='));
+    expect(side.length).toBeGreaterThan(0);
+    for (const u of side) {
+      expect(u).not.toMatch(/order=rating/);
+      expect(u).not.toMatch(/select=[^&]*\brating\b/);
+    }
+  });
+
+  test('a first-party review average shows with its count', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installPlayground(page, DOWNTOWN);
+    await page.route('**/rest/v1/content_rating_aggregates**', (route) => {
+      const url = decodeURIComponent(route.request().url());
+      expect(url).toContain('content_type=eq.playground');
+      return fulfil(route, [{ average_rating: 4.2, total_ratings: 3 }]);
+    });
+
+    await page.goto('/playgrounds/fixture-downtown-playground');
+    const summary = page.locator('[data-review-summary]');
+    await expect(summary).toHaveText('4.2 from 3 reviews');
+    await expect(page.getByText('4.5')).toHaveCount(0);
   });
 
   test('a failed fetch offers Retry and sets no noindex', async ({ page }) => {

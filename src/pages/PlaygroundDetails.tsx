@@ -31,6 +31,7 @@ import { isInMetro } from "@/lib/geo";
 import { splashPadReason, toddlerReason } from "@/lib/playgroundHub";
 import { buildPlaygroundFaqs } from "@/lib/playgroundFaqs";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
+import { useReviewAggregate } from "@/hooks/useReviewAggregate";
 import {
   formatMilesAway,
   suburbFromLocation,
@@ -74,6 +75,7 @@ export default function PlaygroundDetails() {
   // out-of-state rows linked to Not Found. Both are metro-bounded now, and
   // nearby is a box around this playground sorted by distance.
   const { data: relatedPlaygrounds } = useSameAgePlaygrounds(playground);
+  const { data: reviewAggregate } = useReviewAggregate("playground", playground?.id, "PlaygroundDetails");
   const { data: nearbyCandidates } = useNearbyPlaygrounds(playground);
   // One card per playground across the two sections.
   const relatedIds = new Set((relatedPlaygrounds ?? []).map((p) => p.id));
@@ -270,10 +272,20 @@ export default function PlaygroundDetails() {
                     {playground.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 text-white/90">
-                    {playground.rating != null && (
-                      <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        <span className="font-semibold">{playground.rating.toFixed(1)}</span>
+                    {/* WEB-SEO-056: the review average with its count, or
+                        nothing. playgrounds.rating is not shown: a model read
+                        it off a crawled page and nothing says whose it is. */}
+                    {reviewAggregate && (
+                      <div
+                        className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1"
+                        data-review-summary=""
+                      >
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
+                        <span>
+                          <span className="font-semibold">{reviewAggregate.average_rating.toFixed(1)}</span>
+                          {" "}from {reviewAggregate.total_ratings}{" "}
+                          {reviewAggregate.total_ratings === 1 ? "review" : "reviews"}
+                        </span>
                       </div>
                     )}
                     {playground.age_range && (
@@ -559,12 +571,6 @@ function PlaygroundSideCard({ item }: SideCardProps) {
             )}
             {item.has_shade && <Badge variant="secondary" className="text-xs">Shade</Badge>}
             {item.has_restrooms && <Badge variant="secondary" className="text-xs">Restrooms</Badge>}
-            {item.rating != null && (
-              <div className="flex items-center gap-1">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
-                <span>{item.rating.toFixed(1)}</span>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

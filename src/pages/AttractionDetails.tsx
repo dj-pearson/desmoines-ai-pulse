@@ -46,12 +46,12 @@ import { AttractionAtAGlance } from "@/components/AttractionAtAGlance";
 import { attractionMetaDescription, attractionPageTitle } from "@/lib/attractionMeta";
 import { isPrerender } from "@/lib/isPrerender";
 import { useNow } from "@/hooks/useNow";
-import { handleError } from "@/lib/errorHandler";
 import { formatMiles, nearby } from "@/lib/venuePages";
 import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { safeWebUrl } from "@/lib/reservations";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { useReviewAggregate } from "@/hooks/useReviewAggregate";
 
 // Ratings sit below the fold and fire their own requests on mount. React.lazy
 // defers the chunk; DeferredWidget defers the mount until the reader scrolls
@@ -104,39 +104,6 @@ const NEAR_MAX_MILES = 10;
 
 type AttractionCardRow = Pick<Attraction, "id" | "name" | "type" | "image_url" | "latitude" | "longitude">;
 
-interface ReviewAggregate {
-  average_rating: number;
-  total_ratings: number;
-}
-
-/**
- * The review average and count for one attraction, from
- * content_rating_aggregates (explore pass 2 WP3 item 2). Only these two
- * columns: RatingSystem further down fetches the reviews themselves, and the
- * hero needs nothing else. Null when nobody has reviewed it, or when the read
- * fails, in which case the hero shows no rating rather than a wrong one.
- */
-function useReviewAggregate(contentId: string | undefined) {
-  return useQuery({
-    queryKey: ["content-rating-aggregate", "attraction", contentId],
-    queryFn: async (): Promise<ReviewAggregate | null> => {
-      const { data, error } = await supabase
-        .from("content_rating_aggregates")
-        .select("average_rating, total_ratings")
-        .eq("content_type", "attraction")
-        .eq("content_id", contentId ?? "")
-        .maybeSingle();
-      if (error) {
-        handleError(error, { component: "AttractionDetails", action: "loadReviewAggregate" });
-        return null;
-      }
-      return data && data.total_ratings > 0 ? data : null;
-    },
-    enabled: Boolean(contentId) && !isPrerender(),
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
 export default function AttractionDetails() {
   const { slug } = useParams();
   const [imageError, setImageError] = useState(false);
@@ -167,7 +134,7 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
-  const { data: reviewAggregate } = useReviewAggregate(attraction?.id);
+  const { data: reviewAggregate } = useReviewAggregate("attraction", attraction?.id, "AttractionDetails");
   // Record into the unified recently-viewed feed (WEB-FEAT-007). Only
   // EventDetails used to, so the home rail could never resume an attraction.
   // The href is the param that just resolved this row, so it resolves again.
