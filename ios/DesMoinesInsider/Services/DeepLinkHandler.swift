@@ -5,6 +5,8 @@ import os
 ///
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id-or-slug` → Event detail
+/// - `desmoinesinsider.com/events/series/:slug` → that annual-event page on
+///   the web (no native screen)
 /// - `desmoinesinsider.com/search?q=` → Search tab with the query
 /// - `desmoinesinsider.com/events?q=&category=&location=&price=&preset=` →
 ///   Search tab on Events with those filters; bare `/events` → Home
@@ -294,6 +296,20 @@ final class DeepLinkHandler {
         return .tab(.home)
     }
 
+    /// /events/series/<slug>, the web's annual-event page (IOS-AUDIT-FEAT-045,
+    /// src/pages/EventSeriesPage.tsx). It lists this year's edition and past
+    /// ones by matching titles, and the app has no screen for that, so it
+    /// opens on the web. It used to read "series" as an event slug and open
+    /// an event detail that found nothing. These URLs are in the sitemap and
+    /// linked from every edition's web page, so they are shared. A malformed
+    /// slug, or bare /events/series, falls through to eventDestination, where
+    /// "series" is a landing segment and opens Home.
+    static func eventSeriesDestination(_ path: [String], url: URL) -> Destination? {
+        guard path.count == 3, path[1] == "series", path[2].count <= 120,
+              path[2].range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else { return nil }
+        return .web(url)
+    }
+
     /// Bare /events with the hub's filter keys (IOS-AUDIT-FEAT-041). The web
     /// writes every filter into the URL (EventsPage.tsx), the saved-search
     /// alert email links there with them (savedSearchMatch.ts deepLink), and
@@ -372,6 +388,7 @@ final class DeepLinkHandler {
 
         switch type {
         case "events":
+            if let series = Self.eventSeriesDestination(path, url: url) { return series }
             return Self.eventDestination(rawId)
         case "restaurants":
             // The web's canonical restaurant URL is /restaurants/:slug, so a

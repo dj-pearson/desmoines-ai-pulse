@@ -270,6 +270,35 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/Bad%20Slug"), .tab(.home))
     }
 
+    // MARK: - Event series (IOS-AUDIT-FEAT-045)
+
+    func testEventSeriesLinkOpensOnTheWeb() {
+        // Was .event(id: "series"): a detail screen that found nothing.
+        let url = URL(string: "https://desmoinesinsider.com/events/series/panda-fest")!
+        XCTAssertEqual(handler.destination(for: url), .web(url))
+        let tracked = URL(string: "https://www.desmoinesinsider.com/events/series/cloris-awards?utm_source=share")!
+        XCTAssertEqual(handler.destination(for: tracked), .web(tracked))
+    }
+
+    func testMalformedOrBareEventSeriesLinkOpensHome() {
+        XCTAssertEqual(dest("/events/series"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/Panda-Fest"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/panda%20fest"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/panda-fest/2026"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/" + String(repeating: "a", count: 121)), .tab(.home))
+    }
+
+    func testAnEventWhoseSlugStartsWithSeriesStillOpens() {
+        XCTAssertEqual(dest("/events/series-finale-watch-party-2026-11-20"),
+                       .event(id: "series-finale-watch-party-2026-11-20"))
+    }
+
+    func testEventSeriesLinkIsRoutedNotJustParsed() {
+        let url = URL(string: "https://desmoinesinsider.com/events/series/jazz-in-july")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .web(url))
+    }
+
     // MARK: - Neighborhood guides (IOS-AUDIT-FEAT-038)
 
     func testNeighborhoodLinkOpensThatGuide() {
