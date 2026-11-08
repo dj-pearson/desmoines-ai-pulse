@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
 import { interpretSignUpResult } from '@/lib/signUpResult';
 import { isValidRedirectUrl } from '@/lib/redirectSafety';
+import { withStoredReferral } from '@/lib/referralStorage';
 
 /**
  * The user-initiated Supabase auth calls: sign in, sign up, OAuth, password
@@ -227,7 +228,9 @@ export async function signUpWithPassword(
         // wait for the session and explain a failed link, then on to
         // /auth/verified.
         emailRedirectTo: confirmationRedirectUrl(),
-        data: metadata,
+        // WEB-ADS-032: the invite code rides on the account, because the
+        // confirmation link is often opened in a browser that never saw it.
+        data: withStoredReferral(metadata),
       },
     });
 
