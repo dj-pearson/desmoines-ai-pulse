@@ -12327,8 +12327,8 @@
         "Map esm.sh supabase-js imports to npm: specifiers where tests need them",
         "Document running the lane locally via npm i deno in README Checks by area"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the reliability lane: 73/166 lane steps pass locally, all 93 failures are network-blocked imports. | Slice 1 (AC1, AC3) of WEB-CI-036. 90 Deno suites moved from deno.land/std asserts to jsr:@std/assert@1, which deno.lock already resolves, and check-deno-lanes now fails any suite that imports straight from deno.land or esm.sh. That took the lane from 72/166 to 160/166 locally on Deno 2.9.6. The newly runnable steps turned up one real red test: nlp-search's upcomingOrRunningFilter drift guard still read useEvents.ts after WEB-SEO-063 moved the string to src/lib/eventRunningFilter.ts. It now reads the lib and checks that useEvents imports from it, and both negative controls fail as they should. The loop README now says how to run the lane in a container. Note: this worktree was created from main, so before working I reset it to the rolling branch head 58976fc1 so the commit cherry-picks cleanly. Handoff: docs/improvement-loops/lanes/reliability.md"
+      "passes": true,
+      "notes": "Found 2026-11-08 by the reliability lane: 73/166 lane steps pass locally, all 93 failures are network-blocked imports. | Slice 1 (AC1, AC3) of WEB-CI-036. 90 Deno suites moved from deno.land/std asserts to jsr:@std/assert@1, which deno.lock already resolves, and check-deno-lanes now fails any suite that imports straight from deno.land or esm.sh. That took the lane from 72/166 to 160/166 locally on Deno 2.9.6. The newly runnable steps turned up one real red test: nlp-search's upcomingOrRunningFilter drift guard still read useEvents.ts after WEB-SEO-063 moved the string to src/lib/eventRunningFilter.ts. It now reads the lib and checks that useEvents imports from it, and both negative controls fail as they should. The loop README now says how to run the lane in a container. Note: this worktree was created from main, so before working I reset it to the rolling branch head 58976fc1 so the commit cherry-picks cleanly. Handoff: docs/improvement-loops/lanes/reliability.md | Slice 2 (AC2), done. Production edge code is unchanged. New scripts/run-deno-lane.mjs runs every workflow deno test line with --no-lock, --node-modules-dir=none and scripts/deno-container-import-map.json, which maps the four esm.sh URLs the code under test reaches to npm: packages at the versions deno.lock resolves, and it fails before running if a pin drifts from the lock. On Deno 2.9.6 that took the lane from 160/166 to 166/166, with session-timeout-policy (WEB-QA-051/053) among the passes. The worktree was created from main, so I reset it to the rolling branch head e5ba4f27 first."
     },
     {
       "priority": 2,
@@ -12529,7 +12529,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 3 named 34 admin/CMS fields across 8 files: CategoryTagManager, PartnershipsManager, AdminCampaigns, SupportTicketsConsole, SupportConsole, HotelManager, AttractionManager and ActivityLogViewer. Dialog Labels now have htmlFor/id, and filter searches and Selects have aria-label. The check-field-names baseline went from 123 to 89. The new adminFieldNamesSlice3.test.tsx fails 9/9 on the old code and passes 9/9. Full vitest is 3370/3370 and the type ratchet is 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md"
+      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 3 named 34 admin/CMS fields across 8 files: CategoryTagManager, PartnershipsManager, AdminCampaigns, SupportTicketsConsole, SupportConsole, HotelManager, AttractionManager and ActivityLogViewer. Dialog Labels now have htmlFor/id, and filter searches and Selects have aria-label. The check-field-names baseline went from 123 to 89. The new adminFieldNamesSlice3.test.tsx fails 9/9 on the old code and passes 9/9. Full vitest is 3370/3370 and the type ratchet is 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 4 of 5: 40 unnamed admin/CMS fields in 12 files are now named. ContentEditor's Labels pointed at field.key and no control had that id; they now use useId-prefixed ids. Filter rows got aria-labels and visible Labels got htmlFor/id. check-field-names baseline went from 89 to 49. New adminFieldNamesSlice4.test.tsx fails 14/14 on the old code and passes 14/14 now; full vitest 3441/3441 and the type ratchet 30/30 both pass. Handoff: docs/improvement-loops/lanes/ui-ux.md"
     },
     {
       "id": "WEB-PERF-069",
@@ -12860,7 +12860,221 @@
         "A count of rows with weekly_digest_enabled true, created before 20261004000001, whose user gave no email_marketing_consent, is reported to the owner; flipping them is an owner decision",
         "check-migrations-parse and check-migration-order pass"
       ],
+      "passes": false,
+      "notes": "Migration 20261108000099 sets user_email_preferences.weekly_digest_enabled DEFAULT false (new rows only). It ran in PGlite: a row inserted before the migration kept true, a row inserted after without the column got false, and the migration re-ran cleanly. A new vitest guard fails 2 of 3 without the migration and passes 3/3 with it. AC2 is still open because counting the digest-on rows that have no marketing consent needs production DB access. The read-only query is in the migration header, so the story stays passes:false for the owner. Handoff: docs/improvement-loops/lanes/features.md"
+    },
+    {
+      "id": "WEB-FEAT-078",
+      "title": "The public events API serves hidden, merged and archived events, floors on the UTC date and drops running events",
+      "description": "As a consumer of the public events feed (openapi.yaml, llms.txt), I need api-events to show what the site shows, because it filtered neither unpublish switch nor is_merged under a public-read RLS policy, so moderator-hidden, archived and merged-away events were listed and served by /api-events/<id>; it floored on the UTC date, had no end_date arm so a multi-day run left the feed on day two, and read end_date=YYYY-MM-DD as that day's UTC midnight so the last requested day was missing.",
+      "acceptanceCriteria": [
+        "Evidence: supabase/functions/api-events/index.ts list read `.gte(\"date\", params.start_date || today)` with `today` from toISOString, no is_hidden/archived_at/is_merged filter on list or detail, `.lte(\"date\", params.end_date)`",
+        "List and detail apply neq is_merged, neq is_hidden, is archived_at null; a hidden event's detail is a 404",
+        "Default lower bound is start of today in Central time with the end_date running arm; start_date/end_date are Central day bounds",
+        "Location and search are one or= group with the window, sanitized for PostgREST reserved characters",
+        "Response shape unchanged apart from an added end_date field",
+        "An offline Deno test evaluates the sent filters against fixture rows and is wired into CI"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Done 2026-11-08: api-events/listQuery.ts plus listQuery.test.ts (8/8 under deno 2.1.4; old logic 2/8), wired into subscription-sync-tests.yml. type-check:functions, check-edge-types, check-edge-auth, check-event-unpublish, check-deno-lanes pass. Not run against a live PostgREST; needs `supabase functions deploy api-events`. | api-events (the public feed) now applies is_merged/is_hidden/archived_at to list and detail, a Central-time window with the end_date running arm, end_date as end of that Central day, and one and(or(...)) group for window/location/search via new api-events/listQuery.ts; response gains end_date, nothing removed. listQuery.test.ts 8/8 under deno 2.1.4, 2/8 with the old filter logic as negative control; type-check:functions, check-edge-types, check-edge-auth, check-event-unpublish, check-deno-lanes 167/167 pass; not run against a live PostgREST."
+    },
+    {
+      "id": "WEB-FEAT-079",
+      "title": "Restaurant hours and business_status are fetched once and never refreshed, so a place that changes hours or closes keeps its first answer",
+      "description": "Every writer of restaurants.hours_json fills a row only once. bulk-update-restaurants' hoursOnly mode targets hours_json IS NULL, and the full enrichment skips rows whose enhanced is 'completed'. Every open-now badge, closed-place filter and deals guard reads hours_json and business_status, so they get less accurate the longer it has been since the first fetch.",
+      "acceptanceCriteria": [
+        "bulk-update-restaurants hoursOnly accepts an optional staleDays and re-reads hours and status for rows with hours whose last check is older than that, oldest first",
+        "A nullable restaurants.hours_checked_at records every Places answer, including no hours and 404, so a place with no hours does not head every batch",
+        "A refresh never writes hours_json null and never blanks stored hours; non-404 Places errors are retried on the next run",
+        "Absent staleDays keeps the existing fill behaviour (backward compatible request)",
+        "The refresh runs on a schedule with its Places cost named"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Slice 1 of 2. bulk-update-restaurants' hoursOnly mode now takes staleDays (clamped to 7-365) and re-reads hours_json and business_status for rows whose last check is older than that. The last check is the new restaurants.hours_checked_at (additive migration 20261108000099), falling back to hours_json.fetchedAt. A refresh never blanks stored hours; a 404 counts as a check and other Places errors are retried. Verified: Deno place-hours 23/23, and a negative control turns 3 of the 9 new tests red. The migration applied twice in PGlite, and the stale filter picked only the old rows. type-check:functions, check-edge-types, check-edge-auth, check-migrations-parse and check-migration-order all clean. Handoff: docs/improvement-loops/lanes/restaurants.md"
+    },
+    {
+      "id": "WEB-PERF-072",
+      "title": "UpgradeModal is in the static closure of /events, /search, /search/advanced, /trip-planner and RatingSystem although the app root already lazy-loads it",
+      "description": "As a visitor opening /events or /search, I need the route to download only what it renders, because PremiumGate, PremiumButton, SaveSearchButton, WatchSearchButton and TripPlanner each mount their own UpgradeModal (with Switch, useTrialEligibility, paywallAnalytics, billingStatus), while App.tsx already renders GlobalUpgradeModal, which lazy-loads UpgradeModal on first open, and openPaywall() can open it from anywhere.",
+      "acceptanceCriteria": [
+        "Evidence: static imports of @/components/UpgradeModal in PremiumGate.tsx:8, SaveSearchButton.tsx:17, search/WatchSearchButton.tsx:15, pages/TripPlanner.tsx:9; the eagerGraph chain runs EventsPage -> EventsStickyBar -> SaveSearchButton -> UpgradeModal",
+        "Every one of those call sites opens the paywall with openPaywall(feature, tier) and none mounts its own modal; useUpgradeModal is removed",
+        "A static-graph test fails on any static import of UpgradeModal and on the five chunks that used to reach it, with a negative control",
+        "Per-route gz beyond the critical path drops on the affected routes, no route gets heavier, and the critical path does not change",
+        "paywall and search-watch specs still pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "2026-11-08: PremiumGate, PremiumButton, Save/Watch search buttons and TripPlanner no longer mount their own UpgradeModal. Each now calls openPaywall(), which opens the app-root GlobalUpgradeModal, and that modal is lazy. useUpgradeModal is deleted. Measured with measure-route-preload, gz beyond the critical path: /search -8.3 KB, /search/advanced -7.8, /events -7.2, /trip-planner -7.2, plus the lazy RatingSystem chunk; no route got heavier; summed 8,605.3 -> 8,574.1; critical path 174.8 unchanged. Guarded by a graph test whose negative control fails 4/7, and the paywall, search and trip-planner smoke specs pass 27/27 in Chrome. Note: the worktree was created from main (65138139), so it was reset to the rolling branch head e5ba4f27 before any work began; the commit's parent is e5ba4f27."
+    },
+    {
+      "id": "WEB-SEC-071",
+      "title": "event_live_feed mirrors every check-in to the anon key, undoing WEB-SEC-052; event_discussion_reactions is anon-readable",
+      "description": "As a user who checks in to an event, I need the fact that I was there, and when, to stay private. WEB-SEC-052 made event_checkins owner-only, but trigger_create_feed_on_checkin copies each check-in into event_live_feed as (event_id, user_id, 'checkin', created_at), and that table's only SELECT policy is USING (true) with no TO clause. event_discussion_reactions has the same public read that WEB-SEC-068 removed from the likes tables.",
+      "acceptanceCriteria": [
+        "Drop \"Anyone can view event live feed\" and \"Anyone can view discussion reactions\" (the only public SELECT policies docs/RLS_AUDIT.md lists for the two tables)",
+        "Add an owner read TO authenticated and an admin read on each, so the web upsert of its own reaction and the unlike keep working",
+        "List every reader on web, iOS, Android, edge and SQL before tightening, and confirm no shipped client reads another user's row",
+        "Remove both tables from .github/identity-read-baseline.json without removing user_subscriptions (WEB-SEC-054)",
+        "Test on a real Postgres with the original migrations: anon and an outsider read 0 rows, the owner reads their own, an admin reads all, and re-applying the migration changes nothing"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and closed 2026-11-08 (security loop, round 19). Migration 20261108000099. Tested on local Postgres 16 with migrations 20250829222354, 20250829222450 and 20261107000001 plus auth stubs. Before: anon read 2 check-in feed rows while event_checkins returned 0. After: anon and outsider 0, owner own rows, admin all, upsert and DELETE-by-filter unchanged. identity-read baseline 8 -> 6. Not applied to production. | Migration 20261108000099 swaps the USING (true) reads on event_live_feed and event_discussion_reactions for an owner read and an admin read. The leak it closes: trigger_create_feed_on_checkin copies every check-in into event_live_feed, so the anon key could still list who checked in to which event and when after WEB-SEC-052. Tested on local Postgres 16 with the real migrations. Before the fix, anon got 2 check-in feed rows while event_checkins returned 0. After it, anon and outsiders get 0, owners see their own rows, admins see all, and upsert and unlike still work. Identity-read baseline 8 -> 6. Not applied to production. Handoff: docs/improvement-loops/lanes/security.md"
+    },
+    {
+      "id": "WEB-SEO-066",
+      "title": "Named robots.txt groups drifted from User-agent: *, so Googlebot, Bingbot and 13 AI crawlers were allowed /campaigns",
+      "description": "As the platform owner, I need the private-path rules to reach every crawler. A crawler reads only the most specific group naming it (RFC 9309 2.2.1), never * as well. /campaigns was added to * and GPTBot only, and /_redirects and /_headers to * only, so 15 named groups still allowed them.",
+      "acceptanceCriteria": [
+        "Every allowing named group in public/robots.txt carries exactly the * group's Disallow set",
+        "Blocking groups are exactly Disallow: /",
+        "No crawler is named in more than one group",
+        "Every <ProtectedRoute> path in src/App.tsx is disallowed for *",
+        "No URL in a checked-in public/sitemap*.xml is disallowed for *",
+        "An offline suite in scripts/__tests__ enforces all of the above and fails on the old file"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2026-11-08 (improvement loop, seo-geo lane). scripts/__tests__/robots-groups.test.mjs failed on the old file (15 groups drifting) and passes 8/8 now; test:offline 67/67, check-sitemap-registration green, eslint clean. | Before this, 15 named robots.txt groups (Googlebot, Bingbot, ClaudeBot, PerplexityBot and 11 more) were missing /campaigns, /_redirects and /_headers. GPTBot was missing only the last two. A crawler reads only its own group and ignores *, so those paths were open to them. Every allowing group now repeats the * Disallow list. The new offline suite scripts/__tests__/robots-groups.test.mjs checks five things: each named group matches *, a blocking group is exactly Disallow: /, no crawler is named twice, every ProtectedRoute path is disallowed, and no sitemap URL is disallowed. It failed on the old file (15 groups drifting) and passes 8/8 now; test:offline 67/67."
+    },
+    {
+      "id": "WEB-ADS-034",
+      "title": "An invited visitor lands on the home page with no sign that a friend sent them and no ask to create the account the invite is counted against",
+      "description": "As a visitor who opened a friend's invite link, I need to be told why I'm here and how to join. The ?ref code was stored silently by useReferralCapture and the page looked like any other visit, while attribute_referral only counts an account made within 24 hours of the visit, so the referral funnel's best prospect got no prompt at all.",
+      "acceptanceCriteria": [
+        "A signed-out visitor who opens a page with a well-formed ?ref sees a strip saying a friend sent them, with 'Create a free account' linking to /auth?mode=signup&redirect=<current path>",
+        "The strip stays across in-app navigation for the tab, and isn't shown on /auth, while auth is loading, or to a signed-in member",
+        "A code merely stored from an earlier visit, a malformed ref, or no ref shows nothing",
+        "'Not now' hides it and the dismissal persists in safeStorage under a new key",
+        "Code capture and attribution behave as before; the strip is lazy-loaded so no other visitor downloads it",
+        "vitest covers each case with negative controls"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Done 2026-11-08 (marketing-growth loop). src/components/InviteWelcomeBanner.tsx (lazy), rendered by src/components/ReferralCapture.tsx; gating in shouldOfferInvite and the dismissal key in src/lib/referralStorage.ts. New vitest 6/6 in src/components/__tests__/inviteWelcomeBanner.test.tsx; negative controls fail 3/6 (old headless component), 1/6 (gate on stored code), 1/6 (no dismissal write). Full vitest 3433/3433, eslint, type-check ratchet 30/30, check-imports, check-internal-links, check-ui-craft, check-icon-button-names, check-error-handling. | Done: a signed-out visitor who opens a well-formed ?ref invite link now sees a lazy-loaded strip offering a free account (sign-up returns them to the page they were on), with \"Not now\" remembered in safeStorage. It's skipped on /auth, while auth is resolving and for members, and a code merely stored from an earlier visit doesn't trigger it. New vitest 6/6 with three negative controls (3/6, 1/6, 1/6 fail), full vitest 3433/3433, eslint clean, type-check ratchet 30/30, check-imports, check-internal-links, check-ui-craft, check-icon-button-names, check-error-handling."
+    },
+    {
+      "id": "IOS-AUDIT-006",
+      "title": "Venue, team and trail links open the whole Music/Sports/Outdoors hub on iOS",
+      "description": "As an iOS user tapping a guide link or notification to a venue, team or trail page, I need to see that page, because DeepLinkHandler routed any path whose first segment is a Discover hub slug to the hub, so /sports/iowa-cubs, /outdoors/high-trestle-trail and /music/venues/<slug> (linked from every event at a known venue on the web) opened the whole hub and lost the target.",
+      "acceptanceCriteria": [
+        "/music/venues/<slug>, /sports/<slug> and /outdoors/<slug> open the web page (the app has no venue, team or trail screen), as /stay/near/<venue> does",
+        "Paths with no web page (bare /music/venues, a malformed or UUID slug, a deeper path) still open the hub",
+        "A guide body link to one of these falls back to the in-app browser on the site URL, not the hub",
+        "A vitest guard reads App.tsx and the Swift and fails when the web adds or drops a detail route under a hub iOS routes by first segment"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "DeepLinkHandler.hubDetailPrefixes + hubDetailDestination run before the DiscoverDestination fallback. 6 new XCTest cases; vitest iosHubDetailParity.test.ts negative-controlled 3 ways; vitest src/lib 2099/2099; not compiled (no Xcode here). | /music/venues/<slug>, /sports/<slug> and /outdoors/<slug> now open the web page on iOS, through the new DeepLinkHandler.hubDetailPrefixes and hubDetailDestination. Before this they opened the whole Music, Sports or Outdoors hub, so the team, trail or venue was lost. These links come in through guide body links and notification URLs. Paths with no web page still open the hub. Verified with 6 new XCTest cases (not compiled, no Xcode here) and a new vitest, iosHubDetailParity.test.ts, which failed under 3 negative controls and passes on restore. vitest src/lib: 2099/2099. eslint is clean, and the type-check ratchet shows no regressions."
+    },
+    {
+      "id": "AND-AUDIT-040",
+      "title": "Landing links drop their filter: /restaurants/open-now opens every restaurant, /events/near-me opens Home",
+      "priority": 3,
+      "passes": false,
+      "description": "As someone opening a shared Des Moines Insider link on Android, I need /restaurants/open-now to show only open restaurants and /events/near-me to show what is near me, because Android opened the unfiltered Dining tab and Home for them, while iOS opens the filtered list and the Map tab.",
+      "acceptanceCriteria": [
+        "/restaurants/open-now opens the Dining tab with Open now on, whether or not the Dining view model already exists",
+        "The filter is applied once and consumed, so returning to the tab keeps the user's own choice",
+        "/events/near-me opens the Map tab (iOS .tab(.map))",
+        "/restaurants/new and /restaurants/dietary still open Dining (no Android filter exists for them) and never a restaurant detail",
+        "JVM tests cover the route table and the pending-filter hand-off; a device check confirms the chip is on after a cold and a warm link"
+      ],
+      "notes": "/restaurants/open-now now opens Dining with Open now on (Destination.RestaurantsOpenNow, held in DeepLinkHandler.pendingRestaurantsOpenNow until RestaurantsViewModel applies and consumes it) and /events/near-me opens the Map tab, as iOS does; 3 new DeepLinkPendingFilterTest JVM tests pass with the 55 existing DeepLink tests (58/58) on a stub harness (kotlinc 2.2.10), and a mutation fails the 3 expected tests. Not compiled (no Android SDK, no mockk for the RestaurantsViewModel tests); one device check, written in the lane handoff, closes it. Handoff: docs/improvement-loops/lanes/android.md"
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-080",
+      "title": "Restaurant detail 'Tonight nearby' drops festivals already running near the restaurant",
+      "description": "useTonightNearRestaurant reads only events whose date is inside today's Central window, so a multi-day festival a block away (opened yesterday, still on) never appears on the restaurant page while /events/today lists it.",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useTonightNearRestaurant.ts .gte(\"date\", day.startISO).lt(\"date\", day.endISO)",
+        "Add a capped second read for runs (date < day start, end_date >= now) like useTonightStripEvents, and decide with the restaurants lane how pickTonightNear ranks them",
+        "Fixture test evaluates the sent filters"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the events lane; RestaurantDetails is restaurants-lane territory, so not touched."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-FEAT-081",
+      "title": "openapi.yaml does not describe the api-events end_date field or the overlap semantics of start_date/end_date",
+      "description": "After the api-events visibility and window fix, the list returns runs that started before start_date and carries end_date; public/openapi.yaml still documents start_date as a plain lower bound and has no end_date in the event schema.",
+      "acceptanceCriteria": [
+        "public/openapi.yaml documents end_date in the Event schema and states that start_date/end_date are Central-time days and an overlap test",
+        "llms.txt wording matches"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the events lane; seo-geo owns openapi/llms.txt."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-FEAT-082",
+      "title": "RestaurantFilters.tsx is not rendered anywhere and still carries an Open Now switch that filters nothing",
+      "description": "src/components/RestaurantFilters.tsx is only imported for its RestaurantFilterOptions type. Its Open Now switch, badge and filter count would claim a filter that useRestaurants never applies (Restaurants.tsx forces openNow: false). Move the type to a lib file and delete the dead component, or drop openNow from the type, so the control cannot come back on its own.",
+      "acceptanceCriteria": [
+        "No rendered or exported component offers an Open Now toggle that the restaurant query ignores",
+        "RestaurantFilterOptions lives where its importers can read it without the dead component"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "priority": 4,
+      "id": "WEB-UX-072",
+      "title": "Delete admin/CMS components nothing imports",
+      "description": "ContentEditor, CompetitorAnalysis, ArticleEditor, SecurityDashboard, AttractionFilters, EventSocialHub, EventFriendFinder and LocationAutocomplete have no component importer in src. They still count against the a11y ratchets, and adminIconButtonNames.test.ts reads three of them. Delete them, drop their test cases and baseline entries, and update the docs that name them (docs/LOCATION_FEATURES*.md).",
       "passes": false
+    },
+    {
+      "priority": 4,
+      "id": "WEB-UX-073",
+      "title": "VenuesManager alias badges remove an alias on a mouse-only click",
+      "description": "In the admin venue dialog, each alias Badge removes its alias through onClick on a div, and nothing on it can take keyboard focus. Add a named remove button to each badge, like the ArticleEditor keyword badges have.",
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-PERF-073",
+      "title": "ShareDialog (2.6 KB gz) is in the static closure of every detail route and /events, though it renders only after a Share click",
+      "description": "As a visitor opening an event, restaurant, attraction, playground or article page, I need the share dialog downloaded only when I tap Share. Right now EventCard, SocialEventCard and five detail pages import ShareDialog statically.",
+      "acceptanceCriteria": [
+        "Evidence: static imports of @/components/ShareDialog in EventCard.tsx:22, SocialEventCard.tsx:7, EventDetails.tsx:6, AttractionDetails.tsx:16, ArticleDetails.tsx:19, PlaygroundDetails.tsx:18, RestaurantDetails.tsx:18",
+        "Render ShareDialog lazily, only while it is open, following the GlobalUpgradeModal pattern",
+        "Add a static-graph test with a negative control, and check per-route gz before and after with measure-route-preload",
+        "The share smoke specs still pass"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-041",
+      "title": "/events/kids searches the word 'kids' instead of the web's kids-and-family filter",
+      "passes": false,
+      "description": "As a parent opening /events/kids on Android, I need the web's KIDS_EVENTS_FILTER, because Android searches the text 'kids events', so a family storytime or children's show without the word 'kids' is missing. iOS fixed the same bug under IOS-AUDIT-005 by adding a kidsOnly search filter.",
+      "acceptanceCriteria": [
+        "Android Search (or the Events tab) gains a kids-only filter that runs the web's KIDS_EVENTS_FILTER rule",
+        "/events/kids applies it instead of a text query",
+        "DeepLinkWebDestinationTest asserts the new destination"
+      ],
+      "notes": ""
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-042",
+      "title": "/events/series/<slug> opens in the web view; iOS has a native event-series screen",
+      "passes": false,
+      "description": "As a reader opening an annual-event link on Android, I need the native series page iOS has (IOS-AUDIT-FEAT-046: EventSeries catalogue, EventSeriesSchedule, EventSeriesView), because Android routes /events/series/<slug> to the in-app WebView. This is several loops: the catalogue and schedule logic first, with JVM tests, then the screen and route.",
+      "acceptanceCriteria": [
+        "Port the EventSeries catalogue and title normalisation, held equal to the web by a parity test",
+        "Port EventSeriesSchedule (this year's dates or '<year> date not announced yet', past years newest first)",
+        "A native screen and route; a slug the app does not know still opens on the web"
+      ],
+      "notes": ""
     }
   ]
 }
