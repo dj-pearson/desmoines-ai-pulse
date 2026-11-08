@@ -29,8 +29,10 @@
  *                           readable", not "does this table link a person to a
  *                           private signal".
  *
- * OFFLINE. Reads supabase/migrations/*.sql (chronological, last-wins) and the
- * generated types for the column list. No network, no credentials.
+ * OFFLINE. Reads supabase/migrations/*.sql (chronological, last-wins) for the
+ * policies, and takes the identity-bearing tables from BOTH the generated
+ * types and the migrations' own CREATE/ALTER TABLE column definitions
+ * (WEB-SEC-072; see migrationIdentityTables). No network, no credentials.
  *
  * DYNAMIC SQL (WEB-SEC-054). A policy changed through EXECUTE format(...) in a
  * DO block is invisible to a regex over the file, and that blind spot cuts both
@@ -245,6 +247,12 @@ export function computeExposure(migrations, withIdentity) {
     // case in the tree rescopes policies earlier files created; a file mixing
     // both for one policy would be ambiguous to a human reader too.
     const all = dyn.sql ? `${sql}\n${dyn.sql}` : sql;
+    // DROP TABLE takes its policies with it. Without this, a table dropped and
+    // recreated (user_follows, 20251110000010) kept the old file's policies.
+    for (const t of stripLineComments(all).matchAll(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:"?public"?\.)?"?[A-Za-z0-9_]+"?)/gi)) {
+      const table = t[1].replace(/"/g, '').replace(/^public\./, '');
+      for (const key of [...current.keys()]) if (key.startsWith(`${table}|`)) current.delete(key);
+    }
     for (const d of parseDrops(all)) current.delete(`${d.table}|${d.name}`);
     for (const p of parsePolicies(all, file)) current.set(`${p.table}|${p.name}`, p);
   }
@@ -261,6 +269,103 @@ export function computeExposure(migrations, withIdentity) {
     detail.push(`${p.table}  "${p.name}"  (${p.file})`);
   }
   return { current, exposed, detail, unreadable };
+}
+
+/** SQL with `-- ...` comments blanked, so a commented-out DROP TABLE is not read. */
+const stripLineComments = (sql) => sql.replace(/--[^\n]*/g, '');
+
+/** A column definition that points at a person: REFERENCES auth.users or profiles. */
+const PERSON_FK = /\bREFERENCES\s+(?:auth\.users|(?:public\.)?profiles)\b/i;
+
+/** Split a CREATE TABLE body on its top-level commas. */
+function splitTopLevel(body) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ',' && depth === 0) {
+      parts.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(body.slice(start));
+  return parts.map((p) => p.replace(/--[^\n]*/g, '').trim()).filter(Boolean);
+}
+
+const isIdentityDef = (name, def) => IDENTITY_COLUMNS.test(name) || PERSON_FK.test(def);
+
+/**
+ * Tables whose identity column comes from the MIGRATIONS rather than the
+ * generated types (WEB-SEC-072). types.ts was the only source, so a table the
+ * types never listed (event_photo_reactions: user_id, USING (true) for anyone)
+ * was outside the check, and so was any person column not on the name list
+ * (user_follows: follower_id and following_id, both REFERENCES auth.users).
+ *
+ * Replays CREATE TABLE, ALTER TABLE ... ADD COLUMN and DROP TABLE in file
+ * order. A column counts when its name is on IDENTITY_COLUMNS or its
+ * definition references auth.users or profiles.
+ *
+ * @param {{ file: string, sql: string }[]} migrations  sorted chronologically
+ * @returns {Set<string>}
+ */
+export function migrationIdentityTables(migrations) {
+  const tables = new Map(); // table -> Set of identity columns
+  const TABLE = '((?:"?public"?\\.)?"?[A-Za-z0-9_]+"?)';
+  const norm = (t) => t.replace(/"/g, '').replace(/^public\./, '').toLowerCase();
+  for (const { sql: raw } of migrations) {
+    const sql = stripLineComments(raw);
+    const events = [];
+    const create = new RegExp(`CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${TABLE}\\s*\\(`, 'gi');
+    let m;
+    while ((m = create.exec(sql))) {
+      const body = readBalanced(sql, create.lastIndex - 1);
+      events.push({ at: m.index, kind: 'create', table: norm(m[1]), body });
+    }
+    const drop = new RegExp(`DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?${TABLE}`, 'gi');
+    while ((m = drop.exec(sql))) events.push({ at: m.index, kind: 'drop', table: norm(m[1]) });
+    const alter = new RegExp(`ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?${TABLE}([^;]*);`, 'gi');
+    while ((m = alter.exec(sql))) events.push({ at: m.index, kind: 'alter', table: norm(m[1]), body: m[2] });
+    events.sort((a, b) => a.at - b.at);
+
+    for (const e of events) {
+      if (e.kind === 'drop') {
+        tables.delete(e.table);
+        continue;
+      }
+      if (e.kind === 'create') {
+        // CREATE TABLE IF NOT EXISTS on a table that exists is a no-op, but
+        // its columns were the same table's anyway; adding them is harmless.
+        const cols = tables.get(e.table) ?? new Set();
+        for (const def of splitTopLevel(e.body)) {
+          // A table-level FOREIGN KEY (a, b) REFERENCES auth.users marks a and b.
+          const fk = def.match(/\bFOREIGN\s+KEY\s*\(([^)]*)\)/i);
+          if (fk && PERSON_FK.test(def)) {
+            for (const c of fk[1].split(',')) cols.add(c.trim().replace(/"/g, '').toLowerCase());
+            continue;
+          }
+          if (/^(CONSTRAINT|PRIMARY|UNIQUE|CHECK|FOREIGN|EXCLUDE|LIKE)\b/i.test(def)) continue;
+          const name = def.split(/\s+/)[0].replace(/"/g, '').toLowerCase();
+          if (isIdentityDef(name, def)) cols.add(name);
+        }
+        tables.set(e.table, cols);
+        continue;
+      }
+      const add = /\bADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"?([A-Za-z0-9_]+)"?([^,]*)/gi;
+      let a;
+      while ((a = add.exec(e.body))) {
+        const name = a[1].toLowerCase();
+        if (/^(constraint|primary|unique|check|foreign)$/.test(name)) continue;
+        if (!isIdentityDef(name, a[2])) continue;
+        const cols = tables.get(e.table) ?? new Set();
+        cols.add(name);
+        tables.set(e.table, cols);
+      }
+    }
+  }
+  return new Set([...tables].filter(([, cols]) => cols.size > 0).map(([t]) => t));
 }
 
 /** Tables that carry an identity column, read from the generated types. */
@@ -295,19 +400,24 @@ function main() {
 
   const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
 
-  const withIdentity = identityTables();
-  if (!withIdentity || withIdentity.size === 0) {
-    console.error(
-      '[identity-read] parsed no identity columns out of the generated types - refusing to pass.\n' +
-        '  An empty set means the parse broke, not that the schema is clean.',
-    );
-    process.exit(1);
-  }
+  const migrations = files.map((file) => ({ file, sql: readFileSync(join(MIGRATIONS, file), 'utf8') }));
 
-  const { current, exposed, detail, unreadable } = computeExposure(
-    files.map((file) => ({ file, sql: readFileSync(join(MIGRATIONS, file), 'utf8') })),
-    withIdentity,
-  );
+  const fromTypes = identityTables();
+  const fromMigrations = migrationIdentityTables(migrations);
+  // Either source parsing to nothing means that parse broke; the union would
+  // hide it, so each is checked on its own.
+  for (const [what, set] of [['the generated types', fromTypes], ['the migrations', fromMigrations]]) {
+    if (!set || set.size === 0) {
+      console.error(
+        `[identity-read] parsed no identity columns out of ${what} - refusing to pass.\n` +
+          '  An empty set means the parse broke, not that the schema is clean.',
+      );
+      process.exit(1);
+    }
+  }
+  const withIdentity = new Set([...fromTypes, ...fromMigrations]);
+
+  const { current, exposed, detail, unreadable } = computeExposure(migrations, withIdentity);
 
   if (current.size === 0) {
     console.error('[identity-read] parsed no policies at all - refusing to pass on that.');
