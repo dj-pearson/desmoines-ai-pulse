@@ -16,8 +16,8 @@ import javax.inject.Singleton
  * Supported URL patterns (https on desmoinesinsider.com or www. only):
  * - `/events/:slug-or-id` -> Event detail; `/events/today`, `/events/free` and
  *   the other web landing pages (src/App.tsx) -> the matching tab or list
- * - `/restaurants/:slug-or-id` -> Restaurant detail; `/restaurants/open-now`,
- *   `/new`, `/dietary` -> Dining tab
+ * - `/restaurants/:slug-or-id` -> Restaurant detail; `/restaurants/open-now`
+ *   -> Dining tab with Open now on; `/new`, `/dietary` -> Dining tab
  * - `/attractions/:slug-or-id` -> Attraction detail
  * - `/stay/:slug` -> Hotel detail, `/stay` -> Hotels list
  * - `/articles/:slug` -> Article detail, `/articles` -> Articles list
@@ -57,6 +57,13 @@ class DeepLinkHandler @Inject constructor() {
         data class Screen(val screen: ScreenDestination) : Destination()
         data class Search(val query: String) : Destination()
         data class Web(val url: String) : Destination()
+
+        /**
+         * The Dining tab with its Open now filter on: /restaurants/open-now
+         * (iOS restaurantLandingDestination). The flag waits in
+         * [pendingRestaurantsOpenNow] until RestaurantsViewModel applies it.
+         */
+        data object RestaurantsOpenNow : Destination()
     }
 
     enum class TabDestination {
@@ -84,6 +91,11 @@ class DeepLinkHandler @Inject constructor() {
     // navigate, before the Search screen's view model is created.
     private val _pendingSearchQuery = MutableStateFlow<String?>(null)
     val pendingSearchQuery: StateFlow<String?> = _pendingSearchQuery.asStateFlow()
+
+    // An /restaurants/open-now link, held for RestaurantsViewModel for the same
+    // reason: the Dining view model may not exist when MainScreen navigates.
+    private val _pendingRestaurantsOpenNow = MutableStateFlow(false)
+    val pendingRestaurantsOpenNow: StateFlow<Boolean> = _pendingRestaurantsOpenNow.asStateFlow()
 
     /**
      * Attempts to parse a URL into a navigation destination.
@@ -152,8 +164,17 @@ class DeepLinkHandler @Inject constructor() {
         return query
     }
 
-    private fun publish(destination: Destination) {
+    /** Consumes an /restaurants/open-now link's filter: true once, then false. */
+    fun consumeRestaurantsOpenNow(): Boolean {
+        val pending = _pendingRestaurantsOpenNow.value
+        _pendingRestaurantsOpenNow.value = false
+        return pending
+    }
+
+    /** Internal, not private, so JVM tests can publish without an android.net.Uri. */
+    internal fun publish(destination: Destination) {
         if (destination is Destination.Search) _pendingSearchQuery.value = destination.query
+        if (destination is Destination.RestaurantsOpenNow) _pendingRestaurantsOpenNow.value = true
         _pendingDestination.value = destination
     }
 
@@ -365,6 +386,8 @@ class DeepLinkHandler @Inject constructor() {
                 "tonight" -> return Destination.Search("tonight")
                 "free" -> return Destination.Search("free events")
                 "kids" -> return Destination.Search("kids events")
+                // The Map tab is the app's nearby-events surface (iOS .tab(.map)).
+                "near-me" -> return Destination.Tab(TabDestination.MAP)
                 // /events/series/:slug has no native screen.
                 "series" -> return Destination.Web(url)
             }
@@ -407,7 +430,11 @@ class DeepLinkHandler @Inject constructor() {
             return when (first) {
                 "events" -> eventDestination(segment, url)
                 "restaurants" ->
-                    if (segment in RESTAURANT_LANDING_SEGMENTS) {
+                    if (segment == "open-now") {
+                        // A shared "open now" page used to open every restaurant.
+                        Destination.RestaurantsOpenNow
+                    } else if (segment in RESTAURANT_LANDING_SEGMENTS) {
+                        // No new-openings or dietary filter on Android yet.
                         Destination.Tab(TabDestination.DINING)
                     } else {
                         webLinkId(segment)?.let { Destination.Restaurant(it) }

@@ -76,7 +76,7 @@ class DeepLinkWebDestinationTest {
         assertEquals(Destination.Search("kids events"), web("/events/kids"))
         assertEquals(Destination.Search("events in west des moines"), web("/events/west-des-moines"))
         assertEquals(Destination.Search("events in ankeny"), web("/events/ankeny"))
-        assertEquals(Destination.Tab(TabDestination.HOME), web("/events/near-me"))
+        assertEquals(Destination.Tab(TabDestination.MAP), web("/events/near-me"))
         assertEquals(Destination.Tab(TabDestination.HOME), web("/events/date-night"))
         assertEquals(Destination.Tab(TabDestination.HOME), web("/events/may-2026"))
     }
@@ -110,7 +110,7 @@ class DeepLinkWebDestinationTest {
 
     @Test
     fun `restaurant landing pages go to Dining, a slug to the detail`() {
-        assertEquals(Destination.Tab(TabDestination.DINING), web("/restaurants/open-now"))
+        assertEquals(Destination.RestaurantsOpenNow, web("/restaurants/open-now"))
         assertEquals(Destination.Tab(TabDestination.DINING), web("/restaurants/new"))
         assertEquals(Destination.Tab(TabDestination.DINING), web("/restaurants/dietary/vegan"))
         assertEquals(Destination.Restaurant(LinkId("zombie-burger")), web("/restaurants/zombie-burger"))

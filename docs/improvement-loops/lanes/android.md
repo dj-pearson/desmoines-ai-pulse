@@ -115,6 +115,15 @@ iOS and web do (AND-AUDIT-039), so a 399-word guide reads 2 min on all three; if
 disagree by one minute, check the word split (web and Android split on any whitespace, iOS on space,
 newline and tab only) before suspecting the rounding.
 
+AND-AUDIT-040 (landing links keep their filter) is code-complete and JVM-tested.
+/restaurants/open-now now opens Dining with Open now on (DeepLinkHandler.Destination.RestaurantsOpenNow;
+the flag waits in pendingRestaurantsOpenNow until RestaurantsViewModel applies and consumes it), and
+/events/near-me opens the Map tab as on iOS. /restaurants/new and /dietary still open Dining unfiltered,
+because Android has no new-openings or dietary filter. One device check closes it: tap an open-now link
+(push url or adb am start) with the Dining tab never opened, then again with it already open, and confirm
+the Open now chip is on both times. The trap: if it is on only the second time, the view model is being
+created after MainScreen consumed the destination and the pending flag is not surviving until init.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -137,3 +146,4 @@ newline and tab only) before suspecting the rounding.
 | 2026-11-08 | AND-AUDIT-037 | this commit | Deal Active now reads the Des Moines clock: isActiveNow converts the instant to America/Chicago before taking weekday and minute (was the phone offset via OffsetDateTime.now()), and a 21:00-02:00 window now runs past midnight as on iOS (it could never match). 2 new DealTest JVM tests pass on a stub harness (kotlinc 2.2.10), 7/7 in the suite; the pre-fix Deal.kt fails exactly the 2 new tests. Existing recurring test inputs moved from Z to -05:00 so they still mean 4pm Central. DealsScreen, DealsViewModel and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-038 | this commit | Article and review dates read the Des Moines day via EventSlug.centralDate (were formatted in the +00:00 offset, so evening posts showed tomorrow); articles fall back to created_at like iOS, and Guides cards now show date and reading time. 8 new ArticleTest and 1 new ReviewTest JVM tests pass on a stub harness (kotlinc 2.2.10), 14/14 across both suites; a mutation restoring offset-day formatting fails 5 of the article tests and the new review test. Compose screens and app module not compiled (no Android SDK); no device check |
 | 2026-11-08 | AND-AUDIT-039 | this commit | Guide reading time rounds up (ceil of words / 200, min 1) to match web readTimeLabel and iOS readingMinutes; it truncated, so 201-399 word guides read one minute short on cards and detail. 3 new MarkdownParserTest JVM tests pass on a stub harness (kotlinc 2.2.10), 17/17 across MarkdownParserTest and ArticleTest; restoring truncation fails exactly 2 (rounding boundaries, newline/tab split). App module not compiled (no Android SDK); no device check needed beyond reading a card |
+| 2026-11-08 | AND-AUDIT-040 | this commit | /restaurants/open-now opens Dining with Open now on (was the unfiltered tab) and /events/near-me opens the Map tab (was Home), matching iOS. 3 new DeepLinkPendingFilterTest JVM tests pass with the 55 existing DeepLink tests (58/58) on a stub harness (kotlinc 2.2.10); a mutation dropping the pending flag and the near-me case fails the 3 expected tests. RestaurantsViewModel tests, MainScreen and app module not compiled (no Android SDK, no mockk in cache); no device check |

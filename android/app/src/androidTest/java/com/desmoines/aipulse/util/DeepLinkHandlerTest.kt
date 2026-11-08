@@ -81,13 +81,13 @@ class DeepLinkHandlerTest {
         assertEquals(Destination.Search("free events"), parse("https://desmoinesinsider.com/events/free"))
         assertEquals(Destination.Search("kids events"), parse("https://desmoinesinsider.com/events/kids"))
         assertEquals(Destination.Search("events in ankeny"), parse("https://desmoinesinsider.com/events/ankeny"))
-        assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events/near-me"))
+        assertEquals(Destination.Tab(TabDestination.MAP), parse("https://desmoinesinsider.com/events/near-me"))
         assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events/may-2026"))
     }
 
     @Test
     fun restaurantLandingPagesLandOnDining() {
-        assertEquals(Destination.Tab(TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants/open-now"))
+        assertEquals(Destination.RestaurantsOpenNow, parse("https://desmoinesinsider.com/restaurants/open-now"))
         assertEquals(Destination.Tab(TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants/new"))
     }
 

@@ -189,6 +189,17 @@ fun MainScreen(
                     restoreState = true
                 }
             }
+            // The filter waits in DeepLinkHandler.pendingRestaurantsOpenNow
+            // until RestaurantsViewModel picks it up.
+            is DeepLinkHandler.Destination.RestaurantsOpenNow -> {
+                navController.navigate(Route.Dining.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
             is DeepLinkHandler.Destination.Tab -> {
                 val tabRoute = when (destination.tab) {
                     DeepLinkHandler.TabDestination.HOME -> Route.Home.route
