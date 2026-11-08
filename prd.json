@@ -11480,8 +11480,8 @@
         "Wrap the two calls in arrow functions so the rejects assertion actually awaits the call",
         "npm run check-edge-types exits 0"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane while verifying WEB-BE-060."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane while verifying WEB-BE-060. | Fixed by the orchestrator in round 8: both calls wrapped in arrow functions; check-edge-types reports no file gained a type error."
     },
     {
       "priority": 3,
@@ -11568,8 +11568,8 @@
       "acceptanceCriteria": [
         "Close one as a duplicate of the other, and carry its notes across"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the reliability lane while checking the WEB-CI-028 handoff."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the reliability lane while checking the WEB-CI-028 handoff. | Resolved in round 8: WEB-UX-059 closed as a duplicate of WEB-UX-061."
     }
   ]
 }
