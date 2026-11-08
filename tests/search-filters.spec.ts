@@ -177,56 +177,34 @@ test.describe('Search Behavior - Proper Debouncing', () => {
   });
 
   test('search should trigger only after user stops typing', async ({ page }) => {
+    // This read three result counts, logged them, and ended. With no
+    // assertion, the required lane counted it as coverage on a page with no
+    // search box at all (WEB-QA-050). It now asserts the events test's
+    // contract on the restaurants list: typing one key at a time fires fewer
+    // data queries than keystrokes, and the finished term lands in the URL.
     await page.goto('/restaurants', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput, '/restaurants has no search input').toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      const url = request.url();
+      if (/\/rest\/v1\//.test(url) && !/\/storage\//.test(url)) requests.push(url);
+    });
 
-    // Get initial results count
+    const term = 'pizza';
+    await searchInput.pressSequentially(term, { delay: 60 });
+    await expect(page).toHaveURL(/[?&]q=pizza/, { timeout: 5000 });
     await page.waitForTimeout(500);
-    const initialResults = await page.locator('[data-testid*="result"], article, .card, [class*="item"]').count();
 
-    // Type search query
-    await searchInput.fill('pizza');
-
-    // Immediately check if results changed (they shouldn't yet)
-    await page.waitForTimeout(100);
-    const resultsAfter100ms = await page.locator('[data-testid*="result"], article, .card, [class*="item"]').count();
-
-    // Wait for debounce to complete
-    await page.waitForTimeout(600);
-    const resultsAfterDebounce = await page.locator('[data-testid*="result"], article, .card, [class*="item"]').count();
-
-    console.log(`Initial: ${initialResults}, After 100ms: ${resultsAfter100ms}, After debounce: ${resultsAfterDebounce}`);
-
-    // Results should change after debounce completes, not immediately
-    // This ensures good UX - not filtering on every keystroke
+    expect(requests.length, `${requests.length} data queries for ${term.length} keystrokes`).toBeLessThan(term.length);
   });
 
-  test('search should show loading indicator during search', async ({ page }) => {
-    await page.goto('/events', { waitUntil: 'networkidle' });
-
-    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() === 0) {
-      return;
-    }
-
-    // Start typing
-    await searchInput.fill('music');
-
-    // Check for loading indicator within a reasonable time
-    const hasLoadingIndicator = await page.locator(
-      '[role="progressbar"], .loading, .spinner, [aria-busy="true"]'
-    ).count();
-
-    if (hasLoadingIndicator > 0) {
-      console.log('Search shows loading indicator');
-    }
-  });
+  // 'search should show loading indicator during search' was deleted
+  // (WEB-QA-050). It logged a line when a spinner appeared and did nothing
+  // when none did, so it passed either way, and against fixtures the answer
+  // arrives before a spinner could paint.
 });
 
 test.describe('Search Results', () => {
@@ -439,49 +417,36 @@ test.describe('Filter Functionality', () => {
   });
 
   test('filters should have clear/reset functionality', async ({ page }) => {
-    await page.goto('/events', { waitUntil: 'networkidle' });
+    // It looked for 'select, input[type="checkbox"]', which this app never
+    // renders (findFilters above records 0 native controls on every hub), so
+    // the body never ran and the test passed with no assertion (WEB-QA-050).
+    // Now: arrive with a search filter active, press the visible Clear all,
+    // and assert the filter is gone from both the URL and the input.
+    await page.goto('/events?q=jazz', { waitUntil: 'networkidle' });
 
-    const clearButton = page.locator('button:has-text("Clear"), button:has-text("Reset"), button[aria-label*="clear" i]').first();
+    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toHaveValue('jazz');
 
-    // Apply some filters first
-    const filters = await page.locator('select, input[type="checkbox"]').all();
+    const clearAll = page.getByRole('button', { name: /^clear all/i }).first();
+    await expect(clearAll, 'an active filter shows a Clear all control').toBeVisible();
+    await clearAll.click();
 
-    if (filters.length > 0) {
-      await filters[0].click();
-      await page.waitForTimeout(500);
-
-      if (await clearButton.count() > 0) {
-        await clearButton.click();
-        await page.waitForTimeout(500);
-
-        console.log('Filter clear/reset button works');
-      }
-    }
+    await expect(page).not.toHaveURL(/[?&]q=/, { timeout: 5000 });
+    await expect(searchInput).toHaveValue('');
   });
 });
 
 test.describe('Search URL Parameters', () => {
   test('search query should be reflected in URL', async ({ page }) => {
+    // Computed hasQueryInUrl and only logged it, so a search that never
+    // reached the URL passed (WEB-QA-050).
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('concert');
-    await page.waitForTimeout(800);
-
-    const url = page.url();
-    console.log('URL after search:', url);
-
-    // URL should contain the search query (good for sharing/bookmarking)
-    const hasQueryInUrl = url.includes('concert') || url.includes('search=') || url.includes('q=');
-
-    if (hasQueryInUrl) {
-      console.log('Search query is reflected in URL (good for bookmarking)');
-    }
+    await expect(page).toHaveURL(/[?&]q=concert/, { timeout: 5000 });
   });
 
   test('should respect search parameters from URL', async ({ page }) => {
@@ -541,23 +506,20 @@ test.describe('Search Accessibility', () => {
   });
 
   test('search results should be announced to screen readers', async ({ page }) => {
+    // Counted live regions and logged the answer, so it passed with none
+    // (WEB-QA-050). /events announces the result count through useAnnounce's
+    // role=status region once the debounced term is answered; the assertion
+    // is that the announcement names the term, which is what is heard.
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('music');
-    await page.waitForTimeout(800);
-
-    // Look for ARIA live region for results
-    const hasLiveRegion = await page.locator('[aria-live], [role="status"], [role="alert"]').count() > 0;
-
-    if (hasLiveRegion) {
-      console.log('Search uses ARIA live regions for result announcements');
-    }
+    await expect(
+      page.locator('[role="status"][aria-live]').filter({ hasText: 'matching "music"' }),
+      'no live region announced the search result',
+    ).toHaveCount(1, { timeout: 5000 });
   });
 });
 
@@ -626,31 +588,36 @@ test.describe('Advanced Search Page', () => {
 
 test.describe('Search Performance', () => {
   test('search should not cause layout shift', async ({ page }) => {
+    // It compared document heights and logged when the difference was small,
+    // so any shift passed (WEB-QA-050). Page height is the wrong measure
+    // anyway: a search is meant to change how many cards there are. The shift
+    // a person feels is the box they are typing in moving, so that is what is
+    // measured, with the browser's layout-shift score for anything else.
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    await page.evaluate(() => {
+      const w = window as unknown as { __searchCls: number };
+      w.__searchCls = 0;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as Array<PerformanceEntry & { value: number; hadRecentInput: boolean }>) {
+          if (!entry.hadRecentInput) w.__searchCls += entry.value;
+        }
+      }).observe({ type: 'layout-shift', buffered: false });
+    });
 
-    // Get initial layout
-    const initialHeight = await page.evaluate(() => document.body.scrollHeight);
-
-    // Perform search
+    const before = await searchInput.boundingBox();
     await searchInput.fill('test');
+    await expect(page).toHaveURL(/[?&]q=test/, { timeout: 5000 });
     await page.waitForTimeout(800);
+    const after = await searchInput.boundingBox();
 
-    const afterSearchHeight = await page.evaluate(() => document.body.scrollHeight);
-
-    // Major layout shift would be problematic
-    const heightDiff = Math.abs(afterSearchHeight - initialHeight);
-    console.log(`Height difference after search: ${heightDiff}px`);
-
-    // Some height change is expected, but massive shifts are bad for UX
-    if (heightDiff < 100) {
-      console.log('Search causes minimal layout shift');
-    }
+    expect(before && after, 'the search input has no layout box').toBeTruthy();
+    expect(Math.abs(after!.y - before!.y), 'the search input moved after typing').toBeLessThanOrEqual(1);
+    const cls = await page.evaluate(() => (window as unknown as { __searchCls: number }).__searchCls);
+    expect(cls, 'layout shift score after a search').toBeLessThan(0.1);
   });
 });
 

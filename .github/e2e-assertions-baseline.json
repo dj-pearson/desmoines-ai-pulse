@@ -1,0 +1,9 @@
+{
+  "_comment": "Tests in REQUIRED E2E lanes with no reachable assertion (WEB-QA-050). They pass on any page. This list must only ever SHRINK. See scripts/check-e2e-assertions.mjs.",
+  "generated": "2026-11-08",
+  "vacuous": [
+    "performance.spec.ts :: should load critical CSS first",
+    "performance.spec.ts :: should show loading states for async content",
+    "performance.spec.ts :: should use appropriate image formats"
+  ]
+}
