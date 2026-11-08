@@ -11035,7 +11035,7 @@
         "The action has a TalkBack custom action",
         "A device with no calendar app shows the same 'No calendar app available.' toast as event detail instead of crashing"
       ],
-      "notes": "Found in the AND-AUDIT-027 loop, 2026-11-07."
+      "notes": "Found in the AND-AUDIT-027 loop, 2026-11-07. | Code-complete 2026-11-08: upcoming Saved event rows offer Add to Calendar from an overflow menu and a TalkBack custom action, built from the same EventCalendarEntry as event detail via a new shared util/EventCalendarIntent (intent + 'No calendar app available.' toast); past and undated rows offer neither (EventCalendarEntry.forSavedRow). 3 new JVM tests pass on a stub harness (46/46 across four event-time suites), and a mutation ignoring isPast fails exactly the past-row test. Compose UI and app module were not compiled (no Android SDK); a device check is still needed before it can pass. Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "priority": 3,
@@ -11150,8 +11150,8 @@
         "statusLine uses resolveOpenStatus(hours_json, hoursTextOf(opening), now) and is suppressed for a non-serving business_status",
         "Test with a production-shaped row plus a negative control"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-07 while shipping WEB-FEAT-041; not yet reproduced against the hook's projection."
+      "passes": true,
+      "notes": "Found 2026-11-07 while shipping WEB-FEAT-041; not yet reproduced against the hook's projection. | Brewery Trail now selects BREWERY_TRAIL_COLUMNS (adds hours_json and business_status, held by check-list-columns 15/15) in place of RESTAURANT_LIST_COLUMNS. The new breweryStatusLine runs resolveOpenStatus(hours_json, hoursTextOf(opening), now), so a production row with a date in `opening` now shows \"Open until 10 PM\". A CLOSED_TEMPORARILY taproom shows \"Temporarily closed\", and splitBreweries drops Google CLOSED_PERMANENTLY rows from the trail and from the passport count. Bug reproduced first: 8 new tests were red before the fix. A negative control (undefined hours, closure guards removed) turns 3 red. vitest 3001/3001, type-check ratchet 32/32, eslint clean. Note: the worktree was created at 65138139, which has no docs/improvement-loops, so it was reset to the rolling branch tip 3c124efa before any work was done."
     },
     {
       "priority": 3,
@@ -11371,8 +11371,8 @@
       "id": "WEB-UX-060",
       "title": "check-icon-button-names: cover expression children and asChild links",
       "description": "The icon-button scanner skips buttons with a {expression} child, a {...spread} or asChild, so its count of 0 is only a floor. Slice 2 found four unnamed buttons in those shapes by hand (SocialPostQueue retry, VideoUpload play/pause, VenuesManager website link). Teach the scanner to flag a ternary or && child whose branches are all icon elements, and an asChild Button wrapping a link that has only an icon inside. Then fix what it finds and keep the baseline at 0.",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "check-icon-button-names now flags ternary/&& children whose branches are all icons (or null/false) and asChild Buttons whose one child link holds only an icon; the 8 controls it found (AI settings save, ArticlesManager edit/view links, ContentTable and TimelineView expanders with aria-expanded, FavoritesView source link, SocialShare copy buttons) are named and the baseline stays 0. Verified by adminIconButtonNames.test.ts 43/43 (2 new cases red on the old scanner), vitest 3002/3002, type ratchet 32/32, eslint 0 errors, check-ui-craft 3 <= 7."
     },
     {
       "priority": 4,
@@ -11493,8 +11493,8 @@
         "Swap any that follow redirects to fetchPublicUrl (or safeFetch with an allowlist where the host is fixed)",
         "Extend public-url-fetch.test.ts with a stubbed-fetch case per swapped caller"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while doing WEB-SEC-060; not audited in that commit."
+      "passes": true,
+      "notes": "Found 2026-11-08 while doing WEB-SEC-060; not audited in that commit. | The domain adapters' fetchAllowed (adapterFetch.ts) now fetches through fetchPublicUrl. A refused URL or redirect hop returns null, the same as a robots Disallow, and network errors still throw. link-content-monitor's probeLink got main's #469 safeFetch guard, copied byte-for-byte so a later merge of main is clean. The rest of _shared/ needed no change: uptime-monitor uses redirect: manual and the others call fixed hosts. public-url-fetch.test.ts went from 16 to 21 tests, and 4 of the 5 new ones fail on the unfixed code. tribeEvents.test.ts now stubs Deno.resolveDns. All affected adapter suites pass on deno 2.5.6. Not deployed."
     },
     {
       "priority": 3,
@@ -11506,8 +11506,8 @@
         "A test pins that playgrounds.rating is not rendered",
         "The 'NULL ratings first' nearby ordering, if still keyed on rating, is checked"
       ],
-      "passes": false,
-      "notes": "Found in the WEB-SEO-055 loop, 2026-11-08; not changed there."
+      "passes": true,
+      "notes": "Found in the WEB-SEO-055 loop, 2026-11-08; not changed there. | playgrounds.rating no longer renders anywhere. The playground hero shows the content_rating_aggregates average with its count, or nothing, through a new shared useReviewAggregate hook that AttractionDetails now uses too. Side cards and hub cards lost the badge, PLAYGROUND_CARD_COLUMNS stopped selecting rating, and the same-age list is closest-first instead of rating.desc. Verified by new vitest source guards (they fail on the old files), smoke playground-detail/playgrounds-hub/attraction-detail 32/32 against a vite build, vitest 2996/2996, app type ratchet 32/32 and clean eslint."
     },
     {
       "priority": 3,
@@ -11531,8 +11531,8 @@
         "Both pages call handleError with component/action and show fixed copy without the raw message",
         "Vitest asserts the raw message is not rendered"
       ],
-      "passes": false,
-      "notes": "Found during the 2026-11-08 marketing-growth loop."
+      "passes": true,
+      "notes": "Found during the 2026-11-08 marketing-growth loop. | Done 2026-11-08: src/pages/NewsletterConfirm.tsx and src/pages/Unsubscribe.tsx no longer render the RPC error.message. Both failure paths (error answer, thrown request) now show fixed copy and call handleError with component and action. New vitest src/pages/__tests__/newsletterTokenPageErrors.test.tsx passes 6/6; against the old pages it fails 4/6. eslint, type-check ratchet 32/32, check-error-handling, check-false-empty-state, check-supabase-await and check-imports all pass. Note for the orchestrator: this worktree started on main, not the rolling branch, so I reset it to 3c124efa (rolling HEAD) before working. Sibling worktrees may have the same base problem."
     },
     {
       "priority": 3,
@@ -11545,8 +11545,8 @@
         "/restaurants/dietary/kosher opens Dining with kosher applied",
         "A test asserts the iOS keyword table equals the web's"
       ],
-      "passes": false,
-      "notes": "Found while routing restaurant landing links (2026-11-08)."
+      "passes": true,
+      "notes": "Found while routing restaurant landing links (2026-11-08). | RestaurantsService.dietaryKeywords now equals the web's DIETS (kosher added, keto also matches \"ketogenic\"). The Dietary pill now offers Kosher, and /restaurants/dietary/kosher opens Dining with kosher applied instead of the plain tab. A new vitest, src/hooks/__tests__/iosDietaryParity.test.ts, reads the Swift table and pill options and fails on drift; it was negative-controlled against the old Swift. 3 XCTest cases added and 1 updated. The Swift was not compiled (no Xcode here)."
     },
     {
       "priority": 3,
@@ -11570,6 +11570,152 @@
       ],
       "passes": true,
       "notes": "Found 2026-11-08 by the reliability lane while checking the WEB-CI-028 handoff. | Resolved in round 8: WEB-UX-059 closed as a duplicate of WEB-UX-061."
+    },
+    {
+      "id": "WEB-FEAT-050",
+      "title": "/events/free and /events/kids drop a multi-day event on its second day",
+      "description": "As a visitor looking for something free or family-friendly, I need a festival that opened yesterday and runs through Sunday to stay on /events/free and /events/kids. Both pages call useEventLanding with no window, and that path sent a bare `date >= start of today Central` with no end_date arm, so a running event left both pages on its second day while the events hub, site search (WEB-FEAT-045) and the .ics feeds (WEB-FEAT-041) kept it.",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useEventLanding.ts queryFn, where a call with no window took `request.gte(\"date\", from)` because `includeOngoing && to` is false when there is no window; FreeEvents.tsx:53 and KidsEvents.tsx:50 pass no window",
+        "A window-less landing sends ongoingStartFilter(from), ANDed with the audience or() inside a single or() group (a second .or() is a second param that PostgREST does not promise to AND)",
+        "Windowed landings (today, weekend, month, date night) are unchanged",
+        "A vitest test records the filter calls and fails on the old bare floor"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Done 2026-11-08 (events lane). Fixed in useEventLanding: a call with no window now always uses the running-event filter. useEventLanding.running.test.ts passes 6/6; it failed 3/6 before the fix and 3/6 again under a negative control. vitest src/hooks src/pages src/components/events src/lib 2521/2521, eslint clean, type-check ratchet 32/32, check-postgrest-filters/check-event-unpublish/check-list-columns/check-supabase-await pass. Not run against a live PostgREST. Follow-up: scripts/check-hub-inventory.mjs still counts /events/free with the bare date floor, so its report undercounts by the running events. | /events/free and /events/kids are the two pages that call useEventLanding with no window. That path filtered on a bare date >= start of today CT, so a running festival dropped off both pages on its second day. A window-less landing now always sends ongoingStartFilter, ANDed with the audience filter in one or() group. Verified with the new useEventLanding.running.test.ts (6/6; it failed 3/6 before the fix and 3/6 again under a negative control) and vitest across hooks/pages/events/lib (2521/2521); eslint, the type-check ratchet and the four related checks also pass. It was not run against a live PostgREST. Handoff: docs/improvement-loops/lanes/events.md"
+    },
+    {
+      "id": "WEB-PERF-063",
+      "title": "AuthProvider ships every sign-in and account-change body in the entry chunk",
+      "description": "AuthContext is in the entry chunk and held login (local throttle, server lockout, MFA gate), signup, Google/Apple OAuth, password reset/change, email change and resend. Anonymous visitors, most of the traffic, run none of them. AuthContext was 14.8 KB minified of the entry chunk.",
+      "acceptanceCriteria": [
+        "The user-initiated auth action bodies live in a module that AuthContext reaches only through a dynamic import",
+        "A failed chunk load returns { success: false, error } instead of throwing",
+        "MFA, role-cache and logout behaviour unchanged (existing AuthContext suites pass)",
+        "A static-graph test pins authActions and signUpResult out of main.tsx's graph, with a negative control",
+        "Critical-path baseline ratcheted down"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "2026-11-08 loop 9: lib/authActions.ts behind withAuthActions. Entry 55.3 -> 54.2 KB gz, critical path 175.8 -> 174.9 KB. vitest 2999/2999, negative control fails 2 tests. Deno source tests repointed to authActions.ts and replayed in Node (no deno binary). | AuthProvider's login/signup/OAuth/reset/password/email/resend bodies moved to src/lib/authActions.ts behind a dynamic import (chunk-load failure returns success:false), taking signUpResult out of the entry chunk; entry 55.3 -> 54.2 KB gz, critical path 175.8 -> 174.9 KB, baseline ratcheted. Verified by vitest 2999/2999, a new static-graph test whose negative control fails on a static import, and check-bundle-budget. The two Deno source tests were repointed and replayed in Node because the container has no Deno."
+    },
+    {
+      "id": "WEB-FEAT-051",
+      "title": "The admin idle timeout never signs an idle admin out: opening the warning resets the clock",
+      "description": "As the platform owner, I need an idle admin session to end after 30 minutes, because useSessionTimeout's handleUserActivity listed isWarning as a dependency, the arming effect listed handleUserActivity, so setIsWarning(true) at 25 minutes re-ran the effect, whose resetTimer() cleared the warning and countdown and restarted the 30 minutes. The admin got a 'Session Expiring Soon' toast every 25 minutes and was never logged out. The countdown also called handleTimeout from inside a setTimeRemaining updater, a second logout path running inside a state updater.",
+      "acceptanceCriteria": [
+        "After 25 idle minutes the warning opens and stays open while the countdown runs",
+        "After 30 idle minutes logout({ scope: 'local' }) is called exactly once",
+        "Activity during the warning, or Stay logged in, closes it and restarts the idle clock",
+        "A hook test with fake timers and a React render between steps fails on the old code"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "2026-11-08 features lane. isWarning now read through isWarningRef in handleUserActivity; countdown only updates timeRemaining, the idle timer owns logout. src/hooks/__tests__/useSessionTimeout.idle.test.tsx: 3 of 4 failed before, 4/4 after. Full vitest 2997/2997, type ratchet 32/32. Note: a single act() over 30 minutes hides the bug because React batches the warning state past the logout timer; the test advances in separate acts. | useSessionTimeout's activity handler depended on isWarning, so opening the warning re-ran the timer-arming effect and its resetTimer() closed the warning and restarted the 30 minutes; idle admins were warned every 25 minutes and never signed out. Warning state is now read through a ref and the countdown no longer calls logout from a state updater; new hook test failed 3/4 before and passes 4/4 after, full vitest 2997/2997, type ratchet 32/32."
+    },
+    {
+      "id": "WEB-QA-050",
+      "title": "Tests in the required E2E lanes that cannot fail: search-filters had six with no assertion",
+      "description": "As the platform owner, I need every test the required smoke and a11y lanes run to be able to go red. search-filters.spec.ts joined the required smoke lane under WEB-CI-028, and six of its tests typed into the search box, logged what they saw and ended with no assertion, so they passed on a page with no search box and the lane counted them as coverage. performance.spec.ts has three more of the same.",
+      "acceptanceCriteria": [
+        "A check (npm run check-e2e-assertions, in validate and pr-checks) fails a test in a required lane that has no expect, no expect*/assert* call and no throw, following local and tests/support helpers, and honours each config's testMatch, grep and grepInvert",
+        "search-filters' assertion-free tests assert what they are named for, or are deleted, and pass on a vite build with fixtureBackend",
+        "The three baselined performance.spec tests assert or are deleted; .github/e2e-assertions-baseline.json is empty",
+        "search-filters tests whose only assertion sits behind a presence guard (if count > 0) assert unconditionally or are deleted"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Slice 1 done 2026-11-08 (reliability lane): AC1 and AC2. The check found 9 tests. search-filters' 6 now assert (restaurant search debounce, Clear all resets q, q reaches the URL, the live region announces the term, the search input stays put and CLS < 0.1) or are deleted (the loading indicator test). search-filters is 29/29 on a vite build and 87/87 with --repeat-each=3, and three negative controls in src fail exactly the targeted tests. AC3 and AC4 are open; see the reliability lane handoff. | Slice 1 of 2. The new npm run check-e2e-assertions runs in validate and pr-checks. It fails any test in a required lane (the smoke testMatch, and the a11y testMatch plus its grep) that has no expect, no expect*/assert* call and no throw, and it follows local and tests/support helpers transitively. It found 9 such tests. search-filters' 6 now assert or are deleted; the 3 in performance.spec are baselined. Verified on a vite build: search-filters 29/29, and 87/87 with --repeat-each=3. Three negative controls in src fail exactly the 3 targeted tests, the old spec trips the check 6 times, and the offline suite passes 28/28. Handoff: docs/improvement-loops/lanes/reliability.md"
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-052",
+      "title": "Legacy dateless event slugs 404 after the first day of a multi-day run",
+      "description": "As a visitor following an old link, I need /events/<dateless-slug> to resolve while the event is still running. useEventBySlug's legacy path filters `.gte(\"date\", upcomingFloorUtc())` with no end_date arm, so a festival's legacy URL stops resolving on its second day even though the event is still listed.",
+      "acceptanceCriteria": [
+        "Evidence: src/hooks/useEventBySlug.ts legacy branch, the ilike plus .gte(\"date\", upcomingFloorUtc()) query",
+        "The legacy branch also matches rows whose end_date is on or after today's floor, in one or() group",
+        "A vitest test with a recording client asserts the end_date arm"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the events lane while fixing the window-less landings. Not changed."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-SEO-057",
+      "title": "check-hub-inventory counts /events/free without running events",
+      "description": "scripts/check-hub-inventory.mjs says its predicates mirror the pages, but it counts /events/free with a bare `date >= today` floor. Since the events lane fix, the page also lists events that started earlier and are still running, so the report undercounts and can call the hub thin when it isn't.",
+      "acceptanceCriteria": [
+        "Evidence: scripts/check-hub-inventory.mjs upcomingParams() and the /events/free block",
+        "The /events/free count uses the same running-event window as useEventLanding (ongoingStartFilter ANDed with FREE_PRICE_FILTER)"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the events lane. Report-only script, needs Supabase credentials to run."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-053",
+      "title": "DiscoverMap restaurant popups evaluate `opening` only (resolveOpenStatus(undefined, opening))",
+      "description": "src/pages/DiscoverMap.tsx:744 calls resolveOpenStatus(undefined, opening, new Date(at)). Production stores a date in `opening`, so the restaurant open/closed state on /discover-map can never resolve, and a CLOSED_TEMPORARILY place is not ruled out. This is the same defect as WEB-FEAT-040/044.",
+      "acceptanceCriteria": [
+        "The DiscoverMap restaurant source selects hours_json and business_status",
+        "The status uses resolveOpenStatus(hours_json, hoursTextOf(opening), at) and is overridden by businessStatusLabel for a non-serving business_status",
+        "Test with a production-shaped row plus a negative control"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while shipping WEB-FEAT-044 (grep for resolveOpenStatus(undefined). Not yet reproduced against DiscoverMap's projection."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-058",
+      "title": "Playground pages have no way to leave a review, so the first-party rating they now show can never appear",
+      "description": "WEB-SEO-056 made the playground hero show the content_rating_aggregates average or nothing. Attraction pages mount RatingSystem (a lazy DeferredWidget under #reviews); PlaygroundDetails mounts no review widget, even though 'playground' is a value of the content_type enum. So the aggregate for any playground stays empty and the hero always shows nothing.",
+      "acceptanceCriteria": [
+        "PlaygroundDetails mounts RatingSystem for content_type playground the way AttractionDetails does (deferred, below the fold)",
+        "The hero review summary links to #reviews once the widget exists",
+        "A smoke test asserts the widget mounts and the summary link resolves"
+      ],
+      "passes": false,
+      "notes": "Found in the WEB-SEO-056 loop, 2026-11-08; not changed there. It touches review UX, so the features lane may own it."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-QA-051",
+      "title": "session-timeout-policy.test.ts still greps SessionManager for a line WEB-PERF-061 removed",
+      "description": "The Deno test 'the idle policy is scoped to admins' asserts SessionManager.tsx matches /enabled: isAdmin && !isAdminLoading/, but WEB-PERF-061 replaced that with an early return before a lazy AdminSessionTimeout. If that test runs in a Deno lane it fails; if not, it guards nothing. No Deno in the container to confirm.",
+      "acceptanceCriteria": [
+        "Run deno test on supabase/functions/_tests/session-timeout-policy.test.ts and record the result",
+        "Update the assertion to the current shape (early return unless isAdmin && !isAdminLoading) without loosening what it guards"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-054",
+      "title": "Web has two restaurant diet keyword tables that disagree (DIETARY_KEYWORDS vs DIETS)",
+      "description": "src/hooks/useRestaurants.ts DIETARY_KEYWORDS (the /restaurants list filter and useRestaurantMapPoints) has five diets and keto without 'ketogenic'. src/hooks/useDietaryRestaurants.ts DIETS (the /restaurants/dietary pages) has six, kosher included, and keto matches 'ketogenic'. So /restaurants with keto selected lists fewer rows than /restaurants/dietary/keto, and the list filter can't pick kosher. iOS now follows DIETS (IOS-AUDIT-FEAT-044).",
+      "acceptanceCriteria": [
+        "One diet keyword table on the web, used by useRestaurants, useRestaurantMapPoints and useDietaryRestaurants",
+        "The /restaurants dietary filter offers kosher",
+        "A unit test asserts the list filter and the dietary pages use the same keywords"
+      ],
+      "passes": false,
+      "notes": "Found while doing IOS-AUDIT-FEAT-044 (2026-11-08)."
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-033",
+      "title": "Saved event rows have no Share or Remind Me, which iOS's Saved context menu has",
+      "passes": false,
+      "description": "iOS's FavoriteEventRow context menu offers Remind me / Remove reminder (upcoming rows only) and Share (a site URL /events/<id>). Android's Saved rows now have an overflow menu with Add to Calendar (AND-AUDIT-028), but no Share and no reminder. EventDetailViewModel.shareText and EventReminderTiming already exist, so this needs a shared share-text helper and a reminder toggle on the row.",
+      "acceptanceCriteria": [
+        "The Saved row overflow offers Share on every event row, sharing the same text or URL event detail shares",
+        "Upcoming rows offer Remind me / Remove reminder using EventReminderTiming, so TBA rows get the 9am Central day-of reminder",
+        "Both have TalkBack custom actions",
+        "A JVM test pins which rows offer the reminder"
+      ],
+      "notes": "Found in the AND-AUDIT-028 loop, 2026-11-08."
     }
   ]
 }
