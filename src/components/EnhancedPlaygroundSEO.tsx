@@ -172,9 +172,8 @@ export default function EnhancedPlaygroundSEO({
       {playground.image_url && (
         <meta name="place:image" content={playground.image_url} />
       )}
-      {playground.rating != null && (
-        <meta name="place:rating" content={playground.rating.toFixed(1)} />
-      )}
+      {/* No place:rating (WEB-SEO-055): playgrounds.rating is a number a
+          model read off a crawled page, with no record of whose it was. */}
       {playground.age_range && (
         <meta name="place:age_range" content={playground.age_range} />
       )}

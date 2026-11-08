@@ -29,6 +29,7 @@ import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { isInMetro } from "@/lib/geo";
 import { splashPadReason, toddlerReason } from "@/lib/playgroundHub";
+import { buildPlaygroundFaqs } from "@/lib/playgroundFaqs";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
 import {
   formatMilesAway,
@@ -164,46 +165,9 @@ export default function PlaygroundDetails() {
     address: `${playground.name} ${playground.location ?? ""}`,
   });
 
-  // SEO-014. Built from this playground's own row and nothing else. The
-  // previous answers told every one of these pages - suburban parks run by
-  // other cities, and any indoor play space in the table - that it was "a free
-  // public playground in Des Moines", "maintained by the Des Moines Parks &
-  // Recreation Department", open all day with "free parking". None of
-  // that is a column, and FAQPage schema publishes it as a factual claim.
-  const playgroundFaqs = [
-    ...(playground.age_range
-      ? [
-          {
-            question: `What ages is ${playground.name} suitable for?`,
-            answer: `${playground.name} is listed for ages ${playground.age_range}. Always supervise children during play.`,
-          },
-        ]
-      : []),
-    ...(playground.location
-      ? [
-          {
-            question: `Where is ${playground.name} located?`,
-            answer: `${playground.name} is at ${playground.location}.${playground.latitude ? " The map on this page gives directions." : ""}`,
-          },
-        ]
-      : []),
-    ...(playground.amenities && playground.amenities.length > 0
-      ? [
-          {
-            question: `What amenities does ${playground.name} have?`,
-            answer: `${playground.name} lists these amenities: ${playground.amenities.join(", ")}.`,
-          },
-        ]
-      : []),
-    ...(playground.rating != null
-      ? [
-          {
-            question: `What is the rating for ${playground.name}?`,
-            answer: `${playground.name} is rated ${playground.rating.toFixed(1)} out of 5.`,
-          },
-        ]
-      : []),
-  ];
+  // SEO-014 / WEB-SEO-055: answers come from the row only, and never from
+  // playgrounds.rating, which no one can attribute. See playgroundFaqs.ts.
+  const playgroundFaqs = buildPlaygroundFaqs(playground);
 
   return (
     <>
