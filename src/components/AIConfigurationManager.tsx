@@ -427,11 +427,12 @@ export function AIConfigurationManager() {
                           disabled={!hasChanges(setting.setting_key) || isUpdating}
                           size="sm"
                           variant={hasChanges(setting.setting_key) ? "default" : "ghost"}
+                          aria-label={`Save ${setting.setting_key}`}
                         >
                           {isUpdating ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                           ) : (
-                            <Save className="h-4 w-4" />
+                            <Save className="h-4 w-4" aria-hidden="true" />
                           )}
                         </Button>
                       </TableCell>

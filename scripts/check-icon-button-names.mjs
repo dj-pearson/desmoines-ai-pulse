@@ -13,9 +13,18 @@
  * button itself. Anything that might carry a name is given the benefit of the
  * doubt, on purpose, so the count is a floor and never a false alarm:
  *   - a {...spread} on the button (the name may arrive in the props)
- *   - any {expression} child (it may render text)
+ *   - an {expression} child that could render text (a variable, a call, a
+ *     string); see below for the expressions that cannot
  *   - any lowercase element child (a <span className="sr-only"> is a name)
- *   - asChild (the name belongs to the child element)
+ *
+ * WEB-UX-060 closed two holes in that floor, found by hand in slice 2:
+ *   - {cond ? <Pause /> : <Play />} and {busy && <Loader2 />} are icons too.
+ *     An expression child counts as silent when every branch of its ternaries
+ *     and the right side of its && are silent icons, null, undefined or false.
+ *   - <Button asChild><a href={url}><ExternalLink /></a></Button> renders an
+ *     icon-only link. asChild is checked by looking through to the one child
+ *     element: it is unnamed when that child has no name attribute or spread
+ *     and holds only silent icons. A child with any text still passes.
  *
  * SO THIS IS A RATCHET. Fixing the existing buttons is the story's work; what
  * was missing is anything stopping new ones. A file may lose unnamed icon
@@ -42,7 +51,7 @@ const WRITE = process.argv.includes('--write');
 const LIST = process.argv.includes('--list');
 
 const EXCLUDE = /[\\/]components[\\/]ui[\\/]|__tests__|\.test\.tsx$/;
-const NAME_ATTRS = new Set(['aria-label', 'aria-labelledby', 'title', 'asChild']);
+const NAME_ATTRS = new Set(['aria-label', 'aria-labelledby', 'title']);
 /** Toggle is the shadcn pressed-state button; the CMS editor toolbar is 19 of them. */
 const BUTTON_TAGS = new Set(['Button', 'button', 'Toggle']);
 
@@ -72,8 +81,77 @@ function isSilentIcon(node) {
 
 function isSilentChild(child) {
   if (ts.isJsxText(child)) return child.getText().trim() === '';
-  if (ts.isJsxExpression(child)) return child.expression === undefined; // {/* comment */}
+  if (ts.isJsxExpression(child)) {
+    return child.expression === undefined || isSilentExpression(child.expression); // {/* comment */}
+  }
   return isSilentIcon(child);
+}
+
+/** True for a value that renders nothing: null, undefined, false. */
+function rendersNothing(expr) {
+  return (
+    expr.kind === ts.SyntaxKind.NullKeyword ||
+    expr.kind === ts.SyntaxKind.FalseKeyword ||
+    (ts.isIdentifier(expr) && expr.text === 'undefined')
+  );
+}
+
+/**
+ * True when an expression can only render silent icons or nothing:
+ * `a ? <X /> : <Y />`, `a && <X />`, `a ? <X /> : null`, nested and parenthesised.
+ * Anything else (a variable, a call, a string, a fragment) may render text.
+ */
+function isSilentExpression(expr) {
+  if (ts.isParenthesizedExpression(expr)) return isSilentExpression(expr.expression);
+  if (ts.isConditionalExpression(expr)) {
+    const { whenTrue, whenFalse } = expr;
+    if (rendersNothing(whenTrue) && rendersNothing(whenFalse)) return false;
+    return isSilentBranch(whenTrue) && isSilentBranch(whenFalse);
+  }
+  if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+    return isSilentBranch(expr.right);
+  }
+  return ts.isJsxElement(expr) || ts.isJsxSelfClosingElement(expr) ? isSilentIcon(expr) : false;
+}
+
+/** A branch may render nothing; the other branch has to hold the icon. */
+function isSilentBranch(expr) {
+  return rendersNothing(expr) || isSilentExpression(expr);
+}
+
+/** True when a child counts toward "icon-only": an icon, or an expression of icons. */
+function isMeaningfulSilent(child) {
+  if (ts.isJsxExpression(child)) return child.expression !== undefined && isSilentExpression(child.expression);
+  return isSilentIcon(child);
+}
+
+function isBlank(child) {
+  return (ts.isJsxText(child) && child.getText().trim() === '') ||
+    (ts.isJsxExpression(child) && child.expression === undefined);
+}
+
+/** True when an element's own children are all silent and at least one exists. */
+function holdsOnlyIcons(node) {
+  const meaningful = node.children.filter((c) => !isBlank(c));
+  return meaningful.length > 0 && meaningful.every(isMeaningfulSilent);
+}
+
+/**
+ * asChild hands the button's role and props to its one child element, so the
+ * name has to be on that child or inside it.
+ */
+function isUnnamedAsChild(node) {
+  const elements = node.children.filter((c) => !isBlank(c));
+  if (elements.length !== 1 || !ts.isJsxElement(elements[0])) return false;
+  const child = elements[0];
+  if (hasName(child.openingElement.attributes)) return false;
+  return holdsOnlyIcons(child);
+}
+
+function hasAsChild(attributes) {
+  return attributes.properties.some(
+    (attr) => ts.isJsxAttribute(attr) && attr.name.getText() === 'asChild',
+  );
 }
 
 function hasName(attributes) {
@@ -91,14 +169,10 @@ export function findUnnamedIconButtons(source, fileName = 'file.tsx') {
   const visit = (node) => {
     if (ts.isJsxElement(node)) {
       const name = tagName(node);
-      if (BUTTON_TAGS.has(name) && !hasName(node.openingElement.attributes)) {
-        const meaningful = node.children.filter(
-          (c) => !(ts.isJsxText(c) && c.getText().trim() === '') &&
-            !(ts.isJsxExpression(c) && c.expression === undefined),
-        );
-        if (meaningful.length > 0 && meaningful.every(isSilentIcon)) {
-          lines.push(sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
-        }
+      const attrs = node.openingElement.attributes;
+      if (BUTTON_TAGS.has(name) && !hasName(attrs)) {
+        const unnamed = hasAsChild(attrs) ? isUnnamedAsChild(node) : holdsOnlyIcons(node);
+        if (unnamed) lines.push(sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
       }
     }
     ts.forEachChild(node, visit);

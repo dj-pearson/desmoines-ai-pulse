@@ -1358,11 +1358,13 @@ export default function ContentTable({
                                   size="sm"
                                   onClick={() => toggleRowExpansion(item.id)}
                                   className="h-6 w-6 p-0"
+                                  aria-expanded={isExpanded}
+                                  aria-label={`${isExpanded ? "Hide" : "Show"} details for ${item.title || item.name || "this row"}`}
                                 >
                                   {isExpanded ? (
-                                    <ChevronDown className="h-3 w-3" />
+                                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
                                   ) : (
-                                    <ChevronRight className="h-3 w-3" />
+                                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
                                   )}
                                 </Button>
                               </TableCell>

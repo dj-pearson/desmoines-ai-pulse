@@ -293,14 +293,19 @@ export default function ArticlesManager() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button asChild variant="ghost" size="sm">
-                          <a href={`/admin/articles/edit/${article.id}`} target="_blank" rel="noopener noreferrer">
-                            <Edit className="h-3 w-3" />
+                          <a
+                            href={`/admin/articles/edit/${article.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Edit ${article.title} (opens in a new tab)`}
+                          >
+                            <Edit className="h-3 w-3" aria-hidden="true" />
                           </a>
                         </Button>
                         
                         <Button asChild variant="ghost" size="sm">
-                          <Link to={`/articles/${article.slug}`}>
-                            <Eye className="h-3 w-3" />
+                          <Link to={`/articles/${article.slug}`} aria-label={`View ${article.title}`}>
+                            <Eye className="h-3 w-3" aria-hidden="true" />
                           </Link>
                         </Button>
                         

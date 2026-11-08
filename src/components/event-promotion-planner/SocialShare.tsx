@@ -108,8 +108,8 @@ export function SocialShare({ referralCode, onShare }: SocialShareProps) {
               </DialogHeader>
               <div className="flex gap-2">
                 <Input value={shareUrl} readOnly className="flex-1" />
-                <Button onClick={handleCopyLink}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <Button onClick={handleCopyLink} aria-label={copied ? "Link copied" : "Copy link"}>
+                  {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
                 </Button>
               </div>
             </DialogContent>
@@ -168,8 +168,14 @@ function ShareMessage({ text, onCopy }: ShareMessageProps) {
   return (
     <div className="flex items-start gap-2 p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
       <p className="text-xs flex-1 text-gray-700">{text}</p>
-      <Button variant="ghost" size="sm" onClick={handleCopy} className="h-6 px-2">
-        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleCopy}
+        className="h-6 px-2"
+        aria-label={copied ? "Message copied" : "Copy message"}
+      >
+        {copied ? <Check className="h-3 w-3" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
       </Button>
     </div>
   );

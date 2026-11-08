@@ -30,7 +30,30 @@ describe("findUnnamedIconButtons", () => {
     expect(scan(`<Button><Edit /><span className="sr-only">Edit</span></Button>`)).toEqual([]);
     expect(scan(`<Button>{label}</Button>`)).toEqual([]);
     expect(scan(`<Button {...props}><X /></Button>`)).toEqual([]);
-    expect(scan(`<Button asChild><Link to="/"><Home /></Link></Button>`)).toEqual([]);
+    expect(scan(`<Button asChild><Link to="/">Home</Link></Button>`)).toEqual([]);
+    expect(scan(`<Button asChild><Link to="/" aria-label="Home"><Home /></Link></Button>`)).toEqual([]);
+    expect(scan(`<Button asChild><Link {...linkProps}><Home /></Link></Button>`)).toEqual([]);
+  });
+
+  // WEB-UX-060: the shapes slice 2 found by hand.
+  it("flags a ternary or && child whose branches are all icons", () => {
+    expect(scan(`<Button onClick={t}>{on ? <Pause /> : <Play />}</Button>`)).toEqual([1]);
+    expect(scan(`<Button>{busy && <Loader2 className="animate-spin" />}</Button>`)).toEqual([1]);
+    expect(scan(`<Button>{busy ? <Loader2 /> : null}<RefreshCw /></Button>`)).toEqual([1]);
+    expect(scan(`<Button>{a ? (b ? <X /> : <Y />) : <Z />}</Button>`)).toEqual([1]);
+  });
+
+  it("does not flag a ternary or && that may render text", () => {
+    expect(scan(`<Button>{on ? <Pause /> : "Play"}</Button>`)).toEqual([]);
+    expect(scan(`<Button>{on ? <Pause /> : label}</Button>`)).toEqual([]);
+    expect(scan(`<Button>{busy && <Loader2 />}Save</Button>`)).toEqual([]);
+    expect(scan(`<Button>{on ? null : null}</Button>`)).toEqual([]);
+    expect(scan(`<Button aria-label="Play">{on ? <Pause /> : <Play />}</Button>`)).toEqual([]);
+  });
+
+  it("flags an asChild button wrapping a link that holds only an icon", () => {
+    expect(scan(`<Button asChild><Link to="/"><Home /></Link></Button>`)).toEqual([1]);
+    expect(scan(`<Button asChild size="sm">\n  <a href={url}>\n    <ExternalLink />\n  </a>\n</Button>`)).toEqual([1]);
   });
 
   it("ignores a <Button> named in a comment or a string", () => {
@@ -93,5 +116,21 @@ describe("files fixed in WEB-UX-056 slice 2", () => {
     );
     expect(source).toContain('aria-label="Grid view" aria-pressed={viewMode === "grid"}');
     expect(source).toContain('aria-label="List view" aria-pressed={viewMode === "list"}');
+  });
+});
+
+describe("files fixed in WEB-UX-060", () => {
+  const fixed = [
+    "src/components/AIConfigurationManager.tsx",
+    "src/components/ArticlesManager.tsx",
+    "src/components/ContentTable.tsx",
+    "src/components/FavoritesView.tsx",
+    "src/components/event-promotion-planner/SocialShare.tsx",
+    "src/components/event-promotion-planner/TimelineView.tsx",
+  ];
+
+  it.each(fixed)("%s has no unnamed icon button", (file) => {
+    const source = readFileSync(resolve(__dirname, "../../..", file), "utf8");
+    expect(findUnnamedIconButtons(source, file)).toEqual([]);
   });
 });
