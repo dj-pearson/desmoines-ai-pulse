@@ -8,40 +8,41 @@
 
 ## Handoff
 
-None. WEB-PERF-064 closed in loop 10: the forced `vendor-dates` manual chunk
-is gone from vite.config.ts, so date-fns travels with its importers. Summed
-per-route JS beyond the critical path, every lazy route in App.tsx: 11,779 ->
-10,840 KB gz (78 better, 36 worse by 0.5-5.5 KB, the 89 public routes 6,033 ->
-5,727). Critical path unchanged. Pinned by src/__tests__/manualChunks.test.ts,
-which calls the real manualChunks and asserts date-fns, radix, three, recharts
-and lucide are left to Rollup (negative control: re-adding the date-fns line
-fails 3 of 8).
+None. WEB-PERF-065 closed in loop 11: experimentalMinChunkSize 1000 -> 1
+(Rollup's default, no merging). Summed per-route JS beyond the critical path
+over the 137 lazy imports in App.tsx: 10,853 -> 9,734 KB gz; the part that was
+modules the route never reaches statically, 1,892 -> 615. 131 routes lighter,
+none heavier by more than 0.2 KB. Cost: 441 more route files summed (/ 47 ->
+62) and critical path 174.9 -> 176.0 KB gz (inside the 5 KB tolerance; the
+entry's __vite__mapDeps arrays name 79 more chunks). Baseline NOT ratcheted up.
+Pinned by src/__tests__/manualChunks.test.ts (negative control: 1000 fails).
 
-How it was measured, so the next loop can reuse it: build twice with
-`npx vite build --sourcemap` into separate dirs, then for each
-`import("./<Page>-hash.js"),__vite__mapDeps([...])` in the entry chunk, sum
-the gzipped size of the route chunk plus every chunk in its mapDeps list,
-skipping the three critical-path vendors. A single route diff is noise:
-module-to-chunk assignment reshuffles on any config change.
+Measuring is now one command, and replaces the hand method below:
+`node scripts/measure-route-preload.mjs [--min-chunk N] [--out f.json]` builds
+into a temp dir with a post generateBundle hook and reads Rollup's module
+graph, so it reports per route the gz bytes (kb), the chunk files (files) and
+the bytes of modules the route never reaches statically (wasteKb, estimated by
+rendered length). Its criticalKb matches check-bundle-budget. It needs the
+placeholder VITE_* env vars. Diff two --out files by route; single routes
+reshuffle on any config change.
 
-What that turned up and was not done (filed as additional stories):
-- experimentalMinChunkSize 1000 merges small shared modules into chunks that
-  routes import without needing them. /hotels now preloads eventsHubQuery,
-  useEventLanding and useProximitySearch; before this change admin pages
-  preloaded restaurantHours, tonightPairings and useCampaigns the same way.
-- The preload dependency arrays (`__vite__mapDeps`) are 16.6 KB of file names
-  plus 28.5 KB of index arrays in the entry chunk, about 13.7 KB of its 54.2 KB
-  gz. build.modulePreload.resolveDependencies could drop the three vendors
-  every page already has (468 of 7,652 refs, small) without adding a
-  waterfall; trimming more trades route-navigation latency for entry bytes.
+What that turned up and was not done:
+- The 615 KB of remaining waste is the forced vendor-editor manual chunk
+  (tiptap + prosemirror, ~122 KB gz each) on five admin routes: AdminAgents,
+  AdminAnalyticsPage, AdminRefunds, CampaignAnalytics and AdminArticleEditor.
+  Something they import statically pulls one tiptap module, and the forced
+  chunk brings the rest (even AdminArticleEditor reaches only part of it).
+  Find the importer with the tool's `wasted` list; either make that import
+  lazy or stop forcing vendor-editor (the remove-lazy-preloads plugin and
+  check its pattern list if the name goes away).
+- WEB-PERF-066 (preload arrays in the entry) is now slightly larger: 79 more
+  file names.
 
 Earlier notes still hold: eagerGraph.ts is the static-graph walker for
 entry-chunk tests (write `import type`, not `import { type X }`); headless
-app-root lazy components use src/lib/lazyOrNothing.ts. Entry residents left:
-App.tsx 44 KB minified (mostly the preload arrays above), tailwind-merge 20 KB,
-react-helmet-async 12 KB, AuthContext 9.9 KB. A local build needs placeholder
-VITE_SUPABASE_URL/ANON_KEY/SITE_URL exported. /usr/bin/google-chrome exists in
-the container, so `chromium.launch({ channel: "chrome" })` against
+app-root lazy components use src/lib/lazyOrNothing.ts. A local build needs
+placeholder VITE_SUPABASE_URL/ANON_KEY/SITE_URL exported. /usr/bin/google-chrome
+exists in the container, so `chromium.launch({ channel: "chrome" })` against
 `vite preview --host 127.0.0.1` can load routes even though Playwright's own
 browsers are not installed. The open WEB-PERF stories (023, 031, 034, 035) are
 still waiting on a migration or live data.
@@ -60,3 +61,4 @@ still waiting on a migration or live data.
 | 2026-11-08 | WEB-PERF-062 | this commit | ProtectedRoute permission half split into lazy RoutePermissionGate; usePermission, useSecurityContext and lib/security out of the entry chunk; critical path 178 -> 175.8 KB gz, baseline ratcheted; static-graph test with negative control (8 fail on a static import); story closed |
 | 2026-11-08 | WEB-PERF-063 | this commit | AuthProvider's sign-in/sign-up/OAuth/reset/password/email/resend bodies moved to lazily imported lib/authActions; signUpResult out of the entry chunk; critical path 175.8 -> 174.9 KB gz, baseline ratcheted; static-graph test with negative control (2 fail on a static import); story closed |
 | 2026-11-08 | WEB-PERF-064 | this commit | Forced vendor-dates manual chunk removed; per-route JS beyond the critical path 11,779 -> 10,840 KB gz summed over 131 lazy routes (/pricing -20.9, /auth -23.5, /events/:id -4.4, /hotels +5.5); critical path unchanged; manualChunks test with negative control (3 fail on re-adding); 24 routes loaded clean in Chrome; story closed |
+| 2026-11-08 | WEB-PERF-065 | this commit | experimentalMinChunkSize 1000 -> 1; per-route JS 10,853 -> 9,734 KB gz summed over 137 lazy routes, unused passengers 1,892 -> 615; 131 lighter, none heavier >0.2 KB; critical path 174.9 -> 176.0 (in tolerance); new scripts/measure-route-preload.mjs; test with negative control; 24 routes clean in Chrome; story closed |

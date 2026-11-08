@@ -237,9 +237,10 @@ test.describe('Resource Loading', () => {
 
     // The budget is BYTES, not files. This used to assert fewer than 100 JS
     // files, a bar written for the dev server, and it failed every build at
-    // 111-114 (2026-11-07): vite.config.ts sets experimentalMinChunkSize to
-    // 1000 on purpose, trading more small chunks for 8.2 KB less on every
-    // first paint (WEB-PERF, measured there). A file-count bar argues with that
+    // 111-114 (2026-11-07): vite.config.ts trades more small chunks for fewer
+    // bytes on purpose (experimentalMinChunkSize, WEB-PERF-065: no merging, so
+    // routes stop downloading modules they never run; measured there; the
+    // home page went from 47 to 62 route files). A file-count bar argues with that
     // decision; it does not catch the regression it was meant to, a heavy
     // library landing on the home page. CLAUDE.md's bundle target is 500 KB
     // gzipped; the home page measured 423 KB on 2026-11-07. Zero means

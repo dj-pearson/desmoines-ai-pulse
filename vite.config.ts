@@ -360,7 +360,8 @@ export default defineConfig(({ command, mode }) => {
           // largest): Rollup's experimentalMinChunkSize merge, below, now folds
           // a different set of small shared modules into chunks those routes
           // import. That over-fetch exists either way; this change moves less of
-          // it onto fewer routes. Critical path unchanged (174.9 -> 175.0 KB).
+          // it onto fewer routes (WEB-PERF-065 then turned the merge off).
+          // Critical path unchanged (174.9 -> 175.0 KB).
           // Pinned by src/__tests__/manualChunks.test.ts.
 
           // No lucide-react chunk. Forcing every icon into one vendor-icons
@@ -376,32 +377,39 @@ export default defineConfig(({ command, mode }) => {
         assetFileNames: "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",
-        // Rollup merges any chunk smaller than this into its importer. At the
-        // 20000 it used to carry, every small lazy module landed in the ENTRY:
-        // src/pages/AdminGscCallback.tsx - an admin OAuth callback - was in the
-        // first paint of every visitor, along with useMediaUpload, useMFA,
-        // useArticles, useCampaigns, useCampaignNotifications, useSocialFeatures,
-        // useProximitySearch and usePushNotifications. All of them are lazy at
-        // the source; the bundler put them back.
+        // No chunk merging (WEB-PERF-065). 1 is Rollup's default: it folds
+        // away only chunks with no code at all. Any larger value merges small
+        // chunks into a chunk their importers share, and every route that
+        // imports the merged chunk then downloads all of it - modules it never
+        // reaches included. With 1000 here, /hotels fetched eventsHubQuery,
+        // useEventLanding and useProximitySearch; /trip-planner carried 28.8 KB
+        // gz it never ran.
         //
-        // The comment that used to sit here read "prevents tiny preloaded
-        // chunks", and that reason no longer holds: scripts/prerender.mjs strips
-        // the runtime-injected modulepreload links - 1,110 of them in the last
-        // build - so the prerendered HTML carries 4 preloads per route either
-        // way. The setting was paying for a problem something else already
-        // solves.
-        //
-        // MEASURED, and it is NOT a smooth curve, so do not "tune" this - test
-        // the values you would actually ship:
-        //     20000 -> 227.5 KB gz critical path, 149 chunks   (was here)
-        //     10000 -> 230.0 KB                 , 186
-        //      5000 -> 237.0 KB across SIX chunks, 222
-        //      1000 -> 219.3 KB                 , 281          (here now)
-        // The trade is explicit: 8.2 KB off every first paint for 132 more
-        // chunk files, which a visitor pays for only when they navigate to a
-        // route that needs one. Six routes verified in a browser against the
-        // built output - no chunk failures, no page errors.
-        experimentalMinChunkSize: 1000,
+        // History, so nobody re-tunes this blind. 20000 put every small lazy
+        // module in the ENTRY (AdminGscCallback, useMFA, useCampaigns... on
+        // every first paint). 1000 got the critical path from 227.5 to 219.3 KB
+        // and was the right call against 20000. Measured against no merging,
+        // with `node scripts/measure-route-preload.mjs --min-chunk N`, which
+        // reads Rollup's module graph so it can tell needed bytes from
+        // passengers (gz, sums over the 137 lazy imports in App.tsx):
+        //     N       routes sum   of which unused   files   critical path
+        //     2000    12,325       3,405             6,232   175.8
+        //     1000    10,853       1,892             6,480   174.9  (was here)
+        //      500    10,367       1,362             6,600   175.4
+        //        1     9,734         615             6,921   176.0  (here now)
+        // At 1, 131 routes get lighter and none heavier by more than 0.2 KB:
+        //     /restaurants 173.7 -> 152.0   /events 220.3 -> 204.0
+        //     /events/:id 168.0 -> 154.6    /restaurants/:id 152.2 -> 139.1
+        //     /trip-planner 157.7 -> 131.3  / 76.2 -> 70.5   /hotels 105.9 -> 87.7
+        // The 615 left is the forced vendor-editor chunk on admin pages, not
+        // merging. The cost is 441 more files summed over routes (/ 47 -> 62,
+        // /events 130 -> 150), fetched in parallel as one modulepreload batch
+        // over HTTP/2, and +1.1 KB on the critical path: the entry's
+        // __vite__mapDeps arrays name 79 more chunk files (WEB-PERF-066).
+        // scripts/prerender.mjs strips the runtime preload links, so the
+        // prerendered HTML does not grow.
+        // Pinned by src/__tests__/manualChunks.test.ts.
+        experimentalMinChunkSize: 1,
       },
     },
     chunkSizeWarningLimit: 500, // Stricter limit due to better splitting

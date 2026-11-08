@@ -57,3 +57,19 @@ describe("manualChunks (WEB-PERF-064)", () => {
     expect(chunkFor(id)).toBeUndefined();
   });
 });
+
+describe("experimentalMinChunkSize (WEB-PERF-065)", () => {
+  // Any value above Rollup's default of 1 merges small chunks into a chunk
+  // their importers share, so a route downloads modules it never runs. At 1000
+  // that was 1,892 KB gz summed over the lazy routes; at 1 it is 615, all of
+  // it the forced vendor-editor chunk. vite.config.ts has the table.
+  it("does not merge small chunks into shared ones", () => {
+    const resolved =
+      typeof viteConfig === "function"
+        ? (viteConfig as (env: ConfigEnv) => UserConfig)({ command: "build", mode: "production" })
+        : viteConfig;
+    const output = (resolved as UserConfig).build?.rollupOptions?.output;
+    const opts = Array.isArray(output) ? output[0] : output;
+    expect(opts?.experimentalMinChunkSize ?? 1).toBeLessThanOrEqual(1);
+  });
+});
