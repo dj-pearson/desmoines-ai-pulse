@@ -305,6 +305,29 @@ actor EventsService {
         }
     }
 
+    /// The second look the web takes when the visible read finds nothing
+    /// (classifyUnlisted in src/hooks/useEventBySlug.ts): a row the archive
+    /// sweep retired is a past event and still has a page, so it is read with
+    /// archived rows asked for by name. A moderator's hide is never looked
+    /// past, and a merged row stays "no longer available" here as before.
+    /// nil means no such archived row (IOS-AUDIT-001).
+    func fetchArchivedEvent(id: String) async throws -> Event? {
+        try await withRetry { [self] in
+            let client = try db()
+            let rows: [Event] = try await client
+                .from("events")
+                .select()
+                .eq("id", value: id)
+                .neq("is_merged", value: true)
+                .neq("is_hidden", value: true)
+                .not("archived_at", operator: .is, value: "null")
+                .limit(1)
+                .execute()
+                .value
+            return rows.first
+        }
+    }
+
     /// Shaped like PostgREST's "0 rows" answer so EventDetailViewModel.isNotFound
     /// (which reads a `code` child) treats an unresolvable slug the same way.
     struct SlugNotFound: Error {
@@ -608,7 +631,7 @@ actor EventsService {
 ///
 /// A ROLE interface, deliberately. EventsService has around forty methods; a
 /// protocol mirroring it would be unwritable and unmaintainable, and every
-/// caller would have to stub methods it never calls. This declares the two the
+/// caller would have to stub methods it never calls. This declares the three the
 /// event detail screen actually uses, so a fake in a test is a dozen lines.
 ///
 /// Same shape as `AuthProviding` (IOS-AUDIT-TEST-002): a protocol beside the
@@ -617,6 +640,8 @@ actor EventsService {
 protocol EventDetailProviding: Sendable {
     func fetchEvent(id: String) async throws -> Event
     func fetchRelatedEvents(eventId: String, category: String, limit: Int) async throws -> [Event]
+    /// The archived row for an id the visible read refused, or nil (IOS-AUDIT-001).
+    func fetchArchivedEvent(id: String) async throws -> Event?
 }
 
 extension EventDetailProviding {

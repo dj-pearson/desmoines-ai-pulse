@@ -8,9 +8,7 @@
 
 ## Handoff
 
-None. IOS-AUDIT-FEAT-046 finished in three slices (series data, schedule rules, screen and routing).
-
-Known limit, not a new story yet: an archived past edition opens `EventDetailView` with the row's own Event, so its content shows, but the detail's background refresh calls `fetchEvent(id:)`, which refuses archived rows, and the screen then shows its "no longer available" note over that content.
+None. IOS-AUDIT-001 closed the known limit IOS-AUDIT-FEAT-046 left: an archived past edition now opens as a past event.
 
 ## Loop log
 
@@ -29,3 +27,4 @@ Known limit, not a new story yet: an archived past edition opens `EventDetailVie
 | 2026-11-08 | IOS-AUDIT-FEAT-046 (slice 1) | this commit | iOS has the web's 20 annual event series and ports of its title normaliser and matcher, for the native series screen; vitest `iosEventSeriesParity.test.ts` fails on list drift and checks the Swift normaliser cases against the web (negative-controlled); 7 new XCTest cases; screen and routing are the handoff; not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-FEAT-046 (slice 2) | this commit | the series screen's data layer: `EventSeriesSchedule` ports the web's buildSeriesView rules (current and past editions, sweep-hidden listed unlinked, moderator-hidden dropped, archived linked, one row per day) and `EventsService.fetchSeriesRows` the web's series read; 12 new XCTest cases taken from the web's own cases; vitest parity now guards that read (negative-controlled); screen and routing are the handoff; not compiled (no Xcode here) |
 | 2026-11-08 | IOS-AUDIT-FEAT-046 (slice 3) | this commit | `/events/series/<slug>` for the 20 known series opens a native series screen (this year's dates or "<year> date not announced yet", past years newest first with the web's date line), was the web page; an unknown well-formed slug still opens the web; rows open with the Event the series read carries, so archived editions open and sweep-hidden ones are plain text; article links route there too; 11 new XCTest cases, vitest parity guards the routing (negative-controlled); not compiled (no Xcode here) |
+| 2026-11-08 | IOS-AUDIT-001 | this commit | an archived past edition opened from a series screen (or an /events/<id> link to one) shows "This event has already happened", was "no longer available" over its content; on PGRST116 the detail takes the web's second look (classifyUnlisted) via `EventsService.fetchArchivedEvent`, hidden and merged rows stay unavailable; 8 new XCTest cases; not compiled (no Xcode here) |

@@ -8,9 +8,11 @@ import SwiftUI
 /// Rows push `Event` values, so it must sit in a NavigationStack that
 /// registers `Event` (DeepLinkResolverView does). A row opens with the Event
 /// the series read already carries, never a fetch by id: an archived past
-/// edition is linked on the web, and `fetchEvent(id:)` refuses archived rows,
-/// so a re-read would say the listing is gone. A row the stale sweep hid has
-/// no page on the web either and is plain text here.
+/// edition is linked on the web, and `fetchEvent(id:)` refuses archived rows.
+/// The detail's background re-read then takes the web's second look
+/// (`fetchArchivedEvent`) and labels the row a past event (IOS-AUDIT-001). A
+/// row the stale sweep hid has no page on the web either and is plain text
+/// here.
 struct EventSeriesView: View {
     @State private var viewModel: EventSeriesViewModel
 

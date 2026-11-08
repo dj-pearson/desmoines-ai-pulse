@@ -30,6 +30,8 @@ struct EventDetailView: View {
 
                 if viewModel.isUnavailable {
                     unavailableBanner
+                } else if viewModel.isArchived {
+                    pastEventBanner
                 }
 
                 EventDetailInfo(event: displayEvent)
@@ -157,6 +159,23 @@ struct EventDetailView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text("This event is no longer available")
+                .font(.subheadline.weight(.semibold))
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// An archived row is a past event, not a dead listing (IOS-AUDIT-001).
+    private var pastEventBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("This event has already happened")
                 .font(.subheadline.weight(.semibold))
             Spacer(minLength: 0)
         }

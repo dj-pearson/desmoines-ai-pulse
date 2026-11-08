@@ -21,6 +21,13 @@ final class EventDetailViewModel {
     /// as live.
     private(set) var isUnavailable = false
 
+    /// The archive sweep retired this row: the event happened, so the screen
+    /// shows it as a past event rather than as gone, the way the web's
+    /// EventDetails renders `archived` (IOS-AUDIT-001). A series screen opens
+    /// archived past editions directly, and the visible re-read refuses them,
+    /// which is what put "no longer available" over a real past event.
+    private(set) var isArchived = false
+
     private let service: EventDetailProviding
     private let favorites = FavoritesService.shared
 
@@ -44,11 +51,24 @@ final class EventDetailViewModel {
                 relatedEvents = try await service.fetchRelatedEvents(eventId: id, category: category)
             }
         } catch {
-            errorMessage = error.localizedDescription
-            if Self.isNotFound(error) { isUnavailable = true }
+            if Self.isNotFound(error), let archived = await archivedRow(id: id) {
+                event = archived
+                isArchived = true
+                await loadRelated(id: id, category: archived.category)
+            } else {
+                errorMessage = error.localizedDescription
+                if Self.isNotFound(error) { isUnavailable = true }
+            }
         }
 
         isLoading = false
+    }
+
+    /// The web's second look (classifyUnlisted): is the id an archived row?
+    /// A failed look counts as "no", which is what the screen said before
+    /// there was a second look at all.
+    private func archivedRow(id: String) async -> Event? {
+        try? await service.fetchArchivedEvent(id: id)
     }
 
     /// Show a pre-fetched event immediately, then refresh it behind the scenes.
@@ -102,11 +122,21 @@ final class EventDetailViewModel {
             fresh = try await service.fetchEvent(id: id)
         } catch {
             // Only "no such row" is news. Anything else (offline, a timeout)
-            // stays silent, for the reason above.
-            if Self.isNotFound(error) { isUnavailable = true }
+            // stays silent, for the reason above. "No such row" is then either
+            // a past event the archive sweep retired or genuinely gone.
+            guard Self.isNotFound(error) else { return }
+            if let archived = await archivedRow(id: id) {
+                isArchived = true
+                isUnavailable = false
+                if Self.contentDiffers(archived, from: event) { event = archived }
+            } else {
+                isArchived = false
+                isUnavailable = true
+            }
             return
         }
         isUnavailable = false
+        isArchived = false
         guard Self.contentDiffers(fresh, from: event) else { return }
         event = fresh
     }
