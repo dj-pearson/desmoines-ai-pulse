@@ -19,6 +19,10 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('AIConfigurationManager');
 
+/** "default_model" -> "Default Model": the row heading, and the name of its field. */
+const formatSettingKey = (key: string) =>
+  key.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+
 export function AIConfigurationManager() {
   const { settings, isLoading, updateSetting, isUpdating, getSetting } = useAIConfiguration();
   const { models, isLoading: modelsLoading, addModel, deleteModel, isAdding, isDeleting } = useAIModels();
@@ -210,7 +214,7 @@ export function AIConfigurationManager() {
                       <div className="grid gap-2">
                         <Label htmlFor="provider">Provider</Label>
                         <Select value={newModel.provider} onValueChange={(value) => setNewModel({ ...newModel, provider: value })}>
-                          <SelectTrigger>
+                          <SelectTrigger id="provider">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -351,9 +355,7 @@ export function AIConfigurationManager() {
                             {setting.setting_key.includes("tokens") && <Cpu className="h-4 w-4 text-muted-foreground" />}
                             {!setting.setting_key.includes("model") && !setting.setting_key.includes("temperature") && !setting.setting_key.includes("tokens") && <Settings className="h-4 w-4 text-muted-foreground" />}
                             <span className="text-sm">
-                              {setting.setting_key.split("_").map(word => 
-                                word.charAt(0).toUpperCase() + word.slice(1)
-                              ).join(" ")}
+                              {formatSettingKey(setting.setting_key)}
                             </span>
                           </div>
                           {setting.description && (
@@ -372,7 +374,7 @@ export function AIConfigurationManager() {
                               }))
                             }
                           >
-                            <SelectTrigger className="w-full">
+                            <SelectTrigger className="w-full" aria-label={formatSettingKey(setting.setting_key)}>
                               <SelectValue placeholder="Select model" />
                             </SelectTrigger>
                             <SelectContent>
@@ -388,6 +390,7 @@ export function AIConfigurationManager() {
                           </Select>
                         ) : (
                           <Input
+                            aria-label={formatSettingKey(setting.setting_key)}
                             value={getDisplayValue(setting.setting_key, setting.setting_value)}
                             onChange={(e) =>
                               setEditedValues((prev) => ({

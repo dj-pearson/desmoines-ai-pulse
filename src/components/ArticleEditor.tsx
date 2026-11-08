@@ -357,9 +357,10 @@ export default function ArticleEditor() {
               </div>
 
               <div>
-                <Label>SEO Keywords</Label>
+                <Label htmlFor="seo-keyword">SEO Keywords</Label>
                 <div className="flex gap-2 mb-2">
                   <Input
+                    id="seo-keyword"
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
                     placeholder="Add SEO keyword..."
@@ -399,7 +400,7 @@ export default function ArticleEditor() {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select value={articleData.status} onValueChange={(value) => handleInputChange('status', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -414,7 +415,7 @@ export default function ArticleEditor() {
               <div>
                 <Label htmlFor="category">Category</Label>
                 <Select value={articleData.category} onValueChange={(value) => handleInputChange('category', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -450,6 +451,7 @@ export default function ArticleEditor() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
+                  aria-label="Add tag"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add tag..."

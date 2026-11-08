@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useId } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -144,13 +144,21 @@ export default function ContentEditor({ type, item, onSave, onClose }: ContentEd
     onSave(updatedItem);
   };
 
+  // The Labels below pointed at field.key, which no control carried, so
+  // every field was nameless. A per-instance prefix keeps keys like "name"
+  // from colliding with other ids on the admin page.
+  const idPrefix = useId();
+  const fieldId = (key: string) => `${idPrefix}-${key}`;
+
   const renderField = (field: any) => {
     const value = formData[field.key];
+    const id = fieldId(field.key);
 
     switch (field.type) {
       case "input":
         return (
           <Input
+            id={id}
             value={value}
             onChange={(e) => handleInputChange(field.key, e.target.value)}
             placeholder={field.placeholder}
@@ -161,6 +169,7 @@ export default function ContentEditor({ type, item, onSave, onClose }: ContentEd
       case "textarea":
         return (
           <Textarea
+            id={id}
             value={value}
             onChange={(e) => handleInputChange(field.key, e.target.value)}
             placeholder={field.placeholder}
@@ -174,7 +183,7 @@ export default function ContentEditor({ type, item, onSave, onClose }: ContentEd
             value={value}
             onValueChange={(newValue) => handleInputChange(field.key, newValue)}
           >
-            <SelectTrigger>
+            <SelectTrigger id={id}>
               <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
             </SelectTrigger>
             <SelectContent>
@@ -192,6 +201,7 @@ export default function ContentEditor({ type, item, onSave, onClose }: ContentEd
       case "datetime-local":
         return (
           <Input
+            id={id}
             type={field.type}
             value={value}
             onChange={(e) => handleInputChange(field.key, e.target.value)}
@@ -204,6 +214,7 @@ export default function ContentEditor({ type, item, onSave, onClose }: ContentEd
       case "switch":
         return (
           <Switch
+            id={id}
             checked={value}
             onCheckedChange={(checked) => handleInputChange(field.key, checked)}
           />
@@ -234,14 +245,14 @@ export default function ContentEditor({ type, item, onSave, onClose }: ContentEd
                 key={field.key} 
                 className={field.type === "textarea" ? "md:col-span-2" : ""}
               >
-                <Label htmlFor={field.key}>
+                <Label htmlFor={fieldId(field.key)}>
                   {field.label}
                   {field.required && <span className="text-red-500 ml-1">*</span>}
                 </Label>
                 <div className={field.type === "switch" ? "flex items-center mt-2" : "mt-2"}>
                   {renderField(field)}
                   {field.type === "switch" && (
-                    <Label htmlFor={field.key} className="ml-2">
+                    <Label htmlFor={fieldId(field.key)} className="ml-2">
                       {field.label}
                     </Label>
                   )}

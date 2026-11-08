@@ -202,9 +202,10 @@ function VenueDialog({
             </div>
 
             <div className="col-span-2">
-              <Label>Aliases (for matching)</Label>
+              <Label htmlFor="venue_alias">Aliases (for matching)</Label>
               <div className="flex gap-2 mb-2">
                 <Input
+                  id="venue_alias"
                   value={aliasInput}
                   onChange={(e) => setAliasInput(e.target.value)}
                   placeholder="Add alias (e.g., VMH, Vibrant)"
@@ -241,7 +242,7 @@ function VenueDialog({
                   setFormData({ ...formData, venue_type: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="venue_type">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -925,6 +926,7 @@ export default function VenuesManager() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search venues"
               placeholder="Search venues..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

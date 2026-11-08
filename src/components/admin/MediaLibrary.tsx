@@ -371,6 +371,7 @@ export function MediaLibrary({
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search media"
             placeholder="Search media..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -385,7 +386,7 @@ export function MediaLibrary({
             setFilters((prev) => ({ ...prev, bucket: value === "all" ? undefined : value, page: 1 }))
           }
         >
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-[140px]" aria-label="Filter by bucket">
             <SelectValue placeholder="All buckets" />
           </SelectTrigger>
           <SelectContent>
@@ -403,7 +404,7 @@ export function MediaLibrary({
             setFilters((prev) => ({ ...prev, sortBy: value as MediaFilters["sortBy"] }))
           }
         >
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-[140px]" aria-label="Sort by">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>

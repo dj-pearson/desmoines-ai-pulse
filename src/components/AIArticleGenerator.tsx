@@ -509,9 +509,9 @@ const AIArticleGenerator: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="category">Category</Label>
+                    <Label htmlFor="ai-article-category">Category</Label>
                     <Select value={settings.category} onValueChange={(value) => handleSettingChange('category', value)}>
-                      <SelectTrigger>
+                      <SelectTrigger id="ai-article-category">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -525,9 +525,10 @@ const AIArticleGenerator: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label>Target Keywords</Label>
+                    <Label htmlFor="ai-article-keyword">Target Keywords</Label>
                     <div className="flex gap-2 mb-2">
                       <Input
+                        id="ai-article-keyword"
                         value={newKeyword}
                         onChange={(e) => setNewKeyword(e.target.value)}
                         placeholder="Add keyword..."
@@ -561,9 +562,9 @@ const AIArticleGenerator: React.FC = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor="tone">Writing Tone</Label>
+                    <Label htmlFor="ai-article-tone">Writing Tone</Label>
                     <Select value={settings.tone} onValueChange={(value: any) => handleSettingChange('tone', value)}>
-                      <SelectTrigger>
+                      <SelectTrigger id="ai-article-tone">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -580,9 +581,9 @@ const AIArticleGenerator: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="length">Article Length</Label>
+                    <Label htmlFor="ai-article-length">Article Length</Label>
                     <Select value={settings.length} onValueChange={(value: any) => handleSettingChange('length', value)}>
-                      <SelectTrigger>
+                      <SelectTrigger id="ai-article-length">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

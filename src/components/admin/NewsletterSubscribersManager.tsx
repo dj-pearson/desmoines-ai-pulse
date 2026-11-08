@@ -375,6 +375,7 @@ export default function NewsletterSubscribersManager() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search subscribers by email"
               value={searchInput}
               onChange={(e) => {
                 setSearchInput(e.target.value);
@@ -391,7 +392,7 @@ export default function NewsletterSubscribersManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -409,7 +410,7 @@ export default function NewsletterSubscribersManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by source">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>

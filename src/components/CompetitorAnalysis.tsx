@@ -351,32 +351,36 @@ const CompetitorAnalysis = () => {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Competitor Name</Label>
+                <Label htmlFor="competitor-name">Competitor Name</Label>
                 <Input
+                  id="competitor-name"
                   value={newCompetitor.name}
                   onChange={(e) => setNewCompetitor({...newCompetitor, name: e.target.value})}
                   placeholder="e.g., Catch Des Moines"
                 />
               </div>
               <div>
-                <Label>Website URL</Label>
+                <Label htmlFor="competitor-url">Website URL</Label>
                 <Input
+                  id="competitor-url"
                   value={newCompetitor.website_url}
                   onChange={(e) => setNewCompetitor({...newCompetitor, website_url: e.target.value})}
                   placeholder="https://www.catchdesmoines.com"
                 />
               </div>
               <div>
-                <Label>Description</Label>
+                <Label htmlFor="competitor-description">Description</Label>
                 <Input
+                  id="competitor-description"
                   value={newCompetitor.description}
                   onChange={(e) => setNewCompetitor({...newCompetitor, description: e.target.value})}
                   placeholder="Brief description of the competitor"
                 />
               </div>
               <div>
-                <Label>Primary Focus</Label>
+                <Label htmlFor="competitor-focus">Primary Focus</Label>
                 <Input
+                  id="competitor-focus"
                   value={newCompetitor.primary_focus}
                   onChange={(e) => setNewCompetitor({...newCompetitor, primary_focus: e.target.value})}
                   placeholder="e.g., tourism, events, dining"

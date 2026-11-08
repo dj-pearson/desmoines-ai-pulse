@@ -266,7 +266,7 @@ export function ContentQueue() {
           {/* Filters */}
           <div className="flex gap-4 mb-4">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[200px]" aria-label="Filter by status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -279,7 +279,7 @@ export function ContentQueue() {
             </Select>
 
             <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[200px]" aria-label="Filter by content type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -395,6 +395,7 @@ export function ContentQueue() {
           </DialogHeader>
           <div className="space-y-4">
             <Textarea
+              aria-label="Reason for rejection"
               placeholder="Reason for rejection..."
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}

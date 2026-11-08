@@ -266,9 +266,9 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
       {/* Controls row */}
       <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/30 rounded-lg">
         <div className="space-y-1">
-          <Label>Batch Size</Label>
+          <Label htmlFor="menu-scrape-batch-size">Batch Size</Label>
           <Select value={batchSize} onValueChange={setBatchSize}>
-            <SelectTrigger className="w-24">
+            <SelectTrigger id="menu-scrape-batch-size" className="w-24">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -319,6 +319,7 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                aria-label="Search restaurants"
                 placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -326,7 +327,7 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
               />
             </div>
             <Select value={filterMode} onValueChange={(v) => setFilterMode(v as typeof filterMode)}>
-              <SelectTrigger className="w-36 h-8">
+              <SelectTrigger className="w-36 h-8" aria-label="Filter by menu status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

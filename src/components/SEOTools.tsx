@@ -728,6 +728,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
                         </Button>
                       </div>
                       <Textarea
+                        aria-label={`Generated ${generator.title}`}
                         value={generatedContent[generator.id]}
                         readOnly
                         className="text-xs font-mono h-32 resize-none"
@@ -807,6 +808,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
                         </Button>
                       </div>
                       <Textarea
+                        aria-label={`Generated ${generator.title}`}
                         value={generatedContent[generator.id]}
                         readOnly
                         className="text-xs font-mono h-40 resize-none"
@@ -884,6 +886,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
                         </Button>
                       </div>
                       <Textarea
+                        aria-label={`Generated ${generator.title}`}
                         value={generatedContent[generator.id]}
                         readOnly
                         className="text-xs font-mono h-40 resize-none"
