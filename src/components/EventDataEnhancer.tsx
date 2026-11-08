@@ -469,7 +469,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                         setSelectedDomain(value);
                         setCustomDomain(""); // Clear custom domain when selecting from dropdown
                       }}>
-                        <SelectTrigger>
+                        <SelectTrigger id="domain">
                           <SelectValue placeholder="Choose a domain..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -506,7 +506,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                   <div className="space-y-2">
                     <Label htmlFor="batchSize">Batch Size</Label>
                     <Select value={batchSize.toString()} onValueChange={(value) => setBatchSize(parseInt(value))}>
-                      <SelectTrigger>
+                      <SelectTrigger id="batchSize">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

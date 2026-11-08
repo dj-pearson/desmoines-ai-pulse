@@ -227,6 +227,8 @@ export default function ImagePickerDialog({
           </p>
           <div className="flex gap-2">
             <Input
+              type="url"
+              aria-label="Image URL"
               placeholder="https://example.com/image.jpg"
               value={manualUrl}
               onChange={(e) => setManualUrl(e.target.value)}

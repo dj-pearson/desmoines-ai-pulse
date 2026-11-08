@@ -783,7 +783,7 @@ export default function ScraperConfigWizard({
                       setCustomConfig({ ...customConfig, schedule: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="config-schedule">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

@@ -462,6 +462,7 @@ export default function AffiliateManager() {
                       </TableCell>
                       <TableCell>
                         <Input
+                          aria-label={`UTM parameters for ${urlData.domain}`}
                           placeholder="?utm_source=desmoinesinsider&utm_medium=website&utm_campaign=events"
                           value={urlData.utmParameters}
                           onChange={(e) => updateUtmParameters(urlData.domain, e.target.value)}

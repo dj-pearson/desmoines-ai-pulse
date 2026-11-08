@@ -195,6 +195,7 @@ export default function BusinessClaimsManager() {
                 </Button>
 
                 <Textarea
+                  aria-label={`Notes on the claim for ${name}`}
                   placeholder="Notes for the record (optional)"
                   value={notes[claim.id] ?? ""}
                   onChange={(e) => setNotes((n) => ({ ...n, [claim.id]: e.target.value }))}

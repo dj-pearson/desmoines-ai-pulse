@@ -285,8 +285,9 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Redirect URI (Add this to your OAuth app)</Label>
+                        <Label htmlFor="redirect_uri">Redirect URI (Add this to your OAuth app)</Label>
                         <Input
+                          id="redirect_uri"
                           readOnly
                           value={`${window.location.origin}/admin/oauth/callback`}
                           className="font-mono text-xs"

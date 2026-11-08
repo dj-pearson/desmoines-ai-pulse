@@ -151,6 +151,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                   <h3 className="font-semibold mb-3">Find Events</h3>
                   <div className="flex gap-2">
                     <Input
+                      aria-label="Search events"
                       placeholder="Search events..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -271,6 +272,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
               </div>
               
               <Textarea
+                aria-label="Group notes"
                 placeholder="Add notes, ideas, or plans here..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

@@ -549,7 +549,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                       });
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="job-schedule">
                       <SelectValue placeholder="Select schedule frequency" />
                     </SelectTrigger>
                     <SelectContent>
@@ -578,6 +578,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                     <div className="mt-2">
                       <Input
                         id="job-schedule-custom"
+                        aria-label="Custom cron expression"
                         value={formData.schedule || ""}
                         onChange={(e) =>
                           setFormData({ ...formData, schedule: e.target.value })

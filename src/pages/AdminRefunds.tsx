@@ -583,8 +583,8 @@ export default function AdminRefunds() {
                       value={statusFilter}
                       onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
                     >
-                      <SelectTrigger className="w-[150px]">
-                        <Filter className="h-4 w-4 mr-2" />
+                      <SelectTrigger className="w-[150px]" aria-label="Filter by status">
+                        <Filter className="h-4 w-4 mr-2" aria-hidden="true" />
                         <SelectValue placeholder="Filter" />
                       </SelectTrigger>
                       <SelectContent>

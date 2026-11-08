@@ -386,7 +386,7 @@ export default function SocialPostQueue() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -404,7 +404,7 @@ export default function SocialPostQueue() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by platform">
               <SelectValue placeholder="Platform" />
             </SelectTrigger>
             <SelectContent>

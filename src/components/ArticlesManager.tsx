@@ -181,6 +181,7 @@ export default function ArticlesManager() {
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search articles"
             placeholder="Search articles by title, category, or status..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

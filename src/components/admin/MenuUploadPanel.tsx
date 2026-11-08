@@ -201,9 +201,9 @@ export function MenuUploadPanel({ restaurants }: MenuUploadPanelProps) {
       {(step === "select" || step === "preview") && (
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Restaurant</Label>
+            <Label htmlFor="menu-upload-restaurant">Restaurant</Label>
             <Select value={restaurantId} onValueChange={setRestaurantId}>
-              <SelectTrigger>
+              <SelectTrigger id="menu-upload-restaurant">
                 <SelectValue placeholder="Select a restaurant..." />
               </SelectTrigger>
               <SelectContent>

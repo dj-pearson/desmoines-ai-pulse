@@ -271,9 +271,10 @@ export default function TrendingTuner() {
               return (
                 <div key={c.key} className="space-y-1">
                   <div className="flex items-center justify-between gap-3">
-                    <Label className="text-sm">{c.label}</Label>
+                    <Label htmlFor={`trending-${c.key}`} className="text-sm">{c.label}</Label>
                     <div className="flex items-center gap-2">
                       <Input
+                        id={`trending-${c.key}`}
                         type="number"
                         min={c.min}
                         max={c.max}

@@ -693,7 +693,7 @@ const SocialMediaManager = () => {
                           setNewWebhook({ ...newWebhook, platform: value })
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id="webhook-platform">
                           <SelectValue placeholder="Select platform" />
                         </SelectTrigger>
                         <SelectContent>

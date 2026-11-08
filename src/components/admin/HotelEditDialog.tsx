@@ -491,7 +491,7 @@ export default function HotelEditDialog({
                   />
                 </div>
                 <div>
-                  <Label>Price range</Label>
+                  <Label htmlFor="h-price">Price range</Label>
                   <Select
                     value={form.watch("price_range") || ""}
                     onValueChange={(v) =>
@@ -502,7 +502,7 @@ export default function HotelEditDialog({
                       )
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="h-price">
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>

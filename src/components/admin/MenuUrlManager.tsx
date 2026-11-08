@@ -122,6 +122,7 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search restaurants or menu URLs"
             placeholder="Search restaurants or URLs..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -198,6 +199,7 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Input
+                        aria-label={`Menu URL for ${r.name}`}
                         placeholder="https://restaurant.com/menu"
                         value={currentEdit ?? r.menu_url ?? ""}
                         onChange={(e) =>

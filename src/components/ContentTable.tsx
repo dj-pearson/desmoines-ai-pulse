@@ -920,6 +920,7 @@ export default function ContentTable({
               <div className="relative">
                 <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
                 <Input
+                  aria-label={`Search ${config.title.toLowerCase()}`}
                   placeholder={config.searchPlaceholder}
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
@@ -983,7 +984,7 @@ export default function ContentTable({
                 value={activeFilters[filter.key] || "All"}
                 onValueChange={(value) => handleFilterChange(filter.key, value)}
               >
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-[150px]" aria-label={`Filter by ${filter.label.toLowerCase()}`}>
                   <SelectValue placeholder={filter.label} />
                 </SelectTrigger>
                 <SelectContent>

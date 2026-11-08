@@ -101,6 +101,7 @@ export default function SupportKbManager() {
           {/* Retrieval tester */}
           <div className="mb-4 flex flex-wrap gap-2">
             <Input
+              aria-label="Test retrieval query"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Test retrieval — e.g. 'how do I cancel?'"

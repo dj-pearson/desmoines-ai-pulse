@@ -304,7 +304,7 @@ export default function ImageBackfill() {
           {/* Controls */}
           <div className="flex flex-wrap items-center gap-3">
             <Select value={category} onValueChange={(v) => { setCategory(v as Category); handleReset(); }}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px]" aria-label="Content type to backfill">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>

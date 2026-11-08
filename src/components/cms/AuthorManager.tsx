@@ -345,6 +345,7 @@ export function AuthorManager() {
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search authors"
             placeholder="Search authors by name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

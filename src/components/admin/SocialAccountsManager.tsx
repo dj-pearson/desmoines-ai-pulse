@@ -478,12 +478,12 @@ export default function SocialAccountsManager() {
             {dialog.mode === "create" && (
               <>
                 <div>
-                  <Label>Platform</Label>
+                  <Label htmlFor="s-platform">Platform</Label>
                   <Select
                     value={formPlatform}
                     onValueChange={(v: Platform) => setFormPlatform(v)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="s-platform">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
