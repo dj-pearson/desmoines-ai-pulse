@@ -214,6 +214,9 @@ function SocialEventCardComponent({
   return (
     <Card
       ref={cardRef}
+      // The card root for layout specs (events-hub-list). Not data-testid:
+      // vite.config.ts strips that from every build.
+      data-event-card=""
       className={`group relative isolate overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
         featured ? 'md:col-span-2 md:row-span-2' : ''
       } ${sponsoredActive ? 'ring-2 ring-amber-400' : ''}`}

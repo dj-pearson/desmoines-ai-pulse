@@ -112,8 +112,9 @@ async function installPagedEvents(page: Page, options: { delayMs?: () => number 
 
 // Card titles are h3, or h4 under a day header (WP2 headingLevel). An active
 // sponsored card carries an sr-only "Sponsored: " inside its title link.
+const CARD_TITLE_PATTERN = '^(Sponsored: )?Hub Fixture \\d{3}$';
 const cardTitles = (page: Page) =>
-  page.locator('h3, h4').filter({ hasText: /^(Sponsored: )?Hub Fixture \d{3}$/ });
+  page.locator('h3, h4').filter({ hasText: new RegExp(CARD_TITLE_PATTERN) });
 
 /**
  * A card's title link. Not the event-card-link test id: vite.config.ts strips
@@ -241,23 +242,59 @@ test.describe('/events on a phone (WP1 items 8 and 14)', () => {
     await installPagedEvents(page);
   });
 
+  /**
+   * The first card's top edge, measured once the list has settled (WEB-QA-054).
+   *
+   * The list renders before the sponsored lead query answers, then pins rows 7
+   * and 40 above row 000. This used to wait for any title to be visible and
+   * then call locator.evaluate, which is two round trips (resolve, evaluate):
+   * under a loaded run the pinned cards committed between them and row 000 was
+   * measured where they had pushed it, 1360px, while the screenshot showed
+   * row 7 at 501. Reproduced by holding the handle across that commit.
+   *
+   * So: wait for the sponsored lead (the fixture always has one, so settled
+   * means row 7 first), then find the title and its card root and measure in
+   * one evaluate, and check the measured title is still row 7.
+   */
+  async function settledFirstCard(page: Page): Promise<{ title: string; top: number }> {
+    await expect(cardTitles(page).first()).toHaveText(titleText(7), { timeout: 30_000 });
+    const measured = await page.evaluate((pattern) => {
+      const re = new RegExp(pattern);
+      const heading = Array.from(document.querySelectorAll('h3, h4')).find((h) =>
+        re.test(h.textContent ?? ''),
+      );
+      if (!heading) return null;
+      const card = heading.closest('[data-event-card]');
+      if (!card) return null;
+      return { title: heading.textContent ?? '', top: card.getBoundingClientRect().top + window.scrollY };
+    }, CARD_TITLE_PATTERN);
+    expect(measured, 'the first card title sits inside a [data-event-card] root').not.toBeNull();
+    expect(measured!.title).toMatch(titleText(7));
+    return measured!;
+  }
+
   test('the first card starts on the first screen', async ({ page }) => {
     await page.goto('/events');
-    const first = cardTitles(page).first();
-    await expect(first).toBeVisible({ timeout: 30_000 });
-    // The card's top, not its title's: walk up to the card root.
-    const top = await first.evaluate((el) => {
-      const card = el.closest('.rounded-xl, [class*="card"]') ?? el;
-      return card.getBoundingClientRect().top + window.scrollY;
+    const { top } = await settledFirstCard(page);
+    expect(top, `first card starts at ${Math.round(top)}px`).toBeLessThan(560);
+  });
+
+  test('the first card starts on the first screen when the sponsored lead answers late', async ({ page }) => {
+    // The order a loaded run produces: the list lands, the sponsored lead later.
+    await page.route('**/rest/v1/events?**', async (route: Route) => {
+      if (new URL(route.request().url()).searchParams.get('is_sponsored') === 'eq.true') {
+        await new Promise((r) => setTimeout(r, 1_500));
+      }
+      return route.fallback();
     });
+    await page.goto('/events');
+    const { top } = await settledFirstCard(page);
     expect(top, `first card starts at ${Math.round(top)}px`).toBeLessThan(560);
   });
 
   test('one Filters control and one List/Map control above the first card, no id twice', async ({ page }) => {
     await page.goto('/events');
-    const first = cardTitles(page).first();
-    await expect(first).toBeVisible({ timeout: 30_000 });
-    const cardTop = await first.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+    const { top: cardTop } = await settledFirstCard(page);
 
     const above = async (selector: string) =>
       page.locator(selector).evaluateAll(
