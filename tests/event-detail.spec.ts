@@ -213,6 +213,14 @@ function matches(r: Row, params: URLSearchParams): boolean {
         if (r.is_merged === true || (r.archived_at !== null && r.archived_at !== undefined)) continue;
         return false;
       }
+      // The dateless-slug lookup keeps a run that is still on (WEB-FEAT-052):
+      // upcomingOrRunningFilter sends or=(date.gte.X,end_date.gte.X).
+      const running = /^\(date\.gte\.([^,]+),end_date\.gte\.([^,]+)\)$/.exec(raw);
+      if (running) {
+        const floor = ms(running[1]);
+        if (ms(r.date) >= floor || (r.end_date != null && ms(r.end_date) >= floor)) continue;
+        return false;
+      }
       return false; // series by parent: none in these fixtures
     }
     const cell = r[key];

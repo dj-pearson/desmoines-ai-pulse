@@ -12068,8 +12068,8 @@
         "Find whether the page or the fixture matcher is wrong, and fix that one",
         "The test passes without being loosened"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the seo-geo loop. Placeholder VITE_SUPABASE_* build, vite preview on 127.0.0.1:4173 (IPv6 listen fails in the container). Not investigated past reproduction."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the seo-geo loop. Placeholder VITE_SUPABASE_* build, vite preview on 127.0.0.1:4173 (IPv6 listen fails in the container). Not investigated past reproduction. | Fixed 2026-11-08 by the orchestrator: the spec fixture matcher rejected every unknown or= param, and WEB-FEAT-052 made the dateless-slug lookup send or=(date.gte.X,end_date.gte.X). The matcher now evaluates that group. event-detail.spec.ts 11/11 against a vite build; with the old matcher the dateless test fails (negative control)."
     },
     {
       "priority": 3,
@@ -12086,8 +12086,9 @@
     {
       "priority": 4,
       "id": "WEB-QA-053",
-      "note": "Already fixed in code by 392b022f (WEB-FEAT-055): session-timeout-policy.test.ts now asserts the early return 'if (!isAdmin || isAdminLoading) return null;' and the lazy AdminSessionTimeout mount, which matches SessionManager.tsx. The only thing left is running it under Deno (subscription-sync-tests.yml:563) and closing the story; Deno isn't available in this container.",
-      "passes": false
+      "passes": false,
+      "title": "Close WEB-QA-051 once session-timeout-policy.test.ts runs green under Deno in CI",
+      "notes": "Already fixed in code by 392b022f (WEB-FEAT-055): session-timeout-policy.test.ts now asserts the early return 'if (!isAdmin || isAdminLoading) return null;' and the lazy AdminSessionTimeout mount, which matches SessionManager.tsx. The only thing left is running it under Deno (subscription-sync-tests.yml:563) and closing the story; Deno isn't available in this container."
     },
     {
       "priority": 3,
