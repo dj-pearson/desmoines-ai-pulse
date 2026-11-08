@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,6 +24,8 @@ export default function Social() {
   useDocumentTitle("Community");
   const { toast } = useToast();
   const [searchEmail, setSearchEmail] = useState("");
+  // WEB-UX-065: the email field was named only by its placeholder.
+  const friendEmailId = useId();
   const [groupName, setGroupName] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
@@ -135,10 +138,13 @@ export default function Social() {
                   Add Friends
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
+                <Label htmlFor={friendEmailId}>Friend's email</Label>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Enter friend's email"
+                    id={friendEmailId}
+                    type="email"
+                    placeholder="name@example.com"
                     value={searchEmail}
                     onChange={(e) => setSearchEmail(e.target.value)}
                     className="flex-1"
