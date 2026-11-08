@@ -803,14 +803,28 @@ export function resolveDietarySelections(filters: {
   return [...new Set(candidates.filter((value) => value in DIETARY_KEYWORDS))];
 }
 
-const RESTAURANT_TAGS = [
-  "Takeout",
-  "Delivery",
-  "Outdoor Seating",
-  "Family Friendly",
-  "Date Night",
-  "Happy Hour",
-];
+/**
+ * The tag values a restaurant filter UI may offer (WEB-FEAT-060).
+ *
+ * This list used to be Takeout, Delivery, Outdoor Seating, Family Friendly,
+ * Date Night and Happy Hour. resolveDietarySelections drops every one of them,
+ * and no restaurant column stores any of them, so a "#Happy Hour" badge (or a
+ * ?tags=Happy%20Hour link) showed an active filter over the unfiltered list.
+ * The only `tags` values any query applies are the diet ids, so those are the
+ * only ones offered. Happy hour lives in the deals table and has its own strip
+ * on /restaurants (RestaurantsHappyHourStrip), not a tag.
+ */
+export const RESTAURANT_FILTER_TAGS: readonly string[] = Object.keys(DIETARY_KEYWORDS);
+
+/**
+ * `tags` as read from a URL: only the values a query applies, in order. A
+ * shared link carrying a retired tag ("Happy Hour") keeps working as a page
+ * and simply loses the tag, instead of rendering a chip and an active-filter
+ * count for a filter that filters nothing.
+ */
+export function appliedRestaurantTags(tags: readonly string[]): string[] {
+  return resolveDietarySelections({ tags: [...tags] });
+}
 
 interface FilterOptionsResult {
   cuisines: { cuisine: string; count: number }[];
@@ -893,7 +907,7 @@ export function useRestaurantFilterOptions() {
     /** Cuisines with their row counts, most common first (plan WP2 item 5). */
     cuisineCounts: data?.cuisines ?? [],
     locations: data?.locations ?? [],
-    tags: RESTAURANT_TAGS,
+    tags: RESTAURANT_FILTER_TAGS,
     isLoading,
   };
 }

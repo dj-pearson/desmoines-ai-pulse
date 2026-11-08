@@ -23,6 +23,7 @@ import {
   useCuisineCounts,
   initialRestaurantPageParam,
   RESTAURANT_PAGE_SIZE,
+  appliedRestaurantTags,
 } from "@/hooks/useRestaurants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,7 +175,10 @@ export default function Restaurants() {
       sortBy: getStr("sort", "popularity") as RestaurantFilterOptions["sortBy"],
       featuredOnly: getStr("featured", "") === "1",
       openNow: false,
-      tags: getList("tags"),
+      // Only tags a query applies (WEB-FEAT-060): a link carrying a retired
+      // tag such as "Happy Hour" no longer shows a chip and a filter count
+      // over an unfiltered list.
+      tags: appliedRestaurantTags(getList("tags")),
     }),
     [getStr, getNum, getList]
   );

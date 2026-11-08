@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Search, Filter, X, Star, DollarSign, Clock, TrendingUp, SlidersHorizontal } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { DIETS } from "@/lib/restaurantDiets";
+import { resolveDietarySelections } from "@/hooks/useRestaurants";
 
 export interface RestaurantFilterOptions {
   search: string;
@@ -40,10 +42,18 @@ interface RestaurantFiltersProps {
   onFiltersChange: (filters: RestaurantFilterOptions) => void;
   availableCuisines: string[];
   availableLocations: string[];
+  /**
+   * Tag values to offer. Anything no query applies is dropped before render
+   * (WEB-FEAT-060), so a caller cannot bring back a badge that filters nothing.
+   */
   availableTags: string[];
   totalResults: number;
   isLoading?: boolean;
 }
+
+const DIET_LABELS: Record<string, string> = Object.fromEntries(
+  DIETS.map((d) => [d.id, d.label])
+);
 
 const priceRangeOptions = [
   { value: "$", label: "$ - Budget Friendly", description: "Under $15" },
@@ -102,6 +112,7 @@ export function RestaurantFilters({
 }: RestaurantFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search);
+  const offeredTags = resolveDietarySelections({ tags: availableTags });
 
   // Debounced search
   const debouncedUpdateSearch = useCallback(() => {
@@ -445,12 +456,12 @@ export function RestaurantFilters({
               </div>
             </div>
 
-            {/* Popular Tags */}
-            {availableTags.length > 0 && (
+            {/* Diet keywords: the only tags a restaurant query applies */}
+            {offeredTags.length > 0 && (
               <div className="space-y-3">
-                <Label className="text-sm font-medium">Popular Tags</Label>
+                <Label className="text-sm font-medium">Mentions a diet</Label>
                 <div className="flex flex-wrap gap-2">
-                  {availableTags.map((tag) => (
+                  {offeredTags.map((tag) => (
                     <Badge
                       key={tag}
                       variant={
@@ -459,7 +470,7 @@ export function RestaurantFilters({
                       className="cursor-pointer hover:bg-primary/80 transition-colors"
                       onClick={() => toggleArrayFilter("tags", tag)}
                     >
-                      #{tag}
+                      {DIET_LABELS[tag] ?? tag}
                       {filters.tags.includes(tag) && (
                         <X className="h-3 w-3 ml-1" />
                       )}
