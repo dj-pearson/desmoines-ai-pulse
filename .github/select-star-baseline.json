@@ -1,5 +1,5 @@
 {
-  "count": 113,
+  "count": 112,
   "sites": [
     "src/hooks/useAIConfiguration.ts:24",
     "src/hooks/useAIModels.ts:30",
@@ -94,7 +94,6 @@
     "src/hooks/useTripPlanner.ts:148",
     "src/hooks/useTripPlanner.ts:209",
     "src/hooks/useTripPlanner.ts:422",
-    "src/hooks/useUsage.ts:81",
     "src/hooks/useUserSubmittedEvents.ts:92",
     "src/hooks/useVenues.ts:28",
     "src/hooks/useVenues.ts:44",
