@@ -17,6 +17,8 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *     none.
  *   - head meta comes from the row: a Waukee event is not placed downtown.
  *   - A past event offers no hotels.
+ *   - Model-written GEO answers are visible and labelled, and publish no
+ *     FAQPage (WEB-SEO-059).
  *
  * The clock is fixed at Fri 2026-09-25 12:00 CDT with page.clock, so "upcoming"
  * and "over" don't depend on the day this runs.
@@ -169,7 +171,18 @@ const PAST = row({
   event_start_utc: '2026-09-02T00:00:00Z',
 });
 
-const ROWS = [JAZZ, FIXTURE_JAZZ, SENTINEL, LISTING, SCRIPTED, WAUKEE, SURVIVOR, DUPLICATE, PAST];
+/** Carries model-written GEO fields, as generate-seo-content writes them. */
+const GEO = row({
+  id: '40000000-0000-0000-0000-000000000009',
+  title: 'Lantern Walk',
+  date: '2026-10-11T00:00:00Z',
+  event_start_utc: '2026-10-11T00:00:00Z',
+  geo_summary: 'An evening lantern walk along the riverfront trail.',
+  geo_key_facts: ['Starts at dusk'],
+  geo_faq: [{ question: 'Do I need to bring a lantern?', answer: 'The listing says lanterns are provided.' }],
+});
+
+const ROWS = [JAZZ, FIXTURE_JAZZ, SENTINEL, LISTING, SCRIPTED, WAUKEE, SURVIVOR, DUPLICATE, PAST, GEO];
 
 /** PostgREST `ilike` with % wildcards, case-insensitive. */
 function ilike(value: unknown, pattern: string): boolean {
@@ -354,6 +367,24 @@ test.describe('event detail', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Summer Send Off' })).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#event-summary')).toContainText('took place');
     await expect(page.getByText(/Stay Nearby|Staying over\?|hotels near/i)).toHaveCount(0);
+  });
+
+  test('model-written answers are shown and labelled, never FAQPage (WEB-SEO-059)', async ({ page }) => {
+    await openAt(page, '/events/lantern-walk-2026-10-10');
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Lantern Walk' })).toBeVisible({ timeout: 30_000 });
+    const qa = page.getByRole('heading', { name: 'Lantern Walk: Questions and Answers' });
+    await expect(qa).toBeVisible();
+    await expect(page.getByText('Do I need to bring a lantern?')).toBeVisible();
+    await expect(page.getByText('The listing says lanterns are provided.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Quick Facts' })).toBeVisible();
+    // Both GEO blocks carry the badge; the enhanced-description one is absent here.
+    await expect(page.getByText('AI-assisted', { exact: true })).toHaveCount(2);
+
+    await eventJsonLd(page);
+    const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
+    expect(blocks.join('\n')).not.toContain('FAQPage');
+    expect(blocks.join('\n')).not.toContain('Do I need to bring a lantern?');
   });
 
   test('the article passes axe', async ({ page }) => {

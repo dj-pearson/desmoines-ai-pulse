@@ -116,16 +116,15 @@ Deno.test('event pages emit no head-only FAQPage', async () => {
   assertFalse(/FAQPage/.test(seo), 'no FAQPage may be built here');
   assertFalse(/faqSchema/.test(seo));
 
-  // EventDetails now renders the event's own FAQ visibly, and only when it has
-  // one: shown AND marked up, which is the condition the removed FAQPage never
-  // met. What must not come back is markup without a visible section.
+  // EventDetails renders the event's geo_faq visibly through EventAiAnswers.
+  // That text is model-written (generate-seo-content), so it is labelled
+  // AI-assisted and carries no FAQPage, the restaurant page's rule (WEB-SEO-059).
   const details = codeOnly(await read('src/pages/EventDetails.tsx'));
-  if (/<FAQSection/.test(details)) {
-    assert(
-      /\{readGeoFaq\(event\.geo_faq\)\.length > 0 && \(/.test(details),
-      'the FAQ section must render only when the event has questions',
-    );
-  }
+  assertFalse(/<FAQSection/.test(details), 'geo_faq must not go through FAQSection');
+  assert(/<EventAiAnswers/.test(details), 'geo_faq is rendered by EventAiAnswers');
+  const answers = codeOnly(await read('src/components/events/EventAiAnswers.tsx'));
+  assertFalse(/FAQPage|ld\+json|FAQSection/.test(answers), 'EventAiAnswers emits no schema');
+  assert(/AIDisclosureBadge/.test(answers), 'and it is labelled');
 
   // The drift guard has to agree, or it fails on a component that no longer emits.
   const guard = codeOnly(await read('scripts/check-duplicate-schema.mjs'));
