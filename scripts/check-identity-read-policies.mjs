@@ -59,8 +59,10 @@ const WRITE = process.argv.includes('--write');
 /**
  * A column that names a PERSON. user_id is the obvious one; the others appear
  * on this schema's join tables, where the person is the row's whole point.
+ * host_user_id was missing until WEB-SEC-070, which is how swipe_sessions
+ * (every group session's host, readable by anon) passed this check.
  */
-const IDENTITY_COLUMNS = /^(user_id|voter_id|participant_id|author_id|actor|created_by|owner_id)$/;
+const IDENTITY_COLUMNS = /^(user_id|host_user_id|voter_id|participant_id|author_id|actor|created_by|owner_id)$/;
 
 function readBalanced(src, open) {
   let depth = 0;
