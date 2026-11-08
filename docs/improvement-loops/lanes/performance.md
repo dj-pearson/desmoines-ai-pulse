@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. WEB-PERF-066 closed in loop 14.
+None. WEB-PERF-068 closed in loop 15.
 
 What the next loop should know:
 - The rest of the entry's __vite__mapDeps (about 13 KB gz) is the routes' own
@@ -17,9 +17,12 @@ What the next loop should know:
   a "direct deps only" build cut 36 of 8,018 refs and 0.2 KB gz. The only
   bigger cut is "target only", which costs one full RTT on every navigation
   by construction. Not worth re-measuring unless the chunking changes.
-- Next candidate: WEB-PERF-068 (remove-lazy-preloads warns on every build that
-  critical-path vendor-supabase is preloaded). The open WEB-PERF stories 023,
-  031, 034 and 035 are still waiting on a migration or live data.
+- A clean `vite build` now prints no remove-lazy-preloads warning. If one
+  appears, it is real: a non-critical chunk over 150 KB raw is preloaded from
+  the HTML. CRITICAL_PATH_CHUNKS in vite.config.ts is the exemption list and
+  heavyPreloads.test.ts pins it to what manualChunks forces.
+- The open WEB-PERF stories 023, 031, 034 and 035 are still waiting on a
+  migration or live data; the next loop likely needs to audit for a new gap.
 - Entry chunk, by module, after this loop: App.tsx 46 KB raw (route table),
   tailwind-merge 20 KB, react-helmet-async 11.8 KB (HelmetProvider and Helmet
   are one module), AuthContext 9.9 KB. Measure with a sourcemap walk
@@ -59,3 +62,4 @@ a keydown on document.body to test "?".
 | 2026-11-08 | WEB-PERF-067 | this commit | Forced vendor-editor chunk removed (it absorbed fast-equals, shared with recharts, and the app's tiptap-styles.css); unused passengers 614.8 -> 0, routes 9,743 -> 9,121 KB gz, five admin routes 123-125 KB lighter, none heavier; critical path 176.0 unchanged; manualChunks test with negative control (4 fail on re-adding); six chunks import clean in Chrome; story closed |
 | 2026-11-08 | WEB-PERF-066 | this commit | Preload lists drop chunks the importing chunk already loaded (modulePreload.resolveDependencies + bundle capture); entry refs 8,381 -> 7,905, lazy hosts 1,660 -> 792, entry 55.4 -> 55.2 KB gz; check-bundle-budget guards it (pre-change dist fails); 20 routes clean in Chrome; story stays open for AC2/AC3 |
 | 2026-11-08 | WEB-PERF-066 | this commit | AC3: AccessibilityWidget announces via new lib/announce (useAccessibility out of the entry, two duplicate announcers merged) and the shortcut listener is a lazy headless component; critical path 175.8 -> 174.7 KB gz, baseline ratcheted 174.9 -> 174.7; static-graph test with negative control (2 fail on revert). AC2 assessed, not shipped: direct-deps-only cuts 36/8,018 refs (0.2 KB gz) because rollup hoists transitive imports; target-only costs a full RTT per navigation. Story closed |
+| 2026-11-08 | WEB-PERF-068 | this commit | Heavy-preload check extracted to findHeavyPreloads and exempts CRITICAL_PATH_CHUNKS by chunk name; a clean build goes from 1 warning (vendor-supabase 216 KB) to 0; critical path 174.7 unchanged; test with negative controls (no exemption: 2 fail; prefix match: 1 fail); story closed |

@@ -71,6 +71,46 @@ function injectBuildTimestamp(): Plugin {
   };
 }
 
+/**
+ * The manual chunks every page loads before it can render (React, the router
+ * and query client, Supabase). manualChunks below returns exactly these names,
+ * and src/__tests__/manualChunks.test.ts pins that the two agree.
+ */
+export const CRITICAL_PATH_CHUNKS: readonly string[] = [
+  "vendor-react",
+  "vendor-react-ecosystem",
+  "vendor-supabase",
+];
+
+export const HEAVY_PRELOAD_BYTES = 150 * 1024;
+
+/**
+ * Chunks over the threshold that an HTML page preloads (WEB-PERF-068).
+ *
+ * vendor-supabase is ~216 KB raw and is preloaded from index.html on purpose,
+ * so without the exemption this reported it on every good build and the one
+ * warning meant to catch a lazy chunk on first paint read as noise. The
+ * critical-path vendors are not unbudgeted: check-bundle-budget totals every
+ * JS file index.html references and fails when that grows. Matched on the
+ * chunk's name (the manual-chunk name), not a filename prefix, so
+ * "vendor-react" cannot also exempt a future "vendor-react-whatever".
+ */
+export function findHeavyPreloads(
+  html: string,
+  bundle: OutputBundle,
+  thresholdBytes: number = HEAVY_PRELOAD_BYTES,
+  exempt: readonly string[] = CRITICAL_PATH_CHUNKS
+): { fileName: string; bytes: number }[] {
+  const out: { fileName: string; bytes: number }[] = [];
+  for (const m of html.matchAll(/<link rel="modulepreload"[^>]*href="\/(assets\/[^"]+)"/g)) {
+    const chunk = bundle[m[1]];
+    if (!chunk || chunk.type !== "chunk" || exempt.includes(chunk.name)) continue;
+    const bytes = Buffer.byteLength(chunk.code);
+    if (bytes > thresholdBytes) out.push({ fileName: m[1].slice("assets/".length), bytes });
+  }
+  return out;
+}
+
 // Custom plugin to remove heavy lazy-loaded chunks from preload list
 function removeLazyPreloads(): Plugin {
   return {
@@ -132,25 +172,16 @@ function removeLazyPreloads(): Plugin {
       // usually nothing left to strip, so that condition now fires on success -
       // a warning on every good build, which is how people learn to ignore
       // warnings. It asserts the actual budget instead: nothing heavy may be
-      // preloaded from the entry HTML, whatever it happens to be called.
-      const HEAVY_PRELOAD_BYTES = 150 * 1024;
+      // preloaded from the entry HTML, whatever it happens to be called,
+      // except the critical-path vendors (WEB-PERF-068, see findHeavyPreloads).
       for (const asset of Object.values(bundle)) {
         if (asset.type !== "asset" || !asset.fileName.endsWith(".html")) continue;
-        const preloaded = String(asset.source).match(
-          /<link rel="modulepreload"[^>]*href="\/assets\/([^"]+)"/g
-        ) ?? [];
-        for (const link of preloaded) {
-          const name = link.match(/assets\/([^"]+)/)?.[1];
-          const chunk = name ? bundle[`assets/${name}`] : undefined;
-          if (!chunk || chunk.type !== "chunk") continue;
-          const bytes = Buffer.byteLength(chunk.code);
-          if (bytes > HEAVY_PRELOAD_BYTES) {
-            this.warn(
-              `remove-lazy-preloads: ${name} is ${(bytes / 1024).toFixed(0)} KB ` +
-                `and is preloaded from ${asset.fileName}. That is first-paint ` +
-                `weight - add a pattern above or stop forcing it into a chunk.`
-            );
-          }
+        for (const { fileName, bytes } of findHeavyPreloads(String(asset.source), bundle)) {
+          this.warn(
+            `remove-lazy-preloads: ${fileName} is ${(bytes / 1024).toFixed(0)} KB ` +
+              `and is preloaded from ${asset.fileName}. That is first-paint ` +
+              `weight - add a pattern above or stop forcing it into a chunk.`
+          );
         }
       }
       void stripped;
