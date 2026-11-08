@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
 import { AlertCircle, CheckCircle2, Loader2, MailCheck } from "lucide-react";
 
 type Status = "loading" | "success" | "already" | "invalid" | "error";
@@ -36,7 +37,6 @@ export default function NewsletterConfirm() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [status, setStatus] = useState<Status>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,8 +53,10 @@ export default function NewsletterConfirm() {
 
         if (cancelled) return;
         if (error) {
+          // WEB-ADS-024: the reader gets fixed copy; the PostgREST text goes to
+          // ops through handleError, never onto the page.
+          handleError(error, { component: "NewsletterConfirm", action: "confirmByToken" });
           setStatus("error");
-          setErrorMessage(error.message);
           return;
         }
 
@@ -70,8 +72,8 @@ export default function NewsletterConfirm() {
         setStatus(row.already_confirmed ? "already" : "success");
       } catch (err) {
         if (cancelled) return;
+        handleError(err, { component: "NewsletterConfirm", action: "confirmByToken" });
         setStatus("error");
-        setErrorMessage(err instanceof Error ? err.message : "Unknown error");
       }
     }
 
@@ -142,8 +144,7 @@ export default function NewsletterConfirm() {
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Something went wrong while confirming your subscription
-                  {errorMessage ? ` (${errorMessage})` : ""}. Please try the
+                  Something went wrong while confirming your subscription. Please try the
                   link again in a moment, or email{" "}
                   <a href="mailto:hello@desmoinesinsider.com" className="underline">
                     hello@desmoinesinsider.com

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
 import { logConsent } from "@/lib/consentLog";
 import {
   CheckCircle2,
@@ -36,7 +37,6 @@ export default function Unsubscribe() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [status, setStatus] = useState<Status>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,8 +54,10 @@ export default function Unsubscribe() {
 
         if (cancelled) return;
         if (error) {
+          // WEB-ADS-024: the reader gets fixed copy; the PostgREST text goes to
+          // ops through handleError, never onto the page.
+          handleError(error, { component: "Unsubscribe", action: "unsubscribeByToken" });
           setStatus("error");
-          setErrorMessage(error.message);
           return;
         }
 
@@ -82,10 +84,8 @@ export default function Unsubscribe() {
         }
       } catch (err) {
         if (cancelled) return;
+        handleError(err, { component: "Unsubscribe", action: "unsubscribeByToken" });
         setStatus("error");
-        setErrorMessage(
-          err instanceof Error ? err.message : "Unknown error"
-        );
       }
     }
 
@@ -165,8 +165,7 @@ export default function Unsubscribe() {
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Something went wrong while processing your request
-                  {errorMessage ? ` (${errorMessage})` : ""}. Please try again
+                  Something went wrong while processing your request. Please try again
                   in a moment, or email{" "}
                   <a
                     href="mailto:unsubscribe@desmoinesinsider.com"
