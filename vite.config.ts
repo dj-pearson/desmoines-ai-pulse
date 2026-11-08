@@ -339,10 +339,29 @@ export default defineConfig(({ command, mode }) => {
             return "vendor-editor";
           }
 
-          // Date utilities
-          if (id.includes("date-fns")) {
-            return "vendor-dates";
-          }
+          // No date-fns chunk (WEB-PERF-064). `if (id.includes("date-fns"))
+          // return "vendor-dates"` was the last library forced together that is
+          // not on every page's critical path, and it failed the same way the
+          // Radix and three.js chunks above did: 36 KB minified / 10.3 KB gz of
+          // date-fns and date-fns-tz, every function any page uses, fetched by
+          // 114 of the 159 lazy imports. Worse than its own size, the forced
+          // chunk skewed how Rollup grouped and merged the app's shared modules,
+          // so routes that format no date at all still preloaded
+          // eventsHubQuery, restaurantHours, tonightPairings and useCampaigns.
+          //
+          // Per-route JS beyond the critical path, gzipped, summed over every
+          // lazy route in App.tsx, one build each way:
+          //     all 131 routes      11,779 -> 10,840 KB  (-938; 78 better, 36 worse)
+          //     the 89 public ones   6,033 ->  5,727 KB  (-306)
+          //     /pricing 73.3 -> 52.4   /contact 90.2 -> 66.7   /auth 106.5 -> 83.0
+          //     /articles 107.4 -> 96.8   /restaurants/:id 160.9 -> 155.8
+          //     /events/:id 174.8 -> 170.4   / 78.8 -> 77.9
+          // The worse 36 are 0.5-5.5 KB each (/hotels 102.8 -> 108.3 is the
+          // largest): Rollup's experimentalMinChunkSize merge, below, now folds
+          // a different set of small shared modules into chunks those routes
+          // import. That over-fetch exists either way; this change moves less of
+          // it onto fewer routes. Critical path unchanged (174.9 -> 175.0 KB).
+          // Pinned by src/__tests__/manualChunks.test.ts.
 
           // No lucide-react chunk. Forcing every icon into one vendor-icons
           // chunk put icons only /admin uses on the critical path of every
