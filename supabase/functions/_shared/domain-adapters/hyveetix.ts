@@ -272,7 +272,7 @@ async function fetchViaBrowserless(
     return { ok: true, value: html };
   }, `[hyveetix] ${code}`);
 
-  if (outcome.ok) return outcome.value;
+  if (outcome.ok === true) return outcome.value;
   console.log(`  ❌ [hyveetix] ${code}: Browserless failed - ${outcome.error}`);
   return null;
 }

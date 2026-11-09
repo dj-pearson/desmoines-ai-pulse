@@ -100,6 +100,11 @@ Deno.test('the event flood limit is persistent, per IP and campaign, at the same
   const call = src.match(/await checkRateLimitPersistent\(req, \{([\s\S]*?)\}\);/);
   assert(call, 'track-ad-event must await checkRateLimitPersistent');
   assert(/endpoint: `track-ad-event:\$\{limitKey\}`/.test(call[1]), 'keyed by campaign on top of the IP');
+  // One bucket per campaign, not per spelling of its uuid.
+  assert(
+    /const limitKey = UUID_RE\.test\(String\(campaignId \?\? ''\)\) \? String\(campaignId\)\.toLowerCase\(\) : 'invalid';/.test(src),
+    'the campaign id is lowercased before it keys the limit',
+  );
   assert(/max: 120,/.test(call[1]), 'the limit stays 120; tightening it is a compat break');
   assert(/if \(!limited\.success && limited\.response\) return limited\.response;/.test(src), 'the 429 (with CORS) is returned as built');
 });

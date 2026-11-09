@@ -18,7 +18,7 @@ import { SavedSearchCalendarDialog } from "@/components/dashboard/SavedSearchCal
 import type { SavedSearchListItem } from "@/hooks/useSavedSearchAlerts";
 import { normalizeSavedSearch } from "@/lib/savedSearchFilters";
 
-const TOKEN = "3f2b9c1e-8a4d-4f6e-9b2a-1c3d5e7f9a0b";
+const FEED_UUID = "3f2b9c1e-8a4d-4f6e-9b2a-1c3d5e7f9a0b";
 
 function row(calendar_token: string | null): SavedSearchListItem {
   const base = {
@@ -54,18 +54,18 @@ describe("SavedSearchCalendarDialog", () => {
   });
 
   it("shows the production feed URL when the feed is on", () => {
-    setup(TOKEN);
-    const url = `https://desmoinesinsider.com/calendar/my/${TOKEN}.ics`;
+    setup(FEED_UUID);
+    const url = `https://desmoinesinsider.com/calendar/my/${FEED_UUID}.ics`;
     expect(screen.getByLabelText("Or copy the link into any calendar app")).toHaveValue(url);
     expect(screen.getByRole("link", { name: "Add to Apple Calendar" })).toHaveAttribute(
       "href",
-      `webcal://desmoinesinsider.com/calendar/my/${TOKEN}.ics`,
+      `webcal://desmoinesinsider.com/calendar/my/${FEED_UUID}.ics`,
     );
     expect(screen.getByText(/Anyone with this link/)).toBeInTheDocument();
   });
 
   it("rotates and turns off through the RPC, not a direct write", async () => {
-    const { mutate } = setup(TOKEN);
+    const { mutate } = setup(FEED_UUID);
     await userEvent.click(screen.getByRole("button", { name: "Get a new link" }));
     await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
     expect(mutate.mock.calls.map((c) => c[0])).toEqual([

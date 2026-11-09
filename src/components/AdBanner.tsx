@@ -117,7 +117,7 @@ function AdSlot({ placement, className = "", fallback, adFree, tierLoading }: Ad
     >
       {/* The creative is an <img> rather than a CSS background, so it has
           alternative text, an intrinsic size and a loading priority. */}
-      {hasImage && (
+      {hasImage && ad.image_url && (
         <OptimizedImage
           src={ad.image_url}
           alt={ad.title || ad.description || "Advertisement"}

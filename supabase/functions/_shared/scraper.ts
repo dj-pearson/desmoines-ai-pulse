@@ -172,7 +172,7 @@ export async function withBrowserlessFallback<T>(
   const run = async (host: BrowserlessHost): Promise<BrowserlessAttempt<T>> => {
     try {
       const r = await attempt(host);
-      return r.ok ? r : { ok: false, error: redactBrowserlessToken(r.error) };
+      return r.ok === true ? r : { ok: false, error: redactBrowserlessToken(r.error) };
     } catch (err) {
       return {
         ok: false,
@@ -184,7 +184,7 @@ export async function withBrowserlessFallback<T>(
   const first: BrowserlessAttempt<T> = primary
     ? await run(primary)
     : { ok: false, error: 'primary Browserless key not configured' };
-  if (first.ok) {
+  if (first.ok === true) {
     console.log(`${logPrefix}: served by primary host ${browserlessHostName(primary!.baseUrl)}`);
     return { ok: true, value: first.value, host: 'primary' };
   }
@@ -197,7 +197,7 @@ export async function withBrowserlessFallback<T>(
       `retrying once on backup host ${browserlessHostName(backup.baseUrl)}`,
   );
   const second = await run(backup);
-  if (second.ok) {
+  if (second.ok === true) {
     console.log(`${logPrefix}: served by backup host ${browserlessHostName(backup.baseUrl)}`);
     return { ok: true, value: second.value, host: 'backup' };
   }
@@ -238,7 +238,7 @@ async function scrapeWithBrowserless(
     }
     return { ok: true, value: r };
   });
-  if (outcome.ok) {
+  if (outcome.ok === true) {
     return { ...outcome.value, browserlessHost: outcome.host, duration: Date.now() - startTime };
   }
   return {

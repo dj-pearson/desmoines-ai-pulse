@@ -89,7 +89,7 @@ for (const rule of routes.exclude) {
        !rule.includes('*') && passesThrough(rule) && existsSync(join(root, 'public', rule.slice(1))));
   }
   // No other function lives at an excluded path.
-  const top = rule.slice(1).split('/')[0].replace('*', '');
+  const top = rule.slice(1).split('/')[0].replace(/\*/g, '');
   ck(`${rule}: no functions/ route under it`,
      !existsSync(join(root, 'functions', top)) &&
      !existsSync(join(root, 'functions', top.replace(/\.[^.]+$/, '') + '.ts')));

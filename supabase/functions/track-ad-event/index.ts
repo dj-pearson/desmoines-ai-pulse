@@ -82,7 +82,10 @@ Deno.serve(async (req) => {
     // abuse, and a page showing several campaigns should not share one budget.
     // A malformed campaign id shares one bucket per IP rather than escaping the
     // limit. Limit and window unchanged (120 per 15 minutes).
-    const limitKey = UUID_RE.test(String(campaignId ?? '')) ? campaignId : 'invalid';
+    // Lowercased: UUID_RE is case-insensitive and Postgres reads every
+    // spelling of a uuid as the same campaign, but the key is text, so
+    // varying the case of one id gave the same IP a fresh bucket per spelling.
+    const limitKey = UUID_RE.test(String(campaignId ?? '')) ? String(campaignId).toLowerCase() : 'invalid';
     const limited = await checkRateLimitPersistent(req, {
       endpoint: `track-ad-event:${limitKey}`,
       max: 120,
