@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
-import { hasConsent } from '@/components/CookieConsentBanner';
+import { hasConsent } from '@/lib/cookieConsent';
 
 const log = createLogger('useContentTracking');
 

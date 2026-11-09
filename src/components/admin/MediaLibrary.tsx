@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 import OptimizedImage from "@/components/OptimizedImage";
 import { cn } from "@/lib/utils";
+import { STRETCHED_BUTTON_CLASS } from "@/lib/stretchedButton";
 
 // Helper function to format bytes
 function formatBytes(bytes: number): string {
@@ -124,6 +125,37 @@ function StatusBadge({ status }: { status: string }) {
   }
 }
 
+interface AssetNameProps {
+  asset: MediaAsset;
+  selectable: boolean;
+  selected: boolean;
+  onSelect: (asset: MediaAsset) => void;
+  className: string;
+}
+
+/**
+ * The asset's name. In a selection mode it is a real button stretched over
+ * the whole card, so Tab reaches each asset once and Enter/Space select it
+ * (WEB-UX-057). Outside a selection mode the card does nothing on click, so
+ * it is plain text.
+ */
+function AssetName({ asset, selectable, selected, onSelect, className }: AssetNameProps) {
+  const name = asset.title || asset.original_file_name;
+  if (!selectable) return <p className={className}>{name}</p>;
+  return (
+    <p className={className}>
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={() => onSelect(asset)}
+        className={STRETCHED_BUTTON_CLASS}
+      >
+        {name}
+      </button>
+    </p>
+  );
+}
+
 interface MediaLibraryProps {
   onSelect?: (asset: MediaAsset) => void;
   selectionMode?: "single" | "multiple" | "none";
@@ -167,6 +199,7 @@ export function MediaLibrary({
   const updateAsset = useUpdateMediaAsset();
   const { upload, isUploading } = useMediaUpload();
 
+  const selectable = selectionMode !== "none";
   const totalPages = data ? Math.ceil(data.total / (filters.pageSize || 20)) : 0;
 
   // Handle file upload
@@ -338,6 +371,7 @@ export function MediaLibrary({
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search media"
             placeholder="Search media..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -352,7 +386,7 @@ export function MediaLibrary({
             setFilters((prev) => ({ ...prev, bucket: value === "all" ? undefined : value, page: 1 }))
           }
         >
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-[140px]" aria-label="Filter by bucket">
             <SelectValue placeholder="All buckets" />
           </SelectTrigger>
           <SelectContent>
@@ -370,7 +404,7 @@ export function MediaLibrary({
             setFilters((prev) => ({ ...prev, sortBy: value as MediaFilters["sortBy"] }))
           }
         >
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-[140px]" aria-label="Sort by">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
@@ -383,14 +417,14 @@ export function MediaLibrary({
 
         {/* View toggle */}
         <div className="flex border rounded-md">
-          <Button
+          <Button aria-label="Grid view" aria-pressed={viewMode === "grid"}
             variant={viewMode === "grid" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => setViewMode("grid")}
           >
             <Grid className="h-4 w-4" />
           </Button>
-          <Button
+          <Button aria-label="List view" aria-pressed={viewMode === "list"}
             variant={viewMode === "list" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => setViewMode("list")}
@@ -478,10 +512,10 @@ export function MediaLibrary({
                 <Card
                   key={asset.id}
                   className={cn(
-                    "group cursor-pointer transition-all hover:ring-2 hover:ring-primary",
+                    "group relative transition-all",
+                    selectable && "hover:ring-2 hover:ring-primary",
                     selectedAssets.has(asset.id) && "ring-2 ring-primary"
                   )}
-                  onClick={() => handleSelect(asset)}
                 >
                   <div className="relative aspect-square">
                     {asset.mime_type.startsWith("image/") ? (
@@ -501,19 +535,15 @@ export function MediaLibrary({
                       </div>
                     )}
 
-                    {/* Selection checkbox */}
-                    {selectionMode !== "none" && (
+                    {/* Selection indicator; the name button below is the control */}
+                    {selectable && (
                       <div className="absolute top-2 left-2">
-                        <Checkbox
-                          checked={selectedAssets.has(asset.id)}
-                          onCheckedChange={() => handleSelect(asset)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
+                        <Checkbox checked={selectedAssets.has(asset.id)} tabIndex={-1} aria-hidden="true" />
                       </div>
                     )}
 
-                    {/* Actions */}
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Actions: above the stretched name button, shown on hover or focus */}
+                    <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                           <Button variant="secondary" size="icon" className="h-8 w-8" aria-label="Media options">
@@ -566,7 +596,13 @@ export function MediaLibrary({
                   </div>
 
                   <CardContent className="p-2">
-                    <p className="text-sm font-medium truncate">{asset.title || asset.original_file_name}</p>
+                    <AssetName
+                      asset={asset}
+                      selectable={selectable}
+                      selected={selectedAssets.has(asset.id)}
+                      onSelect={handleSelect}
+                      className="text-sm font-medium truncate"
+                    />
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>{formatBytes(asset.file_size)}</span>
                       <StatusBadge status={asset.processing_status} />
@@ -581,18 +617,14 @@ export function MediaLibrary({
                 <Card
                   key={asset.id}
                   className={cn(
-                    "cursor-pointer transition-all hover:bg-accent",
+                    "relative transition-all",
+                    selectable && "hover:bg-accent",
                     selectedAssets.has(asset.id) && "ring-2 ring-primary"
                   )}
-                  onClick={() => handleSelect(asset)}
                 >
                   <CardContent className="p-3 flex items-center gap-4">
-                    {selectionMode !== "none" && (
-                      <Checkbox
-                        checked={selectedAssets.has(asset.id)}
-                        onCheckedChange={() => handleSelect(asset)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                    {selectable && (
+                      <Checkbox checked={selectedAssets.has(asset.id)} tabIndex={-1} aria-hidden="true" />
                     )}
                     <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0">
                       {asset.mime_type.startsWith("image/") ? (
@@ -610,7 +642,13 @@ export function MediaLibrary({
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{asset.title || asset.original_file_name}</p>
+                      <AssetName
+                        asset={asset}
+                        selectable={selectable}
+                        selected={selectedAssets.has(asset.id)}
+                        onSelect={handleSelect}
+                        className="font-medium truncate"
+                      />
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>{formatBytes(asset.file_size)}</span>
                         <span>•</span>
@@ -626,7 +664,7 @@ export function MediaLibrary({
                     <StatusBadge status={asset.processing_status} />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" aria-label="Media options">
+                        <Button variant="ghost" size="icon" className="relative z-10" aria-label="Media options">
                           <MoreVertical className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </DropdownMenuTrigger>

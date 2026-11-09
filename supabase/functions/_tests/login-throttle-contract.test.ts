@@ -17,7 +17,7 @@
  * point a live call at. Each one names the specific line that was the bug.
  */
 
-import { assert, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
@@ -135,7 +135,11 @@ Deno.test('the browser no longer drives any lockout', async () => {
 });
 
 Deno.test('AuthContext sends the proof it now needs', async () => {
-  const ctx = await read('src/contexts/AuthContext.tsx');
+  // WEB-PERF-063 moved the sign-in body out of the entry chunk into
+  // src/lib/authActions.ts; AuthContext's login must still route through it.
+  const provider = await read('src/contexts/AuthContext.tsx');
+  assert(/m\.loginWithPassword\(email, password, captchaToken\)/.test(provider), 'login must call the moved implementation');
+  const ctx = await read('src/lib/authActions.ts');
   assert(
     /checkServerLockout\(email, 'record_success', data\.session\?\.access_token\)/.test(ctx),
     'the success call must carry the token the server verifies',

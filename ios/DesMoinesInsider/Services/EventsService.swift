@@ -27,6 +27,8 @@ actor EventsService {
         var category: String?
         var cities: [String]?
         var freeOnly: Bool = false
+        /// Kids and family only (IOS-AUDIT-005): `kidsEventsFilter`.
+        var kidsOnly: Bool = false
         var dateStart: Date?
         var dateEnd: Date?
         var isFeatured: Bool?
@@ -107,6 +109,11 @@ actor EventsService {
             orGroups.append(Self.freePriceFilter)
         }
 
+        // Kids and family: the web's /events/kids or-group (IOS-AUDIT-005).
+        if query.kidsOnly {
+            orGroups.append(Self.kidsEventsFilter)
+        }
+
         if let combined = Self.combineOrGroups(orGroups) {
             request = request.or(combined)
         }
@@ -168,6 +175,20 @@ actor EventsService {
     /// Mirrors src/lib/eventPrice.ts FREE_PRICE_FILTER byte for byte: says
     /// "free" and names no non-zero dollar amount, or is exactly $0 / 0.
     static let freePriceFilter = "and(price.ilike.%free%,price.not.match.[$] *[1-9]),price.eq.$0,price.eq.0"
+
+    /// Mirrors KIDS_EVENTS_FILTER in src/hooks/useEventLanding.ts byte for
+    /// byte (IOS-AUDIT-005): family words as whole words in the title, kids /
+    /// family / children in the category, and only plural or explicit child
+    /// words in enhanced_description (a "family-owned brewery" is not a kids
+    /// event). `imatch` is PostgREST's ~*, and [[:<:]] / [[:>:]] are Postgres
+    /// word boundaries. The patterns are double-quoted because PostgREST
+    /// reserves ":" and parentheses inside an or() value.
+    /// src/lib/__tests__/iosKidsEventsParity.test.ts fails when the two drift.
+    static let kidsEventsFilter = [
+        #"title.imatch."[[:<:]](kids?|child|children|family|families|toddlers?|preschool|storytime|story time|teens?)[[:>:]]""#,
+        #"category.imatch."[[:<:]](kids?|family|children)[[:>:]]""#,
+        #"enhanced_description.imatch."[[:<:]](kids|children|toddlers)[[:>:]]""#,
+    ].joined(separator: ",")
 
     /// "Not over yet", three arms, as notOverFilter in
     /// src/components/events/eventsHubQuery.ts: started in the last two hours
@@ -305,6 +326,29 @@ actor EventsService {
         }
     }
 
+    /// The second look the web takes when the visible read finds nothing
+    /// (classifyUnlisted in src/hooks/useEventBySlug.ts): a row the archive
+    /// sweep retired is a past event and still has a page, so it is read with
+    /// archived rows asked for by name. A moderator's hide is never looked
+    /// past, and a merged row stays "no longer available" here as before.
+    /// nil means no such archived row (IOS-AUDIT-001).
+    func fetchArchivedEvent(id: String) async throws -> Event? {
+        try await withRetry { [self] in
+            let client = try db()
+            let rows: [Event] = try await client
+                .from("events")
+                .select()
+                .eq("id", value: id)
+                .neq("is_merged", value: true)
+                .neq("is_hidden", value: true)
+                .not("archived_at", operator: .is, value: "null")
+                .limit(1)
+                .execute()
+                .value
+            return rows.first
+        }
+    }
+
     /// Shaped like PostgREST's "0 rows" answer so EventDetailViewModel.isNotFound
     /// (which reads a `code` child) treats an unresolvable slug the same way.
     struct SlugNotFound: Error {
@@ -410,6 +454,38 @@ actor EventsService {
                 .limit(limit)
                 .execute()
             return try JSONDecoder().decode(LossyEventArray.self, from: response.data).events
+        }
+    }
+
+    // MARK: - Event Series (IOS-AUDIT-FEAT-046)
+
+    /// Most rows one series read returns, as the web's SERIES_ROW_LIMIT:
+    /// several years of even a nightly series.
+    static let seriesRowLimit = 200
+
+    /// Every row of one annual series, for its native screen. A port of the
+    /// web's useEventSeriesPage query.
+    ///
+    /// This read deliberately keeps hidden and archived rows: a past edition
+    /// is exactly a row the stale sweep hid, and `EventSeriesSchedule.build`
+    /// decides per row whether to list it, link it or drop it. Merged
+    /// duplicates are excluded, since their survivor is the row that counts.
+    /// The title filter is the web's loose ilike per alias; `build` applies
+    /// the exact match.
+    func fetchSeriesRows(_ def: EventSeriesDef) async throws -> [SeriesEventRow] {
+        let patterns = EventSeries.titlePatterns(def)
+        guard !patterns.isEmpty else { return [] }
+        return try await withRetry { [self] in
+            let client = try db()
+            let response = try await client
+                .from("events")
+                .select()
+                .neq("is_merged", value: true)
+                .or(patterns.joined(separator: ","))
+                .order("date", ascending: true)
+                .limit(Self.seriesRowLimit)
+                .execute()
+            return try JSONDecoder().decode(LossySeriesRows.self, from: response.data).rows
         }
     }
 
@@ -576,7 +652,7 @@ actor EventsService {
 ///
 /// A ROLE interface, deliberately. EventsService has around forty methods; a
 /// protocol mirroring it would be unwritable and unmaintainable, and every
-/// caller would have to stub methods it never calls. This declares the two the
+/// caller would have to stub methods it never calls. This declares the three the
 /// event detail screen actually uses, so a fake in a test is a dozen lines.
 ///
 /// Same shape as `AuthProviding` (IOS-AUDIT-TEST-002): a protocol beside the
@@ -585,6 +661,8 @@ actor EventsService {
 protocol EventDetailProviding: Sendable {
     func fetchEvent(id: String) async throws -> Event
     func fetchRelatedEvents(eventId: String, category: String, limit: Int) async throws -> [Event]
+    /// The archived row for an id the visible read refused, or nil (IOS-AUDIT-001).
+    func fetchArchivedEvent(id: String) async throws -> Event?
 }
 
 extension EventDetailProviding {

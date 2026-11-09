@@ -6,6 +6,9 @@ import Foundation
 /// chip, a category tile, a Siri intent or a saved search.
 struct SearchFilters: Equatable {
     var datePreset: DateFilterPreset?
+    /// Specific days, from a `?from=&to=` link or a month page
+    /// (IOS-AUDIT-003). Never set together with `datePreset`.
+    var dayRange: EventDayRange?
     var freeOnly = false
     var openNow = false
     var areas: [LocationArea] = []
@@ -13,21 +16,35 @@ struct SearchFilters: Equatable {
     /// The tab the words point at ("restaurants", "open now"). Not a filter:
     /// it only chooses which tab is shown first.
     var tabHint: SearchViewModel.SearchTab?
+    /// Kids and family events only: the web's /events/kids rule
+    /// (EventsService.kidsEventsFilter, IOS-AUDIT-005). Set by that link,
+    /// never parsed from typed words, so "kids" typed in the field stays a
+    /// keyword.
+    var kidsOnly = false
 
     /// True when nothing here narrows a query. `tabHint` does not count.
     var isEmpty: Bool {
-        datePreset == nil && !freeOnly && !openNow && areas.isEmpty && category == nil
+        datePreset == nil && dayRange == nil && !freeOnly && !openNow && areas.isEmpty && category == nil
+            && !kidsOnly
     }
 
     /// `self`, with every field `explicit` sets taking precedence.
     func merged(with explicit: SearchFilters) -> SearchFilters {
         var out = self
-        if let preset = explicit.datePreset { out.datePreset = preset }
+        if let preset = explicit.datePreset {
+            out.datePreset = preset
+            out.dayRange = nil
+        }
+        if let range = explicit.dayRange {
+            out.dayRange = range
+            out.datePreset = nil
+        }
         if explicit.freeOnly { out.freeOnly = true }
         if explicit.openNow { out.openNow = true }
         if !explicit.areas.isEmpty { out.areas = explicit.areas }
         if let category = explicit.category { out.category = category }
         if let hint = explicit.tabHint { out.tabHint = hint }
+        if explicit.kidsOnly { out.kidsOnly = true }
         return out
     }
 }
@@ -192,17 +209,26 @@ enum SearchQueryParser {
     // MARK: - Saved-search slugs (supabase/functions/_shared/savedSearchMatch.ts)
 
     /// The `preset` value the web and the alert job understand. Tonight has no
-    /// preset of its own there, so it saves as today.
+    /// preset of its own there, so it saves as today. This Month has none
+    /// either, and saves with no date rather than a different window.
     static let presetSlug: [DateFilterPreset: String] = [
         .tonight: "today", .today: "today", .tomorrow: "tomorrow", .thisWeekend: "this-weekend",
+        .thisWeek: "this-week", .nextWeek: "next-week", .next7Days: "next-7-days",
     ]
 
-    /// The inverse of `presetSlug`, for a row the web wrote.
+    /// The inverse of `presetSlug`, for a row or link the web wrote: the six
+    /// HUB_DATE_PRESETS keys of src/components/events/eventsHubQuery.ts, plus
+    /// the `next_7_days` spelling SmartFilters once put in links
+    /// (IOS-AUDIT-FEAT-042; this-week, next-week and next-7-days used to read
+    /// as no date filter).
     static func preset(slug: String) -> DateFilterPreset? {
         switch slug.lowercased() {
         case "today": return .today
         case "tomorrow": return .tomorrow
         case "this-weekend": return .thisWeekend
+        case "this-week": return .thisWeek
+        case "next-week": return .nextWeek
+        case "next-7-days", "next_7_days": return .next7Days
         default: return nil
         }
     }
@@ -226,28 +252,34 @@ enum SearchQueryParser {
 /// One removable filter, as the chip row under the tab picker shows it.
 enum SearchFilterChip: Hashable, Identifiable {
     case date(DateFilterPreset)
+    case days(EventDayRange)
     case free
     case openNow
     case area(LocationArea)
     case category(EventCategory)
+    case kids
 
     var id: String {
         switch self {
         case .date(let preset): return "date-\(preset.rawValue)"
+        case .days(let range): return "days-\(range.first)-\(range.last)"
         case .free: return "free"
         case .openNow: return "open-now"
         case .area(let area): return "area-\(area.rawValue)"
         case .category(let category): return "category-\(category.rawValue)"
+        case .kids: return "kids"
         }
     }
 
     var label: String {
         switch self {
         case .date(let preset): return preset.rawValue
+        case .days(let range): return range.label
         case .free: return "Free"
         case .openNow: return "Open now"
         case .area(let area): return area.displayName
         case .category(let category): return category.displayName
+        case .kids: return "Kids & family"
         }
     }
 }
@@ -257,10 +289,12 @@ extension SearchFilters {
     var chips: [SearchFilterChip] {
         var out: [SearchFilterChip] = []
         if let datePreset { out.append(.date(datePreset)) }
+        if let dayRange { out.append(.days(dayRange)) }
         if freeOnly { out.append(.free) }
         if openNow { out.append(.openNow) }
         out += areas.map { .area($0) }
         if let category { out.append(.category(category)) }
+        if kidsOnly { out.append(.kids) }
         return out
     }
 
@@ -273,10 +307,12 @@ extension SearchFilters {
         var out = self
         switch chip {
         case .date: out.datePreset = nil
+        case .days: out.dayRange = nil
         case .free: out.freeOnly = false
         case .openNow: out.openNow = false
         case .area(let area): out.areas.removeAll { $0 == area }
         case .category: out.category = nil
+        case .kids: out.kidsOnly = false
         }
         return out
     }
@@ -328,6 +364,53 @@ extension SearchQueryParser {
         case (.openNow, .openNow): return true
         case (.area(let a), .area(let b)): return a == b
         default: return false
+        }
+    }
+}
+
+// MARK: - The web's /events keys (IOS-AUDIT-FEAT-041)
+
+extension SearchFilters {
+    /// Values the web treats as "no filter": the /events controls' defaults
+    /// (EventsPage.tsx) and savedSearchMatch.ts UNSET_VALUES.
+    static let webUnsetValues: Set<String> = ["", "all", "any-location", "any-price", "any"]
+
+    /// `raw` trimmed, or nil when missing or one of `webUnsetValues`.
+    static func webValue(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return webUnsetValues.contains(trimmed.lowercased()) ? nil : trimmed
+    }
+
+    /// The filter keys the web's /events hub reads - `category`, `location`
+    /// (or `area`), `price`, `preset`, and `from`/`to` when there is no known
+    /// preset (IOS-AUDIT-003) - as search filters. One reader for
+    /// a saved_searches row the web wrote and for a shared /events?... link,
+    /// so the two cannot drift. `query` is the search words, used only so a
+    /// "tonight" search stays tonight: tonight has no preset of its own on
+    /// the web and is stored as "today".
+    init(webEventKeys keys: [String: String], query: String) {
+        self.init()
+        if let raw = Self.webValue(keys["category"]) {
+            let mapped = EventCategory(from: raw)
+            if mapped != .other || raw.lowercased() == "other" { category = mapped }
+        }
+        if let slug = Self.webValue(keys["preset"]) {
+            var preset = SearchQueryParser.preset(slug: slug)
+            if preset == .today, SearchQueryParser.parse(query).filters.datePreset == .tonight {
+                preset = .tonight
+            }
+            datePreset = preset
+        }
+        if datePreset == nil {
+            dayRange = EventDayRange(from: Self.webValue(keys["from"]), to: Self.webValue(keys["to"]))
+        }
+        if Self.webValue(keys["price"])?.lowercased() == "free" {
+            freeOnly = true
+        }
+        let location = Self.webValue(keys["location"]) ?? Self.webValue(keys["area"])
+        if let location, let area = SearchQueryParser.area(slug: location) {
+            areas = [area]
         }
     }
 }

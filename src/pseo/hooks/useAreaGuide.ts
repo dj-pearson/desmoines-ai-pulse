@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { applyEventVisibility } from '@/lib/eventQuery';
 import type { NeighborhoodBoundary } from '@/lib/neighborhoodBoundaries';
 import {
-  AREA_LOOKAHEAD_DAYS,
+  areaEventsWindow,
   polygonBounds,
   splitAreaEvents,
   splitAreaPlaces,
@@ -46,13 +46,14 @@ export function useAreaEvents(boundary: NeighborhoodBoundary | undefined) {
     queryFn: async () => {
       if (!boundary) throw new Error('useAreaEvents: no boundary');
       const now = new Date();
-      const until = new Date(now.getTime() + AREA_LOOKAHEAD_DAYS * 86_400_000);
+      // Still on today or running, starting within the lookahead (WEB-SEO-063).
+      const dates = areaEventsWindow(now);
       const box = polygonBounds(boundary.polygon);
       const query = supabase
         .from('events')
-        .select('id, title, date, event_start_utc, time_tbd, venue, location, latitude, longitude')
-        .gte('date', now.toISOString())
-        .lt('date', until.toISOString())
+        .select('id, title, date, end_date, event_start_utc, time_tbd, venue, location, latitude, longitude')
+        .or(dates.or)
+        .lt('date', dates.before)
         .gte('latitude', box.minLat)
         .lte('latitude', box.maxLat)
         .gte('longitude', box.minLng)

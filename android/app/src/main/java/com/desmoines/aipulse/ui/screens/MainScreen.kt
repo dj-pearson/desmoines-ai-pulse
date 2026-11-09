@@ -162,18 +162,38 @@ fun MainScreen(
                     DeepLinkHandler.ScreenDestination.WEEKEND -> Route.Weekend.route
                     DeepLinkHandler.ScreenDestination.HOTELS -> Route.Hotels.route
                     DeepLinkHandler.ScreenDestination.ARTICLES -> Route.Articles.route
+                    DeepLinkHandler.ScreenDestination.NEIGHBORHOODS -> Route.Neighborhoods.route
                 }
                 navController.navigate(screenRoute) { launchSingleTop = true }
+            }
+            // The slug is one Neighborhood.bySlug knows (AND-AUDIT-025); the
+            // guide is static and loads its own rails.
+            is DeepLinkHandler.Destination.Neighborhood -> {
+                navController.navigate(Route.NeighborhoodDetail.createRoute(destination.slug)) {
+                    launchSingleTop = true
+                }
             }
             is DeepLinkHandler.Destination.Web -> {
                 navController.navigate(Route.WebView.createRoute(destination.url)) {
                     launchSingleTop = true
                 }
             }
-            // The query itself waits in DeepLinkHandler.pendingSearchQuery
+            // The query (or the /events/kids filter) waits in DeepLinkHandler
             // until SearchViewModel picks it up.
-            is DeepLinkHandler.Destination.Search -> {
+            is DeepLinkHandler.Destination.Search,
+            is DeepLinkHandler.Destination.KidsEvents -> {
                 navController.navigate(Route.Search.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+            // The filter waits in DeepLinkHandler.pendingRestaurantsOpenNow
+            // until RestaurantsViewModel picks it up.
+            is DeepLinkHandler.Destination.RestaurantsOpenNow -> {
+                navController.navigate(Route.Dining.route) {
                     popUpTo(navController.graph.findStartDestination().id) {
                         saveState = true
                     }

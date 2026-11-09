@@ -300,6 +300,21 @@ class AuthViewModel @Inject constructor(
         setError(message)
     }
 
+    // MARK: - Apple Sign-In (XPLAT-012)
+
+    /**
+     * Hand off to the browser. No spinner is left running: the user is in
+     * another app until the redirect returns, and a cancelled sheet never
+     * returns at all, so a flag set here would have nothing to clear it. The
+     * outcome arrives as an auth-callback notice on MainScreen.
+     */
+    fun signInWithApple() {
+        viewModelScope.launch {
+            authRepository.signInWithApple()
+                .onFailure { setError(APPLE_SIGN_IN_FAILED_MESSAGE) }
+        }
+    }
+
     // MARK: - Sign Out
 
     fun signOut() {
@@ -457,6 +472,10 @@ class AuthViewModel @Inject constructor(
     }
 
     companion object {
+        /** No browser to open, or no Supabase client in this build. */
+        const val APPLE_SIGN_IN_FAILED_MESSAGE =
+            "Couldn't open Sign in with Apple. Check that a web browser is installed, then try again."
+
         /** Shared with SetNewPasswordViewModel so both forms score alike. */
         fun strengthOf(password: String): PasswordStrength {
             if (password.isEmpty()) return PasswordStrength.NONE

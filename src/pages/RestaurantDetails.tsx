@@ -27,6 +27,7 @@ import {
   buildRestaurantSchema,
   currentDescription,
   priceTier,
+  restaurantDealOffers,
   restaurantLocality,
   restaurantMetaDescription,
   restaurantPageTitle,
@@ -59,6 +60,8 @@ import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { isSponsoredActive } from "@/lib/sponsored";
 import { NearbyContent, TonightNearRestaurant } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
+import { RestaurantDealsList } from "@/components/restaurants/RestaurantDeals";
+import { useRestaurantDeals, venuePageDeals } from "@/hooks/useDeals";
 import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -259,6 +262,10 @@ export default function RestaurantDetails() {
   // Same query key as RestaurantMenuSection's, so this is one request.
   const { data: menuData } = useRestaurantMenu(restaurant?.id, { includeVersions: false });
   const hasCapturedMenu = !!menuData?.menu && menuData.sections.length > 0;
+
+  // In-date deals linked to this venue. Asked here, above the early returns,
+  // because the section, its chip and the JSON-LD all read one list.
+  const { data: venueDeals } = useRestaurantDeals(restaurant?.id);
 
   // The minute clock, so an event that has started leaves the list (WP3.7).
   // Not asked for a place you can't eat at tonight: the rail never shows there
@@ -465,6 +472,8 @@ export default function RestaurantDetails() {
   // The Restaurant node, from one pure builder (WP3.14). The rules it keeps
   // are written there: no invented hours, pin, price tier or menu claim.
   const canonicalUrl = getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`);
+  // One evaluation for the Deals section, its chip and makesOffer (WEB-FEAT-036).
+  const pageDeals = venuePageDeals(venueDeals, { shut: isShut, now });
   const restaurantSchema = buildRestaurantSchema(restaurant, {
     url: canonicalUrl,
     description: aboutText || seoDescription,
@@ -477,6 +486,7 @@ export default function RestaurantDetails() {
     openForBusiness: !lifecycle,
     mapsUrl: safeWebUrl(placeExtras.google_maps_uri),
     acceptsReservations: acceptsReservationsOf(placeExtras, safeWebUrl),
+    offers: restaurantDealOffers(pageDeals, canonicalUrl),
   });
 
   // WEB-SEO-027: the BreadcrumbList this used to build lived here AND in the
@@ -855,6 +865,11 @@ export default function RestaurantDetails() {
                   {menuAction.label}
                 </a>
               )}
+              {pageDeals.length > 0 && (
+                <a href="#deals" className={chipClass}>
+                  Deals
+                </a>
+              )}
               {restaurant.ai_writeup && (
                 <a href="#writeup" className={chipClass}>
                   Our take
@@ -1022,6 +1037,11 @@ export default function RestaurantDetails() {
                   </CollapsibleSection>
                 </>
               )}
+
+              {/* Deals and happy hours linked to this venue; nothing when none are in date
+                  or the place is shut (WEB-FEAT-035). The same list feeds the Deals
+                  chip and makesOffer (WEB-FEAT-036). */}
+              <RestaurantDealsList deals={pageDeals} restaurantName={restaurant.name} now={now} />
 
               {/* Menu: a section of its own, not a card inside this card (WP3.14) */}
               <Separator className="my-8" />

@@ -44,4 +44,24 @@ final class ArticleLinkRouteTests: XCTestCase {
         XCTAssertNil(ArticleDetailView.nativePresentation(for: .tab(.home)))
         XCTAssertNil(ArticleDetailView.nativePresentation(for: nil))
     }
+
+    func testNeighborhoodLinkOpensTheNativeGuide() {
+        // IOS-AUDIT-FEAT-038: a guide that links /neighborhoods/<slug>.
+        let presentation = ArticleDetailView.nativePresentation(for: .neighborhood(slug: "ankeny"))
+        XCTAssertEqual(presentation?.id, "neighborhood-ankeny")
+        XCTAssertNil(ArticleDetailView.nativePresentation(for: .neighborhood(slug: "not-a-place")))
+    }
+
+    func testBestOfCategoryLinkOpensNatively() {
+        // IOS-AUDIT-FEAT-040: a guide that links /best-of/<slug>.
+        let presentation = ArticleDetailView.nativePresentation(for: .bestOfCategory(slug: "best-pizza"))
+        XCTAssertEqual(presentation?.id, "best-of-best-pizza")
+    }
+
+    func testEventSeriesLinkOpensNatively() {
+        // IOS-AUDIT-FEAT-046: a guide that links /events/series/<slug>.
+        let presentation = ArticleDetailView.nativePresentation(for: .eventSeries(slug: "panda-fest"))
+        XCTAssertEqual(presentation?.id, "event-series-panda-fest")
+        XCTAssertNil(ArticleDetailView.nativePresentation(for: .eventSeries(slug: "not-a-series")))
+    }
 }

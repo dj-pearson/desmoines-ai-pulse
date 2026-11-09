@@ -1,9 +1,11 @@
 package com.desmoines.aipulse.data.remote
 
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.AuthCallbackRouter
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.Apple
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
@@ -25,22 +27,17 @@ import javax.inject.Singleton
 /**
  * Remote data source for authentication operations.
  *
- * DOES NOT MIRROR iOS, and the line that used to say it did was wrong in both
- * directions (XPLAT-003 AC4). It read "Mirrors iOS AuthService.swift - uses
- * Supabase Auth for email/password and Google Sign-In". iOS has NO Google
- * Sign-In (grep for google across AuthService.swift and Views/Auth returns
- * nothing), and this file has no Apple Sign-In. The two clients offer
- * DIFFERENT provider sets:
+ * DOES NOT MIRROR iOS (XPLAT-003 AC4). The provider sets are:
  *
  *   web      email + apple + google
- *   Android  email + google
- *   iOS      email + apple
+ *   Android  email + apple + google   (apple since XPLAT-012)
+ *   iOS      email + apple            (no Google; XPLAT-003)
  *
- * That is not cosmetic. Measured against auth.identities on 2026-08-23:
- * 5 email-only, 3 apple-only, 2 apple+google, 1 google-only. So one user
- * cannot reach their account on iOS, and THREE cannot reach theirs here.
- * Counting raw_app_meta_data->>'provider' instead overstates the iOS side
- * 2x, because a linked apple+google user signs in fine on both.
+ * Measured against auth.identities on 2026-08-23: 5 email-only, 3 apple-only,
+ * 2 apple+google, 1 google-only. The three apple-only accounts could not reach
+ * their account here before XPLAT-012; the one google-only account still
+ * cannot on iOS. Counting raw_app_meta_data->>'provider' instead overstates
+ * both gaps, because a linked apple+google user signs in fine everywhere.
  */
 @Singleton
 class AuthRemoteDataSource @Inject constructor(
@@ -152,6 +149,31 @@ class AuthRemoteDataSource @Inject constructor(
             provider = Google
             this.idToken = idToken
         }
+    }
+
+    // MARK: - Apple Sign-In (XPLAT-012)
+
+    /**
+     * Start Sign in with Apple in the browser. Returns once the browser is
+     * open, not once the user is signed in: Apple has no native SDK on
+     * Android, so this is the same OAuth provider web uses (AuthContext
+     * signInWithOAuth 'apple'), through the same Supabase Apple config.
+     *
+     * The client is PKCE (SupabaseClientProvider), so supabase-kt stores the
+     * code verifier here and the browser comes back to
+     * [AuthCallbackRouter.OAUTH_REDIRECT_URL] with a code. MainActivity
+     * classifies that as AuthCallback.OAuth and exchanges it through the same
+     * guarded path an email confirmation takes, so a refused code becomes a
+     * message instead of a crash.
+     *
+     * An Apple account resolves to the same auth.users row, and so the same
+     * profiles row, on every client: GoTrue keys the identity on Apple's
+     * stable `sub`, not on the client that asked. No auth or session shape
+     * changes.
+     */
+    suspend fun signInWithApple() {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        client.auth.signInWith(Apple, redirectUrl = AuthCallbackRouter.OAUTH_REDIRECT_URL)
     }
 
     // MARK: - Profile Management

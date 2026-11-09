@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.190.0/testing/asserts.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { recordableVersion, recordVersionCheck } from "./versionCheckLog.ts";
 
 const deps = (fetchImpl: typeof fetch) => ({ url: "https://api.example.test/", serviceKey: "k", fetchImpl });

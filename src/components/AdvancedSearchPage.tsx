@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ErrorState } from "@/components/ui/error-state";
 import { Search, Star, DollarSign, Grid, List, Navigation2 } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { AdvancedSearchFilters } from "./AdvancedSearchFilters";
 import { SavedSearches } from "./SavedSearches";
 import SEOHead from "./SEOHead";
@@ -14,6 +15,9 @@ import { useAdvancedSearch, type SavedSearch, type SearchResult } from "@/hooks/
 import { useAuth } from "@/hooks/useAuth";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { createSlug } from "@/lib/slug";
+
+/** 1x, 2x and 3x of the 96px list-view thumbnail (w-24). */
+const LIST_THUMB_WIDTHS = [96, 192, 288];
 
 function contentTypeIcon(type: SearchResult['type']) {
   switch (type) {
@@ -240,11 +244,11 @@ export default function AdvancedSearchPage() {
                         <>
                           {result.imageUrl && (
                             <div className="relative h-48 overflow-hidden rounded-t-lg">
-                              <img
+                              <OptimizedImage
                                 src={result.imageUrl}
                                 alt=""
-                                loading="lazy"
-                                className="w-full h-full object-cover"
+                                containerClassName="w-full h-full"
+                                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
                               />
                             </div>
                           )}
@@ -295,11 +299,12 @@ export default function AdvancedSearchPage() {
                           <div className="flex gap-4">
                             {result.imageUrl && (
                               <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
-                                <img
+                                <OptimizedImage
                                   src={result.imageUrl}
                                   alt=""
-                                  loading="lazy"
-                                  className="w-full h-full object-cover"
+                                  containerClassName="w-full h-full"
+                                  sizes="96px"
+                                  transformWidths={LIST_THUMB_WIDTHS}
                                 />
                               </div>
                             )}

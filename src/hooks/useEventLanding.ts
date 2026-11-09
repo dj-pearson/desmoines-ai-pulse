@@ -51,7 +51,11 @@ export type LandingEvent = Event & { date: string };
 export interface EventLandingOptions {
   /** What makes this landing's cache entry distinct, e.g. `{ landing: "free" }`. */
   key: Record<string, unknown>;
-  /** A Central-time window. Omitted: everything from the start of today CT. */
+  /**
+   * A Central-time window. Omitted: everything from the start of today CT,
+   * plus anything that started earlier and is still running (end_date on or
+   * after today's start), so day two of a festival stays on /events/free.
+   */
   window?: CentralWindowPreset;
   /** A PostgREST `.or()` filter string, e.g. FREE_PRICE_FILTER. */
   or?: string;
@@ -60,8 +64,9 @@ export interface EventLandingOptions {
   enabled?: boolean;
   /**
    * Also return events that started before the window and are still running
-   * at its start (end_date on or after it). Only meaningful with `window`.
-   * A three-day festival that opened Thursday is part of the weekend.
+   * at its start (end_date on or after it). A three-day festival that opened
+   * Thursday is part of the weekend. Only read with `window`: a window-less
+   * landing always includes running events.
    */
   includeOngoing?: boolean;
   /**
@@ -102,6 +107,9 @@ export function useEventLanding(options: EventLandingOptions) {
   const window: CentralWindow | null = preset ? centralWindow(preset, now) : null;
   const from = window ? window.start : upcomingFloorUtc(now);
   const to = window ? window.end : null;
+  // "Upcoming" (no window) means what the hub, site search and the .ics feeds
+  // mean: not over yet. A bare `date >= today` dropped a run on its second day.
+  const keepsRunning = to ? includeOngoing : true;
 
   const query = useQuery({
     // Under queryKeys.events.list so invalidateEvents reaches every landing.
@@ -112,12 +120,12 @@ export function useEventLanding(options: EventLandingOptions) {
       to,
       or: or ?? null,
       limit,
-      ongoing: includeOngoing && to ? true : null,
+      ongoing: keepsRunning ? true : null,
       columns: columns === EVENT_LIST_COLUMNS ? null : columns,
     }),
     queryFn: async (): Promise<LandingEvent[]> => {
       let request = applyEventVisibility(supabase.from("events").select(columns));
-      const ongoing = includeOngoing && to ? ongoingStartFilter(from) : null;
+      const ongoing = keepsRunning ? ongoingStartFilter(from) : null;
       if (ongoing) {
         // One or() for both, because a second .or() is a second `or` query
         // param and PostgREST does not promise to AND duplicates.

@@ -337,12 +337,18 @@ test.describe('/playgrounds hub (explore pass 2 WP4)', () => {
     await expect(page.locator('section:has([data-amenity-chips]) [aria-live]')).toHaveCount(0);
   });
 
-  test('rating 0 renders as 0.0, not a stray "0"', async ({ page }) => {
+  // WEB-SEO-056. playgrounds.rating is a number a model read off a crawled
+  // page. The fixtures carry 4.5, 3.9 and 0; no card may print any of them.
+  test('no card shows the unsourced playgrounds.rating', async ({ page }) => {
     await installFixtureBackend(page);
     await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    const card = page.locator('[data-playground-grid] a', { hasText: 'Fixture Valley Junction Playground' });
-    await expect(card).toContainText('0.0/5');
+    const grid = page.locator('[data-playground-grid]');
+    await expect(grid.locator('a', { hasText: 'Fixture Valley Junction Playground' })).toBeVisible();
+    const text = await grid.innerText();
+    expect(text).not.toMatch(/\d\.\d\/5/);
+    expect(text).not.toContain('4.5');
+    expect(text).not.toContain('3.9');
   });
 
   test('a failed list offers Try again, which refetches', async ({ page }) => {

@@ -73,7 +73,7 @@ import AttractionEditDialog from "@/components/admin/AttractionEditDialog";
 import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { SafeExternalLink } from "@/components/SafeExternalLink";
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
@@ -387,6 +387,7 @@ export default function AttractionManager() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search attractions"
               value={searchInput}
               onChange={(e) => {
                 setSearchInput(e.target.value);
@@ -403,7 +404,7 @@ export default function AttractionManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by attraction type">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -422,7 +423,7 @@ export default function AttractionManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by indoor or outdoor">
               <SelectValue placeholder="Indoor/outdoor" />
             </SelectTrigger>
             <SelectContent>
@@ -432,7 +433,7 @@ export default function AttractionManager() {
             </SelectContent>
           </Select>
           <Select value={sortBy} onValueChange={(v: SortKey) => setSortBy(v)}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Sort attractions">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>

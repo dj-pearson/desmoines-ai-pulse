@@ -38,8 +38,6 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { DinnerBeforeShow, NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { eventSummary } from "@/lib/eventMeta";
-import { readGeoFaq } from "@/lib/restaurantMeta";
-import { FAQSection } from "@/components/FAQSection";
 import { matchVenue, formatMiles } from "@/lib/venuePages";
 import { useVenueMatchRows } from "@/hooks/useVenues";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -59,6 +57,7 @@ import { handleError } from "@/lib/errorHandler";
 import { markdownToPlainText } from "@/lib/aiText";
 import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
 import { EventProvenance } from "@/components/events/EventProvenance";
+import { EventAiAnswers } from "@/components/events/EventAiAnswers";
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import { PlainTextBlocks } from "@/components/PlainTextBlocks";
 import { useSiteFooter } from "@/hooks/useSiteFooter";
@@ -678,34 +677,15 @@ export default function EventDetails() {
                   )}
                 </section>
 
-                {/* GEO fields: the FAQ is shown AND marked up, which is the
-                    condition EnhancedEventSEO's removed FAQPage never met
-                    (WEB-SEO-022). */}
-                {(event.geo_summary || (event.geo_key_facts?.length ?? 0) > 0) && (
-                  <section className="bg-card rounded-2xl border p-6 md:p-8">
-                    <h2 className="text-xl font-bold mb-4">Quick Facts</h2>
-                    {event.geo_summary && (
-                      <p className="text-muted-foreground leading-relaxed">{event.geo_summary}</p>
-                    )}
-                    {(event.geo_key_facts?.length ?? 0) > 0 && (
-                      <ul className="mt-4 list-disc pl-5 space-y-1 text-muted-foreground">
-                        {event.geo_key_facts.map((fact, i) => (
-                          <li key={i}>{fact}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
-                )}
-                {readGeoFaq(event.geo_faq).length > 0 && (
-                  <section className="bg-card rounded-2xl border overflow-hidden">
-                    <FAQSection
-                      title={`${event.title}: Questions and Answers`}
-                      faqs={readGeoFaq(event.geo_faq)}
-                      showSchema={true}
-                      className="border-0"
-                    />
-                  </section>
-                )}
+                {/* GEO fields, model-written by generate-seo-content: shown,
+                    labelled AI-assisted, and kept out of FAQPage JSON-LD, as
+                    on the restaurant page (WEB-SEO-059). */}
+                <EventAiAnswers
+                  title={event.title}
+                  summary={event.geo_summary}
+                  keyFacts={event.geo_key_facts}
+                  faq={event.geo_faq}
+                />
 
                 {/* Community widgets, deferred until scrolled near. Check-in is
                     only for events that have not ended. The photo uploader is

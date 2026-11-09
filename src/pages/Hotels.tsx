@@ -776,8 +776,8 @@ export default function Hotels() {
                 <section className="mb-8" aria-labelledby="stay-featured">
                   <h2 id="stay-featured" className="text-xl font-semibold mb-4">Featured hotels</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {featuredHotels.slice(0, 3).map((hotel) => (
-                      <HotelCard key={hotel.id} hotel={hotel} variant="featured" />
+                    {featuredHotels.slice(0, 3).map((hotel, index) => (
+                      <HotelCard key={hotel.id} hotel={hotel} variant="featured" priority={index < 3} />
                     ))}
                   </div>
                 </section>
@@ -794,10 +794,11 @@ export default function Hotels() {
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {nearRows && nearPlace
-                        ? nearRows.slice(0, shownCount).map(({ hotel, miles }) => (
+                        ? nearRows.slice(0, shownCount).map(({ hotel, miles }, index) => (
                             <HotelCard
                               key={hotel.id}
                               hotel={hotel}
+                              priority={!showFeaturedStrip && index < 3}
                               distanceLabel={
                                 miles === null
                                   ? undefined
@@ -809,8 +810,14 @@ export default function Hotels() {
                           <>
                             {hotels
                               .filter((h) => !featuredIds.has(h.id))
-                              .map((hotel) => (
-                                <HotelCard key={hotel.id} hotel={hotel} />
+                              .map((hotel, index) => (
+                                <HotelCard
+                                  key={hotel.id}
+                                  hotel={hotel}
+                                  // With the featured strip shown, its three cards are the
+                                  // first row and this grid starts below the fold.
+                                  priority={!showFeaturedStrip && index < 3}
+                                />
                               ))}
                             {Array.from({ length: extraPages }).map((_, i) => (
                               <ExtraHotelPage

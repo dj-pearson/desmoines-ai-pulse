@@ -1,0 +1,12 @@
+{
+  "_comment": "Text fields and selects with no accessible name (placeholder only, or nothing), per file (WEB-UX-068). This list must only ever SHRINK - add a <Label htmlFor> tied by useId, or aria-label when the design has no room for visible text.",
+  "generated": "2026-11-08",
+  "total": 12,
+  "files": {
+    "src/components/AttractionFilters.tsx": 3,
+    "src/components/EventFriendFinder.tsx": 1,
+    "src/components/EventSocialHub.tsx": 1,
+    "src/components/LocationAutocomplete.tsx": 1,
+    "src/components/SecurityDashboard.tsx": 6
+  }
+}

@@ -57,6 +57,44 @@ class AuthCallbackRouterTest {
         )
     }
 
+    // --- OAuth (XPLAT-012, Sign in with Apple) ---
+
+    @Test
+    fun `the OAuth redirect URL itself classifies as OAuth`() {
+        // The URL signInWithApple sends must be the one this router recognises,
+        // or the return lands as an email Confirmation and says so.
+        assertEquals(
+            AuthCallback.OAuth("ap-1"),
+            AuthCallbackRouter.classify("${AuthCallbackRouter.OAUTH_REDIRECT_URL}&code=ap-1"),
+        )
+    }
+
+    @Test
+    fun `flow=oauth is OAuth, not an email Confirmation`() {
+        assertEquals(
+            AuthCallback.OAuth("ap-2"),
+            AuthCallbackRouter.classify("$base?code=ap-2&flow=oauth"),
+        )
+    }
+
+    @Test
+    fun `an OAuth return with no code is OAuth without a code`() {
+        assertEquals(AuthCallback.OAuth(null), AuthCallbackRouter.classify("$base?flow=oauth"))
+    }
+
+    @Test
+    fun `a cancelled OAuth sign-in is an Error that does not talk about an expired link`() {
+        val result = AuthCallbackRouter.classify(
+            "$base?flow=oauth&error=access_denied&error_code=otp_expired" +
+                "&error_description=User+cancelled+the+authorization",
+        )
+        assertTrue(result is AuthCallback.Error)
+        val message = (result as AuthCallback.Error).message
+        assertTrue(message.startsWith("Sign-in didn't finish: User cancelled the authorization"))
+        assertTrue(!message.contains("expired"))
+        assertTrue(!message.contains("email we sent"))
+    }
+
     // --- Error ---
 
     @Test

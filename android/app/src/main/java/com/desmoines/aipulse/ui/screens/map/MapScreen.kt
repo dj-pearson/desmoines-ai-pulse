@@ -1,6 +1,5 @@
 package com.desmoines.aipulse.ui.screens.map
 
-import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -82,6 +81,7 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.minHitTarget
 import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 import com.google.android.gms.maps.model.CameraPosition
@@ -95,7 +95,6 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.rememberMarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -558,8 +557,6 @@ private fun EventPopup(
     onNavigate: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d, h:mm a", UiFormatLocale) }
-
     PopupCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -598,9 +595,9 @@ private fun EventPopup(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                event.parsedDate?.let { date ->
+                EventTimeText.dateTimeText(event, "MMM d", "h:mm a", ", ")?.let { dateTime ->
                     Text(
-                        date.format(dateFormatter),
+                        dateTime,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

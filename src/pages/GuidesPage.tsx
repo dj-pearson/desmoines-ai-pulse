@@ -7,10 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { ErrorState } from "@/components/ui/error-state";
 import { useSeasonalGuideCards, getSeasonLabel, getSeasonColor } from "@/hooks/useSeasonalGuides";
 import { Users, Heart, Coffee, Utensils, Camera, Star, Umbrella, Sun, Snowflake } from "lucide-react";
-import OptimizedImage from "@/components/OptimizedImage";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 const guides = [
   {
@@ -20,7 +18,6 @@ const guides = [
     category: "Weather",
     icon: Umbrella,
     tags: ["Indoor", "Family-Friendly", "All Ages"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/rainy-day-des-moines"
   },
   {
@@ -30,7 +27,6 @@ const guides = [
     category: "Romance",
     icon: Heart,
     tags: ["Adults", "Evening", "Romantic"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/date-night-des-moines"
   },
   {
@@ -40,7 +36,6 @@ const guides = [
     category: "Seasonal",
     icon: Sun,
     tags: ["Outdoor", "Family", "Summer"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/summer-activities-des-moines"
   },
   {
@@ -50,7 +45,6 @@ const guides = [
     category: "Budget",
     icon: Star,
     tags: ["Free", "Budget", "All Ages"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/free-things-des-moines"
   },
   {
@@ -60,7 +54,6 @@ const guides = [
     category: "Family",
     icon: Users,
     tags: ["Kids", "Family", "Playgrounds"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/family-fun-des-moines"
   },
   {
@@ -70,7 +63,6 @@ const guides = [
     category: "Food",
     icon: Coffee,
     tags: ["Brunch", "Weekend", "Food"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/best-brunch-des-moines"
   },
   {
@@ -80,7 +72,6 @@ const guides = [
     category: "Photography",
     icon: Camera,
     tags: ["Photography", "Scenic", "Instagram"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/photography-spots-des-moines"
   },
   {
@@ -90,7 +81,6 @@ const guides = [
     category: "Seasonal",
     icon: Snowflake,
     tags: ["Winter", "Holiday", "Indoor"],
-    image: "/api/placeholder/400/250",
     slug: "/guides/winter-activities-des-moines"
   }
 ];
@@ -197,22 +187,23 @@ export default function GuidesPage() {
 
         {/* Guides Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-          {guides.map((guide, index) => {
+          {guides.map((guide) => {
             const IconComponent = guide.icon;
             return (
               <Card key={guide.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="aspect-video relative">
-                  <img
-                    src={guide.image}
-                    alt={guide.title}
-                    className="w-full h-full object-cover"
-                    // The first row of a three-column grid. Chrome does not start a lazy
-                    // image's fetch until layout has run, so the LCP candidate on a listing
-                    // page must not be lazy (WEB-SEO-032).
-                    loading={index < 3 ? "eager" : "lazy"}
-                    decoding="async"
-                    {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
-                  />
+                {/* WEB-PERF-058. These cards pointed at /api/placeholder/400/250, a
+                    route nothing serves: _routes.json sends it through the Pages
+                    middleware, and the SPA fallback answers 200 with the homepage
+                    HTML. So every visit made eight Function invocations that each
+                    downloaded the homepage document as a broken image, three of
+                    them at fetchpriority=high, competing with the page's own chunks.
+                    There are no photos for these guides, so the panel is drawn
+                    rather than fetched. Same aspect-video box, so the card height
+                    and layout do not move. If real images arrive, render them
+                    through OptimizedImage with the first row eager and put /guides
+                    back in check-lcp-priority's LISTING_PAGES. */}
+                <div className="aspect-video relative bg-muted flex items-center justify-center">
+                  <IconComponent aria-hidden="true" className="h-16 w-16 text-muted-foreground/60" strokeWidth={1.5} />
                   <div className="absolute top-4 left-4">
                     <Badge variant="secondary" className="bg-background/90 backdrop-blur">
                       <IconComponent className="h-3 w-3 mr-1" />

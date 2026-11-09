@@ -10,6 +10,7 @@ import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.PaginationGuard
@@ -56,6 +57,7 @@ class RestaurantsViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val networkMonitor: NetworkMonitor,
     private val billingService: BillingService,
+    private val deepLinkHandler: DeepLinkHandler,
 ) : ViewModel() {
 
     // region State
@@ -156,6 +158,15 @@ class RestaurantsViewModel @Inject constructor(
     // region Public API
 
     init {
+        // A /restaurants/open-now link: turn Open now on once this screen
+        // exists, then consume it so returning to the tab keeps the user's
+        // own choice. It used to open the tab unfiltered.
+        viewModelScope.launch {
+            deepLinkHandler.pendingRestaurantsOpenNow.collect { pending ->
+                if (pending && deepLinkHandler.consumeRestaurantsOpenNow()) showOpenNowOnly()
+            }
+        }
+
         // Auto-refetch the visible first page when connectivity returns (ANDP-069).
         viewModelScope.launch {
             networkMonitor.isConnected.onReconnect().collect {
@@ -221,6 +232,12 @@ class RestaurantsViewModel @Inject constructor(
 
     fun toggleOpenNowOnly() {
         _showOpenNowOnly.value = !_showOpenNowOnly.value
+        applyOpenNowFilter()
+    }
+
+    /** Turns Open now on without toggling, so a second link cannot turn it off. */
+    private fun showOpenNowOnly() {
+        _showOpenNowOnly.value = true
         applyOpenNowFilter()
     }
 

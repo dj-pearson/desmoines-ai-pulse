@@ -9,7 +9,7 @@
  * email had changed had none.
  */
 
-import { assert, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
@@ -68,8 +68,14 @@ Deno.test('changing an email goes through AuthContext so an alert is sent', asyn
   const panel = codeOnly(await read('src/components/auth/AccountCredentials.tsx'));
   assert(/await updateEmail\(address\)/.test(panel), 'not supabase.auth.updateUser directly');
 
-  const ctx = codeOnly(await read('src/contexts/AuthContext.tsx'));
-  const fn = ctx.slice(ctx.indexOf('const updateEmail = useCallback'), ctx.indexOf('const resendVerification'));
+  // WEB-PERF-063: AuthContext.updateEmail delegates to authActions.changeEmail,
+  // which loads on first use so the entry chunk does not carry it.
+  const provider = codeOnly(await read('src/contexts/AuthContext.tsx'));
+  const wrapper = provider.slice(provider.indexOf('const updateEmail = useCallback'), provider.indexOf('const resendVerification'));
+  assert(/m\.changeEmail\(newEmail\)/.test(wrapper), 'updateEmail must call changeEmail');
+  const ctx = codeOnly(await read('src/lib/authActions.ts'));
+  const fn = ctx.slice(ctx.indexOf('export async function changeEmail'), ctx.indexOf('export async function resendSignupVerification'));
+  assert(fn.length > 0, 'changeEmail must exist');
   assert(/supabase\.auth\.updateUser\(\{ email: newEmail \}\)/.test(fn));
   assert(/send-security-notification/.test(fn), 'the same alert path updatePassword uses');
   assert(/email_change_requested/.test(fn));

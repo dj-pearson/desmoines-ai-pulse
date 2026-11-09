@@ -309,6 +309,57 @@ test.describe('/stay/:slug pass 2', () => {
     await expect(page.getByText(/4\.5 stars|4\.5-star/)).toHaveCount(0);
   });
 
+  test('model-written geo_faq is shown and labelled, never FAQPage (WEB-SEO-060)', async ({ page }) => {
+    await installHotels(page, [
+      hotel(0, {
+        geo_faq: [
+          { question: 'Is breakfast included at Pass Two Hotel 0?', answer: 'Yes. AAA lists breakfast as included.' },
+          { question: 'Does the hotel allow pets?', answer: 'Yes, for an additional fee.' },
+        ],
+      }),
+    ]);
+    await page.goto('/stay/pass-two-hotel-0');
+    await expect(page.getByRole('heading', { level: 1, name: 'Pass Two Hotel 0' })).toBeVisible();
+
+    const qa = page.locator('section[aria-labelledby="hotel-ai-answers"]');
+    await expect(qa.getByRole('heading', { name: 'Questions about Pass Two Hotel 0' })).toBeVisible();
+    await expect(qa.getByText('Is breakfast included at Pass Two Hotel 0?')).toBeVisible();
+    await expect(qa.getByText('Yes, for an additional fee.')).toBeVisible();
+    await expect(qa.getByText('AI-assisted', { exact: true })).toBeVisible();
+
+    // The Hotel block is there, so JSON-LD has rendered; FAQPage is not.
+    const blocks = page.locator('script[type="application/ld+json"]');
+    await expect.poll(async () => (await blocks.allTextContents()).join('\n')).toContain('"@type":"Hotel"');
+    const ld = (await blocks.allTextContents()).join('\n');
+    expect(ld).not.toContain('FAQPage');
+    expect(ld).not.toContain('Is breakfast included');
+  });
+
+  test('model-written About copy is labelled AI-assisted (WEB-SEO-061)', async ({ page }) => {
+    await installHotels(page, [
+      hotel(0, {
+        geo_summary: 'Pass Two Hotel 0 suits drivers who want breakfast included.',
+        geo_key_facts: ['Breakfast included', 'Indoor heated pool'],
+      }),
+    ]);
+    await page.goto('/stay/pass-two-hotel-0');
+    await expect(page.getByRole('heading', { level: 1, name: 'Pass Two Hotel 0' })).toBeVisible();
+
+    const about = page.locator('section[aria-labelledby="hotel-about"]');
+    await expect(about.getByRole('heading', { name: 'About This Hotel' })).toBeVisible();
+    await expect(about.getByText('AI-assisted', { exact: true })).toBeVisible();
+    await expect(about.getByText('A hotel supplied by stay-pass2.spec.ts.')).toBeVisible();
+    await expect(about.getByText('Pass Two Hotel 0 suits drivers who want breakfast included.')).toBeVisible();
+    await expect(about.getByRole('listitem')).toHaveText(['Breakfast included', 'Indoor heated pool']);
+
+    // The summary and key facts stay out of structured data.
+    const blocks = page.locator('script[type="application/ld+json"]');
+    await expect.poll(async () => (await blocks.allTextContents()).join('\n')).toContain('"@type":"Hotel"');
+    const ld = (await blocks.allTextContents()).join('\n');
+    expect(ld).not.toContain('suits drivers');
+    expect(ld).not.toContain('Indoor heated pool');
+  });
+
   test('breadcrumb is labelled and marks the current page', async ({ page }) => {
     await installHotels(page, [hotel(0)]);
     await page.goto('/stay/pass-two-hotel-0');

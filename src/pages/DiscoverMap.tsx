@@ -14,7 +14,9 @@ import { handleError } from '@/lib/errorHandler';
 import { markdownToPlainText } from '@/lib/aiText';
 import { createLogger } from '@/lib/logger';
 import { STALE_TIME } from '@/lib/queryConfig';
-import { resolveOpenStatus, formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
+import { formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
+import { discoverMapRestaurantStatus, isDiscoverMapRestaurantListed } from '@/lib/discoverMapRestaurant';
+import { DISCOVER_MAP_RESTAURANT_COLUMNS } from '@/lib/listColumns';
 import { attractionOpenStatus } from '@/lib/attractionHours';
 import { haversineDistance } from '@/lib/geo';
 import {
@@ -134,8 +136,10 @@ type MapRow = PlacedEntity & {
   endMs?: number;
   /** Events: false for the untimed 19:31:58 marker (hasSpecificTime at fetch). */
   timed?: boolean;
-  /** Restaurants: the free-text hours. */
+  /** Restaurants: the free-text hours (production stores a date here), hours_json and Google's business_status. */
   opening?: string | null;
+  hoursJson?: unknown;
+  businessStatus?: string | null;
   /** Attractions: the structured weekly hours and their text fallback. */
   hours?: unknown;
   hoursSummary?: string | null;
@@ -150,9 +154,6 @@ interface LayerResult {
 }
 
 type RowsResponse<R> = { data: R[] | null; error: unknown };
-
-/** Statuses that are never a place to go, as useOpenNowRestaurants reads them. */
-const UNVISITABLE_RESTAURANT_STATUSES = new Set(['closed', 'opening_soon', 'announced']);
 
 /** events.date and end_date are timestamptz: always an instant, never a bare day. */
 function parseInstant(raw: string | null | undefined): number | undefined {
@@ -271,7 +272,9 @@ interface RestaurantRow {
   cuisine: string | null;
   rating: number | string | null;
   opening: string | null;
+  hours_json: unknown;
   status: string | null;
+  business_status: string | null;
   is_merged: boolean | null;
 }
 
@@ -285,7 +288,7 @@ const RESTAURANT_DEEP_CAP = 600;
 async function fetchRestaurantPage(bounds: MapBounds, from: number, to: number) {
   const query = supabase
     .from('restaurants')
-    .select('id, slug, name, latitude, longitude, description, cuisine, rating, opening, status, is_merged')
+    .select(DISCOVER_MAP_RESTAURANT_COLUMNS)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     // The predicates /restaurants/open-now uses. `not.is.true` rather than
@@ -311,8 +314,7 @@ async function fetchRestaurants(bounds: MapBounds, deep: boolean): Promise<Layer
 
   const rows: MapRow[] = [];
   for (const r of data) {
-    if (r.is_merged === true) continue;
-    if (r.status && UNVISITABLE_RESTAURANT_STATUSES.has(r.status)) continue;
+    if (!isDiscoverMapRestaurantListed(r)) continue;
     const rating = r.rating != null ? Number(r.rating) : undefined;
     rows.push({
       id: r.id,
@@ -325,6 +327,8 @@ async function fetchRestaurants(bounds: MapBounds, deep: boolean): Promise<Layer
       category: r.cuisine ?? undefined,
       rating: rating && Number.isFinite(rating) ? rating : undefined,
       opening: r.opening,
+      hoursJson: r.hours_json,
+      businessStatus: r.business_status,
     });
   }
   return { rows, fetched: data.length, cap: deep ? RESTAURANT_DEEP_CAP : limit };
@@ -733,26 +737,32 @@ export default function DiscoverMap() {
     for (const k of activeKeys) {
       const rows = byLayer[k].data?.rows ?? [];
       for (const row of rows) {
-        const { startMs, endMs, timed, opening, hours, hoursSummary, ...entity } = row;
+        const { startMs, endMs, timed, opening, hoursJson, businessStatus, hours, hoursSummary, ...entity } = row;
         if (k === 'event') {
           const timing = { startMs, endMs, timed: timed !== false };
           if (evWindow && !inEventWindow(timing, evWindow, now)) continue;
           out.push({ ...entity, statusLabel: eventStatusLabel(timing, now) });
         } else if (k === 'restaurant' || k === 'attraction') {
-          const statusAt = (at: number): RestaurantOpenResult =>
-            k === 'restaurant'
-              ? resolveOpenStatus(undefined, opening, new Date(at))
-              : attractionOpenStatus(hours, hoursSummary, new Date(at));
+          const statusAt = (at: number): { result: RestaurantOpenResult; label: string | null } => {
+            if (k === 'restaurant') {
+              return discoverMapRestaurantStatus(
+                { opening, hours_json: hoursJson, business_status: businessStatus },
+                new Date(at)
+              );
+            }
+            const result = attractionOpenStatus(hours, hoursSummary, new Date(at));
+            return { result, label: formatOpenStatusLine(result) };
+          };
           const status = statusAt(dinnerAt);
           if (timeFiltered) {
-            if (status.status === 'unknown') {
+            if (status.result.status === 'unknown') {
               held.push(entity);
               continue;
             }
-            if (status.status !== 'open' && status.status !== 'closing-soon') continue;
+            if (status.result.status !== 'open' && status.result.status !== 'closing-soon') continue;
           }
           const labelStatus = dinnerAt === now ? status : statusAt(now);
-          out.push({ ...entity, statusLabel: formatOpenStatusLine(labelStatus) ?? undefined });
+          out.push({ ...entity, statusLabel: labelStatus.label ?? undefined });
         } else {
           out.push(entity);
         }

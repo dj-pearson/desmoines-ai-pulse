@@ -7,16 +7,16 @@
  *
  * Why the grant lives here rather than in the inline script: the validity rules
  * for a consent record (version match, 13-month expiry, absence means denial)
- * belong to CookieConsentBanner.tsx. Duplicating them in a hand-written inline
+ * belong to src/lib/cookieConsent.ts. Duplicating them in a hand-written inline
  * script would let the two drift, and a drift in the permissive direction is
  * exactly the failure this story exists to fix. getStoredConsent() stays the
  * single source of truth.
  *
- * GPC needs no special handling here: the banner records a rejection when it
+ * GPC needs no special handling here: needsConsentPrompt() records a rejection when it
  * sees the signal, so a GPC visitor's record simply has analytics:false.
  */
 
-import { getStoredConsent, type CookieConsent } from "@/components/CookieConsentBanner";
+import { getStoredConsent, type CookieConsent } from "@/lib/cookieConsent";
 
 type Gtag = (...args: unknown[]) => void;
 

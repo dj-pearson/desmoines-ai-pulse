@@ -178,6 +178,10 @@ export default defineConfig({
   // `discover-map` entry above does not match discover-map-time.spec.ts, for
   // the same reason as the -pass2 files.
   //
+  // itinerary-detail joined with WEB-SEO-051: the itinerary page's breadcrumb
+  // nav and BreadcrumbList name the same pages, on fixtureBackend plus a
+  // curated_itineraries route.
+  //
   // trip-planner-pass2, stay-pass2, group-travel, articles-pass2 and
   // best-of-pass2 joined with the Plan & Stay second pass
   // (docs/page-plans/plan-stay-pass2.md WP6 item 1), on fixtureBackend plus
@@ -192,7 +196,28 @@ export default defineConfig({
   // URL Google Play's Data safety form points at. It is static, so it needs
   // no fixtureBackend: the heading, the email fallback and the store-cancel
   // note, plus the a11y lane's axe tags on that page.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2|events-hub-clock|events-card-honesty|events-landings|events-request-budget|weather-aware-events|restaurants-hub-pass2|restaurants-new|restaurant-detail-pass2|restaurants-open-now-pass2|restaurants-dietary|brewery-trail|restaurant-reservations|explore-section-links|discover-map-time|attraction-detail|playground-detail|team-venue-trail-detail|trip-planner-pass2|stay-pass2|group-travel|articles-pass2|best-of-pass2|account-deletion|ad-slot)\.spec\.ts/,
+  //
+  // add-to-calendar-card and restaurant-dietary-filter were orphans in
+  // .github/e2e-lane-baseline.json (WEB-CI-028 AC2). The dietary spec already
+  // passed on the build (3/3); it asserts the outgoing PostgREST request, which
+  // the placeholder backend does not change. The calendar spec failed every day
+  // after 2026-09-08, the date of its one fixture on /events/today, so it now
+  // pins the clock. Pulling the action row out of the card's z-20 layer makes
+  // its click land on the stretched link and fail, which is what it guards.
+  //
+  // performance was the last orphan but one. On a vite build it failed one
+  // test: "fewer than 100 JS files" on the home page, a dev-server bar that
+  // argued with vite.config.ts's deliberate experimentalMinChunkSize (111
+  // files). It now budgets gzipped JS bytes against CLAUDE.md's 500 KB target
+  // (423 KB measured) and runs on fixtureBackend, without a pinned clock,
+  // because page.clock empties Resource Timing. The entry is unanchored at the
+  // front like the rest, so a future foo-performance.spec.ts would join too.
+  //
+  // layout-integrity was the last orphan. 23 of its 24 tests passed on the
+  // build; the sticky test measured 40.8% of a 375x667 screen pinned on
+  // /events against a 30% bar. The results bar now slides away on scroll down
+  // on phones (WEB-UX-061), 24/24.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2|events-hub-clock|events-card-honesty|events-landings|events-request-budget|weather-aware-events|restaurants-hub-pass2|restaurants-new|restaurant-detail-pass2|restaurants-open-now-pass2|restaurants-dietary|brewery-trail|restaurant-reservations|explore-section-links|discover-map-time|attraction-detail|playground-detail|team-venue-trail-detail|itinerary-detail|trip-planner-pass2|stay-pass2|group-travel|articles-pass2|best-of-pass2|account-deletion|ad-slot|add-to-calendar-card|restaurant-dietary-filter|performance|layout-integrity)\.spec\.ts/,
   // One block is held out, by title, not the file. weather-aware-events.spec.ts
   // still asserts the homepage's standalone WeatherNotice ("... in Des Moines
   // right now.", "indoor picks for today"), which the Home plan replaced with

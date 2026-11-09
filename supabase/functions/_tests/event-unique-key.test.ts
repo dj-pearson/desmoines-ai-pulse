@@ -13,7 +13,7 @@
  * holds them to the same key: title + Central calendar date + venue.
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
 import { centralCalendarDate, isDuplicateEvent } from '../_shared/eventDedup.ts';
 
 const REPO = new URL('../../../', import.meta.url);

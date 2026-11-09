@@ -2,6 +2,12 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { handleError } from '@/lib/errorHandler';
 import { createSlug } from '@/lib/slug';
+import {
+  DEAL_RESTAURANT_STATUS_COLUMNS,
+  DEAL_VENUE_RESTAURANT_COLUMNS,
+  HAPPY_HOUR_RESTAURANT_COLUMNS,
+} from '@/lib/listColumns';
+import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday, isShutRestaurant } from '@/lib/restaurantHours';
 
 export interface Deal {
   id: string;
@@ -66,29 +72,247 @@ function activeWindowFilter(nowIso: string): { start: string; endOr: string } {
   return { start: nowIso, endOr: `end_date.is.null,end_date.gte.${nowIso}` };
 }
 
+/** The fields of a deal's restaurant that decide whether /deals lists it. */
+export interface DealRestaurantStatus {
+  id: string;
+  status: string | null;
+  business_status: string | null;
+}
+
+/**
+ * Drops the deals whose linked restaurant is shut (isShutRestaurant). The
+ * restaurant page shows none for such a place and the Happy hour now strip
+ * skips it, so /deals listing it sent the visitor from "Half-price drafts" to
+ * a page that says Temporarily closed and has no Deals section (WEB-FEAT-067).
+ * A deal with no entity_id, or whose restaurant was not returned, is kept:
+ * the only thing this knows how to say is "that door is shut".
+ */
+export function dropShutRestaurantDeals(deals: Deal[], restaurants: DealRestaurantStatus[]): Deal[] {
+  const shut = new Set(restaurants.filter((r) => isShutRestaurant(r)).map((r) => r.id));
+  if (shut.size === 0) return deals;
+  return deals.filter((d) => !(d.entity_type === 'restaurant' && d.entity_id && shut.has(d.entity_id)));
+}
+
+/**
+ * In-date deals for /deals (and the explore deals row), featured first.
+ * Two reads, because deals.entity_id is polymorphic and has no foreign key to
+ * embed through: the deals, then the status of the restaurants they name. A
+ * failed status read is reported and the deals are listed unfiltered, since a
+ * page of deals with one shut venue in it is better than no page.
+ */
+export async function fetchDeals(category?: string): Promise<Deal[]> {
+  const active = activeWindowFilter(new Date().toISOString());
+  let query = supabase
+    .from('deals')
+    .select(DEAL_LIST_COLUMNS)
+    .lte('start_date', active.start)
+    .or(active.endOr)
+    .order('is_featured', { ascending: false })
+    .order('end_date', { ascending: true });
+
+  if (category && category !== 'all') {
+    query = query.eq('entity_type', category);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const deals = (data ?? []) as unknown as Deal[];
+
+  const ids = uniqueIds(deals, 'restaurant');
+  if (ids.length === 0) return deals;
+  const { data: restaurantRows, error: restaurantError } = await supabase
+    .from('restaurants')
+    .select(DEAL_RESTAURANT_STATUS_COLUMNS)
+    .in('id', ids);
+  if (restaurantError) {
+    handleError(restaurantError, { component: 'useDeals', action: 'fetchRestaurantStatus' });
+    return deals;
+  }
+  return dropShutRestaurantDeals(deals, (restaurantRows ?? []) as unknown as DealRestaurantStatus[]);
+}
+
 export function useDeals(category?: string) {
   return useQuery({
     queryKey: ['deals', category],
-    queryFn: async (): Promise<Deal[]> => {
-      const active = activeWindowFilter(new Date().toISOString());
-      let query = supabase
-        .from('deals')
-        .select(DEAL_LIST_COLUMNS)
-        .lte('start_date', active.start)
-        .or(active.endOr)
-        .order('is_featured', { ascending: false })
-        .order('end_date', { ascending: true });
-
-      if (category && category !== 'all') {
-        query = query.eq('entity_type', category);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as unknown as Deal[];
-    },
+    queryFn: () => fetchDeals(category),
     staleTime: 5 * 60 * 1000,
   });
+}
+
+/**
+ * The in-date deals linked to one restaurant (entity_type 'restaurant',
+ * entity_id = the restaurant's id). Same columns and date window as /deals, so
+ * a deal shows on the venue page exactly when it shows on the list.
+ *
+ * A failed read is reported and answered with no deals: the section is a
+ * supplement to the restaurant page, and an error card there would push the
+ * menu down to say something the visitor can't act on.
+ */
+export async function fetchRestaurantDeals(restaurantId: string): Promise<Deal[]> {
+  const active = activeWindowFilter(new Date().toISOString());
+  const { data, error } = await supabase
+    .from('deals')
+    .select(DEAL_LIST_COLUMNS)
+    .eq('entity_type', 'restaurant')
+    .eq('entity_id', restaurantId)
+    .lte('start_date', active.start)
+    .or(active.endOr)
+    .order('is_featured', { ascending: false })
+    .order('end_date', { ascending: true });
+  if (error) {
+    handleError(error, { component: 'useRestaurantDeals', action: 'fetch', metadata: { restaurantId } });
+    return [];
+  }
+  return (data ?? []) as unknown as Deal[];
+}
+
+export function useRestaurantDeals(restaurantId: string | undefined) {
+  return useQuery({
+    queryKey: ['deals', 'restaurant', restaurantId],
+    queryFn: () => fetchRestaurantDeals(restaurantId as string),
+    enabled: !!restaurantId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** The restaurant fields the Happy hour now strip links and filters on. */
+export interface HappyHourRestaurant {
+  id: string;
+  name: string | null;
+  slug: string | null;
+  status: string | null;
+  business_status: string | null;
+}
+
+export interface HappyHourCandidate {
+  deal: Deal;
+  restaurant: HappyHourRestaurant;
+}
+
+/** Upper bound on in-date timed restaurant deals read for the hub strip. */
+const HAPPY_HOUR_DEAL_LIMIT = 200;
+
+/**
+ * Every in-date restaurant deal with a daily time window, paired with a
+ * restaurant someone can eat at today (WEB-FEAT-025). The time window is the
+ * point: a happy hour is "3-6 PM", and only a deal with start_time/end_time
+ * can be said to be running now. This is the editorial data DealManager
+ * already curates; there is no second specials table to keep in step.
+ *
+ * Two reads, because deals.entity_id is polymorphic and has no foreign key to
+ * embed through. A deal whose restaurant is missing, closed for good or
+ * temporarily closed is dropped: a happy hour at a door that is shut is not an
+ * offer. A failed read is reported and answered with nothing, so the strip
+ * hides rather than claiming there is no happy hour anywhere.
+ */
+export async function fetchHappyHourCandidates(): Promise<HappyHourCandidate[]> {
+  const active = activeWindowFilter(new Date().toISOString());
+  const { data: dealRows, error: dealError } = await supabase
+    .from('deals')
+    .select(DEAL_LIST_COLUMNS)
+    .eq('entity_type', 'restaurant')
+    .not('entity_id', 'is', null)
+    .not('start_time', 'is', null)
+    .not('end_time', 'is', null)
+    .lte('start_date', active.start)
+    .or(active.endOr)
+    .order('is_featured', { ascending: false })
+    .order('end_date', { ascending: true })
+    .limit(HAPPY_HOUR_DEAL_LIMIT);
+  if (dealError) {
+    handleError(dealError, { component: 'useHappyHourNow', action: 'fetchDeals' });
+    return [];
+  }
+  const deals = (dealRows ?? []) as unknown as Deal[];
+  const ids = [...new Set(deals.map((d) => d.entity_id).filter((id): id is string => !!id))].sort();
+  if (ids.length === 0) return [];
+
+  const { data: restaurantRows, error: restaurantError } = await supabase
+    .from('restaurants')
+    .select(HAPPY_HOUR_RESTAURANT_COLUMNS)
+    .in('id', ids)
+    .or(NOT_CLOSED_RESTAURANT_FILTER);
+  if (restaurantError) {
+    handleError(restaurantError, { component: 'useHappyHourNow', action: 'fetchRestaurants' });
+    return [];
+  }
+  const byId = new Map<string, HappyHourRestaurant>();
+  for (const row of (restaurantRows ?? []) as unknown as HappyHourRestaurant[]) {
+    if (isServingToday(row)) byId.set(row.id, row);
+  }
+  const candidates: HappyHourCandidate[] = [];
+  for (const deal of deals) {
+    const restaurant = deal.entity_id ? byId.get(deal.entity_id) : undefined;
+    if (restaurant) candidates.push({ deal, restaurant });
+  }
+  return candidates;
+}
+
+export function useHappyHourCandidates(enabled = true) {
+  return useQuery({
+    queryKey: ['deals', 'restaurant', 'happy-hour'],
+    queryFn: fetchHappyHourCandidates,
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * The candidates running at `now` on the Des Moines clock, one row per
+ * restaurant (its first live deal in query order, so a featured one wins),
+ * at most `max`. Recomputed by the caller each minute, so a happy hour leaves
+ * the strip the minute it ends.
+ */
+export function happyHourNow(
+  candidates: HappyHourCandidate[] | undefined,
+  now: Date,
+  max = 5,
+): HappyHourCandidate[] {
+  const seen = new Set<string>();
+  const rows: HappyHourCandidate[] = [];
+  for (const candidate of candidates ?? []) {
+    if (rows.length >= max) break;
+    if (seen.has(candidate.restaurant.id)) continue;
+    if (!isDealLiveAt(candidate.deal, now)) continue;
+    seen.add(candidate.restaurant.id);
+    rows.push(candidate);
+  }
+  return rows;
+}
+
+/**
+ * A venue's deals in the order a visitor standing outside wants them: a
+ * scheduled deal running now, then deals with no schedule (good whenever they
+ * are in date), then starting later today, then other days, then the ones
+ * already over for today. Deals outside their date window at `now` are
+ * dropped, so one that expires while the page is open leaves at that minute.
+ * Stable within a group, so the query's featured-first order survives.
+ */
+export function orderDealsForVenue(deals: Deal[], now: Date = new Date()): Deal[] {
+  const rank = (deal: Deal): number => {
+    if (!hasDealSchedule(deal)) return 1;
+    if (isDealLiveAt(deal, now)) return 0;
+    const today = dealTodayStatus(deal, now);
+    if (today?.kind === 'later') return 2;
+    if (today?.kind === 'ended') return 4;
+    return 3;
+  };
+  return deals
+    .filter((d) => inDateRange(d, now))
+    .map((deal, index) => ({ deal, index, rank: rank(deal) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ deal }) => deal);
+}
+
+/**
+ * The deals a restaurant page shows, decided once so the Deals section, its
+ * quick-link chip and the Restaurant node's makesOffer cannot disagree
+ * (WEB-FEAT-036). A closed or temporarily closed place shows none: a special
+ * at a place you can't walk into is not an offer.
+ */
+export function venuePageDeals(deals: Deal[] | undefined, opts: { shut: boolean; now: Date }): Deal[] {
+  if (opts.shut || !deals || deals.length === 0) return [];
+  return orderDealsForVenue(deals, opts.now);
 }
 
 /**
@@ -109,14 +333,99 @@ export function useClaimDeal() {
   });
 }
 
+/** A restaurant row as the /deals venue links read it. */
+export interface DealVenueRestaurant {
+  id: string;
+  slug: string | null;
+  is_merged?: boolean | null;
+  merged_into?: string | null;
+}
+
 /**
- * Venue links for a page of deals: one batched query per entity type.
+ * The page a restaurant deal links to. A deal curated against a duplicate
+ * that was later merged follows merged_into to the kept row (WEB-FEAT-069):
+ * the duplicate's page only redirects there, and the kept row's Deals section
+ * lists deals by its own id. A merged row whose survivor was not returned
+ * keeps its own link, which still redirects, rather than losing the link.
+ */
+export function restaurantVenueLinks(
+  rows: DealVenueRestaurant[],
+  survivors: DealVenueRestaurant[] = [],
+): Record<string, string> {
+  const byId = new Map<string, DealVenueRestaurant>();
+  for (const row of [...rows, ...survivors]) byId.set(row.id, row);
+  const links: Record<string, string> = {};
+  for (const row of rows) {
+    const survivor =
+      row.is_merged && row.merged_into && row.merged_into !== row.id ? byId.get(row.merged_into) : undefined;
+    const target = survivor ?? row;
+    links[`restaurant:${row.id}`] = `/restaurants/${target.slug || target.id}`;
+  }
+  return links;
+}
+
+/** The survivors a page of restaurant rows points at that it does not already hold. */
+function missingSurvivorIds(rows: DealVenueRestaurant[]): string[] {
+  const have = new Set(rows.map((r) => r.id));
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.is_merged && row.merged_into && !have.has(row.merged_into)) ids.add(row.merged_into);
+  }
+  return [...ids].sort();
+}
+
+/**
+ * Venue links for a page of deals: one batched query per entity type, plus
+ * one for the survivors of merged restaurants.
  * restaurants carry a slug (falls back to id, as RestaurantsTonightStrip
  * does); attractions have no stored slug yet (plan D2), so their route slug is
  * derived from the name the same way the attractions pages build it; hotels
  * link /stay/<slug> (hotels.slug is in the 2026-08-24 snapshot) and a hotel
  * without a slug gets no link rather than a guessed one.
  */
+export async function fetchDealVenueLinks(deals: Deal[] | undefined): Promise<Record<string, string>> {
+  const restaurantIds = uniqueIds(deals, 'restaurant');
+  const attractionIds = uniqueIds(deals, 'attraction');
+  const hotelIds = uniqueIds(deals, 'hotel');
+  const [restaurants, attractions, hotels] = await Promise.all([
+    restaurantIds.length
+      ? supabase.from('restaurants').select(DEAL_VENUE_RESTAURANT_COLUMNS).in('id', restaurantIds)
+      : Promise.resolve({ data: [], error: null }),
+    attractionIds.length
+      ? supabase.from('attractions').select('id, name').in('id', attractionIds)
+      : Promise.resolve({ data: [], error: null }),
+    hotelIds.length
+      ? supabase.from('hotels').select('id, slug').in('id', hotelIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (restaurants.error) throw restaurants.error;
+  if (attractions.error) throw attractions.error;
+  if (hotels.error) throw hotels.error;
+
+  const restaurantRows = (restaurants.data ?? []) as unknown as DealVenueRestaurant[];
+  let survivors: DealVenueRestaurant[] = [];
+  const survivorIds = missingSurvivorIds(restaurantRows);
+  if (survivorIds.length) {
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select(DEAL_VENUE_RESTAURANT_COLUMNS)
+      .in('id', survivorIds);
+    // The duplicate's own link still reaches the kept page by redirect, so a
+    // failed survivor read costs a hop, not the links.
+    if (error) handleError(error, { component: 'useDeals', action: 'fetchMergedSurvivors' });
+    else survivors = (data ?? []) as unknown as DealVenueRestaurant[];
+  }
+
+  const links: Record<string, string> = restaurantVenueLinks(restaurantRows, survivors);
+  for (const row of (attractions.data ?? []) as Array<{ id: string; name: string | null }>) {
+    if (row.name) links[`attraction:${row.id}`] = `/attractions/${createSlug(row.name)}`;
+  }
+  for (const row of (hotels.data ?? []) as Array<{ id: string; slug: string | null }>) {
+    if (row.slug) links[`hotel:${row.id}`] = `/stay/${row.slug}`;
+  }
+  return links;
+}
+
 export function useDealVenueLinks(deals: Deal[] | undefined) {
   const restaurantIds = uniqueIds(deals, 'restaurant');
   const attractionIds = uniqueIds(deals, 'attraction');
@@ -125,34 +434,7 @@ export function useDealVenueLinks(deals: Deal[] | undefined) {
   return useQuery({
     queryKey: ['deals', 'venues', restaurantIds, attractionIds, hotelIds],
     enabled: restaurantIds.length > 0 || attractionIds.length > 0 || hotelIds.length > 0,
-    queryFn: async (): Promise<Record<string, string>> => {
-      const links: Record<string, string> = {};
-      const [restaurants, attractions, hotels] = await Promise.all([
-        restaurantIds.length
-          ? supabase.from('restaurants').select('id, slug').in('id', restaurantIds)
-          : Promise.resolve({ data: [], error: null }),
-        attractionIds.length
-          ? supabase.from('attractions').select('id, name').in('id', attractionIds)
-          : Promise.resolve({ data: [], error: null }),
-        hotelIds.length
-          ? supabase.from('hotels').select('id, slug').in('id', hotelIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      if (restaurants.error) throw restaurants.error;
-      if (attractions.error) throw attractions.error;
-      if (hotels.error) throw hotels.error;
-
-      for (const row of (restaurants.data ?? []) as Array<{ id: string; slug: string | null }>) {
-        links[`restaurant:${row.id}`] = `/restaurants/${row.slug || row.id}`;
-      }
-      for (const row of (attractions.data ?? []) as Array<{ id: string; name: string | null }>) {
-        if (row.name) links[`attraction:${row.id}`] = `/attractions/${createSlug(row.name)}`;
-      }
-      for (const row of (hotels.data ?? []) as Array<{ id: string; slug: string | null }>) {
-        if (row.slug) links[`hotel:${row.id}`] = `/stay/${row.slug}`;
-      }
-      return links;
-    },
+    queryFn: () => fetchDealVenueLinks(deals),
     staleTime: 10 * 60 * 1000,
   });
 }

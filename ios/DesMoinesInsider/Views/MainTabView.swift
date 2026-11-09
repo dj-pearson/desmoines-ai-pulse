@@ -127,6 +127,15 @@ struct MainTabView: View {
         /// UUID or slug (IOS-DD-GUIDES-22).
         case article(String)
         case discover(DiscoverDestination)
+        /// One neighborhood guide (IOS-AUDIT-FEAT-038). Static content, so
+        /// nothing to fetch; the guide loads its own rails.
+        case neighborhood(Neighborhood)
+        /// One Best Of category by slug (IOS-AUDIT-FEAT-040).
+        /// BestOfCategoryLinkView looks it up and falls back to the hub.
+        case bestOfCategory(String)
+        /// One annual event series (IOS-AUDIT-FEAT-046). Static definition;
+        /// EventSeriesView reads its rows.
+        case eventSeries(EventSeriesDef)
         /// A first-party page with no native screen, in SafariView
         /// (IOS-DD-PLATFORM-02).
         case web(URL)
@@ -139,6 +148,9 @@ struct MainTabView: View {
             case .hotel(let id): return "hotel-\(id)"
             case .article(let id): return "article-\(id)"
             case .discover(let d): return "discover-\(d.rawValue)"
+            case .neighborhood(let n): return "neighborhood-\(n.slug)"
+            case .bestOfCategory(let slug): return "best-of-\(slug)"
+            case .eventSeries(let def): return "event-series-\(def.slug)"
             case .web(let url): return "web-\(url.absoluteString)"
             }
         }
@@ -290,12 +302,52 @@ struct MainTabView: View {
         case .hotel(let id): present(.hotel(id))
         case .article(let id): present(.article(id))
         case .discover(let d): present(.discover(d))
+        case .neighborhood(let slug):
+            // DeepLinkHandler only emits a slug bySlug knows; the hub is the
+            // fallback should that ever drift.
+            if let n = Neighborhood.bySlug(slug) {
+                present(.neighborhood(n))
+            } else {
+                present(.discover(.neighborhoods))
+            }
+        case .bestOfCategory(let slug): present(.bestOfCategory(slug))
+        case .eventSeries(let slug):
+            // DeepLinkHandler only emits a slug EventSeries knows; the web
+            // page is the fallback should that ever drift.
+            if let def = EventSeries.series(slug: slug) {
+                present(.eventSeries(def))
+            } else if let url = URL(string: EventSeries.pathPrefix + slug, relativeTo: Config.siteURL)?.absoluteURL {
+                present(.web(url))
+            }
         case .web(let url): present(.web(url))
         case .search(let query):
             // Through the intent path, so Search applies it the way it
             // applies a Siri search (IOS-DD-PLATFORM-02), once any sheet is
             // out of the way so the results are not hidden behind it.
             TopPresenter.dismissAll { intentDispatcher.pending = .searchText(query) }
+        case .eventSearch(let query, let filters):
+            // Same path, carrying the /events link's filters as explicit
+            // ones (IOS-AUDIT-FEAT-041).
+            TopPresenter.dismissAll { intentDispatcher.pending = .filteredSearch(text: query, filters: filters) }
+        case .restaurantLanding(let link):
+            // RestaurantsView applies the staged filter when it appears or,
+            // if it already exists, on change (IOS-AUDIT-FEAT-043). Any sheet
+            // is dismissed first so the filtered list is not hidden behind it.
+            TopPresenter.dismissAll {
+                deepLink.stageRestaurantLink(link)
+                if selectedTab != .restaurants { programmaticTabChange = true }
+                selectedTab = .restaurants
+                if sidebarSelection != .tab(.restaurants) { sidebarSelection = .tab(.restaurants) }
+            }
+        case .map(let layers):
+            // EventMapView applies the staged layers when it appears or, if
+            // it already exists, on change (IOS-AUDIT-007).
+            TopPresenter.dismissAll {
+                deepLink.stageMapLink(layers)
+                if selectedTab != .map { programmaticTabChange = true }
+                selectedTab = .map
+                if sidebarSelection != .tab(.map) { sidebarSelection = .tab(.map) }
+            }
         case .tab(let tab):
             // Only flag a change that will fire onChange; an unchanged tab
             // would leave the flag set and swallow the next real tap.
@@ -343,7 +395,7 @@ struct MainTabView: View {
             // Own this payload — consume so SearchView doesn't also see it.
             _ = intentDispatcher.consume()
             askPulseLaunch = AskPulseLaunch(query: query)
-        case .findRestaurants, .findEvents, .searchText:
+        case .findRestaurants, .findEvents, .searchText, .filteredSearch:
             if selectedTab != .search {
                 programmaticTabChange = true
                 selectedTab = .search
@@ -610,6 +662,12 @@ struct DeepLinkResolverView: View {
         switch presentation {
         case .discover(let destination):
             destination.destinationView
+        case .neighborhood(let neighborhood):
+            NeighborhoodDetailView(neighborhood: neighborhood)
+        case .bestOfCategory(let slug):
+            BestOfCategoryLinkView(slug: slug)
+        case .eventSeries(let def):
+            EventSeriesView(def: def)
         case .web(let url):
             SafariView(url: url).ignoresSafeArea()
         case .event, .restaurant, .attraction, .hotel, .article:
@@ -682,7 +740,7 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): path = "attractions/\(id)"
         case .hotel(let id): path = "stay/\(id)"
         case .article(let id): path = "articles/\(id)"
-        case .discover, .web: return nil
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web: return nil
         }
         return URL(string: path, relativeTo: Config.siteURL)?.absoluteURL
     }
@@ -695,13 +753,13 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): return "attraction-\(id)"
         case .hotel(let id): return "hotel-\(id)"
         case .article(let id): return "article-\(id)"
-        case .discover, .web: return nil
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web: return nil
         }
     }
 
     private func resolve() async {
         switch presentation {
-        case .discover, .web:
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web:
             return // rendered directly
         case .event, .restaurant, .attraction, .hotel, .article:
             break
@@ -742,7 +800,7 @@ struct DeepLinkResolverView: View {
                 return .article(try await ArticlesService.shared.fetchArticle(id: id))
             }
             return .article(try await ArticlesService.shared.fetchArticle(slug: id))
-        case .discover, .web:
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web:
             return .loading
         }
     }

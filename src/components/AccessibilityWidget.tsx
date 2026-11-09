@@ -2,7 +2,10 @@ import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Accessibility, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAccessibilityPreferences } from '@/contexts/AccessibilityContext';
-import { useAccessibility } from '@/hooks/useAccessibility';
+// Not useAccessibility: this widget is mounted at the app root, and that hook
+// (focus trap, list navigation, reduced motion) would ride along into the
+// entry chunk for this one function (WEB-PERF-066).
+import { announceToScreenReader } from '@/lib/announce';
 
 /**
  * The panel is the whole weight of this feature - Switch, Button, Link and
@@ -20,7 +23,6 @@ export function AccessibilityWidget() {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const { hasCustomPreferences } = useAccessibilityPreferences();
-  const { announceToScreenReader } = useAccessibility();
 
   const handleToggle = useCallback(() => {
     setIsOpen(prev => {
@@ -31,13 +33,13 @@ export function AccessibilityWidget() {
       );
       return next;
     });
-  }, [announceToScreenReader]);
+  }, []);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
     triggerRef.current?.focus();
     announceToScreenReader('Accessibility settings panel closed', 'polite');
-  }, [announceToScreenReader]);
+  }, []);
 
   // Close on Escape key
   useEffect(() => {

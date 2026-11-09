@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
-import com.desmoines.aipulse.util.UiFormatLocale
+import com.desmoines.aipulse.util.EventTimeText
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -95,7 +95,6 @@ import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.StatusSuccess
 import com.desmoines.aipulse.util.rememberHapticPerformer
-import java.time.format.DateTimeFormatter
 
 /**
  * Event Detail screen matching iOS EventDetailView.swift.
@@ -367,17 +366,17 @@ private fun EventDetailHeader(
 
 @Composable
 private fun EventDetailDateTime(event: Event) {
-    val date = event.parsedDate ?: return
-
-    val dateFormat = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", UiFormatLocale)
-    val timeFormat = DateTimeFormatter.ofPattern("h:mm a", UiFormatLocale)
+    // Des Moines day and time, "Time TBA" for a row with no real start time
+    // (AND-AUDIT-029); it used to print the 7:31 PM / 3:30 AM placeholder.
+    val dayText = EventTimeText.dayText(event, "EEEE, MMMM d, yyyy") ?: return
+    val timeText = EventTimeText.timeText(event) ?: return
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .semantics(mergeDescendants = true) {
-                val label = date.format(dateFormat) + ", " + date.format(timeFormat)
+                val label = EventTimeText.spokenDateTime(event, "EEEE, MMMM d, yyyy") ?: dayText
                 val urgency = event.urgencyLabel
                 contentDescription = if (urgency != null) "$label. $urgency" else label
             },
@@ -392,12 +391,12 @@ private fun EventDetailDateTime(event: Event) {
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = date.format(dateFormat),
+                text = dayText,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = date.format(timeFormat),
+                text = timeText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -973,9 +972,9 @@ private fun RelatedEventCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        event.parsedDate?.let { date ->
+        EventTimeText.dayText(event, "MMM d")?.let { dayText ->
             Text(
-                text = date.format(DateTimeFormatter.ofPattern("MMM d", UiFormatLocale)),
+                text = dayText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

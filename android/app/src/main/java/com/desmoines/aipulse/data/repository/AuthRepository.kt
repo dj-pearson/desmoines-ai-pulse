@@ -47,6 +47,12 @@ interface AuthRepository {
     /** Sign in with Google ID token. */
     suspend fun signInWithGoogle(idToken: String): Result<Unit>
 
+    /**
+     * Open Sign in with Apple in the browser. Success means the browser
+     * opened; the session arrives later through the auth-callback link.
+     */
+    suspend fun signInWithApple(): Result<Unit>
+
     /** Fetch user profile by user ID. */
     suspend fun fetchProfile(userId: String): Result<UserProfile?>
 

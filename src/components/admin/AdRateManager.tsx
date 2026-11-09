@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,10 @@ export function AdRateManager() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [editedRates, setEditedRates] = useState<Record<string, Partial<RateCard>>>({});
+  // Every rate card repeats the same fields, so each id carries the placement.
+  const baseId = useId();
+  const fieldId = (placementType: string, field: string) =>
+    `${baseId}-${placementType}-${field}`;
 
   useEffect(() => {
     fetchRates();
@@ -199,8 +203,9 @@ export function AdRateManager() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>CPM Rate ($ per 1,000 impressions)</Label>
+                  <Label htmlFor={fieldId(rate.placement_type, "cpm_rate")}>CPM Rate ($ per 1,000 impressions)</Label>
                   <Input
+                    id={fieldId(rate.placement_type, "cpm_rate")}
                     type="number"
                     step="0.50"
                     min="1"
@@ -218,8 +223,9 @@ export function AdRateManager() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Base Rate */}
               <div className="space-y-2">
-                <Label>Base Daily Rate ($)</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "base_daily_rate")}>Base Daily Rate ($)</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "base_daily_rate")}
                   type="number"
                   step="0.50"
                   min="0"
@@ -230,8 +236,9 @@ export function AdRateManager() {
 
               {/* Min Days */}
               <div className="space-y-2">
-                <Label>Minimum Days</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "min_days")}>Minimum Days</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "min_days")}
                   type="number"
                   min="1"
                   value={getFieldValue(rate, "min_days")}
@@ -241,8 +248,9 @@ export function AdRateManager() {
 
               {/* Max Days */}
               <div className="space-y-2">
-                <Label>Maximum Days</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "max_days")}>Maximum Days</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "max_days")}
                   type="number"
                   min="1"
                   value={getFieldValue(rate, "max_days")}
@@ -252,8 +260,9 @@ export function AdRateManager() {
 
               {/* Min Lead Time */}
               <div className="space-y-2">
-                <Label>Min Lead Time (days)</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "min_lead_time_days")}>Min Lead Time (days)</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "min_lead_time_days")}
                   type="number"
                   min="0"
                   value={getFieldValue(rate, "min_lead_time_days")}
@@ -264,8 +273,9 @@ export function AdRateManager() {
 
               {/* Discounts */}
               <div className="space-y-2">
-                <Label>7-Day Discount (%)</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "discount_7_day")}>7-Day Discount (%)</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "discount_7_day")}
                   type="number"
                   step="0.5"
                   min="0"
@@ -276,8 +286,9 @@ export function AdRateManager() {
               </div>
 
               <div className="space-y-2">
-                <Label>14-Day Discount (%)</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "discount_14_day")}>14-Day Discount (%)</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "discount_14_day")}
                   type="number"
                   step="0.5"
                   min="0"
@@ -288,8 +299,9 @@ export function AdRateManager() {
               </div>
 
               <div className="space-y-2">
-                <Label>30-Day Discount (%)</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "discount_30_day")}>30-Day Discount (%)</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "discount_30_day")}
                   type="number"
                   step="0.5"
                   min="0"
@@ -301,8 +313,9 @@ export function AdRateManager() {
 
               {/* Traffic Multipliers */}
               <div className="space-y-2">
-                <Label>Peak Traffic Multiplier</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "peak_multiplier")}>Peak Traffic Multiplier</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "peak_multiplier")}
                   type="number"
                   step="0.05"
                   min="1"
@@ -313,8 +326,9 @@ export function AdRateManager() {
               </div>
 
               <div className="space-y-2">
-                <Label>High Traffic Multiplier</Label>
+                <Label htmlFor={fieldId(rate.placement_type, "high_multiplier")}>High Traffic Multiplier</Label>
                 <Input
+                  id={fieldId(rate.placement_type, "high_multiplier")}
                   type="number"
                   step="0.05"
                   min="1"

@@ -15,9 +15,12 @@ interface EventFeedbackProps {
   eventId: string;
   className?: string;
   showStats?: boolean;
+  /** Event title, so each card's buttons have a distinct accessible name. */
+  itemName?: string;
 }
 
-export default function EventFeedback({ eventId, className, showStats = false }: EventFeedbackProps) {
+export default function EventFeedback({ eventId, className, showStats = false, itemName }: EventFeedbackProps) {
+  const target = itemName?.trim() || "this event";
   const { isAuthenticated } = useAuth();
   const { submitFeedback, removeFeedback, getFeedbackForEvent, getFeedbackStats } = useFeedback();
   const { toast } = useToast();
@@ -134,6 +137,8 @@ export default function EventFeedback({ eventId, className, showStats = false }:
         size="sm"
         onClick={handleInterestToggle}
         disabled={isSubmitting}
+        aria-label={`Interested in ${target}`}
+        aria-pressed={currentFeedback?.feedback_type === 'interested'}
         className={cn(
           "p-2 h-8 w-8",
           currentFeedback?.feedback_type === 'interested'
@@ -142,9 +147,9 @@ export default function EventFeedback({ eventId, className, showStats = false }:
         )}
       >
         {currentFeedback?.feedback_type === 'interested' ? (
-          <Heart className="h-4 w-4 fill-current" />
+          <Heart className="h-4 w-4 fill-current" aria-hidden="true" />
         ) : (
-          <HeartOff className="h-4 w-4" />
+          <HeartOff className="h-4 w-4" aria-hidden="true" />
         )}
       </Button>
 
@@ -154,6 +159,8 @@ export default function EventFeedback({ eventId, className, showStats = false }:
         size="sm"
         onClick={() => handleFeedback('thumbs_up')}
         disabled={isSubmitting}
+        aria-label={`Like ${target}`}
+        aria-pressed={currentFeedback?.feedback_type === 'thumbs_up'}
         className={cn(
           "p-2 h-8 w-8",
           currentFeedback?.feedback_type === 'thumbs_up'
@@ -161,7 +168,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
             : "text-gray-500 hover:text-green-500"
         )}
       >
-        <ThumbsUp className="h-4 w-4" />
+        <ThumbsUp className="h-4 w-4" aria-hidden="true" />
       </Button>
 
       {/* Thumbs Down */}
@@ -170,6 +177,8 @@ export default function EventFeedback({ eventId, className, showStats = false }:
         size="sm"
         onClick={() => handleFeedback('thumbs_down')}
         disabled={isSubmitting}
+        aria-label={`Dislike ${target}`}
+        aria-pressed={currentFeedback?.feedback_type === 'thumbs_down'}
         className={cn(
           "p-2 h-8 w-8",
           currentFeedback?.feedback_type === 'thumbs_down'
@@ -177,7 +186,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
             : "text-gray-500 hover:text-red-500"
         )}
       >
-        <ThumbsDown className="h-4 w-4" />
+        <ThumbsDown className="h-4 w-4" aria-hidden="true" />
       </Button>
 
       {/* Stats (optional) */}

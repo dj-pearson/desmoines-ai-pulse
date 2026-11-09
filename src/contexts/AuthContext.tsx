@@ -1,13 +1,11 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { interpretSignUpResult } from "@/lib/signUpResult";
 import { sessionStartedAt } from "@/lib/sessionAge";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // Only the redirect validator is needed here, and it lives in a file with no
 // imports. Reaching it through the SecurityUtils class pulled zod and
 // dompurify onto the critical path (WEB-PERF-020).
-import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { createLogger } from '@/lib/logger';
 import { clearPersonalStorage } from '@/lib/userPreferencesStore';
 import { sessionStore } from '@/lib/safeStorage';
@@ -185,86 +183,28 @@ function stableUser(prev: User | null, next: User | null): User | null {
   }
 }
 
-// Login attempt throttling — max 5 failed attempts per email per 15 minutes
-const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-const MAX_ATTEMPTS_PER_EMAIL = 5;
-const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
-
-function checkLoginThrottle(email: string): { allowed: boolean; retryAfterSec?: number } {
-  const key = email.toLowerCase();
-  const entry = loginAttempts.get(key);
-  if (!entry) return { allowed: true };
-
-  const elapsed = Date.now() - entry.firstAttempt;
-  if (elapsed > LOGIN_WINDOW_MS) {
-    loginAttempts.delete(key);
-    return { allowed: true };
-  }
-
-  if (entry.count >= MAX_ATTEMPTS_PER_EMAIL) {
-    const retryAfterSec = Math.ceil((LOGIN_WINDOW_MS - elapsed) / 1000);
-    return { allowed: false, retryAfterSec };
-  }
-
-  return { allowed: true };
-}
-
-function recordFailedLogin(email: string) {
-  const key = email.toLowerCase();
-  const entry = loginAttempts.get(key);
-  if (!entry || Date.now() - entry.firstAttempt > LOGIN_WINDOW_MS) {
-    loginAttempts.set(key, { count: 1, firstAttempt: Date.now() });
-  } else {
-    entry.count++;
-    if (entry.count >= MAX_ATTEMPTS_PER_EMAIL) {
-      log.warn('login', 'Login throttle triggered', { email: key, attempts: entry.count });
-    }
-  }
-}
-
-function resetLoginAttempts(email: string) {
-  loginAttempts.delete(email.toLowerCase());
-}
-
-interface ServerLockoutResult {
-  allowed: boolean;
-  lockoutSeconds?: number;
-  attemptsRemaining?: number;
-  message?: string;
-}
-
 /**
- * Server-side brute-force lockout check (WEB-SEC-006). Authoritative across
- * devices/refreshes. Returns null (treated as allowed) on any failure so an
- * outage never blocks legitimate sign-in.
+ * The user-initiated auth calls live in @/lib/authActions and load on first
+ * use (WEB-PERF-063): an anonymous visitor never runs them, and they were a
+ * few KB of the entry chunk. A failed chunk load (offline, or a deploy purged
+ * the hashed file) returns an ordinary error result, so every caller's
+ * existing `success: false` branch handles it.
  */
-async function checkServerLockout(
-  email: string,
-  action: 'check' | 'record_failure' | 'record_success',
-  // WEB-SEC-027: clearing a lockout requires proof that the sign-in actually
-  // succeeded. The server verifies this token against GoTrue and checks the
-  // address on it; a call without one is accepted and changes nothing.
-  accessToken?: string,
-): Promise<ServerLockoutResult | null> {
+type AuthActionsModule = typeof import("@/lib/authActions");
+const AUTH_ACTIONS_LOAD_ERROR = "Could not reach sign-in. Check your connection and try again.";
+
+async function withAuthActions<R>(scope: string, run: (m: AuthActionsModule) => Promise<R>, onLoadError: R): Promise<R> {
+  let mod: AuthActionsModule;
   try {
-    const { data, error } = await supabase.functions.invoke('check-login-attempt', {
-      body: accessToken ? { email, action, accessToken } : { email, action },
-    });
-    if (error) return null;
-    return data as ServerLockoutResult;
-  } catch {
-    return null;
+    mod = await import("@/lib/authActions");
+  } catch (error) {
+    log.error(scope, 'Could not load auth actions', { error });
+    return onLoadError;
   }
+  return run(mod);
 }
 
-/**
- * Where a sign-up confirmation link sends the person (WEB-AUTH-005): through
- * /auth/callback, which waits for the session and renders a failed link, and
- * on to /auth/verified. Used by signup and by resend so the two cannot differ.
- */
-function confirmationRedirectUrl(): string {
-  return `${window.location.origin}/auth/callback?redirect=${encodeURIComponent("/auth/verified")}`;
-}
+const loadFailure = { success: false, error: AUTH_ACTIONS_LOAD_ERROR } as const;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // WEB-SEC-031. AuthProvider is mounted INSIDE QueryClientProvider
@@ -772,156 +712,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [resolveRole, handleAuthChange, applyRole]);
 
-  // Login with email/password (with attempt throttling)
+  // Login with email/password (throttle, server lockout and MFA gate in authActions)
   const login = useCallback(async (email: string, password: string, captchaToken?: string): Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }> => {
-    try {
-      // Fast local throttle (defense in depth; bypassable so not authoritative).
-      const throttle = checkLoginThrottle(email);
-      if (!throttle.allowed) {
-        const minutes = Math.ceil((throttle.retryAfterSec || 60) / 60);
-        log.warn('login', 'Login throttled', { email, retryAfterSec: throttle.retryAfterSec });
-        return { success: false, error: `Too many login attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` };
-      }
-
-      // Authoritative SERVER-side brute-force lockout (cross-device, survives
-      // refreshes). Fails open if the function is unreachable.
-      const serverLock = await checkServerLockout(email, 'check');
-      if (serverLock && !serverLock.allowed) {
-        log.warn('login', 'Server lockout active', { email });
-        return { success: false, error: serverLock.message || 'Too many sign-in attempts. Please try again later.' };
-      }
-
-      log.info('login', 'Attempting login', { email });
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
-
-      if (error) {
-        recordFailedLogin(email);
-        void checkServerLockout(email, 'record_failure');
-        log.error('login', 'Login error', { message: error.message, code: error.code });
-        // WEB-AUTH-008: the CODE travels with the message now. The form used to
-        // render error.message straight into a toast, so a user whose only
-        // problem was an unclicked confirmation link read "Email not confirmed"
-        // and was offered nothing. Matching that on message text at the call
-        // site would be a second place for Supabase's wording to break; the
-        // code is the stable identifier. `error` is unchanged for the callers
-        // that already read it.
-        return { success: false, error: error.message, errorCode: error.code };
-      }
-
-      // Check if MFA is required (AAL1 but user has MFA factors).
-      //
-      // WEB-BE-032: both calls below used to discard their errors, and that
-      // discard FAILED OPEN. On an error `mfaData` is undefined, so both levels
-      // are undefined, the aal1/aal2 condition is false, the whole MFA block is
-      // skipped, and execution falls through to "Login successful" — a
-      // transient error silently bypassed the MFA prompt. There is no
-      // server-side backstop: no RLS policy references aal2, so this branch is
-      // the only thing enforcing MFA.
-      const { data: mfaData, error: mfaError } =
-        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (mfaError) {
-        log.error('login', 'MFA assurance-level check failed', { message: mfaError.message });
-      }
-      const currentLevel = mfaData?.currentLevel;
-      const nextLevel = mfaData?.nextLevel;
-
-      // Enter the MFA path when the session is aal1 and a second factor exists,
-      // OR when the level could not be read at all. The second case is the
-      // fail-closed path: unknown means "might need MFA", not "does not".
-      if ((currentLevel === 'aal1' && nextLevel === 'aal2' && data.session) || (mfaError && data.session)) {
-        log.info('login', 'MFA verification required');
-
-        // Get the first verified TOTP factor
-        const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
-        if (factorsError) {
-          // Both MFA reads failed, so whether this account is protected by a
-          // second factor is unknown. Refuse the sign-in rather than hand out a
-          // session that skipped a gate that may exist. Accounts with no factor
-          // are unaffected: listFactors succeeds and simply returns none.
-          log.error('login', 'MFA factor lookup failed; refusing sign-in', {
-            message: factorsError.message,
-          });
-          await supabase.auth.signOut();
-          return {
-            success: false,
-            error: 'Could not verify two-factor authentication. Please try again.',
-          };
-        }
-        const verifiedFactor = factorsData?.totp?.find((f) => f.status === 'verified');
-
-        if (verifiedFactor) {
-          setAuthState(prev => ({
-            ...prev,
-            requiresMFA: true,
-            mfaFactorId: verifiedFactor.id,
-          }));
-
-          return {
-            success: false,
-            requiresMFA: true,
-            factorId: verifiedFactor.id,
-          };
-        }
-      }
-
-      resetLoginAttempts(email);
-      // WEB-SEC-027: the server clears a lockout only against a session that
-      // a correct password produced, so the token goes with the call. Without
-      // it the request is still accepted and simply does nothing.
-      void checkServerLockout(email, 'record_success', data.session?.access_token);
-      log.info('login', 'Login successful');
-      return { success: !!data.session };
-    } catch (error: unknown) {
-      log.error('login', 'Login exception', { error });
-      const message = error instanceof Error ? error.message : "An unexpected error occurred";
-      return { success: false, error: message };
+    const result = await withAuthActions('login', (m) => m.loginWithPassword(email, password, captchaToken), { ...loadFailure });
+    if (result.requiresMFA && result.factorId) {
+      const factorId = result.factorId;
+      setAuthState(prev => ({ ...prev, requiresMFA: true, mfaFactorId: factorId }));
     }
+    return result;
   }, []);
 
   // Signup with email/password
   const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>, captchaToken?: string): Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }> => {
-    try {
-      log.info('signup', 'Attempting signup', { email });
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          captchaToken,
-          // WEB-AUTH-005. Was /auth/verified directly, which is a page with no
-          // machinery: it could not exchange a code, could not wait for a
-          // session, and read no error parameter -- so every failed
-          // confirmation landed on a celebration screen.
-          //
-          // /auth/callback already polls for the session and renders failures;
-          // it forwards here only once one exists. The confirmed user still ends
-          // up on the same welcome page, and a broken link now stops one screen
-          // earlier, where it can be explained.
-          emailRedirectTo: confirmationRedirectUrl(),
-          data: metadata
-        }
-      });
-
-      if (error) {
-        log.error('signup', 'Signup error', { message: error.message });
-        return { success: false, error: error.message };
-      }
-
-      // WEB-AUTH-004. This was `!!data.user && !data.session`, which cannot tell
-      // a new account from an address that already had one -- Supabase answers
-      // both with a user and no session, on purpose, so the response cannot be
-      // used to enumerate accounts. The tell is an empty `identities` array.
-      const { needsVerification, alreadyRegistered } = interpretSignUpResult(data);
-      // The email is NOT logged on this branch. "already registered" plus an
-      // address is exactly the pairing the neutral response exists to withhold,
-      // and a log line is a place it leaks.
-      log.info('signup', 'Signup successful', { needsVerification, alreadyRegistered });
-
-      return { success: true, needsVerification, alreadyRegistered };
-    } catch (error: unknown) {
-      log.error('signup', 'Signup exception', { error });
-      const message = error instanceof Error ? error.message : "An unexpected error occurred";
-      return { success: false, error: message };
-    }
+    return withAuthActions('signup', (m) => m.signUpWithPassword(email, password, metadata, captchaToken), { ...loadFailure });
   }, []);
 
   // Logout - robust implementation with race condition prevention
@@ -1051,192 +854,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Sign in with Google OAuth
   const signInWithGoogle = useCallback(async (redirectTo?: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
-      // Validate redirect URL to prevent open redirect attacks
-      if (redirectTo && isValidRedirectUrl(redirectTo)) {
-        callbackUrl.searchParams.set("redirect", redirectTo);
-      }
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: callbackUrl.toString(),
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          }
-        }
-      });
-
-      if (error) {
-        log.error('signInWithGoogle', 'Google sign-in error', { message: error.message });
-        return { success: false, error: error.message };
-      }
-
-      return { success: true };
-    } catch (error: unknown) {
-      log.error('signInWithGoogle', 'Google sign-in exception', { error });
-      const message = error instanceof Error ? error.message : "Failed to sign in with Google";
-      return { success: false, error: message };
-    }
+    return withAuthActions('signInWithGoogle', (m) => m.signInWithOAuthProvider('google', redirectTo), { ...loadFailure });
   }, []);
 
-  // Sign in with Apple OAuth
   const signInWithApple = useCallback(async (redirectTo?: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
-      // Validate redirect URL to prevent open redirect attacks
-      if (redirectTo && isValidRedirectUrl(redirectTo)) {
-        callbackUrl.searchParams.set("redirect", redirectTo);
-      }
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: callbackUrl.toString(),
-        }
-      });
-
-      if (error) {
-        log.error('signInWithApple', 'Apple sign-in error', { message: error.message });
-        return { success: false, error: error.message };
-      }
-
-      return { success: true };
-    } catch (error: unknown) {
-      log.error('signInWithApple', 'Apple sign-in exception', { error });
-      const message = error instanceof Error ? error.message : "Failed to sign in with Apple";
-      return { success: false, error: message };
-    }
+    return withAuthActions('signInWithApple', (m) => m.signInWithOAuthProvider('apple', redirectTo), { ...loadFailure });
   }, []);
 
-  // Reset password via email
   const resetPassword = useCallback(async (email: string, captchaToken?: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        captchaToken,
-        // WEB-AUTH-001: this pointed at /auth?reset=true, a parameter nothing
-        // read, on a page that redirects any authenticated visitor away. The
-        // link signed the user in and left the old password in place.
-        //
-        // OWNER: this URL must also be on the Supabase redirect allowlist
-        // (Dashboard -> Authentication -> URL Configuration), or GoTrue falls
-        // back to the site URL and the reset page never sees the token.
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
-
-      if (error) {
-        log.error('resetPassword', 'Password reset error', { message: error.message });
-        return { success: false, error: error.message };
-      }
-
-      return { success: true };
-    } catch (error: unknown) {
-      log.error('resetPassword', 'Password reset exception', { error });
-      const message = error instanceof Error ? error.message : "Failed to send reset email";
-      return { success: false, error: message };
-    }
+    return withAuthActions('resetPassword', (m) => m.sendPasswordReset(email, captchaToken), { ...loadFailure });
   }, []);
 
-  // Update password (for logged-in users or after reset)
+  // Update password (for logged-in users or after reset); alerts the account email.
   const updatePassword = useCallback(async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-
-      if (error) {
-        log.error('updatePassword', 'Password update error', { message: error.message });
-        return { success: false, error: error.message };
-      }
-
-      // Send a transactional security alert to the account email so the
-      // account holder knows their password changed even if their session
-      // is stolen by an attacker. Fire-and-forget.
-      void supabase.functions
-        .invoke('send-security-notification', {
-          body: {
-            event_type: 'password_changed',
-            context: {
-              user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-            },
-          },
-        })
-        .catch((err) => log.warn('updatePassword', 'security alert failed', { error: String(err) }));
-
-      return { success: true };
-    } catch (error: unknown) {
-      log.error('updatePassword', 'Password update exception', { error });
-      const message = error instanceof Error ? error.message : "Failed to update password";
-      return { success: false, error: message };
-    }
+    return withAuthActions('updatePassword', (m) => m.changePassword(newPassword), { ...loadFailure });
   }, []);
 
-  /**
-   * Change the sign-in email (WEB-AUTH-012).
-   *
-   * Supabase's default is DOUBLE CONFIRMATION: a link goes to the current
-   * address and to the new one, and the change lands only when both are
-   * clicked. That is what makes this safe against a hijacked session -- an
-   * attacker cannot move the account to an address they control without the
-   * real owner clicking a link in their own inbox.
-   *
-   * The alert goes to the CURRENT address, through the same path updatePassword
-   * uses, so the owner hears about an attempt even if they never click.
-   */
+  // Double-confirmation email change; alerts the current address (WEB-AUTH-012).
   const updateEmail = useCallback(async (newEmail: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const { error } = await supabase.auth.updateUser({ email: newEmail });
-
-      if (error) {
-        log.error('updateEmail', 'Email update error', { message: error.message });
-        return { success: false, error: error.message };
-      }
-
-      void supabase.functions
-        .invoke('send-security-notification', {
-          body: {
-            event_type: 'email_change_requested',
-            context: {
-              user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-            },
-          },
-        })
-        .catch((err) => log.warn('updateEmail', 'security alert failed', { error: String(err) }));
-
-      return { success: true };
-    } catch (error: unknown) {
-      log.error('updateEmail', 'Email update exception', { error });
-      const message = error instanceof Error ? error.message : "Failed to update email";
-      return { success: false, error: message };
-    }
+    return withAuthActions('updateEmail', (m) => m.changeEmail(newEmail), { ...loadFailure });
   }, []);
 
-  // Resend verification email
   const resendVerification = useCallback(async (email: string, captchaToken?: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-        // Without emailRedirectTo the resent link fell back to the project's
-        // Site URL and skipped /auth/callback, so a resent confirmation landed
-        // somewhere that could not exchange the code or show a failure. Same
-        // URL as signup's, from the same function.
-        options: { emailRedirectTo: confirmationRedirectUrl(), captchaToken },
-      });
-
-      if (error) {
-        log.error('resendVerification', 'Resend verification error', { message: error.message });
-        return { success: false, error: error.message };
-      }
-
-      return { success: true };
-    } catch (error: unknown) {
-      log.error('resendVerification', 'Resend verification exception', { error });
-      const message = error instanceof Error ? error.message : "Failed to resend verification email";
-      return { success: false, error: message };
-    }
+    return withAuthActions('resendVerification', (m) => m.resendSignupVerification(email, captchaToken), { ...loadFailure });
   }, []);
 
   // Get session expiry timestamp (in seconds since epoch)

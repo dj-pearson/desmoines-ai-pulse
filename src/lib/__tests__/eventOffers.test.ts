@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { isFreePrice } from "@/lib/eventPrice";
 import {
   parseEventPrice,
   buildEventOffers,
@@ -7,13 +8,6 @@ import {
 } from "@/lib/eventOffers";
 
 describe("parseEventPrice: free", () => {
-  it("treats an absent or empty price as free admission", () => {
-    expect(parseEventPrice(null)).toEqual({ kind: "free" });
-    expect(parseEventPrice(undefined)).toEqual({ kind: "free" });
-    expect(parseEventPrice("")).toEqual({ kind: "free" });
-    expect(parseEventPrice("   ")).toEqual({ kind: "free" });
-  });
-
   it("reads the free wordings the database actually contains", () => {
     expect(parseEventPrice("Free")).toEqual({ kind: "free" });
     expect(parseEventPrice("FREE")).toEqual({ kind: "free" });
@@ -182,7 +176,6 @@ describe("buildEventOffers", () => {
 describe("isEventAccessibleForFree", () => {
   it("is true only when admission is genuinely free", () => {
     expect(isEventAccessibleForFree("Free")).toBe(true);
-    expect(isEventAccessibleForFree(null)).toBe(true);
     expect(isEventAccessibleForFree("$0")).toBe(true);
     expect(isEventAccessibleForFree("Free - $20")).toBe(true);
   });
@@ -205,5 +198,41 @@ describe("eventPriceContent", () => {
     expect(eventPriceContent("$25")).toBe("25");
     expect(eventPriceContent("$54.40-$89.40")).toBeUndefined();
     expect(eventPriceContent("Varies")).toBeUndefined();
+  });
+});
+
+describe("an absent price is unknown, not free (WEB-SEO-049)", () => {
+  const absent: Array<string | null | undefined> = [null, undefined, "", "   ", "\t\n"];
+
+  it("parses as unknown", () => {
+    for (const raw of absent) {
+      expect(parseEventPrice(raw)).toEqual({ kind: "unknown" });
+    }
+  });
+
+  it("emits no Offer, no isAccessibleForFree and no microdata price", () => {
+    for (const raw of absent) {
+      expect(buildEventOffers(raw)).toBeUndefined();
+      expect(isEventAccessibleForFree(raw)).toBeUndefined();
+      expect(eventPriceContent(raw)).toBeUndefined();
+    }
+  });
+
+  it("agrees with isFreePrice, which the badge and the free filter use", () => {
+    for (const raw of absent) {
+      expect(isFreePrice(raw)).toBeNull();
+      expect(parseEventPrice(raw).kind).toBe("unknown");
+    }
+  });
+
+  it("agrees with isFreePrice on the plain free and paid strings", () => {
+    for (const raw of ["Free", "Free admission", "$0", "0"]) {
+      expect(isFreePrice(raw)).toBe(true);
+      expect(parseEventPrice(raw).kind).toBe("free");
+    }
+    for (const raw of ["$25", "$54.40-$89.40"]) {
+      expect(isFreePrice(raw)).toBe(false);
+      expect(parseEventPrice(raw).kind).not.toBe("free");
+    }
   });
 });

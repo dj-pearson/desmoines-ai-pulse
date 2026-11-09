@@ -191,4 +191,29 @@ final class VotingTests: XCTestCase {
         XCTAssertEqual(progress.voted, 1)
         XCTAssertEqual(progress.total, 2)
     }
+
+    // MARK: /best-of/<slug> links (IOS-AUDIT-FEAT-040)
+
+    private func slugged(_ id: String, _ slug: String, active: Bool? = true) -> VotingCategory {
+        VotingCategory(
+            id: id, name: "Best \(slug)", slug: slug, description: nil, icon: nil,
+            isActive: active, votingStart: nil, votingEnd: nil, createdAt: nil
+        )
+    }
+
+    func testLinkSlugMatchesItsCategoryExactly() {
+        let cats = [slugged("a", "best-pizza"), slugged("b", "best-coffee")]
+        XCTAssertEqual(VotingCategory.matching(slug: "best-coffee", in: cats)?.id, "b")
+        XCTAssertNil(VotingCategory.matching(slug: "best-coffe", in: cats))
+        XCTAssertNil(VotingCategory.matching(slug: "Best-Coffee", in: cats))
+        XCTAssertNil(VotingCategory.matching(slug: "best-coffee", in: []))
+    }
+
+    func testLinkToAnInactiveCategoryIsNotAMatch() {
+        // The web only serves active categories (useCategoryResults); a link
+        // to a retired one goes to the hub. A missing flag counts as active,
+        // as isVotingOpen treats it.
+        XCTAssertNil(VotingCategory.matching(slug: "best-pizza", in: [slugged("a", "best-pizza", active: false)]))
+        XCTAssertEqual(VotingCategory.matching(slug: "best-pizza", in: [slugged("a", "best-pizza", active: nil)])?.id, "a")
+    }
 }

@@ -1,6 +1,6 @@
 // Run with: deno test supabase/functions/_shared/aiQuota.test.ts
 // Offline: the Supabase client is a stub that records RPC calls and inserts.
-import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   denialBody,
   guardAi,

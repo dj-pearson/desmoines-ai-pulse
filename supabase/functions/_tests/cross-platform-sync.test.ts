@@ -21,7 +21,7 @@
  * `.github/workflows/edge-function-tests.yml`.
  */
 
-import { assert, assertEquals, assertExists } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertExists } from 'jsr:@std/assert@1';
 
 // -----------------------------------------------------------------------------
 // 1. validate-ios-receipt scopes its UPDATE to platform='ios'

@@ -274,8 +274,12 @@ export function RestaurantInlineFilters({
 
   const ratingActive = filters.rating[0] > 0 || filters.rating[1] < 5;
 
+  // Bleeds to the screen edge on the left only. The right side sits 12px
+  // (gap-3) from the sort select on /restaurants, so a -mr-4 bleed ran the
+  // scroll row 4px under the select and chips scrolled beneath it - measured
+  // by layout-integrity.spec.ts at 375px (WEB-CI-028).
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-hide">
+    <div className="flex items-center gap-2 overflow-x-auto pb-1 -ml-4 pl-4 scrollbar-hide">
       <FilterPill label="Cuisine" icon={ChefHat} activeCount={filters.cuisine.length}>
         <CuisineFilter
           selected={filters.cuisine}

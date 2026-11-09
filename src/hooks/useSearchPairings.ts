@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useHotelPins, type HotelPin } from "@/hooks/useHotels";
 import { handleError, ErrorSeverity } from "@/lib/errorHandler";
+import { SEARCH_PAIRING_RESTAURANT_COLUMNS } from "@/lib/listColumns";
 import { haversineDistance } from "@/lib/geo";
 import { shouldRetry } from "@/lib/queryConfig";
 import {
@@ -38,9 +39,8 @@ export const STAY_MAX_MILES = 3;
 const RESTAURANT_ROW_LIMIT = 250;
 const FIVE_MINUTES = 5 * 60_000;
 
-/** Every column pickDinner reads, and nothing else. */
-const PAIRING_COLUMNS =
-  "id, name, slug, cuisine, price_range, latitude, longitude, opening, opening_date, status";
+/** Every column pickDinner reads, and nothing else (checked by check-list-columns). */
+export const PAIRING_COLUMNS = SEARCH_PAIRING_RESTAURANT_COLUMNS;
 
 export interface NearbyStay {
   hotel: HotelPin;

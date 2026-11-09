@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Performance Testing Suite
@@ -12,6 +13,30 @@ import { test, expect } from '@playwright/test';
  * - Image optimization
  * - Network performance
  */
+
+/**
+ * The smoke lane builds with placeholder VITE_SUPABASE_*, so without help
+ * every hub measures a failed fetch and its error branch rather than the page
+ * a visitor gets (WEB-CI-028). fixtureBackend answers PostgREST with rows, and
+ * consent is seeded so the cookie banner is not part of what CLS and LCP see.
+ *
+ * The clock is deliberately NOT pinned, unlike layout-integrity.spec.ts:
+ * page.clock fakes `performance` too, and with it installed
+ * performance.getEntriesByType('resource') comes back empty, so the vitals
+ * and byte-budget tests below would measure nothing and pass.
+ */
+const CONSENT = { version: '2026-04-13', essential: true, preferences: true, analytics: false, advertising: false };
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((consent) => {
+    try {
+      localStorage.setItem('cookie-consent', JSON.stringify({ ...consent, timestamp: new Date().toISOString() }));
+    } catch {
+      /* private mode: the banner shows and CLS includes it */
+    }
+  }, CONSENT);
+  await installFixtureBackend(page);
+});
 
 const pages = [
   { path: '/', name: 'homepage' },
@@ -32,7 +57,7 @@ interface PerformanceMetrics {
   loadComplete: number;
 }
 
-async function getWebVitals(page: any): Promise<PerformanceMetrics> {
+async function getWebVitals(page: Page): Promise<PerformanceMetrics> {
   return await page.evaluate(() => {
     return new Promise<PerformanceMetrics>((resolve) => {
       const metrics: Partial<PerformanceMetrics> = {};
@@ -198,13 +223,30 @@ test.describe('Resource Loading', () => {
     await page.goto('/', { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
 
-    console.log('Resource Stats:', resourceStats);
+    // JS as it crossed the wire (gzipped by vite preview here, by Cloudflare in
+    // production), from Resource Timing rather than response bodies, which are
+    // decoded.
+    const scriptGzipBytes = await page.evaluate(() =>
+      (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+        .filter((e) => e.initiatorType === 'script' || /\.js(\?|$)/.test(e.name))
+        .reduce((sum, e) => sum + e.encodedBodySize, 0),
+    );
+    const scriptGzipKB = scriptGzipBytes / 1024;
 
-    // Reasonable limits for a modern web app
-    // Note: In dev mode, Vite serves modules individually which increases file count
-    // In production, these are bundled into fewer chunks with lazy loading
-    // Threshold increased to 100 to account for dev mode + lazy loaded chunks
-    expect(resourceStats.scripts, 'Should not load excessive JS files').toBeLessThan(100);
+    console.log('Resource Stats:', resourceStats, `JS on the wire: ${scriptGzipKB.toFixed(1)} KB`);
+
+    // The budget is BYTES, not files. This used to assert fewer than 100 JS
+    // files, a bar written for the dev server, and it failed every build at
+    // 111-114 (2026-11-07): vite.config.ts trades more small chunks for fewer
+    // bytes on purpose (experimentalMinChunkSize, WEB-PERF-065: no merging, so
+    // routes stop downloading modules they never run; measured there; the
+    // home page went from 47 to 62 route files). A file-count bar argues with that
+    // decision; it does not catch the regression it was meant to, a heavy
+    // library landing on the home page. CLAUDE.md's bundle target is 500 KB
+    // gzipped; the home page measured 423 KB on 2026-11-07. Zero means
+    // Resource Timing recorded nothing, which would make this pass vacuously.
+    expect(scriptGzipBytes, 'Resource Timing must see the scripts it is budgeting').toBeGreaterThan(0);
+    expect(scriptGzipKB, 'Home page JS should stay under the 500 KB gzipped bundle target').toBeLessThan(500);
     expect(resourceStats.stylesheets, 'Should not load excessive CSS files').toBeLessThan(20);
 
     // Total page size should be reasonable (in bytes)
@@ -213,30 +255,49 @@ test.describe('Resource Loading', () => {
     expect(totalMB, 'Total page size should be under 5MB').toBeLessThan(5);
   });
 
-  test('should load critical CSS first', async ({ page }) => {
-    const resourceTimeline: any[] = [];
+  /**
+   * "Critical CSS first" means no unstyled first paint: the shell's inline
+   * <style> is there, and the app stylesheet is a <link> in the initial <head>
+   * that holds rendering until it arrives. The old version compared the
+   * Date.now() of two response events and logged the answer (WEB-QA-050).
+   * Order of CSS vs module JS is not the point - Vite's entry is a deferred
+   * module script - so this checks the paint against the stylesheet instead.
+   */
+  test('should load critical CSS first', async ({ page, browserName }) => {
+    await page.goto('/', { waitUntil: 'load' });
 
-    page.on('response', (response) => {
-      const contentType = response.headers()['content-type'] || '';
-      if (contentType.includes('css') || contentType.includes('javascript')) {
-        resourceTimeline.push({
-          type: contentType.includes('css') ? 'css' : 'js',
-          url: response.url().split('/').pop(),
-          timing: Date.now(),
-        });
-      }
+    const css = await page.evaluate(() => {
+      const links = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'));
+      const appSheet = links.find((l) => /\/assets\/index-[^/]+\.css$/.test(l.href));
+      const timing = appSheet
+        ? (performance.getEntriesByName(appSheet.href)[0] as
+            | (PerformanceResourceTiming & { renderBlockingStatus?: string })
+            | undefined)
+        : undefined;
+      const fcp = performance.getEntriesByName('first-contentful-paint')[0];
+      return {
+        inlineCriticalCss: (document.head.querySelector('style')?.textContent ?? '').includes('--background'),
+        appSheetHref: appSheet?.href ?? null,
+        appSheetMedia: appSheet?.media ?? null,
+        renderBlockingStatus: timing?.renderBlockingStatus ?? null,
+        responseEnd: timing?.responseEnd ?? null,
+        fcp: fcp?.startTime ?? null,
+      };
     });
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
-
-    // Check if CSS loads before JS (generally a good practice)
-    const firstCSS = resourceTimeline.find(r => r.type === 'css');
-    const firstJS = resourceTimeline.find(r => r.type === 'js');
-
-    if (firstCSS && firstJS) {
-      const cssFirst = firstCSS.timing <= firstJS.timing;
-      console.log('CSS loaded first:', cssFirst);
-      // This is informational, not a hard requirement
+    expect(css.inlineCriticalCss, 'index.html inlines the theme tokens for the first paint').toBe(true);
+    expect(css.appSheetHref, 'the app stylesheet is a <link> in the initial <head>').not.toBeNull();
+    expect(['', 'all', 'screen'], 'the app stylesheet applies to screen, not deferred via media').toContain(
+      css.appSheetMedia,
+    );
+    expect(css.responseEnd, 'Resource Timing recorded the app stylesheet').not.toBeNull();
+    expect(css.fcp, 'the page recorded a first-contentful-paint').not.toBeNull();
+    expect(css.responseEnd, 'the app stylesheet arrived before the first contentful paint').toBeLessThanOrEqual(
+      css.fcp,
+    );
+    // renderBlockingStatus is Chromium-only; the smoke lane is Chromium.
+    if (browserName === 'chromium') {
+      expect(css.renderBlockingStatus, 'the app stylesheet blocks rendering').toBe('blocking');
     }
   });
 });
@@ -276,26 +337,33 @@ test.describe('Image Optimization', () => {
     expect(oversizedImages.length, 'Should not load excessively large images on mobile').toBeLessThan(3);
   });
 
-  test('should use appropriate image formats', async ({ page }) => {
-    const imageFormats: any = {};
+  /**
+   * Images this build serves itself must be WebP, AVIF or SVG. Third-party
+   * images (venue photos from image_url) are out of this build's control and
+   * excluded. The fixtures carry image_url: null, so on the smoke lane the
+   * same-origin set is the header logo, which OptimizedLogo serves from a
+   * <picture> with a WebP <source>; a regression to its PNG fallback fails
+   * here. The non-empty check stops this passing on a page that loaded no
+   * images at all (WEB-QA-050).
+   */
+  test('should use appropriate image formats', async ({ page, baseURL }) => {
+    const origin = new URL(baseURL ?? 'http://localhost:4173').origin;
+    const served: { file: string; type: string }[] = [];
 
     page.on('response', (response) => {
-      const contentType = response.headers()['content-type'] || '';
-      if (contentType.includes('image')) {
-        const format = contentType.split('/')[1]?.split(';')[0] || 'unknown';
-        imageFormats[format] = (imageFormats[format] || 0) + 1;
-      }
+      if (response.request().resourceType() !== 'image') return;
+      if (new URL(response.url()).origin !== origin) return;
+      served.push({
+        file: response.url().split('/').pop() ?? response.url(),
+        type: (response.headers()['content-type'] ?? '').split(';')[0].trim(),
+      });
     });
 
     await page.goto('/', { waitUntil: 'networkidle' });
 
-    console.log('Image formats used:', imageFormats);
-
-    // Modern formats like WebP, AVIF are preferred
-    const hasModernFormats = imageFormats['webp'] || imageFormats['avif'];
-    if (!hasModernFormats && Object.keys(imageFormats).length > 0) {
-      console.warn('Consider using modern image formats (WebP, AVIF) for better performance');
-    }
+    expect(served.length, 'the home page loaded at least one same-origin image').toBeGreaterThan(0);
+    const legacy = served.filter((s) => !['image/webp', 'image/avif', 'image/svg+xml'].includes(s.type));
+    expect(legacy, 'same-origin images are WebP, AVIF or SVG').toEqual([]);
   });
 
   test('should implement lazy loading for images', async ({ page }) => {
@@ -413,32 +481,55 @@ test.describe('Mobile Performance', () => {
     expect(loadTime, 'Should load within 8 seconds on slow network').toBeLessThan(8000);
   });
 
+  /**
+   * Holds every PostgREST answer behind a gate so the loading state is
+   * observable rather than a race against a local fixture (WEB-QA-050). While
+   * held, the first screen must say it is loading (aria-busy, which is what a
+   * screen reader hears); once released, nothing on that screen may still be
+   * busy or still a skeleton. Below-fold rails keep their skeletons until
+   * scrolled to, so only the viewport is checked.
+   */
   test('should show loading states for async content', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    // Check for loading indicators
-    const hasLoadingState = await page.evaluate(() => {
-      const loadingIndicators = document.querySelectorAll(
-        '[role="progressbar"], [aria-busy="true"], .loading, .spinner, [data-loading]'
-      );
-      return loadingIndicators.length > 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/rest/v1/**', async (route) => {
+      await gate;
+      await route.fallback();
     });
 
-    // Wait for content to load
+    const loadingInViewport = () =>
+      page.evaluate(() => {
+        const inView = (e: Element) => {
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.top < window.innerHeight && r.bottom > 0;
+        };
+        return {
+          busy: Array.from(document.querySelectorAll('[aria-busy="true"]')).filter(inView).length,
+          skeletons: Array.from(document.querySelectorAll('.animate-pulse')).filter(inView).length,
+        };
+      });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    // The route's Suspense fallback is itself aria-busy; wait for the page to
+    // mount so the check below sees the data loading state, not the shell's.
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+    await expect
+      .poll(async () => (await loadingInViewport()).busy, {
+        message: 'while data is pending, the first screen marks a region aria-busy',
+      })
+      .toBeGreaterThan(0);
+
+    release();
     await page.waitForLoadState('networkidle');
 
-    // Check that loading states are removed
-    const stillLoading = await page.evaluate(() => {
-      const loadingIndicators = document.querySelectorAll(
-        '[role="progressbar"], [aria-busy="true"], .loading, .spinner'
-      );
-      return loadingIndicators.length > 0;
-    });
-
-    if (!stillLoading) {
-      console.log('Loading states properly removed after content loads');
-    }
+    await expect
+      .poll(loadingInViewport, { message: 'once data arrives, no busy region or skeleton is left on screen' })
+      .toEqual({ busy: 0, skeletons: 0 });
   });
 });
 

@@ -211,6 +211,10 @@ export async function fetchHomeSnapshot(now: Date = new Date()): Promise<HomeSna
       : Promise.resolve(null),
 
     // Next up: the soonest start from now, within the next 7 Central days.
+    // Future-only on purpose (WEB-FEAT-062): this card says what starts
+    // next, so a run already under way or a show that began an hour ago is
+    // not "next". The weekend count above is the one that keeps running
+    // events (applyWeekendFilter's ongoing arm).
     applyEventVisibility(supabase.from("events").select(ROW_COLUMNS))
       .gte("date", now.toISOString())
       .lte("date", window.nextUpEndUtc)

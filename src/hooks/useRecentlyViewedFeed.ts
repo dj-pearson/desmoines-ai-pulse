@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
 import {
   MAX_AGE_MS,
   MAX_ITEMS,
@@ -25,6 +26,14 @@ import {
  * rail uses it to decide whether to render at all, so rows that arrive from
  * the server later fill a rail that is already there instead of inserting a
  * new one under the visitor's thumb (home pass-2 WP3 item 10).
+ *
+ * WEB-FEAT-043. "Clear all" used to clear only the local store. A signed-in
+ * user's server rows were untouched, so the next page load merged every one of
+ * them back: the history returned on reload and on every other device. `clear`
+ * now deletes the user's rows as well (recently_viewed_delete_own scopes the
+ * delete to auth.uid() = user_id), and a clear or remove made while the
+ * mount-time merge is still in flight discards that merge instead of letting
+ * it resurrect what the user just removed.
  */
 type ViewInput = Omit<RecentlyViewedEntry, "viewedAt">;
 
@@ -53,11 +62,15 @@ export function useRecentlyViewedFeed() {
   const { user, isAuthenticated } = useAuth();
   const [entries, setEntries] = useState<RecentlyViewedEntry[]>(() => readRecentlyViewed());
   const [localCount] = useState(() => entries.length);
+  // Bumped by clear and remove. A server merge that started under an older
+  // generation answers a question the user has since changed, so it is dropped.
+  const generationRef = useRef(0);
 
   // Merge server rows for signed-in users (server + local union, newest wins).
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
     let cancelled = false;
+    const generation = generationRef.current;
     (async () => {
       try {
         // The local store keeps MAX_ITEMS for MAX_AGE_MS; asking the server
@@ -69,7 +82,7 @@ export function useRecentlyViewedFeed() {
           .gte("viewed_at", since)
           .order("viewed_at", { ascending: false })
           .limit(MAX_ITEMS);
-        if (error || cancelled || !data) return;
+        if (error || cancelled || !data || generation !== generationRef.current) return;
         const serverEntries = (data as unknown as Parameters<typeof toEntry>[0][]).map(toEntry);
         setEntries((local) => {
           const byKey = new Map<string, RecentlyViewedEntry>();
@@ -91,6 +104,7 @@ export function useRecentlyViewedFeed() {
 
   const remove = useCallback(
     (id: string, type: RecentlyViewedType) => {
+      generationRef.current += 1;
       setEntries(removeView(id, type));
       if (isAuthenticated && user?.id) {
         void supabase
@@ -104,9 +118,21 @@ export function useRecentlyViewedFeed() {
   );
 
   const clear = useCallback(() => {
+    generationRef.current += 1;
     clearRecentlyViewed();
     setEntries([]);
-  }, []);
+    if (isAuthenticated && user?.id) {
+      const report = (error: unknown) =>
+        handleError(error, { component: "useRecentlyViewedFeed", action: "clear" });
+      void supabase
+        .from("recently_viewed" as never)
+        .delete()
+        .eq("user_id", user.id)
+        .then(({ error }) => {
+          if (error) report(error);
+        }, report);
+    }
+  }, [isAuthenticated, user?.id]);
 
   return { entries, localCount, remove, clear };
 }

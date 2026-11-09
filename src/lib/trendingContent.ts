@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { upcomingOrRunningFilter } from '@/lib/eventRunningFilter';
 import {
   ATTRACTION_LIST_COLUMNS,
   EVENT_LIST_COLUMNS,
@@ -11,7 +12,7 @@ import { centralDayStartUtcISO, createEventSlugWithCentralTime } from '@/lib/tim
 
 /**
  * Shared reads for the Social "Trending" tab (TrendingContent, fed by
- * useTrending in useTrendingContent.ts and by useSimplePersonalization).
+ * useTrending in useTrendingContent.ts and by useRecentContent).
  *
  * Both hooks fetched content rows with select('*') and no visibility filter,
  * so a past, hidden, merged or archived event could appear under "Trending
@@ -65,7 +66,10 @@ function startOfTodayIso(): string {
 export function applyPublicVisibility(type: TrendingContentType, query: any): any {
   switch (type) {
     case 'event':
-      return applyEventVisibility(query).gte('date', startOfTodayIso());
+      // Not over yet, the rule useEvents and the hubs use. A bare
+      // `date >= today` dropped a multi-day run on its second morning, so the
+      // State Fair left "Trending Events" on the days it trended most.
+      return applyEventVisibility(query).or(upcomingOrRunningFilter(startOfTodayIso()));
     case 'restaurant':
       return query.neq('is_merged', true);
     case 'attraction':

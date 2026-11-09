@@ -39,13 +39,31 @@ const q = feeds.feedRestQuery(feeds.feedForSlug('music'), '2026-11-07T06:00:00.0
 ck('filters is_merged', q.get('is_merged') === 'neq.true');
 ck('filters is_hidden', q.get('is_hidden') === 'neq.true');
 ck('filters archived_at', q.get('archived_at') === 'is.null');
-ck('lower bound is the given Central day start', q.getAll('date').includes('gte.2026-11-07T06:00:00.000Z'));
+const WINDOW = 'date.gte.2026-11-07T06:00:00.000Z,end_date.gte.2026-11-07T06:00:00.000Z';
+ck('lower bound is the given Central day start, or a run still going', feeds.feedWindowOrFilter(new Date('2026-11-07T06:00:00.000Z')) === WINDOW && q.get('or') === `(${WINDOW})`);
+ck('no bare date lower bound outside the or', !q.getAll('date').some((v) => v.startsWith('gte.')));
 ck('upper bound is FEED_WINDOW_DAYS later', q.getAll('date').includes('lt.2027-01-06T06:00:00.000Z'));
 ck('category is exact', q.get('category') === 'eq.Music');
 ck('limit is capped', q.get('limit') === String(feeds.FEED_MAX_EVENTS));
 ck('all feed has no category filter', !feeds.feedRestQuery(feeds.feedForSlug('all'), '2026-11-07T06:00:00.000Z').has('category'));
 const fq = feeds.feedRestQuery(feeds.feedForSlug('free'), '2026-11-07T06:00:00.000Z');
 ck('free feed uses FREE_PRICE_FILTER', fq.get('or')?.includes('price.eq.$0'));
+ck('free feed ANDs the window with the price group', fq.getAll('or').length === 1 && fq.get('or').startsWith(`(and(or(${WINDOW}),or(`));
+
+// The window group evaluated the way PostgREST would, over the two columns it
+// names. A multi-day run that started before today must stay in the feed: a
+// subscribing client deletes every event the next copy leaves out.
+const windowKeeps = (group, row) => group.split(',').some((arm) => {
+  const [col, op, ...rest] = arm.split('.');
+  const v = row[col];
+  return op === 'gte' && v != null && Date.parse(v) >= Date.parse(rest.join('.'));
+});
+const fairDay3 = feeds.feedWindowOrFilter(new Date('2026-08-15T05:00:00.000Z'));
+ck('State Fair on day 3 stays in', windowKeeps(fairDay3, { date: '2026-08-13T14:00:00Z', end_date: '2026-08-23T23:00:00Z' }));
+ck('a run ending later today stays in', windowKeeps(fairDay3, { date: '2026-08-10T14:00:00Z', end_date: '2026-08-15T15:00:00Z' }));
+ck('a run that ended yesterday is out', !windowKeeps(fairDay3, { date: '2026-08-10T14:00:00Z', end_date: '2026-08-14T23:00:00Z' }));
+ck('a one-off from yesterday with no end is out', !windowKeeps(fairDay3, { date: '2026-08-14T23:00:00Z', end_date: null }));
+ck('tonight with no end stays in', windowKeeps(fairDay3, { date: '2026-08-16T00:30:00Z', end_date: null }));
 
 console.log('\nlinks');
 const links = feeds.feedLinks(feeds.feedForSlug('music'), 'https://desmoinesinsider.com');
@@ -163,7 +181,7 @@ ck('still filters all three unpublish switches', pq.get('is_merged') === 'neq.tr
 const bq = feeds.feedRestQuery({ area: { slug: 'b', label: 'B', kind: 'bbox', bbox: { south: 1, west: 2, north: 3, east: 4 } } }, '2026-11-07T06:00:00.000Z');
 ck('bbox area is four bounds', JSON.stringify(bq.getAll('latitude')) === '["gte.1","lte.3"]' && JSON.stringify(bq.getAll('longitude')) === '["gte.2","lte.4"]');
 const cq = feeds.feedRestQuery({ area: { slug: 'dm', label: 'DM', kind: 'city', city: 'Des Moines' } }, '2026-11-07T06:00:00.000Z');
-ck('city without fallback is an ilike', cq.get('city') === 'ilike.Des Moines' && !cq.has('or'));
+ck('city without fallback is an ilike', cq.get('city') === 'ilike.Des Moines' && cq.getAll('or').length === 1 && cq.get('or') === `(${WINDOW})`);
 
 console.log('\npersonal feeds: onRequest');
 store.clear();

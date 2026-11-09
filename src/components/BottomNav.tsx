@@ -3,7 +3,6 @@ import { Home, Calendar, Navigation, UtensilsCrossed, Map, User } from "lucide-r
 import { cn } from "@/lib/utils";
 import { useAuthFlags } from "@/contexts/AuthContext";
 import { prefetchRoute } from "@/lib/prefetch";
-import { hapticTap } from "@/lib/capacitorUtils";
 import { signInHref } from "@/lib/signInLinks";
 
 interface NavItem {
@@ -118,10 +117,6 @@ export default function BottomNav() {
               onMouseEnter={() => prefetchRoute(routePath)}
               onTouchStart={() => prefetchRoute(routePath)}
               onFocus={() => prefetchRoute(routePath)}
-              onClick={() => {
-                // Native haptic feedback (Capacitor) with web fallback
-                hapticTap();
-              }}
             >
               {isActive && (
                 <div className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-8 h-1.5 bg-primary rounded-b-full shadow-sm" />

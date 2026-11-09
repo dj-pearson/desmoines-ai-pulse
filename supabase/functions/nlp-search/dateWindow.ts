@@ -70,6 +70,17 @@ export function centralTodayStartUtc(now: Date = new Date()): string {
   return dayStartUtc(centralToday(now));
 }
 
+/**
+ * The PostgREST `or=` group that keeps an event starting at or after
+ * `lowerIso`, OR a run whose end_date is at or after it. Same string as
+ * upcomingOrRunningFilter in src/hooks/useEvents.ts (search.test.ts guards the
+ * drift). A row with no end_date matches only on its own date, so a past
+ * one-night show stays off. WEB-FEAT-068.
+ */
+export function upcomingOrRunningFilter(lowerIso: string): string {
+  return `date.gte.${lowerIso},end_date.gte.${lowerIso}`;
+}
+
 /** Central date of `now` as YYYY-MM-DD, for the prompt given to the model. */
 export function centralTodayString(now: Date = new Date()): string {
   return centralWallClockFromUtc(now).slice(0, 10);

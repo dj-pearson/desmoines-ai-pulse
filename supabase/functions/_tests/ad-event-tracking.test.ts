@@ -13,8 +13,15 @@
  * the source level, because what must not come back is a code path.
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { looksAutomated, UUID_RE } from '../_shared/adEventFilters.ts';
+import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
+import {
+  clampTrackingText,
+  looksAutomated,
+  resolveClickImpressionId,
+  TRACKING_TEXT_MAX,
+  UUID_RE,
+  type ImpressionOwner,
+} from '../_shared/adEventFilters.ts';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
@@ -156,4 +163,92 @@ Deno.test('an advertiser can read their own numbers, and only their own', async 
   assertFalse(/TO anon/.test(sql), 'impressions carry session ids and page urls; not public');
   // Enabling RLS on a table where it may be off would deny access that works.
   assertFalse(/ENABLE ROW LEVEL SECURITY/.test(sql));
+});
+
+// WEB-SEC-065 -----------------------------------------------------------------
+
+const CAMPAIGN = '11111111-1111-4111-8111-111111111111';
+const CREATIVE = '22222222-2222-4222-8222-222222222222';
+const OTHER_CAMPAIGN = '33333333-3333-4333-8333-333333333333';
+const OTHER_CREATIVE = '44444444-4444-4444-8444-444444444444';
+const IMPRESSION = '55555555-5555-4555-8555-555555555555';
+
+const lookupReturning = (owner: ImpressionOwner | null) => {
+  const seen: string[] = [];
+  const fn = (id: string) => {
+    seen.push(id);
+    return Promise.resolve(owner);
+  };
+  return { fn, seen };
+};
+
+Deno.test('a click links to an impression of its own campaign and creative', async () => {
+  const { fn, seen } = lookupReturning({ campaign_id: CAMPAIGN, creative_id: CREATIVE });
+  assertEquals(await resolveClickImpressionId(IMPRESSION, CAMPAIGN, CREATIVE, fn), IMPRESSION);
+  assertEquals(seen, [IMPRESSION]);
+});
+
+Deno.test("a click cannot claim another campaign's impression", async () => {
+  const other = lookupReturning({ campaign_id: OTHER_CAMPAIGN, creative_id: CREATIVE });
+  assertEquals(await resolveClickImpressionId(IMPRESSION, CAMPAIGN, CREATIVE, other.fn), null);
+  // Same campaign, different creative: still not this click's impression.
+  const sibling = lookupReturning({ campaign_id: CAMPAIGN, creative_id: OTHER_CREATIVE });
+  assertEquals(await resolveClickImpressionId(IMPRESSION, CAMPAIGN, CREATIVE, sibling.fn), null);
+});
+
+Deno.test('an unknown, malformed or unreadable impression id is stored as null', async () => {
+  const missing = lookupReturning(null);
+  assertEquals(await resolveClickImpressionId(IMPRESSION, CAMPAIGN, CREATIVE, missing.fn), null);
+
+  // Not a uuid: never reaches the database.
+  const unused = lookupReturning({ campaign_id: CAMPAIGN, creative_id: CREATIVE });
+  for (const bad of ['not-a-uuid', '', 42, null, undefined, { id: IMPRESSION }]) {
+    assertEquals(await resolveClickImpressionId(bad, CAMPAIGN, CREATIVE, unused.fn), null);
+  }
+  assertEquals(unused.seen, []);
+
+  // A failed lookup leaves the click unlinked rather than failing it.
+  const throwing = () => Promise.reject(new Error('db down'));
+  assertEquals(await resolveClickImpressionId(IMPRESSION, CAMPAIGN, CREATIVE, throwing), null);
+});
+
+Deno.test('tracking text is cut to a fixed length', () => {
+  assertEquals(clampTrackingText('https://x.test/a', 2048), 'https://x.test/a');
+  const long = 'https://x.test/' + 'a'.repeat(1_000_000);
+  assertEquals(clampTrackingText(long, TRACKING_TEXT_MAX.page_url)?.length, 2048);
+  assertEquals(clampTrackingText(long, TRACKING_TEXT_MAX.referrer_url)?.length, 2048);
+  assertEquals(clampTrackingText('M'.repeat(5000), TRACKING_TEXT_MAX.user_agent)?.length, 512);
+
+  // Not a string, or empty: null, never String(value).
+  for (const bad of [null, undefined, '', 42, { href: 'x' }, ['a']]) {
+    assertEquals(clampTrackingText(bad, 2048), null);
+  }
+
+  // A cut through a surrogate pair drops the orphaned half.
+  const emoji = 'a'.repeat(9) + '\u{1F600}';
+  assertEquals(emoji.length, 11);
+  assertEquals(clampTrackingText(emoji, 10), 'a'.repeat(9));
+});
+
+Deno.test('the function stores clamped text and a checked impression id', async () => {
+  const src = await read(FN);
+  for (const field of ['user_agent', 'page_url', 'referrer_url']) {
+    assert(
+      new RegExp(`${field}: clampTrackingText\\(\\w+, TRACKING_TEXT_MAX\\.${field}\\)`).test(src),
+      `${field} must be clamped before insert`,
+    );
+  }
+  assertFalse(/user_agent: userAgent,/.test(src), 'the raw header must not be written through');
+  assertFalse(/pageUrl \?\? null/.test(src), 'the raw page_url must not be written through');
+
+  assert(/impression_id: linkedImpressionId,/.test(src), 'the click stores the checked id');
+  assert(/await resolveClickImpressionId\(\s*impressionId,\s*campaignId,\s*creativeId,/.test(src));
+  assert(
+    /from\('ad_impressions'\)\s*\.select\('campaign_id, creative_id'\)\s*\.eq\('id', id\)/.test(src),
+    'the lookup reads the impression it was given',
+  );
+  assertFalse(
+    /impression_id: UUID_RE\.test\(String\(impressionId/.test(src),
+    'a shape check alone must not come back',
+  );
 });

@@ -71,6 +71,38 @@ final class RestaurantPresetTests: XCTestCase {
         XCTAssertNil(vm.activePreset)
     }
 
+    // MARK: - Landing links (IOS-AUDIT-FEAT-043)
+
+    func testLandingLinkReplacesEarlierFiltersAndLightsItsPreset() {
+        let vm = viewModel()
+        vm.applyPreset(.dateNight)
+        vm.searchText = "pizza"
+        vm.applyLink(RestaurantLinkFilter(openNow: true))
+        XCTAssertTrue(vm.showOpenNowOnly)
+        XCTAssertEqual(vm.activePreset, .openNow)
+        XCTAssertTrue(vm.selectedPriceRanges.isEmpty)
+        XCTAssertEqual(vm.minRating, 0)
+        XCTAssertEqual(vm.searchText, "")
+        XCTAssertEqual(vm.activeFilterCount, 1)
+    }
+
+    func testTheSameLandingLinkTwiceDoesNotToggleOff() {
+        let vm = viewModel()
+        vm.applyLink(RestaurantLinkFilter(newOpenings: true))
+        vm.applyLink(RestaurantLinkFilter(newOpenings: true))
+        XCTAssertTrue(vm.newOpeningsOnly)
+        XCTAssertEqual(vm.activePreset, .newOpenings)
+    }
+
+    func testDietLinkSetsOnlyThatDiet() {
+        let vm = viewModel()
+        vm.selectedDietary = ["keto"]
+        vm.applyLink(RestaurantLinkFilter(openNow: true, diet: "vegan"))
+        XCTAssertEqual(vm.selectedDietary, ["vegan"])
+        XCTAssertTrue(vm.showOpenNowOnly)
+        XCTAssertNil(vm.activePreset)
+    }
+
     // MARK: - Query path
 
     func testStatusesForceTheTablePath() {

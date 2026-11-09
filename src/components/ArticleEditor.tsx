@@ -12,11 +12,15 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const log = createLogger('ArticleEditor');
+
+/** The featured-image preview sits in the editor's side column, about 400px wide. */
+const FEATURED_PREVIEW_WIDTHS = [400, 800];
 
 interface ArticleData {
   title: string;
@@ -232,8 +236,8 @@ export default function ArticleEditor() {
           {!isNewArticle && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4" />
+                <Button variant="destructive" size="sm" aria-label="Delete article">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -353,24 +357,29 @@ export default function ArticleEditor() {
               </div>
 
               <div>
-                <Label>SEO Keywords</Label>
+                <Label htmlFor="seo-keyword">SEO Keywords</Label>
                 <div className="flex gap-2 mb-2">
                   <Input
+                    id="seo-keyword"
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
                     placeholder="Add SEO keyword..."
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
                   />
-                  <Button onClick={handleAddKeyword} size="sm">
-                    <Plus className="h-4 w-4" />
+                  <Button onClick={handleAddKeyword} size="sm" aria-label="Add keyword">
+                    <Plus className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {articleData.seo_keywords.map((keyword) => (
                     <Badge key={keyword} variant="secondary" className="gap-1">
                       {keyword}
-                      <button onClick={() => handleRemoveKeyword(keyword)}>
-                        <X className="h-3 w-3" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveKeyword(keyword)}
+                        aria-label={`Remove keyword ${keyword}`}
+                      >
+                        <X className="h-3 w-3" aria-hidden="true" />
                       </button>
                     </Badge>
                   ))}
@@ -391,7 +400,7 @@ export default function ArticleEditor() {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select value={articleData.status} onValueChange={(value) => handleInputChange('status', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -406,7 +415,7 @@ export default function ArticleEditor() {
               <div>
                 <Label htmlFor="category">Category</Label>
                 <Select value={articleData.category} onValueChange={(value) => handleInputChange('category', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -442,21 +451,26 @@ export default function ArticleEditor() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
+                  aria-label="Add tag"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add tag..."
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                 />
-                <Button onClick={handleAddTag} size="sm">
-                  <Plus className="h-4 w-4" />
+                <Button onClick={handleAddTag} size="sm" aria-label="Add tag">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {articleData.tags.map((tag) => (
                   <Badge key={tag} variant="outline" className="gap-1">
                     {tag}
-                    <button onClick={() => handleRemoveTag(tag)}>
-                      <X className="h-3 w-3" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      aria-label={`Remove tag ${tag}`}
+                    >
+                      <X className="h-3 w-3" aria-hidden="true" />
                     </button>
                   </Badge>
                 ))}
@@ -471,14 +485,12 @@ export default function ArticleEditor() {
                 <CardTitle>Featured Image</CardTitle>
               </CardHeader>
               <CardContent>
-                <img
+                <OptimizedImage
                   src={articleData.featured_image_url}
                   alt={`Featured image for ${articleData.title || 'article'}`}
-                  className="w-full h-32 object-cover rounded"
-                  loading="lazy"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
+                  containerClassName="w-full h-32 rounded"
+                  sizes="(max-width: 1024px) 100vw, 400px"
+                  transformWidths={FEATURED_PREVIEW_WIDTHS}
                 />
               </CardContent>
             </Card>

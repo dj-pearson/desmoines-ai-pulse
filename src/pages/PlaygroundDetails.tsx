@@ -23,13 +23,16 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
 import { Star, ArrowLeft, Navigation, Check, Zap, TreePine } from "lucide-react";
-import { useState } from "react";
+import { lazy, useState } from "react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { isInMetro } from "@/lib/geo";
 import { splashPadReason, toddlerReason } from "@/lib/playgroundHub";
+import { buildPlaygroundFaqs } from "@/lib/playgroundFaqs";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
+import { useReviewAggregate } from "@/hooks/useReviewAggregate";
+import { DeferredWidget } from "@/components/DeferredWidget";
 import {
   formatMilesAway,
   suburbFromLocation,
@@ -37,6 +40,13 @@ import {
   useSameAgePlaygrounds,
   type PlaygroundCard,
 } from "@/hooks/usePlaygrounds";
+
+// WEB-SEO-058: the reviews the hero average is computed from. Below the fold
+// and fires its own requests, so lazy defers the chunk and DeferredWidget
+// defers the mount until the reader scrolls near it, as on AttractionDetails.
+const RatingSystem = lazy(() =>
+  import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
+);
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
@@ -73,6 +83,7 @@ export default function PlaygroundDetails() {
   // out-of-state rows linked to Not Found. Both are metro-bounded now, and
   // nearby is a box around this playground sorted by distance.
   const { data: relatedPlaygrounds } = useSameAgePlaygrounds(playground);
+  const { data: reviewAggregate } = useReviewAggregate("playground", playground?.id, "PlaygroundDetails");
   const { data: nearbyCandidates } = useNearbyPlaygrounds(playground);
   // One card per playground across the two sections.
   const relatedIds = new Set((relatedPlaygrounds ?? []).map((p) => p.id));
@@ -164,46 +175,9 @@ export default function PlaygroundDetails() {
     address: `${playground.name} ${playground.location ?? ""}`,
   });
 
-  // SEO-014. Built from this playground's own row and nothing else. The
-  // previous answers told every one of these pages - suburban parks run by
-  // other cities, and any indoor play space in the table - that it was "a free
-  // public playground in Des Moines", "maintained by the Des Moines Parks &
-  // Recreation Department", open all day with "free parking". None of
-  // that is a column, and FAQPage schema publishes it as a factual claim.
-  const playgroundFaqs = [
-    ...(playground.age_range
-      ? [
-          {
-            question: `What ages is ${playground.name} suitable for?`,
-            answer: `${playground.name} is listed for ages ${playground.age_range}. Always supervise children during play.`,
-          },
-        ]
-      : []),
-    ...(playground.location
-      ? [
-          {
-            question: `Where is ${playground.name} located?`,
-            answer: `${playground.name} is at ${playground.location}.${playground.latitude ? " The map on this page gives directions." : ""}`,
-          },
-        ]
-      : []),
-    ...(playground.amenities && playground.amenities.length > 0
-      ? [
-          {
-            question: `What amenities does ${playground.name} have?`,
-            answer: `${playground.name} lists these amenities: ${playground.amenities.join(", ")}.`,
-          },
-        ]
-      : []),
-    ...(playground.rating != null
-      ? [
-          {
-            question: `What is the rating for ${playground.name}?`,
-            answer: `${playground.name} is rated ${playground.rating.toFixed(1)} out of 5.`,
-          },
-        ]
-      : []),
-  ];
+  // SEO-014 / WEB-SEO-055: answers come from the row only, and never from
+  // playgrounds.rating, which no one can attribute. See playgroundFaqs.ts.
+  const playgroundFaqs = buildPlaygroundFaqs(playground);
 
   return (
     <>
@@ -306,11 +280,23 @@ export default function PlaygroundDetails() {
                     {playground.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 text-white/90">
-                    {playground.rating != null && (
-                      <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        <span className="font-semibold">{playground.rating.toFixed(1)}</span>
-                      </div>
+                    {/* WEB-SEO-056: the review average with its count, or
+                        nothing. playgrounds.rating is not shown: a model read
+                        it off a crawled page and nothing says whose it is.
+                        WEB-SEO-058: it links to the reviews it summarises. */}
+                    {reviewAggregate && (
+                      <a
+                        href="#reviews"
+                        className="flex min-h-11 items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 hover:bg-white/30"
+                        data-review-summary=""
+                      >
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
+                        <span>
+                          <span className="font-semibold">{reviewAggregate.average_rating.toFixed(1)}</span>
+                          {" "}from {reviewAggregate.total_ratings}{" "}
+                          {reviewAggregate.total_ratings === 1 ? "review" : "reviews"}
+                        </span>
+                      </a>
                     )}
                     {playground.age_range && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
@@ -462,6 +448,14 @@ export default function PlaygroundDetails() {
             longitude={playground.longitude}
           />
 
+          {/* Ratings and reviews (WEB-SEO-058). Without this nobody could
+              review a playground, so the hero average above never appeared. */}
+          <div id="reviews" className="mb-8 scroll-mt-20">
+            <DeferredWidget minHeight={240} label="Ratings and reviews">
+              <RatingSystem contentType="playground" contentId={playground.id} showReviews />
+            </DeferredWidget>
+          </div>
+
           {/* Playground-Specific FAQ */}
           <Card className="rounded-2xl mb-8 overflow-hidden">
             <FAQSection
@@ -595,12 +589,6 @@ function PlaygroundSideCard({ item }: SideCardProps) {
             )}
             {item.has_shade && <Badge variant="secondary" className="text-xs">Shade</Badge>}
             {item.has_restrooms && <Badge variant="secondary" className="text-xs">Restrooms</Badge>}
-            {item.rating != null && (
-              <div className="flex items-center gap-1">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
-                <span>{item.rating.toFixed(1)}</span>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

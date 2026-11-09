@@ -3,16 +3,70 @@
  * in the nurture_sends ledger (AOS-NURTURE-002+). Reused by onboarding, win-back,
  * and the weekly digest. Sends through _shared/email.ts (SES)
  * with the emailLayout CAN-SPAM footer and one-click
- * unsubscribe. Callers MUST have already checked consent/unsubscribe; this
+ * unsubscribe (the token is looked up by address when the caller has none, see
+ * lookupUnsubscribeToken). Callers MUST have already checked consent/unsubscribe; this
  * records the send, it does not decide policy. sendEmail still drops
  * suppressed addresses, which is recorded here as `skipped`.
  *
  * Fail-safe: on any send error it records a `failed` row and returns ok:false,
  * never throwing, so one bad send can't abort a batch.
  */
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { listUnsubscribeHeaders, renderEmail } from "./emailLayout.ts";
-import { sendEmail } from "./email.ts";
+import { normalizeEmail, sendEmail } from "./email.ts";
+import { envVar } from "./siteUrl.ts";
+
+// A service-role supabase-js client. Untyped like email.ts's DbClient so this
+// module imports nothing from esm.sh and loads in an offline vitest.
+// deno-lint-ignore no-explicit-any
+type NurtureDb = any;
+
+/** newsletter_subscribers.unsubscribe_token: 48 lowercase hex, as newsletter_unsubscribe_by_token checks. */
+const UNSUBSCRIBE_TOKEN = /^[0-9a-f]{48}$/;
+
+/**
+ * The recipient's newsletter unsubscribe token, or null.
+ *
+ * No nurture agent passes one, so every onboarding, win-back, re-engagement,
+ * milestone and subscription-nurture email went out with a footer saying
+ * "unsubscribe in one click" that linked to /profile?tab=settings (sign-in
+ * required) and a List-Unsubscribe header with only the mailto form, so no
+ * inbox showed its one-click button. send-weekly-digest already looks the
+ * token up by address; this does the same. The token unsubscribes through
+ * newsletter_unsubscribe_by_token, which writes the 'unsubscribe' suppression
+ * that sendEmail applies to every marketing send, nurture included.
+ *
+ * Any row status is fine: the RPC accepts a pending or unsubscribed row's
+ * token and still writes the suppression. A failed read returns null, which is
+ * the old footer, rather than stopping the send: the footer is not the opt-out
+ * check (consent and email_suppressions are), and losing every nurture email
+ * to a lookup error would be a worse outcome than one email without the link.
+ */
+export async function lookupUnsubscribeToken(
+  supabase: NurtureDb,
+  email: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("newsletter_subscribers")
+      .select("unsubscribe_token")
+      .eq("email", normalizeEmail(email))
+      .maybeSingle();
+    if (error) {
+      console.warn(`[sendNurtureEmail] unsubscribe token lookup failed: ${error.message}`);
+      return null;
+    }
+    const token = (data as { unsubscribe_token?: unknown } | null)?.unsubscribe_token;
+    return typeof token === "string" && UNSUBSCRIBE_TOKEN.test(token) ? token : null;
+  } catch (err) {
+    console.warn(`[sendNurtureEmail] unsubscribe token lookup threw: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
+export interface NurtureEmailDeps {
+  /** Pinned in tests. */
+  send?: typeof sendEmail;
+}
 
 export interface NurtureEmailArgs {
   agentKey: string;
@@ -43,21 +97,25 @@ export interface NurtureEmailResult {
 }
 
 export async function sendNurtureEmail(
-  // deno-lint-ignore no-explicit-any
-  supabase: SupabaseClient<any>,
+  supabase: NurtureDb,
   args: NurtureEmailArgs,
+  deps: NurtureEmailDeps = {},
 ): Promise<NurtureEmailResult> {
-  const from = args.fromAddress || Deno.env.get("NURTURE_FROM") || undefined;
+  const from = args.fromAddress || envVar("NURTURE_FROM") || undefined;
   const category = args.category ?? "marketing";
+  // Transactional mail carries no unsubscribe, so it does not need the token.
+  const unsubscribeToken = category === "marketing"
+    ? args.unsubscribeToken ?? await lookupUnsubscribeToken(supabase, args.email)
+    : null;
 
   const rendered = renderEmail({
     bodyHtml: args.bodyHtml,
     bodyText: args.bodyText,
-    recipient: { email: args.email, unsubscribeToken: args.unsubscribeToken ?? null },
+    recipient: { email: args.email, unsubscribeToken },
     category,
   });
 
-  const res = await sendEmail(
+  const res = await (deps.send ?? sendEmail)(
     {
       to: args.email,
       subject: args.subject,

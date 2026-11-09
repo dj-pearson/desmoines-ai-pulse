@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { SpriteIcon } from '@/components/ui/SpriteIcon';
 import { Briefcase, Send } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useContactForm } from '@/hooks/useContactForm';
 import {
   EMPTY_RFP_FORM,

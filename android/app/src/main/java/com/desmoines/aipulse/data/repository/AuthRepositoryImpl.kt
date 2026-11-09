@@ -71,6 +71,10 @@ class AuthRepositoryImpl @Inject constructor(
         suspendRunCatching { remoteDataSource.signInWithGoogle(idToken) }
             .onFailure { AppLogger.auth.warning("Google sign in failed: ${it.message}") }
 
+    override suspend fun signInWithApple(): Result<Unit> =
+        suspendRunCatching { remoteDataSource.signInWithApple() }
+            .onFailure { AppLogger.auth.warning("Apple sign in failed to start: ${it.message}") }
+
     override suspend fun fetchProfile(userId: String): Result<UserProfile?> =
         suspendRunCatching { remoteDataSource.fetchProfile(userId) }
             .onFailure { AppLogger.auth.warning("Fetch profile failed: ${it.message}") }

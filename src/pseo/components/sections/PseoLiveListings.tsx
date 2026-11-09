@@ -11,9 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
-import { CATEGORY_FILTERS, dayAfter, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../listingFilters';
+import { CATEGORY_FILTERS, pseoEventFilters, resolveEntityType, restaurantLocationMatch } from '../../listingFilters';
 import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
@@ -116,11 +117,11 @@ function ListingCard({ item }: { item: ListingItem }) {
       <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
         {item.image_url && (
           <div className="h-36 overflow-hidden rounded-t-lg">
-            <img
+            <OptimizedImage
               src={item.image_url}
               alt={item.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
+              containerClassName="h-full w-full"
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
           </div>
         )}
@@ -196,7 +197,6 @@ async function fetchListings(
       // event_start_utc is here for the link: the canonical slug carries the
       // Central Time date, which prefers it over `date`.
       .select('id, title, enhanced_description, original_description, location, date, event_start_utc, price, category, image_url')
-      .gte('date', new Date().toISOString())
       .order('date', { ascending: true })
       .limit(12);
     // is_hidden (WEB-AUTO-006), archived_at (WEB-BE-034), and is_merged, which
@@ -204,27 +204,14 @@ async function fetchListings(
     // event it was merged into.
     query = applyEventVisibility(query);
 
-    if (location) {
-      // venue is in the OR because that is where a neighbourhood name actually
-      // lands on this table - events.city is NULL on 1,243 of 1,249 rows, so the
-      // city arm almost never fires. Same fields EventsByLocation.tsx matches.
-      // Names come from pSEO config, but one with a comma ("Ankeny, IA") would
-      // end the or() clause and 400, which empties the listing block.
-      const place = sanitizePostgrestPattern(location.name);
-      query = query.or(
-        `city.ilike.%${place}%,location.ilike.%${place}%,venue.ilike.%${place}%`,
-      );
-    }
+    // Date window (still on today, or overlapping the temporal window) and the
+    // location match, in one or= (WEB-SEO-063).
+    const dates = pseoEventFilters({ temporalSlug: temporal?.slug, locationName: location?.name });
+    query = query.or(dates.or);
+    if (dates.lte) query = query.lte('date', dates.lte);
     if (categoryFilter?.entity === 'events') {
       query = query.filter(categoryFilter.column, 'imatch', categoryFilter.pattern);
     }
-    if (temporal) {
-      const range = temporalRange(temporal.slug);
-      // lt the day after, not lte the last day: events.date is timestamptz, so
-      // lte '2026-10-04' stops at midnight and drops everything later that day.
-      if (range) query = query.gte('date', range.from).lt('date', dayAfter(range.to));
-    }
-
     const { data, error } = await query;
     // The component renders NOTHING when this returns empty - `if (!items?.length)
     // return null` - so a failed query removes the listing block from the page

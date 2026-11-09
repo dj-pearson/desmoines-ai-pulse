@@ -84,23 +84,16 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, viewModel.shareText)
                 }
-                context.startActivity(Intent.createChooser(shareIntent, "Share Event"))
+                context.startActivity(Intent.createChooser(shareIntent, com.desmoines.aipulse.util.EventShareText.CHOOSER_TITLE))
             },
             onToggleFavorite = { viewModel.toggleFavorite() },
             onAddToCalendar = {
                 viewModel.createCalendarIntent()?.let { intent ->
-                    // No calendar app resolves this on some tablets and Android
-                    // Go devices; an unguarded startActivity there is an
-                    // ActivityNotFoundException crash, not a no-op.
-                    runCatching { context.startActivity(intent) }
-                        .onSuccess { viewModel.setCalendarAdded() }
-                        .onFailure {
-                            android.widget.Toast.makeText(
-                                context,
-                                "No calendar app available.",
-                                android.widget.Toast.LENGTH_SHORT,
-                            ).show()
-                        }
+                    // Shows "No calendar app available." instead of crashing
+                    // where nothing resolves the insert (AND-AUDIT-028 shares it).
+                    if (com.desmoines.aipulse.util.EventCalendarIntent.launch(context, intent)) {
+                        viewModel.setCalendarAdded()
+                    }
                 }
             },
             onOpenDirections = {
@@ -269,9 +262,7 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
             // In the app's web view: an ACTION_VIEW on desmoinesinsider.com is
             // an App Link and would bounce straight back to this screen.
             onOpenOnWeb = {
-                viewModel.webUrl()?.let { url ->
-                    navController.navigate(Route.WebView.createRoute(url)) { launchSingleTop = true }
-                }
+                navController.navigate(Route.WebView.createRoute(viewModel.webUrl())) { launchSingleTop = true }
             },
         )
     }

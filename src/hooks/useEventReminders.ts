@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
+import { fetchReminderEmailsUnsubscribed } from '@/lib/reminderEmailSuppression';
 
 const logger = createLogger('useEventReminders');
 
@@ -46,6 +46,15 @@ export function useEventReminders(eventId: string) {
     enabled: !!eventId,
   });
 
+  // WEB-FEAT-065: reminders are marketing mail, so an address that left the
+  // newsletter never gets them. Asked once per user, not per event.
+  const { data: emailsUnsubscribed = false } = useQuery({
+    queryKey: ['reminder-emails-unsubscribed', user?.id],
+    queryFn: fetchReminderEmailsUnsubscribed,
+    enabled: isAuthenticated && !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Mutation to toggle reminders
   const toggleReminderMutation = useMutation({
     mutationFn: async ({ reminderType, enabled }: { reminderType: ReminderType; enabled: boolean }) => {
@@ -71,16 +80,25 @@ export function useEventReminders(eventId: string) {
       const action = variables.enabled ? 'enabled' : 'disabled';
       const timeLabel = getReminderLabel(variables.reminderType);
 
+      if (variables.enabled && emailsUnsubscribed) {
+        toast({
+          title: 'Reminder saved, but not emailed',
+          description: "You unsubscribed from our emails, so we won't send it. Resubscribe on this page to get it.",
+        });
+        return;
+      }
+
       toast({
         title: `Reminder ${action}`,
         description: `You'll ${variables.enabled ? 'receive' : 'no longer receive'} a reminder ${timeLabel} before this event.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       logger.error('toggleReminder', 'Error toggling reminder', { error });
+      const message = error instanceof Error ? error.message : '';
       toast({
         title: 'Failed to update reminder',
-        description: error.message || 'Please try again',
+        description: message || 'Please try again',
         variant: 'destructive',
       });
     },
@@ -116,6 +134,8 @@ export function useEventReminders(eventId: string) {
     isReminderEnabled,
     toggleReminder,
     isTogglingReminder: toggleReminderMutation.isPending,
+    /** The caller's address is newsletter-unsubscribed, so no reminder will be emailed. */
+    emailsUnsubscribed,
   };
 }
 

@@ -67,6 +67,14 @@ struct VotingCategory: Identifiable, Codable, Hashable {
 
     /// When the round ends, if it has an end.
     var closesAt: Date? { Article.parseTimestamp(votingEnd) }
+
+    /// The category a /best-of/<slug> link names (IOS-AUDIT-FEAT-040): an
+    /// exact slug match on a category that is not inactive, the same rule as
+    /// the web's useCategoryResults (`.eq('slug').eq('is_active', true)`).
+    /// nil sends the link to the hub.
+    static func matching(slug: String, in categories: [VotingCategory]) -> VotingCategory? {
+        categories.first { $0.slug == slug && $0.isActive != false }
+    }
 }
 
 /// The current user's vote in a category (mirrors a row of the `votes` table).

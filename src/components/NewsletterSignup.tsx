@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNewsletterSubscription, NewsletterPreferences } from "@/hooks/useNewsletterSubscription";
-import { Mail, CheckCircle, Utensils } from "lucide-react";
+import { Mail, Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { NEWSLETTER_PROMISE } from "@/content/newsletterCopy";
+import {
+  NEWSLETTER_PROMISE,
+  NEWSLETTER_CONFIRM_HEADING,
+  NEWSLETTER_CONFIRM_BODY,
+} from "@/content/newsletterCopy";
+import type { NewsletterSource } from "@/lib/newsletterSources";
 
 /*
  * Copy rule (explore pass 2 WP6 item 4): say only what the weekly send holds.
@@ -19,7 +25,8 @@ import { NEWSLETTER_PROMISE } from "@/content/newsletterCopy";
 
 interface NewsletterSignupProps {
   variant?: 'default' | 'compact' | 'hero' | 'footer' | 'modal';
-  source?: 'website' | 'popup' | 'footer' | 'checkout' | 'hero';
+  /** Which form this is; each placement passes its own (WEB-ADS-033). */
+  source?: NewsletterSource;
   showPreferences?: boolean;
   className?: string;
   title?: string;
@@ -40,6 +47,9 @@ export function NewsletterSignup({
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  // Placeholders vanish on the first keystroke and are not a name (WEB-UX-068).
+  const firstNameId = useId();
+  const emailId = useId();
   const [preferences, setPreferences] = useState<NewsletterPreferences>({
     weekly_digest: true,
     event_alerts: true,
@@ -68,16 +78,18 @@ export function NewsletterSignup({
     setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Success state
+  // Submitted, not subscribed: the row stays pending until the emailed link is
+  // clicked, so this asks for that click instead of announcing a welcome. Same
+  // copy for every outcome; see newsletterCopy.ts (WEB-ADS-017).
   if (submitted) {
     return (
-      <div className={cn("text-center py-6", className)}>
-        <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-3">
-          <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+      <div role="status" className={cn("text-center py-6", className)}>
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+          <Mail className="w-6 h-6 text-primary" aria-hidden="true" />
         </div>
-        <h3 className="text-lg font-semibold mb-1">You're In!</h3>
-        <p className="text-sm text-muted-foreground">
-          Welcome to the Des Moines Insider community. Check your inbox!
+        <h3 className="text-lg font-semibold mb-1">{NEWSLETTER_CONFIRM_HEADING}</h3>
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+          {NEWSLETTER_CONFIRM_BODY}
         </p>
         <Button
           variant="link"
@@ -121,13 +133,14 @@ export function NewsletterSignup({
           <Input
             type="email"
             placeholder="your@email.com"
+            aria-label="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             className="flex-1 bg-background"
           />
-          <Button type="submit" disabled={loading} size="sm">
-            <Mail className="w-4 h-4" />
+          <Button type="submit" disabled={loading} size="sm" aria-label="Subscribe">
+            <Mail className="w-4 h-4" aria-hidden="true" />
           </Button>
         </form>
         <p className="text-xs text-muted-foreground">
@@ -157,6 +170,8 @@ export function NewsletterSignup({
             <Input
               type="email"
               placeholder="your@email.com"
+              aria-label="Email address"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -191,20 +206,29 @@ export function NewsletterSignup({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Input
-              type="text"
-              placeholder="First name (optional)"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-            />
-            <Input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={firstNameId}>First name (optional)</Label>
+              <Input
+                id={firstNameId}
+                type="text"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={emailId}>Email</Label>
+              <Input
+                id={emailId}
+                type="email"
+                placeholder="your@email.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           {showPreferences && (
@@ -258,19 +282,28 @@ export function NewsletterSignup({
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Input
-              type="text"
-              placeholder="First name (optional)"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-            />
-            <Input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor={firstNameId}>First name (optional)</Label>
+              <Input
+                id={firstNameId}
+                type="text"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={emailId}>Email</Label>
+              <Input
+                id={emailId}
+                type="email"
+                placeholder="your@email.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           {showPreferences && (

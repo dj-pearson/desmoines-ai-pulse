@@ -7,6 +7,14 @@
  * `newsletter_unsubscribe_by_token` SECURITY DEFINER RPC which validates the
  * token format, updates the newsletter subscriber row, and returns a simple
  * success / already-unsubscribed boolean.
+ *
+ * An event-reminder email links here with ?reminder=<id> instead (WEB-FEAT-059).
+ * That stops the remaining reminders for that one event and leaves the
+ * newsletter alone; see src/lib/reminderOptOut.ts.
+ *
+ * A saved-search alert email links here with ?alerts=<saved search id>
+ * (WEB-FEAT-073). That turns off the reader's event alerts and leaves
+ * the newsletter alone; see src/lib/alertsOptOut.ts.
  */
 
 import { useEffect, useState } from "react";
@@ -22,7 +30,10 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
 import { logConsent } from "@/lib/consentLog";
+import { cancelRemindersByToken } from "@/lib/reminderOptOut";
+import { disableAlertsByToken } from "@/lib/alertsOptOut";
 import {
   CheckCircle2,
   AlertCircle,
@@ -30,18 +41,55 @@ import {
   MailX,
 } from "lucide-react";
 
-type Status = "loading" | "success" | "already" | "invalid" | "error";
+type Status = "loading" | "success" | "already" | "reminders" | "alerts" | "invalid" | "error";
 
 export default function Unsubscribe() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
+  const reminderToken = params.get("reminder");
+  const alertsToken = params.get("alerts");
   const [status, setStatus] = useState<Status>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reminderEvent, setReminderEvent] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
+    async function runReminder(id: string) {
+      const result = await cancelRemindersByToken(id);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "cancelRemindersByToken" });
+        setStatus("error");
+        return;
+      }
+      if (result.kind === "invalid") {
+        setStatus("invalid");
+        return;
+      }
+      setReminderEvent(result.eventTitle);
+      setStatus("reminders");
+    }
+
+    async function runAlerts(id: string) {
+      const result = await disableAlertsByToken(id);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "disableAlertsByToken" });
+        setStatus("error");
+        return;
+      }
+      setStatus(result.kind === "invalid" ? "invalid" : "alerts");
+    }
+
     async function run() {
+      if (reminderToken !== null) {
+        await runReminder(reminderToken);
+        return;
+      }
+      if (alertsToken !== null) {
+        await runAlerts(alertsToken);
+        return;
+      }
       if (!token) {
         setStatus("invalid");
         return;
@@ -54,8 +102,10 @@ export default function Unsubscribe() {
 
         if (cancelled) return;
         if (error) {
+          // WEB-ADS-024: the reader gets fixed copy; the PostgREST text goes to
+          // ops through handleError, never onto the page.
+          handleError(error, { component: "Unsubscribe", action: "unsubscribeByToken" });
           setStatus("error");
-          setErrorMessage(error.message);
           return;
         }
 
@@ -82,10 +132,8 @@ export default function Unsubscribe() {
         }
       } catch (err) {
         if (cancelled) return;
+        handleError(err, { component: "Unsubscribe", action: "unsubscribeByToken" });
         setStatus("error");
-        setErrorMessage(
-          err instanceof Error ? err.message : "Unknown error"
-        );
       }
     }
 
@@ -93,7 +141,7 @@ export default function Unsubscribe() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, reminderToken, alertsToken]);
 
   return (
     <>
@@ -135,6 +183,36 @@ export default function Unsubscribe() {
               </Alert>
             )}
 
+            {status === "reminders" && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  {reminderEvent
+                    ? `Reminders for ${reminderEvent} are off.`
+                    : "Reminders for this event are off."}{" "}
+                  Your other reminders and any newsletter you get are unchanged.{" "}
+                  <Link to="/my-events?tab=reminders" className="underline">
+                    See your reminders
+                  </Link>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {status === "alerts" && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  Saved-search alerts are off. Your saved searches, any
+                  newsletter you get and your other emails are unchanged.{" "}
+                  <Link to="/dashboard?tab=saved-searches" className="underline">
+                    Manage saved searches
+                  </Link>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
+
             {status === "already" && (
               <Alert>
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -165,8 +243,7 @@ export default function Unsubscribe() {
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Something went wrong while processing your request
-                  {errorMessage ? ` (${errorMessage})` : ""}. Please try again
+                  Something went wrong while processing your request. Please try again
                   in a moment, or email{" "}
                   <a
                     href="mailto:unsubscribe@desmoinesinsider.com"

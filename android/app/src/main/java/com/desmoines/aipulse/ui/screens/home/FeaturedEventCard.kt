@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.home
 
-import com.desmoines.aipulse.util.UiFormatLocale
+import com.desmoines.aipulse.util.EventTimeText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,7 +40,6 @@ import com.desmoines.aipulse.ui.theme.GlassIntensity
 import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
 import com.desmoines.aipulse.ui.theme.glassSurface
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -130,7 +129,7 @@ fun FeaturedEventCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            event.parsedDate?.let { date ->
+            EventTimeText.dayText(event, "MMM d")?.let { dayText ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -142,7 +141,7 @@ fun FeaturedEventCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = date.format(DateTimeFormatter.ofPattern("MMM d", UiFormatLocale)),
+                        text = dayText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { BarChart3, Search, Globe, Link2, ExternalLink, CheckCircle2, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { storage } from "@/lib/safeStorage";
 import { createLogger } from '@/lib/logger';
 
@@ -285,8 +285,9 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Redirect URI (Add this to your OAuth app)</Label>
+                        <Label htmlFor="redirect_uri">Redirect URI (Add this to your OAuth app)</Label>
                         <Input
+                          id="redirect_uri"
                           readOnly
                           value={`${window.location.origin}/admin/oauth/callback`}
                           className="font-mono text-xs"

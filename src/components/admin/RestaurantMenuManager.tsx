@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   UtensilsCrossed,
   Upload,
@@ -276,6 +276,7 @@ function RestaurantTable({
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search restaurants"
             placeholder="Search restaurants…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -283,7 +284,7 @@ function RestaurantTable({
           />
         </div>
         <Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-          <SelectTrigger className="w-36 h-8">
+          <SelectTrigger className="w-36 h-8" aria-label="Filter by menu status">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -443,6 +444,8 @@ function RestaurantTable({
                           <div className="flex items-center gap-2">
                             <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
                             <Input
+                              type="url"
+                              aria-label={`Menu URL for ${r.name}`}
                               placeholder="https://restaurant.com/menu or direct PDF link…"
                               value={displayUrl}
                               onChange={(e) =>

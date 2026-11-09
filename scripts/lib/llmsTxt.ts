@@ -10,6 +10,13 @@
  *
  * Google has said it ignores llms.txt, so this stays short and cheap: what the
  * site covers, how much of it there is today, and where the hubs are.
+ *
+ * "Where the hubs are" means every public hub in public/sitemap-static.xml
+ * (WEB-SEO-052). The list was written once and fourteen hubs shipped after it,
+ * /music, /sports, /outdoors and /stay among them, so an AI reader was told
+ * the site had none of them. scripts/__tests__/llms-txt.test.mjs now fails
+ * when a single-segment path in sitemap-static.xml is neither linked here nor
+ * on its named exclusion list, and when a link here is in no sitemap.
  */
 
 export interface LlmsCounts {
@@ -108,13 +115,33 @@ Coverage: Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Wauke
 - [This weekend](${base}/events/this-weekend): Friday through Sunday
 - [Free events](${base}/events/free): no-cost events
 - [Kids events](${base}/events/kids): family and children's events
+- [Date night](${base}/events/date-night): evening events suited to a night out
+- [Live music](${base}/music): tonight's shows, this weekend's concerts and the venues that host them
+- [Sports](${base}/sports): Iowa Cubs, Iowa Wild, Iowa Wolves and Iowa Barnstormers games, with schedules and venues
+- [Iowa State Fair](${base}/iowa-state-fair): dates, parking, hotels and restaurants near the fairgrounds
+- Events by suburb: ${base}/events/<suburb>, e.g. west-des-moines, ankeny, urbandale, johnston, clive, waukee, altoona, windsor-heights
 ${months.join('\n')}${months.length ? '\n' : ''}
 ## Places
 - [Restaurants](${base}/restaurants): restaurant directory with cuisine, price and hours
 - [Open now](${base}/restaurants/open-now): restaurants open at this moment
+- [New restaurants](${base}/restaurants/new): restaurants opened in the last 12 months, plus announced and opening-soon ones
+- [Dietary](${base}/restaurants/dietary): restaurants whose listing mentions vegan, vegetarian, gluten-free, keto, halal or kosher (a keyword match, not a menu check)
+- [What's new](${base}/whats-new): restaurant openings, closings and other changes, newest first
+- [Deals](${base}/deals): happy hours, specials and coupons, with the days and times they run
+- [Breweries](${base}/breweries): craft breweries and taprooms with their listed hours
+- [Best of](${base}/best-of): community-voted best pizza, coffee, brunch and more
 - [Attractions](${base}/attractions): museums, parks and things to do
+- [Outdoors](${base}/outdoors): state parks, county parks and rail trails within about 40 minutes of downtown
 - [Playgrounds](${base}/playgrounds): playgrounds and parks for kids
 - [Neighborhoods](${base}/neighborhoods): neighborhood and suburb guides
+
+## Visiting
+- [Things to do](${base}/things-to-do): things to do by neighborhood, activity or occasion
+- [Visitors guide](${base}/visitors-guide): what's on this weekend, where to eat, stay and how to get around
+- [Where to stay](${base}/stay): hotels by area and by distance to a venue
+- [Getting around](${base}/getting-around): downtown parking, the skywalk, DART, BCycle, the airport and rideshare
+- [Itineraries](${base}/itineraries): curated day and weekend trip plans
+- [Group travel](${base}/group-travel): meeting, conference and wedding venues by capacity and type
 
 ## Reading
 - [Articles](${base}/articles): local articles, including the weekly "This Weekend in Des Moines"

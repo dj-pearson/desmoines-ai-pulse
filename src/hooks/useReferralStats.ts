@@ -8,6 +8,8 @@ const log = createLogger("useReferralStats");
 export interface ReferralStats {
   referralCode: string;
   signedUp: number;
+  /** Of those, how many went on to a paid plan (20261107000105). */
+  subscribed: number;
 }
 
 /**
@@ -16,8 +18,9 @@ export interface ReferralStats {
  * migration is not applied yet) or answers nothing, so the caller can hide the
  * card instead of showing a code that does not exist.
  *
- * `subscribed` is not surfaced: nothing moves a referral to that status yet,
- * so it would always read 0.
+ * `subscribed` counts referrals whose member went on to an active paid plan.
+ * Until migration 20261107000105 is applied nothing moves a row there, so it
+ * reads 0 and the card leaves that line out.
  */
 export function useReferralStats() {
   const { user } = useAuthState();
@@ -36,7 +39,11 @@ export function useReferralStats() {
       }
       const row = Array.isArray(data) ? data[0] : null;
       if (!row?.referral_code) return null;
-      return { referralCode: row.referral_code, signedUp: Number(row.signed_up) || 0 };
+      return {
+        referralCode: row.referral_code,
+        signedUp: Number(row.signed_up) || 0,
+        subscribed: Number(row.subscribed) || 0,
+      };
     },
   });
 }

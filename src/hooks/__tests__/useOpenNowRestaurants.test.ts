@@ -59,6 +59,27 @@ describe("useOpenNowRestaurants derivation", () => {
     ]);
   });
 
+  it("drops places Google marks closed, even when their hours say open (WEB-FEAT-037)", () => {
+    // Google keeps the weekly hours of a temporarily closed place, and
+    // restaurants.status has no value for it: business_status is the only signal.
+    const everyDay = {
+      periods: [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+        open: { day, hour: 11, minute: 0 },
+        close: { day, hour: 23, minute: 0 },
+      })),
+    };
+    const rows = [
+      row("Serving", null, { hours_json: everyDay, business_status: "OPERATIONAL" }),
+      row("No Google Status", null, { hours_json: everyDay }),
+      row("Renovating", null, { hours_json: everyDay, business_status: "CLOSED_TEMPORARILY" }),
+      row("Gone Since Import", null, { hours_json: everyDay, business_status: "closed_permanently" }),
+    ];
+    expect(rows.filter(isListableRow).map((r) => r.id)).toEqual(["Serving", "No Google Status"]);
+    const view = deriveOpenNow(rows, central("2026-09-24T19:00:00"));
+    expect(view.open.map((e) => e.restaurant.id)).toEqual(["No Google Status", "Serving"]);
+    expect(view.withListedHours).toBe(2);
+  });
+
   it("reads clock labels back to minutes", () => {
     expect(clockLabelToMinutes("10 PM")).toBe(22 * 60);
     expect(clockLabelToMinutes("9:45 PM")).toBe(21 * 60 + 45);

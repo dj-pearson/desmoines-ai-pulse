@@ -28,7 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 type HotelInsert = Database["public"]["Tables"]["hotels"]["Insert"];
@@ -491,7 +491,7 @@ export default function HotelEditDialog({
                   />
                 </div>
                 <div>
-                  <Label>Price range</Label>
+                  <Label htmlFor="h-price">Price range</Label>
                   <Select
                     value={form.watch("price_range") || ""}
                     onValueChange={(v) =>
@@ -502,7 +502,7 @@ export default function HotelEditDialog({
                       )
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="h-price">
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>

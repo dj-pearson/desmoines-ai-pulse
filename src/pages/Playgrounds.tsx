@@ -40,7 +40,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, LocateFixed, ArrowDownAZ } from "lucide-react";
+import { Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, LocateFixed, ArrowDownAZ } from "lucide-react";
 // map-pin and users render once per card. Both are multi-shape lucide icons, so
 // the sprite costs 2 nodes where inline costs 3 and 5 - see the membership rules
 // in scripts/generate-icon-sprite.mjs. Measured saving on this route: 154 of
@@ -822,12 +822,9 @@ export default function Playgrounds() {
                           {formatMilesAway(playground.distanceMiles)}
                         </div>
                       )}
-                      {playground.rating != null && (
-                        <div className="flex items-center gap-2">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" aria-hidden="true" />
-                          <span>{playground.rating.toFixed(1)}/5</span>
-                        </div>
-                      )}
+                      {/* No star badge: playgrounds.rating is a number a model
+                          read off a crawled page, with no record of whose
+                          rating it was (WEB-SEO-056). */}
                       {playground.location && (
                         <div className="flex items-center gap-2">
                           <SpriteIcon name="map-pin" className="h-4 w-4" />

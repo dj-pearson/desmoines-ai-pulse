@@ -79,15 +79,15 @@ class DeepLinkHandlerTest {
         assertEquals(Destination.Search("today"), parse("https://desmoinesinsider.com/events/today"))
         assertEquals(Destination.Screen(ScreenDestination.WEEKEND), parse("https://desmoinesinsider.com/events/this-weekend"))
         assertEquals(Destination.Search("free events"), parse("https://desmoinesinsider.com/events/free"))
-        assertEquals(Destination.Search("kids events"), parse("https://desmoinesinsider.com/events/kids"))
+        assertEquals(Destination.KidsEvents, parse("https://desmoinesinsider.com/events/kids"))
         assertEquals(Destination.Search("events in ankeny"), parse("https://desmoinesinsider.com/events/ankeny"))
-        assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events/near-me"))
+        assertEquals(Destination.Tab(TabDestination.MAP), parse("https://desmoinesinsider.com/events/near-me"))
         assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events/may-2026"))
     }
 
     @Test
     fun restaurantLandingPagesLandOnDining() {
-        assertEquals(Destination.Tab(TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants/open-now"))
+        assertEquals(Destination.RestaurantsOpenNow, parse("https://desmoinesinsider.com/restaurants/open-now"))
         assertEquals(Destination.Tab(TabDestination.DINING), parse("https://desmoinesinsider.com/restaurants/new"))
     }
 
@@ -238,6 +238,40 @@ class DeepLinkHandlerTest {
 
         // The activity is handed the same Intent again after a configuration
         // change; without the removeExtra calls it would navigate a second time.
+        assertFalse(handler.handleIntent(intent))
+        assertNull(handler.consumeDestination())
+    }
+
+    @Test
+    fun aPushWithTypeAndIdRoutesAndIsDrained() {
+        // AND-AUDIT-026: the iOS payload keys, as PushNotificationService writes them.
+        val intent = Intent()
+        DeepLinkHandler.notificationExtrasFromPush(mapOf("type" to "article", "id" to "a1"))
+            .forEach { (key, value) -> intent.putExtra(key, value) }
+
+        assertTrue(handler.handleIntent(intent))
+        assertEquals(Destination.Article(LinkId("a1")), handler.consumeDestination())
+
+        assertFalse(handler.handleIntent(intent))
+    }
+
+    @Test
+    fun aPushUrlGoesThroughTheLinkParser() {
+        val intent = Intent()
+        val url = "https://desmoinesinsider.com/stay/hotel-fort-des-moines"
+        DeepLinkHandler.notificationExtrasFromPush(mapOf("url" to url))
+            .forEach { (key, value) -> intent.putExtra(key, value) }
+
+        assertTrue(handler.handleIntent(intent))
+        assertEquals(Destination.Hotel(LinkId("hotel-fort-des-moines")), handler.consumeDestination())
+    }
+
+    @Test
+    fun aPushUrlOffOurHostIsRefused() {
+        val intent = Intent()
+        DeepLinkHandler.notificationExtrasFromPush(mapOf("url" to "https://desmoinesinsider.com.evil.io/events/x"))
+            .forEach { (key, value) -> intent.putExtra(key, value) }
+
         assertFalse(handler.handleIntent(intent))
         assertNull(handler.consumeDestination())
     }

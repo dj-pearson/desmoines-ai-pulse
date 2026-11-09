@@ -9,7 +9,7 @@
  * checked only campaign ownership: any number of links, on a paid or running
  * campaign, for a listing that might not exist.
  */
-import { assert, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));

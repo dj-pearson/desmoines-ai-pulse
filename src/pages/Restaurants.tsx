@@ -9,6 +9,7 @@ import {
 import { RestaurantSmartPresets } from "@/components/RestaurantSmartPresets";
 import { RestaurantInlineFilters } from "@/components/RestaurantInlineFilters";
 import { RestaurantsTonightStrip } from "@/components/RestaurantsTonightStrip";
+import { RestaurantsHappyHourStrip } from "@/components/restaurants/RestaurantsHappyHourStrip";
 import { RestaurantsHubDirectory } from "@/components/seo/RestaurantsHubDirectory";
 import { RestaurantsHubFaq, RestaurantsHubGuide } from "@/components/RestaurantsHubGuide";
 import { RestaurantsTopRated } from "@/components/RestaurantsTopRated";
@@ -22,6 +23,7 @@ import {
   useCuisineCounts,
   initialRestaurantPageParam,
   RESTAURANT_PAGE_SIZE,
+  appliedRestaurantTags,
 } from "@/hooks/useRestaurants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,7 +175,10 @@ export default function Restaurants() {
       sortBy: getStr("sort", "popularity") as RestaurantFilterOptions["sortBy"],
       featuredOnly: getStr("featured", "") === "1",
       openNow: false,
-      tags: getList("tags"),
+      // Only tags a query applies (WEB-FEAT-060): a link carrying a retired
+      // tag such as "Happy Hour" no longer shows a chip and a filter count
+      // over an unfiltered list.
+      tags: appliedRestaurantTags(getList("tags")),
     }),
     [getStr, getNum, getList]
   );
@@ -934,6 +939,7 @@ export default function Restaurants() {
             )}
 
             {showTonight && isAboveSm && <RestaurantsTonightStrip />}
+            {showTonight && isAboveSm && <RestaurantsHappyHourStrip />}
 
             {/* Main Restaurant Grid */}
             <section aria-labelledby="all-restaurants-heading">
@@ -1059,6 +1065,7 @@ export default function Restaurants() {
                   </div>
 
                   {tonightInGrid && <RestaurantsTonightStrip className="mt-6" />}
+                  {tonightInGrid && <RestaurantsHappyHourStrip className="mt-6" />}
 
                   {cardsAfterTonight.length > 0 && (
                     <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

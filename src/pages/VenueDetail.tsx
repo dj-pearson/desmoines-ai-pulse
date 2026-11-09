@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { Helmet } from 'react-helmet-async';
 import { useVenue, useVenueEvents } from '@/hooks/useVenues';
 import { Card, CardContent } from '@/components/ui/card';
@@ -152,14 +153,16 @@ export default function VenueDetail() {
       </Helmet>
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
-          {/* Breadcrumb */}
-          <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground mb-6">
-            <Link to="/music" className="hover:text-primary">Music</Link>
-            <span className="mx-2">/</span>
-            <Link to="/events" className="hover:text-primary">Events</Link>
-            <span className="mx-2">/</span>
-            <span>{venueName}</span>
-          </nav>
+          {/* WEB-SEO-048: the trail follows the URL. It used to read
+              Music / Events / venue, naming /events as a parent of a page
+              that lives under /music. */}
+          <DetailBreadcrumb
+            className="mb-6"
+            crumbs={[
+              { name: 'Music', path: '/music' },
+              { name: venueName, path: `/music/venues/${venue.slug}` },
+            ]}
+          />
 
           {/* Venue Header */}
           <div className="mb-8">

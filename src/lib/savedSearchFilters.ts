@@ -15,7 +15,6 @@
  * Every field is read with a fallback, so a row missing any key, or with
  * `filters` null, a string or an array, still normalizes. Nothing here throws.
  */
-import { z } from "zod";
 import { findEventArea } from "./eventAreas";
 import { FALLBACK_CATEGORY, normalizeCategory } from "./eventCategories";
 
@@ -43,23 +42,29 @@ export function buildSavedSearchUrl(filters: SavedSearchFilters): string {
 }
 
 /** A string, or "" for anything else (numbers, arrays, null, missing). */
-const text = z
-  .unknown()
-  .transform((v) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ") : ""));
+function text(v: unknown): string {
+  return typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "";
+}
 
-const filtersSchema = z.preprocess(
-  (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {}),
-  z.object({
-    q: text,
-    query: text,
-    category: text,
-    location: text,
-    price: text,
-    preset: text,
-    sort: text,
-    tab: text,
-  }),
-);
+/**
+ * The filter keys any writer uses, each read with text().
+ *
+ * PLAIN CODE, NOT ZOD (WEB-PERF-069). This was a zod preprocess + object of
+ * eight z.unknown().transform() fields, and it was the only zod import in the
+ * static graph of /events, /search and /dashboard: 11.9 KB gzipped of zod
+ * downloaded on the busiest list page to coerce eight values to strings. The
+ * function below is the same contract, and stricter about "never throws": a
+ * non-plain object such as a Date made the zod version throw.
+ */
+const FILTER_KEYS = ["q", "query", "category", "location", "price", "preset", "sort", "tab"] as const;
+type ReadFilters = Record<(typeof FILTER_KEYS)[number], string>;
+
+function readFilters(v: unknown): ReadFilters {
+  const src = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  const out = {} as ReadFilters;
+  for (const key of FILTER_KEYS) out[key] = text(src[key]);
+  return out;
+}
 
 export type SavedSearchKind = "events" | "other";
 
@@ -117,7 +122,7 @@ function kindOf(searchType: string | null | undefined, tab: string): SavedSearch
 }
 
 export function normalizeSavedSearch(row: SavedSearchRowLike | null | undefined): NormalizedSavedSearch {
-  const f = filtersSchema.parse(row?.filters);
+  const f = readFilters(row?.filters);
   const kind = kindOf(row?.search_type, f.tab);
   // iOS writes `query`; the web writes `q`. The web key wins when both exist.
   const q = f.q || f.query;

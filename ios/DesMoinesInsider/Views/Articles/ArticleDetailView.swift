@@ -266,8 +266,21 @@ struct ArticleDetailView: View {
         case .hotel(let id): return .hotel(id)
         case .article(let id): return .article(id)
         case .discover(let d): return .discover(d)
+        case .neighborhood(let slug):
+            // A guide linking a neighborhood opens it natively
+            // (IOS-AUDIT-FEAT-038); an unknown slug falls back to the web.
+            guard let neighborhood = Neighborhood.bySlug(slug) else { return nil }
+            return .neighborhood(neighborhood)
+        // A guide linking a Best Of category opens it natively
+        // (IOS-AUDIT-FEAT-040).
+        case .bestOfCategory(let slug): return .bestOfCategory(slug)
+        // A guide linking an annual event opens the series natively
+        // (IOS-AUDIT-FEAT-046); an unknown slug falls back to the web.
+        case .eventSeries(let slug):
+            guard let def = EventSeries.series(slug: slug) else { return nil }
+            return .eventSeries(def)
         // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
-        case .tab, .search, .web: return nil
+        case .tab, .restaurantLanding, .map, .search, .eventSearch, .web: return nil
         }
     }
 

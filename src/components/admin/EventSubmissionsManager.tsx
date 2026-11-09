@@ -71,7 +71,7 @@ import { recordAdminAudit } from "@/lib/adminAudit";
 import { handleError } from "@/lib/errorHandler";
 import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 import { safeWebUrl } from "@/lib/reservations";
 
@@ -471,6 +471,7 @@ export default function EventSubmissionsManager() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search submissions"
               value={searchInput}
               onChange={(e) => {
                 setSearchInput(e.target.value);
@@ -487,7 +488,7 @@ export default function EventSubmissionsManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>

@@ -77,4 +77,31 @@ final class MapQuickFilterTests: XCTestCase {
         XCTAssertTrue(EventAnnotation.isTonight(soon, now: now))
         XCTAssertFalse(EventAnnotation.isTonight(afterMidnight, now: now))
     }
+
+    // MARK: - /map links (IOS-AUDIT-007)
+
+    func testAMapLinkShowsOnlyTheKindsItNames() {
+        let vm = viewModel()
+        vm.restaurants = [MapFixtures.restaurant("r", hours: MapFixtures.dailyHours)]
+        vm.attractions = [MapFixtures.attraction("a")]
+        vm.apply(MapLinkLayers(events: false, restaurants: false, attractions: true))
+        XCTAssertFalse(vm.showEvents)
+        XCTAssertFalse(vm.showRestaurants)
+        XCTAssertTrue(vm.showAttractions)
+        XCTAssertTrue(vm.restaurantAnnotations.isEmpty)
+        XCTAssertEqual(vm.attractionAnnotations.map(\.id), ["a"])
+    }
+
+    func testAMapLinkReplacesEarlierChoicesAndQuickFilters() {
+        let vm = viewModel()
+        vm.showRestaurants = false
+        vm.openNowOnly = true
+        vm.walkableOnly = true
+        vm.apply(MapLinkLayers())
+        XCTAssertTrue(vm.showEvents)
+        XCTAssertTrue(vm.showRestaurants)
+        XCTAssertTrue(vm.showAttractions)
+        XCTAssertFalse(vm.openNowOnly)
+        XCTAssertFalse(vm.walkableOnly)
+    }
 }

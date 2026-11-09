@@ -3,7 +3,11 @@
  * without pulling in every adapter (several import deno_dom's wasm build).
  */
 
-import type { AdapterResult, DomainAdapter } from "./types.ts";
+import type {
+  AdapterFetchOptions,
+  AdapterResult,
+  DomainAdapter,
+} from "./types.ts";
 
 /**
  * Run every adapter that claims `url` + `category`, in order, until one returns
@@ -18,6 +22,7 @@ export async function runAdapters(
   adapters: readonly DomainAdapter[],
   url: string,
   category: string,
+  options?: AdapterFetchOptions,
 ): Promise<AdapterResult | null> {
   const candidates = adapters.filter(
     (a) => a.matches(url) && a.supports(category),
@@ -32,12 +37,21 @@ export async function runAdapters(
 
   for (const adapter of candidates) {
     try {
-      const result = await adapter.fetch(url, category);
+      const result = await adapter.fetch(url, category, options);
       if (!result.success) {
         console.log(
           `⚠️ ${adapter.name} adapter failed (${result.error}); trying next candidate`,
         );
         continue;
+      }
+      if (result.items.length === 0 && (result.skippedKnown ?? 0) > 0) {
+        // Everything it found is already stored. That is this adapter doing
+        // its job, not missing: falling through would send a site we just
+        // read to the generic scraper and the model.
+        console.log(
+          `✅ ${adapter.name} adapter found nothing new (${result.skippedKnown} already stored)`,
+        );
+        return result;
       }
       if (result.items.length === 0) {
         console.log(

@@ -54,7 +54,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type Platform = "twitter" | "facebook" | "instagram" | "linkedin";
 
@@ -432,7 +432,7 @@ export default function SocialAccountsManager() {
                           <RotateCw className="h-3.5 w-3.5 mr-1" />
                           Rotate
                         </Button>
-                        <Button
+                        <Button aria-label={`Delete ${acc.handle}`}
                           size="sm"
                           variant="outline"
                           className="text-destructive"
@@ -478,12 +478,12 @@ export default function SocialAccountsManager() {
             {dialog.mode === "create" && (
               <>
                 <div>
-                  <Label>Platform</Label>
+                  <Label htmlFor="s-platform">Platform</Label>
                   <Select
                     value={formPlatform}
                     onValueChange={(v: Platform) => setFormPlatform(v)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="s-platform">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

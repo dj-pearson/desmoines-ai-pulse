@@ -3,7 +3,8 @@ import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, addCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { validateQueryParams, sanitizeLikeInput } from "../_shared/validation.ts";
+import { validateQueryParams } from "../_shared/validation.ts";
+import { applyEventListFilters, applyEventVisibility } from "./listQuery.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -95,40 +96,25 @@ serve(async (req) => {
       }
 
       const params = validationResult.data!;
-      const location = params.location || params.city;
-      const today = new Date().toISOString().split("T")[0];
 
-      let query = supabase
-        .from("events")
-        .select(
-          "id, title, date, event_start_local, location, venue, price, category, enhanced_description, original_description, image_url, source_url, event_start_utc, city, latitude, longitude, is_featured",
-          { count: "exact" }
-        )
-        .gte("date", params.start_date || today)
-        .order("date", { ascending: true });
-
-      // Apply filters
-      if (params.end_date) {
-        query = query.lte("date", params.end_date);
-      }
-
-      if (params.category) {
-        query = query.eq("category", params.category);
-      }
-
-      if (location) {
-        const safeLocation = sanitizeLikeInput(location);
-        query = query.or(
-          `location.ilike.%${safeLocation}%,city.ilike.%${safeLocation}%,venue.ilike.%${safeLocation}%`
-        );
-      }
-
-      if (params.search) {
-        const safeSearch = sanitizeLikeInput(params.search);
-        query = query.or(
-          `title.ilike.%${safeSearch}%,enhanced_description.ilike.%${safeSearch}%,venue.ilike.%${safeSearch}%`
-        );
-      }
+      // Visibility, the Central-time date window (with the running arm),
+      // category, location and search all live in listQuery.ts, which the
+      // suite next to it covers offline. WEB-FEAT-078.
+      let query = applyEventListFilters(
+        supabase
+          .from("events")
+          .select(
+            "id, title, date, end_date, event_start_local, location, venue, price, category, enhanced_description, original_description, image_url, source_url, event_start_utc, city, latitude, longitude, is_featured",
+            { count: "exact" }
+          ),
+        {
+          category: params.category,
+          location: params.location || params.city,
+          search: params.search,
+          start_date: params.start_date,
+          end_date: params.end_date,
+        },
+      ).order("date", { ascending: true });
 
       // Pagination
       query = query.range(params.offset, params.offset + params.limit - 1);
@@ -142,6 +128,9 @@ serve(async (req) => {
         id: event.id,
         title: event.title,
         date: event.date,
+        // Added for WEB-FEAT-078: the list now includes runs that started
+        // before the requested window, and this is how a caller tells one.
+        end_date: event.end_date ?? null,
         time: localStartTime(event.event_start_local),
         venue: event.venue,
         location: event.location,
@@ -186,9 +175,11 @@ serve(async (req) => {
     if (req.method === "GET" && eventIdSegment) {
       const eventId = eventIdSegment;
 
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
+      // A merged, hidden or archived event is a 404 here, as it is on the
+      // site. It was served in full before WEB-FEAT-078.
+      const { data, error } = await applyEventVisibility(
+        supabase.from("events").select("*"),
+      )
         .eq("id", eventId)
         .single();
 
@@ -213,6 +204,7 @@ serve(async (req) => {
         id: data.id,
         title: data.title,
         date: data.date,
+        end_date: data.end_date ?? null,
         time: localStartTime(data.event_start_local),
         venue: data.venue,
         location: data.location,

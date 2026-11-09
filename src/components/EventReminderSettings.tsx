@@ -6,27 +6,31 @@ import { Label } from '@/components/ui/label';
 import { Bell, BellOff } from "lucide-react";
 import { useEventReminders, type ReminderType } from '@/hooks/useEventReminders';
 import { Skeleton } from '@/components/ui/skeleton';
-import { scheduleEventReminder } from '@/hooks/usePushNotifications';
-import { isCapacitor } from '@/lib/capacitorUtils';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { signInHref } from '@/components/header/navigationConfig';
+import { ReminderEmailsUnsubscribedNotice } from '@/components/ReminderEmailsUnsubscribedNotice';
+import { useAuth } from '@/hooks/useAuth';
 
 interface EventReminderSettingsProps {
   eventId: string;
+  /** Unused since the Capacitor local-notification branch went (WEB-FEAT-020). Kept so callers still compile. */
   eventTitle?: string;
+  /** Unused, see eventTitle. */
   eventDate?: Date;
   className?: string;
 }
 
-export function EventReminderSettings({ eventId, eventTitle, eventDate, className = '' }: EventReminderSettingsProps) {
+export function EventReminderSettings({ eventId, className = '' }: EventReminderSettingsProps) {
   const {
     isAuthenticated,
     isLoading,
     isReminderEnabled,
     toggleReminder,
     isTogglingReminder,
+    emailsUnsubscribed,
   } = useEventReminders(eventId);
   const location = useLocation();
+  const { user } = useAuth();
 
   if (!isAuthenticated) {
     return (
@@ -104,6 +108,7 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {emailsUnsubscribed && <ReminderEmailsUnsubscribedNotice email={user?.email} />}
         {reminderOptions.map((option) => {
           const enabled = isReminderEnabled(option.type);
           return (
@@ -114,18 +119,7 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
               <Checkbox
                 id={`reminder-${option.type}`}
                 checked={enabled}
-                onCheckedChange={() => {
-                  toggleReminder(option.type);
-                  // Also schedule a local notification on Capacitor
-                  if (!enabled && isCapacitor() && eventTitle && eventDate) {
-                    scheduleEventReminder({
-                      eventId,
-                      eventTitle,
-                      eventDate,
-                      reminderType: option.type,
-                    });
-                  }
-                }}
+                onCheckedChange={() => toggleReminder(option.type)}
                 disabled={isTogglingReminder}
                 className="h-5 w-5"
               />
@@ -143,7 +137,7 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
           );
         })}
 
-        {anyEnabled && (
+        {anyEnabled && !emailsUnsubscribed && (
           <div className="mt-4 pt-4 border-t">
             <p className="text-sm text-muted-foreground flex items-start gap-2">
               <Bell className="h-4 w-4 mt-0.5 flex-shrink-0" />

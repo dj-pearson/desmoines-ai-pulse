@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { priorityForTier } from "./supportPriority.ts";
 
 Deno.test("a VIP ticket moves up one step", () => {

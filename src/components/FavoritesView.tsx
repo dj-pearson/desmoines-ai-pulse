@@ -230,8 +230,13 @@ export function FavoritesView() {
                         publish_submission), so only http(s) gets a link. */}
                     {safeWebUrl(event.source_url) && (
                       <Button asChild size="sm" variant="outline">
-                        <a href={safeWebUrl(event.source_url) ?? undefined} target="_blank" rel="noopener noreferrer">
-                          <SpriteIcon name="external-link" className="h-4 w-4" />
+                        <a
+                          href={safeWebUrl(event.source_url) ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${event.title} source website (opens in a new tab)`}
+                        >
+                          <SpriteIcon name="external-link" className="h-4 w-4" aria-hidden="true" />
                         </a>
                       </Button>
                     )}

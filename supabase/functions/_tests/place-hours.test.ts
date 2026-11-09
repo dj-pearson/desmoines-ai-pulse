@@ -1,6 +1,13 @@
 import { strict as assert } from "node:assert";
 import {
   buildHoursOnlyUpdate,
+  buildStaleRefreshUpdate,
+  failedLookupCountsAsCheck,
+  HOURS_STALE_MAX_DAYS,
+  HOURS_STALE_MIN_DAYS,
+  parseStaleDays,
+  staleHoursCutoff,
+  staleHoursFilter,
   BUSINESS_STATUSES,
   HOURS_ONLY_FIELD_MASK,
   HOURS_JSON_VERSION,
@@ -163,4 +170,83 @@ Deno.test("a closed place with no hours still records its status", () => {
 
 Deno.test("the hours-only mask asks for exactly the two fields it writes", () => {
   assert.equal(HOURS_ONLY_FIELD_MASK, "regularOpeningHours,businessStatus");
+});
+
+// WEB-FEAT-079: re-reading hours a row already has.
+
+Deno.test("parseStaleDays: absent, zero or junk is not a refresh", () => {
+  for (const raw of [null, undefined, false, 0, -3, "", "abc", NaN, {}]) {
+    assert.equal(parseStaleDays(raw), null, String(raw));
+  }
+});
+
+Deno.test("parseStaleDays clamps to a week and a year", () => {
+  assert.equal(parseStaleDays(30), 30);
+  assert.equal(parseStaleDays("14"), 14);
+  assert.equal(parseStaleDays(30.9), 30);
+  assert.equal(parseStaleDays(1), HOURS_STALE_MIN_DAYS);
+  assert.equal(parseStaleDays(10_000), HOURS_STALE_MAX_DAYS);
+});
+
+Deno.test("staleHoursCutoff is that many days before now, in ISO", () => {
+  const now = new Date("2026-11-08T12:00:00.000Z");
+  assert.equal(staleHoursCutoff(30, now), "2026-10-09T12:00:00.000Z");
+});
+
+Deno.test("staleHoursFilter reads the check time, and fetchedAt only for never-checked rows", () => {
+  const cutoff = "2026-10-09T12:00:00.000Z";
+  assert.equal(
+    staleHoursFilter(cutoff),
+    "hours_checked_at.lt.2026-10-09T12:00:00.000Z,and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.2026-10-09T12:00:00.000Z)",
+  );
+});
+
+Deno.test("a refresh with new hours writes hours, status and the check time", () => {
+  const at = "2026-11-08T12:00:00.000Z";
+  const update = buildStaleRefreshUpdate(
+    {
+      businessStatus: "CLOSED_TEMPORARILY",
+      regularOpeningHours: {
+        periods: [{ open: { day: 1, hour: 11, minute: 0 }, close: { day: 1, hour: 21, minute: 0 } }],
+        weekdayDescriptions: ["Monday: 11:00 AM - 9:00 PM"],
+      },
+    },
+    at,
+  );
+  assert.equal(update.hours_checked_at, at);
+  assert.equal(update.business_status, "CLOSED_TEMPORARILY");
+  assert.equal(update.hours_json?.fetchedAt, at);
+  assert.equal(update.hours_json?.periods.length, 1);
+});
+
+Deno.test("a refresh with no hours keeps the stored ones and still records the check", () => {
+  // Writing hours_json: null here would turn "Google said these hours on
+  // fetchedAt" into "unknown", and an empty periods array would read as
+  // closed all week. Only the check time moves.
+  const at = "2026-11-08T12:00:00.000Z";
+  assert.deepEqual(buildStaleRefreshUpdate({}, at), { hours_checked_at: at });
+  assert.deepEqual(buildStaleRefreshUpdate(null, at), { hours_checked_at: at });
+  assert.deepEqual(buildStaleRefreshUpdate({ businessStatus: "CLOSED_PERMANENTLY" }, at), {
+    business_status: "CLOSED_PERMANENTLY",
+    hours_checked_at: at,
+  });
+});
+
+Deno.test("only a 404 counts as a check; quota and server errors are retried", () => {
+  assert.equal(failedLookupCountsAsCheck(404), true);
+  for (const status of [400, 401, 403, 429, 500, 503]) {
+    assert.equal(failedLookupCountsAsCheck(status), false, String(status));
+  }
+});
+
+Deno.test("bulk-update-restaurants routes staleDays to the refresh and checks every answer", async () => {
+  const src = await Deno.readTextFile(new URL("../bulk-update-restaurants/index.ts", import.meta.url));
+  // The refresh reads rows that HAVE hours, stale by the shared filter.
+  const fn = src.slice(src.indexOf("async function refreshStaleHours"), src.indexOf("serve(async"));
+  assert.ok(fn.includes(".not('hours_json', 'is', null)"), "refresh must read rows with hours");
+  assert.ok(fn.includes(".or(staleHoursFilter(cutoff))"), "refresh must use the shared stale filter");
+  assert.ok(fn.includes("buildStaleRefreshUpdate("), "refresh must write the check time");
+  assert.ok(fn.includes("HOURS_ONLY_FIELD_MASK"), "refresh must ask for the two fields only");
+  // Routed only when staleDays parses; absent keeps the fill mode.
+  assert.ok(/const staleDays = parseStaleDays\(rawStaleDays\)\s+if \(staleDays !== null\)/.test(src));
 });

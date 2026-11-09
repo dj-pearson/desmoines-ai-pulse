@@ -41,76 +41,6 @@ if (getSentryDsn()) {
   });
 }
 
-// ──────────────────────────────────────────────────────────────
-// Mobile error overlay – shows runtime errors visually on the
-// device when running inside Capacitor.  On the web this is a
-// no-op because uncaught errors already appear in DevTools.
-// ──────────────────────────────────────────────────────────────
-const isCapacitor = !!(window as any).Capacitor;
-
-// Tag the body so CSS can target mobile app vs web
-if (isCapacitor) {
-  document.documentElement.classList.add('capacitor-app');
-  document.body.classList.add('capacitor-app');
-}
-
-// ──────────────────────────────────────────────────────────────
-// Global link interceptor for Capacitor
-//
-// In the native WKWebView / Android WebView, <a target="_blank">
-// links do NOT open in the system browser by default – they
-// either silently fail or navigate inside the WebView.
-//
-// This handler catches every click on an <a> element that points
-// to an external URL and routes it through the Capacitor Browser
-// plugin so it opens properly in Safari / Chrome.
-// ──────────────────────────────────────────────────────────────
-if (isCapacitor) {
-  // ---- Intercept <a target="_blank"> clicks ----
-  document.addEventListener('click', (e) => {
-    // Walk up from the event target to find the nearest <a>
-    const anchor = (e.target as Element)?.closest?.('a[href]') as HTMLAnchorElement | null;
-    if (!anchor) return;
-
-    const href = anchor.getAttribute('href') || '';
-
-    // Only intercept external URLs (http/https) and target="_blank"
-    const isExternal = /^https?:\/\//i.test(href);
-    const isBlank = anchor.getAttribute('target') === '_blank';
-
-    // Also intercept any absolute URL not on the app's own origin
-    const isOffOrigin = isExternal && !href.startsWith(window.location.origin);
-
-    if (isExternal && (isBlank || isOffOrigin)) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const cap = (window as any).Capacitor;
-      if (cap?.Plugins?.Browser) {
-        cap.Plugins.Browser.open({ url: href });
-      }
-    }
-  }, true); // Use capture phase to catch before React handlers
-
-  // ---- Override window.open so all code paths use the Browser plugin ----
-  const _originalOpen = window.open.bind(window);
-  (window as any).open = (url?: string | URL, target?: string, features?: string) => {
-    const href = String(url || '');
-    const isExternal = /^https?:\/\//i.test(href);
-
-    if (isExternal) {
-      const cap = (window as any).Capacitor;
-      if (cap?.Plugins?.Browser) {
-        cap.Plugins.Browser.open({ url: href });
-        return null; // Browser plugin handles it
-      }
-    }
-
-    // Fallback to original for non-external or if plugin unavailable
-    return _originalOpen(url, target, features);
-  };
-}
-
 /**
  * WEB-QA-028 -- THE OVERLAY IS NO LONGER GATED ON isCapacitor.
  *
@@ -239,26 +169,12 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: STALE_TIME.SHORT,
       gcTime: GC_TIME,
-      // Use "always" so queries fire even if Capacitor's Network plugin
-      // hasn't reported online status yet. "online" can silently block
-      // all queries until a network status event arrives.
+      // "always" so a query fires whatever navigator.onLine reports; the
+      // default "online" mode pauses every query until an online event.
       networkMode: "always",
     },
   },
 });
-
-// Hide the Capacitor splash screen once the app is ready.
-// Uses the global Capacitor bridge (injected by the native shell) so
-// there is zero import overhead and no build-time resolution issues.
-function hideSplashScreen() {
-  const cap = (window as any).Capacitor;
-  if (!cap?.Plugins?.SplashScreen) return;
-  try {
-    cap.Plugins.SplashScreen.hide({ fadeOutDuration: 300 });
-  } catch {
-    // Plugin not available – ignore
-  }
-}
 
 // Fast initial render for optimal TTI
 function initializeApp() {
@@ -326,12 +242,6 @@ function initializeApp() {
       'initializeApp()',
     );
   }
-
-  // Hide splash screen now that the app has rendered.
-  // Use a short delay to ensure the first paint has actually
-  // been committed — hiding the splash before content is visible
-  // shows a brief white flash.
-  setTimeout(hideSplashScreen, 50);
 
   // Defer all non-critical features until after interaction
   initializeOnInteraction();

@@ -43,3 +43,40 @@ export function normalizeReferralCode(value: string | null | undefined): string 
   const code = value.trim().toUpperCase();
   return REFERRAL_CODE_PATTERN.test(code) ? code : null;
 }
+
+/**
+ * The count line under the invite link on the profile page (WEB-ADS-018). The
+ * paid half appears only once at least one invite has subscribed: "0 went on
+ * to subscribe" is noise on a card most members will never see move, and
+ * before migration 20261107000105 the number is 0 for everyone regardless.
+ */
+export function referralCountLabel(stats: { signedUp: number; subscribed: number }): string {
+  const signed =
+    stats.signedUp === 1 ? '1 person has signed up' : `${stats.signedUp} people have signed up`;
+  // get_my_referral_stats counts subscribed as a subset of signed_up today;
+  // the clamp keeps a later change to it from printing "3 of 1".
+  const paid = Math.min(stats.subscribed, stats.signedUp);
+  if (paid <= 0) return `${signed} through your link so far.`;
+  if (stats.signedUp === 1) return `${signed} through your link so far and went on to subscribe.`;
+  return `${signed} through your link so far; ${paid} went on to subscribe.`;
+}
+
+/** utm_* an invite link carries (WEB-ADS-021). */
+export const INVITE_UTM_SOURCE = 'referral';
+export const INVITE_UTM_MEDIUM = 'invite';
+
+/**
+ * The share link on the invite card. `ref` is what useReferralCapture reads;
+ * the utm pair is what campaignAttribution reads, so a newsletter signup that
+ * came through a friend's invite is stored as utm_source=referral rather than
+ * as no campaign at all. A bare ?ref link sent before this change still works:
+ * the capture never needed the utm pair.
+ */
+export function inviteLink(baseUrl: string, code: string): string {
+  const params = new URLSearchParams({
+    ref: code,
+    utm_source: INVITE_UTM_SOURCE,
+    utm_medium: INVITE_UTM_MEDIUM,
+  });
+  return `${baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
+}

@@ -10,13 +10,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { CheckCircle, XCircle, AlertTriangle, Eye, Tag, User, Mail, Phone, Globe, DollarSign } from "lucide-react";
 import { useAllSubmittedEvents, useReviewEvent } from "@/hooks/useUserSubmittedEvents";
 import { format } from "date-fns";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { safeWebUrl } from "@/lib/reservations";
 import { Spinner } from "@/components/ui/loading-skeleton";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const log = createLogger('EventReviewSystem');
+
+/** The review dialog is about 640px wide; a submitted image is often a phone original. */
+const REVIEW_IMAGE_WIDTHS = [320, 640, 1280];
 
 export default function EventReviewSystem() {
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
@@ -357,11 +361,13 @@ export default function EventReviewSystem() {
                                     {event.image_url && (
                                       <div className="md:col-span-2">
                                         <Label className="font-semibold">Event Image</Label>
-                                        <img
+                                        <OptimizedImage
                                           src={event.image_url}
                                           alt={`Image for ${event.title || 'event'}`}
-                                          className="mt-2 max-w-full h-48 object-cover rounded-lg"
-                                          loading="lazy"
+                                          objectFit="contain"
+                                          containerClassName="mt-2 w-full h-48 rounded-lg"
+                                          sizes="(max-width: 768px) 100vw, 640px"
+                                          transformWidths={REVIEW_IMAGE_WIDTHS}
                                         />
                                       </div>
                                     )}

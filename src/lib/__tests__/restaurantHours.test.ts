@@ -7,6 +7,8 @@ import {
   getOpeningCoverage,
   getOpeningHoursSpecification,
   getRestaurantOpenStatus,
+  businessStatusLabel,
+  isServingToday,
   isVisitableStatus,
   resolveOpenStatus,
 } from "@/lib/restaurantHours";
@@ -365,5 +367,32 @@ describe("isVisitableStatus", () => {
   it("still catches legacy spellings", () => {
     expect(isVisitableStatus("permanently_closed")).toBe(false);
     expect(isVisitableStatus("temporarily_closed")).toBe(false);
+  });
+});
+
+describe("isServingToday (WEB-FEAT-037)", () => {
+  it("treats Google's temporary and permanent closures as not serving", () => {
+    expect(isServingToday({ status: "open", business_status: "CLOSED_TEMPORARILY" })).toBe(false);
+    expect(isServingToday({ status: null, business_status: " closed_permanently " })).toBe(false);
+  });
+
+  it("keeps OPERATIONAL, unknown and missing business_status serving", () => {
+    expect(isServingToday({ status: "open", business_status: "OPERATIONAL" })).toBe(true);
+    expect(isServingToday({ status: "newly_opened", business_status: null })).toBe(true);
+    expect(isServingToday({ status: null })).toBe(true);
+    // An unrecognised value is not a closure claim (placeHours drops these at write).
+    expect(isServingToday({ status: "open", business_status: "SOMETHING_NEW" })).toBe(true);
+  });
+
+  it("still applies the lifecycle status first", () => {
+    expect(isServingToday({ status: "opening_soon", business_status: "OPERATIONAL" })).toBe(false);
+    expect(isServingToday(null)).toBe(false);
+  });
+
+  it("labels the closures for cards and nothing else", () => {
+    expect(businessStatusLabel("CLOSED_TEMPORARILY")).toBe("Temporarily closed");
+    expect(businessStatusLabel("CLOSED_PERMANENTLY")).toBe("Permanently closed");
+    expect(businessStatusLabel("OPERATIONAL")).toBeUndefined();
+    expect(businessStatusLabel(null)).toBeUndefined();
   });
 });

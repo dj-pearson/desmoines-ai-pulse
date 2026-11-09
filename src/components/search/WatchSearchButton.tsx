@@ -12,12 +12,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useUpgradeModal } from "@/components/UpgradeModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useSavedSearchAlerts, SavedSearchLimitError } from "@/hooks/useSavedSearchAlerts";
 import { useToast } from "@/hooks/use-toast";
 import { handleError } from "@/lib/errorHandler";
+import { openPaywall } from "@/lib/paywallStore";
 import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { planWatchedSearch, type WatchSearchAppliedFilter } from "@/lib/savedSearchFilters";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,6 @@ function WatchSearchControl({ query, appliedFilters, className }: Omit<WatchSear
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { hasFeature, isLoading: subscriptionLoading } = useSubscription();
-  const { openUpgradeModal, UpgradeModalComponent } = useUpgradeModal();
   const { saveSearch } = useSavedSearchAlerts();
   const { toast } = useToast();
 
@@ -76,7 +75,7 @@ function WatchSearchControl({ query, appliedFilters, className }: Omit<WatchSear
       return;
     }
     if (!hasFeature("save_searches")) {
-      openUpgradeModal("save_searches", "insider");
+      openPaywall("save_searches", "insider");
       return;
     }
     setName(plan.filters.q ? `Events: ${plan.filters.q}` : "New events");
@@ -96,7 +95,7 @@ function WatchSearchControl({ query, appliedFilters, className }: Omit<WatchSear
           variant: "destructive",
         });
         setOpen(false);
-        openUpgradeModal("save_searches", "vip");
+        openPaywall("save_searches", "vip");
         return;
       }
       handleError(err, { component: "WatchSearchButton", action: "saveSearch" });
@@ -162,8 +161,6 @@ function WatchSearchControl({ query, appliedFilters, className }: Omit<WatchSear
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <UpgradeModalComponent />
     </>
   );
 }

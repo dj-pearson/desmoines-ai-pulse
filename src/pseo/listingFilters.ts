@@ -10,6 +10,9 @@
  * a plain node script import it.
  */
 import { isNeighborhoodSlug } from '../lib/neighborhoodBoundaries';
+import { upcomingOrRunningFilter } from '../lib/eventRunningFilter';
+import { sanitizePostgrestPattern } from '../lib/postgrestPattern';
+import { addCentralDays, centralDateOf, centralWindow, upcomingFloorUtc } from '../lib/timezone';
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -93,24 +96,19 @@ export function resolveEntityType(contentSlug?: string, categorySlug?: string): 
   return 'events';
 }
 
-function ymd(d: Date): string {
-  const m = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
 /**
  * The calendar day after a YYYY-MM-DD key, for an exclusive upper bound.
  * temporalRange's `to` is the last day INCLUDED; events.date is timestamptz,
  * so a query must stop before the next day starts, not at midnight of `to`.
  */
 export function dayAfter(key: string): string {
-  const [y, m, d] = key.split('-').map(Number);
-  return ymd(new Date(y, m - 1, d + 1));
+  return addCentralDays(key, 1);
 }
 
 /**
- * Temporal dimension -> a date window, clamped so it never starts in the past.
+ * Temporal dimension -> a date window. Months and seasons are clamped so they
+ * never start in the past; this-weekend is the whole Friday-Sunday weekend, and
+ * the listing's start-of-today floor does the clamping there.
  *
  * THIS DIMENSION WAS READ AND THEN NEVER USED. `temporal` was destructured at
  * the top of fetchListings and no branch referenced it, so /live-music/today,
@@ -131,17 +129,36 @@ const SEASON_MONTHS: Record<string, [number, number]> = {
   winter: [11, 1],
 };
 
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/** First day of a month as a YYYY-MM-DD key; month is 0-based, may overflow. */
+function monthFirst(year: number, month0: number): string {
+  const y = year + Math.floor(month0 / 12);
+  const m = ((month0 % 12) + 12) % 12;
+  return `${y}-${pad2(m + 1)}-01`;
+}
+
+/**
+ * WEB-SEO-064. Every key is a CENTRAL calendar date. This used to read
+ * now.getFullYear/getMonth/getDate, the runtime's local date, while
+ * pseoEventFilters turns the keys into Central days. The prerenderer and the
+ * inventory gate run in UTC, so from 7 PM CDT (6 PM CST) /x/today was
+ * tomorrow's window, and a visitor in another zone got their own date.
+ */
 export function temporalRange(slug: string, now: Date = new Date()): { from: string; to: string } | null {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = centralDateOf(now);
 
-  if (slug === 'today') return { from: ymd(today), to: ymd(today) };
+  if (slug === 'today') return { from: today, to: today };
 
+  // WEB-SEO-065. The weekend is centralWindow's: Friday through Sunday, and on
+  // Friday, Saturday and Sunday the weekend in progress. This was the coming
+  // Saturday and Sunday, so on a Sunday afternoon /x/this-weekend listed the
+  // weekend six days out while /events/this-weekend (and its FAQ) listed
+  // today. pseoEventFilters still floors the window at the start of today, so
+  // Friday's rows drop off on Saturday unless they run into it.
   if (slug === 'this-weekend') {
-    const sat = new Date(today);
-    sat.setDate(today.getDate() + ((6 - today.getDay() + 7) % 7));
-    const sun = new Date(sat);
-    sun.setDate(sat.getDate() + 1);
-    return { from: ymd(sat), to: ymd(sun) };
+    const w = centralWindow('this-weekend', now);
+    return { from: w.startDay, to: w.endDay };
   }
 
   const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june',
@@ -152,12 +169,59 @@ export function temporalRange(slug: string, now: Date = new Date()): { from: str
   if (!span) return null;
 
   const [startMonth, endMonth] = span;
-  for (let year = today.getFullYear(); year <= today.getFullYear() + 1; year++) {
+  const thisYear = Number(today.slice(0, 4));
+  for (let year = thisYear; year <= thisYear + 1; year++) {
     const endYear = endMonth < startMonth ? year + 1 : year;
-    const start = new Date(year, startMonth, 1);
-    const end = new Date(endYear, endMonth + 1, 0); // day 0 of next month = last day
+    const start = monthFirst(year, startMonth);
+    // The day before the first of the following month is the last day.
+    const end = addCentralDays(monthFirst(endYear, endMonth + 1), -1);
     if (end < today) continue;
-    return { from: ymd(start < today ? today : start), to: ymd(end) };
+    return { from: start < today ? today : start, to: end };
   }
   return null;
+}
+
+/**
+ * WEB-SEO-063. The date half of a pSEO events listing, as PostgREST filters:
+ * one `or=` body and an optional inclusive upper bound on `date`.
+ *
+ * The listing used to send `date >= now()`, which dropped two kinds of event
+ * that are still on:
+ *   - a run that started before today (a festival vanished on its second day),
+ *   - an untimed event, stored at the 19:31:58 Central sentinel, which vanished
+ *     at 7:31 PM on its own day.
+ * The floor is now the start of today in Central time (upcomingFloorUtc) and a
+ * row also qualifies while its end_date is at or after it, the same group
+ * /events and site search send. With a temporal dimension the window is an
+ * overlap: started by the window's end, not over before its start. The window's
+ * days are Central days, so "today" no longer includes last night's 7 PM show
+ * (00:00 UTC is still yesterday in Des Moines).
+ *
+ * The location match shares the one `or=`: a second .or() is a second `or`
+ * query param, and PostgREST does not promise to AND duplicates.
+ *
+ * Shared by PseoLiveListings and scripts/lib/pseoShippable.ts (the inventory
+ * gate), so the two count the same rows.
+ */
+export function pseoEventFilters(
+  opts: { temporalSlug?: string; locationName?: string },
+  now: Date = new Date(),
+): { or: string; lte: string | null } {
+  let lower = upcomingFloorUtc(now);
+  let lte: string | null = null;
+  const range = opts.temporalSlug ? temporalRange(opts.temporalSlug, now) : null;
+  if (range) {
+    const w = centralWindow({ kind: 'range', from: range.from, to: range.to }, now);
+    if (w.start > lower) lower = w.start;
+    lte = w.end;
+  }
+  const running = upcomingOrRunningFilter(lower);
+  if (!opts.locationName) return { or: running, lte };
+  // venue is in the OR because that is where a neighbourhood name actually
+  // lands on this table - events.city is NULL on 1,243 of 1,249 rows, so the
+  // city arm almost never fires. Same fields EventsByLocation.tsx matches.
+  // A name with a comma ("Ankeny, IA") would end the or() clause and 400.
+  const place = sanitizePostgrestPattern(opts.locationName);
+  const where = `city.ilike.%${place}%,location.ilike.%${place}%,venue.ilike.%${place}%`;
+  return { or: `and(or(${running}),or(${where}))`, lte };
 }

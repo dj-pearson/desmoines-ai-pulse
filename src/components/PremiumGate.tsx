@@ -1,14 +1,14 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Lock, Crown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuthFlags } from "@/hooks/useAuth";
-import { UpgradeModal } from "@/components/UpgradeModal";
 import { FeatureTag } from "@/components/PremiumBadge";
 import { requiredTierFor } from "@/lib/premiumFeatures";
 import { isValidRedirectUrl } from "@/lib/redirectSafety";
+import { openPaywall } from "@/lib/paywallStore";
 import { handleError } from "@/lib/errorHandler";
 import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
@@ -99,8 +99,12 @@ export function PremiumGate({
   } = useSubscription();
   const signedIn = useIsSignedIn();
   const { pathname, search } = useLocation();
-  const [showModal, setShowModal] = useState(false);
   const requiredTier = resolveRequiredTier(feature, requiredTierProp);
+  // The upgrade dialog is the app-root GlobalUpgradeModal, which lazy-loads
+  // UpgradeModal on first open. A gate used to mount its own, and that static
+  // import put UpgradeModal and its imports on every route with a gate in it
+  // (WEB-PERF-072).
+  const openUpgrade = () => openPaywall(feature, requiredTier);
 
   // Pricing plan WP4 item 6: a failed read is "don't know", not "free".
   useEffect(() => {
@@ -201,7 +205,7 @@ export function PremiumGate({
       </Button>
     );
     secondary = (
-      <Button type="button" variant="ghost" className="min-h-11" onClick={() => setShowModal(true)}>
+      <Button type="button" variant="ghost" className="min-h-11" onClick={openUpgrade}>
         See what {tierLabel} includes
       </Button>
     );
@@ -220,21 +224,12 @@ export function PremiumGate({
       description ||
       (needsHigherTier ? "Move up to VIP to use this." : `Upgrade to ${tierLabel} to use this.`);
     primary = (
-      <Button type="button" onClick={() => setShowModal(true)} className={cn("min-h-11", tierButtonClass(requiredTier))}>
+      <Button type="button" onClick={openUpgrade} className={cn("min-h-11", tierButtonClass(requiredTier))}>
         <TierIcon tier={requiredTier} className="h-4 w-4 mr-2 text-current" />
         {mode === "blur" ? "Unlock" : "Upgrade to Unlock"}
       </Button>
     );
   }
-
-  const modal = (
-    <UpgradeModal
-      open={showModal}
-      onOpenChange={setShowModal}
-      feature={feature}
-      requiredTier={requiredTier}
-    />
-  );
 
   // Blur mode - show blurred content with overlay
   if (mode === "blur") {
@@ -256,7 +251,6 @@ export function PremiumGate({
             </div>
           </div>
         </div>
-        {modal}
       </div>
     );
   }
@@ -283,35 +277,31 @@ export function PremiumGate({
             {lockedLabel}
           </Link>
         ) : (
-          <button type="button" onClick={() => setShowModal(true)} className={rowClass}>
+          <button type="button" onClick={openUpgrade} className={rowClass}>
             {lockedLabel}
           </button>
         )}
         <p className="text-xs text-muted-foreground">{body}</p>
-        {modal}
       </div>
     );
   }
 
   // Lock mode (default) - show a locked card
   return (
-    <>
-      <Card className={cn("border-dashed", className)}>
-        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-4">
-            <TierIcon tier={requiredTier} className="h-6 w-6" />
-          </div>
-          <FeatureTag requiredTier={requiredTier} size="md" />
-          <h3 className="font-semibold mt-3 mb-1">{heading}</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-sm">{body}</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {primary}
-            {secondary}
-          </div>
-        </CardContent>
-      </Card>
-      {modal}
-    </>
+    <Card className={cn("border-dashed", className)}>
+      <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-4">
+          <TierIcon tier={requiredTier} className="h-6 w-6" />
+        </div>
+        <FeatureTag requiredTier={requiredTier} size="md" />
+        <h3 className="font-semibold mt-3 mb-1">{heading}</h3>
+        <p className="text-sm text-muted-foreground mb-4 max-w-sm">{body}</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          {primary}
+          {secondary}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -372,8 +362,6 @@ export function PremiumButton({
   disabled,
 }: PremiumButtonProps) {
   const { hasFeature, subscriptionLoading } = useSubscription();
-  const [showModal, setShowModal] = useState(false);
-
   const handleClick = () => {
     // WEB-FEAT-018: a click that lands before the subscription resolves must
     // not be answered with the upgrade modal. The button is disabled below for
@@ -382,7 +370,7 @@ export function PremiumButton({
     if (hasFeature(feature)) {
       onClick?.();
     } else {
-      setShowModal(true);
+      openPaywall(feature, requiredTier);
     }
   };
 
@@ -392,32 +380,16 @@ export function PremiumButton({
   const showUpgradeTag = !subscriptionLoading && !hasAccess;
 
   return (
-    <>
-      <Button
-        variant={variant}
-        size={size}
-        onClick={handleClick}
-        disabled={disabled || subscriptionLoading}
-        className={cn(
-          showUpgradeTag && "relative",
-          className
-        )}
-      >
-        {children}
-        {showUpgradeTag && (
-          <FeatureTag
-            requiredTier={requiredTier}
-            size="sm"
-          />
-        )}
-      </Button>
-      <UpgradeModal
-        open={showModal}
-        onOpenChange={setShowModal}
-        feature={feature}
-        requiredTier={requiredTier}
-      />
-    </>
+    <Button
+      variant={variant}
+      size={size}
+      onClick={handleClick}
+      disabled={disabled || subscriptionLoading}
+      className={cn(showUpgradeTag && "relative", className)}
+    >
+      {children}
+      {showUpgradeTag && <FeatureTag requiredTier={requiredTier} size="sm" />}
+    </Button>
   );
 }
 

@@ -63,9 +63,14 @@ Deno.test('the shared producers carry no evening-time literal at all', async () 
   // reason to name a time - so banning the literals is exact.
   const banned = [/\b19:30:00\b/, /\b19:00:00\b/, /["']19:00["']/];
 
+  // WEB-BE-059 added the last three: eventbrite, tribeEvents and Vibrant each
+  // still wrote 7pm for a date-only event after WEB-BE-037 fixed the others.
   for (const rel of [
     'supabase/functions/_shared/jsonLdEvents.ts',
     'supabase/functions/_shared/domain-adapters/catchdesmoinesParse.ts',
+    'supabase/functions/_shared/domain-adapters/eventbrite.ts',
+    'supabase/functions/_shared/domain-adapters/tribeEvents.ts',
+    'supabase/functions/_shared/domain-adapters/vibrantmusichall.ts',
   ]) {
     const src = stripComments(await read(rel));
     for (const re of banned) {

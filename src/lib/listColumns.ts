@@ -156,9 +156,112 @@ export const TONIGHT_EVENT_COLUMNS =
 /**
  * Every column pickDinner and the Tonight card read, and nothing else.
  * hours_json (SEO-054): the only hours production carries; `opening` is a date.
+ * business_status: a temporary closure is recorded only there (WEB-FEAT-037).
  */
 export const TONIGHT_RESTAURANT_COLUMNS =
-  "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status";
+  "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status, business_status";
+
+/**
+ * Dinner near each event on /search (useSearchPairings). The same columns
+ * pickDinner reads for Tonight, plus price_range for the card. It used to be a
+ * private list in the hook without hours_json or business_status, so
+ * pickDinner fell back to `opening` (a date in production) and never found a
+ * dinner, and a CLOSED_TEMPORARILY place could not be ruled out (WEB-FEAT-038).
+ */
+export const SEARCH_PAIRING_RESTAURANT_COLUMNS =
+  "id, name, slug, cuisine, price_range, latitude, longitude, opening, hours_json, opening_date, status, business_status";
+
+/**
+ * Restaurant map pins (useRestaurantMapPoints). business_status is how a pin
+ * says "Temporarily closed": restaurants.status has no such value and Google
+ * keeps publishing the weekly hours of a temporarily closed place
+ * (WEB-FEAT-038). hours_json is what colours a pin open or closed: it is the
+ * only hours production carries, and `opening` is a date (SEO-054), so
+ * without it nearly every pin read "Hours unknown" (WEB-FEAT-040). Both
+ * columns have been in production since 20260919000009, and open-now and
+ * Tonight already select them.
+ */
+export const RESTAURANT_MAP_POINT_COLUMNS =
+  "id, name, slug, latitude, longitude, cuisine, opening, hours_json, price_range, rating, image_url, phone, status, business_status";
+
+/**
+ * Restaurant pins on /discover-map. It selected `opening` alone and called
+ * resolveOpenStatus(undefined, opening), and production stores a date in
+ * `opening`, so under Now and Tonight every restaurant was "hours unknown" and
+ * held back, and with no business_status a CLOSED_TEMPORARILY place could
+ * never be ruled out (WEB-FEAT-053). discoverMapRestaurantStatus reads both.
+ */
+export const DISCOVER_MAP_RESTAURANT_COLUMNS =
+  "id, slug, name, latitude, longitude, description, cuisine, rating, opening, hours_json, status, business_status, is_merged";
+
+/**
+ * Restaurants under a food article (pickHubRestaurants in useArticles). It
+ * selected `opening` alone for hours, which production stores as a date, so
+ * the block could never say "Open now", and it had no business_status, so a
+ * CLOSED_TEMPORARILY place was offered as a place to try (WEB-FEAT-042).
+ */
+export const ARTICLE_HUB_RESTAURANT_COLUMNS =
+  "id, slug, name, status, business_status, cuisine, opening, hours_json";
+
+/**
+ * Brewery Trail cards (useBreweries). Only what the card, its JSON-LD and the
+ * upcoming label read, plus hours_json and business_status for the status
+ * line: it selected RESTAURANT_LIST_COLUMNS, which has neither, and evaluated
+ * `opening` alone, a date in production, so no card ever said "Open until"
+ * and a CLOSED_TEMPORARILY taproom could not be told apart (WEB-FEAT-044).
+ */
+export const BREWERY_TRAIL_COLUMNS =
+  "id, name, slug, city, location, description, image_url, latitude, longitude, opening, hours_json, opening_date, opening_timeframe, status, business_status";
+
+/**
+ * Restaurant typeahead rows (SearchAutocomplete, useEntitySuggestions). status
+ * and business_status are what label a place closed for good and rank it last
+ * instead of offering it like any other (WEB-FEAT-048).
+ */
+export const RESTAURANT_SUGGESTION_COLUMNS =
+  "id, name, cuisine, slug, status, business_status";
+
+/**
+ * Restaurants behind the Happy hour now strip on /restaurants
+ * (fetchHappyHourCandidates). The link needs name and slug; status and
+ * business_status are how a deal at a closed or temporarily closed place is
+ * kept off the strip (WEB-FEAT-025).
+ */
+export const HAPPY_HOUR_RESTAURANT_COLUMNS = "id, name, slug, status, business_status";
+
+/**
+ * Restaurants behind the deals on /deals and the explore deals row
+ * (fetchDeals). Only what decides whether the door is shut: a deal at a
+ * closed or temporarily closed place is dropped there, as it already was on
+ * the restaurant page and the Happy hour now strip (WEB-FEAT-067).
+ */
+export const DEAL_RESTAURANT_STATUS_COLUMNS = "id, status, business_status";
+
+/**
+ * Restaurants a /deals card links to (fetchDealVenueLinks). is_merged and
+ * merged_into are there so a deal curated against a duplicate that was later
+ * merged links to the row it was merged into, not to the duplicate, whose
+ * page redirects to a survivor with no Deals section for it (WEB-FEAT-069).
+ */
+export const DEAL_VENUE_RESTAURANT_COLUMNS = "id, slug, is_merged, merged_into";
+
+/**
+ * The restaurant an existing deal is linked to, as DealManager's venue picker
+ * reads it (fetchLinkedDealVenue). is_merged and merged_into let the picker
+ * say the link is a merged duplicate and name the kept row (WEB-FEAT-075).
+ */
+export const DEAL_LINKED_RESTAURANT_COLUMNS = "id, name, location, is_merged, merged_into";
+
+/**
+ * Cards on /restaurants/dietary/:diet (useDietaryRestaurants). What
+ * RestaurantCard reads, plus hours_json and business_status: it selected
+ * RESTAURANT_LIST_COLUMNS, which has neither, so with a date in `opening` no
+ * card said "Open until", a CLOSED_TEMPORARILY place read as an ordinary
+ * listing, and a Google CLOSED_PERMANENTLY row could not be told apart
+ * (WEB-FEAT-064).
+ */
+export const DIETARY_RESTAURANT_COLUMNS =
+  "id, slug, name, description, cuisine, rating, price_range, location, city, image_url, phone, website, status, business_status, opening, hours_json, opening_date, opening_timeframe, is_sponsored, sponsored_until";
 
 /**
  * The four columns needed to DERIVE an event slug, and nothing else

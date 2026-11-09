@@ -269,7 +269,7 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
                       value={formData.category} 
                       onValueChange={(value) => setFormData({...formData, category: value})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="category">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -328,6 +328,7 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
         <CardContent>
           <div className="space-y-4">
             <Input
+              aria-label="Search sources"
               placeholder="Search sources..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -416,14 +417,14 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
                                   Use
                                 </Button>
                               )}
-                              <Button
+                              <Button aria-label={`Edit ${source.name}`}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => openEditDialog(source)}
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
-                              <Button
+                              <Button aria-label={`Delete ${source.name}`}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleDelete(source.id)}

@@ -12,6 +12,7 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.QueryCache
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +24,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import javax.inject.Inject
@@ -88,15 +88,18 @@ class WeekendViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            val friday = weekendFriday(LocalDate.now())
+            // The weekend is Des Moines's Fri-Sun, bounded at Central midnights (AND-AUDIT-030).
+            // A bare local timestamp was read as UTC, which dropped Sunday shows after 6-7pm
+            // and pulled in Thursday's.
+            val friday = weekendFriday(EventTimeText.desMoinesToday())
             val monday = friday.plusDays(3)
             val connected = networkMonitor.isConnected.value
 
             // Events: fresh-or-cached, with offline cold-start from the cache.
             val fresh = eventsRepository.fetchEvents(
                 EventsQuery(
-                    dateStart = friday.atStartOfDay().format(ISO),
-                    dateEnd = monday.atStartOfDay().format(ISO),
+                    dateStart = EventTimeText.centralMidnight(friday),
+                    dateEnd = EventTimeText.centralMidnight(monday),
                     limit = 50,
                 ),
             ).getOrNull()?.events
@@ -140,7 +143,6 @@ class WeekendViewModel @Inject constructor(
 
     companion object {
         private const val CACHE_KEY = "weekend-events"
-        private val ISO: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
         private val EVENTS_SERIALIZER = ListSerializer(Event.serializer())
 
         /** The Friday anchoring the current/upcoming weekend window. Pure — testable. */
@@ -151,11 +153,9 @@ class WeekendViewModel @Inject constructor(
             else today.plusDays((friday - dow).toLong())
         }
 
-        /** Group events into Fri/Sat/Sun buckets, dropping empty days. Pure — testable. */
+        /** Group events into Fri/Sat/Sun buckets by Des Moines day, dropping empty days. Pure, testable. */
         fun groupEventsByDay(events: List<Event>, friday: LocalDate): List<WeekendDay> {
-            val byDate = events
-                .sortedBy { it.parsedDate }
-                .groupBy { it.parsedDate?.toLocalDate() }
+            val byDate = EventTimeText.groupByDesMoinesDay(events)
             return (0..2L).mapNotNull { offset ->
                 val day = friday.plusDays(offset)
                 val dayEvents = byDate[day].orEmpty()

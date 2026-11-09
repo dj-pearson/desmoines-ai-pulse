@@ -16,6 +16,12 @@ data class Attraction(
     val id: String,
     val name: String,
     val type: String,
+    /**
+     * The /attractions/<slug> key from migration 20260919000008. Optional:
+     * until that migration is applied the column is absent and this decodes
+     * as null (AND-AUDIT-034 falls back to the name slug).
+     */
+    val slug: String? = null,
     val location: String? = null,
     val description: String? = null,
     val rating: Double? = null,

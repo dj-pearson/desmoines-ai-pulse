@@ -598,6 +598,9 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val errorMessage by profileViewModel.errorMessage.collectAsStateWithLifecycle()
         val storeSubscriptionNotice by profileViewModel.storeSubscriptionNotice.collectAsStateWithLifecycle()
         val subscriptionState by settingsSubscriptionViewModel.uiState.collectAsStateWithLifecycle()
+        val isExporting by profileViewModel.isExporting.collectAsStateWithLifecycle()
+        val pendingExport by profileViewModel.pendingExport.collectAsStateWithLifecycle()
+        val exportNotice by profileViewModel.exportNotice.collectAsStateWithLifecycle()
         val locationConsent by profileViewModel.locationConsent.collectAsStateWithLifecycle()
         val emailConsent by profileViewModel.emailConsent.collectAsStateWithLifecycle()
         val emailConsentError by profileViewModel.emailConsentError.collectAsStateWithLifecycle()
@@ -615,6 +618,13 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
                 if (notice.isGooglePlay) notice.copy(manageUrl = subscriptionState.manageSubscriptionUrl ?: notice.manageUrl) else notice
             },
             onAcknowledgeStoreSubscriptionNotice = { profileViewModel.acknowledgeStoreSubscriptionNotice() },
+            isExporting = isExporting,
+            pendingExport = pendingExport,
+            exportNotice = exportNotice,
+            onExportData = { profileViewModel.exportData() },
+            onExportPickerShown = { profileViewModel.markExportPickerShown() },
+            onExportFinished = { profileViewModel.finishExport(it) },
+            onDismissExportNotice = { profileViewModel.dismissExportNotice() },
             locationConsent = locationConsent,
             emailConsent = emailConsent,
             emailConsentError = emailConsentError,

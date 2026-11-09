@@ -43,7 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, RefreshCw, DollarSign, AlertCircle, CheckCircle, Search, Filter, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   Cell,
   Legend,
@@ -583,8 +583,8 @@ export default function AdminRefunds() {
                       value={statusFilter}
                       onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
                     >
-                      <SelectTrigger className="w-[150px]">
-                        <Filter className="h-4 w-4 mr-2" />
+                      <SelectTrigger className="w-[150px]" aria-label="Filter by status">
+                        <Filter className="h-4 w-4 mr-2" aria-hidden="true" />
                         <SelectValue placeholder="Filter" />
                       </SelectTrigger>
                       <SelectContent>

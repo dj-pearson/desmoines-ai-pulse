@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,6 +24,8 @@ export default function Social() {
   useDocumentTitle("Community");
   const { toast } = useToast();
   const [searchEmail, setSearchEmail] = useState("");
+  // WEB-UX-065: the email field was named only by its placeholder.
+  const friendEmailId = useId();
   const [groupName, setGroupName] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
@@ -34,6 +37,13 @@ export default function Social() {
     error: friendsError,
     fetchFriends,
   } = useSocialFeatures();
+
+  // WEB-UX-054: the planner was always titled "Selected Group". Look the group
+  // up by id so its heading and share text name the group that was picked, and
+  // so a group that drops out of the list closes the planner instead of
+  // leaving it open for a group the reader can no longer see.
+  const selectedGroup =
+    friendGroups?.find((group) => group.id === selectedGroupId) ?? null;
 
   const handleSendFriendRequest = async () => {
     if (!searchEmail.trim()) return;
@@ -128,10 +138,13 @@ export default function Social() {
                   Add Friends
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
+                <Label htmlFor={friendEmailId}>Friend's email</Label>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Enter friend's email"
+                    id={friendEmailId}
+                    type="email"
+                    placeholder="name@example.com"
                     value={searchEmail}
                     onChange={(e) => setSearchEmail(e.target.value)}
                     className="flex-1"
@@ -205,12 +218,22 @@ export default function Social() {
                     {friendGroups.map((group) => (
                       <div
                         key={group.id}
-                        className="p-4 border rounded-lg cursor-pointer hover:bg-muted"
-                        onClick={() => setSelectedGroupId(group.id)}
+                        className="relative p-4 border rounded-lg hover:bg-muted"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium">{group.name}</h3>
+                            {/* WEB-UX-052: a div with onClick had no tab stop,
+                                so a keyboard user could not open a group. */}
+                            <h3 className="font-medium">
+                              <button
+                                type="button"
+                                aria-pressed={selectedGroupId === group.id}
+                                onClick={() => setSelectedGroupId(group.id)}
+                                className="text-left rounded-sm after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
+                              >
+                                {group.name}
+                              </button>
+                            </h3>
                             <p className="text-sm text-muted-foreground">
                               {group.description}
                             </p>
@@ -239,10 +262,10 @@ export default function Social() {
             </Card>
 
             {/* Enhanced Group Event Planner */}
-            {selectedGroupId && (
+            {selectedGroup && (
               <EnhancedGroupPlanner
-                groupId={selectedGroupId}
-                groupName="Selected Group"
+                groupId={selectedGroup.id}
+                groupName={selectedGroup.name}
                 onClose={() => setSelectedGroupId(null)}
               />
             )}

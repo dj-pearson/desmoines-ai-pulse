@@ -106,9 +106,18 @@ object MarkdownParser {
         return blocks
     }
 
-    /** Reading-time estimate at ~200 wpm (min 1). */
+    /**
+     * Reading time at 200 words a minute, rounded up, never less than one.
+     *
+     * Rounds up to match the web (src/lib/articleHubs.ts readTimeLabel,
+     * Math.ceil) and iOS (Article.readingMinutes, .rounded(.up)). It used to
+     * truncate, so a 399-word guide read "1 min read" here and "2 min read" on
+     * the other two surfaces (AND-AUDIT-039).
+     */
     fun readingMinutes(content: String): Int {
         val words = content.split(Regex("\\s+")).count { it.isNotBlank() }
-        return (words / 200).coerceAtLeast(1)
+        return ((words + WORDS_PER_MINUTE - 1) / WORDS_PER_MINUTE).coerceAtLeast(1)
     }
+
+    private const val WORDS_PER_MINUTE = 200
 }

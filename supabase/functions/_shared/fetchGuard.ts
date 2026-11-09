@@ -267,6 +267,42 @@ export async function safeFetch(
 }
 
 /**
+ * Redirect hops fetchPublicUrl follows. Restaurant and venue sites commonly
+ * chain http -> https -> www -> a canonical path, which is already 3.
+ */
+export const PUBLIC_URL_MAX_REDIRECTS = 5;
+
+/**
+ * Fetch a URL that came from a content row or from somebody else's page
+ * (restaurants.website, a menu link, a venue site, an <img src>).
+ *
+ * safeFetch only runs the literal check on the first URL, because its callers
+ * validate first. A stored website is not something we chose, so here the
+ * first host is resolved too: a name that points at 10.x passes the literal
+ * check and fails this one. Every redirect hop then gets the same resolving
+ * check inside safeFetch.
+ *
+ * Throws UnsafeFetchError when the URL or a hop is refused; callers that
+ * already catch fetch errors need no new handling.
+ */
+export async function fetchPublicUrl(
+  url: string,
+  init: RequestInit = {},
+  options: SafeFetchOptions = {},
+): Promise<Response> {
+  const ssrf = options.ssrf ?? { allowedProtocols: ['http:', 'https:'], blockPrivateIPs: true };
+  const validate = options.validateHop ?? ((u: string) => validateURLForSSRFResolved(u, ssrf));
+  const check = await validate(url);
+  if (!check.valid) throw new UnsafeFetchError(`Refused URL: ${check.error}`, url);
+  return await safeFetch(url, init, {
+    maxRedirects: PUBLIC_URL_MAX_REDIRECTS,
+    ...options,
+    ssrf,
+    validateHop: validate,
+  });
+}
+
+/**
  * fetch() that returns binary bytes but aborts once the body exceeds maxBytes,
  * reading the stream incrementally so an oversized target is cut off early.
  * Rejects if the cap is exceeded so callers never serve a truncated image.

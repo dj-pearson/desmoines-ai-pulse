@@ -45,6 +45,59 @@ final class EventQueryFilterTests: XCTestCase {
             "and(price.ilike.%free%,price.not.match.[$] *[1-9]),price.eq.$0,price.eq.0"
         )
     }
+
+    func testKidsEventsFilterIsTheWebString() {
+        // src/hooks/useEventLanding.ts KIDS_EVENTS_FILTER, byte for byte
+        // (IOS-AUDIT-005; iosKidsEventsParity.test.ts guards the source too).
+        XCTAssertEqual(
+            EventsService.kidsEventsFilter,
+            #"title.imatch."[[:<:]](kids?|child|children|family|families|toddlers?|preschool|storytime|story time|teens?)[[:>:]]","#
+                + #"category.imatch."[[:<:]](kids?|family|children)[[:>:]]","#
+                + #"enhanced_description.imatch."[[:<:]](kids|children|toddlers)[[:>:]]""#
+        )
+        // Three arms of one or-group: no unquoted comma inside a pattern.
+        XCTAssertEqual(EventsService.combineOrGroups(["a.eq.1", EventsService.kidsEventsFilter])?.hasPrefix("and(or(a.eq.1),or(title.imatch."), true)
+    }
+}
+
+/// IOS-AUDIT-005: the kids filter is a removable Search filter that only
+/// events honour.
+final class KidsSearchFilterTests: XCTestCase {
+    private var kids: SearchFilters {
+        var f = SearchFilters(tabHint: .events)
+        f.kidsOnly = true
+        return f
+    }
+
+    func testKidsCountsAsAFilterAndShowsAChip() {
+        XCTAssertFalse(kids.isEmpty)
+        XCTAssertEqual(kids.chips, [.kids])
+        XCTAssertEqual(SearchFilterChip.kids.label, "Kids & family")
+    }
+
+    func testRemovingTheChipClearsIt() {
+        let cleared = kids.removing(.kids)
+        XCTAssertFalse(cleared.kidsOnly)
+        XCTAssertTrue(cleared.isEmpty)
+    }
+
+    func testMergeKeepsKidsFromTheLink() {
+        let typed = SearchQueryParser.parse("storytime tonight").filters
+        let merged = typed.merged(with: kids)
+        XCTAssertTrue(merged.kidsOnly)
+        XCTAssertEqual(merged.datePreset, .tonight)
+    }
+
+    func testTypedKidsStaysAKeyword() {
+        let parsed = SearchQueryParser.parse("kids")
+        XCTAssertEqual(parsed.keywords, "kids")
+        XCTAssertFalse(parsed.filters.kidsOnly)
+    }
+
+    @MainActor
+    func testKidsAloneDoesNotSearchRestaurants() {
+        XCTAssertFalse(SearchViewModel.searchesRestaurants(ParsedSearch(keywords: "", filters: kids)))
+    }
 }
 
 /// IOS-DD-EVENTS-22: a view is counted once per session.

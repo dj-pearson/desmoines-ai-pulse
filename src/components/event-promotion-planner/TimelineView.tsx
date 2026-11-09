@@ -208,8 +208,13 @@ function WeekCard({ week, isExpanded, onToggle, onTaskToggle, completedTasks, ev
               </div>
             )}
           </div>
-          <Button variant="ghost" size="sm">
-            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} week ${week.week}`}
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
           </Button>
         </div>
 

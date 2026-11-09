@@ -2,6 +2,7 @@ package com.desmoines.aipulse.util
 
 import android.content.Intent
 import android.net.Uri
+import com.desmoines.aipulse.data.model.Neighborhood as NeighborhoodGuide
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,11 +16,13 @@ import javax.inject.Singleton
  * Supported URL patterns (https on desmoinesinsider.com or www. only):
  * - `/events/:slug-or-id` -> Event detail; `/events/today`, `/events/free` and
  *   the other web landing pages (src/App.tsx) -> the matching tab or list
- * - `/restaurants/:slug-or-id` -> Restaurant detail; `/restaurants/open-now`,
- *   `/new`, `/dietary` -> Dining tab
+ * - `/restaurants/:slug-or-id` -> Restaurant detail; `/restaurants/open-now`
+ *   -> Dining tab with Open now on; `/new`, `/dietary` -> Dining tab
  * - `/attractions/:slug-or-id` -> Attraction detail
  * - `/stay/:slug` -> Hotel detail, `/stay` -> Hotels list
  * - `/articles/:slug` -> Article detail, `/articles` -> Articles list
+ * - `/neighborhoods/:slug` -> that neighborhood guide, or the Neighborhoods
+ *   hub for a slug the app has no guide for; `/neighborhoods` -> the hub
  * - `/search?q=` -> Search with the query, `/search` -> Search tab
  * - any other path on our host -> the in-app WebView of that URL
  *
@@ -28,7 +31,8 @@ import javax.inject.Singleton
  * - `com.desmoines.aipulse://home` (also search, favorites, profile, dining, map)
  * - `com.desmoines.aipulse://auth-callback` -> Auth callback (MainActivity.handleAuthCallback, AND-OVH-005)
  *
- * Also handles notification tap intents with navigate_to + event_id/content_id extras.
+ * Also handles notification taps: navigate_to + event_id/content_id extras,
+ * and a push's `url` or `type` + `id` (see [notificationRoute]).
  */
 @Singleton
 class DeepLinkHandler @Inject constructor() {
@@ -47,10 +51,26 @@ class DeepLinkHandler @Inject constructor() {
         data class Attraction(val id: LinkId) : Destination()
         data class Hotel(val id: LinkId) : Destination()
         data class Article(val id: LinkId) : Destination()
+        /** One guide, by a slug [NeighborhoodGuide.bySlug] knows (AND-AUDIT-025). */
+        data class Neighborhood(val slug: String) : Destination()
         data class Tab(val tab: TabDestination) : Destination()
         data class Screen(val screen: ScreenDestination) : Destination()
         data class Search(val query: String) : Destination()
         data class Web(val url: String) : Destination()
+
+        /**
+         * The Dining tab with its Open now filter on: /restaurants/open-now
+         * (iOS restaurantLandingDestination). The flag waits in
+         * [pendingRestaurantsOpenNow] until RestaurantsViewModel applies it.
+         */
+        data object RestaurantsOpenNow : Destination()
+
+        /**
+         * Search on Events with the kids-and-family filter on: /events/kids
+         * (iOS kidsDestination, AND-AUDIT-041). The flag waits in
+         * [pendingKidsEvents] until SearchViewModel applies it.
+         */
+        data object KidsEvents : Destination()
     }
 
     enum class TabDestination {
@@ -59,7 +79,15 @@ class DeepLinkHandler @Inject constructor() {
 
     /** Non-tab list screens a web landing page maps to. */
     enum class ScreenDestination {
-        WEEKEND, HOTELS, ARTICLES
+        WEEKEND, HOTELS, ARTICLES, NEIGHBORHOODS
+    }
+
+    /** Where a notification tap goes, before any navigation happens. */
+    sealed interface NotificationRoute {
+        data class To(val destination: Destination) : NotificationRoute
+
+        /** A link; [handle] still applies its host and scheme checks. */
+        data class Link(val url: String) : NotificationRoute
     }
 
     private val _pendingDestination = MutableStateFlow<Destination?>(null)
@@ -70,6 +98,15 @@ class DeepLinkHandler @Inject constructor() {
     // navigate, before the Search screen's view model is created.
     private val _pendingSearchQuery = MutableStateFlow<String?>(null)
     val pendingSearchQuery: StateFlow<String?> = _pendingSearchQuery.asStateFlow()
+
+    // An /restaurants/open-now link, held for RestaurantsViewModel for the same
+    // reason: the Dining view model may not exist when MainScreen navigates.
+    private val _pendingRestaurantsOpenNow = MutableStateFlow(false)
+    val pendingRestaurantsOpenNow: StateFlow<Boolean> = _pendingRestaurantsOpenNow.asStateFlow()
+
+    // An /events/kids link, held for SearchViewModel for the same reason.
+    private val _pendingKidsEvents = MutableStateFlow(false)
+    val pendingKidsEvents: StateFlow<Boolean> = _pendingKidsEvents.asStateFlow()
 
     /**
      * Attempts to parse a URL into a navigation destination.
@@ -92,33 +129,25 @@ class DeepLinkHandler @Inject constructor() {
 
     /**
      * Handles intents from notification taps and other internal deep links.
-     * Checks for navigate_to + event_id/content_id extras from NotificationReceiver/PushNotificationService.
+     * Notification extras (see [notificationRoute]) win over the intent's data
+     * URI; PushNotificationService and NotificationReceiver both write them.
      */
     fun handleIntent(intent: Intent): Boolean {
-        // Check for notification tap extras
-        val navigateTo = intent.getStringExtra("navigate_to")
-        val contentId = (intent.getStringExtra("event_id") ?: intent.getStringExtra("content_id"))
-            ?.let(::appLinkId)
-
-        if (navigateTo != null) {
-            val destination = when (navigateTo) {
-                "event_detail" -> contentId?.let { Destination.Event(it) }
-                "restaurant_detail" -> contentId?.let { Destination.Restaurant(it) }
-                "attraction_detail" -> contentId?.let { Destination.Attraction(it) }
-                "home" -> Destination.Tab(TabDestination.HOME)
-                "search" -> Destination.Tab(TabDestination.SEARCH)
-                "favorites" -> Destination.Tab(TabDestination.SAVED)
-                "profile" -> Destination.Tab(TabDestination.PROFILE)
-                else -> null
+        val route = notificationRoute { key -> intent.getStringExtra(key) }
+        if (route != null) {
+            val handled = when (route) {
+                is NotificationRoute.To -> {
+                    publish(route.destination)
+                    true
+                }
+                // Same host and scheme checks as a tapped link, so a push
+                // cannot open anything a link could not.
+                is NotificationRoute.Link -> handle(Uri.parse(route.url))
             }
-            if (destination != null) {
-                publish(destination)
-                // Clear intent extras to prevent re-handling on config change
-                intent.removeExtra("navigate_to")
-                intent.removeExtra("event_id")
-                intent.removeExtra("content_id")
-                return true
-            }
+            // Drain the extras so a configuration change, which hands the
+            // activity this same Intent again, does not navigate twice.
+            NOTIFICATION_EXTRA_KEYS.forEach(intent::removeExtra)
+            if (handled) return true
         }
 
         // Check for deep link URI in intent data
@@ -146,8 +175,25 @@ class DeepLinkHandler @Inject constructor() {
         return query
     }
 
-    private fun publish(destination: Destination) {
+    /** Consumes an /restaurants/open-now link's filter: true once, then false. */
+    fun consumeRestaurantsOpenNow(): Boolean {
+        val pending = _pendingRestaurantsOpenNow.value
+        _pendingRestaurantsOpenNow.value = false
+        return pending
+    }
+
+    /** Consumes an /events/kids link's filter: true once, then false. */
+    fun consumeKidsEvents(): Boolean {
+        val pending = _pendingKidsEvents.value
+        _pendingKidsEvents.value = false
+        return pending
+    }
+
+    /** Internal, not private, so JVM tests can publish without an android.net.Uri. */
+    internal fun publish(destination: Destination) {
         if (destination is Destination.Search) _pendingSearchQuery.value = destination.query
+        if (destination is Destination.RestaurantsOpenNow) _pendingRestaurantsOpenNow.value = true
+        if (destination is Destination.KidsEvents) _pendingKidsEvents.value = true
         _pendingDestination.value = destination
     }
 
@@ -199,7 +245,19 @@ class DeepLinkHandler @Inject constructor() {
          * parsing it; DeepLinkManifestParityTest holds the two lists equal.
          */
         val CLAIMED_WEB_SECTIONS: Set<String> =
-            setOf("events", "restaurants", "attractions", "stay", "articles", "search")
+            setOf("events", "restaurants", "attractions", "stay", "articles", "search", "neighborhoods")
+
+        /**
+         * Intent extras a notification tap carries. The push_* three are the
+         * FCM data keys url, type and id renamed by [notificationExtrasFromPush],
+         * so a bare "type" or "id" extra from some other intent is never read
+         * as a push.
+         */
+        const val EXTRA_PUSH_URL = "push_url"
+        const val EXTRA_PUSH_TYPE = "push_type"
+        const val EXTRA_PUSH_ID = "push_id"
+        val NOTIFICATION_EXTRA_KEYS: List<String> =
+            listOf("navigate_to", "event_id", "content_id", EXTRA_PUSH_URL, EXTRA_PUSH_TYPE, EXTRA_PUSH_ID)
 
         /** Longest search text a link may carry (iOS maxLinkQueryLength). */
         const val MAX_LINK_QUERY_LENGTH = 120
@@ -253,6 +311,84 @@ class DeepLinkHandler @Inject constructor() {
 
         fun isMonthPage(segment: String): Boolean = MONTH_PAGE_PATTERN.matches(segment)
 
+        /**
+         * /neighborhoods/<slug> (AND-AUDIT-025, iOS IOS-AUDIT-FEAT-038). Every
+         * slug the web builds (src/lib/neighborhoods.ts) is in Neighborhood.all,
+         * so a shared guide opens that guide. A slug the app has no guide for
+         * lands on the hub, never on nothing. Exact match against the curated
+         * list is the validation, so nothing unchecked reaches the nav route.
+         */
+        fun neighborhoodDestination(segment: String): Destination =
+            NeighborhoodGuide.bySlug(segment)?.let { Destination.Neighborhood(it.slug) }
+                ?: Destination.Screen(ScreenDestination.NEIGHBORHOODS)
+
+        /**
+         * The intent extras for a tapped push, from its FCM data payload.
+         * Reads the keys iOS reads (DeepLinkHandler.swift handleNotification:
+         * `url`, then `type` + `id`) as well as Android's own navigate_to and
+         * content_id, so one payload routes on both apps (AND-AUDIT-026).
+         */
+        fun notificationExtrasFromPush(data: Map<String, String>): Map<String, String> = buildMap {
+            fun copy(from: String, to: String) {
+                data[from]?.takeIf { it.isNotBlank() }?.let { put(to, it) }
+            }
+            copy("navigate_to", "navigate_to")
+            copy("content_id", "content_id")
+            copy("url", EXTRA_PUSH_URL)
+            copy("type", EXTRA_PUSH_TYPE)
+            copy("id", EXTRA_PUSH_ID)
+        }
+
+        /**
+         * Precedence: navigate_to (local reminders and older pushes), then a
+         * `url`, then a `type` + `id` pair. That is the iOS order after its
+         * eventId key, which Android's reminders spell as navigate_to. An
+         * unusable navigate_to falls through to the next key; a url does not,
+         * as on iOS.
+         */
+        fun notificationRoute(extra: (String) -> String?): NotificationRoute? {
+            extra("navigate_to")?.let { navigateTo ->
+                val id = (extra("event_id") ?: extra("content_id"))?.let(::appLinkId)
+                navigateToDestination(navigateTo, id)?.let { return NotificationRoute.To(it) }
+            }
+            extra(EXTRA_PUSH_URL)?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                return NotificationRoute.Link(it)
+            }
+            val type = extra(EXTRA_PUSH_TYPE)
+            val rawId = extra(EXTRA_PUSH_ID)
+            if (type != null && rawId != null) {
+                typedDestination(type, rawId)?.let { return NotificationRoute.To(it) }
+            }
+            return null
+        }
+
+        /** A navigate_to value with its content id, or null when unusable. */
+        fun navigateToDestination(navigateTo: String, id: LinkId?): Destination? = when (navigateTo) {
+            "event_detail" -> id?.let { Destination.Event(it) }
+            "restaurant_detail" -> id?.let { Destination.Restaurant(it) }
+            "attraction_detail" -> id?.let { Destination.Attraction(it) }
+            "hotel_detail" -> id?.let { Destination.Hotel(it) }
+            "article_detail" -> id?.let { Destination.Article(it) }
+            "home" -> Destination.Tab(TabDestination.HOME)
+            "search" -> Destination.Tab(TabDestination.SEARCH)
+            "favorites" -> Destination.Tab(TabDestination.SAVED)
+            "profile" -> Destination.Tab(TabDestination.PROFILE)
+            else -> null
+        }
+
+        /** A push `type` + `id` pair (iOS routeTyped), or null when unusable. */
+        fun typedDestination(type: String, rawId: String): Destination? {
+            val id = appLinkId(rawId) ?: return null
+            return when (type) {
+                "event" -> Destination.Event(id)
+                "restaurant" -> Destination.Restaurant(id)
+                "attraction" -> Destination.Attraction(id)
+                "hotel" -> Destination.Hotel(id)
+                "article" -> Destination.Article(id)
+                else -> null
+            }
+        }
+
         /** The trimmed, capped `q` of a /search link, or null when empty. */
         fun searchQuery(raw: String?): String? =
             raw?.trim()?.take(MAX_LINK_QUERY_LENGTH)?.trim()?.takeIf { it.isNotEmpty() }
@@ -268,7 +404,10 @@ class DeepLinkHandler @Inject constructor() {
                 "today" -> return Destination.Search("today")
                 "tonight" -> return Destination.Search("tonight")
                 "free" -> return Destination.Search("free events")
-                "kids" -> return Destination.Search("kids events")
+                // The web's kids-and-family rule, not the text "kids events".
+                "kids" -> return Destination.KidsEvents
+                // The Map tab is the app's nearby-events surface (iOS .tab(.map)).
+                "near-me" -> return Destination.Tab(TabDestination.MAP)
                 // /events/series/:slug has no native screen.
                 "series" -> return Destination.Web(url)
             }
@@ -301,6 +440,7 @@ class DeepLinkHandler @Inject constructor() {
                     "restaurants" -> Destination.Tab(TabDestination.DINING)
                     "stay" -> Destination.Screen(ScreenDestination.HOTELS)
                     "articles" -> Destination.Screen(ScreenDestination.ARTICLES)
+                    "neighborhoods" -> Destination.Screen(ScreenDestination.NEIGHBORHOODS)
                     // /attractions has no native list screen.
                     else -> Destination.Web(url)
                 }
@@ -310,7 +450,11 @@ class DeepLinkHandler @Inject constructor() {
             return when (first) {
                 "events" -> eventDestination(segment, url)
                 "restaurants" ->
-                    if (segment in RESTAURANT_LANDING_SEGMENTS) {
+                    if (segment == "open-now") {
+                        // A shared "open now" page used to open every restaurant.
+                        Destination.RestaurantsOpenNow
+                    } else if (segment in RESTAURANT_LANDING_SEGMENTS) {
+                        // No new-openings or dietary filter on Android yet.
                         Destination.Tab(TabDestination.DINING)
                     } else {
                         webLinkId(segment)?.let { Destination.Restaurant(it) }
@@ -330,6 +474,7 @@ class DeepLinkHandler @Inject constructor() {
                 "articles" ->
                     webLinkId(segment)?.let { Destination.Article(it) }
                         ?: Destination.Screen(ScreenDestination.ARTICLES)
+                "neighborhoods" -> neighborhoodDestination(segment)
                 else -> Destination.Web(url)
             }
         }

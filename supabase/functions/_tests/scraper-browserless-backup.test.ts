@@ -7,7 +7,7 @@
  * that each key only ever reaches its own host: every test below ends by
  * checking every request the fake fetch saw.
  */
-import { assert, assertEquals, assertFalse, assertStringIncludes } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse, assertStringIncludes } from 'jsr:@std/assert@1';
 import {
   browserlessHosts,
   HOSTED_BROWSERLESS_URL,

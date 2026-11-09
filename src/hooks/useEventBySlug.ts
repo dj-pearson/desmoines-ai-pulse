@@ -5,6 +5,7 @@ import { createEventSlugWithCentralTime, upcomingFloorUtc } from "@/lib/timezone
 import { EVENT_LIST_COLUMNS, EVENT_SLUG_COLUMNS } from "@/lib/listColumns";
 import { createSlug, slugToTitlePattern } from "@/lib/slug";
 import { applyEventVisibility } from "@/lib/eventQuery";
+import { upcomingOrRunningFilter } from "@/hooks/useEvents";
 import type { Database } from "@/integrations/supabase/types";
 
 const log = createLogger("useEventBySlug");
@@ -259,8 +260,11 @@ async function fetchCandidates(slug: string, visibleOnly: boolean): Promise<Slug
     if (!pattern) return null;
     query = query
       .ilike("title", pattern)
-      // Start of today in Central: a UTC date drops tonight's events after 7pm.
-      .gte("date", upcomingFloorUtc())
+      // Starts today (Central) or later, OR is a run that ends today or later.
+      // A bare `date >= today` floor 404'd a festival's legacy link from its
+      // second day while every list still showed it (WEB-FEAT-052). Central,
+      // not UTC: a UTC date drops tonight's events after 7pm.
+      .or(upcomingOrRunningFilter(upcomingFloorUtc()))
       .order("date", { ascending: true })
       .limit(20);
   }
@@ -323,7 +327,8 @@ async function findUnlisted(slug: string): Promise<EventLookup | null> {
   return event ? { event, archived: true } : null;
 }
 
-async function fetchEventBySlug(slug: string): Promise<EventLookup | null> {
+/** Exported for the request-shape tests; components use useEventBySlug. */
+export async function fetchEventBySlug(slug: string): Promise<EventLookup | null> {
   let event: Event | null = null;
   if (isEventIdSlug(slug)) {
     // A bare UUID (WP8 item 2, D9): look the row up by id with the same

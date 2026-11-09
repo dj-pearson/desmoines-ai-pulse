@@ -11,7 +11,7 @@
  * The helpers are exported from index.ts, which calls Deno.serve at import time,
  * so these import it knowing a server starts; the assertions are pure.
  */
-import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { reviewLines, sourced, summarise } from "../agent-performance-review/index.ts";
 
 const run = (over: Record<string, unknown> = {}) => ({

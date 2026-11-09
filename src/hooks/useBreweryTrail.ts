@@ -1,11 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS } from '@/lib/listColumns';
+import { BREWERY_TRAIL_COLUMNS, EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { applyEventVisibility } from '@/lib/eventQuery';
 import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 import { STALE_TIME } from '@/lib/queryConfig';
-import { isVisitableStatus } from '@/lib/restaurantHours';
+import {
+  businessStatusLabel,
+  formatOpenStatusLine,
+  hoursTextOf,
+  isPermanentlyClosedRestaurant,
+  isServingToday,
+  isVisitableStatus,
+  resolveOpenStatus,
+  type StoredOpeningHours,
+} from '@/lib/restaurantHours';
 import { centralDateOf, centralWindow } from '@/lib/timezone';
 
 export interface BreweryCheckin {
@@ -53,7 +62,7 @@ export function useBreweries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('restaurants')
-        .select(RESTAURANT_LIST_COLUMNS)
+        .select(BREWERY_TRAIL_COLUMNS)
         // Merged duplicates and closed places are not on the trail, and must
         // not count toward the passport's "N of M" denominator either.
         // status is nullable and neq('status', 'closed') would also drop the
@@ -78,6 +87,8 @@ export function useBreweries() {
 /** The fields the trail reads to decide where a row goes. */
 export interface BreweryLifecycleRow {
   status?: string | null;
+  /** Google's flag. CLOSED_PERMANENTLY takes a place off the trail before our own status catches up. */
+  business_status?: string | null;
 }
 
 /** Statuses that mean "not open yet", as opposed to closed for good. */
@@ -90,16 +101,41 @@ const UPCOMING_STATUSES = new Set(['opening_soon', 'announced', 'coming_soon']);
  * has not opened cannot be checked in at, so counting it made the passport
  * impossible to finish. `upcoming` renders in its own group with its dated
  * label. Anything else that is not visitable (a legacy closed spelling the
- * query's `status.neq.closed` let through) is on neither list.
+ * query's `status.neq.closed` let through, or a row Google marks
+ * CLOSED_PERMANENTLY) is on neither list. CLOSED_TEMPORARILY stays visitable:
+ * it is still on the trail, and breweryStatusLine labels it.
  */
 export function splitBreweries<T extends BreweryLifecycleRow>(rows: readonly T[]): { visitable: T[]; upcoming: T[] } {
   const visitable: T[] = [];
   const upcoming: T[] = [];
   for (const row of rows) {
+    if (isPermanentlyClosedRestaurant(row)) continue;
     if (isVisitableStatus(row.status)) visitable.push(row);
     else if (UPCOMING_STATUSES.has((row.status ?? '').trim().toLowerCase())) upcoming.push(row);
   }
   return { visitable, upcoming };
+}
+
+/** What breweryStatusLine reads. hours_json and `opening` are untrusted row data. */
+export interface BreweryHoursRow extends BreweryLifecycleRow {
+  opening?: unknown;
+  hours_json?: unknown;
+}
+
+/**
+ * The one-line status on a trail card, or null when there is nothing honest
+ * to print (WEB-FEAT-044). The same call open-now and the map pins make:
+ * hours_json first, then `opening` only through hoursTextOf, because
+ * production stores a date there. Google's temporary or permanent closure wins
+ * over the weekly hours it keeps publishing, and a place that is not open yet
+ * gets no hours line (its card shows the opening label instead).
+ */
+export function breweryStatusLine(row: BreweryHoursRow, now: Date): string | null {
+  const closure = businessStatusLabel(row.business_status);
+  if (closure) return closure;
+  if (!isServingToday(row)) return null;
+  const hours = (row.hours_json ?? null) as StoredOpeningHours | null;
+  return formatOpenStatusLine(resolveOpenStatus(hours, hoursTextOf(row.opening), now));
 }
 
 /** Words a brewery's name carries that an event's venue text often leaves out. */

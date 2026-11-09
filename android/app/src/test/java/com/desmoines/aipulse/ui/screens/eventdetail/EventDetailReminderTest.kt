@@ -67,6 +67,15 @@ class EventDetailReminderTest {
         category = "Music",
     )
 
+    /** A row at the 19:31:58 no-time marker: 7:31:58pm CDT on Oct 23, i.e. time TBA. */
+    private fun tbaEvent(id: String) = Event(
+        id = id,
+        title = "Event $id",
+        date = "2026-10-24T00:31:58+00:00",
+        venue = "Wells Fargo Arena",
+        category = "Music",
+    )
+
     private fun loadedViewModel(event: Event): EventDetailViewModel {
         coEvery { eventsRepository.fetchEvent(event.id) } returns Result.success(event)
         val viewModel = EventDetailViewModel(
@@ -150,8 +159,8 @@ class EventDetailReminderTest {
 
         viewModel.onNotificationPermissionDenied()
 
-        verify(exactly = 0) { notifications.toggleReminder(any(), any(), any(), any()) }
-        verify(exactly = 0) { notifications.scheduleReminder(any(), any(), any(), any()) }
+        verify(exactly = 0) { notifications.toggleReminder(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { notifications.scheduleReminder(any(), any(), any(), any(), any(), any()) }
         assertFalse(viewModel.isReminderSet.value)
         assertNotNull(viewModel.reminderMessage.value)
 
@@ -173,5 +182,46 @@ class EventDetailReminderTest {
             "This event starts in under an hour, too soon for a reminder.",
             viewModel.reminderMessage.value,
         )
+    }
+
+    // AND-AUDIT-029: a time-TBA row's reminder is day-based, 9am Central on
+    // its day, not an hour before the placeholder start.
+
+    @Test
+    fun `a TBA row schedules its reminder for 9am Des Moines time as a day-of reminder`() = runTest(testDispatcher) {
+        val row = tbaEvent("h")
+        val start = Instant.parse("2026-10-24T00:31:58Z").toEpochMilli()
+        val nineAmCentral = Instant.parse("2026-10-23T14:00:00Z").toEpochMilli()
+        every { notifications.toggleReminder("h", any(), any(), any(), any(), any()) } returns true
+
+        val viewModel = loadedViewModel(row)
+        advanceUntilIdle()
+        assertTrue(viewModel.showReminderButton.value) // now is 7am CDT, before 9am
+        viewModel.toggleReminder()
+
+        verify { notifications.toggleReminder("h", "Event h", "Wells Fargo Arena", start, nineAmCentral, true) }
+        assertTrue(viewModel.isReminderSet.value)
+    }
+
+    @Test
+    fun `a TBA row hides the button once 9am on its day has passed`() {
+        val row = tbaEvent("i")
+        val tenAmCentral = Instant.parse("2026-10-23T15:00:00Z").toEpochMilli()
+        // The placeholder start (7:31pm) is still ahead, which kept the old button up.
+        assertFalse(EventDetailViewModel.isReminderButtonVisible(row, isReminderSet = false, nowMillis = tenAmCentral))
+        assertTrue(EventDetailViewModel.isReminderButtonVisible(row, isReminderSet = true, nowMillis = tenAmCentral))
+        assertTrue(EventDetailViewModel.isReminderButtonVisible(row, isReminderSet = false, nowMillis = now))
+    }
+
+    @Test
+    fun `a timed row still passes an hour-before trigger and no day-of flag`() = runTest(testDispatcher) {
+        val start = now + 5 * hour
+        every { notifications.toggleReminder("j", any(), any(), any(), any(), any()) } returns true
+
+        val viewModel = loadedViewModel(event("j", start))
+        advanceUntilIdle()
+        viewModel.toggleReminder()
+
+        verify { notifications.toggleReminder("j", "Event j", "Wells Fargo Arena", start, start - hour, false) }
     }
 }

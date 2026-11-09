@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { installFixtureBackend } from './support/fixtureBackend';
+import { centralDay } from './support/fixtureClock';
 
 /**
  * Home plan WP2 and pass-2 WP3: the For You and recently viewed rails, and the
@@ -95,20 +96,6 @@ async function delayWeather(page: Page, ms: number) {
 const FIXTURE_ISO = '2026-01-01T00:00:00Z';
 
 /** Three of each, so every dashboard group has a full three-card slot to fill. */
-/**
- * A Central calendar day `offset` days from now, as yyyy-MM-dd.
- *
- * Fixture dates are relative so the spec cannot rot. It used to hardcode
- * opening_date '2026-11-01' for "opening soon" rows; once that day passed,
- * homeOpenings correctly dropped them as stale and the required smoke lane
- * went red on every branch with no code change.
- */
-function centralDay(offset: number): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(
-    new Date(Date.now() + offset * 86_400_000),
-  );
-}
-
 const OPENINGS = [0, 1, 2].map((i) => ({
   id: `41000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
   name: `CLS Opening ${i}`,
@@ -134,6 +121,8 @@ const OPENINGS = [0, 1, 2].map((i) => ({
   merged_at: null,
   merged_into: null,
   opening: true,
+  // Upcoming relative to today: this spec does not pin the clock, and the
+  // literal '2026-11-01' that stood here went stale on 2026-11-02 (WEB-QA-041).
   opening_date: centralDay(30),
   opening_timeframe: null,
   phone: null,

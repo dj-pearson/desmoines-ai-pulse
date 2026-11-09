@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
 import { MessageSquare, Plus, Pin, Lock, Reply } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+
+// Stretched-button rows (same pattern as SceneUpdateCard / TrendingContent):
+// the heading holds the one real control, and its ::after covers the row so
+// the whole card stays clickable. A div with onClick had no role and no tab
+// stop, so forums and threads could not be opened from a keyboard (WCAG 2.1.1).
+const ROW_BUTTON_CLASS =
+  "text-left rounded-sm after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background";
+
+type CommunityFeatures = ReturnType<typeof useCommunityFeatures>;
+type Forum = CommunityFeatures['forums'][number];
+type Thread = Awaited<ReturnType<CommunityFeatures['getThreads']>>[number];
 
 export function CommunityForums() {
   const { user } = useAuth();
@@ -37,6 +49,59 @@ export function CommunityForums() {
   const [newReply, setNewReply] = useState('');
   const [isCreateForumOpen, setIsCreateForumOpen] = useState(false);
   const [isCreateThreadOpen, setIsCreateThreadOpen] = useState(false);
+
+  // WEB-UX-053: every field is named by a Label tied to its id. A bare <label>
+  // beside the input left screen readers announcing only the placeholder.
+  const fieldId = useId();
+  const forumTitleId = `${fieldId}-forum-title`;
+  const forumDescriptionId = `${fieldId}-forum-description`;
+  const threadTitleId = `${fieldId}-thread-title`;
+  const threadContentId = `${fieldId}-thread-content`;
+  const replyId = `${fieldId}-reply`;
+
+  // WEB-UX-052: opening a forum or thread swaps the whole card, so the control
+  // that had focus unmounts and keyboard/screen-reader users land on <body>.
+  // Each transition names where focus goes next: the new view's heading when
+  // going in, the row they came from when going back.
+  const viewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<string | null>(null);
+
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (!target) return;
+    pendingFocus.current = null;
+    if (target === 'heading') {
+      viewHeadingRef.current?.focus();
+      return;
+    }
+    const row = listRef.current?.querySelector<HTMLButtonElement>(
+      `button[data-row-id="${CSS.escape(target)}"]`
+    );
+    row?.focus();
+  }, [selectedForum, selectedThread]);
+
+  const openForum = (forum: Forum) => {
+    pendingFocus.current = 'heading';
+    setSelectedForum(forum);
+    loadThreads(forum.id);
+  };
+
+  const openThread = (thread: Thread) => {
+    pendingFocus.current = 'heading';
+    setSelectedThread(thread);
+    loadReplies(thread.id);
+  };
+
+  const backToForums = () => {
+    pendingFocus.current = selectedForum?.id ?? null;
+    setSelectedForum(null);
+  };
+
+  const backToThreads = () => {
+    pendingFocus.current = selectedThread?.id ?? null;
+    setSelectedThread(null);
+  };
 
   const handleCreateForum = async () => {
     const result = await createForum(newForumData);
@@ -104,15 +169,19 @@ export function CommunityForums() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedThread(null)}
+                onClick={backToThreads}
               >
                 ← Back to {selectedForum?.title}
               </Button>
             </div>
           </div>
-          <CardTitle className="flex items-center gap-2">
-            {selectedThread.is_pinned && <Pin className="w-4 h-4 text-blue-500" />}
-            {selectedThread.is_locked && <Lock className="w-4 h-4 text-gray-500" />}
+          <CardTitle
+            ref={viewHeadingRef}
+            tabIndex={-1}
+            className="flex items-center gap-2 focus:outline-none"
+          >
+            {selectedThread.is_pinned && <Pin className="w-4 h-4 text-blue-500" role="img" aria-label="Pinned" />}
+            {selectedThread.is_locked && <Lock className="w-4 h-4 text-gray-500" role="img" aria-label="Locked" />}
             {selectedThread.title}
           </CardTitle>
         </CardHeader>
@@ -140,7 +209,9 @@ export function CommunityForums() {
           {/* New Reply */}
           {!selectedThread.is_locked && (
             <div className="space-y-2">
+              <Label htmlFor={replyId}>Your reply</Label>
               <Textarea
+                id={replyId}
                 placeholder="Write your reply..."
                 value={newReply}
                 onChange={(e) => setNewReply(e.target.value)}
@@ -170,7 +241,7 @@ export function CommunityForums() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedForum(null)}
+                onClick={backToForums}
               >
                 ← Back to Forums
               </Button>
@@ -188,8 +259,9 @@ export function CommunityForums() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium">Title</label>
+                    <Label htmlFor={threadTitleId}>Title</Label>
                     <Input
+                      id={threadTitleId}
                       placeholder="Thread title..."
                       value={newThreadData.title}
                       onChange={(e) => setNewThreadData(prev => ({
@@ -199,8 +271,9 @@ export function CommunityForums() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Content</label>
+                    <Label htmlFor={threadContentId}>Content</Label>
                     <Textarea
+                      id={threadContentId}
                       placeholder="What would you like to discuss?"
                       value={newThreadData.content}
                       onChange={(e) => setNewThreadData(prev => ({
@@ -229,29 +302,36 @@ export function CommunityForums() {
               </DialogContent>
             </Dialog>
           </div>
-          <CardTitle>{selectedForum.title}</CardTitle>
+          <CardTitle ref={viewHeadingRef} tabIndex={-1} className="focus:outline-none">
+            {selectedForum.title}
+          </CardTitle>
           {selectedForum.description && (
             <p className="text-muted-foreground">{selectedForum.description}</p>
           )}
         </CardHeader>
         <CardContent>
           {threads.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-3" ref={listRef}>
               {threads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="p-4 border rounded-lg cursor-pointer hover:bg-muted transition-colors"
-                  onClick={() => {
-                    setSelectedThread(thread);
-                    loadReplies(thread.id);
-                  }}
+                  className="relative p-4 border rounded-lg hover:bg-muted transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        {thread.is_pinned && <Pin className="w-4 h-4 text-blue-500" />}
-                        {thread.is_locked && <Lock className="w-4 h-4 text-gray-500" />}
-                        <h3 className="font-medium">{thread.title}</h3>
+                        {thread.is_pinned && <Pin className="w-4 h-4 text-blue-500" role="img" aria-label="Pinned" />}
+                        {thread.is_locked && <Lock className="w-4 h-4 text-gray-500" role="img" aria-label="Locked" />}
+                        <h3 className="font-medium">
+                          <button
+                            type="button"
+                            data-row-id={thread.id}
+                            onClick={() => openThread(thread)}
+                            className={ROW_BUTTON_CLASS}
+                          >
+                            {thread.title}
+                          </button>
+                        </h3>
                       </div>
                       <p className="text-sm text-muted-foreground line-clamp-2">
                         {thread.content}
@@ -297,8 +377,9 @@ export function CommunityForums() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Title</label>
+                  <Label htmlFor={forumTitleId}>Title</Label>
                   <Input
+                    id={forumTitleId}
                     placeholder="Forum title..."
                     value={newForumData.title}
                     onChange={(e) => setNewForumData(prev => ({
@@ -308,8 +389,9 @@ export function CommunityForums() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Description</label>
+                  <Label htmlFor={forumDescriptionId}>Description</Label>
                   <Textarea
+                    id={forumDescriptionId}
                     placeholder="What is this forum about?"
                     value={newForumData.description}
                     onChange={(e) => setNewForumData(prev => ({
@@ -341,20 +423,25 @@ export function CommunityForums() {
       </CardHeader>
       <CardContent>
         {forums.length > 0 ? (
-          <div className="grid gap-4">
+          <div className="grid gap-4" ref={listRef}>
             {forums.map((forum) => (
               <div
                 key={forum.id}
-                className="p-4 border rounded-lg cursor-pointer hover:bg-muted transition-colors"
-                onClick={() => {
-                  setSelectedForum(forum);
-                  loadThreads(forum.id);
-                }}
+                className="relative p-4 border rounded-lg hover:bg-muted transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-medium">{forum.title}</h3>
+                      <h3 className="font-medium">
+                        <button
+                          type="button"
+                          data-row-id={forum.id}
+                          onClick={() => openForum(forum)}
+                          className={ROW_BUTTON_CLASS}
+                        >
+                          {forum.title}
+                        </button>
+                      </h3>
                       <Badge variant="secondary">{forum.category}</Badge>
                     </div>
                     {forum.description && (

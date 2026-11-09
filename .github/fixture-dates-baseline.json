@@ -1,0 +1,5 @@
+{
+  "_comment": "Near-future date literals in Playwright files that never pin the clock (WEB-QA-041). Each flips from upcoming to past on that day with no code change. This list must only SHRINK: date a new fixture with tests/support/fixtureClock.ts or pin the clock. See scripts/check-fixture-dates.mjs.",
+  "generated": "2026-11-07",
+  "literals": []
+}

@@ -340,12 +340,15 @@ private struct DietaryPill: View {
     @Bindable var viewModel: RestaurantsViewModel
     @State private var showPopover = false
 
+    /// One per key of `RestaurantsService.dietaryKeywords`, in the web's
+    /// DIETS order (iosDietaryParity.test.ts checks both).
     private static let options: [(key: String, label: String, emoji: String)] = [
         ("vegan",        "Vegan",        "🌱"),
         ("vegetarian",   "Vegetarian",   "🥬"),
         ("gluten-free",  "Gluten-Free",  "🌾"),
         ("keto",         "Keto",         "🥑"),
         ("halal",        "Halal",        "🍖"),
+        ("kosher",       "Kosher",       "🍽️"),
     ]
 
     var body: some View {

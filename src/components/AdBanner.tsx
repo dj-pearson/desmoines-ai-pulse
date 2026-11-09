@@ -16,7 +16,7 @@ import {
   type AdSlotPlacement,
 } from "@/components/adSlotSizes";
 
-import { isCapacitor, openExternalUrl, toSafeExternalUrl } from "@/lib/capacitorUtils";
+import { toSafeExternalUrl } from "@/lib/capacitorUtils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AdBannerProps {
@@ -102,15 +102,9 @@ function AdSlot({ placement, className = "", fallback, adFree, tierLoading }: Ad
   const { width, height } = PLACEMENT_CREATIVE_SIZE[placement];
 
   // WEB-UX-046: the click lives on a real link, so it is focusable, announces
-  // as a link, and middle-click/open-in-new-tab work. On the web the browser
-  // follows the href and the click is logged alongside; inside the native app
-  // the in-app browser opens it instead.
-  const handleAdClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (isCapacitor()) {
-      e.preventDefault();
-      void trackClick().then(() => (safeLinkUrl ? openExternalUrl(safeLinkUrl) : false));
-      return;
-    }
+  // as a link, and middle-click/open-in-new-tab work. The browser follows the
+  // href and the click is logged alongside.
+  const handleAdClick = () => {
     void trackClick();
   };
 

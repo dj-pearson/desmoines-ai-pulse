@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { type Deps, type PendingNotice, run } from "./handler.ts";
 
 const notice = (id: string, user: string | null = "u1"): PendingNotice => ({

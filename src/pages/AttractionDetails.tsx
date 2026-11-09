@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { DetailBreadcrumb } from "@/components/seo/DetailBreadcrumb";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
@@ -43,14 +43,15 @@ import {
   seasonLabel,
 } from "@/lib/attractionAtAGlance";
 import { AttractionAtAGlance } from "@/components/AttractionAtAGlance";
+import { attractionMetaDescription, attractionPageTitle } from "@/lib/attractionMeta";
 import { isPrerender } from "@/lib/isPrerender";
 import { useNow } from "@/hooks/useNow";
-import { handleError } from "@/lib/errorHandler";
 import { formatMiles, nearby } from "@/lib/venuePages";
 import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { safeWebUrl } from "@/lib/reservations";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { useReviewAggregate } from "@/hooks/useReviewAggregate";
 
 // Ratings sit below the fold and fire their own requests on mount. React.lazy
 // defers the chunk; DeferredWidget defers the mount until the reader scrolls
@@ -103,39 +104,6 @@ const NEAR_MAX_MILES = 10;
 
 type AttractionCardRow = Pick<Attraction, "id" | "name" | "type" | "image_url" | "latitude" | "longitude">;
 
-interface ReviewAggregate {
-  average_rating: number;
-  total_ratings: number;
-}
-
-/**
- * The review average and count for one attraction, from
- * content_rating_aggregates (explore pass 2 WP3 item 2). Only these two
- * columns: RatingSystem further down fetches the reviews themselves, and the
- * hero needs nothing else. Null when nobody has reviewed it, or when the read
- * fails, in which case the hero shows no rating rather than a wrong one.
- */
-function useReviewAggregate(contentId: string | undefined) {
-  return useQuery({
-    queryKey: ["content-rating-aggregate", "attraction", contentId],
-    queryFn: async (): Promise<ReviewAggregate | null> => {
-      const { data, error } = await supabase
-        .from("content_rating_aggregates")
-        .select("average_rating, total_ratings")
-        .eq("content_type", "attraction")
-        .eq("content_id", contentId ?? "")
-        .maybeSingle();
-      if (error) {
-        handleError(error, { component: "AttractionDetails", action: "loadReviewAggregate" });
-        return null;
-      }
-      return data && data.total_ratings > 0 ? data : null;
-    },
-    enabled: Boolean(contentId) && !isPrerender(),
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
 export default function AttractionDetails() {
   const { slug } = useParams();
   const [imageError, setImageError] = useState(false);
@@ -166,7 +134,7 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
-  const { data: reviewAggregate } = useReviewAggregate(attraction?.id);
+  const { data: reviewAggregate } = useReviewAggregate("attraction", attraction?.id, "AttractionDetails");
   // Record into the unified recently-viewed feed (WEB-FEAT-007). Only
   // EventDetails used to, so the home rail could never resume an attraction.
   // The href is the param that just resolved this row, so it resolves again.
@@ -464,12 +432,10 @@ export default function AttractionDetails() {
       {/* No `location` prop: EnhancedAttractionSEO's TouristAttraction is the
           one place entity this page publishes (Explore plan WP3 item 4). */}
       <SEOHead
-        title={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
-        description={
-          attraction.description
-            ? attraction.description.slice(0, 160)
-            : `${attraction.name}, a ${typeLabel} in the ${BRAND.city} area: hours, directions and what's on nearby.`
-        }
+        // WEB-SEO-053: the city the address names, not Des Moines for every row,
+        // and a description that is more than the two-word column.
+        title={attractionPageTitle(attraction)}
+        description={attractionMetaDescription(attraction)}
         type="website"
         imageUrl={attraction.image_url || undefined}
         url={`/attractions/${attractionSlug}`}
@@ -481,25 +447,19 @@ export default function AttractionDetails() {
           `${attraction.type} ${BRAND.city}`,
         ].filter(Boolean) as string[]}
         modifiedTime={attraction.updated_at}
-        breadcrumbs={[
-          { name: "Home", url: "/" },
-          { name: "Attractions", url: "/attractions" },
-          { name: attraction.type, url: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-          { name: attraction.name, url: `/attractions/${attractionSlug}` },
-        ]}
       />
 
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-6 max-w-6xl">
-          {/* Breadcrumb Navigation */}
-          <Breadcrumbs
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Attractions", href: "/attractions" },
-              { label: attraction.type, href: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-              { label: attraction.name },
-            ]}
+          {/* WEB-SEO-054: nav and BreadcrumbList from one list. The old trail
+              had a {type} crumb at /attractions?type=..., which canonicalizes
+              to /attractions, so the schema named two items for one page. */}
+          <DetailBreadcrumb
             className="mb-4"
+            crumbs={[
+              { name: "Attractions", path: "/attractions" },
+              { name: attraction.name, path: `/attractions/${attractionSlug}` },
+            ]}
           />
 
           {/* Top Actions Bar: the page's one Share control. */}

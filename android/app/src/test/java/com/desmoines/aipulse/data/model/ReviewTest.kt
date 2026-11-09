@@ -47,6 +47,13 @@ class ReviewTest {
     }
 
     @Test
+    fun `formattedDate uses the Des Moines day for an evening review`() {
+        // 9pm CDT on Jul 3 arrives as 02:00 UTC on Jul 4.
+        val r = Review(id = "r1", createdAt = "2026-07-04T02:00:00+00:00")
+        assertEquals("Jul 3, 2026", r.formattedDate)
+    }
+
+    @Test
     fun `aggregate averageLabel formats to one decimal`() {
         assertEquals("4.5", RatingAggregate(averageRating = 4.5, totalRatings = 3).averageLabel)
         assertTrue(RatingAggregate(totalRatings = 1).hasRatings)

@@ -20,7 +20,7 @@ function makeQuery(result: { count: number | null; error: unknown }) {
     calls,
     then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
   };
-  for (const method of ['select', 'gte', 'lte', 'lt', 'neq', 'is', 'eq', 'order', 'limit']) {
+  for (const method of ['select', 'gte', 'lte', 'lt', 'or', 'neq', 'is', 'eq', 'order', 'limit']) {
     builder[method] = (...args: unknown[]) => {
       calls.push([method, args]);
       return builder;
@@ -64,6 +64,41 @@ function argsOf(method: string) {
   return queries[0].calls.filter(([m]) => m === method).map(([, args]) => args);
 }
 
+type Row = { id: string; date: string | null; end_date: string | null };
+
+function compare(cell: string | null, op: string, raw: string): boolean {
+  if (cell == null) return false;
+  const a = Date.parse(cell);
+  const b = Date.parse(raw);
+  if (op === 'gte') return a >= b;
+  if (op === 'lte') return a <= b;
+  throw new Error(`unsupported op ${op}`);
+}
+
+/** The ids the recorded date filters keep: gte/lte calls plus one flat or= group. */
+function countedIds(rows: Row[]): string[] {
+  const calls = queries[0].calls;
+  return rows
+    .filter((row) =>
+      calls.every(([method, args]) => {
+        if (method === 'gte' || method === 'lte') {
+          const [col, value] = args as ['date' | 'end_date', string];
+          return compare(row[col], method, value);
+        }
+        if (method === 'or') {
+          return String(args[0])
+            .split(',')
+            .some((t) => {
+              const [col, op, ...rest] = t.split('.');
+              return compare(row[col as 'date' | 'end_date'], op, rest.join('.'));
+            });
+        }
+        return true;
+      }),
+    )
+    .map((row) => row.id);
+}
+
 describe('fetchHomepageCounts', () => {
   it('makes one events request with the visibility predicate', async () => {
     nextResults = [ok(4)];
@@ -77,13 +112,44 @@ describe('fetchHomepageCounts', () => {
     expect(argsOf('is')).toEqual([['archived_at', null]]);
   });
 
-  it('counts the whole Central day before 15:00', async () => {
+  it('counts the whole Central day before 15:00, runs still on included', async () => {
     nextResults = [ok(4)];
     await expect(fetchHomepageCounts(MORNING)).resolves.toEqual({ count: 4, mode: 'today' });
 
     // Midnight to 23:59:59.999 CDT on 2026-09-25.
-    expect(argsOf('gte')).toEqual([['date', '2026-09-25T05:00:00.000Z']]);
+    expect(argsOf('gte')).toEqual([]);
+    expect(argsOf('or')).toEqual([['date.gte.2026-09-25T05:00:00.000Z,end_date.gte.2026-09-25T05:00:00.000Z']]);
     expect(argsOf('lte')).toEqual([['date', '2026-09-26T04:59:59.999Z']]);
+  });
+
+  /**
+   * WEB-FEAT-072. The line links /events/today, which lists a run that opened
+   * on an earlier day. On the State Fair's third morning the count left the
+   * fair out while the page it links to led with it. Evaluates the filters
+   * the count sends against fixture rows.
+   */
+  it('counts a multi-day run on its third morning, as /events/today lists it', async () => {
+    nextResults = [ok(0)];
+    await fetchHomepageCounts(MORNING);
+    const rows = [
+      { id: 'fair', date: '2026-09-23T15:00:00Z', end_date: '2026-09-27T03:00:00Z' },
+      { id: 'tonight', date: '2026-09-26T00:00:00Z', end_date: null },
+      { id: 'last-night', date: '2026-09-25T02:00:00Z', end_date: null },
+      { id: 'ended-yesterday', date: '2026-09-20T15:00:00Z', end_date: '2026-09-25T03:00:00Z' },
+      { id: 'tomorrow', date: '2026-09-26T15:00:00Z', end_date: null },
+    ];
+    expect(countedIds(rows)).toEqual(['fair', 'tonight']);
+  });
+
+  it('after 15:00 a run already on is not "still to start"', async () => {
+    nextResults = [ok(0)];
+    await fetchHomepageCounts(EVENING);
+    const rows = [
+      { id: 'fair', date: '2026-09-23T15:00:00Z', end_date: '2026-09-27T03:00:00Z' },
+      { id: 'late-show', date: '2026-09-26T02:00:00Z', end_date: null },
+      { id: 'matinee', date: '2026-09-25T19:00:00Z', end_date: null },
+    ];
+    expect(countedIds(rows)).toEqual(['late-show']);
   });
 
   it('counts only what has not started after 15:00', async () => {

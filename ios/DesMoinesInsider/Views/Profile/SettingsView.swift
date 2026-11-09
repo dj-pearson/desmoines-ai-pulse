@@ -1,6 +1,7 @@
 import SwiftUI
 import StoreKit
 import UserNotifications
+import UniformTypeIdentifiers
 
 /// App settings view with account management, subscription, and about sections.
 struct SettingsView: View {
@@ -33,6 +34,11 @@ struct SettingsView: View {
     @State private var restoreResultMessage: String?
     @State private var errorMessage: String?
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    // XPLAT-007 (iOS half): right of access.
+    @State private var isExportingData = false
+    @State private var pendingExport: PendingDataExport?
+    @State private var showDataExporter = false
+    @State private var dataExportMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -252,6 +258,24 @@ struct SettingsView: View {
                 }
             }
             .toastOverlay(message: $toast)
+            .fileExporter(
+                isPresented: $showDataExporter,
+                document: pendingExport?.document,
+                contentType: .json,
+                defaultFilename: pendingExport?.fileName
+            ) { result in
+                finishDataExport(result)
+            } onCancellation: {
+                pendingExport = nil
+            }
+            .alert("Export My Data", isPresented: .init(
+                get: { dataExportMessage != nil },
+                set: { if !$0 { dataExportMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(dataExportMessage ?? "")
+            }
             .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     Task { await deleteAccount() }
@@ -356,6 +380,28 @@ struct SettingsView: View {
         .task { await emailPreferences.load() }
 
         Section {
+            Button {
+                Task { await exportData() }
+            } label: {
+                Label {
+                    Text(isExportingData ? "Preparing Your Data..." : "Export My Data")
+                } icon: {
+                    if isExportingData {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                }
+            }
+            .disabled(isExportingData)
+            .accessibilityLabel("Export a copy of your data")
+        } header: {
+            Text("Your Data")
+        } footer: {
+            Text("Download a copy of the data we hold about your account as a JSON file.")
+        }
+
+        Section {
             Button(role: .destructive) {
                 showDeleteConfirmation = true
             } label: {
@@ -449,6 +495,48 @@ struct SettingsView: View {
         }
     }
 
+    /// XPLAT-007 (iOS half). Fetches the server-assembled export, then opens
+    /// the system file exporter; nothing is written until the user picks where.
+    private func exportData() async {
+        isExportingData = true
+        let outcome = await DataExportService.shared.requestExport()
+        isExportingData = false
+
+        switch outcome {
+        case let .ready(json, tablesWithData, tablesConsidered, unavailableCount):
+            pendingExport = PendingDataExport(
+                document: DataExportDocument(data: json),
+                fileName: DataExportService.fileName(),
+                tablesWithData: tablesWithData,
+                tablesConsidered: tablesConsidered,
+                unavailableCount: unavailableCount
+            )
+            showDataExporter = true
+        case .notAvailable:
+            dataExportMessage = DataExportService.notAvailableMessage
+        case .notSignedIn:
+            dataExportMessage = DataExportService.notSignedInMessage
+        case let .failed(status):
+            dataExportMessage = DataExportService.failedMessage(status: status)
+        }
+    }
+
+    private func finishDataExport(_ result: Result<URL, Error>) {
+        defer { pendingExport = nil }
+        guard let export = pendingExport else { return }
+        switch result {
+        case .success:
+            dataExportMessage = DataExportService.savedMessage(
+                fileName: export.fileName,
+                tablesWithData: export.tablesWithData,
+                tablesConsidered: export.tablesConsidered,
+                unavailableCount: export.unavailableCount
+            )
+        case .failure:
+            dataExportMessage = DataExportService.saveFailedMessage
+        }
+    }
+
     private func deleteAccount() async {
         // Re-authenticate first; a cancel just returns (IOS-DD-ACCOUNT-08).
         guard await AccountDeletionService.confirmIdentity() else { return }
@@ -477,6 +565,15 @@ struct SettingsView: View {
 
         isDeleting = false
     }
+}
+
+/// A decoded export waiting for the user to pick where it goes.
+private struct PendingDataExport {
+    let document: DataExportDocument
+    let fileName: String
+    let tablesWithData: Int?
+    let tablesConsidered: Int?
+    let unavailableCount: Int
 }
 
 #Preview {

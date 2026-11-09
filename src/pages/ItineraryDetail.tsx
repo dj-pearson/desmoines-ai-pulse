@@ -5,6 +5,7 @@ import { Helmet } from 'react-helmet-async';
 import { useItinerary, getDurationLabel, getThemeLabel } from '@/hooks/useItineraries';
 import type { ItineraryStop } from '@/hooks/useItineraries';
 import TouristTripSchema from '@/components/schema/TouristTripSchema';
+import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -162,12 +163,17 @@ export default function ItineraryDetail() {
 
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
-          {/* Back link (screen only) */}
-          <div className="print:hidden mb-6">
-            <Link to="/itineraries" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1">
-              <ArrowLeft className="h-4 w-4" /> All Itineraries
-            </Link>
-          </div>
+          {/* WEB-SEO-051. Was a bare "All Itineraries" back link with no
+              BreadcrumbList, the last sitemapped detail family without one.
+              Screen only, as the back link was; the JSON-LD is in <head> and
+              unaffected by print:hidden. */}
+          <DetailBreadcrumb
+            className="print:hidden mb-6"
+            crumbs={[
+              { name: 'Itineraries', path: '/itineraries' },
+              { name: itinerary.title, path: `/itineraries/${itinerary.slug}` },
+            ]}
+          />
 
           {/* Hero */}
           <div className="mb-8">

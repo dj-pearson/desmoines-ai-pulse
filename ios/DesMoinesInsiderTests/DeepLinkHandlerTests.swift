@@ -42,10 +42,49 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.consumeDestination(), .restaurant(id: "zombie-burger-drink-lab"))
     }
 
-    func testRestaurantLandingPageOpensTheTab() {
+    func testRestaurantLandingPageOpensTheFilteredTab() {
         let url = URL(string: "https://desmoinesinsider.com/restaurants/open-now")!
         XCTAssertTrue(handler.handle(url))
-        XCTAssertEqual(handler.consumeDestination(), .tab(.restaurants))
+        XCTAssertEqual(handler.consumeDestination(), .restaurantLanding(RestaurantLinkFilter(openNow: true)))
+    }
+
+    // MARK: - Restaurant landing pages (IOS-AUDIT-FEAT-043)
+
+    func testRestaurantLandingLinksCarryTheirFilter() {
+        XCTAssertEqual(dest("/restaurants/new"), .restaurantLanding(RestaurantLinkFilter(newOpenings: true)))
+        XCTAssertEqual(dest("/restaurants/dietary/vegan"), .restaurantLanding(RestaurantLinkFilter(diet: "vegan")))
+        XCTAssertEqual(dest("/restaurants/dietary/gluten-free"), .restaurantLanding(RestaurantLinkFilter(diet: "gluten-free")))
+        // The web's open-now diet filter and the legacy ?diet= index form.
+        XCTAssertEqual(dest("/restaurants/open-now?diet=Halal"),
+                       .restaurantLanding(RestaurantLinkFilter(openNow: true, diet: "halal")))
+        XCTAssertEqual(dest("/restaurants/dietary?diet=keto"), .restaurantLanding(RestaurantLinkFilter(diet: "keto")))
+        // IOS-AUDIT-FEAT-044: kosher was the one web diet with no Dining key
+        // and opened the plain tab.
+        XCTAssertEqual(dest("/restaurants/dietary/kosher"), .restaurantLanding(RestaurantLinkFilter(diet: "kosher")))
+        XCTAssertEqual(dest("/restaurants/open-now?diet=kosher"),
+                       .restaurantLanding(RestaurantLinkFilter(openNow: true, diet: "kosher")))
+    }
+
+    func testDietTheDiningFilterLacksOpensTheUnfilteredTab() {
+        // An unknown diet and the bare index have nothing to narrow by.
+        XCTAssertEqual(dest("/restaurants/dietary/paleo"), .tab(.restaurants))
+        XCTAssertEqual(dest("/restaurants/dietary"), .tab(.restaurants))
+        // An unknown open-now diet drops the diet, not the open-now filter.
+        XCTAssertEqual(dest("/restaurants/open-now?diet=paleo"), .restaurantLanding(RestaurantLinkFilter(openNow: true)))
+    }
+
+    func testLandingLinkPresetIsOnlyAnExactMatch() {
+        XCTAssertEqual(RestaurantLinkFilter(openNow: true).preset, .openNow)
+        XCTAssertEqual(RestaurantLinkFilter(newOpenings: true).preset, .newOpenings)
+        XCTAssertNil(RestaurantLinkFilter(openNow: true, diet: "vegan").preset)
+        XCTAssertNil(RestaurantLinkFilter(diet: "vegan").preset)
+    }
+
+    func testRestaurantLinkIsStagedUntilConsumed() {
+        let link = RestaurantLinkFilter(diet: "vegan")
+        handler.stageRestaurantLink(link)
+        XCTAssertEqual(handler.consumeRestaurantLink(), link)
+        XCTAssertNil(handler.consumeRestaurantLink())
     }
 
     func testMalformedRestaurantSlugOpensTheTab() {
@@ -138,6 +177,71 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.consumeDestination(), .article(id: "best-patios-2026"))
     }
 
+    // MARK: - /stay/near/<venue> is a web page, not a hotel (IOS-AUDIT-004)
+
+    func testStayNearVenueOpensTheWebPage() {
+        let url = URL(string: "https://desmoinesinsider.com/stay/near/wells-fargo-arena")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .web(url))
+    }
+
+    func testStayNearIsNeverReadAsAHotelSlug() {
+        let url = URL(string: "https://desmoinesinsider.com/stay/near/principal-park")!
+        XCTAssertNotEqual(handler.destination(for: url), .hotel(id: "near"))
+    }
+
+    func testBareOrMalformedStayNearOpensTheStayList() {
+        for path in ["/stay/near", "/stay/near/Not%20A%20Slug", "/stay/near/a/b",
+                     "/stay/near/550e8400-e29b-41d4-a716-446655440000"] {
+            let url = URL(string: "https://desmoinesinsider.com\(path)")!
+            XCTAssertEqual(handler.destination(for: url), .discover(.stay), path)
+        }
+    }
+
+    func testStayHotelSlugStillOpensTheHotel() {
+        let path = ["stay", "surety-hotel"]
+        let url = URL(string: "https://desmoinesinsider.com/stay/surety-hotel")!
+        XCTAssertNil(DeepLinkHandler.stayNearDestination(path, url: url))
+    }
+
+    // MARK: - Hub detail pages open on the web (IOS-AUDIT-006)
+
+    func testHubDetailPagesOpenTheWebPage() {
+        for path in ["/music/venues/wooly-s", "/sports/iowa-cubs", "/outdoors/high-trestle-trail"] {
+            let url = URL(string: "https://desmoinesinsider.com\(path)")!
+            XCTAssertEqual(handler.destination(for: url), .web(url), path)
+        }
+    }
+
+    func testHubDetailPagesAreNeverTheWholeHub() {
+        XCTAssertNotEqual(dest("/sports/iowa-wild"), .discover(.sports))
+        XCTAssertNotEqual(dest("/outdoors/grays-lake-trail"), .discover(.outdoors))
+        XCTAssertNotEqual(dest("/music/venues/val-air-ballroom"), .discover(.music))
+    }
+
+    func testPathsWithNoWebDetailPageStillOpenTheHub() {
+        // No web route exists for these, so the hub beats a 404.
+        XCTAssertEqual(dest("/music/venues"), .discover(.music))
+        XCTAssertEqual(dest("/music/wooly-s"), .discover(.music))
+        XCTAssertEqual(dest("/sports/iowa-cubs/schedule"), .discover(.sports))
+        XCTAssertEqual(dest("/sports/Not%20A%20Slug"), .discover(.sports))
+        XCTAssertEqual(dest("/outdoors/550e8400-e29b-41d4-a716-446655440000"), .discover(.outdoors))
+        XCTAssertEqual(dest("/deals/anything"), .discover(.deals))
+    }
+
+    func testBareHubLinksStillOpenTheHub() {
+        XCTAssertEqual(dest("/music"), .discover(.music))
+        XCTAssertEqual(dest("/sports"), .discover(.sports))
+        XCTAssertEqual(dest("/outdoors"), .discover(.outdoors))
+    }
+
+    func testAGuideLinkingATrailOpensTheTrailPageNotTheHub() {
+        // ArticleDetailView.openLink: nil presentation means the in-app
+        // browser on the site URL; it used to be the Outdoors hub.
+        let destination = dest("/outdoors/neal-smith-trail")
+        XCTAssertNil(ArticleDetailView.nativePresentation(for: destination))
+    }
+
     func testBadArticleSegmentFallsBackToArticlesHub() {
         XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/articles/Not%20A%20Slug")!))
         XCTAssertEqual(handler.consumeDestination(), .discover(.articles))
@@ -226,9 +330,254 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/free"), .search(query: "free events"))
         XCTAssertEqual(dest("/events/west-des-moines"), .search(query: "events in west des moines"))
         XCTAssertEqual(dest("/events/this-weekend"), .discover(.weekend))
-        XCTAssertEqual(dest("/events/near-me"), .tab(.home))
-        XCTAssertEqual(dest("/events/june-2026"), .tab(.home))
         XCTAssertEqual(dest("/events/Bad%20Slug"), .tab(.home))
+    }
+
+    // MARK: - /events/kids (IOS-AUDIT-005)
+
+    func testKidsLinkOpensEventsSearchWithTheKidsFilter() {
+        var filters = SearchFilters(tabHint: .events)
+        filters.kidsOnly = true
+        XCTAssertEqual(dest("/events/kids"), .eventSearch(query: "", filters: filters))
+        // It used to search the text "kids events", which FTS reads as the
+        // keyword "kids" and misses a storytime with no "kids" in it.
+        XCTAssertNotEqual(dest("/events/kids"), .search(query: "kids events"))
+    }
+
+    func testKidsLinkIgnoresWebQueryKeys() {
+        guard case .eventSearch(let query, let filters) = dest("/events/kids?utm_source=newsletter") else {
+            return XCTFail("expected eventSearch")
+        }
+        XCTAssertEqual(query, "")
+        XCTAssertTrue(filters.kidsOnly)
+        XCTAssertEqual(filters.chips, [.kids])
+    }
+
+    // MARK: - Landing pages that used to open Home (IOS-AUDIT-002)
+
+    private func site(_ path: String) -> URL {
+        URL(string: "https://desmoinesinsider.com\(path)")!
+    }
+
+    func testNearMeLinkOpensTheMap() {
+        XCTAssertEqual(dest("/events/near-me"), .tab(.map))
+        // The web's own state (origin, radius) has no Map equivalent; the
+        // link still opens the Map rather than Home.
+        XCTAssertEqual(dest("/events/near-me?from=ankeny&r=10"), .tab(.map))
+    }
+
+    func testDateNightLinkOpensTheWebPage() {
+        XCTAssertEqual(dest("/events/date-night"), .web(site("/events/date-night")))
+    }
+
+    // MARK: - Month archive and day ranges (IOS-AUDIT-003)
+
+    private func monthSearch(_ slug: String) -> DeepLinkHandler.Destination {
+        var filters = SearchFilters(tabHint: .events)
+        filters.dayRange = EventDayRange(monthSlug: slug)
+        return .eventSearch(query: "", filters: filters)
+    }
+
+    private func utc(_ iso: String) -> Date {
+        ISO8601DateFormatter().date(from: iso)!
+    }
+
+    func testMonthArchiveLinkSearchesThatMonthUntilItIsOver() {
+        let url = site("/events/june-2026")
+        let before = utc("2026-05-15T12:00:00Z")
+        let lastMinute = utc("2026-07-01T04:59:00Z") // 11:59pm June 30, Central
+        let over = utc("2026-07-01T05:00:00Z")       // midnight July 1, Central
+        XCTAssertEqual(DeepLinkHandler.eventDestination("june-2026", url: url, now: before), monthSearch("june-2026"))
+        XCTAssertEqual(DeepLinkHandler.eventDestination("june-2026", url: url, now: lastMinute), monthSearch("june-2026"))
+        // Search hides events that are over, so a past month opens the archive.
+        XCTAssertEqual(DeepLinkHandler.eventDestination("june-2026", url: url, now: over), .web(url))
+    }
+
+    func testPastMonthLinkStillOpensTheWebPage() {
+        // June 2026 is over on any clock this test runs on.
+        XCTAssertEqual(dest("/events/june-2026"), .web(site("/events/june-2026")))
+    }
+
+    func testDayRangeLinkKeepsItsDates() {
+        var june = SearchFilters(tabHint: .events)
+        june.dayRange = EventDayRange(from: "2026-06-01", to: "2026-06-30")
+        XCTAssertEqual(dest("/events?from=2026-06-01&to=2026-06-30"), .eventSearch(query: "", filters: june))
+
+        var oneDay = SearchFilters(freeOnly: true, tabHint: .events)
+        oneDay.dayRange = EventDayRange(from: "2026-06-05", to: nil)
+        XCTAssertEqual(dest("/events?from=2026-06-05&price=free"), .eventSearch(query: "", filters: oneDay))
+    }
+
+    func testDayRangeLinkFollowsTheWebsPrecedence() {
+        // A known preset wins over from/to.
+        var today = SearchFilters(tabHint: .events)
+        today.datePreset = .today
+        XCTAssertEqual(dest("/events?preset=today&from=2026-06-01&to=2026-06-30"), .eventSearch(query: "", filters: today))
+        // An unparseable from is no date filter, and with nothing else that is Home.
+        XCTAssertEqual(dest("/events?from=someday&to=2026-06-30"), .tab(.home))
+    }
+
+    func testMonthLikeSlugsThatAreNotMonthPagesAreUnchanged() {
+        // Not a month name, or not a bare <month>-<yyyy>: an event slug.
+        XCTAssertEqual(dest("/events/june-bug-2026"), .event(id: "june-bug-2026"))
+        XCTAssertEqual(dest("/events/june-2026-concert"), .event(id: "june-2026-concert"))
+        // Capitalised is malformed for a slug and not a month page either.
+        XCTAssertEqual(dest("/events/June-2026"), .tab(.home))
+    }
+
+    func testBareSeriesIsTheOnlyLandingSegmentThatOpensHome() {
+        for segment in EventSlug.landingSegments.sorted() {
+            let destination = dest("/events/\(segment)")
+            if segment == "series" {
+                XCTAssertEqual(destination, .tab(.home), segment)
+            } else {
+                XCTAssertNotEqual(destination, .tab(.home), segment)
+            }
+        }
+    }
+
+    func testLandingLinksAreRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(site("/events/near-me")))
+        XCTAssertEqual(handler.consumeDestination(), .tab(.map))
+        XCTAssertTrue(handler.handle(site("/events/may-2026")))
+        XCTAssertEqual(handler.consumeDestination(), .web(site("/events/may-2026")))
+    }
+
+    // MARK: - Event series (IOS-AUDIT-FEAT-045)
+
+    func testKnownEventSeriesLinkOpensTheNativeSeries() {
+        // Was .event(id: "series"), a detail screen that found nothing, then
+        // the web page (IOS-AUDIT-FEAT-045); now the native screen (046).
+        XCTAssertEqual(dest("/events/series/panda-fest"), .eventSeries(slug: "panda-fest"))
+        let tracked = URL(string: "https://www.desmoinesinsider.com/events/series/cloris-awards?utm_source=share")!
+        XCTAssertEqual(handler.destination(for: tracked), .eventSeries(slug: "cloris-awards"))
+    }
+
+    func testEverySeriesTheAppKnowsOpensNatively() {
+        for def in EventSeries.all {
+            XCTAssertEqual(dest(EventSeries.path(def)), .eventSeries(slug: def.slug), def.slug)
+        }
+    }
+
+    func testUnknownWellFormedSeriesLinkStillOpensOnTheWeb() {
+        // A series the web added after this build shipped.
+        let url = URL(string: "https://desmoinesinsider.com/events/series/some-new-festival")!
+        XCTAssertEqual(handler.destination(for: url), .web(url))
+    }
+
+    func testMalformedOrBareEventSeriesLinkOpensHome() {
+        XCTAssertEqual(dest("/events/series"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/Panda-Fest"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/panda%20fest"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/panda-fest/2026"), .tab(.home))
+        XCTAssertEqual(dest("/events/series/" + String(repeating: "a", count: 121)), .tab(.home))
+    }
+
+    func testAnEventWhoseSlugStartsWithSeriesStillOpens() {
+        XCTAssertEqual(dest("/events/series-finale-watch-party-2026-11-20"),
+                       .event(id: "series-finale-watch-party-2026-11-20"))
+    }
+
+    func testEventSeriesLinkIsRoutedNotJustParsed() {
+        let url = URL(string: "https://desmoinesinsider.com/events/series/jazz-in-july")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .eventSeries(slug: "jazz-in-july"))
+    }
+
+    // MARK: - Neighborhood guides (IOS-AUDIT-FEAT-038)
+
+    func testNeighborhoodLinkOpensThatGuide() {
+        XCTAssertEqual(dest("/neighborhoods/ankeny"), .neighborhood(slug: "ankeny"))
+        XCTAssertEqual(dest("/neighborhoods/west-des-moines"), .neighborhood(slug: "west-des-moines"))
+        // The web 301s these two to /things-to-do/..., but the app claims
+        // /neighborhoods/* and has a native guide for both.
+        XCTAssertEqual(dest("/neighborhoods/east-village"), .neighborhood(slug: "east-village"))
+        XCTAssertEqual(dest("/neighborhoods/downtown"), .neighborhood(slug: "downtown"))
+    }
+
+    func testEveryWebNeighborhoodSlugHasANativeGuide() {
+        // src/lib/neighborhoods.ts NEIGHBORHOODS, the slugs the web links to.
+        let webSlugs = ["east-village", "west-des-moines", "ankeny", "urbandale",
+                        "johnston", "clive", "waukee", "altoona"]
+        for slug in webSlugs {
+            XCTAssertEqual(dest("/neighborhoods/\(slug)"), .neighborhood(slug: slug), slug)
+        }
+    }
+
+    func testUnknownOrMalformedNeighborhoodFallsBackToTheHub() {
+        XCTAssertEqual(dest("/neighborhoods/beaverdale"), .discover(.neighborhoods))
+        XCTAssertEqual(dest("/neighborhoods/Ankeny"), .discover(.neighborhoods))
+        XCTAssertEqual(dest("/neighborhoods/ankeny%20"), .discover(.neighborhoods))
+        XCTAssertEqual(dest("/neighborhoods"), .discover(.neighborhoods))
+    }
+
+    func testNeighborhoodLinkIsRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/neighborhoods/clive")!))
+        XCTAssertEqual(handler.consumeDestination(), .neighborhood(slug: "clive"))
+    }
+
+    // MARK: - Best Of categories (IOS-AUDIT-FEAT-040)
+
+    func testBestOfCategoryLinkOpensThatCategory() {
+        // BestOfCategoryView shares /best-of/<category.slug>; it used to open the hub.
+        XCTAssertEqual(dest("/best-of/best-pizza"), .bestOfCategory(slug: "best-pizza"))
+        XCTAssertEqual(dest("/best-of/brunch"), .bestOfCategory(slug: "brunch"))
+        XCTAssertEqual(dest("/best-of/best-pizza?utm_source=share"), .bestOfCategory(slug: "best-pizza"))
+    }
+
+    func testMalformedBestOfLinkFallsBackToTheHub() {
+        XCTAssertEqual(dest("/best-of"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/Best-Pizza"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/best%20pizza"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/best-pizza-"), .discover(.bestOf))
+        XCTAssertEqual(dest("/best-of/" + String(repeating: "a", count: 121)), .discover(.bestOf))
+        // The web routes by slug, never by id.
+        XCTAssertEqual(dest("/best-of/550e8400-e29b-41d4-a716-446655440000"), .discover(.bestOf))
+    }
+
+    func testBestOfCategoryLinkIsRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(URL(string: "https://www.desmoinesinsider.com/best-of/best-coffee")!))
+        XCTAssertEqual(handler.consumeDestination(), .bestOfCategory(slug: "best-coffee"))
+    }
+
+    // MARK: - /map links (IOS-AUDIT-007)
+
+    func testBareMapLinkOpensTheMapTabWithTheDefaultKinds() {
+        XCTAssertTrue(handler.handle(site("/map")))
+        XCTAssertEqual(handler.consumeDestination(), .map(MapLinkLayers()))
+        // The web's other map state (when, sel, bbox, sort) has no Map tab
+        // equivalent and does not change where the link goes.
+        XCTAssertEqual(dest("/map?when=tonight&sort=near&bbox=-93.7,41.5,-93.5,41.7"), .map(MapLinkLayers()))
+    }
+
+    func testMapLinkLayersFollowTheWebParser() {
+        // Attraction pages and the Attractions hub link /map?layers=attraction.
+        XCTAssertEqual(dest("/map?layers=attraction"),
+                       .map(MapLinkLayers(events: false, restaurants: false, attractions: true)))
+        XCTAssertEqual(dest("/map?layers=event,%20restaurant"),
+                       .map(MapLinkLayers(events: true, restaurants: true, attractions: false)))
+        XCTAssertEqual(dest("/map?layers=none"),
+                       .map(MapLinkLayers(events: false, restaurants: false, attractions: false)))
+        // parseLayers: empty or only unknown keys is the default set.
+        XCTAssertEqual(dest("/map?layers="), .map(MapLinkLayers()))
+        XCTAssertEqual(dest("/map?layers=hotel,bogus"), .map(MapLinkLayers()))
+        XCTAssertEqual(dest("/map?layers=bogus,event"),
+                       .map(MapLinkLayers(events: true, restaurants: false, attractions: false)))
+    }
+
+    func testMapLinkNamingAWebOnlyLayerOpensTheWebMap() {
+        // HUB_PLAYGROUND_MAP_HREF and the Outdoors hub's trail map: the
+        // native map has no playground or trail pins.
+        for path in ["/map?layers=playground", "/map?layers=trail,attraction", "/map?layers=event,playground"] {
+            XCTAssertEqual(dest(path), .web(site(path)), path)
+        }
+    }
+
+    func testMapLinkIsStagedUntilConsumed() {
+        let link = MapLinkLayers(events: false, restaurants: true, attractions: false)
+        handler.stageMapLink(link)
+        XCTAssertEqual(handler.consumeMapLink(), link)
+        XCTAssertNil(handler.consumeMapLink())
     }
 
     // MARK: - Nothing claimed strands the user (IOS-DD-PLATFORM-02)
@@ -237,11 +586,12 @@ final class DeepLinkHandlerTests: XCTestCase {
         let paths = [
             "/search", "/search?q=brunch", "/search/advanced",
             "/attractions", "/attractions/science-center-of-iowa",
-            "/stay", "/stay/hotel-x", "/weekend", "/deals", "/best-of", "/best-of/brunch",
+            "/stay", "/stay/hotel-x", "/stay/near/wells-fargo-arena", "/weekend", "/deals", "/best-of", "/best-of/brunch",
             "/music", "/sports", "/outdoors",
             "/neighborhoods", "/neighborhoods/east-village",
             "/events", "/events/today", "/restaurants", "/restaurants/open-now",
             "/restaurants/dietary/vegan", "/trip-planner", "/articles", "/articles/foo",
+            "/map", "/map?layers=playground",
         ]
         for path in paths {
             XCTAssertNotNil(dest(path), path)
@@ -252,6 +602,81 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/search?q=brunch"), .search(query: "brunch"))
         XCTAssertEqual(dest("/search?q=%20%20"), .tab(.search))
         XCTAssertEqual(dest("/search/advanced"), .tab(.search))
+    }
+
+    // MARK: - Filtered /events links (IOS-AUDIT-FEAT-041)
+
+    func testFilteredEventsLinkSearchesWithThoseFilters() {
+        // The web hub's own "free this weekend" tile (hubLinks.ts).
+        var weekendFree = SearchFilters(freeOnly: true, tabHint: .events)
+        weekendFree.datePreset = .thisWeekend
+        XCTAssertEqual(dest("/events?preset=this-weekend&price=free"), .eventSearch(query: "", filters: weekendFree))
+
+        // A category tile, spelled the way the web writes it.
+        var festivals = SearchFilters(tabHint: .events)
+        festivals.category = .festival
+        XCTAssertEqual(dest("/events?category=Festival"), .eventSearch(query: "", filters: festivals))
+    }
+
+    func testWeekPresetLinksKeepTheirDates() {
+        // The hub's This week / Next week / Next 7 days chips (IOS-AUDIT-FEAT-042).
+        let cases: [(String, DateFilterPreset)] = [
+            ("this-week", .thisWeek), ("next-week", .nextWeek),
+            ("next-7-days", .next7Days), ("next_7_days", .next7Days),
+        ]
+        for (slug, preset) in cases {
+            var expected = SearchFilters(tabHint: .events)
+            expected.datePreset = preset
+            XCTAssertEqual(dest("/events?preset=\(slug)"), .eventSearch(query: "", filters: expected), slug)
+        }
+    }
+
+    func testSavedSearchAlertEmailLinkKeepsWordsAndArea() {
+        // savedSearchMatch.ts deepLink(): q, location, preset, sort, then utm keys.
+        let link = "/events?q=jazz&location=west-des-moines&preset=today&sort=date_asc"
+            + "&utm_source=saved-search&utm_medium=email"
+        var expected = SearchFilters(areas: [.westDesMoines], tabHint: .events)
+        expected.datePreset = .today
+        XCTAssertEqual(dest(link), .eventSearch(query: "jazz", filters: expected))
+    }
+
+    func testEventsLinkReadsTheOldSearchAliasAndAreaKey() {
+        // ?search= is what the WebSite SearchAction advertised (WEB-SEO-029);
+        // q wins when both are present, as on the web.
+        XCTAssertEqual(dest("/events?search=trivia"), .eventSearch(query: "trivia", filters: SearchFilters(tabHint: .events)))
+        XCTAssertEqual(dest("/events?q=jazz&search=trivia"), .eventSearch(query: "jazz", filters: SearchFilters(tabHint: .events)))
+        XCTAssertEqual(
+            dest("/events?area=ankeny"),
+            .eventSearch(query: "", filters: SearchFilters(areas: [.ankeny], tabHint: .events))
+        )
+    }
+
+    func testTonightWordsKeepTheTonightWindowOverTheSavedToday() {
+        var expected = SearchFilters(tabHint: .events)
+        expected.datePreset = .tonight
+        XCTAssertEqual(dest("/events?q=live%20music%20tonight&preset=today"), .eventSearch(query: "live music tonight", filters: expected))
+    }
+
+    func testEventsLinkWithNoUsableFilterIsStillHome() {
+        XCTAssertEqual(dest("/events"), .tab(.home))
+        XCTAssertEqual(dest("/events?utm_source=share&sort=date_asc&view=map&page=2"), .tab(.home))
+        // The controls' "no filter" values, an unknown category and preset,
+        // an unknown area, a non-free price and a blank q.
+        XCTAssertEqual(dest("/events?category=all&location=any-location&price=any-price"), .tab(.home))
+        XCTAssertEqual(dest("/events?category=Underwater%20Basket&preset=someday&location=mars&price=under-25&q=%20"), .tab(.home))
+    }
+
+    func testEventsLinkQueryIsCapped() {
+        let long = String(repeating: "a", count: 300)
+        XCTAssertEqual(
+            dest("/events?q=\(long)"),
+            .eventSearch(query: String(repeating: "a", count: 120), filters: SearchFilters(tabHint: .events))
+        )
+    }
+
+    func testFilteredEventsLinkIsRoutedNotJustParsed() {
+        XCTAssertTrue(handler.handle(URL(string: "https://www.desmoinesinsider.com/events?price=free")!))
+        XCTAssertEqual(handler.consumeDestination(), .eventSearch(query: "", filters: SearchFilters(freeOnly: true, tabHint: .events)))
     }
 
     func testSearchQueryIsCapped() {

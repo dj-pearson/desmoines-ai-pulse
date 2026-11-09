@@ -4,9 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { createLogger } from "@/lib/logger";
 import { useUserPreferences } from "./useUserPreferences";
+import { useProfile } from "./useProfile";
+import { readOptIn } from "@/lib/communicationPreferences";
 import { FOR_YOU_RAIL_KEY, useHomeShownIds } from "./useHomeShownIds";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { upcomingFloorUtc } from "@/lib/timezone";
+import { upcomingOrRunningFilter } from "./useEvents";
 import { knownPicks, rerankByPicks, withoutIds, type Reranked } from "@/lib/forYouRerank";
 
 const log = createLogger("useForYouRail");
@@ -15,7 +19,8 @@ const log = createLogger("useForYouRail");
  * Rows for the home For You rail (IOS-DISCOVER-2026-002, home pass-2 WP3).
  *
  * TWO SOURCES.
- *   - Signed in with 5+ recent swipes: get_personalized_recommendations_v2,
+ *   - Signed in, opted in to "Personalized suggestions", with 5+ recent
+ *     swipes: get_personalized_recommendations_v2,
  *     one request. v2 (migration 20261102000002) filters the three unpublish
  *     switches and returns is_sponsored / sponsored_until for the badge. Until
  *     it is applied, v1 plus one follow-up events read that drops hidden,
@@ -29,6 +34,15 @@ const log = createLogger("useForYouRail");
  *     paid and hidden rows under "Trending now". This read orders by the
  *     measured events.trending_score (written by calculate_trending_scores),
  *     then by date, with the standard visibility predicate.
+ *
+ * THE OPT-IN IS READ HERE. The settings switch ("Personalized suggestions",
+ * profiles.communication_preferences.event_recommendations, logged to
+ * consent_records as personalization_ai) controlled nothing: a user who turned
+ * it off still had their swipes and saves ranked into this rail. Only an
+ * explicit true counts, the same reading the switch renders (readOptIn), and
+ * without it the swipe history is not even probed. The profile is the one the
+ * header already loads, so this adds no request. A failed profile read is not
+ * consent. The taste chips still re-rank: the visitor picks those on the rail.
  *
  * Tonight's events are dropped after the taste re-rank; the Tonight rail
  * above already shows them (item 6).
@@ -75,10 +89,15 @@ export interface UseForYouRailResult {
 /** Columns for the anonymous read: the list projection plus the ranking signal. */
 const FOR_YOU_COLUMNS = `${EVENT_LIST_COLUMNS}, trending_score`;
 
-async function fetchTrendingRows(limit: number): Promise<ForYouRecommendation[]> {
+/** Exported for the unit tests. */
+export async function fetchTrendingRows(limit: number): Promise<ForYouRecommendation[]> {
   const { data, error } = await applyEventVisibility(
-    supabase.from("events").select(FOR_YOU_COLUMNS).gte("date", new Date().toISOString()),
+    supabase.from("events").select(FOR_YOU_COLUMNS),
   )
+    // Upcoming or still running, the window every events list uses
+    // (WEB-FEAT-062). `date >= now` dropped a multi-day run on its second
+    // morning, which is when it trends hardest.
+    .or(upcomingOrRunningFilter(upcomingFloorUtc()))
     .order("trending_score", { ascending: false, nullsFirst: false })
     .order("date", { ascending: true })
     .limit(limit);
@@ -198,16 +217,21 @@ export function useForYouRail(limit = 12): UseForYouRailResult {
   // Joined so the memo below keys on the picks' content, not the array identity.
   const picksKey = knownPicks(tags).join(",");
   const userId = user?.id ?? null;
+  const { profile, isLoading: profileLoading } = useProfile();
+  const optedIn = userId !== null && readOptIn(profile?.communication_preferences, "event_recommendations");
+  // Wait for the profile before choosing, so an opted-in user does not get a
+  // trending read that is thrown away a moment later.
+  const consentKnown = userId === null || !profileLoading;
 
   // Cold-start probe, cached on its own so a rail refetch does not repeat it.
   const swipes = useQuery({
     queryKey: [...FOR_YOU_SWIPES_KEY, userId],
     queryFn: () => hasRecentSwipes(userId as string),
-    enabled: userId !== null,
+    enabled: optedIn,
     staleTime: 10 * 60 * 1000,
   });
-  const probeDone = userId === null || swipes.isSuccess || swipes.isError;
-  const source: ForYouSource = userId !== null && swipes.data === true ? "for-you" : "trending";
+  const probeDone = consentKnown && (!optedIn || swipes.isSuccess || swipes.isError);
+  const source: ForYouSource = optedIn && swipes.data === true ? "for-you" : "trending";
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [...FOR_YOU_RAIL_KEY, userId, limit, source],

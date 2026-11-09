@@ -21,6 +21,13 @@
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
+import { priceFromOffers } from "../jsonLdOffers.ts";
+// WEB-BE-059. Vibrant carried a private copy of this parser that defaulted a
+// date-only startDate to 7pm. The Catch Des Moines one returns the DATE ONLY
+// instead, so parseEventDateTime stamps NO_TIME_MARKER. Ticketmaster stamps
+// the Central offset, so the wall-clock time in the string is already the
+// Central local time AdapterEvent expects; both parsers read it the same way.
+import { parseDateTime } from "./catchdesmoinesParse.ts";
 
 const SHOWS_URL = "https://www.vibrantmusichall.com/shows";
 const VENUE_NAME = "Vibrant Music Hall";
@@ -107,27 +114,32 @@ export const vibrantmusichallAdapter: DomainAdapter = {
       };
     }
 
-    const events = parseLdJsonEvents(html);
-    const items: AdapterEvent[] = [];
-    const seen = new Set<string>();
-
-    for (const ev of events) {
-      const item = toAdapterEvent(ev);
-      if (!item) continue;
-      // Dedupe on the per-event URL (or title+date when a URL is absent) so a
-      // block repeated across markup variants isn't ingested twice.
-      const key = (item.source_url || `${item.title}|${item.date}`).toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      items.push(item);
-    }
-
+    const { items, blocks } = parseShowsHtml(html);
     console.log(
-      `✅ [vibrantmusichall] ${items.length} event(s) parsed from ${events.length} ld+json Event block(s)`,
+      `✅ [vibrantmusichall] ${items.length} event(s) parsed from ${blocks} ld+json Event block(s)`,
     );
     return { success: true, items, adapter: "vibrantmusichall" };
   },
 };
+
+/** The /shows page as AdapterEvents, plus how many Event blocks it held. */
+export function parseShowsHtml(html: string): { items: AdapterEvent[]; blocks: number } {
+  const events = parseLdJsonEvents(html);
+  const items: AdapterEvent[] = [];
+  const seen = new Set<string>();
+
+  for (const ev of events) {
+    const item = toAdapterEvent(ev);
+    if (!item) continue;
+    // Dedupe on the per-event URL (or title+date when a URL is absent) so a
+    // block repeated across markup variants isn't ingested twice.
+    const key = (item.source_url || `${item.title}|${item.date}`).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
+  }
+  return { items, blocks: events.length };
+}
 
 /**
  * Pull every schema.org Event (incl. MusicEvent and other *Event subtypes)
@@ -204,7 +216,7 @@ function toAdapterEvent(ev: SchemaOrgEvent): AdapterEvent | null {
     location,
     venue,
     category: "Music",
-    price: extractPrice(ev.offers),
+    price: priceFromOffers(ev.offers) ?? "See website",
     source_url: url,
     image_url: image,
   };
@@ -232,33 +244,4 @@ function extractImage(image: ImageField | undefined): string | null {
   }
   const u = image.url ?? image.contentUrl;
   return typeof u === "string" && u ? u : null;
-}
-
-function extractPrice(offers: SchemaOrgOffer | SchemaOrgOffer[] | undefined): string {
-  const list = Array.isArray(offers) ? offers : offers ? [offers] : [];
-  for (const offer of list) {
-    const raw = offer.lowPrice ?? offer.price;
-    if (raw === undefined || raw === null || raw === "") continue;
-    const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-    if (Number.isFinite(num) && num > 0) return `From $${num}`;
-  }
-  return "See website";
-}
-
-/**
- * schema.org dates arrive as "YYYY-MM-DD" (all-day) or
- * "YYYY-MM-DDTHH:MM:SS[Z|±HH:MM]". Vibrant is a Central-time venue and Ticketmaster
- * stamps the offset for that zone, so the literal wall-clock time in the string
- * IS the Central local time the AdapterEvent contract expects
- * ("YYYY-MM-DD HH:MM:SS" in Central Time). Extract it directly, defaulting to a
- * 19:00 show time when only a date is present.
- */
-function parseDateTime(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2})(?::(\d{2}))?)?/);
-  if (!m) return null;
-  const date = m[1];
-  const hhmm = m[2] ?? "19:00";
-  const ss = m[3] ?? "00";
-  return `${date} ${hhmm}:${ss}`;
 }

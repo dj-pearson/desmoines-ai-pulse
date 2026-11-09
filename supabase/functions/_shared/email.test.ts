@@ -4,7 +4,7 @@
  *
  *   deno test supabase/functions/_shared/email.test.ts
  */
-import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   buildMessageHeaders,
   buildSesPayload,
@@ -12,7 +12,14 @@ import {
   sendEmail,
   type SendEmailInput,
 } from "./email.ts";
-import { buildOneClickUnsubscribeUrl, listUnsubscribeHeaders, renderEmail } from "./emailLayout.ts";
+import {
+  buildOneClickAlertsUrl,
+  buildOneClickReminderUrl,
+  buildOneClickUnsubscribeUrl,
+  buildUnsubscribeUrl,
+  listUnsubscribeHeaders,
+  renderEmail,
+} from "./emailLayout.ts";
 
 const SES_ENV: Record<string, string> = {
   AWS_SES_REGION: "us-east-2",
@@ -200,4 +207,43 @@ Deno.test("emailLayout: the one-click header points at email-unsubscribe, the fo
   assertEquals(listUnsubscribeHeaders(r), { "List-Unsubscribe": "<mailto:unsubscribe@desmoinesinsider.com?subject=unsubscribe>" });
   const t = renderEmail({ bodyHtml: "<p>x</p>", bodyText: "x", recipient: { email: "a@b.c" }, category: "transactional" });
   assertEquals(listUnsubscribeHeaders(t), {});
+});
+
+Deno.test("emailLayout: a reminder email's opt-out stops the reminder, not the newsletter (WEB-FEAT-059)", () => {
+  const id = "3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b";
+  const recipient = { email: "a@b.c", reminderToken: id, unsubscribeToken: "ab12" };
+  assertEquals(
+    buildOneClickReminderUrl(id, "https://x.supabase.co/"),
+    `https://x.supabase.co/functions/v1/email-unsubscribe?reminder=${id}`,
+  );
+  assertEquals(buildOneClickReminderUrl(null, "https://x.supabase.co"), null);
+  // The reminder id wins over a newsletter token.
+  assert(buildUnsubscribeUrl(recipient).endsWith(`/unsubscribe?reminder=${id}`));
+  const r = renderEmail({ bodyHtml: "<p>x</p>", bodyText: "x", recipient });
+  assert(r.html.includes(`/unsubscribe?reminder=${id}`), "footer links the reminder opt-out");
+  assert(!r.html.includes("token=ab12"), "footer does not carry the newsletter token");
+  assert(r.html.includes("stop reminders for this event"));
+  assert(r.text.includes("Stop reminders for this event (one click): "));
+  assert(r.text.includes("/my-events?tab=reminders"));
+  assert(!(r.listUnsubscribe ?? "").includes("token=ab12"), "inbox button does not unsubscribe the newsletter");
+});
+
+Deno.test("emailLayout: a saved-search alert's opt-out stops alerts, not the newsletter (WEB-FEAT-073)", () => {
+  const id = "7a1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e";
+  const recipient = { email: "a@b.c", alertsToken: id, unsubscribeToken: "ab12" };
+  assertEquals(
+    buildOneClickAlertsUrl(id, "https://x.supabase.co/"),
+    `https://x.supabase.co/functions/v1/email-unsubscribe?alerts=${id}`,
+  );
+  assertEquals(buildOneClickAlertsUrl(null, "https://x.supabase.co"), null);
+  // The search id wins over a newsletter token; a reminder id wins over both.
+  assert(buildUnsubscribeUrl(recipient).endsWith(`/unsubscribe?alerts=${id}`));
+  assert(buildUnsubscribeUrl({ ...recipient, reminderToken: "r1" }).endsWith("/unsubscribe?reminder=r1"));
+  const r = renderEmail({ bodyHtml: "<p>x</p>", bodyText: "x", recipient });
+  assert(r.html.includes(`/unsubscribe?alerts=${id}`), "footer links the alerts opt-out");
+  assert(!r.html.includes("token=ab12"), "footer does not carry the newsletter token");
+  assert(r.html.includes("turn off saved-search alerts in one click"));
+  assert(r.html.includes("/dashboard?tab=saved-searches"));
+  assert(r.text.includes("Turn off saved-search alerts (one click): "));
+  assert(!(r.listUnsubscribe ?? "").includes("token=ab12"), "inbox button does not unsubscribe the newsletter");
 });

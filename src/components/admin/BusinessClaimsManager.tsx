@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { createLogger } from "@/lib/logger";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { BadgeCheck, Building2, ExternalLink, X } from "lucide-react";
 
 const log = createLogger("BusinessClaimsManager");
@@ -195,6 +195,7 @@ export default function BusinessClaimsManager() {
                 </Button>
 
                 <Textarea
+                  aria-label={`Notes on the claim for ${name}`}
                   placeholder="Notes for the record (optional)"
                   value={notes[claim.id] ?? ""}
                   onChange={(e) => setNotes((n) => ({ ...n, [claim.id]: e.target.value }))}

@@ -10,7 +10,7 @@
  * exported and needs a live Stripe client to run.
  */
 
-import { assert } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (path: string) => Deno.readTextFile(new URL(path, REPO));

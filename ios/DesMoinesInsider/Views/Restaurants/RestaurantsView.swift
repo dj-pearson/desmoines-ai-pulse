@@ -6,6 +6,8 @@ struct RestaurantsView: View {
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
     @State private var showDiscover = false
+    /// Restaurant landing links staged by MainTabView (IOS-AUDIT-FEAT-043).
+    @State private var deepLink = DeepLinkHandler.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -188,7 +190,13 @@ struct RestaurantsView: View {
                 RestaurantDetailView(restaurant: restaurant)
             }
             .task {
+                // A landing link that opened this tab for the first time is
+                // applied before the first load, so it fetches its own list.
+                applyPendingLink()
                 await viewModel.loadInitialData()
+            }
+            .onChange(of: deepLink.pendingRestaurantLink) { _, _ in
+                applyPendingLink()
             }
             // Open Now is evaluated against the clock; a list filtered before
             // the app went to the background is stale when it returns.
@@ -211,6 +219,11 @@ struct RestaurantsView: View {
             return "Swipe these"
         }
         return "Swipe"
+    }
+
+    private func applyPendingLink() {
+        guard let link = deepLink.consumeRestaurantLink() else { return }
+        viewModel.applyLink(link)
     }
 
     private func discoverFilterFromRestaurants() -> DiscoverFilterContext {

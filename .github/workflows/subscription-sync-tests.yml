@@ -21,20 +21,27 @@ on:
       # The contract has two ends. Watching only the server half is how
       # delete-user-account drifted: the edge function was changed and the
       # clients were not, and nothing here ran when a client changed either.
-      - 'ios/DesMoinesInsider/**'
-      - 'android/app/src/main/java/**'
-      - 'src/hooks/useSubscription.ts'
-      - 'src/hooks/__tests__/useSubscription.test.ts'
-      # WEB-FEAT-019: the double opt-in test reads the newsletter hook and the
-      # config.toml entry that makes the signup endpoint public, so a change to
-      # either has to run this suite.
-      - 'src/hooks/useNewsletterSubscription.ts'
-      - 'src/hooks/__tests__/useNewsletterSubscription.test.ts'
+      #
+      # WEB-QA-055: the suites read far more than this list used to name. It
+      # listed about 25 files; the suites read about 145 outside
+      # supabase/functions, and several walk whole trees (client-contract walks
+      # src/, ios/ and android/; oauth-role-sync-self-only walks src/;
+      # no-embedded-credentials walks scripts/ and docs/). A PR touching only a
+      # read file ran nothing, which is how session-timeout-policy.test.ts went
+      # stale on a SessionManager.tsx rewrite (WEB-QA-051). The globs below are
+      # what the suites read, and scripts/check-deno-lane-paths.mjs (validate,
+      # pr-checks) fails when a suite reads a file this filter does not watch.
+      - 'src/**'
+      - 'ios/**'
+      - 'android/**'
+      - 'scripts/**'
+      - 'docs/**'
+      - 'package.json'
+      - '.gitleaks.toml'
       - 'supabase/config.toml'
-      - 'src/components/SubscriptionPlatformBreakdown.tsx'
       # The IndexNow key file. Its contents have to match INDEXNOW_KEY exactly
       # or every submission 403s, and the file lives nowhere near the function
-      # that depends on it — so a PR touching only public/ must run this suite.
+      # that depends on it - so a PR touching only public/ must run this suite.
       - 'public/*.txt'
       # The GitHub Actions crawler posts its own heartbeat row into
       # automation_job_runs (WEB-BE-043) - nothing inside Supabase can observe
@@ -44,28 +51,7 @@ on:
       - 'crawlers/event_detail.py'
       # CLAUDE.md is asserted by ingest-coordinates.test.ts (WEB-BE-050).
       - 'CLAUDE.md'
-      # The canonical category vocabulary and its browser mirror (WEB-BE-049).
-      - 'src/lib/eventCategories.*'
-      - 'src/components/EventSubmissionForm.tsx'
       - '.github/workflows/subscription-sync-tests.yml'
-      # Search plan WP6: nlp-search/search.test.ts compares against the free
-      # filter string and the example list, and savedSearchMatch.test.ts against
-      # the area list, so a change to any of the three has to run this suite.
-      - 'src/lib/eventPrice.ts'
-      - 'src/hooks/useNLPSearch.ts'
-      - 'src/lib/eventAreas.ts'
-      # Pricing plan WP6: plan-features-truthful.test.ts reads the benefit lines
-      # from planBenefits.ts and scans every premium surface for withdrawn
-      # claims, so a change to any of them has to run this suite. The two new
-      # billing tests live under supabase/functions/ and are already covered.
-      - 'src/lib/planBenefits.ts'
-      - 'src/pages/Pricing.tsx'
-      - 'src/components/UpgradeModal.tsx'
-      - 'src/pages/SubscriptionSuccess.tsx'
-      - 'src/pages/SubscriptionPortal.tsx'
-      # NON_CORE_REVIEW_2026-09 WP4: Terms lists plan features from
-      # planBenefits.ts and the same test now scans it.
-      - 'src/pages/Terms.tsx'
 
 concurrency:
   group: subscription-sync-${{ github.head_ref }}
@@ -121,6 +107,13 @@ jobs:
       - run: deno test --allow-env supabase/functions/_shared/aiModel.test.ts
       # Written with versionCheckLog.ts and never added to a lane.
       - run: deno test supabase/functions/_shared/versionCheckLog.test.ts
+      # WEB-SEC-057. play-rtdn-webhook must pin the push subscription's service
+      # account, or any Google identity can mint a token that passes.
+      # --allow-read: the wiring check reads the webhook source.
+      - run: deno test --allow-read supabase/functions/_shared/pubsubOidc.test.ts
+      # WEB-SEC-058. A voided-purchase notification revokes only once Google's
+      # voidedpurchases.list confirms the token. --allow-read: wiring check.
+      - run: deno test --allow-read supabase/functions/_shared/playVoidedPurchase.test.ts
       # The limiter's 429 must carry CORS for the requesting origin, or the
       # browser drops it and the client sees a network error instead of
       # "rate limit exceeded". --allow-env: the CORS allow-list reads it.
@@ -459,6 +452,10 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/sponsored-listing-link-guard.test.ts
       - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
       - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
+      # Event-reminder emails HTML-escaped the subject ("Tacos &amp; Tequila"),
+      # linked a dateless slug, and printed the 19:31:58 no-time sentinel as a
+      # start time. Pins the plain subject, canonical link and date-only line.
+      - run: deno test --allow-read supabase/functions/send-event-reminders/content.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into
       # tables with no INSERT policy, so RLS refused every write and every
       # advertiser dashboard read zero. Pins the server-side write path, the bot
@@ -568,6 +565,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/billing-webhook-idempotency.test.ts
       - run: deno test --allow-read supabase/functions/_tests/storage-bucket-posture.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
+      # WEB-BE-049 AC3. schema.org offers -> events.price, checked against
+      # the src/lib readers that decide the free badge and Event JSON-LD.
+      - run: deno test supabase/functions/_shared/jsonLdOffers.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
       - run: deno test --allow-read supabase/functions/_tests/indexnow.test.ts
@@ -582,6 +582,11 @@ jobs:
       # and without the permission that read throws inside the adapter.
       - run: deno test --allow-env supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
       - run: deno test supabase/functions/_shared/domain-adapters/venueProfile.test.ts
+      # WEB-BE-058: a __SERVER_DATA__ blob with no event list is a failure,
+      # not a quiet week. Pure parsing, no network or env.
+      - run: deno test supabase/functions/_shared/domain-adapters/eventbrite.test.ts
+      # WEB-BE-059: a date-only show is the date alone, not an invented 7pm.
+      - run: deno test supabase/functions/_shared/domain-adapters/vibrantmusichall.test.ts
       # Menu-scraping invariants — see docs/scraping/MENU_SCRAPER.md.
       # All fixture-based; no network access needed.
       - run: deno test supabase/functions/_shared/menu/menuNormalize.test.ts
@@ -601,6 +606,9 @@ jobs:
       - run: deno test supabase/functions/nlp-search/dateWindow.test.ts
       - run: deno test --allow-read supabase/functions/nlp-search/search.test.ts
       - run: deno test supabase/functions/nlp-search/handler.test.ts
+      # The public events API's filters: visibility, Central-time window with
+      # the running arm, one or= group. Offline, no remote imports.
+      - run: deno test supabase/functions/api-events/listQuery.test.ts
       # Saved-search alert matching and the email it builds (WP5).
       - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts
       # support-chat is anon-callable; these caps are what bound one request's
@@ -652,6 +660,9 @@ jobs:
       - run: deno test --allow-read --allow-env supabase/functions/_shared/eventSourceOwnership.test.ts
       - run: deno test --allow-net supabase/functions/_shared/fetchWithTimeout.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/fetchGuard.test.ts
+      # WEB-SEC-059: stored restaurant/venue URLs go through fetchPublicUrl
+      # (first host resolved, every redirect re-checked), not bare fetch().
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/public-url-fetch.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/postgrestErrors.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/prompts/prompts.test.ts
       - run: deno test --allow-read --allow-env supabase/functions/_shared/validation.test.ts

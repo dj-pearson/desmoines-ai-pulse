@@ -189,6 +189,7 @@ internal fun NavGraphBuilder.addTabDestinations(
             onSearchTextChanged = viewModel::onSearchTextChanged,
             onTabSelected = viewModel::onTabSelected,
             onClearSearch = viewModel::clearSearch,
+            onClearKidsFilter = viewModel::clearKidsFilter,
             onSaveCurrentSearch = {
                 savedSearchViewModel.save(state.searchText, state.selectedTab.displayName)
             },
@@ -257,9 +258,30 @@ internal fun NavGraphBuilder.addTabDestinations(
     composable(Route.Saved.route) {
         val viewModel: FavoritesViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(Unit) {
             viewModel.loadFavorites()
+            // Back from event detail, where a reminder may have changed.
+            viewModel.refreshReminderIds()
+        }
+
+        // Saved-row reminders (AND-AUDIT-033) are local notifications, so on API
+        // 33+ they need POST_NOTIFICATIONS first, asked here as event detail
+        // asks in DetailDestinations. The row waiting on the answer is held so
+        // the result can schedule it.
+        var pendingReminderEvent by remember {
+            mutableStateOf<com.desmoines.aipulse.data.model.Event?>(null)
+        }
+        val reminderPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            val event = pendingReminderEvent
+            pendingReminderEvent = null
+            when {
+                !granted -> viewModel.onNotificationPermissionDenied()
+                event != null -> viewModel.toggleReminder(event)
+            }
         }
 
         FavoritesScreen(
@@ -278,6 +300,34 @@ internal fun NavGraphBuilder.addTabDestinations(
             },
             onRemoveEventFavorite = { eventId -> viewModel.removeEventFavorite(eventId) },
             onRemoveRestaurantFavorite = { restaurantId -> viewModel.removeRestaurantFavorite(restaurantId) },
+            // Same entry and intent as event detail's Add to Calendar (AND-AUDIT-028).
+            onAddEventToCalendar = { event ->
+                com.desmoines.aipulse.util.EventCalendarIntent.build(event)?.let { intent ->
+                    com.desmoines.aipulse.util.EventCalendarIntent.launch(context, intent)
+                }
+            },
+            // Same text and link as event detail's Share (AND-AUDIT-033).
+            onShareEvent = { event ->
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, com.desmoines.aipulse.util.EventShareText.text(event))
+                }
+                context.startActivity(
+                    android.content.Intent.createChooser(shareIntent, com.desmoines.aipulse.util.EventShareText.CHOOSER_TITLE),
+                )
+            },
+            onToggleEventReminder = { event ->
+                val needsPermission = !state.isReminderSet(event.id) &&
+                    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                    !com.desmoines.aipulse.util.PushNotificationService.hasNotificationPermission(context)
+                if (needsPermission) {
+                    pendingReminderEvent = event
+                    reminderPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    viewModel.toggleReminder(event)
+                }
+            },
+            onReminderMessageShown = { viewModel.clearReminderMessage() },
             onRefresh = { viewModel.refresh() },
             scrollToTopTrigger = scrollToTopTrigger,
         )

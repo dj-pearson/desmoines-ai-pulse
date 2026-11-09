@@ -46,6 +46,22 @@ class WeekendViewModelTest {
     }
 
     @Test
+    fun `groupEventsByDay files a 7pm CDT show under its Des Moines day (AND-AUDIT-030)`() {
+        val friday = LocalDate.of(2026, 7, 3)
+        val events = listOf(
+            // 8:30pm CDT Thursday July 2: not this weekend, though its UTC day is Friday.
+            Event(id = "thu", title = "Thu late", date = "2026-07-03T01:30:00+00:00"),
+            // 7:00pm CDT Saturday July 4: Saturday, though its UTC day is Sunday.
+            Event(id = "sat", title = "Sat evening", date = "2026-07-05T00:00:00+00:00"),
+        )
+
+        val days = WeekendViewModel.groupEventsByDay(events, friday)
+
+        assertEquals(listOf("Saturday"), days.map { it.name })
+        assertEquals(listOf("sat"), days.single().events.map { it.id })
+    }
+
+    @Test
     fun `groupEventsByDay returns empty for no events`() {
         val days = WeekendViewModel.groupEventsByDay(emptyList(), LocalDate.of(2026, 7, 3))
         assertTrue(days.isEmpty())

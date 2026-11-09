@@ -21,7 +21,7 @@
  * request Firecrawl received before, so this ships no behaviour change on its
  * own. Setting SCRAPER_USER_AGENT is the decision, and it is the owner's.
  */
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 import { getScraperConfig } from '../_shared/scraper.ts';
 
 const DECLARED = 'DesMoinesInsiderBot/1.0 (+https://desmoinesinsider.com/bot)';

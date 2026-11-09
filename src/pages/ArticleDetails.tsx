@@ -465,7 +465,7 @@ const ArticleDetails: React.FC = () => {
                     <p className="text-sm text-muted-foreground mb-4">
                       Weekly updates on Des Moines events, restaurants and more.
                     </p>
-                    <NewsletterSignup variant="compact" source="website" />
+                    <NewsletterSignup variant="compact" source="article" />
                   </Card>
                 </div>
               </aside>

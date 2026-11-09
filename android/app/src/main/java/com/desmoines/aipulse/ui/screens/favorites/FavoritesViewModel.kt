@@ -8,7 +8,11 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.util.EventReminderTiming
+import com.desmoines.aipulse.util.EventSlug
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.FetchGeneration
+import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
 import com.desmoines.aipulse.util.onReconnect
@@ -20,7 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.OffsetDateTime
+import java.time.ZonedDateTime
 import javax.inject.Inject
 
 private const val TAG = "FavoritesViewModel"
@@ -35,7 +39,11 @@ class FavoritesViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val networkMonitor: NetworkMonitor,
     private val billingService: BillingService,
+    private val localNotificationService: LocalNotificationService,
 ) : ViewModel() {
+
+    /** Clock for the reminder rule; a test pins it. */
+    internal var nowMillis: () -> Long = { System.currentTimeMillis() }
 
     private val _upcomingEvents = MutableStateFlow<List<Event>>(emptyList())
     private val _pastEvents = MutableStateFlow<List<Event>>(emptyList())
@@ -47,6 +55,8 @@ class FavoritesViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     private val _isAuthenticated = MutableStateFlow(false)
     private val _currentTier = MutableStateFlow(SubscriptionTier.FREE)
+    private val _reminderEventIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _reminderMessage = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<FavoritesScreenState> = combine(
         _upcomingEvents,
@@ -80,6 +90,10 @@ class FavoritesViewModel @Inject constructor(
             favoriteRestaurantIds = extra.favoriteRestaurantIds,
             currentTier = extra.currentTier,
         )
+    }.combine(
+        combine(_reminderEventIds, _reminderMessage) { ids, message -> ids to message }
+    ) { state, (ids, message) ->
+        state.copy(reminderEventIds = ids, reminderMessage = message)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -120,6 +134,9 @@ class FavoritesViewModel @Inject constructor(
     }
 
     private fun loadFavoritesInternal() {
+        // Read on every load and refresh: a reminder set or cancelled on event
+        // detail, or fired since, shows correctly when Saved is pulled again.
+        refreshReminderIds()
         val userId = getCurrentUserId()
         _isAuthenticated.value = userId != null
 
@@ -154,14 +171,13 @@ class FavoritesViewModel @Inject constructor(
             // Fetch full event objects and split into upcoming/past
             favoritesRepository.fetchFavoriteEvents(_favoriteEventIds.value).onSuccess { allEvents ->
                 if (!favoritesFetch.isCurrent(token)) return@launch
-                val now = OffsetDateTime.now()
+                // A TBA row stays Upcoming through its Des Moines day (AND-AUDIT-030).
+                val now = ZonedDateTime.now(EventSlug.CENTRAL)
                 _upcomingEvents.value = allEvents.filter { event ->
-                    val date = event.parsedDate ?: return@filter true
-                    !date.isBefore(now)
+                    EventTimeText.hasPassed(event, now) != true
                 }
                 _pastEvents.value = allEvents.filter { event ->
-                    val date = event.parsedDate ?: return@filter false
-                    date.isBefore(now)
+                    EventTimeText.hasPassed(event, now) == true
                 }
             }.onFailure {
                 if (!favoritesFetch.isCurrent(token)) return@launch
@@ -215,6 +231,52 @@ class FavoritesViewModel @Inject constructor(
         }
     }
 
+    // MARK: - Reminder (AND-AUDIT-033)
+
+    /**
+     * Re-reads which saved events have a reminder. Also called when the Saved
+     * tab comes back into view, since event detail can change it in between.
+     */
+    fun refreshReminderIds() {
+        _reminderEventIds.value = localNotificationService.getScheduledEventIds()
+    }
+
+    /**
+     * Sets or cancels the reminder for an upcoming saved [event], with the
+     * same timing event detail uses: an hour before a timed start, 9am Des
+     * Moines time for a TBA row. The caller asks for POST_NOTIFICATIONS on
+     * API 33+ first and calls [onNotificationPermissionDenied] on a no.
+     */
+    fun toggleReminder(event: Event) {
+        val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return
+        val fireAtMillis = EventReminderTiming.fireAtMillis(event) ?: return
+        val wasSet = event.id in _reminderEventIds.value
+
+        val nowSet = localNotificationService.toggleReminder(
+            eventId = event.id,
+            title = event.title,
+            venue = event.venue,
+            eventTimeMillis = startMillis,
+            triggerAtMillis = fireAtMillis,
+            isDayOf = !event.hasSpecificTime,
+        )
+        _reminderEventIds.value =
+            if (nowSet) _reminderEventIds.value + event.id else _reminderEventIds.value - event.id
+
+        if (!wasSet && !nowSet) {
+            _reminderMessage.value = EventReminderTiming.refusedMessage(event, nowMillis())
+        }
+    }
+
+    /** The user declined POST_NOTIFICATIONS; nothing is scheduled. */
+    fun onNotificationPermissionDenied() {
+        _reminderMessage.value = EventReminderTiming.PERMISSION_DENIED_MESSAGE
+    }
+
+    fun clearReminderMessage() {
+        _reminderMessage.value = null
+    }
+
     private fun getCurrentUserId(): String? = authRepository.currentUserId
 }
 
@@ -232,7 +294,13 @@ data class FavoritesScreenState(
     val favoriteEventIds: Set<String> = emptySet(),
     val favoriteRestaurantIds: Set<String> = emptySet(),
     val currentTier: SubscriptionTier = SubscriptionTier.FREE,
+    /** Saved event ids with a reminder scheduled (AND-AUDIT-033). */
+    val reminderEventIds: Set<String> = emptySet(),
+    /** Why the last reminder request did not take; cleared once shown. */
+    val reminderMessage: String? = null,
 ) {
+    fun isReminderSet(eventId: String): Boolean = eventId in reminderEventIds
+
     val totalFavoriteCount: Int
         get() = favoriteEventIds.size + favoriteRestaurantIds.size
 

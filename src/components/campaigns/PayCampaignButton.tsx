@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { handleError, ErrorSeverity } from "@/lib/errorHandler";
 import { formatUSD } from "@/lib/campaignDisplay";
 import { readCheckoutFailure, type CheckoutFailure } from "@/lib/campaignCheckout";
+import { logAdvertiserFunnelEvent } from "@/lib/advertiserFunnel";
 import { BUSINESS_CONTACT_EMAIL, BUSINESS_CONTACT_HREF } from "@/lib/businessCopy";
 
 export interface PayCampaignButtonProps {
@@ -37,6 +38,7 @@ export function PayCampaignButton({ campaignId, totalCost, onStale, className }:
     inFlight.current = true;
     setSubmitting(true);
     setFailure(null);
+    logAdvertiserFunnelEvent("ad_funnel_checkout_started", { campaignId, source: "campaign_page" });
     try {
       const url: unknown = await createCheckoutSession(campaignId);
       if (typeof url !== "string" || !/^https:\/\//.test(url)) {

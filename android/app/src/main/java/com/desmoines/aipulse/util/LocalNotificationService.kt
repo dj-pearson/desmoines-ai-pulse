@@ -25,6 +25,13 @@ internal data class ReminderRecord(
     val title: String,
     val venue: String? = null,
     val eventTimeMillis: Long,
+    /**
+     * When the alarm fires. Null on records written before AND-AUDIT-029,
+     * which all used the timed rule (an hour before [eventTimeMillis]).
+     */
+    val triggerAtMillis: Long? = null,
+    /** Scheduled by the time-TBA rule: fires the morning of, says "is today". */
+    val isDayOf: Boolean = false,
 )
 
 /**
@@ -57,13 +64,14 @@ class LocalNotificationService @Inject constructor(
          */
         private const val KEY_SCHEDULED_PAYLOADS = "scheduled_event_payloads"
 
-        /** Reminder fires 1 hour before the event (matching iOS). */
-        const val REMINDER_OFFSET_MILLIS = 3600_000L // 1 hour
+        /** Reminder fires 1 hour before a timed event (matching iOS). */
+        const val REMINDER_OFFSET_MILLIS = EventReminderTiming.TIMED_OFFSET_MILLIS
 
         /** Extra keys for the notification intent. */
         const val EXTRA_EVENT_ID = "event_id"
         const val EXTRA_EVENT_TITLE = "event_title"
         const val EXTRA_EVENT_VENUE = "event_venue"
+        const val EXTRA_IS_DAY_OF = "event_is_day_of"
     }
 
     private val alarmManager: AlarmManager =
@@ -98,22 +106,28 @@ class LocalNotificationService @Inject constructor(
     // region Schedule Reminder
 
     /**
-     * Schedules a local notification 1 hour before the event.
+     * Schedules a local notification ahead of the event.
      * Matching iOS: `scheduleReminder(for event: Event)`.
      *
      * @param eventId Unique event ID.
      * @param title Event title.
      * @param venue Optional venue name.
      * @param eventTimeMillis Event start time in epoch millis.
+     * @param triggerAtMillis When to fire; [EventReminderTiming.fireAtMillis]
+     *   decides it. Defaults to an hour before [eventTimeMillis].
+     * @param isDayOf The time-TBA rule chose [triggerAtMillis]; the body
+     *   then says "is today" instead of "starts in 1 hour".
      * @return true if scheduled successfully, false otherwise.
      */
     fun scheduleReminder(
         eventId: String,
         title: String,
         venue: String?,
-        eventTimeMillis: Long
+        eventTimeMillis: Long,
+        triggerAtMillis: Long = eventTimeMillis - REMINDER_OFFSET_MILLIS,
+        isDayOf: Boolean = false,
     ): Boolean {
-        val triggerTime = eventTimeMillis - REMINDER_OFFSET_MILLIS
+        val triggerTime = triggerAtMillis
 
         // Don't schedule if the trigger time is already in the past
         if (triggerTime <= System.currentTimeMillis()) return false
@@ -123,6 +137,7 @@ class LocalNotificationService @Inject constructor(
             putExtra(EXTRA_EVENT_ID, eventId)
             putExtra(EXTRA_EVENT_TITLE, title)
             putExtra(EXTRA_EVENT_VENUE, venue)
+            putExtra(EXTRA_IS_DAY_OF, isDayOf)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -159,7 +174,7 @@ class LocalNotificationService @Inject constructor(
             }
 
             addScheduledEventId(eventId)
-            saveReminderRecord(ReminderRecord(eventId, title, venue, eventTimeMillis))
+            saveReminderRecord(ReminderRecord(eventId, title, venue, eventTimeMillis, triggerTime, isDayOf))
             return true
         } catch (e: SecurityException) {
             // Exact alarm permission denied
@@ -211,7 +226,9 @@ class LocalNotificationService @Inject constructor(
         eventId: String,
         title: String,
         venue: String?,
-        eventTimeMillis: Long
+        eventTimeMillis: Long,
+        triggerAtMillis: Long = eventTimeMillis - REMINDER_OFFSET_MILLIS,
+        isDayOf: Boolean = false,
     ): Boolean {
         return if (isReminderSet(eventId)) {
             cancelReminder(eventId)
@@ -221,7 +238,7 @@ class LocalNotificationService @Inject constructor(
             // an event less than an hour out or a denied exact-alarm permission,
             // and claiming "true" there left the UI showing a bell for a
             // reminder that was never set.
-            scheduleReminder(eventId, title, venue, eventTimeMillis)
+            scheduleReminder(eventId, title, venue, eventTimeMillis, triggerAtMillis, isDayOf)
         }
     }
 
@@ -317,6 +334,8 @@ class LocalNotificationService @Inject constructor(
                 title = record.title,
                 venue = record.venue,
                 eventTimeMillis = record.eventTimeMillis,
+                triggerAtMillis = record.triggerAtMillis ?: (record.eventTimeMillis - REMINDER_OFFSET_MILLIS),
+                isDayOf = record.isDayOf,
             )
             if (scheduled) {
                 restored++

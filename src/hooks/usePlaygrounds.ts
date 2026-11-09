@@ -31,10 +31,11 @@ export const PLAYGROUND_METRO_FILTER =
 /**
  * What a related/nearby card on the detail page renders, and nothing else
  * (explore plan WP4 item 2). No `slug`: the column is not live yet (plan D2)
- * and naming a missing column fails the whole query with 42703.
+ * and naming a missing column fails the whole query with 42703. No `rating`
+ * (WEB-SEO-056): a model read it off a crawled page, so no card shows it.
  */
 export const PLAYGROUND_CARD_COLUMNS =
-  "id, name, image_url, age_range, rating, location, latitude, longitude, has_shade, has_restrooms";
+  "id, name, image_url, age_range, location, latitude, longitude, has_shade, has_restrooms";
 
 export type PlaygroundCard = Pick<
   Playground,
@@ -42,7 +43,6 @@ export type PlaygroundCard = Pick<
   | "name"
   | "image_url"
   | "age_range"
-  | "rating"
   | "location"
   | "latitude"
   | "longitude"
@@ -512,8 +512,17 @@ export function useNearbyPlaygrounds(target: SideQueryTarget | null | undefined)
 }
 
 /**
- * Other metro playgrounds for the same age range, best rated first with
- * unrated rows last. Distance is attached when both ends have coordinates.
+ * How many same-age rows to read before keeping the closest SIDE_LIST_SIZE.
+ * The metro holds about 50 playgrounds in all, so this is every candidate.
+ */
+const SAME_AGE_CANDIDATES = 60;
+
+/**
+ * Other metro playgrounds for the same age range, closest first. This was
+ * "best rated first", keyed on playgrounds.rating, a number a model read off a
+ * crawled page (WEB-SEO-056), so the cut kept whichever rows a scraper had
+ * scored highest. Rows without coordinates, or every row when this playground
+ * has none, fall back to name order.
  */
 export function useSameAgePlaygrounds(target: SideQueryTarget | null | undefined) {
   return useQuery<PlaygroundCard[]>({
@@ -529,8 +538,8 @@ export function useSameAgePlaygrounds(target: SideQueryTarget | null | undefined
         .eq("age_range", target.age_range)
         .neq("id", target.id)
         .or(PLAYGROUND_METRO_FILTER)
-        .order("rating", { ascending: false, nullsFirst: false })
-        .limit(SIDE_LIST_SIZE);
+        .order("name", { ascending: true })
+        .limit(SAME_AGE_CANDIDATES);
 
       if (error) {
         handleError(error, { component: "useSameAgePlaygrounds", action: "fetch" });
@@ -538,16 +547,13 @@ export function useSameAgePlaygrounds(target: SideQueryTarget | null | undefined
       }
       const rows = (data || []) as unknown as Omit<PlaygroundCard, "distanceMiles">[];
       if (target.latitude == null || target.longitude == null) {
-        return rows.map((r) => ({ ...r, distanceMiles: null }));
+        return rows.slice(0, SIDE_LIST_SIZE).map((r) => ({ ...r, distanceMiles: null }));
       }
-      const from = { latitude: target.latitude, longitude: target.longitude };
-      return rows.map((r) => ({
-        ...r,
-        distanceMiles:
-          r.latitude != null && r.longitude != null
-            ? haversineDistance(from, { latitude: r.latitude, longitude: r.longitude })
-            : null,
-      }));
+      // Array.prototype.sort is stable, so ties and unlocated rows keep name order.
+      return sortByDistanceFrom(rows, {
+        latitude: target.latitude,
+        longitude: target.longitude,
+      }).slice(0, SIDE_LIST_SIZE);
     },
   });
 }

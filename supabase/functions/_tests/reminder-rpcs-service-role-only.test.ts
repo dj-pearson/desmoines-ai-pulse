@@ -9,7 +9,7 @@
  * These assert the migration source and that no client started calling them.
  */
 
-import { assert } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));

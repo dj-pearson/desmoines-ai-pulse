@@ -25,6 +25,9 @@ final class PulseIntentDispatcher {
         /// Free text from a /search?q= link or an /events/<landing> page
         /// (IOS-DD-PLATFORM-02).
         case searchText(String)
+        /// Words plus explicit filters from a filtered /events?... link
+        /// (IOS-AUDIT-FEAT-041).
+        case filteredSearch(text: String, filters: SearchFilters)
     }
 
     var pending: Pending?
@@ -204,6 +207,9 @@ extension PulseIntentDispatcher.Pending {
 
         case .searchText(let text):
             return (SearchFilters(), Self.clean(text) ?? "", .events)
+
+        case .filteredSearch(let text, let filters):
+            return (filters, Self.clean(text) ?? "", filters.tabHint ?? .events)
 
         case .askPulse:
             return nil

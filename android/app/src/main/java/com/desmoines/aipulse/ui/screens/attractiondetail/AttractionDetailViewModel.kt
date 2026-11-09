@@ -7,8 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.data.remote.EntityNotFoundException
 import com.desmoines.aipulse.data.repository.AttractionsRepository
-import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.LocationService
+import com.desmoines.aipulse.util.PlaceShareLinks
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,10 +69,15 @@ class AttractionDetailViewModel @Inject constructor(
     }
 
     /**
-     * The page on the web for the id or slug this screen was opened with. A
-     * slug the app can't resolve may still open there (AND-OVH-022).
+     * The page on the web for this attraction. A slug the app can't resolve
+     * may still open there (AND-OVH-022), but the web resolves by slug only,
+     * so a UUID the screen was opened with is never placed in the path; with
+     * no slug to go on it opens the /attractions listing (AND-AUDIT-035).
      */
-    fun webUrl(): String? = lastId?.let { "${Config.SITE_URL}/attractions/${Uri.encode(it)}" }
+    fun webUrl(): String {
+        val loaded = _attraction.value
+        return PlaceShareLinks.attractionWebUrl(loaded?.slug, loaded?.name, lastId)
+    }
 
     /**
      * Formatted distance from user's location to this attraction.
@@ -106,14 +111,17 @@ class AttractionDetailViewModel @Inject constructor(
         return Intent(Intent.ACTION_VIEW, uri)
     }
 
-    /** Share text matching iOS: "Name (Type) - Location ⭐ Rating\n\nFound on Des Moines Insider" */
+    /**
+     * Share text matching iOS: "Name (Type) - Location ⭐ Rating", then the
+     * footer with the /attractions/<slug> page (AND-AUDIT-034).
+     */
     val shareText: String
         get() {
             val attraction = _attraction.value ?: return ""
             var text = "${attraction.name} (${attraction.type})"
             attraction.location?.let { text += " - $it" }
             attraction.rating?.let { text += " \u2B50 ${String.format(Locale.US, "%.1f", it)}" }
-            text += "\n\nFound on Des Moines Insider"
+            text += "\n\n" + PlaceShareLinks.footer(PlaceShareLinks.attractionUrl(attraction.slug, attraction.name))
             return text
         }
 }

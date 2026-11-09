@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 
@@ -63,6 +64,11 @@ actor QueryCache {
             try? String(Self.cacheVersion).write(to: versionFile, atomically: true, encoding: .utf8)
             AppLogger.cache.info("Cache upgraded to version \(Self.cacheVersion), old entries purged")
         }
+
+        // Rename entries written under the old percent-encoded-key scheme to
+        // their hashed names, so no query text stays on disk past first launch
+        // (IOS-AUDIT-PERF-032).
+        Self.migrateLegacyFilenames(in: cacheDir)
     }
 
     // MARK: - Public API
@@ -217,8 +223,68 @@ actor QueryCache {
     // MARK: - Internal
 
     private func fileURL(for key: String) -> URL {
-        let safeKey = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
-        return cacheDir.appendingPathComponent(safeKey + ".json")
+        cacheDir.appendingPathComponent(Self.hashedFilename(for: key))
+    }
+
+    /// On-disk name for a cache key: the SHA-256 of the key, hex-encoded.
+    ///
+    /// Keys carry filter state, and some carry what the user typed
+    /// (`EventsViewModel.eventsCacheKey()` appends `q-<searchText>`). The old
+    /// scheme percent-encoded the key into the filename, so a search for a
+    /// person's name or address sat in the Caches directory as a readable file
+    /// name, outside the encrypted payload. Hashing keeps the key out of the
+    /// file system entirely (IOS-AUDIT-PERF-032).
+    nonisolated static func hashedFilename(for key: String) -> String {
+        let digest = SHA256.hash(data: Data(key.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined() + ".json"
+    }
+
+    /// True for a name `hashedFilename(for:)` produced: 64 lowercase hex
+    /// characters plus `.json`.
+    nonisolated static func isHashedFilename(_ name: String) -> Bool {
+        guard name.hasSuffix(".json") else { return false }
+        let stem = name.dropLast(5)
+        return stem.count == 64 && stem.allSatisfy { $0.isHexDigit && !$0.isUppercase }
+    }
+
+    /// Moves files named by the old scheme (`<percent-encoded key>.json`) to
+    /// their hashed names. The old name is reversible, so the entry and its
+    /// TTL survive the upgrade instead of costing an offline user their cache.
+    /// A file whose key cannot be recovered, or whose hashed name is already
+    /// taken by a newer write, is deleted rather than left behind.
+    nonisolated static func migrateLegacyFilenames(in dir: URL) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+
+        var migrated = 0
+        var dropped = 0
+        for file in files {
+            let name = file.lastPathComponent
+            guard name.hasSuffix(".json"), !isHashedFilename(name) else { continue }
+
+            guard let key = String(name.dropLast(5)).removingPercentEncoding else {
+                try? fm.removeItem(at: file)
+                dropped += 1
+                continue
+            }
+            let target = dir.appendingPathComponent(hashedFilename(for: key))
+            if fm.fileExists(atPath: target.path) {
+                try? fm.removeItem(at: file)
+                dropped += 1
+                continue
+            }
+            do {
+                try fm.moveItem(at: file, to: target)
+                migrated += 1
+            } catch {
+                try? fm.removeItem(at: file)
+                dropped += 1
+            }
+        }
+
+        if migrated + dropped > 0 {
+            AppLogger.cache.info("Migrated \(migrated) cache entries to hashed filenames, dropped \(dropped)")
+        }
     }
 
     // MARK: - Test Support
@@ -232,6 +298,23 @@ actor QueryCache {
 
     /// Total on-disk size of the cache in bytes (excludes the version marker).
     /// Test-only helper for asserting the cap is honoured.
+    /// Names of the files currently in the cache directory, version marker
+    /// excluded. Lets tests assert what actually lands on disk.
+    func diskFilenamesForTesting() -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: cacheDir.path)) ?? []
+        return names.filter { $0 != ".cache-version" }
+    }
+
+    /// The cache directory, so a test can plant a file written by an older build.
+    func cacheDirectoryForTesting() -> URL {
+        cacheDir
+    }
+
+    /// Runs the legacy-filename migration against the live cache directory.
+    func migrateLegacyFilenamesForTesting() {
+        Self.migrateLegacyFilenames(in: cacheDir)
+    }
+
     func totalDiskBytesForTesting() -> Int {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(

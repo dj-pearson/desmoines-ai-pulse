@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   FolderTree,
   Tags,
@@ -351,6 +351,7 @@ export function CategoryTagManager() {
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search categories and tags"
             placeholder="Search categories or tags..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -398,13 +399,14 @@ export function CategoryTagManager() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleOpenCategoryDialog(category)}
+                        aria-label={`Edit category ${category.name}`}
                       >
-                        <Edit className="h-3 w-3" />
+                        <Edit className="h-3 w-3" aria-hidden="true" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                          <Button variant="ghost" size="sm" aria-label={`Delete category ${category.name}`}>
+                            <Trash2 className="h-3 w-3 text-destructive" aria-hidden="true" />
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -477,19 +479,25 @@ export function CategoryTagManager() {
                   <Badge variant="secondary" className="text-xs">
                     {tag.usage_count} uses
                   </Badge>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0"
                       onClick={() => handleOpenTagDialog(tag)}
+                      aria-label={`Edit tag ${tag.name}`}
                     >
-                      <Edit className="h-3 w-3" />
+                      <Edit className="h-3 w-3" aria-hidden="true" />
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <Trash2 className="h-3 w-3 text-destructive" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          aria-label={`Delete tag ${tag.name}`}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" aria-hidden="true" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
@@ -558,14 +566,14 @@ export function CategoryTagManager() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Color</Label>
+                  <Label htmlFor="category-color">Color</Label>
                   <Select
                     value={categoryForm.color}
                     onValueChange={(value) =>
                       setCategoryForm((prev) => ({ ...prev, color: value }))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="category-color">
                       <SelectValue>
                         <div className="flex items-center gap-2">
                           <span
@@ -594,8 +602,9 @@ export function CategoryTagManager() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Sort Order</Label>
+                  <Label htmlFor="category-sort-order">Sort Order</Label>
                   <Input
+                    id="category-sort-order"
                     type="number"
                     value={categoryForm.sort_order}
                     onChange={(e) =>
@@ -606,7 +615,7 @@ export function CategoryTagManager() {
               </div>
 
               <div className="space-y-2">
-                <Label>Parent Category</Label>
+                <Label htmlFor="category-parent">Parent Category</Label>
                 <Select
                   value={categoryForm.parent_id || 'none'}
                   onValueChange={(value) =>
@@ -616,7 +625,7 @@ export function CategoryTagManager() {
                     }))
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="category-parent">
                     <SelectValue placeholder="Select parent category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -688,12 +697,12 @@ export function CategoryTagManager() {
               </div>
 
               <div className="space-y-2">
-                <Label>Color</Label>
+                <Label htmlFor="tag-color">Color</Label>
                 <Select
                   value={tagForm.color}
                   onValueChange={(value) => setTagForm((prev) => ({ ...prev, color: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="tag-color">
                     <SelectValue>
                       <div className="flex items-center gap-2">
                         <span
