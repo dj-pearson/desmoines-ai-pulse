@@ -12529,7 +12529,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 3 named 34 admin/CMS fields across 8 files: CategoryTagManager, PartnershipsManager, AdminCampaigns, SupportTicketsConsole, SupportConsole, HotelManager, AttractionManager and ActivityLogViewer. Dialog Labels now have htmlFor/id, and filter searches and Selects have aria-label. The check-field-names baseline went from 123 to 89. The new adminFieldNamesSlice3.test.tsx fails 9/9 on the old code and passes 9/9. Full vitest is 3370/3370 and the type ratchet is 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 4 of 5: 40 unnamed admin/CMS fields in 12 files are now named. ContentEditor's Labels pointed at field.key and no control had that id; they now use useId-prefixed ids. Filter rows got aria-labels and visible Labels got htmlFor/id. check-field-names baseline went from 89 to 49. New adminFieldNamesSlice4.test.tsx fails 14/14 on the old code and passes 14/14 now; full vitest 3441/3441 and the type ratchet 30/30 both pass. Handoff: docs/improvement-loops/lanes/ui-ux.md"
+      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 3 named 34 admin/CMS fields across 8 files: CategoryTagManager, PartnershipsManager, AdminCampaigns, SupportTicketsConsole, SupportConsole, HotelManager, AttractionManager and ActivityLogViewer. Dialog Labels now have htmlFor/id, and filter searches and Selects have aria-label. The check-field-names baseline went from 123 to 89. The new adminFieldNamesSlice3.test.tsx fails 9/9 on the old code and passes 9/9. Full vitest is 3370/3370 and the type ratchet is 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 4 of 5: 40 unnamed admin/CMS fields in 12 files are now named. ContentEditor's Labels pointed at field.key and no control had that id; they now use useId-prefixed ids. Filter rows got aria-labels and visible Labels got htmlFor/id. check-field-names baseline went from 89 to 49. New adminFieldNamesSlice4.test.tsx fails 14/14 on the old code and passes 14/14 now; full vitest 3441/3441 and the type ratchet 30/30 both pass. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 5 of 6: named the last 37 unnamed fields in live files across 29 files (five Label htmlFor ids their SelectTrigger never carried now resolve, filter rows got aria-label, per-row fields name their row); check-field-names baseline 49 -> 12, all in five unimported files. New adminFieldNamesSlice5.test.tsx fails 30/30 on old code and passes 30/30; vitest 3491/3491, type ratchet 30/30. Note: this worktree started at 65138139 (a hotfix commit not on the rolling branch), so it was reset to the rolling branch head 3341b568 before work; the commit sits on 3341b568. Handoff: docs/improvement-loops/lanes/ui-ux.md"
     },
     {
       "id": "WEB-PERF-069",
@@ -12891,8 +12891,8 @@
         "The refresh runs on a schedule with its Places cost named"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Slice 1 of 2. bulk-update-restaurants' hoursOnly mode now takes staleDays (clamped to 7-365) and re-reads hours_json and business_status for rows whose last check is older than that. The last check is the new restaurants.hours_checked_at (additive migration 20261108000099), falling back to hours_json.fetchedAt. A refresh never blanks stored hours; a 404 counts as a check and other Places errors are retried. Verified: Deno place-hours 23/23, and a negative control turns 3 of the 9 new tests red. The migration applied twice in PGlite, and the stale filter picked only the old rows. type-check:functions, check-edge-types, check-edge-auth, check-migrations-parse and check-migration-order all clean. Handoff: docs/improvement-loops/lanes/restaurants.md"
+      "passes": true,
+      "notes": "Slice 1 of 2. bulk-update-restaurants' hoursOnly mode now takes staleDays (clamped to 7-365) and re-reads hours_json and business_status for rows whose last check is older than that. The last check is the new restaurants.hours_checked_at (additive migration 20261108000099), falling back to hours_json.fetchedAt. A refresh never blanks stored hours; a 404 counts as a check and other Places errors are retried. Verified: Deno place-hours 23/23, and a negative control turns 3 of the 9 new tests red. The migration applied twice in PGlite, and the stale filter picked only the old rows. type-check:functions, check-edge-types, check-edge-auth, check-migrations-parse and check-migration-order all clean. Handoff: docs/improvement-loops/lanes/restaurants.md | Slice 2 of 2: migration 20261108000102 schedules pg_cron job restaurant-hours-refresh (daily 09:41 UTC, bulk-update-restaurants {hoursOnly: true, staleDays: 30, batchSize: 20}, Vault credentials via app_secret, raises on a missing secret; Places Enterprise-SKU cost named, at most 20 calls/day). Verified in PGlite with stubbed cron/net/app_secret (no-op without pg_cron, idempotent, no POST without secrets, exact URL/body/bearer/timeout), plus check-cron-credentials, check-migrations-parse 507 and check-migration-order ok."
     },
     {
       "id": "WEB-PERF-072",
@@ -13047,21 +13047,21 @@
         "Add a static-graph test with a negative control, and check per-route gz before and after with measure-route-preload",
         "The share smoke specs still pass"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "ShareDialog is now a Slot trigger that lazily loads the new ShareDialogPanel on first click; focus goes back to the trigger in onCloseAutoFocus, and no caller changed. 15 routes got lighter beyond the critical path and none got heavier: AttractionDetails -19.1, PlaygroundDetails -18.9, RestaurantDetails -13.6, ArticleDetails -12.3, EventDetails -7.2 and EventsPage -3.1 KB gz, summed 8,570.3 -> 8,441.9. The critical path is unchanged at 175.1. The new shareDialogLazy.test.ts has negative controls (12 tests fail on a static panel import, 1 on the old trigger). In Chrome, /events fetched the panel chunk only after Share was clicked."
     },
     {
       "priority": 3,
       "id": "AND-AUDIT-041",
       "title": "/events/kids searches the word 'kids' instead of the web's kids-and-family filter",
-      "passes": false,
+      "passes": true,
       "description": "As a parent opening /events/kids on Android, I need the web's KIDS_EVENTS_FILTER, because Android searches the text 'kids events', so a family storytime or children's show without the word 'kids' is missing. iOS fixed the same bug under IOS-AUDIT-005 by adding a kidsOnly search filter.",
       "acceptanceCriteria": [
         "Android Search (or the Events tab) gains a kids-only filter that runs the web's KIDS_EVENTS_FILTER rule",
         "/events/kids applies it instead of a text query",
         "DeepLinkWebDestinationTest asserts the new destination"
       ],
-      "notes": ""
+      "notes": "/events/kids now opens Search with a removable Kids & family filter (Destination.KidsEvents, held in DeepLinkHandler.pendingKidsEvents until SearchViewModel applies it). The filter sends the web's KIDS_EVENTS_FILTER as one supabase-kt or { imatch } group from util/KidsEventsFilter and skips the fuzzy fallback; before this the link ran a full-text search for \"kids events\". Verified with 6 new JVM tests (58/58 with the DeepLink suites on a stub kotlinc 2.2.10 harness; a mutation fails 3) and a new vitest parity test (4/4) holding the Kotlin arms equal to the web. App module not compiled (no Android SDK) and no device check."
     },
     {
       "priority": 3,
@@ -13075,6 +13075,203 @@
         "A native screen and route; a slug the app does not know still opens on the web"
       ],
       "notes": ""
+    },
+    {
+      "id": "WEB-FEAT-083",
+      "title": "Approved event submissions publish at the organizer's browser midnight, so a 7 PM show leaves the /events hub at 2 AM on its own day",
+      "description": "publish_submission computes the start instant from the Central day and start_time but writes it only to event_start_utc; events.date gets user_submitted_events.date, the picked day at the submitting browser's local midnight. Every ingest path writes date = event_start_utc and readers filter and sort on date, so notOverFilter (date >= now - 2h) drops the show at 2 AM, lists sort it first on its day, and an untimed submission never carries the 19:31:58 marker on date. The /admin/tools review path (useReviewEvent) inserts its own row with the same date, no start time and no submission_id (re-approval duplicates). The form's toISOString() of local midnight publishes a day early from any browser east of Central.",
+      "acceptanceCriteria": [
+        "Evidence: supabase/migrations/20261007000002_events_stop_public_submitter_contact.sql INSERT writes s.date to events.date; src/hooks/useUserSubmittedEvents.ts useReviewEvent client insert; src/components/EventSubmissionForm.tsx date: selectedDate?.toISOString()",
+        "publish_submission writes date as the start instant (CREATE OR REPLACE, same signature/return/grants) and already-published submission rows are realigned to event_start_utc, scraped rows untouched",
+        "useReviewEvent approves through publish_submission",
+        "The form sends a value whose Central day is the picked day from any browser zone; a test covers east and west of Central with a failing negative control",
+        "Scratch Postgres run shows old vs new date for timed, untimed and DST cases"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed 2026-11-08 by the events lane. Migration 20261108000102 re-creates publish_submission with date = v_start_local AT TIME ZONE 'America/Chicago' and backfills date = event_start_utc where submission_id IS NOT NULL; useReviewEvent calls the RPC; EventSubmissionForm sends noon UTC of the picked day (src/lib/submissionDate.ts). Verified on scratch Postgres 16 (old 00:00 Central, new 19:00/10:00/19:31:58 = event_start_utc; backfill 2 rows, scraped row untouched; re-approval updates in place), submissionDate.test.ts 4/4 in Berlin and Los Angeles TZ with a failing negative control, vitest 903/903, eslint 0 errors, type-check ratchet 30/30, check-migrations-parse/order/schema/imports pass. Not run against a live database; the migration must be applied for the server fix to take effect. | publish_submission now writes events.date as the start instant (= event_start_utc) and migration 20261108000102 realigns already-published submission rows; useReviewEvent calls the RPC instead of its own midnight/no-start-time/duplicating insert; the form sends noon UTC of the picked day so east-of-Central browsers no longer publish a day early. Verified on scratch Postgres 16 (old function reproduced 00:00 Central, new gives 19:00/10:00/19:31:58, backfill realigns only submission rows, re-approval updates in place), submissionDate.test.ts 4/4 across two TZs with a failing negative control, vitest 903/903, eslint, type-check ratchet 30/30, migration and schema checks; not run against a live database."
+    },
+    {
+      "id": "WEB-SEC-072",
+      "title": "check-identity-reads only sees tables in types.ts and columns on a name list, so event_photo_reactions and user_follows were anon-readable and unchecked",
+      "description": "As a maintainer, I need the identity-read sweep to see every table the migrations create with a person column. It took identity-bearing tables from types.ts alone and matched columns by name. So event_photo_reactions (user_id, USING (true), absent from types.ts) and user_follows (follower_id/following_id REFERENCES auth.users, USING (true)) were never checked.",
+      "acceptanceCriteria": [
+        "Identity-bearing tables come from types.ts AND from the migrations' CREATE TABLE / ADD COLUMN / table-level FOREIGN KEY definitions. A column counts when its name is on IDENTITY_COLUMNS or it references auth.users or profiles",
+        "DROP TABLE removes the table and its policies from the replay",
+        "Either source parsing to nothing fails the check",
+        "Baseline edited by hand: the newly seen tables added, stale entries removed, user_subscriptions kept pending WEB-SEC-054",
+        "Offline suite with real-migration cases and negative controls"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Found 2026-11-08 (round 20). Baseline 6 -> 10. Added (all already exposed, newly seen): event_photo_reactions, user_follows, plus restaurant_blacklist and hotel_blacklist (blocked_by) and ad_rate_card (updated_by). event_discussions removed: its old USING (true) read belonged to the table that 20251110000010 dropped and recreated with USING (NOT is_deleted). New suite scripts/__tests__/check-identity-read-migration-columns.test.mjs, 10 tests (3 fail with the auth.users match disabled, 1 with DROP TABLE ignored). check-identity-reads OK, test:offline 69/69, eslint clean. | check-identity-reads now also takes identity-bearing tables from the migrations' CREATE TABLE, ADD COLUMN and FOREIGN KEY definitions. A column counts if its name is on the list or it references auth.users or profiles. The check also replays DROP TABLE, which drops that table's policies too. That surfaced event_photo_reactions (missing from types.ts) and user_follows (follower_id/following_id), both readable by anyone, plus three tables whose admin columns are exposed. event_discussions' stale USING (true) entry comes off. The baseline went from 6 to 10 by hand edit, keeping user_subscriptions until WEB-SEC-054's production probe. Verified with a new offline suite of 10 tests (3 fail with the auth.users match disabled, 1 with DROP TABLE ignored), check-identity-reads OK, test:offline 69/69 and eslint clean. Note: this worktree started on main (65138139), not the rolling branch, so before working I reset it to claude/continuous-improvement-loops-76i72u (3341b568). The commit sits on that base."
+    },
+    {
+      "id": "WEB-SEO-067",
+      "title": "Seasonal guide pages have no og/twitter tags and a bare, incomplete Article node",
+      "description": "As the platform owner, I need /guides/:slug to describe itself when shared and to crawlers. The page wrote its own Helmet with title, canonical and description only, so index.html's shell og:title/og:description won and a shared guide previewed as the home page with no og:url. Its Article JSON-LD was fed to a bare JSON.stringify (the last sitemapped detail page on the json-ld-escape baseline) and had no image, publisher, dateModified or mainEntityOfPage.",
+      "acceptanceCriteria": [
+        "SeasonalGuide mounts SEOHead with type=article, og:url on the canonical guide path, article:published_time/modified_time from publish_date|created_at and updated_at",
+        "og:image is the cover_image only when it is an absolute http(s) URL, else the default card",
+        "Article JSON-LD comes from one builder (src/lib/seasonalGuideSchema.ts) with headline, image, datePublished, dateModified, author and publisher as the Organization, mainEntityOfPage and url; empty values are omitted, not emitted",
+        "Serialized by toJsonLd; pages/SeasonalGuide.tsx leaves the json-ld-escape BASELINE",
+        "DetailBreadcrumb stays the only BreadcrumbList (no breadcrumbs prop to SEOHead); check-schema-dupes green",
+        "Meta description never empty"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Done 2026-11-08 by the seo-geo loop. New vitest seasonalGuideSchema 12/12 (2 source guards red on the old page); vitest src/lib+pages+components+hooks 3210/3210; json-ld-escape PASS; test:offline 68/68; check-schema-dupes and check-seo-routes green; app type ratchet 30/30; eslint clean. | /guides/:slug now mounts SEOHead type=article (og/twitter tags, og:url, article times, cover image only if absolute http(s)) with a new src/lib/seasonalGuideSchema.ts Article builder (image, publisher, author, dateModified, mainEntityOfPage) serialized by toJsonLd; SeasonalGuide removed from the json-ld-escape BASELINE. Verified by new vitest seasonalGuideSchema 12/12 (2 source guards red on the old page), vitest src/lib+pages+components+hooks 3210/3210, json-ld-escape PASS, test:offline 68/68, check-schema-dupes, check-seo-routes, app type ratchet 30/30, eslint clean."
+    },
+    {
+      "id": "WEB-ADS-035",
+      "title": "Nurture marketing mail promises one-click unsubscribe but links to a sign-in page and has no RFC 8058 header",
+      "description": "As someone receiving onboarding, win-back, re-engagement, milestone or subscription-nurture email, I need the unsubscribe link to work without signing in and my inbox's one-click button to appear. No caller of _shared/sendNurtureEmail.ts passes an unsubscribe token, so renderEmail falls back to /profile?tab=settings (sign-in required) while the footer still reads 'unsubscribe in one click', and List-Unsubscribe carries only the mailto form, which a person reads by hand. Gmail and Yahoo bulk-sender rules expect RFC 8058 one-click on marketing mail.",
+      "acceptanceCriteria": [
+        "Evidence: supabase/functions/_shared/sendNurtureEmail.ts passed args.unsubscribeToken ?? null and no agent sets it; _shared/emailLayout.ts buildUnsubscribeUrl falls back to /profile?tab=settings and buildOneClickUnsubscribeUrl returns null without a token",
+        "Slice 1: when the caller has no token, sendNurtureEmail looks up newsletter_subscribers.unsubscribe_token by normalized address for marketing mail; a failed lookup still sends with the old footer; transactional mail does no lookup",
+        "Slice 2: account holders with no newsletter row get their own token (additive column or table), a SECURITY DEFINER anon RPC that writes the 'unsubscribe' email_suppressions row, an email-unsubscribe and /unsubscribe branch for it, and one-click headers",
+        "Until slice 2 ships, the no-token footer does not claim one click",
+        "Never create newsletter_subscribers rows to obtain a token",
+        "vitest covers the subscriber, no-row, failed-lookup, malformed-token, caller-token and transactional cases, with negative controls"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found in the 2026-11-08 marketing-growth loop. Slice 1 done: sendNurtureEmail looks up the newsletter token by address (src/lib/__tests__/nurtureUnsubscribe.test.ts 6/6, two negative controls; full vitest 3467/3467; Deno lane 167/167; type-check ratchet 30/30; check-edge-auth, check-edge-types, check-marketing-consent). Slice 2 (account-only recipients) is the lane handoff. Owner: redeploy agent-onboarding-drip, agent-churn-winback, agent-reengagement, agent-milestones, agent-subscription-nurture, agent-weekly-digest and stripe-webhook. | Slice 1 of 2. Every nurture email (13 sendNurtureEmail callers) said \"unsubscribe in one click\" but linked to /profile?tab=settings, which needs a sign-in, and sent a mailto-only List-Unsubscribe. sendNurtureEmail now looks up the newsletter token by address for marketing mail (a failed lookup falls back to the old footer and the email still sends), so newsletter subscribers get RFC 8058 one-click and a footer link that works signed out. Verified: new vitest 6/6 with 2 negative controls, full vitest 3467/3467, Deno lane 167/167, eslint, type-check ratchet 30/30, type-check:functions, check-edge-auth/edge-types/marketing-consent/deno-lanes. Owner: redeploy the nurture agents and stripe-webhook. Handoff: docs/improvement-loops/lanes/marketing-growth.md"
+    },
+    {
+      "id": "WEB-FEAT-084",
+      "title": "The 'Personalized suggestions' switch controls nothing: the For You rail ranks swipes and saves whatever it says",
+      "description": "As a signed-in user who turned personalized suggestions off, I need the site to stop ranking my activity. Today the switch writes profiles.communication_preferences.event_recommendations and a personalization_ai consent row, but nothing reads either: useForYouRail sends anyone with 5+ recent swipes to get_personalized_recommendations_v2, which ranks swipe_interactions and user_event_interactions. Separately, OAuth finish-setup records the personalization answer only in consent_records, so a Google or Apple user who ticked it sees the switch off.",
+      "acceptanceCriteria": [
+        "useForYouRail takes the personalized path only when event_recommendations === true (readOptIn), and does not read swipe_interactions otherwise",
+        "A missing key, false, or a failed profile read gives the trending rail",
+        "The rail waits for the profile instead of fetching trending rows it would throw away",
+        "OAuth finish-setup merges event_recommendations into the profile bag without dropping other keys and without throwing",
+        "Switch copy says what it controls",
+        "Regression tests fail on the old hook"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Done 2026-11-08 by the features lane. Web only. The iOS/Android For You call v1 with no switch; that is a follow-up (see additional_stories). | The For You rail now uses get_personalized_recommendations_v2 (and reads swipe_interactions) only when communication_preferences.event_recommendations is explicitly true. readOptIn moved to src/lib/communicationPreferences.ts. OAuth finish-setup now also merges the user's answer into the profile bag. Verified: the new consent test fails 4 of 5 on the old hook and passes 5/5 after; full vitest 3470/3470; type ratchet 30/30; check-error-handling 93/94; nine related check-* scripts exit 0. Note for the orchestrator: this worktree started on main (65138139). Since it held no changes, I reset it to the rolling-branch base 3341b568, where the other lanes' worktrees sit, before doing any work."
+    },
+    {
+      "id": "WEB-CI-037",
+      "title": "The quarantined broad e2e lane stops at its global timeout every run, so 13-103 of its 608 tests never execute while the job shows green",
+      "description": "As the person deciding when forms/accessibility can be made required, I need the broad lane to run every test it names, because WEB-CI-028 AC4 counts green runs of it and every run so far stopped part-way: one worker against a cold vite dev server hits the 25-minute --global-timeout, and continue-on-error hides it.",
+      "acceptanceCriteria": [
+        "Evidence: broad-lane jobs 128508805612, 128519003858, 128530461004 and 128535161849 (2026-11-07) each print 'Running 608 tests using 1 worker' and end at 25.0m with 95, 54, 13 and 103 'did not run'",
+        "The broad lane runs against a production build with more than one worker, keeping the base config's per-test, expect, navigation and action timeouts",
+        "The job summary shows the Playwright counts and a warning when any test did not run",
+        "Every spec the lane names is still visible to check-e2e-lanes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "playwright.broad.config.ts runs a vite build plus preview on port 4175 at the default worker count, with retries 1 on CI. e2e.yml uses it and adds a summary step. Locally all 608 tests ran in 10.2m at 2 workers (589 passed, 17 failed, 2 skipped). check-e2e-lanes and check-e2e-assertions are clean. It has not run in CI yet. | The quarantined broad e2e lane never ran to the end. Each of the last 4 green CI runs hit the 25-minute --global-timeout with 13 to 103 of 608 tests not started (1 worker against a cold dev server), and continue-on-error showed the job green. The new playwright.broad.config.ts runs on a vite build plus preview at the default worker count, and e2e.yml now writes the counts to the job summary and warns on any \"did not run\". Locally all 608 tests ran in 10.2 minutes at 2 workers (589 passed, 17 failed, 2 skipped). Handoff: docs/improvement-loops/lanes/reliability.md"
+    },
+    {
+      "id": "IOS-AUDIT-007",
+      "title": "Web /map links open the web map in a sheet over the iOS Map tab",
+      "description": "As an iOS user following a Des Moines Insider /map link (site bottom nav, header, footer, or /map?layers=attraction on attraction pages and the Attractions hub), I need the app's own Map tab to open showing what the link names. Before, DeepLinkHandler had no /map case, so the link opened the web map in a SafariView sheet on top of a native map that draws the same three default kinds.",
+      "acceptanceCriteria": [
+        "/map opens the Map tab with events, restaurants and attractions shown",
+        "?layers= is read with DiscoverMap.tsx parseLayers rules: absent, empty or all-unknown is the default three, 'none' is nothing, otherwise exactly the named kinds",
+        "A link naming playground or trail (no native pins) opens the web map",
+        "The link replaces earlier kind and quick-filter choices and pops the Map tab to its root, staged like the restaurant landing link so it lands even before the tab was ever shown",
+        "/map is claimed in the AASA",
+        "A vitest parity test fails when the web's layer keys or defaults drift from MapLinkLayers.nativeKeys/webOnlyKeys"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Done in the commit that added this story. 6 XCTest cases (DeepLinkHandlerTests, MapQuickFilterTests) plus /map in the claimed-path sweep. src/lib/__tests__/iosMapLinkParity.test.ts was negative-controlled twice. when/sel/bbox are ignored: the Map tab's time chips and camera have no URL form. Not compiled (no Xcode here). | On iOS, /map links (site bottom nav, header, footer) and /map?layers=attraction links (attraction pages, Attractions hub) now open the Map tab showing exactly the linked kinds. Before, they opened the web map in a sheet on top of the app's own Map tab. Layers are read with the web's parseLayers rules, links naming playgrounds or trails still open the web map, and /map was added to the AASA. Verification: 6 new XCTest cases, plus a new vitest iosMapLinkParity.test.ts that was negative-controlled twice; the 7 ios parity vitest files pass (32 tests), check-aasa and check-mobile-schema-usage are OK, and the type-check ratchet is 30/30. Not compiled (no Xcode here)."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-085",
+      "title": "useReviewEvent looks up the submitter's email with supabase.auth.admin.getUserById from the browser, which the anon client cannot call, so /admin/tools approvals never notify the organizer",
+      "description": "src/hooks/useUserSubmittedEvents.ts useReviewEvent calls supabase.auth.admin.getUserById(submittedEvent.user_id) with the browser client; it fails (swallowed by .catch) and submitterEmail is always undefined, so no event_approved/rejected/needs_revision email is sent from that path. EventSubmissionsManager invokes notify-event-submission with the submission id instead.",
+      "acceptanceCriteria": [
+        "useReviewEvent notifies through notify-event-submission by submission id like EventSubmissionsManager, or EventReviewSystem is retired in favour of /admin/event-submissions",
+        "A test asserts the notify call is made for each review decision"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the events lane while fixing WEB-FEAT-NEW-events; not touched in that commit."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-086",
+      "title": "Admin bulk updater can run the hours-only fill and the stale-hours refresh",
+      "description": "useBulkRestaurantUpdate (src/hooks/useBulkRestaurantUpdate.ts) and RestaurantBulkUpdater only send batchSize/forceUpdate/clearEnhanced, so an admin cannot trigger bulk-update-restaurants' hoursOnly fill or the staleDays refresh (WEB-FEAT-079) on demand, e.g. after a holiday-hours change; the only caller is the daily cron.",
+      "acceptanceCriteria": [
+        "Hook accepts hoursOnly and staleDays and forwards them",
+        "Bulk updater offers 'Fill missing hours' and 'Refresh stale hours' actions showing processed/updated/noHours/gone from the response",
+        "Errors go through handleError",
+        "Unit test asserts the request body for each action"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-074",
+      "title": "TrendingTuner sliders have no accessible name",
+      "description": "Admin TrendingTuner renders a Slider per weight next to a now-labelled number input. Radix Slider puts the accessible name on the Thumb, which the shadcn Slider wrapper does not expose, so every slider thumb is announced as an unnamed slider. check-field-names does not scan Slider.",
+      "acceptanceCriteria": [
+        "Each TrendingTuner slider thumb has an accessible name matching its weight label",
+        "The shadcn Slider wrapper accepts a thumb label prop without breaking other callers",
+        "A rendered test finds each slider by role and name"
+      ],
+      "passes": false
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-073",
+      "title": "user_follows and event_photo_reactions are readable by anyone and have no reader in any client",
+      "description": "As a user, I don't want anyone holding the anon key to list who I follow, who follows me, or which photos I reacted to. user_follows ('Anyone can view follows', 20251110000010) and event_photo_reactions ('Anyone can view photo reactions', 20250830013853) are both SELECT USING (true) with no TO clause. Neither table is referenced in src/, ios/, android/ or supabase/functions/.",
+      "acceptanceCriteria": [
+        "Re-enumerate readers in web, iOS, Android and edge functions",
+        "Migration replaces each USING (true) read with an owner read TO authenticated (follower_id or following_id = auth.uid() for follows; user_id = auth.uid() for reactions) plus an admin read",
+        "Probe production for event_photo_reactions first (it is not in types.ts; 42P01 means only the migration side matters)",
+        "Verify on local Postgres with auth stubs, before and after; identity-read baseline shrinks by the tables fixed"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 while doing WEB-SEC-NEW-security."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-068",
+      "title": "Event detail pages publish og:type=event, which is not an Open Graph type",
+      "description": "EnhancedEventSEO emits <meta property=\"og:type\" content=\"event\" />. 'event' is not in the Open Graph type list (website, article, profile, book, video.*, music.*), so parsers fall back or flag it. SEOHead also accepts type 'event'|'restaurant'|'business' and writes them straight into og:type.",
+      "acceptanceCriteria": [
+        "og:type is 'website' (or 'article' where it fits) on event, restaurant and business pages",
+        "SEOHead maps its non-OG type values to a valid og:type instead of emitting them raw",
+        "A vitest guard fails if any component emits an og:type outside the OG list"
+      ],
+      "passes": false,
+      "notes": "Found during the WEB-SEO-067 audit, 2026-11-08; not started."
+    },
+    {
+      "priority": 3,
+      "id": "XPLAT-016",
+      "title": "iOS and Android For You ignore the account's personalized-suggestions opt-out",
+      "description": "The apps call get_personalized_recommendations (v1) for every signed-in user. A user who turns 'Personalized suggestions' off on the web (communication_preferences.event_recommendations = false, personalization_ai consent row) still gets a For You ranked from their swipes and saves in the apps. v1 must not change shape (older binaries).",
+      "acceptanceCriteria": [
+        "Both apps read communication_preferences.event_recommendations and use the trending path unless it is true, or the apps send the opt-in to a v2 RPC that checks it server-side",
+        "The apps offer a way to change the setting, or link to /profile?tab=settings",
+        "v1 is not changed while binaries at or above MIN_SUPPORTED_APP_VERSION still call it"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-08 by the features lane while gating the web rail."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-075",
+      "title": "/attractions scrolls horizontally at 320-375px",
+      "description": "mobile-responsive.spec.ts:103 and :122 fail for /attractions on chromium-desktop and mobile-chrome at iPhone SE, Galaxy S21 and 320px viewports, on a vite build (2026-11-08). CI on a real backend also fails /events/today at 320 and 360px.",
+      "acceptanceCriteria": [
+        "Find the element wider than the viewport on /attractions at 320px and fix it",
+        "mobile-responsive.spec.ts no-horizontal-scroll tests pass for /attractions and /events/today on a vite build"
+      ],
+      "passes": false
     }
   ]
 }
