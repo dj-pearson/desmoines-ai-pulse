@@ -586,7 +586,10 @@ private struct DataExportPresentation: ViewModifier {
             .fileExporter(
                 isPresented: $showExporter,
                 document: pendingExport?.document,
-                contentType: .json,
+                // contentTypes (a list): the iOS 17 overload that takes
+                // onCancellation. The single contentType form with
+                // onCancellation is newer than the Xcode 26 SDK.
+                contentTypes: [.json],
                 defaultFilename: pendingExport?.fileName
             ) { result in
                 onFinish(result)
