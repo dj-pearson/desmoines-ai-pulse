@@ -258,24 +258,15 @@ struct SettingsView: View {
                 }
             }
             .toastOverlay(message: $toast)
-            .fileExporter(
-                isPresented: $showDataExporter,
-                document: pendingExport?.document,
-                contentType: .json,
-                defaultFilename: pendingExport?.fileName
-            ) { result in
-                finishDataExport(result)
-            } onCancellation: {
-                pendingExport = nil
-            }
-            .alert("Export My Data", isPresented: .init(
-                get: { dataExportMessage != nil },
-                set: { if !$0 { dataExportMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(dataExportMessage ?? "")
-            }
+            // A modifier of its own: added inline, these two pushed body past
+            // what Xcode 26.3 can type-check ("unable to type-check this
+            // expression in reasonable time" at the NavigationStack).
+            .modifier(DataExportPresentation(
+                showExporter: $showDataExporter,
+                pendingExport: $pendingExport,
+                message: $dataExportMessage,
+                onFinish: finishDataExport
+            ))
             .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     Task { await deleteAccount() }
@@ -574,6 +565,43 @@ private struct PendingDataExport {
     let tablesWithData: Int?
     let tablesConsidered: Int?
     let unavailableCount: Int
+}
+
+/// The Export My Data file picker and its result alert (XPLAT-007).
+private struct DataExportPresentation: ViewModifier {
+    @Binding var showExporter: Bool
+    @Binding var pendingExport: PendingDataExport?
+    @Binding var message: String?
+    let onFinish: (Result<URL, Error>) -> Void
+
+    private var showsMessage: Binding<Bool> {
+        Binding(
+            get: { message != nil },
+            set: { if !$0 { message = nil } }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .fileExporter(
+                isPresented: $showExporter,
+                document: pendingExport?.document,
+                // contentTypes (a list): the iOS 17 overload that takes
+                // onCancellation. The single contentType form with
+                // onCancellation is newer than the Xcode 26 SDK.
+                contentTypes: [.json],
+                defaultFilename: pendingExport?.fileName
+            ) { result in
+                onFinish(result)
+            } onCancellation: {
+                pendingExport = nil
+            }
+            .alert("Export My Data", isPresented: showsMessage) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(message ?? "")
+            }
+    }
 }
 
 #Preview {
