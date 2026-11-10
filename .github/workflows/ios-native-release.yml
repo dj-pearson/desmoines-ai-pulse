@@ -1,40 +1,15 @@
-# ================================================================
-# iOS Native Release: Build IPA & Upload to TestFlight
-# ================================================================
+# Des Moines Insider: archive, export and TestFlight upload.
 #
-# Builds the native Swift iOS app and uploads to Apple TestFlight.
-# Adapted from the Capacitor ios-release.yml for the native Swift app.
+# The build itself runs in the shared Pearson Media iOS release workflow
+# (Pearson-Media/ios-release). This file says only what is particular to this
+# app. Signing is automatic, so there are no provisioning profiles to keep
+# current and no project patching; the IOS_DISTRIBUTION_CERT_* and
+# IOS_PROVISIONING_PROFILE secrets are no longer read.
 #
-# Key differences from the Capacitor workflow:
-#   - No web asset build (pure Swift)
-#   - XcodeGen instead of existing .xcodeproj
-#   - SPM instead of CocoaPods
-#   - Supabase credentials via generated Swift file (not build settings — avoids :// xcconfig bug)
-#
-# REQUIRED GITHUB SECRETS (6 + 2):
-#   1. APPSTORE_ISSUER_ID           - App Store Connect API Issuer ID
-#   2. APPSTORE_API_KEY_ID          - App Store Connect API Key ID
-#   3. APPSTORE_API_PRIVATE_KEY     - .p8 private key contents
-#   4. IOS_DISTRIBUTION_CERT_P12    - Base64-encoded .p12 distribution cert
-#   5. IOS_DISTRIBUTION_CERT_PASSWORD - .p12 password
-#   6. IOS_PROVISIONING_PROFILE     - Base64-encoded .mobileprovision
-#   7. VITE_SUPABASE_URL            - Supabase project URL (reused from web)
-#   8. VITE_SUPABASE_ANON_KEY       - Supabase anon key (reused from web)
-#
-# OPTIONAL GITHUB SECRETS:
-#   9. IOS_CLIP_PROVISIONING_PROFILE - Base64-encoded .mobileprovision for App Clip
-#      (bundle ID: com.desmoines.aipulse.Clip)
-#      If not set, the App Clip target is excluded from the archive.
-#
-# PROVISIONING PROFILE REQUIREMENTS:
-#   The main app profile (IOS_PROVISIONING_PROFILE) must include these capabilities:
-#     - Associated Domains (for universal links)
-#     - Sign in with Apple
-#   Enable them in Apple Developer Portal → Identifiers → your App ID,
-#   then regenerate the distribution profile.
-#   If capabilities are missing, they will be stripped from the build with warnings.
-#
-# ================================================================
+# Secrets used: the shared IOS_* signing set (copied in by ios-release's
+# scripts/sync-signing-secrets.sh), SUPABASE_URL / SUPABASE_ANON_KEY (or the
+# VITE_ names from the web build), and APPSTORE_* for the optional metadata
+# upload.
 
 name: iOS Native Release - TestFlight
 
@@ -42,618 +17,83 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Marketing version (e.g., 1.0.0)'
+        description: 'Marketing version (e.g., 1.2.2). Empty keeps project.yml'
         required: false
-        default: '1.0.0'
+        default: ''
       build_number:
-        description: 'Build number (leave empty to auto-increment)'
+        description: 'Build number (empty = run number + 100)'
         required: false
-      submit_for_review:
-        description: 'Submit to App Store Review after upload'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
+        default: ''
+      upload:
+        description: 'Upload to TestFlight (off = build and sign only)'
+        type: boolean
+        default: true
       upload_metadata:
         description: 'Upload App Store metadata + screenshots (overwrites the live listing)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
+        type: boolean
+        default: false
 
-
-env:
-  XCODE_VERSION: '26.0'
-  BUNDLE_ID: 'com.desmoines.aipulse'
-  SCHEME: 'DesMoinesInsider'
-  PROJECT_DIR: 'ios'
+permissions:
+  contents: read
 
 jobs:
-  # ================================================================
-  # Build, Sign, and Upload to TestFlight
-  # ================================================================
-  build-and-submit:
-    name: Build & Submit to TestFlight
-    runs-on: macos-15
-    timeout-minutes: 45
-    # Self-hosted cutover (P8). An environment secret overrides the repo
-    # secret of the SAME name, so this build targets the self-hosted stack only
-    # once SUPABASE_URL and SUPABASE_ANON_KEY are set on the `selfhosted`
-    # environment. Until then both resolve to the repo secrets (Supabase Cloud).
-    # Set the plain names: `secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL`
-    # prefers SUPABASE_URL, so an environment-only VITE_SUPABASE_URL would lose
-    # to a repo-level SUPABASE_URL.
-    environment: selfhosted
-
-    steps:
-      # ==============================================================
-      # 1. CHECKOUT & XCODE SETUP
-      # ==============================================================
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Select Xcode version
-        run: |
-          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
-            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
-          elif [ -d "/Applications/Xcode_26.0.app" ]; then
-            sudo xcode-select -s "/Applications/Xcode_26.0.app/Contents/Developer"
-          else
-            echo "::warning::Xcode 26 not found. Using default Xcode version."
-            ls -d /Applications/Xcode*.app 2>/dev/null || echo "None found"
-          fi
-          echo "Active Xcode: $(xcode-select -p)"
-          echo "Xcode version: $(xcodebuild -version | head -1)"
-          echo "Swift: $(swift --version | head -1)"
-          echo "SDK: $(xcodebuild -showsdks 2>/dev/null | grep 'iOS' | tail -1 || echo 'unknown')"
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      # ==============================================================
-      # 2. INJECT SUPABASE SECRETS INTO GENERATED SWIFT FILE
-      # ==============================================================
-      - name: Generate Supabase secrets file
-        working-directory: ${{ env.PROJECT_DIR }}
-        env:
-          # Try both secret naming conventions (VITE_ prefix from web, plain from iOS)
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
-        run: |
-          chmod +x scripts/generate-secrets.sh
-          bash scripts/generate-secrets.sh
-
-          # Verify secrets were actually written (fail fast if empty)
-          if grep -q 'supabaseURL = ""' DesMoinesInsider/Configuration/Secrets.generated.swift; then
-            echo "::error::SUPABASE_URL is empty in Secrets.generated.swift! Check GitHub Secrets."
-            echo "Available secret names: SUPABASE_URL or VITE_SUPABASE_URL"
-            exit 1
-          fi
-          echo "✅ Secrets.generated.swift written and verified"
-
-      # ==============================================================
-      # 3. GENERATE XCODE PROJECT
-      # ==============================================================
-      - name: Generate Xcode project
-        working-directory: ${{ env.PROJECT_DIR }}
-        env:
-          IOS_CLIP_PROVISIONING_PROFILE: ${{ secrets.IOS_CLIP_PROVISIONING_PROFILE }}
-        run: |
-          # If no App Clip provisioning profile is available, remove the clip
-          # target from the project to avoid "requires a provisioning profile"
-          # errors. Xcode 26+ validates all embedded targets at archive time.
-          if [ -z "$IOS_CLIP_PROVISIONING_PROFILE" ]; then
-            echo "ℹ️  No IOS_CLIP_PROVISIONING_PROFILE secret — excluding App Clip from build"
-            python3 << 'PYEOF'
-          with open('project.yml') as f:
-              lines = f.readlines()
-
-          output = []
-          i = 0
-          skip_section = False
-          skip_indent = -1
-
-          while i < len(lines):
-              line = lines[i]
-              raw = line.rstrip('\n')
-              stripped = raw.lstrip()
-              indent = len(raw) - len(stripped)
-
-              # When skipping a section, continue until a non-empty line at
-              # the same or lesser indentation is found.
-              if skip_section:
-                  if stripped == '':
-                      i += 1
-                      continue
-                  if indent > skip_indent:
-                      i += 1
-                      continue
-                  skip_section = False
-
-              # Detect and skip any DesMoinesInsiderClip section (target def or scheme entry)
-              if stripped.startswith('DesMoinesInsiderClip:'):
-                  skip_section = True
-                  skip_indent = indent
-                  i += 1
-                  continue
-
-              # Remove the dependency reference from the main app target
-              if stripped == '- target: DesMoinesInsiderClip':
-                  i += 1
-                  # Also skip the 'embed: true' line that follows
-                  if i < len(lines) and 'embed:' in lines[i]:
-                      i += 1
-                  continue
-
-              output.append(line)
-              i += 1
-
-          with open('project.yml', 'w') as f:
-              f.writelines(output)
-
-          print('  Removed App Clip target from project.yml')
-          PYEOF
-
-          # Belt-and-suspenders: strip appclip from main app entitlements when
-          # building without App Clip. Prevents Invalid Binary if project.yml
-          # or XcodeGen ever re-adds it.
-          ENT="DesMoinesInsider/App/DesMoinesInsider.entitlements"
-          if grep -q "appclip:desmoinesinsider.com" "$ENT" 2>/dev/null; then
-            echo "  Stripping appclip from $ENT (building without App Clip)"
-            sed -i '' '/appclip:desmoinesinsider.com/d' "$ENT"
-          fi
-          fi
-
-          xcodegen generate
-          echo "✅ Xcode project generated from project.yml"
-
-      # ==============================================================
-      # 4. RESOLVE SPM DEPENDENCIES
-      # ==============================================================
-      - name: Resolve Swift Package Manager dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          # Retry up to 3 times — GitHub occasionally returns HTTP 500
-          # when cloning SPM dependencies (transient server errors).
-          for attempt in 1 2 3; do
-            echo "SPM resolve attempt $attempt/3..."
-            if xcodebuild -resolvePackageDependencies \
-              -project DesMoinesInsider.xcodeproj \
-              -scheme "${{ env.SCHEME }}" \
-              -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache"; then
-              echo "✅ SPM dependencies resolved"
-              exit 0
-            fi
-            echo "::warning::SPM resolve attempt $attempt failed"
-            # Clean cache before retry to avoid stale state
-            rm -rf "$RUNNER_TEMP/spm-cache" 2>/dev/null || true
-            sleep $((attempt * 10))
-          done
-          echo "::error::SPM dependency resolution failed after 3 attempts"
+  release:
+    uses: Pearson-Media/ios-release/.github/workflows/ios-release.yml@main
+    with:
+      working-directory: ios
+      project: DesMoinesInsider.xcodeproj
+      scheme: DesMoinesInsider
+      marketing-version: ${{ inputs.version }}
+      build-number: ${{ inputs.build_number }}
+      # project.yml is at build 66; run numbers here are still single digits.
+      build-number-offset: 100
+      require-tag-on-branch: ""
+      upload: ${{ inputs.upload }}
+      required-env: SUPABASE_URL SUPABASE_ANON_KEY
+      # The App Clip has not shipped, so it is left out (set
+      # IOS_INCLUDE_APP_CLIP=1 in BUILD_ENV to keep it). Then the Supabase
+      # values go into the generated Swift files the app reads.
+      prepare-command: |
+        set -euo pipefail
+        cd ios
+        python3 scripts/strip-app-clip.py
+        bash scripts/generate-secrets.sh
+        if grep -q 'supabaseURL = ""' DesMoinesInsider/Configuration/Secrets.generated.swift; then
+          echo "::error::SUPABASE_URL is empty in Secrets.generated.swift."
           exit 1
+        fi
+      expected-entitlements: |
+        com.apple.developer.applesignin
+        com.apple.developer.associated-domains
+    secrets:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.IOS_ASC_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.IOS_ASC_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.IOS_ASC_KEY_BASE64 }}
+      BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_DEV_CERT_BASE64 }}
+      P12_PASSWORD: ${{ secrets.IOS_DEV_CERT_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      BUILD_ENV: |
+        SUPABASE_URL=${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+        SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
 
-      # ==============================================================
-      # 5. SET VERSION & BUILD NUMBER
-      # ==============================================================
-      - name: Set version and build number
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          BUILD_NUMBER="${{ github.event.inputs.build_number }}"
-          if [ -z "$BUILD_NUMBER" ]; then
-            BUILD_NUMBER=${{ github.run_number }}
-          fi
-          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
-
-          VERSION="${{ github.event.inputs.version }}"
-          if [ -z "$VERSION" ]; then
-            VERSION="1.0.0"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-          # Update in project.pbxproj
-          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/g" \
-            DesMoinesInsider.xcodeproj/project.pbxproj
-
-          sed -i '' "s/MARKETING_VERSION = [0-9][0-9.]*;/MARKETING_VERSION = $VERSION;/g" \
-            DesMoinesInsider.xcodeproj/project.pbxproj
-
-          echo "✅ Version: $VERSION ($BUILD_NUMBER)"
-
-      # ==============================================================
-      # 6. IMPORT DISTRIBUTION CERTIFICATE
-      # ==============================================================
-      - name: Import distribution certificate
-        env:
-          IOS_DISTRIBUTION_CERT_P12: ${{ secrets.IOS_DISTRIBUTION_CERT_P12 }}
-          IOS_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
-        run: |
-          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          CERT_PATH="$RUNNER_TEMP/distribution.p12"
-          echo -n "$IOS_DISTRIBUTION_CERT_P12" | base64 --decode > "$CERT_PATH"
-
-          security import "$CERT_PATH" \
-            -P "$IOS_DISTRIBUTION_CERT_PASSWORD" \
-            -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
-
-          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
-          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
-          echo "✅ Distribution certificate imported"
-
-      # ==============================================================
-      # 7. INSTALL PROVISIONING PROFILE
-      # ==============================================================
-      - name: Install provisioning profile
-        env:
-          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
-        run: |
-          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
-          echo -n "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
-
-          security cms -D -i "$PP_PATH" > "$RUNNER_TEMP/pp_info.plist"
-
-          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$RUNNER_TEMP/pp_info.plist")
-          PP_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$RUNNER_TEMP/pp_info.plist")
-          TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :TeamIdentifier:0" "$RUNNER_TEMP/pp_info.plist")
-
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision"
-
-          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
-          echo "PP_NAME=$PP_NAME" >> $GITHUB_ENV
-          echo "TEAM_ID=$TEAM_ID" >> $GITHUB_ENV
-
-          echo "✅ Provisioning profile installed: $PP_NAME (UUID: $PP_UUID, Team: $TEAM_ID)"
-
-      # ==============================================================
-      # 7b. VALIDATE PROFILE CAPABILITIES & ADJUST ENTITLEMENTS
-      # ==============================================================
-      - name: Validate profile capabilities
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          # Xcode 26+ strictly validates that provisioning profile capabilities
-          # match the entitlements declared by the app. If capabilities are missing
-          # from the profile, strip them from the entitlements file so the archive
-          # succeeds, and warn the user to update their profile.
-
-          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" "$RUNNER_TEMP/pp_info.plist" \
-            > "$RUNNER_TEMP/profile_entitlements.plist" 2>/dev/null || true
-
-          ENTITLEMENTS_FILE="DesMoinesInsider/App/DesMoinesInsider.entitlements"
-          STRIPPED=""
-
-          # Check Associated Domains
-          if ! /usr/libexec/PlistBuddy -c "Print :com.apple.developer.associated-domains" \
-               "$RUNNER_TEMP/profile_entitlements.plist" >/dev/null 2>&1; then
-            echo "::warning::Provisioning profile missing 'Associated Domains' — stripping from build entitlements"
-            /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$ENTITLEMENTS_FILE" 2>/dev/null || true
-            STRIPPED="${STRIPPED} Associated-Domains"
-          else
-            echo "✅ Profile includes Associated Domains"
-          fi
-
-          # Check Sign in with Apple
-          if ! /usr/libexec/PlistBuddy -c "Print :com.apple.developer.applesignin" \
-               "$RUNNER_TEMP/profile_entitlements.plist" >/dev/null 2>&1; then
-            echo "::warning::Provisioning profile missing 'Sign in with Apple' — stripping from build entitlements"
-            /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.applesignin" "$ENTITLEMENTS_FILE" 2>/dev/null || true
-            STRIPPED="${STRIPPED} Sign-in-with-Apple"
-          else
-            echo "✅ Profile includes Sign in with Apple"
-          fi
-
-          if [ -n "$STRIPPED" ]; then
-            echo ""
-            echo "============================================================"
-            echo "⚠️  ENTITLEMENTS STRIPPED (profile does not include them):"
-            echo "   ${STRIPPED}"
-            echo ""
-            echo "The build will succeed but these features will be DISABLED."
-            echo ""
-            echo "To restore full functionality:"
-            echo "  1. Apple Developer Portal → Identifiers → ${{ env.BUNDLE_ID }}"
-            echo "  2. Enable the missing capabilities listed above"
-            echo "  3. Profiles → regenerate your distribution profile"
-            echo "  4. Re-download, base64-encode, and update IOS_PROVISIONING_PROFILE secret"
-            echo "============================================================"
-          else
-            echo "✅ All required capabilities present in provisioning profile"
-          fi
-
-      # ==============================================================
-      # 8. CONFIGURE CODE SIGNING
-      # ==============================================================
-      - name: Configure code signing
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          PBXPROJ="DesMoinesInsider.xcodeproj/project.pbxproj"
-
-          # 1. Switch from Automatic to Manual signing (required for CI)
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
-
-          # 2. Set DEVELOPMENT_TEAM in ALL build configs (XcodeGen generates empty values)
-          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = '"$TEAM_ID"';/g' "$PBXPROJ"
-
-          # 3. Insert CODE_SIGN_IDENTITY and PROVISIONING_PROFILE_SPECIFIER.
-          #
-          # XcodeGen with CODE_SIGN_STYLE: Automatic does NOT generate these keys in the
-          # pbxproj, so a sed-replace finds nothing (0 matches). We must INSERT them.
-          #
-          # We use Python to find every "CODE_SIGN_STYLE = Manual;" line (just set above)
-          # and prepend the two signing settings with matching indentation. This writes
-          # them only into DesMoinesInsider.xcodeproj/project.pbxproj — SPM dependency
-          # packages live in their own Package.swift files and are completely unaffected.
-          #
-          # Why NOT CLI overrides: passing PROVISIONING_PROFILE_SPECIFIER or
-          # CODE_SIGN_IDENTITY as global xcodebuild CLI overrides applies them to EVERY
-          # compiled target, including SPM C targets like swift-crypto_Crypto. Xcode 26+
-          # hard-errors when a provisioning profile is assigned to such targets.
-          python3 << 'PYEOF'
-          import re, os, sys
-          
-          pp_uuid = os.environ["PP_UUID"]
-          
-          pbxproj = "DesMoinesInsider.xcodeproj/project.pbxproj"
-          with open(pbxproj, "r") as fh:
-              content = fh.read()
-          
-          def insert_signing_settings(m):
-              indent = m.group(1)
-              return (
-                  indent + 'CODE_SIGN_IDENTITY = "Apple Distribution";\n' +
-                  indent + "CODE_SIGN_STYLE = Manual;\n" +
-                  indent + 'PROVISIONING_PROFILE_SPECIFIER = "' + pp_uuid + '";'
-              )
-          
-          new_content = re.sub(r"(\t+)CODE_SIGN_STYLE = Manual;", insert_signing_settings, content)
-          
-          inserted = new_content.count('PROVISIONING_PROFILE_SPECIFIER = "' + pp_uuid + '"')
-          print("  Inserted PROVISIONING_PROFILE_SPECIFIER into " + str(inserted) + " build config(s)")
-          if inserted == 0:
-              print("  WARNING: no CODE_SIGN_STYLE = Manual; lines found — check project.yml")
-              sys.exit(1)
-          
-          with open(pbxproj, "w") as fh:
-              fh.write(new_content)
-          PYEOF
-
-          echo "✅ Code signing configured in project.pbxproj"
-          grep -c "DEVELOPMENT_TEAM = $TEAM_ID;" "$PBXPROJ" | xargs -I{} echo "   DEVELOPMENT_TEAM set in {} build configs"
-          grep -c "PROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";" "$PBXPROJ" | xargs -I{} echo "   PROVISIONING_PROFILE_SPECIFIER set in {} build configs"
-
-      # ==============================================================
-      # 9. BUILD XCODE ARCHIVE
-      # ==============================================================
-      - name: Build Xcode archive
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          set -o pipefail
-
-          # NOTE: Supabase credentials are injected via Secrets.generated.swift
-          # (step 2), NOT via build settings. Passing URLs as build settings
-          # is fragile because :// is treated as a comment in xcconfig context.
-          # CODE_SIGN_STYLE, CODE_SIGN_IDENTITY, and PROVISIONING_PROFILE_SPECIFIER are
-          # all written into project.pbxproj in step 8 (scoped to the main app target).
-          # Passing them here as global CLI overrides would propagate to every compiled
-          # target — including SPM C package targets like swift-crypto_Crypto — causing
-          # Xcode 26+ to hard-error. Only pass settings that are safe globally:
-          #   DEVELOPMENT_TEAM   — acceptable on all targets
-          #   OTHER_CODE_SIGN_FLAGS — passes keychain path, harmless on unsigned targets
-          xcodebuild archive \
-            -project DesMoinesInsider.xcodeproj \
-            -scheme "${{ env.SCHEME }}" \
-            -archivePath "$RUNNER_TEMP/DesMoinesInsider.xcarchive" \
-            -configuration Release \
-            -destination "generic/platform=iOS" \
-            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
-            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
-            2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty --color || {
-              echo "::error::Archive failed. Last 80 lines:"
-              tail -80 "$RUNNER_TEMP/xcodebuild.log"
-              exit 1
-            }
-
-          echo "✅ Archive built successfully"
-
-      # ==============================================================
-      # 10. EXPORT IPA
-      # ==============================================================
-      - name: Create ExportOptions.plist
-        run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>teamID</key>
-            <string>${TEAM_ID}</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>${{ env.BUNDLE_ID }}</key>
-              <string>${PP_NAME}</string>
-            </dict>
-            <key>uploadSymbols</key>
-            <true/>
-            <key>uploadBitcode</key>
-            <false/>
-          </dict>
-          </plist>
-          PLIST
-          echo "✅ ExportOptions.plist created"
-
-      - name: Export IPA
-        run: |
-          set -o pipefail
-
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/DesMoinesInsider.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath "$RUNNER_TEMP/export" \
-            2>&1 | tee "$RUNNER_TEMP/export.log" | xcpretty --color || {
-              echo "::error::IPA export failed. Last 30 lines:"
-              tail -30 "$RUNNER_TEMP/export.log"
-              exit 1
-            }
-
-          IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" -print -quit)
-          if [ -z "$IPA_PATH" ]; then
-            echo "::error::IPA not found!"
-            ls -la "$RUNNER_TEMP/export/"
-            exit 1
-          fi
-
-          echo "IPA_PATH=$IPA_PATH" >> $GITHUB_ENV
-          echo "✅ IPA exported: $IPA_PATH ($(du -h "$IPA_PATH" | cut -f1))"
-
-      # ==============================================================
-      # 10b. VERIFY BINARY ENTITLEMENTS (debug Invalid Binary)
-      # ==============================================================
-      - name: Verify binary entitlements
-        run: |
-          cd "$RUNNER_TEMP"
-          unzip -q -o "$IPA_PATH" -d ipa_extract
-          APP=$(find ipa_extract -name "*.app" -type d | head -1)
-          echo "📋 App entitlements (embedded in binary):"
-          codesign -d --entitlements - "$APP" 2>/dev/null | plutil -p - 2>/dev/null || codesign -d --entitlements - "$APP" 2>/dev/null || true
-          if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "appclip"; then
-            echo "::error::appclip found in binary entitlements — will cause Invalid Binary"
-            exit 1
-          fi
-          echo "✅ No appclip in binary entitlements"
-
-      # ==============================================================
-      # 11. UPLOAD TO TESTFLIGHT
-      # ==============================================================
-      - name: Setup App Store Connect API key
-        env:
-          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/private_keys
-          echo -n "$APPSTORE_API_PRIVATE_KEY" > ~/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
-          echo "✅ API key configured"
-
-      - name: Upload to TestFlight
-        env:
-          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-        run: |
-          echo "Uploading $IPA_PATH to TestFlight..."
-          echo "Version: $VERSION ($BUILD_NUMBER)"
-
-          # Capture altool output — it can return exit 0 even on validation errors
-          UPLOAD_LOG="$RUNNER_TEMP/altool-upload.log"
-          xcrun altool --upload-app \
-            --file "$IPA_PATH" \
-            --type ios \
-            --apiKey "$APPSTORE_API_KEY_ID" \
-            --apiIssuer "$APPSTORE_ISSUER_ID" 2>&1 | tee "$UPLOAD_LOG"
-          ALTOOL_EXIT=${PIPESTATUS[0]}
-
-          # Check for failure: non-zero exit OR "ERROR" in output
-          if [ $ALTOOL_EXIT -ne 0 ] || grep -qi "ERROR.*UPLOAD FAILED\|Validation failed" "$UPLOAD_LOG"; then
-            echo ""
-            echo "::error::TestFlight upload FAILED! See altool output above."
-            echo "Common causes:"
-            echo "  - App icon has transparency/alpha channel"
-            echo "  - Bundle version already exists in App Store Connect"
-            echo "  - Provisioning profile mismatch"
-            exit 1
-          fi
-
-          echo ""
-          echo "============================================"
-          echo "✅ UPLOADED TO TESTFLIGHT SUCCESSFULLY!"
-          echo "============================================"
-          echo "App:     Des Moines Insider"
-          echo "Version: $VERSION"
-          echo "Build:   $BUILD_NUMBER"
-          echo "Bundle:  ${{ env.BUNDLE_ID }}"
-          echo ""
-          echo "The build will appear in App Store Connect"
-          echo "within 5-15 minutes after processing."
-          echo "============================================"
-
-      # ==============================================================
-      # 12. (OPTIONAL) SUBMIT FOR APP STORE REVIEW
-      # ==============================================================
-      # Upload App Store metadata + screenshots from ios/fastlane/metadata via the
-      # existing `upload_metadata` lane (deliver). Gated + default-off because it
-      # overwrites the live App Store listing (IOS-AUDIT-REL-004). The binary is
-      # already on TestFlight, so this skips the binary upload.
+  # Uploads ios/fastlane/metadata and screenshots with the existing
+  # upload_metadata lane. Off by default because it overwrites the live App
+  # Store listing (IOS-AUDIT-REL-004). Submitting for review stays a manual step
+  # in App Store Connect.
+  metadata:
+    needs: release
+    if: inputs.upload_metadata
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
       - name: Upload App Store metadata & screenshots
-        if: ${{ github.event.inputs.upload_metadata == 'true' }}
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: ios
         env:
           APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          # precheck first so a metadata problem fails loudly before any upload
           bundle exec fastlane upload_metadata 2>/dev/null \
             || fastlane upload_metadata
-
-      # NOTE: automated App Store submission is NOT implemented here. The prior
-      # version of this step printed "Submitting build..." and exited 0 without
-      # calling the App Store Connect API, which falsely reported success
-      # (IOS-AUDIT-REL-005). Until a real submission (fastlane deliver
-      # submit_for_review:true, or the ASC API) is wired and tested, fail loudly
-      # so an operator who sets submit_for_review=true is never misled.
-      - name: Submit for App Store Review (not implemented)
-        if: ${{ github.event.inputs.submit_for_review == 'true' }}
-        run: |
-          echo "::error::Automated App Store submission is not implemented in this workflow."
-          echo "The binary was uploaded to TestFlight. Submit for review manually in"
-          echo "App Store Connect, or wire fastlane deliver(submit_for_review: true)."
-          exit 1
-
-      # ==============================================================
-      # 13. UPLOAD ARTIFACT
-      # ==============================================================
-      - name: Upload IPA artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-native-ipa-v${{ env.VERSION }}-build${{ env.BUILD_NUMBER }}
-          path: ${{ env.IPA_PATH }}
-          retention-days: 90
-
-      # ==============================================================
-      # 14. CLEANUP
-      # ==============================================================
-      - name: Cleanup signing artifacts
-        if: always()
-        run: |
-          if [ -n "$KEYCHAIN_PATH" ]; then
-            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-          fi
-          if [ -n "$PP_UUID" ]; then
-            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision" 2>/dev/null || true
-          fi
-          rm -rf ~/private_keys 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/distribution.p12" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/build_pp.mobileprovision" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/pp_info.plist" 2>/dev/null || true
-          echo "✅ Cleaned up all signing artifacts"
