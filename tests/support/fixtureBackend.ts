@@ -158,6 +158,16 @@ export function fixtureEvents(): ReturnType<typeof events> {
   return events();
 }
 
+/** The restaurants rows, for a spec that changes one row and answers the read itself. */
+export function fixtureRestaurants(): ReturnType<typeof restaurants> {
+  return restaurants();
+}
+
+/** The attractions rows, for a spec that changes one row and answers the read itself. */
+export function fixtureAttractions(): ReturnType<typeof attractions> {
+  return attractions();
+}
+
 const TABLES: Record<string, () => unknown[]> = {
   events,
   restaurants,
