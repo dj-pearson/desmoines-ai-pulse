@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
+import com.desmoines.aipulse.util.EventPastState
 import com.desmoines.aipulse.util.EventSeries
 import com.desmoines.aipulse.util.EventTimeText
 import android.content.Intent
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
@@ -203,6 +205,9 @@ fun EventDetailScreen(
             )
         }
     ) { paddingValues ->
+        // Past rows reach detail from series past years, Saved's Past section
+        // and old links; they are not upcoming (AND-AUDIT-044).
+        val isPast = remember(event) { EventPastState.isPast(event) }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -216,7 +221,8 @@ fun EventDetailScreen(
             )
 
             // Date & Time
-            EventDetailDateTime(event = event)
+            EventDetailDateTime(event = event, isPast = isPast)
+            if (isPast) EventDetailPastBanner()
 
             // Info Section (location, price, distance, description)
             EventDetailInfo(
@@ -229,6 +235,7 @@ fun EventDetailScreen(
             // Action Buttons
             EventDetailActions(
                 event = event,
+                offersAddToCalendar = EventPastState.offersAddToCalendar(event, isPast),
                 hasPremiumAccess = hasPremiumAccess,
                 calendarAdded = calendarAdded,
                 isReminderSet = isReminderSet,
@@ -373,7 +380,7 @@ private fun EventDetailHeader(
 // region Date & Time
 
 @Composable
-private fun EventDetailDateTime(event: Event) {
+private fun EventDetailDateTime(event: Event, isPast: Boolean) {
     // Des Moines day and time, "Time TBA" for a row with no real start time
     // (AND-AUDIT-029); it used to print the 7:31 PM / 3:30 AM placeholder.
     val dayText = EventTimeText.dayText(event, "EEEE, MMMM d, yyyy") ?: return
@@ -385,7 +392,7 @@ private fun EventDetailDateTime(event: Event) {
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .semantics(mergeDescendants = true) {
                 val label = EventTimeText.spokenDateTime(event, "EEEE, MMMM d, yyyy") ?: dayText
-                val urgency = event.urgencyLabel
+                val urgency = if (isPast) null else event.urgencyLabel
                 contentDescription = if (urgency != null) "$label. $urgency" else label
             },
         verticalAlignment = Alignment.CenterVertically
@@ -410,8 +417,9 @@ private fun EventDetailDateTime(event: Event) {
             )
         }
 
-        // Urgency label — icon + text so urgency is not conveyed by color alone
-        event.urgencyLabel?.let { urgency ->
+        // Urgency label — icon + text so urgency is not conveyed by color alone.
+        // None once the row is past: a show that ended an hour ago read "Today".
+        event.urgencyLabel?.takeUnless { isPast }?.let { urgency ->
             Surface(
                 shape = RoundedCornerShape(50),
                 color = BrandOrange
@@ -626,6 +634,41 @@ private fun EventDetailInfo(
     }
 }
 
+/**
+ * "This event has already happened" under the date for a past row, as iOS
+ * shows for an archived row and the web marks with "Past event".
+ */
+@Composable
+private fun EventDetailPastBanner() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .semantics(mergeDescendants = true) {},
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = EventPastState.BANNER_TEXT,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 // endregion
 
 // region Actions
@@ -633,6 +676,7 @@ private fun EventDetailInfo(
 @Composable
 private fun EventDetailActions(
     event: Event,
+    offersAddToCalendar: Boolean,
     hasPremiumAccess: Boolean,
     calendarAdded: Boolean,
     isReminderSet: Boolean,
@@ -652,8 +696,8 @@ private fun EventDetailActions(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Add to Calendar — Insider+ feature
-            if (event.parsedDate != null) {
+            // Add to Calendar — Insider+ feature. Not for a past row.
+            if (offersAddToCalendar) {
                 if (hasPremiumAccess) {
                     Button(
                         onClick = {
@@ -715,7 +759,7 @@ private fun EventDetailActions(
             if (!event.sourceUrl.isNullOrEmpty()) {
                 Button(
                     onClick = { onOpenSourceUrl(event.sourceUrl) },
-                    modifier = if (event.parsedDate != null) Modifier.weight(1f) else Modifier.fillMaxWidth(),
+                    modifier = if (offersAddToCalendar) Modifier.weight(1f) else Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant

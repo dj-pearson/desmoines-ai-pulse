@@ -160,6 +160,15 @@ row and Back twice to land on the original event. The trap: a venue-qualified se
 Pumpkin Fest) shows the line only when the venue or location names the place; a row with neither is
 not a missing link.
 
+AND-AUDIT-044 (past events on detail) is code-complete and JVM-tested. Event detail now shows
+"This event has already happened" under the date, drops the Today/In n days chip and hides Add to Calendar
+when util/EventPastState.isPast says the row is over: archived_at set (Event decodes it now), or the web's
+isEventOver through EventSeriesSchedule.isOver (end_date, else end of the Central day untimed, else three
+hours in). One device check closes it: from /events/series/cloris-awards tap a linked past edition and
+confirm the banner shows and Add to Calendar is gone; then open a festival on its second day and confirm
+it still offers Add to Calendar. The trap: if a linked archived row opens as not-found instead, the by-id
+read is not returning archived rows (look at the events RLS policy), which this change does not touch.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -189,3 +198,4 @@ not a missing link.
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3a: EventsRemoteDataSource.fetchSeriesRows ports the web/iOS series read (neq is_merged, or of title ilikes via new EventSeries.titleLikePatterns, hidden and archived rows kept, limit 200) and util/SeriesEventRows decodes it lossily into SeriesEventRow. 5 new SeriesEventRowsTest and 1 new EventSeriesTest JVM tests pass with the 48 existing series/calendar/day tests, 54/54 on a stub harness (kotlinc 2.2.10 with the real kotlinx-serialization 1.6.2 plugin and runtime, JUnit 5.10); two mutations (rethrow instead of drop, wrong hidden_at name) each fail exactly 1. Parity vitest extended to pin the read and the 200 against web and iOS, 5/5. Not wired to a screen; data source and app module not compiled (no Android SDK) |
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3b (last): native series screen wired. /events/series/<slug> opens EventSeriesScreen for the 20 catalogued slugs (unknown or malformed stays in the web view); EventSeriesViewModel reads fetchSeriesRows through EventsRepository and builds the schedule; current/unannounced, past years, linked vs plain rows, Try again on error, share. 4 new EventSeriesScheduleTest and 2 new DeepLinkWebDestinationTest JVM tests (1 rewritten) pass, 114/114 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); mutations (series link back to web, time on untimed rows) fail exactly 3. Route registration checked by the RouteRegistrationTest regexes in node (0 missing). Parity vitest 5/5. ViewModel, screen, nav and app module not compiled (no Android SDK); no device check |
 | 2026-11-15 | AND-AUDIT-043 | this commit | Event detail links an annual edition to its native series screen ("<name> happens every year." + "Every year's dates for <name>"), matching the web event page; neither mobile app linked detail to the series. 1 new EventSeriesTest JVM test passes, 9/9 in the suite on a stub harness (kotlinc 2.2.10, JUnit 5.10); parity vitest 6/6 (1 new, pins both strings to src/pages/EventDetails.tsx); changing the link label fails 1 JVM and 1 vitest. Compose screen, nav and app module not compiled (no Android SDK); no device check |
+| 2026-11-15 | AND-AUDIT-044 | this commit | Event detail treats an ended or archived row as past, as the web event page does (!isOver && !archived): "This event has already happened" banner (iOS wording), no urgency chip, no Add to Calendar; Event decodes archived_at. 7 new EventPastStateTest JVM tests pass, 122/122 with the series, calendar, day and DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); ignoring archived_at fails 2, a start-based rule fails 3. check-mobile-schema OK. Compose screen and app module not compiled (no Android SDK); no device check |
