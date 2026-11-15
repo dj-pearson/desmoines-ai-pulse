@@ -382,5 +382,67 @@ console.log('\nannual event series (SEO-043)');
   ck('a one-off event links no series', !oneOff.includes('/events/series/'));
 }
 
+console.log('\nno start time published when the source gave none (WEB-SEO-072)');
+{
+  const { eventShellBody } = await import('../_middleware.ts');
+  const tbdPage = 'https://desmoinesinsider.com/events/hawkeye-watch-party-2026-10-09';
+  // SeatGeek flags an unannounced showtime with time_tbd and fills the instant
+  // with 03:30 local; other sources write the 19:31:58 marker. The React page
+  // (eventStartIso, WEB-BE-038) publishes a date-only startDate for both.
+  const tbdRow = {
+    ...eventRow,
+    title: 'Hawkeye Watch Party',
+    date: '2026-10-09T08:30:00Z',
+    event_start_utc: '2026-10-09T08:30:00Z',
+    time_tbd: true,
+  };
+  const tbd = injectedNode(await rewrite(SHELL, {
+    pageUrl: tbdPage, sbBase: SB, type: 'event',
+    entity: { id: 't9', title: tbdRow.title, startDate: tbdRow.event_start_utc, row: tbdRow }, now: NOW,
+  }));
+  ck('time_tbd: startDate is the Central date, no clock time', tbd?.startDate === '2026-10-09', tbd?.startDate);
+  const tbdBody = eventShellBody(tbdRow, NOW);
+  ck('time_tbd: the body prints no 3:30 AM', !/3:30/.test(tbdBody), tbdBody.match(/When: [^<]*/)?.[0]);
+  ck('time_tbd: the body says the time is not listed', tbdBody.includes('When: Friday, October 9, 2026 (time not listed)'), tbdBody.match(/When: [^<]*/)?.[0]);
+
+  // 19:31:58 Central on Oct 9 is 00:31:58 UTC on Oct 10: the Central day must
+  // survive, not the UTC one.
+  const markerRow = { ...eventRow, title: 'Fall Fest', date: '2026-10-10T00:31:58Z', event_start_utc: '2026-10-10T00:31:58Z', time_tbd: false };
+  const marker = injectedNode(await rewrite(SHELL, {
+    pageUrl: 'https://desmoinesinsider.com/events/fall-fest-2026-10-09', sbBase: SB, type: 'event',
+    entity: { id: 'm9', title: 'Fall Fest', startDate: markerRow.event_start_utc, row: markerRow }, now: NOW,
+  }));
+  ck('marker: startDate is the Central day of the marker', marker?.startDate === '2026-10-09', marker?.startDate);
+  ck('marker: the body prints no 7:31 PM', !/7:31/.test(eventShellBody(markerRow, NOW)));
+
+  const seatgeekRow = {
+    ...eventRow, title: 'Tour Stop', time_tbd: undefined, source_url: 'https://seatgeek.com/tour-stop-tickets/1',
+    date: '2026-10-09T08:30:00Z', event_start_utc: '2026-10-09T08:30:00Z', event_start_local: '2026-10-09T03:30:00',
+  };
+  const sg = injectedNode(await rewrite(SHELL, {
+    pageUrl: 'https://desmoinesinsider.com/events/tour-stop-2026-10-09', sbBase: SB, type: 'event',
+    entity: { id: 's9', title: 'Tour Stop', startDate: seatgeekRow.event_start_utc, row: seatgeekRow }, now: NOW,
+  }));
+  ck('SeatGeek 03:30 placeholder without the flag: date only', sg?.startDate === '2026-10-09', sg?.startDate);
+
+  // A run with a real end date keeps it, as a Central date to match.
+  const runRow = { ...tbdRow, end_date: '2026-10-12T04:59:00Z' };
+  const run = injectedNode(await rewrite(SHELL, {
+    pageUrl: tbdPage, sbBase: SB, type: 'event',
+    entity: { id: 'r9', title: runRow.title, startDate: runRow.event_start_utc, row: runRow }, now: NOW,
+  }));
+  ck('time_tbd run: endDate is the Central end day', run?.endDate === '2026-10-11', run?.endDate);
+
+  // Without the full row (the minimal select), the marker is still caught.
+  const thin = injectedNode(await rewrite(SHELL, {
+    pageUrl: 'https://desmoinesinsider.com/events/fall-fest-2026-10-09', sbBase: SB, type: 'event',
+    entity: { id: 'm8', title: 'Fall Fest', startDate: '2026-10-10T00:31:58Z' }, now: NOW,
+  }));
+  ck('minimal path: the marker becomes a date-only startDate', thin?.startDate === '2026-10-09', thin?.startDate);
+
+  // A real showtime is untouched.
+  ck('a stated time keeps its instant', en?.startDate === '2026-10-10T01:00:00Z', en?.startDate);
+}
+
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);
