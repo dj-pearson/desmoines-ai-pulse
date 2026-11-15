@@ -48,8 +48,13 @@ class ForYouRepositoryImpl @Inject constructor(
         val personalized = userId != null &&
             remote.countRecentSwipes(userId, windowStartIso()) >= ForYouRepository.SWIPE_THRESHOLD
 
-        if (personalized) {
-            ForYouResult(ForYouSource.FOR_YOU, remote.fetchPersonalized(lat, lon, ForYouRepository.LIMIT))
+        // An empty personalized answer falls back to trending, as on iOS. The
+        // server answers empty for an account that has not turned
+        // "Personalized suggestions" on (XPLAT-016), so without this an
+        // opted-out user would see a blank For You rail.
+        val rows = if (personalized) remote.fetchPersonalized(lat, lon, ForYouRepository.LIMIT) else emptyList()
+        if (rows.isNotEmpty()) {
+            ForYouResult(ForYouSource.FOR_YOU, rows)
         } else {
             ForYouResult(ForYouSource.TRENDING, remote.fetchTrending(ForYouRepository.LIMIT))
         }
