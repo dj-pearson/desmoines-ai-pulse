@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCw, MapPin, Star, Phone, Globe, Camera, AlertCircle, CheckCircle, Database } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { RestaurantHoursRefresh } from "@/components/restaurants/RestaurantHoursRefresh";
 
 const log = createLogger('RestaurantBulkUpdaterSimple');
 
@@ -262,6 +263,10 @@ export function RestaurantBulkUpdaterSimple() {
               "Force Update" is enabled. The process includes rate limiting to avoid API quota issues.
             </AlertDescription>
           </Alert>
+
+          <hr className="border-gray-200" />
+
+          <RestaurantHoursRefresh />
         </CardContent>
       </Card>
     </div>

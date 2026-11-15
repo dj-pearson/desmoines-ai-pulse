@@ -1,15 +1,21 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { createLogger } from '@/lib/logger';
+import { handleError } from '@/lib/errorHandler';
+import type { BulkUpdateRequestBody } from '@/lib/restaurantHoursRefresh';
 
-const log = createLogger('useBulkRestaurantUpdate');
-
-interface BulkUpdateResult {
+export interface BulkUpdateResult {
   success: boolean;
   message: string;
   processed: number;
   updated: number;
   errors: number;
+  /** Hours-only modes (WEB-FEAT-086): 'hoursOnly' (fill) or 'hoursOnly-stale'. */
+  mode?: string;
+  noHours?: number;
+  /** Stale mode only: Places answered 404 for the place id. */
+  gone?: number;
+  /** Fill mode only: pass back as afterId to move past rows Google has no hours for. */
+  lastId?: string | null;
   errorDetails?: Array<{
     id: string;
     name: string;
@@ -17,10 +23,29 @@ interface BulkUpdateResult {
   }>;
 }
 
-interface BulkUpdateOptions {
+export interface BulkUpdateOptions {
   batchSize?: number;
   forceUpdate?: boolean;
   clearEnhanced?: boolean;
+  /** Hours and business_status only, never the full enrichment (SEO-054). */
+  hoursOnly?: boolean;
+  /** With hoursOnly: re-read hours last checked more than N days ago (WEB-FEAT-079). */
+  staleDays?: number;
+  /** With hoursOnly and no staleDays: the previous run's lastId. */
+  afterId?: string | null;
+}
+
+/**
+ * The body bulk-update-restaurants reads. Hours fields are sent only when
+ * asked for, so the enrichment call is byte-for-byte what it was.
+ */
+export function bulkUpdateRequestBody(options: BulkUpdateOptions = {}): BulkUpdateRequestBody {
+  const { batchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, staleDays, afterId } = options;
+  if (!hoursOnly) return { batchSize, forceUpdate, clearEnhanced };
+  const body: BulkUpdateRequestBody = { batchSize, hoursOnly: true };
+  if (staleDays !== undefined) body.staleDays = staleDays;
+  else if (afterId) body.afterId = afterId;
+  return body;
 }
 
 export function useBulkRestaurantUpdate() {
@@ -34,17 +59,15 @@ export function useBulkRestaurantUpdate() {
       setProgress('Starting bulk restaurant update...');
       setResult(null);
 
-      const { batchSize = 10, forceUpdate = false, clearEnhanced = false } = options;
+      const body = bulkUpdateRequestBody(options);
 
-      setProgress(`Updating restaurants (batch size: ${batchSize})...`);
+      setProgress(
+        body.hoursOnly
+          ? `Refreshing hours (batch size: ${body.batchSize})...`
+          : `Updating restaurants (batch size: ${body.batchSize})...`,
+      );
 
-      const { data, error } = await supabase.functions.invoke('bulk-update-restaurants', {
-        body: {
-          batchSize,
-          forceUpdate,
-          clearEnhanced
-        }
-      });
+      const { data, error } = await supabase.functions.invoke('bulk-update-restaurants', { body });
 
       if (error) {
         throw new Error(error.message || 'Failed to update restaurants');
@@ -61,7 +84,10 @@ export function useBulkRestaurantUpdate() {
       return data;
 
     } catch (error) {
-      log.error('bulkUpdate', 'Bulk restaurant update error', { error });
+      handleError(error, {
+        component: 'useBulkRestaurantUpdate',
+        action: options.hoursOnly ? 'refreshHours' : 'bulkUpdate',
+      });
       const errorResult: BulkUpdateResult = {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error occurred',
