@@ -346,7 +346,8 @@ serve(async (req) => {
 
     const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null } = await req.json()
     // Each row is a paid Google Places lookup, and batchSize went straight into
-    // .limit(). 50 is the admin form's own max (RestaurantBulkUpdater.tsx).
+    // .limit(). 50 is the admin form's own max (RestaurantBulkUpdaterSimple.tsx,
+    // and HOURS_BATCH_MAX in src/lib/restaurantHoursRefresh.ts).
     const batchSize = Math.min(Math.max(Math.floor(Number(rawBatchSize)) || 10, 1), 50)
 
     // SEO-054: hours and status only, for rows with a place id and no hours.
