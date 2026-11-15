@@ -28,6 +28,15 @@ interface RateCard {
   updated_at: string;
 }
 
+/**
+ * Named, not "*": updated_by is not granted to anon or authenticated
+ * (WEB-SEC-075, migration 20261115000102), so select("*") is refused with
+ * 42501 even for an admin. A column added to ad_rate_card needs a GRANT
+ * before it can be listed here.
+ */
+const RATE_CARD_COLUMNS =
+  "id, placement_type, base_daily_rate, cpm_rate, min_days, max_days, min_lead_time_days, discount_7_day, discount_14_day, discount_30_day, peak_multiplier, high_multiplier, is_active, updated_at";
+
 const PLACEMENT_LABELS: Record<string, string> = {
   top_banner: "Top Banner",
   featured_spot: "Featured Spot",
@@ -54,7 +63,7 @@ export function AdRateManager() {
       setIsLoading(true);
       const { data, error } = await supabase
         .from("ad_rate_card")
-        .select("*")
+        .select(RATE_CARD_COLUMNS)
         .order("placement_type");
 
       if (error) throw error;
