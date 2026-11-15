@@ -609,6 +609,9 @@ jobs:
       # The public events API's filters: visibility, Central-time window with
       # the running arm, one or= group. Offline, no remote imports.
       - run: deno test supabase/functions/api-events/listQuery.test.ts
+      # The weekly digest's event window (Central days, running arm, capped
+      # runs) and its date line. Offline, no remote imports. WEB-FEAT-089.
+      - run: deno test supabase/functions/assemble-weekly-digest/content.test.ts
       # Saved-search alert matching and the email it builds (WP5).
       - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts
       # support-chat is anon-callable; these caps are what bound one request's
