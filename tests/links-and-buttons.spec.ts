@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Comprehensive Link and Button Testing Suite
@@ -191,7 +192,43 @@ test.describe('Button Testing - Functionality and Feedback', () => {
   }
 });
 
+/**
+ * The first VISIBLE link to `path`. These two tests used `.first()` on the
+ * bare selector, and the first `a[href="/events"]` in the DOM is the mobile
+ * bottom nav, which is hidden at desktop widths: on chromium-desktop both
+ * timed out waiting for a hidden element to become visible, whatever the
+ * backend (reproduced on a vite build, 2/2). A link a visitor can actually
+ * click is the journey these tests describe.
+ */
+function visibleLink(page: Page, path: string) {
+  return page.locator(`a[href="${path}"]`).filter({ visible: true }).first();
+}
+
 test.describe('Navigation Testing', () => {
+  // On a phone the visible link is the bottom nav, and the cookie banner
+  // (fixed bottom, z-60) sits over it once it mounts: the click then times
+  // out on "subtree intercepts pointer events" (mobile-chrome, 1 in 10 here).
+  // The banner is not part of the navigation journey, so consent is seeded.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem(
+          'cookie-consent',
+          JSON.stringify({
+            version: '2026-04-13',
+            essential: true,
+            preferences: true,
+            analytics: false,
+            advertising: false,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      } catch {
+        /* private mode: the banner shows */
+      }
+    });
+  });
+
   test('should navigate between all major pages successfully', async ({ page }) => {
     await page.goto('/');
 
@@ -204,8 +241,7 @@ test.describe('Navigation Testing', () => {
 
     for (const link of navLinks) {
       await page.goto('/');
-      const navElement = page.locator(`a[href="${link.path}"]`).first();
-      await navElement.click();
+      await visibleLink(page, link.path).click();
       await expect(page).toHaveURL(new RegExp(link.path));
       await expect(page).not.toHaveTitle(/404|Not Found/);
     }
@@ -213,7 +249,7 @@ test.describe('Navigation Testing', () => {
 
   test('should have working back button navigation', async ({ page }) => {
     await page.goto('/');
-    await page.click('a[href="/events"]');
+    await visibleLink(page, '/events').click();
     await page.waitForURL(/\/events/);
 
     await page.goBack();
@@ -306,17 +342,82 @@ test.describe('Event links resolve to real event pages (WEB-SEO-033)', () => {
  * plain deeplink instead. So in this suite the fallback link is what appears;
  * the assertion accepts either form so it still holds in a real browser.
  *
- * Slugs are live rows as of 2026-10-01 (corn-mazes-near-des-moines is a
- * published article, jesses-embers the oldest restaurant).
+ * Rows come from fixtureBackend. These tests used to name live slugs
+ * (corn-mazes-near-des-moines, jesses-embers), so on the placeholder build the
+ * article page took its not-found branch and "renders at the end of an
+ * article" failed on both projects, while "is absent from a restaurant page"
+ * passed on "We couldn't load this restaurant" rather than a restaurant (it
+ * held only because useSiteFooter runs above the error branch). Both now load
+ * a real detail page and check its h1 before asserting.
  */
+const SEO037_ISO = '2026-09-01T12:00:00.000Z';
+const SEO037_ARTICLE = {
+  id: '45000000-0000-0000-0000-000000000001',
+  slug: 'preferred-source-fixture',
+  title: 'Preferred Source Fixture Article',
+  excerpt: 'An article supplied by links-and-buttons.spec.ts.',
+  content: 'Body text for the fixture article. '.repeat(20),
+  category: 'Food',
+  tags: ['fixture'],
+  featured_image_url: null,
+  seo_title: null,
+  seo_description: null,
+  seo_keywords: null,
+  view_count: 0,
+  published_at: SEO037_ISO,
+  created_at: SEO037_ISO,
+  updated_at: SEO037_ISO,
+  status: 'published',
+  is_auto_published: false,
+  generated_from_suggestion_id: null,
+  quality_score: null,
+};
+const SEO037_RESTAURANT = {
+  id: '45000000-0000-0000-0000-000000000002',
+  name: 'Preferred Source Fixture Grill',
+  slug: 'preferred-source-fixture-grill',
+  location: '400 Locust St, Des Moines, IA 50309',
+  city: 'Des Moines',
+  cuisine: 'American',
+  description: 'A restaurant supplied by links-and-buttons.spec.ts.',
+  image_url: null,
+  latitude: 41.58,
+  longitude: -93.62,
+  rating: 4.5,
+  price_range: '$$',
+  opening: 'Daily 11am-10pm',
+  status: 'open',
+  is_merged: false,
+  merged_into: null,
+  updated_at: SEO037_ISO,
+};
+
 test.describe('Google preferred source button (SEO-037)', () => {
   const PREFERRED = '[data-preferred-source]';
   const BUTTON_OR_LINK =
     '[google-add-preferred-source-btn], a[href="https://www.google.com/preferences/source?q=desmoinesinsider.com"]';
 
   test('renders at the end of an article', async ({ page }) => {
-    await page.goto('/articles/corn-mazes-near-des-moines');
-    await expect(page.locator('h1')).toBeVisible({ timeout: 20000 });
+    await installFixtureBackend(page);
+    // After installFixtureBackend, so this handler wins the match. Answers the
+    // slug lookup with the fixture and every other articles read with nothing.
+    await page.route('**/rest/v1/articles**', (route) => {
+      const slug = (new URL(route.request().url()).searchParams.get('slug') || '').replace(/^eq\./, '');
+      const rows = slug === SEO037_ARTICLE.slug ? [SEO037_ARTICLE] : [];
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'content-range',
+          'content-range': rows.length ? '0-0/1' : '*/0',
+        },
+        body: JSON.stringify(rows),
+      });
+    });
+
+    await page.goto(`/articles/${SEO037_ARTICLE.slug}`);
+    await expect(page.locator('h1')).toHaveText(SEO037_ARTICLE.title, { timeout: 20000 });
 
     const block = page.locator(`article ${PREFERRED}`);
     await expect(block).toHaveCount(1);
@@ -328,8 +429,22 @@ test.describe('Google preferred source button (SEO-037)', () => {
   });
 
   test('is absent from a restaurant page', async ({ page }) => {
-    await page.goto('/restaurants/jesses-embers');
-    await expect(page.locator('h1')).toBeVisible({ timeout: 20000 });
+    await installFixtureBackend(page);
+    // The detail read by slug gets the fixture; list reads (related, nearby)
+    // get nothing, so the rails stay quiet.
+    await page.route('**/rest/v1/restaurants*', (route) => {
+      const url = decodeURIComponent(route.request().url());
+      const hit = url.includes(`slug=eq.${SEO037_RESTAURANT.slug}`) || url.includes(`id=eq.${SEO037_RESTAURANT.id}`);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(hit ? [SEO037_RESTAURANT] : []),
+      });
+    });
+
+    await page.goto(`/restaurants/${SEO037_RESTAURANT.slug}`);
+    await expect(page.locator('h1')).toHaveText(SEO037_RESTAURANT.name, { timeout: 20000 });
     await expect(page.locator('footer')).toBeVisible();
 
     await expect(page.locator(PREFERRED)).toHaveCount(0);
