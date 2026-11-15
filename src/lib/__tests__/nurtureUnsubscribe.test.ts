@@ -109,6 +109,30 @@ describe("sendNurtureEmail unsubscribe token", () => {
     expect(out.sent[0].headers?.["List-Unsubscribe-Post"]).toBeUndefined();
   });
 
+  it("does not promise one click when the footer link needs a sign-in (slice 2)", async () => {
+    const { sendNurtureEmail } = await load();
+    const db = fakeClient({ row: null });
+    const out = capture();
+    await sendNurtureEmail(db.client, base, { send: out.send });
+
+    const { html, text } = out.sent[0];
+    expect(html).not.toMatch(/one click/i);
+    expect(text).not.toMatch(/one click/i);
+    expect(html).toContain("/profile?tab=settings");
+    expect(html).toContain("mailto:unsubscribe@desmoinesinsider.com?subject=unsubscribe");
+    expect(text).toContain("sign in and change your email preferences");
+    expect(text).toContain("unsubscribe@desmoinesinsider.com");
+  });
+
+  it("keeps the one-click wording when a token is in the footer", async () => {
+    const { sendNurtureEmail } = await load();
+    const db = fakeClient({ row: { unsubscribe_token: TOKEN } });
+    const out = capture();
+    await sendNurtureEmail(db.client, base, { send: out.send });
+    expect(out.sent[0].html).toContain("unsubscribe in one click");
+    expect(out.sent[0].text).toContain(`Unsubscribe (one click): `);
+  });
+
   it("sends without the token when the lookup errors or throws", async () => {
     const { sendNurtureEmail } = await load();
     for (const opts of [{ readError: "permission denied" }, { throws: true }]) {

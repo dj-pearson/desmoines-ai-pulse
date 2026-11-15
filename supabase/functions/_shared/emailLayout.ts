@@ -171,6 +171,12 @@ export function listUnsubscribeHeaders(rendered: RenderedEmail): Record<string, 
   return h;
 }
 
+/*
+ * Without a token (no reminder, alerts or newsletter token) the footer link
+ * goes to a page behind a sign-in, so it must not promise "one click"
+ * (WEB-ADS-035). It names the mailto opt-out instead, which works signed out
+ * and is the same address the List-Unsubscribe header carries.
+ */
 function renderMarketingFooterHtml(recipient: EmailRecipient): string {
   const unsubscribeUrl = buildUnsubscribeUrl(recipient);
   const why = recipient.reminderToken
@@ -197,7 +203,8 @@ function renderMarketingFooterHtml(recipient: EmailRecipient): string {
         <a href="${SITE_URL}${SAVED_SEARCHES_PATH}" style="color:#666;text-decoration:underline;">
           saved searches</a>.
       </p>`
-    : `
+    : recipient.unsubscribeToken
+    ? `
       <p style="margin:0 0 8px;">
         You're receiving this email because you signed up for updates from
         ${escapeHtml(POSTAL_ADDRESS.name)}. You can
@@ -207,6 +214,16 @@ function renderMarketingFooterHtml(recipient: EmailRecipient): string {
         or update your
         <a href="${SITE_URL}/profile?tab=settings" style="color:#666;text-decoration:underline;">
           email preferences</a>.
+      </p>`
+    : `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because you signed up for updates from
+        ${escapeHtml(POSTAL_ADDRESS.name)}. To stop these emails, sign in and
+        change your
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          email preferences</a>,
+        or email
+        <a href="mailto:${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}?subject=unsubscribe" style="color:#666;text-decoration:underline;">${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}</a>.
       </p>`;
   return `
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#666;line-height:1.5;">${why}
@@ -237,9 +254,13 @@ Your reminders: ${SITE_URL}/my-events?tab=reminders`
     ? `You're receiving this email because you turned on alerts for a saved search on ${POSTAL_ADDRESS.name}.
 Turn off saved-search alerts (one click): ${unsubscribeUrl}
 Your saved searches: ${SITE_URL}${SAVED_SEARCHES_PATH}`
-    : `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
+    : recipient.unsubscribeToken
+    ? `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
 Unsubscribe (one click): ${unsubscribeUrl}
-Email preferences: ${SITE_URL}/profile?tab=settings`;
+Email preferences: ${SITE_URL}/profile?tab=settings`
+    : `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
+To stop these emails, sign in and change your email preferences: ${unsubscribeUrl}
+Or email ${POSTAL_ADDRESS.unsubscribeEmail} with the subject "unsubscribe".`;
   return `
 --
 ${why}

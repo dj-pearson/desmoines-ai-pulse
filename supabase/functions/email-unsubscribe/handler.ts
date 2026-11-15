@@ -29,6 +29,11 @@
  * ?alerts=<saved_searches.id>. Same two doors; the work is
  * disable_event_alerts_by_token, which turns off that user's event alerts
  * (user_email_preferences.event_alerts_enabled) and nothing else.
+ *
+ * WEB-ADS-035: marketing mail to a member with no newsletter row carries
+ * ?account=<marketing_unsubscribe_tokens.token>. Same two doors and the same
+ * 48-hex shape as ?token=; the work is marketing_unsubscribe_by_token, which
+ * writes the same 'unsubscribe' suppression the newsletter token does.
  */
 
 /** 48 lowercase hex, the shape the RPC validates. */
@@ -48,6 +53,8 @@ export interface HandlerDeps {
   cancelReminders?: UnsubscribeRpc;
   /** disable_event_alerts_by_token. Same call shape as rpc. */
   disableAlerts?: UnsubscribeRpc;
+  /** marketing_unsubscribe_by_token. Same call shape as rpc. */
+  accountUnsubscribe?: UnsubscribeRpc;
   siteUrl: string;
 }
 
@@ -64,6 +71,7 @@ export async function handleUnsubscribe(req: Request, deps: HandlerDeps): Promis
   const url = new URL(req.url);
   if (url.searchParams.has("reminder")) return handleReminder(req, url, deps);
   if (url.searchParams.has("alerts")) return handleAlerts(req, url, deps);
+  if (url.searchParams.has("account")) return handleAccount(req, url, deps);
   const token = (url.searchParams.get("token") ?? "").trim().toLowerCase();
 
   if (req.method === "GET") {
@@ -128,4 +136,29 @@ async function handleAlerts(req: Request, url: URL, deps: HandlerDeps): Promise<
   const row = (Array.isArray(data) ? data[0] : data) as { success?: boolean; already_disabled?: boolean } | null;
   if (!row?.success) return json(404, { error: "Unknown alerts token" });
   return json(200, { ok: true, already_disabled: !!row.already_disabled });
+}
+
+async function handleAccount(req: Request, url: URL, deps: HandlerDeps): Promise<Response> {
+  const token = (url.searchParams.get("account") ?? "").trim().toLowerCase();
+
+  if (req.method === "GET") {
+    const page = `${deps.siteUrl.replace(/\/+$/, "")}/unsubscribe?account=${encodeURIComponent(token)}`;
+    return new Response(null, { status: 303, headers: { Location: page, "Cache-Control": "no-store" } });
+  }
+
+  if (!TOKEN_RE.test(token)) return json(400, { error: "Invalid unsubscribe token" });
+  // Never fall back to the newsletter RPC: an account token is not in
+  // newsletter_subscribers, so that call would answer "unknown" and the
+  // provider would stop retrying with the reader still subscribed.
+  if (!deps.accountUnsubscribe) return json(503, { error: "Try again later" });
+
+  const { data, error } = await deps.accountUnsubscribe(token);
+  if (error) {
+    console.error("[email-unsubscribe] account unsubscribe failed:", error.message);
+    return json(503, { error: "Try again later" });
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as { success?: boolean; already_unsubscribed?: boolean } | null;
+  if (!row?.success) return json(404, { error: "Unknown unsubscribe token" });
+  return json(200, { ok: true, already_unsubscribed: !!row.already_unsubscribed });
 }
