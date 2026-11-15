@@ -35,16 +35,22 @@
  * in `unavailable` with its code, so the export says what it could not read
  * instead of quietly shrinking - which is exactly how the client-side version
  * came to omit three tables nobody noticed for months.
+ *
+ * MAIL DATA KEYED BY ADDRESS is read from _shared/addressKeyedData.ts
+ * (newsletter_subscribers, email_log, email_suppressions), the list erasure
+ * also walks. Those rows land in `data` under their table names; no name there
+ * overlaps PURGE_TABLES or RETAINED_TABLES.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { PURGE_TABLES, RETAINED_TABLES } from "../_shared/userDataTables.ts";
-
-interface TableFailure {
-  table: string;
-  code?: string;
-  message: string;
-}
+import {
+  ADDRESS_KEYED_TABLES,
+  addressRetentionBasis,
+  readAddressKeyedData,
+  type AddressDataClient,
+  type TableFailure,
+} from "../_shared/addressKeyedData.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -97,6 +103,15 @@ Deno.serve(async (req) => {
       if (rows && rows.length > 0) data[table] = rows;
     }
 
+    const byAddress = await readAddressKeyedData(
+      supabase as unknown as AddressDataClient,
+      userId,
+      user.email,
+    );
+    Object.assign(data, byAddress.data);
+    unavailable.push(...byAddress.unavailable);
+    const addressTables = Object.keys(ADDRESS_KEYED_TABLES).length;
+
     return json({
       exportedAt: new Date().toISOString(),
       userId,
@@ -104,12 +119,12 @@ Deno.serve(async (req) => {
       data,
       // What was looked at, so the reader can tell an empty table from an
       // unexamined one.
-      tablesConsidered: PURGE_TABLES.length + retainedTables.length,
+      tablesConsidered: PURGE_TABLES.length + retainedTables.length + addressTables,
       tablesWithData: Object.keys(data).length,
       // Rows kept even if erasure is requested, each with the basis. A user
       // reading their own export is entitled to know which of it we would not
       // delete, and why.
-      retentionBasis: RETAINED_TABLES,
+      retentionBasis: { ...RETAINED_TABLES, ...addressRetentionBasis() },
       // Empty on a healthy database. Anything here is a table this export could
       // not read - a schema change, a permission problem, or a name that no
       // longer exists.

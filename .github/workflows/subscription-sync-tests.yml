@@ -180,6 +180,10 @@ jobs:
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.
       - run: deno test --allow-read supabase/functions/_tests/export-user-data.test.ts
+      # Mail data is keyed by address, so the user_id lists above never saw it:
+      # erasure left email_log (to_email kept, user_id nulled) and the export
+      # omitted newsletter_subscribers, email_log and email_suppressions.
+      - run: deno test --allow-read supabase/functions/_tests/address-keyed-data.test.ts
       # XPLAT-008. Two admin diagnostics that returned 404 on every press.
       # test-article-webhook POSTs to a caller-supplied URL, so the SSRF guard
       # running BEFORE the request is the assertion that matters.
