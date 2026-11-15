@@ -281,6 +281,37 @@ class AuthRemoteDataSource @Inject constructor(
             }
     }
 
+    // MARK: - Consent Records (XPLAT-016)
+
+    @Serializable
+    private data class NewConsentRecord(
+        @SerialName("user_id") val userId: String,
+        @SerialName("consent_type") val consentType: String,
+        val granted: Boolean,
+        val source: String,
+        val metadata: JsonObject,
+    )
+
+    /**
+     * Append one consent_records row for the signed-in user, as the web's
+     * logConsent does, so the consent history on /profile shows a flip made in
+     * the app with its date. RLS allows the insert only when user_id is the
+     * caller. Throws on failure; the repository decides that a failed log does
+     * not undo the setting itself.
+     */
+    suspend fun recordConsent(userId: String, consentType: String, granted: Boolean) {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        client.from("consent_records").insert(
+            NewConsentRecord(
+                userId = userId,
+                consentType = consentType,
+                granted = granted,
+                source = "profile_settings",
+                metadata = buildJsonObject { put("platform", "android") },
+            )
+        )
+    }
+
     // MARK: - Admin Check
 
     suspend fun checkAdminRole(userId: String): Boolean {

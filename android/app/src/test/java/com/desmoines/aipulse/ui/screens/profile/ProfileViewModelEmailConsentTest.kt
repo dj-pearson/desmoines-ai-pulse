@@ -59,6 +59,8 @@ class ProfileViewModelEmailConsentTest {
         coEvery { authRepository.fetchProfile(any()) } returns Result.success(null)
         coEvery { authRepository.isEmailMarketingAllowed(any()) } returns Result.success(true)
         coEvery { authRepository.setEmailMarketingAllowed(any(), any()) } returns Result.success(Unit)
+        // loadProfile also reads the personalization switch (XPLAT-016).
+        coEvery { authRepository.isPersonalizationEnabled(any()) } returns Result.success(false)
     }
 
     @AfterEach

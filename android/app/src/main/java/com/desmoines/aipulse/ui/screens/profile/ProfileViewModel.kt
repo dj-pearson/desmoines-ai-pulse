@@ -111,6 +111,48 @@ class ProfileViewModel @Inject constructor(
     fun clearEmailConsentError() { _emailConsentError.value = null }
 
     /**
+     * "Personalized suggestions" (XPLAT-016): whether For You may rank events
+     * from this account's swipes and saves. The same switch as the web's
+     * /profile?tab=settings, stored in communication_preferences and checked by
+     * get_personalized_recommendations_v2.
+     *
+     * Starts OFF, the opposite of email: this key is opt-in, and absence on the
+     * server means no personalization. The real value replaces it when the
+     * profile loads.
+     */
+    private val _personalization = MutableStateFlow(false)
+    val personalization: StateFlow<Boolean> = _personalization.asStateFlow()
+
+    private val _personalizationError = MutableStateFlow<String?>(null)
+    val personalizationError: StateFlow<String?> = _personalizationError.asStateFlow()
+
+    /**
+     * Write the switch through and roll it back if the write fails, like the
+     * email toggle. Signed out there is no profile to write, so nothing
+     * changes.
+     */
+    fun setPersonalization(enabled: Boolean) {
+        val userId = authRepository.currentUserId ?: return
+        val previous = _personalization.value
+        _personalization.value = enabled
+        _personalizationError.value = null
+        viewModelScope.launch {
+            authRepository.setPersonalizationEnabled(userId, enabled).onFailure {
+                _personalization.value = previous
+                _personalizationError.value = "Could not save your suggestions preference. Check your connection and try again."
+            }
+        }
+    }
+
+    private fun refreshPersonalization(userId: String) {
+        viewModelScope.launch {
+            authRepository.isPersonalizationEnabled(userId).onSuccess { enabled ->
+                _personalization.value = enabled
+            }
+        }
+    }
+
+    /**
      * Toggle analytics/telemetry consent. Revoking immediately disables Firebase
      * collection; AdTrackingService drops its queued events via its consent
      * observer, so no non-essential telemetry survives the opt-out.
@@ -203,6 +245,7 @@ class ProfileViewModel @Inject constructor(
         val userId = authRepository.currentUserId ?: return
 
         refreshEmailConsent(userId)
+        refreshPersonalization(userId)
 
         viewModelScope.launch {
             authRepository.fetchProfile(userId).onSuccess { profile ->

@@ -88,5 +88,18 @@ interface AuthRepository {
     /** Persist the email opt-in/out into profiles.communication_preferences. */
     suspend fun setEmailMarketingAllowed(userId: String, allowed: Boolean): Result<Unit>
 
+    /**
+     * Whether "Personalized suggestions" is on for this account (XPLAT-016).
+     * Opt-in: only an explicit true in communication_preferences counts, which
+     * is what get_personalized_recommendations_v2 checks.
+     */
+    suspend fun isPersonalizationEnabled(userId: String): Result<Boolean>
+
+    /**
+     * Persist the switch into profiles.communication_preferences (merged,
+     * never replaced) and log a personalization_ai consent_records row.
+     */
+    suspend fun setPersonalizationEnabled(userId: String, enabled: Boolean): Result<Unit>
+
     suspend fun checkAdminRole(userId: String): Result<Boolean>
 }

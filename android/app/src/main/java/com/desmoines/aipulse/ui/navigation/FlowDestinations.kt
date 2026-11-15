@@ -605,6 +605,8 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
         val emailConsent by profileViewModel.emailConsent.collectAsStateWithLifecycle()
         val emailConsentError by profileViewModel.emailConsentError.collectAsStateWithLifecycle()
         val analyticsConsent by profileViewModel.analyticsConsent.collectAsStateWithLifecycle()
+        val personalization by profileViewModel.personalization.collectAsStateWithLifecycle()
+        val personalizationError by profileViewModel.personalizationError.collectAsStateWithLifecycle()
 
         SettingsScreen(
             isAuthenticated = isAuthenticated,
@@ -629,8 +631,11 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
             emailConsent = emailConsent,
             emailConsentError = emailConsentError,
             analyticsConsent = analyticsConsent,
+            personalization = personalization,
+            personalizationError = personalizationError,
             onToggleLocationConsent = { profileViewModel.setLocationConsent(it) },
             onToggleEmailConsent = { profileViewModel.setEmailConsent(it) },
+            onTogglePersonalization = { profileViewModel.setPersonalization(it) },
             onToggleAnalyticsConsent = { profileViewModel.setAnalyticsConsent(it) },
             onNavigateBack = { navController.popBackStack() },
             onNavigateToSubscription = {
