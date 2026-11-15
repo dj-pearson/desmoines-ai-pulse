@@ -20,6 +20,7 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
+import { weeklyDigestOptedOut } from "../_shared/weeklyDigestOptOut.ts";
 
 const AGENT_KEY = "weekly-digest-personal";
 const BATCH = 300;
@@ -83,10 +84,15 @@ Deno.serve(async (req) => {
     if (profilesError) throw new Error(`weekly-digest: could not read digest recipients: ${profilesError.message}`);
     const rows = (profiles ?? []) as { user_id: string; email: string; interests: unknown; lifecycle_signals: { messagingAllowed?: boolean } | null }[];
 
-    let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0;
+    // The account page's weekly digest switch. Read once for the batch; throws
+  // on a failed read so nobody who switched it off is mailed.
+  const digestOff = await weeklyDigestOptedOut(supabase, rows.map((r) => r.user_id));
+
+  let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0, skippedPref = 0;
 
     for (const p of rows) {
       if (!hasMarketingConsent(p.lifecycle_signals)) { skippedConsent++; continue; }
+    if (digestOff.has(p.user_id)) { skippedPref++; continue; }
 
       // Frequency cap.
       const { data: recent, error: recentError } = await supabase
@@ -167,9 +173,9 @@ Deno.serve(async (req) => {
     }
 
     ctx.processed(rows.length);
-    ctx.summary(`weekly digest: ${sent} sent, ${skippedEmpty} skipped-empty, ${skippedCap} frequency-capped, ${gated} quality-gated, ${skippedConsent} no-consent`);
-    ctx.meta({ sent, skippedEmpty, skippedCap, gated, skippedConsent });
-    return { sent, skippedEmpty, skippedCap, gated };
+    ctx.summary(`weekly digest: ${sent} sent, ${skippedEmpty} skipped-empty, ${skippedCap} frequency-capped, ${gated} quality-gated, ${skippedConsent} no-consent, ${skippedPref} digest-off`);
+    ctx.meta({ sent, skippedEmpty, skippedCap, gated, skippedConsent, skippedPref });
+    return { sent, skippedEmpty, skippedCap, gated, skippedPref };
   });
 
   return json({ ok: ledger.ok, status: ledger.status, ...(ledger.result ?? {}) }, ledger.ok ? 200 : 500, corsHeaders);

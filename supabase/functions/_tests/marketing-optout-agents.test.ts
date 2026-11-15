@@ -50,6 +50,7 @@ const { run: dormantReengagement } = await import("../_shared/agents/dormant-ree
 const { run: churnWinback } = await import("../_shared/agents/churn-winback.ts");
 const { run: milestoneRecognition } = await import("../_shared/agents/milestone-recognition.ts");
 const { run: outreachSequencer } = await import("../_shared/agents/outreach-sequencer.ts");
+const { run: weeklyDigestPersonal } = await import("../_shared/agents/weekly-digest-personal.ts");
 const { lifecycleActions, marketingAllowedFrom } = await import("../subscription-lifecycle/policy.ts");
 
 // ─── A PostgREST-shaped mock ─────────────────────────────────────────────────
@@ -416,4 +417,63 @@ Deno.test("billing win-back: the job reads consent from lifecycle_signals and pa
   assert.ok(/\.select\('user_id, email, lifecycle_signals'\)/.test(src), "profiles must be read with lifecycle_signals");
   assert.ok(/marketingAllowedFrom\(profile\?\.lifecycle_signals/.test(src));
   assert.ok(/lifecycleActions\(sub, now, \{ marketingAllowed \}\)/.test(src));
+});
+
+// ─── weekly digest switch: weekly-digest-personal ────────────────────────────
+//
+// WEB-ADS-036. This agent gated only on messagingAllowed (the
+// "Account and activity emails" switch), so turning the account page's
+// "Weekly event digest" switch off stopped send-weekly-digest and left this
+// one mailing "Your week in Des Moines" every week. Every user here is opted IN
+// to marketing, so the only thing that differs between the cases is the
+// user_email_preferences row.
+
+function weeklyDigestFixtures(prefs: Row[]) {
+  return {
+    profiles: [{ user_id: "u1", email: "someone@example.com", interests: [], lifecycle_signals: OPTED_IN }],
+    user_email_preferences: prefs,
+    events: [{
+      id: "e1",
+      title: "Jazz in July",
+      category: "music",
+      date: new Date(Date.now() + 86_400_000).toISOString(),
+      city: "Des Moines",
+      image_url: null,
+    }],
+    restaurants: [],
+    attractions: [],
+    nurture_sends: [],
+    user_subscriptions: [],
+    saved_searches: [],
+  };
+}
+
+Deno.test("weekly digest switch: weekly-digest-personal does not mail a user who switched the digest off", async () => {
+  const { client, rec } = makeClient(weeklyDigestFixtures([{ user_id: "u1", weekly_digest_enabled: false }]));
+  const { ctx, read } = makeCtx();
+  const out = await weeklyDigestPersonal(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+
+  assert.equal(out.sent, 0);
+  assert.equal(out.skippedPref, 1, "the profile should be counted as digest-off");
+  assert.equal(out.gated, 0);
+  assert.deepEqual(sendLedgerInserts(rec), [], "a user with the digest switched off reached the send ledger");
+  assert.equal(read().meta.skippedPref, 1);
+});
+
+Deno.test("weekly digest switch: weekly-digest-personal DOES reach the send path with the switch on", async () => {
+  const { client } = makeClient(weeklyDigestFixtures([{ user_id: "u1", weekly_digest_enabled: true }]));
+  const { ctx } = makeCtx();
+  const out = await weeklyDigestPersonal(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+
+  assert.equal(out.skippedPref, 0);
+  assert.equal(out.gated, 1, "should have reached the quality gate; if not, the fixture stopped it earlier and the negative test above proves nothing");
+});
+
+Deno.test("weekly digest switch: a user with no preferences row is still decided by messagingAllowed", async () => {
+  const { client } = makeClient(weeklyDigestFixtures([]));
+  const { ctx } = makeCtx();
+  const out = await weeklyDigestPersonal(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+
+  assert.equal(out.skippedPref, 0, "no row is not an opt-out");
+  assert.equal(out.gated, 1);
 });
