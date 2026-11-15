@@ -27,6 +27,10 @@ import com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeViewModel
 import com.desmoines.aipulse.ui.screens.weekend.WeekendScreen
 import com.desmoines.aipulse.ui.screens.weekend.WeekendViewModel
 import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodsHubScreen
+import com.desmoines.aipulse.ui.screens.series.EventSeriesScreen
+import com.desmoines.aipulse.ui.screens.series.EventSeriesViewModel
+import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.EventSeries
 import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodDetailScreen
 import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodDetailViewModel
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubsListScreen
@@ -400,6 +404,33 @@ internal fun NavGraphBuilder.addFlowDestinations(navController: NavHostControlle
             onOpenEvent = { id -> navController.navigate(Route.EventDetail.createRoute(id)) },
             onOpenAttraction = { id -> navController.navigate(Route.AttractionDetail.createRoute(id)) },
             onOpenRestaurant = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(
+        route = Route.EventSeries.route,
+        arguments = Route.EventSeries.arguments,
+    ) { backStackEntry ->
+        val slug = backStackEntry.arguments?.getString("slug") ?: return@composable
+        val viewModel: EventSeriesViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        androidx.compose.runtime.LaunchedEffect(slug) { viewModel.load(slug) }
+
+        EventSeriesScreen(
+            state = state,
+            onOpenEvent = { id -> navController.navigate(Route.EventDetail.createRoute(id)) },
+            onShare = {
+                val def = state.def ?: return@EventSeriesScreen
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, "${def.name}\n${Config.SITE_URL}${EventSeries.path(def)}")
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Share"))
+            },
+            onRetry = viewModel::retry,
             onNavigateBack = { navController.popBackStack() },
         )
     }

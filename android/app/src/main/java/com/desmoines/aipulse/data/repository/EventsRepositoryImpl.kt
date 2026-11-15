@@ -8,6 +8,8 @@ import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.remote.EventsRemoteDataSource
 import com.desmoines.aipulse.data.remote.EventsResponse
 import com.desmoines.aipulse.util.suspendRunCatching
+import com.desmoines.aipulse.util.EventSeriesDef
+import com.desmoines.aipulse.util.SeriesEventRow
 import javax.inject.Inject
 import javax.inject.Singleton
 /**
@@ -98,6 +100,12 @@ class EventsRepositoryImpl @Inject constructor(
             cacheManager.getCachedEvents(cacheKey, allowStale = true) ?: throw error
         }
     }
+
+    override suspend fun fetchSeriesRows(def: EventSeriesDef): Result<List<SeriesEventRow>> =
+        suspendRunCatching { remoteDataSource.fetchSeriesRows(def) }
+            .onFailure { error ->
+                AppLogger.network.error("fetchSeriesRows(${def.slug}) failed: ${error.message}", error)
+            }
 
     override suspend fun fuzzySearchEvents(query: String, limit: Int): Result<List<Event>> {
         val cacheKey = CacheManager.eventsKey("fuzzy", query, limit)

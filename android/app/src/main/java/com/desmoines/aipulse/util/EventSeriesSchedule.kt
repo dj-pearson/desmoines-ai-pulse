@@ -225,4 +225,35 @@ object EventSeriesSchedule {
 
     /** What the page says when no edition is current (the web's unannouncedLabel). */
     fun unannouncedLabel(year: Int): String = "$year date not announced yet"
+
+    // AND-AUDIT-042, slice 3b: the lines the native screen prints, kept here
+    // so they are JVM-tested rather than buried in Compose. Each is the web
+    // page's (src/pages/EventSeriesPage.tsx) and iOS EventSeriesView's.
+
+    /** "2026 dates" over the current edition, else over the unannounced year. */
+    fun currentHeading(schedule: SeriesSchedule): String? =
+        (schedule.current?.year ?: schedule.unannouncedYear)?.let { "$it dates" }
+
+    /** A past year's line: "Friday, October 2, 2026, Water Works Park" (venues joined by " and "). */
+    fun editionSummary(edition: SeriesEdition): String {
+        val dates = editionDateLabel(edition)
+        return if (edition.venues.isEmpty()) dates else "$dates, ${edition.venues.joinToString(" and ")}"
+    }
+
+    /** "Sun, Aug 30: 11th Annual Cloris Awards". */
+    fun instanceTitle(instance: SeriesInstance): String =
+        "${dayWords(instance.day, "EEE, MMM d")}: ${instance.row.event.title}"
+
+    /**
+     * "6:00 PM - Drake University": the Central start time when the row has
+     * one, then the venue or location. Null when there is neither.
+     */
+    fun instanceDetail(instance: SeriesInstance): String? {
+        val event = instance.row.event
+        val time = if (event.hasSpecificTime) EventTimeText.timeText(event) else null
+        val place = listOf(event.venue, event.location)
+            .mapNotNull { it?.trim() }
+            .firstOrNull { it.isNotEmpty() }
+        return listOfNotNull(time, place).joinToString(" - ").ifEmpty { null }
+    }
 }

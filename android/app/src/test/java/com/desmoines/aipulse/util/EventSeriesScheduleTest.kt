@@ -200,4 +200,47 @@ class EventSeriesScheduleTest {
         assertNull(schedule.venue)
         assertEquals(0, schedule.total)
     }
+    // Slice 3b: the lines the screen prints (src/pages/EventSeriesPage.tsx).
+
+    @Test
+    fun `current heading names the current year, else the unannounced one`() {
+        val withCurrent = EventSeriesSchedule.build(series("cloris-awards"), listOf(
+            row("12th Annual Cloris Awards", "2027-08-29"),
+        ), now)
+        assertEquals("2027 dates", EventSeriesSchedule.currentHeading(withCurrent))
+        val none = EventSeriesSchedule.build(series("eerie-evenings"), emptyList(), now)
+        assertEquals("2026 dates", EventSeriesSchedule.currentHeading(none))
+    }
+
+    @Test
+    fun `a past year's summary joins its venues with and`() {
+        val two = SeriesEdition(2025, emptyList(), listOf("Water Works Park", "Cowles Commons"), d("2025-10-02"), d("2025-10-02"))
+        assertEquals("Thursday, October 2, 2025, Water Works Park and Cowles Commons", EventSeriesSchedule.editionSummary(two))
+        val bare = two.copy(venues = emptyList())
+        assertEquals("Thursday, October 2, 2025", EventSeriesSchedule.editionSummary(bare))
+    }
+
+    @Test
+    fun `an instance reads day and title, then Central time and place`() {
+        val schedule = EventSeriesSchedule.build(series("cloris-awards"), listOf(
+            row("11th Annual Cloris Awards", "2026-08-30", venue = "Drake University"),
+        ), now)
+        val instance = schedule.past.single().instances.single()
+        assertEquals("Sun, Aug 30: 11th Annual Cloris Awards", EventSeriesSchedule.instanceTitle(instance))
+        // 23:00 UTC is 6 pm Central; the +00:00 hour must not leak through.
+        assertEquals("6:00 PM - Drake University", EventSeriesSchedule.instanceDetail(instance))
+    }
+
+    @Test
+    fun `an untimed instance shows only its place, and nothing without one`() {
+        val tba = EventSeriesSchedule.build(series("panda-fest"), listOf(
+            row("Panda Fest 2026", "2026-10-03", venue = "  ", timeTbd = true),
+        ), now).current!!.instances.single()
+        assertNull(EventSeriesSchedule.instanceDetail(tba))
+        val placed = SeriesInstance(
+            row = tba.row.copy(event = tba.row.event.copy(location = "Water Works Park")),
+            day = tba.day, linkId = tba.linkId, isOver = tba.isOver,
+        )
+        assertEquals("Water Works Park", EventSeriesSchedule.instanceDetail(placed))
+    }
 }

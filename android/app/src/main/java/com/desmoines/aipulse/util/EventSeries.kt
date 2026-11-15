@@ -6,9 +6,9 @@ package com.desmoines.aipulse.util
  * The web page /events/series/<slug> lists the current or next edition and the
  * past ones by year, matching `events` rows by normalised title.
  *
- * AND-AUDIT-042, slice 1: the catalogue and the title rules. The schedule and
- * the native screen come in later slices; until then /events/series/<slug>
- * still opens in the web view.
+ * AND-AUDIT-042: the catalogue and the title rules. EventSeriesSchedule
+ * groups the rows and ui/screens/series shows them; /events/series/<slug>
+ * opens natively only for a slug in [EventSeries.ALL].
  */
 data class EventSeriesDef(
     /** URL segment under /events/series/. A public URL: never rename. */

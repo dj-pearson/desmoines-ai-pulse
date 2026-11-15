@@ -16,6 +16,8 @@ import javax.inject.Singleton
  * Supported URL patterns (https on desmoinesinsider.com or www. only):
  * - `/events/:slug-or-id` -> Event detail; `/events/today`, `/events/free` and
  *   the other web landing pages (src/App.tsx) -> the matching tab or list
+ * - `/events/series/:slug` -> the native series screen for a slug the app
+ *   knows, else the WebView
  * - `/restaurants/:slug-or-id` -> Restaurant detail; `/restaurants/open-now`
  *   -> Dining tab with Open now on; `/new`, `/dietary` -> Dining tab
  * - `/attractions/:slug-or-id` -> Attraction detail
@@ -53,6 +55,8 @@ class DeepLinkHandler @Inject constructor() {
         data class Article(val id: LinkId) : Destination()
         /** One guide, by a slug [NeighborhoodGuide.bySlug] knows (AND-AUDIT-025). */
         data class Neighborhood(val slug: String) : Destination()
+        /** One annual series, by a slug [EventSeries.forSlug] knows (AND-AUDIT-042). */
+        data class Series(val slug: String) : Destination()
         data class Tab(val tab: TabDestination) : Destination()
         data class Screen(val screen: ScreenDestination) : Destination()
         data class Search(val query: String) : Destination()
@@ -408,7 +412,8 @@ class DeepLinkHandler @Inject constructor() {
                 "kids" -> return Destination.KidsEvents
                 // The Map tab is the app's nearby-events surface (iOS .tab(.map)).
                 "near-me" -> return Destination.Tab(TabDestination.MAP)
-                // /events/series/:slug has no native screen.
+                // Bare /events/series; /events/series/:slug goes through
+                // seriesDestination before this is reached.
                 "series" -> return Destination.Web(url)
             }
             if (segment in EVENT_SUBURB_SEGMENTS) {
@@ -419,6 +424,17 @@ class DeepLinkHandler @Inject constructor() {
             }
             return webLinkId(segment, maxLength = 160)?.let { Destination.Event(it) }
                 ?: Destination.Tab(TabDestination.HOME)
+        }
+
+        /**
+         * /events/series/<slug>: the native series screen for a slug the app's
+         * catalogue has (AND-AUDIT-042), else the web view, which keeps a
+         * series the web added after this build working. Anything but exactly
+         * three segments is not the web's route and opens on the web too.
+         */
+        fun seriesDestination(segments: List<String>, url: String): Destination {
+            val slug = segments.getOrNull(2)?.takeIf { segments.size == 3 }
+            return EventSeries.forSlug(slug)?.let { Destination.Series(it.slug) } ?: Destination.Web(url)
         }
 
         /**
@@ -448,7 +464,12 @@ class DeepLinkHandler @Inject constructor() {
 
             val segment = segments[1]
             return when (first) {
-                "events" -> eventDestination(segment, url)
+                "events" ->
+                    if (segment == "series") {
+                        seriesDestination(segments, url)
+                    } else {
+                        eventDestination(segment, url)
+                    }
                 "restaurants" ->
                     if (segment == "open-now") {
                         // A shared "open now" page used to open every restaurant.

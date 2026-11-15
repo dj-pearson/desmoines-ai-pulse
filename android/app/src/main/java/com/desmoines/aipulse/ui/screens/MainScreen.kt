@@ -173,6 +173,12 @@ fun MainScreen(
                     launchSingleTop = true
                 }
             }
+            // A slug EventSeries.forSlug knows (AND-AUDIT-042); others stay Web.
+            is DeepLinkHandler.Destination.Series -> {
+                navController.navigate(Route.EventSeries.createRoute(destination.slug)) {
+                    launchSingleTop = true
+                }
+            }
             is DeepLinkHandler.Destination.Web -> {
                 navController.navigate(Route.WebView.createRoute(destination.url)) {
                     launchSingleTop = true

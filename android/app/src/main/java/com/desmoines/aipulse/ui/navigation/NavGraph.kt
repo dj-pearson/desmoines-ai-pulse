@@ -64,6 +64,12 @@ sealed class Route(val route: String) {
         val arguments = listOf(navArgument("slug") { type = NavType.StringType })
     }
 
+    /** One annual series, the native /events/series/<slug> (AND-AUDIT-042). */
+    data object EventSeries : Route("event_series/{slug}") {
+        fun createRoute(slug: String) = "event_series/$slug"
+        val arguments = listOf(navArgument("slug") { type = NavType.StringType })
+    }
+
     data object Dashboard : Route("dashboard")
     /** The hub the Home CTA cards moved into (AND-OVH-025). */
     data object Explore : Route("explore")

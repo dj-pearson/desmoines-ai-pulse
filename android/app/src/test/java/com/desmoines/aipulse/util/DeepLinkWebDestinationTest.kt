@@ -94,11 +94,30 @@ class DeepLinkWebDestinationTest {
     }
 
     @Test
-    fun `an event series page opens on the web`() {
-        assertEquals(
-            Destination.Web("https://desmoinesinsider.com/events/series/jazz-in-july"),
-            web("/events/series/jazz-in-july"),
-        )
+    fun `a known event series opens the native series screen`() {
+        // AND-AUDIT-042: it opened in the web view until the native screen landed.
+        assertEquals(Destination.Series("jazz-in-july"), web("/events/series/jazz-in-july"))
+        assertEquals(Destination.Series("cloris-awards"), web("/events/series/cloris-awards"))
+    }
+
+    @Test
+    fun `every catalogued series slug opens natively`() {
+        for (def in EventSeries.ALL) {
+            assertEquals(Destination.Series(def.slug), web(EventSeries.path(def)), def.slug)
+        }
+    }
+
+    @Test
+    fun `an unknown or malformed series link stays on the web`() {
+        // A series the web added after this build must still open somewhere.
+        for (path in listOf(
+            "/events/series/some-new-festival",
+            "/events/series",
+            "/events/series/jazz-in-july/extra",
+            "/events/series/Jazz-In-July",
+        )) {
+            assertEquals(Destination.Web("https://desmoinesinsider.com$path"), web(path), path)
+        }
     }
 
     @Test
