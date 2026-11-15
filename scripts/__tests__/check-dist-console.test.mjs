@@ -34,17 +34,17 @@ const check = (name, cond, detail = '') => {
 // One generated line whose column 0 maps to sources[0]; the console call sits
 // at column 0, so the check attributes it to that source.
 const CODE = 'console.error("x");export const a=1;\n';
-const mapFor = (file, source) =>
-  JSON.stringify({ version: 3, file: `assets/${file}`, sources: [source], names: [], mappings: 'AAAA' });
+const mapFor = (file, source, mappings = 'AAAA') =>
+  JSON.stringify({ version: 3, file: `assets/${file}`, sources: [source], names: [], mappings });
 
 /** A fake project root holding dist/assets with the given chunks. */
 function project(chunks) {
   const root = mkdtempSync(path.join(tmpdir(), 'dist-console-'));
   const assets = path.join(root, 'dist', 'assets');
   mkdirSync(assets, { recursive: true });
-  for (const { file, source } of chunks) {
-    writeFileSync(path.join(assets, file), CODE);
-    if (source) writeFileSync(path.join(assets, `${file}.map`), mapFor(file, source));
+  for (const { file, source, code = CODE, mappings } of chunks) {
+    writeFileSync(path.join(assets, file), code);
+    if (source) writeFileSync(path.join(assets, `${file}.map`), mapFor(file, source, mappings));
   }
   return root;
 }
@@ -112,6 +112,40 @@ console.log('\nstrip empties .sourcemaps/dist first');
   writeFileSync(stale, '{}');
   run(STRIP, root);
   check('stale map removed', !existsSync(stale));
+  rmSync(root, { recursive: true, force: true });
+}
+
+// WEB-CI-040. 'SAAA' puts the first segment at column 9, so the call at
+// column 0 has no source. 'AAAA,U' maps columns 0-9 to sources[0] and ends
+// the mapping at column 10 with a one-field segment; LATE's call sits at 17.
+const LATE = 'export const a=1;console.error("x");\n';
+
+console.log('\na call before the first mapped segment is app code, outside vendor-*');
+{
+  const root = project([{ file: 'EventCard-iiii.js', source: DEP, mappings: 'SAAA' }]);
+  const c = run(CHECK, root);
+  check('exit 1', c.status === 1, `status ${c.status}`);
+  check('says unmapped position', /EventCard-iiii\.js.*\(unmapped position\)/.test(c.stderr), c.stderr);
+  rmSync(root, { recursive: true, force: true });
+}
+{
+  const root = project([{ file: 'vendor-misc-jjjj.js', source: DEP, mappings: 'SAAA' }]);
+  const c = run(CHECK, root);
+  check('the same in a vendor-* chunk passes', c.status === 0, c.stderr || c.stdout);
+  rmSync(root, { recursive: true, force: true });
+}
+
+console.log('\na one-field segment ends the previous source');
+{
+  const root = project([{ file: 'EventCard-kkkk.js', source: DEP, code: LATE, mappings: 'AAAA,U' }]);
+  const c = run(CHECK, root);
+  check('a call past it is not credited to the dependency', c.status === 1, c.stdout);
+  rmSync(root, { recursive: true, force: true });
+}
+{
+  const root = project([{ file: 'EventCard-llll.js', source: DEP, code: LATE, mappings: 'AAAA' }]);
+  const c = run(CHECK, root);
+  check('control: without the one-field segment it is the dependency\'s', c.status === 0, c.stderr);
   rmSync(root, { recursive: true, force: true });
 }
 

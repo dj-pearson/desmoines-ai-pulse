@@ -25,6 +25,9 @@
  * moves maps out of the publish directory (WEB-CI-039). A map whose `file`
  * names a different chunk is not used.
  *
+ * A hit at a position no mapping segment covers is classed the same way as a
+ * chunk with no map (WEB-CI-040).
+ *
  * A chunk with no map in either place is checked by name instead: anything
  * not named vendor-* is treated as app code, so a missing map can't hide a
  * hit. Classifying more chunks as dependency-only by name is not safe:
@@ -71,7 +74,8 @@ function decodeVlq(segment) {
 }
 
 /**
- * Per generated line, the sorted segments [generatedColumn, sourceIndex]. Only
+ * Per generated line, the sorted segments [generatedColumn, sourceIndex], with
+ * sourceIndex null for a segment that maps to nothing. Only
  * what this check needs: which original file a generated column came from.
  */
 function parseMappings(mappings) {
@@ -87,6 +91,10 @@ function parseMappings(mappings) {
       if (fields.length >= 4) {
         sourceIndex += fields[1];
         segments.push([column, sourceIndex]);
+      } else if (fields.length === 1) {
+        // A one-field segment says "from here on, no source". Without it the
+        // previous segment's source would stretch over generated code.
+        segments.push([column, null]);
       }
     }
     lines.push(segments);
@@ -103,7 +111,7 @@ function sourceAt(map, lines, line, column) {
     if (col > column) break;
     found = src;
   }
-  if (found === null) return null;
+  if (found === null) return null; // before the first segment, or in an unmapped one
   return map.sources[found] ?? null;
 }
 
@@ -154,7 +162,14 @@ for (const file of readdirSync(ASSETS).filter((f) => f.endsWith('.js')).sort()) 
   for (const hit of hits) {
     const { line, column } = lineAndColumn(code, hit.index);
     const source = sourceAt(map, lines, line, column);
-    if (source && !source.includes('node_modules')) {
+    if (source === null) {
+      // No segment covers this position, so the map cannot say whose code it
+      // is. Treat it as a chunk with no map is treated (WEB-CI-040): a call
+      // placed before a chunk's first mapped segment used to pass as a
+      // dependency's.
+      if (file.startsWith('vendor-')) vendorHits += 1;
+      else failures.push({ file, source: '(unmapped position)', call: `console.${hit[1]}(` });
+    } else if (!source.includes('node_modules')) {
       failures.push({ file, source: source.replace(/^(\.\.\/)+/, ''), call: `console.${hit[1]}(` });
     } else {
       vendorHits += 1;
