@@ -11,6 +11,12 @@ import { cn } from "@/lib/utils";
  * link and one line of text (date, venue), about five DOM nodes against a
  * card's hundred, so every event the page counts can be in the HTML without
  * undoing the card cap (WEB-PERF-023).
+ *
+ * WEB-UX-075: titles and venues come from scrapers, and one unbroken token (a
+ * pasted URL, a CamelCase title) used to push /events/today and
+ * /events/this-weekend 150-200px wider than a phone. overflow-wrap:anywhere
+ * breaks only a token that would otherwise overflow; ordinary titles still
+ * wrap at spaces.
  */
 
 function eventLine(event: WeekendEventRow): string {
@@ -29,7 +35,7 @@ export function EventLinkList({ events, className, ...rest }: EventLinkListProps
   return (
     <ul className={cn("divide-y rounded-xl border", className)} aria-labelledby={rest["aria-labelledby"]}>
       {events.map((event) => (
-        <li key={event.id} className="px-4 py-3">
+        <li key={event.id} className="px-4 py-3 [overflow-wrap:anywhere]">
           <Link
             to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
             className="font-medium text-primary underline-offset-4 hover:underline"
@@ -65,7 +71,7 @@ export function HubTopPicks({ picks, heading, headingId, article, className, chi
       <p className="mb-3 max-w-3xl text-sm text-muted-foreground">{HUB_PICK_RULE}</p>
       <EventLinkList events={picks} />
       {article && (
-        <p className="mt-3 text-sm">
+        <p className="mt-3 text-sm [overflow-wrap:anywhere]">
           The full weekly roundup:{" "}
           <Link
             to={`/articles/${article.slug}`}

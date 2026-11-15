@@ -328,7 +328,10 @@ export default function EventsToday() {
                   </span>
                 </h2>
                 <EventLinkList events={moreEvents} />
-                <Button asChild variant="outline" className="mt-4 min-h-11">
+                {/* WEB-UX-075: Button is whitespace-nowrap, and this label is
+                    about 380px on one line; on a busy day it pushed the page
+                    sideways on every phone. It wraps now. */}
+                <Button asChild variant="outline" className="mt-4 h-auto min-h-11 whitespace-normal text-center">
                   <Link to="/events?preset=today">See the day on the events page, with filters and a map</Link>
                 </Button>
               </section>
