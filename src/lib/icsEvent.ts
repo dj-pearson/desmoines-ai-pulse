@@ -235,7 +235,16 @@ function veventLines(event: IcsEventInput, options: VeventOptions = {}): string[
     'STATUS:CONFIRMED',
     'SEQUENCE:0',
     ...(alarm
-      ? ['BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Event reminder', 'END:VALARM']
+      ? [
+          'BEGIN:VALARM',
+          // An all-day start is midnight, so -PT1H would ring at 11pm the
+          // night before. 9am on the day is the useful nudge for an event
+          // whose time is not published (WEB-FEAT-088).
+          event.allDay ? 'TRIGGER:PT9H' : 'TRIGGER:-PT1H',
+          'ACTION:DISPLAY',
+          'DESCRIPTION:Event reminder',
+          'END:VALARM',
+        ]
       : []),
     'END:VEVENT',
   ].filter(Boolean);
@@ -312,18 +321,37 @@ export function googleCalendarUrl(event: IcsEventInput): string | null {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-/** Outlook Web "compose event" link. Returns null when the date is unusable. */
+/** `20260908` -> `2026-09-08`, the date form Outlook's deeplink reads. */
+function dashedDate(yyyymmdd: string): string {
+  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+}
+
+/**
+ * Outlook Web "compose event" link. Returns null when the date is unusable.
+ *
+ * An all-day event sends `allday=true` with bare Central dates and the same
+ * exclusive end as the ICS and Google paths. Before WEB-FEAT-088 this
+ * link ignored allDay and sent the placeholder instant, so an untimed event
+ * opened in Outlook at 7:31pm (the sentinel) or 3:30am (SeatGeek).
+ */
 export function outlookCalendarUrl(event: IcsEventInput): string | null {
   const start = resolveStart(event);
   if (Number.isNaN(start.getTime())) return null;
   const end = resolveEnd(event, start);
 
+  const timing: Record<string, string> = event.allDay
+    ? {
+        allday: 'true',
+        startdt: dashedDate(formatIcsDateOnly(start)),
+        enddt: dashedDate(allDayEndDate(start, event)),
+      }
+    : { startdt: start.toISOString(), enddt: end.toISOString() };
+
   const params = new URLSearchParams({
     path: '/calendar/action/compose',
     rru: 'addevent',
     subject: event.title,
-    startdt: start.toISOString(),
-    enddt: end.toISOString(),
+    ...timing,
     body: event.description ? stripHtml(event.description) : '',
     location: event.venue || event.location || '',
   });

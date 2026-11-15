@@ -232,6 +232,41 @@ describe('all-day events (time_tbd)', () => {
     expect(url).toContain('dates=20260907%2F20260908');
   });
 
+  it('sends Outlook an all-day date range, not the placeholder time', () => {
+    // The Outlook link ignored allDay, so a SeatGeek row opened as a 3:30am
+    // entry and a 19:31:58 sentinel row as a 7:31pm one (WEB-FEAT-088).
+    const params = new URL(outlookCalendarUrl(PLACEHOLDER)!).searchParams;
+    expect(params.get('allday')).toBe('true');
+    expect(params.get('startdt')).toBe('2026-09-07');
+    expect(params.get('enddt')).toBe('2026-09-08');
+  });
+
+  it('sends Outlook a multi-day untimed run through its last day', () => {
+    const params = new URL(
+      outlookCalendarUrl({ ...PLACEHOLDER, event_end_utc: '2026-09-10T05:00:00Z' })!,
+    ).searchParams;
+    expect(params.get('startdt')).toBe('2026-09-07');
+    // Midnight Central on the 10th belongs to the 9th, so the exclusive end is the 10th.
+    expect(params.get('enddt')).toBe('2026-09-10');
+  });
+
+  it('keeps the Outlook link timed when allDay is not set', () => {
+    const params = new URL(outlookCalendarUrl(EVENING_EVENT)!).searchParams;
+    expect(params.get('allday')).toBeNull();
+    expect(params.get('startdt')).toBe('2026-09-09T00:00:00.000Z');
+  });
+
+  it('does not ring an all-day entry at 11pm the night before', () => {
+    // TRIGGER:-PT1H on a DATE start is 23:00 the previous evening.
+    const ics = buildEventIcs(PLACEHOLDER)!;
+    expect(ics).not.toContain('TRIGGER:-PT1H');
+    expect(ics).toContain('TRIGGER:PT9H');
+  });
+
+  it('still alarms a timed event one hour before it starts', () => {
+    expect(buildEventIcs(EVENING_EVENT)!).toContain('TRIGGER:-PT1H');
+  });
+
   it('still emits a timed event when allDay is not set', () => {
     const ics = buildEventIcs({ ...PLACEHOLDER, allDay: false })!;
     expect(ics).toContain('DTSTART:20260908T033000Z');
