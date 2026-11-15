@@ -18,7 +18,7 @@ import { CATEGORY_FILTERS, pseoEventFilters, resolveEntityType, restaurantLocati
 import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
-import { isVisitableStatus } from "@/lib/restaurantHours";
+import { isVisitableStatus } from "@/lib/restaurantStatus";
 import { attractionListingHref, eventListingHref, restaurantListingHref } from '../../listingHrefs';
 
 interface PseoLiveListingsProps {

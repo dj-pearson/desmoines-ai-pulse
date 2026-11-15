@@ -26,7 +26,7 @@
  */
 import { DES_MOINES_METRO_BOUNDS } from "@/lib/geo";
 import { NEIGHBORHOOD_BOUNDARIES } from "@/lib/neighborhoodBoundaries";
-import { isPermanentlyClosedRestaurant, isVisitableStatus } from "@/lib/restaurantHours";
+import { isPermanentlyClosedRestaurant, isVisitableStatus } from "@/lib/restaurantStatus";
 import { restaurantLocality } from "@/lib/restaurantMeta";
 
 export interface RankedRestaurantRow {

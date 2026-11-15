@@ -8,8 +8,33 @@
 
 ## Handoff
 
-None. WEB-PERF-079 (the Tonight clock split out of
-tonightPairings.ts) closed in loop 26.
+None. WEB-PERF-080 (restaurantStatus.ts split out of restaurantHours.ts)
+closed in loop 27.
+
+What loop 27 added:
+- restaurantStatus.ts holds OpenStatus, RestaurantOpenResult,
+  StoredOpeningHours, DES_MOINES_TIME_ZONE, the two PostgREST closed filters,
+  isVisitableStatus, isPermanentlyClosedRestaurant, isShutRestaurant,
+  isServingToday, businessStatusLabel and formatOpenStatusLine. It has no
+  imports. restaurantHours.ts re-exports all of it (plus a plain import of the
+  three names it still uses). 25 modules that import only those names now
+  import restaurantStatus.
+- Measured: 9 routes 3.5-3.6 KB gz lighter beyond the critical path
+  (PseoRoutePage, NeighborhoodPage, BestOfCategory, Deals, PlaygroundDetails,
+  WhatsNew, AdvancedSearchPage, AdminTools, AdminAnalyticsPage). 22 routes
+  that need the parser anyway gained one file and 0.1-0.2 KB (the status
+  module is now its own shared chunk); that is the floor. Summed 7,898.8 ->
+  7,870.4 KB gz, files 6,771 -> 6,793. restaurantStatusSplit.test.ts pins the
+  nine routes and the re-export identity.
+- Still on the parser for real: Articles/ArticleDetails (useArticles calls
+  resolveOpenStatus), DiscoverMap (discoverMapRestaurant), RestaurantCard
+  users, OpenStatusChip users, attractionAtAGlance (desMoinesNow,
+  formatClockLabel, the only path on Attractions). Moving those two out
+  could take /attractions off the parser, but they need date-fns-tz, so not
+  into restaurantStatus; check ThingsToDoHub/VisitorsGuide chains and
+  measure first.
+- Next candidates: public form fields on ui/select (Contact, TripPlanner,
+  BusinessPartnership, GroupTravel; check the form still posts).
 
 What loop 26 added:
 - tonightTime.ts holds the Tonight constants, TonightEvent and the window
@@ -207,3 +232,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-077 | this commit | AIDisclosureBadge renders the pill alone and loads AIDisclosureTooltip (Radix Tooltip) on the first mouse hover; EventDetails 120.3 -> 100.5, HotelDetails 88.5 -> 68.9, RestaurantDetails 119.8 -> 103.8, ArticleDetails 129.0 -> 113.2, TripPlanner 116.9 -> 114.0 KB gz beyond the critical path (6-10 fewer files), none heavier; summed 8,120.1 -> 8,042.0; critical path 175.2 unchanged; graph test with negative control (6 of 7 fail on the old badge); new smoke test in restaurant-detail.spec.ts (chunk only on hover, tooltip opens, same size) passes 3/3 repeats with 50 other detail-page smoke tests; vitest 3659/3659 |
 | 2026-11-15 | WEB-PERF-078 | this commit | RestaurantInlineFilters pills are static buttons and load RestaurantFilterPopover (Radix Popover, the four panels, the rating Slider) on first click/Enter; /restaurants 141.9 -> 108.5 KB gz beyond the critical path (18 fewer files); 17 other routes moved by 0.1 either way (chunk reshuffle), none more; summed 8,046.7 -> 8,012.8; critical path 175.2 unchanged; graph test with negative control (2 of 4 fail on a static ui/popover import); new smoke test (no chunk on load, click and Enter open, Escape returns focus, same size) 3/3 repeats plus 108 smoke tests on filter/restaurant pages; vitest 3692/3692 |
 | 2026-11-15 | WEB-PERF-079 | this commit | Tonight clock (constants, window, eventStartInstant, card formatters) moved from tonightPairings.ts to new tonightTime.ts and re-exported; 15 routes 5.6-6.5 KB gz lighter beyond the critical path (Hotels 68.8 -> 62.5, EventsNearMe 97.3 -> 90.8, MusicHub 51.4 -> 45.1, event landings ~-6.3) and 12 more 1.9-2.6 lighter; 8 pairing routes +0.5 and +2 files; summed 8,013.4 -> 7,900.9, files 6,773 -> 6,771; critical path 175.2 unchanged; graph test with negative control (12 of 18 fail on one reverted import); 128 + 75 smoke tests on the touched pages in Chrome; vitest 3731/3731 |
+| 2026-11-15 | WEB-PERF-080 | this commit | Status helpers and result/stored types moved from restaurantHours.ts to new import-free restaurantStatus.ts and re-exported; 25 light importers switched; 9 routes 3.5-3.6 KB gz lighter beyond the critical path (PseoRoutePage 68.8 -> 65.3, PlaygroundDetails 65.4 -> 61.8, Deals 44.6 -> 41.1, NeighborhoodPage 33.1 -> 29.6), 22 parser routes +1 file and +0.1-0.2; summed 7,898.8 -> 7,870.4, files 6,771 -> 6,793; critical path 175.2 unchanged; graph test with negative control (1 fails on one reverted import); vitest 3760/3760 |

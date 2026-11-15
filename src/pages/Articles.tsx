@@ -26,7 +26,7 @@ import {
 } from '@/hooks/useArticles';
 import { aiBadgeLabel, isAiArticle } from '@/lib/articleHubs';
 import { handleError } from '@/lib/errorHandler';
-import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
+import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantStatus';
 
 /** Cards that get the entrance animation; the rest appear without a delay. */
 const STAGGERED_CARDS = 6;

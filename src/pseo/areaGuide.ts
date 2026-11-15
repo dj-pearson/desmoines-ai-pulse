@@ -20,7 +20,7 @@ import {
   type LatLng,
   type NeighborhoodBoundary,
 } from '../lib/neighborhoodBoundaries';
-import { isVisitableStatus } from '../lib/restaurantHours';
+import { isVisitableStatus } from '../lib/restaurantStatus';
 import { upcomingOrRunningFilter } from '../lib/eventRunningFilter';
 import { upcomingFloorUtc } from '../lib/timezone';
 

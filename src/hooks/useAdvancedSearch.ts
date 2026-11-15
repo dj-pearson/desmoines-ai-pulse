@@ -16,7 +16,7 @@ import {
 import { escapeLikePattern, sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 import { centralWindow, upcomingFloorUtc } from '@/lib/timezone';
 import { upcomingOrRunningFilter } from '@/hooks/useEvents';
-import { isPermanentlyClosedRestaurant, NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
+import { isPermanentlyClosedRestaurant, NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantStatus';
 
 /**
  * The filters /search/advanced can actually apply (search plan WP4 item 2).

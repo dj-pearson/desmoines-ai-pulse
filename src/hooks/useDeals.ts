@@ -7,7 +7,7 @@ import {
   DEAL_VENUE_RESTAURANT_COLUMNS,
   HAPPY_HOUR_RESTAURANT_COLUMNS,
 } from '@/lib/listColumns';
-import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday, isShutRestaurant } from '@/lib/restaurantHours';
+import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday, isShutRestaurant } from '@/lib/restaurantStatus';
 
 export interface Deal {
   id: string;

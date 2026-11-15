@@ -1,4 +1,4 @@
-import { businessStatusLabel, isPermanentlyClosedRestaurant } from '@/lib/restaurantHours';
+import { businessStatusLabel, isPermanentlyClosedRestaurant } from '@/lib/restaurantStatus';
 
 /**
  * Restaurant rows in a typeahead (SearchAutocomplete on /restaurants and the

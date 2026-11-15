@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { STALE_TIME, GC_TIME } from '@/lib/queryConfig';
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
-import { NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
+import { NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantStatus';
 import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 import { createLogger } from '@/lib/logger';
 import type { Neighborhood } from '@/lib/neighborhoods';

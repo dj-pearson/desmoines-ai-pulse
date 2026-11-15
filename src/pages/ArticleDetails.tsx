@@ -41,7 +41,7 @@ import { areaHubsForArticle } from "@/lib/areaHubs";
 import { ogImageUrl } from '@/lib/ogImage';
 import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
 import { handleError } from '@/lib/errorHandler';
-import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
+import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantStatus';
 import { useSiteFooter } from '@/hooks/useSiteFooter';
 
 /**

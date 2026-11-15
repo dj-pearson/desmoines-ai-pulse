@@ -40,7 +40,7 @@
  */
 import { CATEGORY_FILTERS, restaurantLocationMatch } from './listingFilters';
 import { NEIGHBORHOOD_SLUGS } from '../lib/neighborhoodBoundaries';
-import { isVisitableStatus } from '../lib/restaurantHours';
+import { isVisitableStatus } from '../lib/restaurantStatus';
 
 export const MIN_PLACES_TO_PUBLISH = 3;
 export const MIN_PLACES_TO_INDEX = 5;

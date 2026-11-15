@@ -14,7 +14,7 @@ import { handleError } from '@/lib/errorHandler';
 import { markdownToPlainText } from '@/lib/aiText';
 import { createLogger } from '@/lib/logger';
 import { STALE_TIME } from '@/lib/queryConfig';
-import { formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
+import { formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantStatus';
 import { discoverMapRestaurantStatus, isDiscoverMapRestaurantListed } from '@/lib/discoverMapRestaurant';
 import { DISCOVER_MAP_RESTAURANT_COLUMNS } from '@/lib/listColumns';
 import { attractionOpenStatus } from '@/lib/attractionHours';

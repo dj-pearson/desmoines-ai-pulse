@@ -38,7 +38,7 @@ import RestaurantCard from "@/components/RestaurantCard";
 import { SPONSORED_CAP, arrangeSponsored, isSponsoredActive } from "@/lib/sponsored";
 import { getRestaurantRotationSeed, pickDailySponsors } from "@/lib/restaurantRotation";
 import { parseIowaAddress, restaurantLocality } from "@/lib/restaurantMeta";
-import { isVisitableStatus } from "@/lib/restaurantHours";
+import { isVisitableStatus } from "@/lib/restaurantStatus";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";

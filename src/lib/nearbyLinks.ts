@@ -10,7 +10,7 @@
  * would otherwise render as a link under the word "nearby".
  */
 import { isInMetro } from "@/lib/geo";
-import { isPermanentlyClosedRestaurant, isVisitableStatus } from "@/lib/restaurantHours";
+import { isPermanentlyClosedRestaurant, isVisitableStatus } from "@/lib/restaurantStatus";
 import { nearby, NEARBY_MILES } from "@/lib/venuePages";
 
 type Coord = number | string | null | undefined;

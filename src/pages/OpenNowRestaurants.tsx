@@ -34,7 +34,7 @@ import { isPrerender } from "@/lib/isPrerender";
 import {
   DES_MOINES_TIME_ZONE,
   formatOpenStatusLine,
-} from "@/lib/restaurantHours";
+} from "@/lib/restaurantStatus";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
 /**

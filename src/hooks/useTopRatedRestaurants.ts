@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DES_MOINES_METRO_BOUNDS } from "@/lib/geo";
-import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantHours";
+import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantStatus";
 import { rankTopRated, TOP_RATED_LIMIT, type RankedRestaurantRow } from "@/lib/restaurantRanking";
 
 /**

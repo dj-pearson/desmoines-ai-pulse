@@ -11,7 +11,7 @@ import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { supabase } from "@/integrations/supabase/client";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
-import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantHours";
+import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantStatus";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { toJsonLd } from "@/lib/jsonLd";
 import { isPrerender } from "@/lib/isPrerender";

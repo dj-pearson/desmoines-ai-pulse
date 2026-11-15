@@ -22,7 +22,7 @@ import {
   isServingToday,
   NOT_CLOSED_RESTAURANT_FILTER,
   NOT_GOOGLE_CLOSED_RESTAURANT_FILTER,
-} from "@/lib/restaurantHours";
+} from "@/lib/restaurantStatus";
 
 const logger = createLogger("useRestaurants");
 
