@@ -247,7 +247,10 @@ struct SettingsView: View {
                 }
             }
             .sheet(isPresented: $showSubscription) {
-                SubscriptionView()
+                // The StoreKit store for a free or App Store plan; where the
+                // plan is billed for a web or Google Play subscriber, who
+                // could otherwise buy a second plan here (IOS-AUDIT-011).
+                PlansLinkView()
             }
             .offerCodeRedemption(isPresented: $showOfferCodeRedeem) { result in
                 switch result {

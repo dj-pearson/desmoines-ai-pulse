@@ -4,6 +4,7 @@ import SwiftUI
 /// opens in the app (IOS-AUDIT-010). The web pages sell and manage plans
 /// through Stripe, which the app may not show (Guideline 3.1.1), so the link
 /// gets the screen the Profile tab's plan card would give the same person.
+/// Settings > Account > Subscription opens the same view (IOS-AUDIT-011).
 enum PlansLinkScreen: Equatable {
     /// The StoreKit store: buy a plan, or change an App Store one.
     case store
