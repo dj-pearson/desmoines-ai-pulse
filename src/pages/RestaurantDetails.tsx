@@ -906,6 +906,7 @@ export default function RestaurantDetails() {
                   heading={tonightHeading(tonight.events, liveStatus?.closesAt, now)}
                   restaurantName={restaurant.name}
                   restaurantHoursLine={restaurantHoursLine}
+                  now={now}
                   className="mb-8 scroll-mt-20"
                 />
               )}

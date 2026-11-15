@@ -13,7 +13,7 @@ import {
   type TonightDinner,
 } from "@/lib/tonightPairings";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
-import type { TonightNearbyEvent } from "@/hooks/useTonightNearRestaurant";
+import { runsUntilLabel, type TonightNearbyEvent } from "@/hooks/useTonightNearRestaurant";
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 
@@ -245,7 +245,16 @@ interface TonightNearRestaurantProps {
    * page's one evaluation. Null when unknown; the line is then left out.
    */
   restaurantHoursLine?: string | null;
+  /** The page's minute clock, for "On until 9:00 PM CT" on a run. */
+  now?: Date;
   className?: string;
+}
+
+/** The second line's time part: a start, a run already on, or no time. */
+function tonightWhenLine(startsAt: Date | null, runsUntil: Date | null, now: Date): string {
+  if (startsAt) return `Starts ${formatCentralTime(startsAt)} CT`;
+  if (runsUntil) return runsUntilLabel(runsUntil, now);
+  return "Time not listed";
 }
 
 /**
@@ -259,6 +268,7 @@ export function TonightNearRestaurant({
   heading,
   restaurantName,
   restaurantHoursLine,
+  now = new Date(),
   className,
 }: TonightNearRestaurantProps) {
   if (events.length === 0) return null;
@@ -276,10 +286,11 @@ export function TonightNearRestaurant({
             </span>{" "}
           </>
         ) : null}
-        Events starting later today within {PAIR_MAX_MILES} miles, straight-line distance.
+        Events starting later today, and runs already on, within {PAIR_MAX_MILES} miles, straight-line
+        distance.
       </p>
       <ul className="mt-3 divide-y rounded-xl border bg-card">
-        {events.map(({ event, startsAt, distanceMiles, walkable }) => (
+        {events.map(({ event, startsAt, distanceMiles, walkable, runsUntil }) => (
           <li key={event.id}>
             <Link
               to={eventHref(event)}
@@ -290,7 +301,7 @@ export function TonightNearRestaurant({
                   {event.title || "Untitled event"}
                 </span>
                 <span className="block truncate text-muted-foreground">
-                  {[startsAt ? `Starts ${formatCentralTime(startsAt)} CT` : "Time not listed", event.venue]
+                  {[tonightWhenLine(startsAt, runsUntil, now), event.venue]
                     .filter(Boolean)
                     .join(" - ")}
                 </span>
