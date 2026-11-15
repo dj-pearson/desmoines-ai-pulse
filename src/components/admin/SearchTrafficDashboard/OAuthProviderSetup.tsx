@@ -32,6 +32,8 @@ interface OAuthProvider {
   description: string;
   setupInstructions: string;
   docsUrl: string;
+  /** True only when a server-side OAuth flow exists for this provider. */
+  connectable: boolean;
 }
 
 const providers: OAuthProvider[] = [
@@ -42,6 +44,7 @@ const providers: OAuthProvider[] = [
     description: "Track website traffic, user behavior, and conversion metrics",
     setupInstructions: "1. Go to Google Cloud Console\n2. Create OAuth 2.0 credentials\n3. Add authorized redirect URI\n4. Enable Analytics API",
     docsUrl: "https://developers.google.com/analytics/devguides/reporting/core/v4/quickstart/service-py",
+    connectable: false,
   },
   {
     provider_name: "google_search_console",
@@ -50,6 +53,7 @@ const providers: OAuthProvider[] = [
     description: "Monitor search performance, keywords, and indexing status",
     setupInstructions: "1. Use same OAuth credentials as Analytics\n2. Enable Search Console API\n3. Verify site ownership",
     docsUrl: "https://developers.google.com/webmaster-tools/search-console-api-original/v3/quickstart",
+    connectable: true,
   },
   {
     provider_name: "bing_webmaster",
@@ -58,6 +62,7 @@ const providers: OAuthProvider[] = [
     description: "Access Bing search data and webmaster tools",
     setupInstructions: "1. Register app in Azure AD\n2. Configure API permissions\n3. Add site to Bing Webmaster Tools",
     docsUrl: "https://docs.microsoft.com/en-us/bingwebmaster/getting-access",
+    connectable: false,
   },
   {
     provider_name: "yandex_webmaster",
@@ -66,6 +71,7 @@ const providers: OAuthProvider[] = [
     description: "Monitor Yandex search performance and indexing",
     setupInstructions: "1. Create app in Yandex OAuth\n2. Request webmaster API access\n3. Verify site ownership",
     docsUrl: "https://yandex.com/dev/webmaster/doc/dg/concepts/about.html",
+    connectable: false,
   },
 ];
 
@@ -115,37 +121,17 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
         return;
       }
 
-      // Generic OAuth flow for other providers (reads from oauth_providers table)
-      const { data: providerData, error: providerError } = await supabase
-        .from("oauth_providers")
-        .select("*")
-        .eq("provider_name", providerName)
-        .single();
-
-      if (providerError) throw providerError;
-
-      const redirectUri = `${window.location.origin}/admin/oauth/callback`;
-      const nonceArray = new Uint8Array(16);
-      crypto.getRandomValues(nonceArray);
-      const nonce = Array.from(nonceArray).map(b => b.toString(16).padStart(2, '0')).join('');
-
-      const state = btoa(JSON.stringify({ provider: providerName, timestamp: Date.now(), nonce }));
-
-      let authUrl = (providerData as any).authorization_url;
-      authUrl += `?client_id=${encodeURIComponent((providerData as any).client_id || clientId)}`;
-      authUrl += `&redirect_uri=${encodeURIComponent(redirectUri)}`;
-      authUrl += `&response_type=code`;
-      authUrl += `&scope=${encodeURIComponent(((providerData as any).scopes || []).join(" "))}`;
-      authUrl += `&state=${encodeURIComponent(state)}`;
-      authUrl += `&access_type=offline`;
-      authUrl += `&prompt=consent`;
-
-      storage.setString("oauth_state", state);
-      window.location.href = authUrl;
-    } catch (error: any) {
+      // WEB-SEC-079: there is no other flow. The generic branch that used to
+      // live here read oauth_providers with select('*'), which shipped
+      // client_secret to the browser, and sent the provider back to
+      // /admin/oauth/callback, which only ever calls gsc-oauth, so a Bing,
+      // Yandex or Analytics connect could never finish. A provider gets a
+      // Connect button again when it has a server-side flow of its own.
+      throw new Error("This platform cannot be connected yet.");
+    } catch (error: unknown) {
       log.error('oauthConnect', 'OAuth connection error', { data: error });
       toast.error("Failed to connect", {
-        description: error.message || "Please try again",
+        description: (error instanceof Error && error.message) || "Please try again",
       });
     } finally {
       setLoading(false);
@@ -305,14 +291,20 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
                   </DialogContent>
                 </Dialog>
 
-                <Button
-                  onClick={() => handleConnect(provider.provider_name)}
-                  disabled={loading}
-                  className="w-full gap-2"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  {loading ? "Connecting..." : "Connect"}
-                </Button>
+                {provider.connectable ? (
+                  <Button
+                    onClick={() => handleConnect(provider.provider_name)}
+                    disabled={loading}
+                    className="w-full gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {loading ? "Connecting..." : "Connect"}
+                  </Button>
+                ) : (
+                  <Button variant="secondary" disabled className="w-full">
+                    Not available yet
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}
