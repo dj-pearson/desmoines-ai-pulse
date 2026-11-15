@@ -164,6 +164,72 @@ export function centralEventWindow(startDate: string, endDate: string): { fromIs
   return { fromIso: from.toISOString(), toIso: to.toISOString() };
 }
 
+/**
+ * Runs that opened before the trip, at most this many. They come after the
+ * events that start during the trip, ordered by end_date, so a festival that
+ * closes Sunday is offered before a three-month museum exhibit.
+ * WEB-FEAT-093.
+ */
+export const TRIP_RUNNING_LIMIT = 10;
+
+/** The slice of the postgrest-js filter builder the trip event reads use. */
+export interface TripEventFilterBuilder<Q> {
+  is(column: string, value: null): Q;
+  not(column: string, operator: string, value: boolean): Q;
+  gte(column: string, value: string): Q;
+  lt(column: string, value: string): Q;
+}
+
+/** Same visibility as the listing pages: no archived, hidden or merged rows. */
+function applyTripVisibility<Q extends TripEventFilterBuilder<Q>>(q: Q): Q {
+  return q.is("archived_at", null).not("is_hidden", "is", true).not("is_merged", "is", true);
+}
+
+/** Events that start on one of the trip's Central days. */
+export function applyTripStartsFilters<Q extends TripEventFilterBuilder<Q>>(
+  q: Q,
+  w: { fromIso: string; toIso: string },
+): Q {
+  return applyTripVisibility(q).gte("date", w.fromIso).lt("date", w.toIso);
+}
+
+/**
+ * Runs that opened before the trip and are still on when it starts: the
+ * State Fair on a trip that begins on its fourth day, a festival weekend that
+ * opened Thursday for a Saturday trip. The starts read alone never held them.
+ * A row with no end_date never matches, so a past one-night show stays out.
+ * Callers order by end_date and cap at TRIP_RUNNING_LIMIT.
+ */
+export function applyTripRunsFilters<Q extends TripEventFilterBuilder<Q>>(
+  q: Q,
+  w: { fromIso: string; toIso: string },
+): Q {
+  return applyTripVisibility(q).lt("date", w.fromIso).gte("end_date", w.fromIso);
+}
+
+/** Starts first, then runs, each id once. */
+export function mergeTripEvents<T extends { id: unknown }>(starts: T[], runs: T[]): T[] {
+  const seen = new Set(starts.map((e) => String(e.id)));
+  return [...starts, ...runs.filter((e) => !seen.has(String(e.id)))];
+}
+
+/**
+ * The Central YYYY-MM-DD a run is on through, for an event that opened before
+ * the trip; null for one that starts during it. The model is told this so it
+ * can place the run on any trip day rather than the opening day it missed.
+ */
+export function runningThrough(
+  e: { date: string | null; end_date?: string | null },
+  w: { fromIso: string },
+): string | null {
+  if (!e.date || !e.end_date) return null;
+  const started = new Date(e.date).getTime();
+  const ends = new Date(e.end_date);
+  if (Number.isNaN(started) || Number.isNaN(ends.getTime())) return null;
+  if (started >= new Date(w.fromIso).getTime()) return null;
+  return centralToday(ends);
+}
+
 /** 00:00 on the 1st of the current Central-time month, as a UTC instant. */
 export function centralMonthStartUtc(now: Date): Date {
   const [y, m] = centralToday(now).split("-").map(Number);
