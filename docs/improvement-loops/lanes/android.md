@@ -134,24 +134,29 @@ check closes it: open /events/kids (adb am start) and confirm a storytime or chi
 if the list is empty and logcat shows a PostgREST 400 "failed to parse logic tree", the double quotes
 around each pattern are not reaching the URL intact; the colons and parentheses inside need them.
 
-AND-AUDIT-042 (native event-series screen) is split; slices 1 and 2 of 3 landed 2026-11-15.
+AND-AUDIT-042 (native event-series screen) is split; slices 1, 2 and 3a landed 2026-11-15.
 util/EventSeries.kt holds the web's 20 series, normaliseTitle, forEvent, forSlug, path and titlePatterns,
 held equal to src/lib/eventSeries.ts by src/lib/__tests__/androidEventSeriesParity.test.ts.
 util/EventSeriesSchedule.kt holds SeriesEventRow (event + is_hidden, hidden_at, archived_at), the web's
 isModeratorHidden / isLinkable / eventEnd / isOver, build (one instance per Central day, live over
 archived over hidden then shorter title, editions by Central year, current = earliest edition with a
 live instance not over, past newest first, unannouncedYear) and editionDateLabel / unannouncedLabel,
-JVM-tested by EventSeriesScheduleTest (the iOS/web cases with the web's answers). Nothing calls either
-yet; /events/series/<slug> still opens in the web view. Slice 3 is what is left:
-  - The data read: select the Event columns plus is_hidden, hidden_at, archived_at; or() of
-    titlePatterns; neq is_merged true; no is_hidden/archived_at filter; limit equal to the web's
-    SERIES_ROW_LIMIT (as iosEventSeriesParity.test.ts pins fetchSeriesRows). Decode each element as an
-    Event plus a small @Serializable flags class from the same JSON object, dropping a row that does
-    not decode (iOS LossySeriesRows). Decoding was left out of slice 2 because no read existed to feed it.
-  - A SeriesViewModel and screen: current edition with editionDateLabel, instances linking by linkId
-    (null = plain text), past editions, "<year> date not announced yet" when current is null.
-  - A DeepLinkHandler route for /events/series/<slug> that falls back to the web view when forSlug is
-    null. Extend the parity test to pin the read.
+JVM-tested by EventSeriesScheduleTest (the iOS/web cases with the web's answers).
+Slice 3a is the read: EventsRemoteDataSource.fetchSeriesRows(def) selects every column, neq is_merged,
+or { ilike("title", ...) } over EventSeries.titleLikePatterns (the web's patterns with % for *), no
+is_hidden/archived_at filter, date ascending, limit SERIES_ROW_LIMIT = 200, and decodes the raw body
+through util/SeriesEventRows (Event plus a flags class per object; a row that does not decode is
+dropped, a non-array body throws). The parity test pins the read's shape and the 200 against the web
+and iOS. Nothing calls fetchSeriesRows yet; /events/series/<slug> still opens in the web view.
+Slice 3b is what is left:
+  - A SeriesViewModel and screen: fetchSeriesRows then EventSeriesSchedule.build; current edition with
+    editionDateLabel, instances linking by linkId (null = plain text), past editions, "<year> date not
+    announced yet" when current is null; a load error with Retry, through handleError-style logging.
+  - A DeepLinkHandler route for /events/series/<slug> (DeepLinkHandler.kt line ~412 returns
+    Destination.Web today) that falls back to the web view when forSlug is null, plus the nav route.
+  - Device check once wired: open /events/series/cloris-awards (adb am start) and confirm past years
+    are listed and a sweep-hidden edition shows as plain text. The trap: if the list is empty and
+    logcat shows a PostgREST 400, the % in the ilike values is not reaching the URL encoded.
 
 ## Loop log
 
@@ -179,3 +184,4 @@ yet; /events/series/<slug> still opens in the web view. Slice 3 is what is left:
 | 2026-11-08 | AND-AUDIT-041 | this commit | /events/kids opens Search with a Kids & family filter that sends the web's KIDS_EVENTS_FILTER as one or-group (was a full-text search for "kids events", which missed storytimes and children's shows); the chip removes it, and the fuzzy fallback is skipped so adult events cannot return. 6 new JVM tests (4 KidsEventsFilterTest, 2 DeepLinkPendingFilterTest) pass with the updated DeepLink suites, 58/58 on a stub harness (kotlinc 2.2.10); a mutation restoring the text search and dropping "family" fails 3. New vitest parity test 4/4, fails on the same mutation. SearchViewModel, SearchScreen, EventsRemoteDataSource and app module not compiled (no Android SDK); no device check |
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 1 of 3: util/EventSeries.kt ports the web's 20 annual series and normaliseEventTitle (plus forEvent, forSlug, path, titlePatterns); new vitest androidEventSeriesParity.test.ts holds the catalogue and 16 normalise cases equal to src/lib/eventSeries.ts, 3/3 (an alias edit fails it). 7 EventSeriesTest JVM tests pass on a stub harness (kotlinc 2.2.10, JUnit 5.10); a mutation dropping the apostrophe step fails 1, an alias edit fails 1. Not wired to any screen yet; app module not compiled (no Android SDK) |
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 2 of 3: util/EventSeriesSchedule.kt ports the web's buildSeriesView rules (moderator vs sweep hidden, linkable, eventEnd/isOver, one instance per Central day, editions by year, current/past/unannounced, date labels). 14 EventSeriesScheduleTest JVM tests (the iOS/web cases plus an isOver case) pass with 34 existing EventSeries/EventCalendarEntry/EventDesMoinesDay tests, 48/48 on a stub harness (kotlinc 2.2.10, JUnit 5.10); three mutations (moderator rule off, no live preference, untimed end_date not run to day end) each fail exactly 1. Not wired to a screen; app module not compiled (no Android SDK) |
+| 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3a: EventsRemoteDataSource.fetchSeriesRows ports the web/iOS series read (neq is_merged, or of title ilikes via new EventSeries.titleLikePatterns, hidden and archived rows kept, limit 200) and util/SeriesEventRows decodes it lossily into SeriesEventRow. 5 new SeriesEventRowsTest and 1 new EventSeriesTest JVM tests pass with the 48 existing series/calendar/day tests, 54/54 on a stub harness (kotlinc 2.2.10 with the real kotlinx-serialization 1.6.2 plugin and runtime, JUnit 5.10); two mutations (rethrow instead of drop, wrong hidden_at name) each fail exactly 1. Parity vitest extended to pin the read and the 200 against web and iOS, 5/5. Not wired to a screen; data source and app module not compiled (no Android SDK) |

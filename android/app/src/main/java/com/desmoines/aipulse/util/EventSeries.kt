@@ -268,4 +268,12 @@ object EventSeries {
      */
     fun titlePatterns(def: EventSeriesDef): List<String> =
         def.aliases.map { "title.ilike.*${it.split(" ").joinToString("*")}*" }
+
+    /**
+     * The same patterns as [titlePatterns], in the form supabase-kt's
+     * `or { ilike("title", ...) }` takes: `%` for PostgREST's `*`, without the
+     * `title.ilike.` prefix. "panda fest" gives "%panda%fest%".
+     */
+    fun titleLikePatterns(def: EventSeriesDef): List<String> =
+        def.aliases.map { "%${it.split(" ").joinToString("%")}%" }
 }

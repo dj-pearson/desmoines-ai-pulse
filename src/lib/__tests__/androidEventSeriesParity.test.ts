@@ -17,6 +17,9 @@ import { EVENT_SERIES, normaliseEventTitle, seriesTitlePatterns } from "../event
 
 const SERIES = "android/app/src/main/java/com/desmoines/aipulse/util/EventSeries.kt";
 const TESTS = "android/app/src/test/java/com/desmoines/aipulse/util/EventSeriesTest.kt";
+const SOURCE = "android/app/src/main/java/com/desmoines/aipulse/data/remote/EventsRemoteDataSource.kt";
+const WEB_HOOK = "src/hooks/useEventSeriesPage.ts";
+const IOS_SERVICE = "ios/DesMoinesInsider/Services/EventsService.swift";
 
 /** Kotlin string literal body to its value: \" \\ \$ and \uXXXX only. */
 function unescapeKotlin(body: string): string {
@@ -101,6 +104,42 @@ describe("Android annual event series match the web (AND-AUDIT-042)", () => {
     for (const def of EVENT_SERIES) {
       const kotlin = def.aliases.map((a) => `title.ilike.*${a.split(" ").join("*")}*`);
       expect(kotlin).toEqual(seriesTitlePatterns(def));
+    }
+  });
+
+  it("the series read keeps hidden and archived rows, drops merged ones, and caps like the web", () => {
+    // AND-AUDIT-042, slice 3a. A past edition is a row the stale sweep hid.
+    // If this read filtered is_hidden or archived_at the way every other list
+    // does, the screen would show no past years and EventSeriesSchedule would
+    // never see a sweep-hidden row to list without a link.
+    const src = readFileSync(SOURCE, "utf8");
+    const start = src.indexOf("suspend fun fetchSeriesRows(");
+    expect(start, `fetchSeriesRows not found in ${SOURCE}`).toBeGreaterThan(-1);
+    const body = src.slice(start, src.indexOf("\n    }\n", start));
+    expect(body).toContain('neq("is_merged", true)');
+    expect(body).toContain("EventSeries.titleLikePatterns(def)");
+    expect(body).toContain('patterns.forEach { ilike("title", it) }');
+    expect(body).toContain("limit(SERIES_ROW_LIMIT)");
+    expect(body).toContain("SeriesEventRows.decode(");
+    expect(body).not.toMatch(/is_hidden|archived_at/);
+
+    const androidLimit = src.match(/const val SERIES_ROW_LIMIT = (\d+)L/);
+    const webLimit = readFileSync(WEB_HOOK, "utf8").match(/const SERIES_ROW_LIMIT = (\d+)/);
+    const iosLimit = readFileSync(IOS_SERVICE, "utf8").match(/static let seriesRowLimit = (\d+)/);
+    expect(androidLimit, `SERIES_ROW_LIMIT not found in ${SOURCE}`).not.toBeNull();
+    expect(webLimit, `SERIES_ROW_LIMIT not found in ${WEB_HOOK}`).not.toBeNull();
+    expect(iosLimit, `seriesRowLimit not found in ${IOS_SERVICE}`).not.toBeNull();
+    expect(androidLimit![1]).toBe(webLimit![1]);
+    expect(iosLimit![1]).toBe(webLimit![1]);
+  });
+
+  it("the like patterns are the web's title patterns in supabase-kt form", () => {
+    const src = readFileSync(SERIES, "utf8");
+    expect(src).toContain('def.aliases.map { "%${it.split(" ").joinToString("%")}%" }');
+    for (const def of EVENT_SERIES) {
+      const kotlin = def.aliases.map((a) => `%${a.split(" ").join("%")}%`);
+      const web = seriesTitlePatterns(def).map((p) => p.replace(/^title\.ilike\./, "").replace(/\*/g, "%"));
+      expect(kotlin).toEqual(web);
     }
   });
 });

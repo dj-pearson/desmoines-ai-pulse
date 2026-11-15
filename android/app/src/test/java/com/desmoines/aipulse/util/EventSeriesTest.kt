@@ -93,6 +93,16 @@ class EventSeriesTest {
     }
 
     @Test
+    fun `like patterns are the title patterns in supabase-kt form`() {
+        val def = EventSeries.forSlug("panda-fest")!!
+        assertEquals(listOf("%panda%fest%", "%pandafest%"), EventSeries.titleLikePatterns(def))
+        EventSeries.ALL.forEach { d ->
+            val fromFilter = EventSeries.titlePatterns(d).map { it.removePrefix("title.ilike.").replace('*', '%') }
+            assertEquals(fromFilter, EventSeries.titleLikePatterns(d), d.slug)
+        }
+    }
+
+    @Test
     fun `the list is safe to put in a filter and in a URL`() {
         assertEquals(EventSeries.ALL.size, EventSeries.ALL.map { it.slug }.toSet().size, "duplicate slug")
         val slugShape = Regex("^[a-z0-9]+(-[a-z0-9]+)*$")

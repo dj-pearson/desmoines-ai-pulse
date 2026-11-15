@@ -3,7 +3,11 @@ package com.desmoines.aipulse.data.remote
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.EventSeries
+import com.desmoines.aipulse.util.EventSeriesDef
 import com.desmoines.aipulse.util.EventSlug
+import com.desmoines.aipulse.util.SeriesEventRow
+import com.desmoines.aipulse.util.SeriesEventRows
 import com.desmoines.aipulse.util.KidsEventsFilter
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
@@ -120,6 +124,37 @@ class EventsRemoteDataSource @Inject constructor(
             totalCount = total,
             hasMore = query.offset + query.limit < total,
         )
+    }
+
+    // endregion
+
+    // region Event Series
+
+    /**
+     * Every row of one annual series, for its native screen (AND-AUDIT-042).
+     * A port of the web's useEventSeriesPage query and iOS fetchSeriesRows.
+     *
+     * This read deliberately keeps hidden and archived rows: a past edition is
+     * exactly a row the stale sweep hid, and [EventSeriesSchedule.build]
+     * decides per row whether to list it, link it or drop it. Merged
+     * duplicates are excluded, since their survivor is the row that counts.
+     * The title filter is the web's loose ilike per alias; build applies the
+     * exact match. The rows are decoded leniently ([SeriesEventRows]).
+     */
+    suspend fun fetchSeriesRows(def: EventSeriesDef): List<SeriesEventRow> {
+        val patterns = EventSeries.titleLikePatterns(def)
+        if (patterns.isEmpty()) return emptyList()
+        val result = db().from("events").select {
+            filter {
+                neq("is_merged", true)
+                or {
+                    patterns.forEach { ilike("title", it) }
+                }
+            }
+            order("date", Order.ASCENDING)
+            limit(SERIES_ROW_LIMIT)
+        }
+        return SeriesEventRows.decode(result.data)
     }
 
     // endregion
@@ -351,6 +386,12 @@ class EventsRemoteDataSource @Inject constructor(
     // endregion
 
     companion object {
+        /**
+         * Rows a series read asks for: the web's SERIES_ROW_LIMIT and iOS
+         * seriesRowLimit (androidEventSeriesParity.test.ts holds all three equal).
+         */
+        const val SERIES_ROW_LIMIT = 200L
+
         /**
          * Haversine distance in meters between two coordinates.
          * Replaces iOS CLLocation.distance(from:).
