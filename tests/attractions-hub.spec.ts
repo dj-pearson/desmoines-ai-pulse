@@ -364,6 +364,30 @@ test.describe('attractions hub (explore pass 2 WP3)', () => {
     await expect(page.getByRole('link', { name: 'Show on map' })).toHaveAttribute('href', '/map?layers=attraction');
   });
 
+  // The hero's action row (Surprise Me, Filters, list/map toggle) needs 383px
+  // on one line, and at 320-375px it pushed the page 8-63px wide. The broad
+  // lane's mobile-responsive spec caught it, but that lane is not required.
+  test('the hero controls fit a 320-375px phone without sideways scroll', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installAttractions(page);
+
+    for (const width of [320, 360, 375]) {
+      await page.setViewportSize({ width, height: 700 });
+      await page.goto('/attractions');
+      const mapToggle = page.getByRole('button', { name: 'Switch to map view' });
+      await expect(mapToggle).toBeVisible();
+      await expect(page.getByRole('heading', { level: 3, name: 'Hub Fixture Attraction 1' })).toBeVisible();
+
+      const box = await page.evaluate(() => {
+        const toggle = document.querySelector('[aria-label="Switch to map view"]')!.getBoundingClientRect();
+        const de = document.documentElement;
+        return { scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, toggleRight: toggle.right };
+      });
+      expect(box.scrollWidth, `page width at ${width}px`).toBeLessThanOrEqual(box.clientWidth);
+      expect(box.toggleRight, `map toggle right edge at ${width}px`).toBeLessThanOrEqual(width);
+    }
+  });
+
   test('the map says how many attractions have no location', async ({ page }) => {
     await installFixtureBackend(page);
     await page.route('**/tile.openstreetmap.org/**', (route) => route.fulfill({ status: 204, body: '' }));

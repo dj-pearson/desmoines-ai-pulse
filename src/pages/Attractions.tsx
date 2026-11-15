@@ -442,7 +442,10 @@ export default function Attractions() {
                   inputRef={searchInputRef}
                 />
               </div>
-              <div className="flex items-center gap-3">
+              {/* flex-wrap: Surprise Me, Filters and the list/map toggle need
+                  383px in one row, so below that the page scrolled sideways
+                  (320-375px phones). The toggle now wraps to its own line. */}
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button
                   onClick={handleSurpriseMe}
                   disabled={!filteredAttractions || filteredAttractions.length === 0}
