@@ -150,6 +150,16 @@ shows a PostgREST 400, the % in the ilike values is not reaching the URL encoded
 row opens detail as not-found, the by-id read is not returning archived rows (Android's fetchEvent has
 no archived_at filter today, so look at RLS; iOS hit this and passes the row it already has instead).
 
+AND-AUDIT-043 (event detail links to its series) is code-complete and JVM-tested. Event detail now
+shows "<name> happens every year." and an "Every year's dates for <name>" link under the action buttons
+when EventSeries.forEvent places the row in one of the 20 series, as the web's event page does (SEO-043);
+the link opens Route.EventSeries. The two strings live in EventSeries.everyYearSentence/everyYearLinkLabel
+and androidEventSeriesParity.test.ts holds them to the web's JSX. One device check closes it: open an
+edition of Cloris Awards or Panda Fest, tap the link, confirm the series screen opens, then tap a past
+row and Back twice to land on the original event. The trap: a venue-qualified series (Jazz in July,
+Pumpkin Fest) shows the line only when the venue or location names the place; a row with neither is
+not a missing link.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -178,3 +188,4 @@ no archived_at filter today, so look at RLS; iOS hit this and passes the row it 
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 2 of 3: util/EventSeriesSchedule.kt ports the web's buildSeriesView rules (moderator vs sweep hidden, linkable, eventEnd/isOver, one instance per Central day, editions by year, current/past/unannounced, date labels). 14 EventSeriesScheduleTest JVM tests (the iOS/web cases plus an isOver case) pass with 34 existing EventSeries/EventCalendarEntry/EventDesMoinesDay tests, 48/48 on a stub harness (kotlinc 2.2.10, JUnit 5.10); three mutations (moderator rule off, no live preference, untimed end_date not run to day end) each fail exactly 1. Not wired to a screen; app module not compiled (no Android SDK) |
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3a: EventsRemoteDataSource.fetchSeriesRows ports the web/iOS series read (neq is_merged, or of title ilikes via new EventSeries.titleLikePatterns, hidden and archived rows kept, limit 200) and util/SeriesEventRows decodes it lossily into SeriesEventRow. 5 new SeriesEventRowsTest and 1 new EventSeriesTest JVM tests pass with the 48 existing series/calendar/day tests, 54/54 on a stub harness (kotlinc 2.2.10 with the real kotlinx-serialization 1.6.2 plugin and runtime, JUnit 5.10); two mutations (rethrow instead of drop, wrong hidden_at name) each fail exactly 1. Parity vitest extended to pin the read and the 200 against web and iOS, 5/5. Not wired to a screen; data source and app module not compiled (no Android SDK) |
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3b (last): native series screen wired. /events/series/<slug> opens EventSeriesScreen for the 20 catalogued slugs (unknown or malformed stays in the web view); EventSeriesViewModel reads fetchSeriesRows through EventsRepository and builds the schedule; current/unannounced, past years, linked vs plain rows, Try again on error, share. 4 new EventSeriesScheduleTest and 2 new DeepLinkWebDestinationTest JVM tests (1 rewritten) pass, 114/114 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); mutations (series link back to web, time on untimed rows) fail exactly 3. Route registration checked by the RouteRegistrationTest regexes in node (0 missing). Parity vitest 5/5. ViewModel, screen, nav and app module not compiled (no Android SDK); no device check |
+| 2026-11-15 | AND-AUDIT-043 | this commit | Event detail links an annual edition to its native series screen ("<name> happens every year." + "Every year's dates for <name>"), matching the web event page; neither mobile app linked detail to the series. 1 new EventSeriesTest JVM test passes, 9/9 in the suite on a stub harness (kotlinc 2.2.10, JUnit 5.10); parity vitest 6/6 (1 new, pins both strings to src/pages/EventDetails.tsx); changing the link label fails 1 JVM and 1 vitest. Compose screen, nav and app module not compiled (no Android SDK); no device check |

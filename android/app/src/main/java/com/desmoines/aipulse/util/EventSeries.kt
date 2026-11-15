@@ -260,6 +260,16 @@ object EventSeries {
     }
 
     /**
+     * The line event detail shows under a dated edition, pointing at the page
+     * that lasts (AND-AUDIT-043). The web's EventDetails.tsx prints the
+     * same two strings (SEO-043); androidEventSeriesParity.test.ts reads both.
+     */
+    fun everyYearSentence(def: EventSeriesDef): String = "${def.name} happens every year."
+
+    /** The link text after [everyYearSentence]; it opens /events/series/<slug>. */
+    fun everyYearLinkLabel(def: EventSeriesDef): String = "Every year's dates for ${def.name}"
+
+    /**
      * ilike patterns for a PostgREST or() filter, as the web builds them
      * (seriesTitlePatterns): each alias with its words joined by `*`, so
      * "panda fest" also finds "PandaFest". The query narrows; [forEvent]

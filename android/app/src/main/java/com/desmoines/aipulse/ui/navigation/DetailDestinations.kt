@@ -117,6 +117,8 @@ internal fun NavGraphBuilder.addDetailDestinations(navController: NavHostControl
                 com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, url)
             },
             onNavigateToAuth = { navController.navigate(Route.Auth.route) },
+            // AND-AUDIT-043: an annual event points at its series screen.
+            onOpenSeries = { slug -> navController.navigate(Route.EventSeries.createRoute(slug)) },
             isReminderSet = isReminderSet,
             showReminderButton = showReminderButton,
             reminderMessage = reminderMessage,

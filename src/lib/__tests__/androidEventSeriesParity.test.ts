@@ -20,6 +20,7 @@ const TESTS = "android/app/src/test/java/com/desmoines/aipulse/util/EventSeriesT
 const SOURCE = "android/app/src/main/java/com/desmoines/aipulse/data/remote/EventsRemoteDataSource.kt";
 const WEB_HOOK = "src/hooks/useEventSeriesPage.ts";
 const IOS_SERVICE = "ios/DesMoinesInsider/Services/EventsService.swift";
+const WEB_DETAIL = "src/pages/EventDetails.tsx";
 
 /** Kotlin string literal body to its value: \" \\ \$ and \uXXXX only. */
 function unescapeKotlin(body: string): string {
@@ -131,6 +132,17 @@ describe("Android annual event series match the web (AND-AUDIT-042)", () => {
     expect(iosLimit, `seriesRowLimit not found in ${IOS_SERVICE}`).not.toBeNull();
     expect(androidLimit![1]).toBe(webLimit![1]);
     expect(iosLimit![1]).toBe(webLimit![1]);
+  });
+
+  it("event detail's every-year line says what the web's event page says", () => {
+    // AND-AUDIT-043. The web prints the sentence and the link label as
+    // JSX text around {series.name}; Android builds them from def.name.
+    const web = readFileSync(WEB_DETAIL, "utf8").replace(/\s+/g, " ");
+    expect(web).toContain('{series.name} happens every year.{" "}');
+    expect(web).toContain("Every year's dates for {series.name}");
+    const src = readFileSync(SERIES, "utf8");
+    expect(src).toContain('fun everyYearSentence(def: EventSeriesDef): String = "${def.name} happens every year."');
+    expect(src).toContain(`fun everyYearLinkLabel(def: EventSeriesDef): String = "Every year's dates for \${def.name}"`);
   });
 
   it("the like patterns are the web's title patterns in supabase-kt form", () => {

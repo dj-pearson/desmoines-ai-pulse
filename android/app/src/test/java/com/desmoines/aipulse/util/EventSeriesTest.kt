@@ -87,6 +87,19 @@ class EventSeriesTest {
     }
 
     @Test
+    fun `event detail's every-year line names the series and its page`() {
+        // AND-AUDIT-043: event detail shows these under an edition and
+        // the link opens Route.EventSeries for def.slug.
+        val def = EventSeries.forEvent("11th Annual Cloris Awards")!!
+        assertEquals("Cloris Awards happens every year.", EventSeries.everyYearSentence(def))
+        assertEquals("Every year's dates for Cloris Awards", EventSeries.everyYearLinkLabel(def))
+        assertEquals("cloris-awards", def.slug)
+        // A row in no series gets no line; a venue-qualified name elsewhere neither.
+        assertNull(EventSeries.forEvent("Some Other Concert"))
+        assertNull(EventSeries.forEvent("Pumpkin Fest 2026", venue = "Some Other Farm"))
+    }
+
+    @Test
     fun `title patterns join alias words with wildcards`() {
         val def = EventSeries.forSlug("panda-fest")!!
         assertEquals(listOf("title.ilike.*panda*fest*", "title.ilike.*pandafest*"), EventSeries.titlePatterns(def))

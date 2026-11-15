@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
+import com.desmoines.aipulse.util.EventSeries
 import com.desmoines.aipulse.util.EventTimeText
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,6 +58,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -125,6 +128,8 @@ fun EventDetailScreen(
     reminderMessage: String? = null,
     onToggleReminder: () -> Unit = {},
     onReminderMessageShown: () -> Unit = {},
+    /** Opens the native series screen by slug (AND-AUDIT-043). */
+    onOpenSeries: (String) -> Unit = {},
 ) {
     var showImageViewer by remember { mutableStateOf(false) }
     val haptic = rememberHapticPerformer()
@@ -233,6 +238,9 @@ fun EventDetailScreen(
                 onShowSubscription = onShowSubscription,
                 onOpenSourceUrl = onOpenSourceUrl,
             )
+
+            // Annual series: the page with every year's dates
+            EventDetailSeriesLink(event = event, onOpenSeries = onOpenSeries)
 
             // Insider Tips
             EventDetailInsiderTips(
@@ -765,6 +773,48 @@ private fun EventDetailActions(
                     color = if (isReminderSet) Color.White else MaterialTheme.colorScheme.onSurface
                 )
             }
+        }
+    }
+}
+
+// endregion
+
+// region Series Link
+
+/**
+ * "<name> happens every year." and a link to its series screen, for a row
+ * EventSeries.forEvent places in one of the web's annual series, as the web's
+ * event page does under the ticket button (SEO-043). Nothing for any other row.
+ */
+@Composable
+private fun EventDetailSeriesLink(
+    event: Event,
+    onOpenSeries: (String) -> Unit,
+) {
+    val series = EventSeries.forEvent(event.title, event.venue, event.location) ?: return
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Text(
+            text = EventSeries.everyYearSentence(series),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(
+            onClick = { onOpenSeries(series.slug) },
+            modifier = Modifier.heightIn(min = 48.dp),
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = EventSeries.everyYearLinkLabel(series),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
