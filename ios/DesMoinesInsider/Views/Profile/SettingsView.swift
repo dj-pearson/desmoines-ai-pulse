@@ -78,12 +78,20 @@ struct SettingsView: View {
                         .disabled(isRestoring)
                         .accessibilityLabel("Restore previous purchases")
 
-                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014)
-                        Button {
-                            AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
-                            showOfferCodeRedeem = true
-                        } label: {
-                            Label("Redeem Offer Code", systemImage: "tag")
+                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014).
+                        // Hidden for a web or Google Play subscriber, for whom
+                        // a code would start a second, App Store-billed plan
+                        // (IOS-AUDIT-012).
+                        if PlansLinkScreen.screen(
+                            tier: storeKit.currentTier,
+                            hasAppStoreSubscription: storeKit.hasAppStoreSubscription
+                        ).offersCodeRedemption {
+                            Button {
+                                AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
+                                showOfferCodeRedeem = true
+                            } label: {
+                                Label("Redeem Offer Code", systemImage: "tag")
+                            }
                         }
                     }
 

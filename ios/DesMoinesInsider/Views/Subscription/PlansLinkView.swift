@@ -17,6 +17,12 @@ enum PlansLinkScreen: Equatable {
         if tier == .free || hasAppStoreSubscription { return .store }
         return .planInfo
     }
+
+    /// Whether Settings offers Redeem Offer Code. An App Store offer code
+    /// starts or changes an App Store plan, so for someone billed through
+    /// Stripe or Google Play it would start a second, duplicate one: the
+    /// same reason they never see the store (IOS-AUDIT-012).
+    var offersCodeRedemption: Bool { self == .store }
 }
 
 struct PlansLinkView: View {

@@ -56,6 +56,19 @@ describe("iOS shows the StoreKit store only where a paid web/Play subscriber can
     expect(src).toMatch(/\.sheet\(isPresented: \$showSubscription\)\s*\{[^}]*PlansLinkView\(\)/);
   });
 
+  it("Settings offers Redeem Offer Code only where it would show the store (IOS-AUDIT-012)", () => {
+    const src = readFileSync(`${APP_DIR}/Views/Profile/SettingsView.swift`, "utf8");
+    // Every button that opens the redemption sheet sits inside the gate.
+    const opens = src.split("showOfferCodeRedeem = true").length - 1;
+    expect(opens).toBe(1);
+    const gated = src.match(
+      /if PlansLinkScreen\.screen\([^)]*\)\.offersCodeRedemption \{\s*Button \{[^}]*showOfferCodeRedeem = true/,
+    );
+    expect(gated, "Redeem Offer Code is not gated on offersCodeRedemption").not.toBeNull();
+    const rule = readFileSync(`${APP_DIR}/Views/Subscription/PlansLinkView.swift`, "utf8");
+    expect(rule).toMatch(/var offersCodeRedemption: Bool \{ self == \.store \}/);
+  });
+
   it("the banner opens the store only from its free-user cards", () => {
     const src = readFileSync(`${APP_DIR}/Views/Components/SubscriptionBanner.swift`, "utf8");
     const subscribed = src.match(/private var subscribedCard: some View \{[\s\S]*?\n {4}\}\n/);
