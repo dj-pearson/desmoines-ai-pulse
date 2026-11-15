@@ -89,7 +89,7 @@ describe("check-field-names flags a Slider with no thumb name", () => {
 
   it.each([
     "src/components/admin/TrendingTuner.tsx",
-    "src/components/RestaurantInlineFilters.tsx",
+    "src/components/RestaurantFilterPopover.tsx",
     "src/components/event-promotion-planner/WizardForm.tsx",
     "src/components/media/VideoPlayer.tsx",
   ])("%s has no unnamed slider", (file) => {

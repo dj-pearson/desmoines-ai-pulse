@@ -8,8 +8,26 @@
 
 ## Handoff
 
-None. WEB-PERF-077 (AIDisclosureBadge's Radix Tooltip loaded on
-first mouse hover) closed in loop 24.
+None. WEB-PERF-078 (RestaurantInlineFilters' Popover and Slider loaded on
+first pill click) closed in loop 25.
+
+What loop 25 added:
+- RestaurantInlineFilters draws four static PillButtons (forwardRef, same
+  classes before and after) and fetches RestaurantFilterPopover on the first
+  click (Enter/Space arrive as clicks; Radix PopoverTrigger has no arrow-key
+  open). The lazy half holds the Popover, all four panels and the rating
+  Slider, so the panels moved there too: a child element built in the static
+  module would have kept ui/slider in the hub. Open state stays in the static
+  pill, so the lazy Popover is controlled and mounts open; Radix focuses the
+  content and returns focus to its own trigger on close. /restaurants
+  141.9 -> 108.5 KB gz, 18 fewer files; it was the last importer of
+  react-popover, popper, floating-ui and react-slider there.
+  restaurantFilterPopoverLazy.test.ts pins it; restaurants-hub.spec.ts has the
+  smoke test. sliderThumbNames.test.tsx now scans the new file.
+- Next candidates: restaurantHours.ts (4.0 KB on ~46 routes) is still the
+  biggest app module by gz x routes; public form fields on ui/select
+  (Contact, TripPlanner, BusinessPartnership, GroupTravel) need a check that
+  the form still posts before converting.
 
 What loop 24 added:
 - AIDisclosureBadge renders the pill alone and fetches AIDisclosureTooltip
@@ -155,3 +173,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-075 | this commit | Closed filter/sort selects on /playgrounds, /stay, /events/near-me and /articles are DeferredSelect; Articles 86.4 -> 52.9, Playgrounds 105.5 -> 84.5, Hotels 88.2 -> 67.9, EventsNearMe 122.8 -> 116.0 KB gz beyond the critical path (17/9/7/2 fewer files); EventsPage/Restaurants/Attractions +0.3-0.4 and one file (deferred-select now a shared chunk); summed 8,438.8 -> 8,361.0; critical path 175.2 unchanged; graph test extended to 7 routes with negative control (1 fails on a static ui/select import); 118 smoke tests on those pages plus 4 throwaway Chrome checks (click, ArrowDown, pick updates URL, focus returned, no size change) pass; vitest 3588/3588 |
 | 2026-11-15 | WEB-PERF-076 | this commit | AddToCalendarButton is a static trigger and loads AddToCalendarMenu (Radix DropdownMenu + export handlers) on first click/Enter/ArrowDown, opened with the first item focused on a keyboard open; seven event landings 118-124 -> 83-89 KB gz beyond the critical path (-35.3, 17 fewer files each), EventsPage 165.4 -> 142.7, EventsNearMe 116.5 -> 96.9, EventDetails 138.3 -> 120.3, none heavier by more than 0.1; summed 8,384.8 -> 8,080.7; critical path 175.2 unchanged; graph test with negative control (12 of 13 fail on the old button); 55 smoke tests on event pages plus 2 throwaway Chrome checks (chunk fetched only on use, keyboard focus, Escape returns focus, same size) pass |
 | 2026-11-15 | WEB-PERF-077 | this commit | AIDisclosureBadge renders the pill alone and loads AIDisclosureTooltip (Radix Tooltip) on the first mouse hover; EventDetails 120.3 -> 100.5, HotelDetails 88.5 -> 68.9, RestaurantDetails 119.8 -> 103.8, ArticleDetails 129.0 -> 113.2, TripPlanner 116.9 -> 114.0 KB gz beyond the critical path (6-10 fewer files), none heavier; summed 8,120.1 -> 8,042.0; critical path 175.2 unchanged; graph test with negative control (6 of 7 fail on the old badge); new smoke test in restaurant-detail.spec.ts (chunk only on hover, tooltip opens, same size) passes 3/3 repeats with 50 other detail-page smoke tests; vitest 3659/3659 |
+| 2026-11-15 | WEB-PERF-078 | this commit | RestaurantInlineFilters pills are static buttons and load RestaurantFilterPopover (Radix Popover, the four panels, the rating Slider) on first click/Enter; /restaurants 141.9 -> 108.5 KB gz beyond the critical path (18 fewer files); 17 other routes moved by 0.1 either way (chunk reshuffle), none more; summed 8,046.7 -> 8,012.8; critical path 175.2 unchanged; graph test with negative control (2 of 4 fail on a static ui/popover import); new smoke test (no chunk on load, click and Enter open, Escape returns focus, same size) 3/3 repeats plus 108 smoke tests on filter/restaurant pages; vitest 3692/3692 |

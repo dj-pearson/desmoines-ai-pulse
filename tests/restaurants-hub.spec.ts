@@ -209,3 +209,49 @@ test.describe('Restaurants hub: copy, links and schema', () => {
     expect(types.some((t) => t.includes('"ItemList"'))).toBe(false);
   });
 });
+
+// WEB-PERF-078: the filter pills render without Radix Popover or Slider.
+// RestaurantFilterPopover is fetched on the first pill interaction and swapped
+// in already open; it must still open from the keyboard and give focus back.
+test.describe('Restaurants hub: filter pills load their popover on use', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('no popover chunk with the page; click and Enter open it, Escape returns focus', async ({ page }) => {
+    const chunks: string[] = [];
+    page.on('request', (req) => {
+      if (/\/RestaurantFilterPopover-[^/]*\.js/.test(req.url())) chunks.push(req.url());
+    });
+    await gotoHub(page);
+
+    const price = page.getByRole('button', { name: /^Price/ });
+    await expect(price).toHaveAttribute('aria-expanded', 'false');
+    const size = async () => {
+      const box = await price.boundingBox();
+      return box && { width: box.width, height: box.height };
+    };
+    const before = await size();
+    expect(chunks, 'the popover chunk loaded with the page').toEqual([]);
+
+    await price.click();
+    const moderate = page.getByRole('button', { name: /^\$\$\s*moderate/ });
+    await expect(moderate).toBeVisible();
+    expect(chunks).toHaveLength(1);
+    await expect(price).toHaveAttribute('aria-expanded', 'true');
+    expect(await size()).toEqual(before);
+
+    await page.keyboard.press('Escape');
+    await expect(moderate).toBeHidden();
+    await expect(price).toBeFocused();
+
+    // A pill that was never opened swaps on Enter, which reaches it as a click.
+    const rating = page.getByRole('button', { name: /^Rating/ });
+    await rating.focus();
+    await page.keyboard.press('Enter');
+    const slider = page.getByRole('slider', { name: 'Minimum rating' });
+    await expect(slider).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(slider).toBeHidden();
+    await expect(rating).toBeFocused();
+    expect(chunks).toHaveLength(1);
+  });
+});
