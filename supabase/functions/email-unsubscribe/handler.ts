@@ -34,6 +34,12 @@
  * ?account=<marketing_unsubscribe_tokens.token>. Same two doors and the same
  * 48-hex shape as ?token=; the work is marketing_unsubscribe_by_token, which
  * writes the same 'unsubscribe' suppression the newsletter token does.
+ *
+ * AOS-PROSPECT-009: B2B outreach mail to a crm_leads prospect carries
+ * ?outreach=<outreach_unsubscribe_tokens.token>. Same two doors and 48-hex
+ * shape; the work is outreach_unsubscribe_by_token, which suppresses the
+ * address for outreach and stops the lead's sequence, and leaves the
+ * newsletter alone.
  */
 
 /** 48 lowercase hex, the shape the RPC validates. */
@@ -55,6 +61,8 @@ export interface HandlerDeps {
   disableAlerts?: UnsubscribeRpc;
   /** marketing_unsubscribe_by_token. Same call shape as rpc. */
   accountUnsubscribe?: UnsubscribeRpc;
+  /** outreach_unsubscribe_by_token. Same call shape as rpc. */
+  outreachUnsubscribe?: UnsubscribeRpc;
   siteUrl: string;
 }
 
@@ -72,6 +80,7 @@ export async function handleUnsubscribe(req: Request, deps: HandlerDeps): Promis
   if (url.searchParams.has("reminder")) return handleReminder(req, url, deps);
   if (url.searchParams.has("alerts")) return handleAlerts(req, url, deps);
   if (url.searchParams.has("account")) return handleAccount(req, url, deps);
+  if (url.searchParams.has("outreach")) return handleOutreach(req, url, deps);
   const token = (url.searchParams.get("token") ?? "").trim().toLowerCase();
 
   if (req.method === "GET") {
@@ -155,6 +164,31 @@ async function handleAccount(req: Request, url: URL, deps: HandlerDeps): Promise
   const { data, error } = await deps.accountUnsubscribe(token);
   if (error) {
     console.error("[email-unsubscribe] account unsubscribe failed:", error.message);
+    return json(503, { error: "Try again later" });
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as { success?: boolean; already_unsubscribed?: boolean } | null;
+  if (!row?.success) return json(404, { error: "Unknown unsubscribe token" });
+  return json(200, { ok: true, already_unsubscribed: !!row.already_unsubscribed });
+}
+
+async function handleOutreach(req: Request, url: URL, deps: HandlerDeps): Promise<Response> {
+  const token = (url.searchParams.get("outreach") ?? "").trim().toLowerCase();
+
+  if (req.method === "GET") {
+    const page = `${deps.siteUrl.replace(/\/+$/, "")}/unsubscribe?outreach=${encodeURIComponent(token)}`;
+    return new Response(null, { status: 303, headers: { Location: page, "Cache-Control": "no-store" } });
+  }
+
+  if (!TOKEN_RE.test(token)) return json(400, { error: "Invalid unsubscribe token" });
+  // Never fall back to the newsletter RPC: a prospect is not in
+  // newsletter_subscribers, so that call would answer "unknown" and the
+  // provider would stop retrying with the sequence still running.
+  if (!deps.outreachUnsubscribe) return json(503, { error: "Try again later" });
+
+  const { data, error } = await deps.outreachUnsubscribe(token);
+  if (error) {
+    console.error("[email-unsubscribe] outreach unsubscribe failed:", error.message);
     return json(503, { error: "Try again later" });
   }
 

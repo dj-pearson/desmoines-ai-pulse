@@ -234,6 +234,11 @@ const PENDING_MIGRATIONS = [
   // email carries an ?account= link until the next slice, so the pending
   // window answers 503 to a request nobody sends.
   { rpc: 'marketing_unsubscribe_by_token', migration: '20261108000104' },
+  // One-click outreach opt-out for crm_leads prospects (AOS-PROSPECT-009).
+  // Only email-unsubscribe's ?outreach= branch calls it, and no email carries
+  // an ?outreach= link until the next slice, so the pending window answers 503
+  // to a request nobody sends.
+  { rpc: 'outreach_unsubscribe_by_token', migration: '20261115000101' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

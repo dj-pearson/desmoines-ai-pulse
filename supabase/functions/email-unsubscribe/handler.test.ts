@@ -228,3 +228,62 @@ Deno.test("GET ?account= hands the reader to the page with the account token", a
   assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?account=${TOKEN}`);
   assertEquals(account.calls.length, 0);
 });
+
+// AOS-PROSPECT-009: an outreach prospect gets ?outreach=<token>, which runs
+// outreach_unsubscribe_by_token and never the newsletter or account RPC.
+const outreachDeps = (outreach: UnsubscribeRpc | undefined, rpc: UnsubscribeRpc) => ({
+  rpc,
+  accountUnsubscribe: rpc,
+  outreachUnsubscribe: outreach,
+  siteUrl: "https://desmoinesinsider.com",
+});
+
+Deno.test("POST ?outreach= stops the prospect's outreach, not through the newsletter or account RPC", async () => {
+  const outreach = rpcReturning([{ success: true, already_unsubscribed: false }]);
+  const other = rpcReturning([{ success: true }]);
+  const res = await handleUnsubscribe(
+    new Request(`${FN}?outreach=${TOKEN.toUpperCase()}`, { method: "POST", body: "List-Unsubscribe=One-Click" }),
+    outreachDeps(outreach.rpc, other.rpc),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(outreach.calls, [TOKEN]);
+  assertEquals(other.calls.length, 0);
+  assertEquals(await res.json(), { ok: true, already_unsubscribed: false });
+});
+
+Deno.test("POST ?outreach= malformed is 400, unknown 404, database error or missing RPC 503", async () => {
+  const bad = rpcReturning(null);
+  const malformed = await handleUnsubscribe(new Request(`${FN}?outreach=nope`, { method: "POST" }), outreachDeps(bad.rpc, bad.rpc));
+  assertEquals(malformed.status, 400);
+  assertEquals(bad.calls.length, 0);
+  await malformed.body?.cancel();
+
+  const unknown = await handleUnsubscribe(
+    new Request(`${FN}?outreach=${TOKEN}`, { method: "POST" }),
+    outreachDeps(rpcReturning([{ success: false }]).rpc, bad.rpc),
+  );
+  assertEquals(unknown.status, 404);
+  await unknown.body?.cancel();
+
+  const down = await handleUnsubscribe(
+    new Request(`${FN}?outreach=${TOKEN}`, { method: "POST" }),
+    outreachDeps(rpcReturning(null, { message: "timeout" }).rpc, bad.rpc),
+  );
+  assertEquals(down.status, 503);
+  await down.body?.cancel();
+
+  // No outreach RPC wired: retry later, never another RPC.
+  const other = rpcReturning([{ success: true }]);
+  const missing = await handleUnsubscribe(new Request(`${FN}?outreach=${TOKEN}`, { method: "POST" }), outreachDeps(undefined, other.rpc));
+  assertEquals(missing.status, 503);
+  assertEquals(other.calls.length, 0);
+  await missing.body?.cancel();
+});
+
+Deno.test("GET ?outreach= hands the prospect to the page with the outreach token", async () => {
+  const outreach = rpcReturning([{ success: true }]);
+  const res = await handleUnsubscribe(new Request(`${FN}?outreach=${TOKEN}`), outreachDeps(outreach.rpc, outreach.rpc));
+  assertEquals(res.status, 303);
+  assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?outreach=${TOKEN}`);
+  assertEquals(outreach.calls.length, 0);
+});
