@@ -20,6 +20,11 @@
  *   - it has a {...spread} (the name may arrive in the props)
  * type="hidden", "file", "checkbox", "radio", "submit" and "button" inputs
  * are skipped: they are hidden, or named by their own label/button rules.
+ *
+ * <Slider> (WEB-UX-074) has a stricter rule. Radix gives role="slider" to the
+ * Thumb inside it, so an aria-label, a wrapping <Label> or a FormControl id
+ * all land on the Root and the thumb is still announced as an unnamed slider.
+ * Only thumbLabel, thumbLabelledBy or a {...spread} name it.
  * The count is a floor, never a false alarm.
  *
  * SO THIS IS A RATCHET. A file may lose unnamed fields freely. It may not gain
@@ -48,6 +53,7 @@ const FIELD_TAGS = new Set(['Input', 'Textarea', 'input', 'textarea', 'select', 
 const NAME_ATTRS = new Set(['aria-label', 'aria-labelledby', 'title']);
 const SKIP_TYPES = new Set(['hidden', 'file', 'checkbox', 'radio', 'submit', 'button', 'reset', 'image']);
 const LABEL_TAGS = new Set(['label', 'Label', 'FormControl']);
+const SLIDER_NAME_ATTRS = ['thumbLabel', 'thumbLabelledBy'];
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -99,7 +105,11 @@ export function findUnnamedFields(source, fileName = 'file.tsx') {
         const v = literalValue(attrs.get('htmlFor'));
         htmlFor.add(v ?? attrs.get('htmlFor').getText());
       }
-      if (FIELD_TAGS.has(tag)) {
+      if (tag === 'Slider') {
+        if (!spread && !SLIDER_NAME_ATTRS.some((n) => attrs.has(n))) {
+          candidates.push({ id: null, line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1 });
+        }
+      } else if (FIELD_TAGS.has(tag)) {
         const type = attrs.has('type') ? literalValue(attrs.get('type')) : null;
         const named =
           spread ||

@@ -293,6 +293,7 @@ export default function TrendingTuner() {
                     </div>
                   </div>
                   <Slider
+                    thumbLabel={c.label}
                     value={[value]}
                     min={c.min}
                     max={c.max}

@@ -113,17 +113,6 @@ function ClearButton({ onClick, label }: { onClick: () => void; label: string })
   );
 }
 
-/**
- * Radix puts role="slider" on the thumb and names it only from the thumb's
- * own aria-label, which the shared ui/slider primitive does not forward. Label
- * the thumb directly so axe does not report an unnamed slider.
- */
-function labelSliderThumb(label: string) {
-  return (root: HTMLElement | null) => {
-    root?.querySelector('[role="slider"]')?.setAttribute("aria-label", label);
-  };
-}
-
 function RatingFilter({
   value,
   onCommit,
@@ -162,8 +151,8 @@ function RatingFilter({
           })}
         </div>
         <Slider
-          ref={labelSliderThumb("Minimum rating")}
-          aria-label="Minimum rating"
+          thumbLabel="Minimum rating"
+          thumbValueText={draft === 0 ? "Any rating" : `${draft} stars and up`}
           value={[draft]}
           onValueChange={([val]) => setDraft(val)}
           onValueCommit={([val]) => onCommit(val)}
