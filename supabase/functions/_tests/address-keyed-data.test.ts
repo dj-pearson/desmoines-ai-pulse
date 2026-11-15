@@ -118,7 +118,8 @@ Deno.test("an erasure failure is reported and the rest still runs", async () => 
 
 Deno.test("the export includes all three tables, each row once, only this user's", async () => {
   const { client } = fakeClient(seed());
-  const { data, unavailable } = await readAddressKeyedData(client, ME, "reader@example.com");
+  const read = await readAddressKeyedData(client, ME, "reader@example.com");
+  const { data, unavailable } = read;
 
   assertEquals(unavailable, []);
   assertEquals((data.newsletter_subscribers as Row[]).map((r) => r.id), ["n1"]);
@@ -129,7 +130,8 @@ Deno.test("the export includes all three tables, each row once, only this user's
 
 Deno.test("an unreadable table is listed in unavailable, not dropped silently", async () => {
   const { client } = fakeClient(seed(), new Set(["email_log"]));
-  const { data, unavailable } = await readAddressKeyedData(client, ME, "reader@example.com");
+  const read = await readAddressKeyedData(client, ME, "reader@example.com");
+  const { data, unavailable } = read;
   assertEquals(unavailable.map((f) => f.table), ["email_log"]);
   assert(!("email_log" in data));
   assert("newsletter_subscribers" in data);
