@@ -477,3 +477,41 @@ Deno.test("weekly digest switch: a user with no preferences row is still decided
   assert.equal(out.skippedPref, 0, "no row is not an opt-out");
   assert.equal(out.gated, 1);
 });
+
+// --- two weekly digests (WEB-ADS-037) ---------------------------------------
+// send-weekly-digest logs to weekly_digest_log, this agent to nurture_sends,
+// and each used to cap only against its own ledger, so a member got both. The
+// mock ignores filters, so these rows reach the agent as-is; the window and the
+// 'sent' status are what decide.
+
+Deno.test("two digests: weekly-digest-personal skips a user send-weekly-digest mailed this week", async () => {
+  const fixtures = {
+    ...weeklyDigestFixtures([{ user_id: "u1", weekly_digest_enabled: true }]),
+    weekly_digest_log: [{ user_id: "u1", email_status: "sent", sent_at: new Date(Date.now() - 3 * 86_400_000).toISOString() }],
+  };
+  const { client, rec } = makeClient(fixtures);
+  const { ctx, read } = makeCtx();
+  const out = await weeklyDigestPersonal(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+
+  assert.equal(out.sent, 0);
+  assert.equal(out.skippedOtherDigest, 1, "a user who had the Sunday digest 3 days ago should be skipped");
+  assert.equal(out.gated, 0);
+  assert.deepEqual(sendLedgerInserts(rec), [], "a user who already had this week's digest reached the send ledger");
+  assert.equal(read().meta.skippedOtherDigest, 1);
+});
+
+Deno.test("two digests: a failed or week-old Sunday send does not stop the personal digest", async () => {
+  const fixtures = {
+    ...weeklyDigestFixtures([{ user_id: "u1", weekly_digest_enabled: true }]),
+    weekly_digest_log: [
+      { user_id: "u1", email_status: "failed", sent_at: new Date(Date.now() - 86_400_000).toISOString() },
+      { user_id: "u1", email_status: "sent", sent_at: new Date(Date.now() - 8 * 86_400_000).toISOString() },
+    ],
+  };
+  const { client } = makeClient(fixtures);
+  const { ctx } = makeCtx();
+  const out = await weeklyDigestPersonal(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+
+  assert.equal(out.skippedOtherDigest, 0);
+  assert.equal(out.gated, 1, "should have reached the quality gate; if not, the fixture stopped it earlier and the test above proves nothing");
+});
