@@ -111,6 +111,15 @@ restart it from `develop` (or `main` if there is no `develop`).
    the next merge. Rounds 10-12 shipped a required-lane break (WEB-QA-052) that
    validate and vitest cannot see.
 
+### Drain mode
+
+Lanes that may define and fix their own stories keep the open count flat: rounds
+20-26 closed about 10 stories each and logged nearly as many, so open went
+151 -> 146 over seven rounds. Pass `mode: "drain"` to `improvement-loop-round`
+to work the existing backlog only. Each lane takes an open story or commits
+nothing, no "found and done" story is created, and a lane may log at most one
+new story, only for a defect a user would hit.
+
 ### Continuous mode
 
 The scheduler's minimum interval is one hour, and a round takes about 30
