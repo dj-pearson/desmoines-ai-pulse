@@ -9,7 +9,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
-import { RESTAURANT_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
+import { RESTAURANT_HUB_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
 import { DIETARY_KEYWORDS, dietaryIlikeClauses } from "@/lib/restaurantDiets";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
@@ -19,8 +19,9 @@ import { hubSearchQuery } from "@/components/events/eventsHubQuery";
 // `announced`, which the local set here left out.
 import {
   isPermanentlyClosedRestaurant,
-  isVisitableStatus,
+  isServingToday,
   NOT_CLOSED_RESTAURANT_FILTER,
+  NOT_GOOGLE_CLOSED_RESTAURANT_FILTER,
 } from "@/lib/restaurantHours";
 
 const logger = createLogger("useRestaurants");
@@ -133,12 +134,17 @@ export function withoutPermanentlyClosed(list: Restaurant[]): Restaurant[] {
   );
 }
 
-function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
+/**
+ * isServingToday, not the lifecycle status alone: a CLOSED_TEMPORARILY place
+ * keeps its weekly hours on Google and its `status` says open, so it sat among
+ * the places a visitor can go to tonight (WEB-FEAT-094).
+ */
+export function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
   const visitable: Restaurant[] = [];
   const unvisitable: Restaurant[] = [];
   for (const r of list) {
-    const status = (r as { status?: string | null }).status;
-    (isVisitableStatus(status) ? visitable : unvisitable).push(r);
+    const row = r as { status?: string | null; business_status?: string | null };
+    (isServingToday(row) ? visitable : unvisitable).push(r);
   }
   return [...visitable, ...unvisitable];
 }
@@ -378,13 +384,19 @@ export async function fetchRestaurantList(
       // the planner estimate only for large result sets, so it keeps the
       // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
       // while always yielding a number.
-      .select(withAdminColumns(RESTAURANT_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
+      //
+      // RESTAURANT_HUB_LIST_COLUMNS carries hours_json and business_status, as
+      // the RPC row does, so a card's hours line and closure label do not
+      // depend on which sort the visitor picked.
+      .select(withAdminColumns(RESTAURANT_HUB_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
       .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
     // SEO-059: a browse never lists a place that has closed for good. In the
     // query, not after it, so the count matches the pages.
+    // Google's CLOSED_PERMANENTLY too: the hours refresh writes it without
+    // touching status, and the RPC path already leaves those rows out.
     if (hideClosed) {
-      query = query.or(NOT_CLOSED_RESTAURANT_FILTER);
+      query = query.or(NOT_CLOSED_RESTAURANT_FILTER).or(NOT_GOOGLE_CLOSED_RESTAURANT_FILTER);
     }
 
     // Prefix full-text search: every word must match and the last one is a

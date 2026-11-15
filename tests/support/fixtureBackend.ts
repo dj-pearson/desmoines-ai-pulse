@@ -124,6 +124,9 @@ function restaurantRow(i: number) {
     status: 'active',
     website: 'https://example.com/fixture',
     writeup_generated_at: null,
+    // RESTAURANT_HUB_LIST_COLUMNS: the hub's table path selects both.
+    business_status: null,
+    hours_json: null,
   };
 }
 

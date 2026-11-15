@@ -32,6 +32,7 @@ const TYPES_FILE = 'src/integrations/supabase/types.ts';
 /** Projection constant -> the table it is selected from. */
 const TABLE_FOR = {
   RESTAURANT_LIST_COLUMNS: 'restaurants',
+  RESTAURANT_HUB_LIST_COLUMNS: 'restaurants',
   EVENT_LIST_COLUMNS: 'events',
   ATTRACTION_LIST_COLUMNS: 'attractions',
   HOTEL_LIST_COLUMNS: 'hotels',

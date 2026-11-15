@@ -36,6 +36,18 @@ export const RESTAURANT_LIST_COLUMNS =
   "city, created_at, cuisine, data_quality_score, description, enhanced, google_place_id, id, image_url, is_featured, is_merged, is_sponsored, sponsored_until, latitude, location, longitude, merged_at, merged_into, name, opening, opening_date, opening_timeframe, phone, popularity_score, price_range, rating, slug, source_url, status, updated_at, website, writeup_generated_at";
 
 /**
+ * The /restaurants hub's table path (fetchRestaurantList: any sort but the
+ * default, a search, a diet filter, the sponsored pool). The list columns plus
+ * hours_json and business_status, which the rotation RPC's to_jsonb(r) row
+ * already carries. Without them the same card said "Open until 10 PM" under
+ * the default sort and nothing once sorted by rating, a CLOSED_TEMPORARILY
+ * place read as an ordinary listing, and a search could not label a Google
+ * CLOSED_PERMANENTLY place it keeps on purpose (WEB-FEAT-094).
+ */
+export const RESTAURANT_HUB_LIST_COLUMNS =
+  "city, created_at, cuisine, data_quality_score, description, enhanced, google_place_id, id, image_url, is_featured, is_merged, is_sponsored, sponsored_until, latitude, location, longitude, merged_at, merged_into, name, opening, opening_date, opening_timeframe, phone, popularity_score, price_range, rating, slug, source_url, status, updated_at, website, writeup_generated_at, business_status, hours_json";
+
+/**
  * What restaurant detail reads on top of the list columns, instead of
  * select("*"), which also shipped search_vector, geom, writeup_prompt_used and
  * the heal bookkeeping on every view and every card hover. Checked against

@@ -873,6 +873,17 @@ export function businessStatusLabel(businessStatus: string | null | undefined): 
 export const NOT_CLOSED_RESTAURANT_FILTER = 'status.is.null,status.neq.closed';
 
 /**
+ * PostgREST `or` filter that leaves out a place Google calls
+ * CLOSED_PERMANENTLY. The SEO-059 data pass set status = 'closed' on the rows
+ * it found, but the daily hours refresh (WEB-FEAT-079) writes business_status
+ * and never status, so a place that closes after that pass is caught only by
+ * this. business_status is stored upper case (normalizeBusinessStatus), and is
+ * nullable, hence the OR. Sits beside NOT_CLOSED_RESTAURANT_FILTER: repeated
+ * `or` params are ANDed.
+ */
+export const NOT_GOOGLE_CLOSED_RESTAURANT_FILTER = 'business_status.is.null,business_status.neq.CLOSED_PERMANENTLY';
+
+/**
  * One short line for a card or list row, or null when there is nothing honest
  * to say: "Open until 10 PM", "Closes at 10 PM", "Open 24 hours",
  * "Closed, opens 11 AM", "Closed".
