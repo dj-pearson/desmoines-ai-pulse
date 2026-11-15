@@ -377,8 +377,10 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     // shell both say so), so submitting it asks Google to crawl a page we've
     // told it not to index. status is nullable and a bare neq would also drop
     // the NULL rows, so "not closed" is an OR that keeps them
-    // (useBreweryTrail.ts uses the same filter).
-    .or('status.is.null,status.neq.closed')
+    // (useBreweryTrail.ts uses the same filter). It names all three spellings
+    // of closed-for-good the restaurant page reads as closed (WEB-BE-045):
+    // nothing filters this list after the query, unlike the listing hooks.
+    .or('status.is.null,status.not.in.(closed,permanently_closed,closed_permanently)')
     // SEO-059: the page is also noindex when Google's business_status says
     // CLOSED_PERMANENTLY, so that row leaves the sitemap too. A second `or`
     // param is ANDed with the first by PostgREST.
