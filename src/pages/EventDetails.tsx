@@ -733,7 +733,15 @@ export default function EventDetails() {
 
                 {isUpcoming && (
                   <DeferredWidget minHeight={160} label="Event reminders">
-                    <EventReminderSettings eventId={event.id} eventTitle={event.title} />
+                    <EventReminderSettings
+                      eventId={event.id}
+                      eventTitle={event.title}
+                      eventTiming={{
+                        date: event.date,
+                        event_start_utc: event.event_start_utc,
+                        time_tbd: (event as { time_tbd?: boolean | null }).time_tbd ?? null,
+                      }}
+                    />
                   </DeferredWidget>
                 )}
 
