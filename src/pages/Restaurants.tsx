@@ -55,13 +55,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load map component to prevent react-leaflet bundling issues
@@ -85,6 +79,16 @@ const sortOptions = [
   { value: "price_low", label: "Price: Low-High", icon: DollarSign },
   { value: "price_high", label: "Price: High-Low", icon: DollarSign },
 ];
+
+const SORT_SELECT_OPTIONS: DeferredSelectOption[] = sortOptions.map(({ value, label, icon: Icon }) => ({
+  value,
+  label: (
+    <div className="flex items-center gap-2">
+      <Icon className="h-4 w-4" />
+      {label}
+    </div>
+  ),
+}));
 
 const ITEMS_PER_PAGE = RESTAURANT_PAGE_SIZE;
 
@@ -889,29 +893,16 @@ export default function Restaurants() {
                     availableCuisines={filterOptions.cuisines}
                   />
                 </div>
-                <Select
+                <DeferredSelect
                   value={filters.sortBy}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, sortBy: value as RestaurantFilterOptions["sortBy"] }))
                   }
-                >
-                  <SelectTrigger aria-label="Sort restaurants" className="w-36 sm:w-40 min-h-11 shrink-0 bg-white dark:bg-card rounded-xl text-sm">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortOptions.map((option) => {
-                      const Icon = option.icon;
-                      return (
-                        <SelectItem key={option.value} value={option.value}>
-                          <div className="flex items-center gap-2">
-                            <Icon className="h-4 w-4" />
-                            {option.label}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                  options={SORT_SELECT_OPTIONS}
+                  placeholder="Sort by"
+                  aria-label="Sort restaurants"
+                  triggerClassName="w-36 sm:w-40 min-h-11 shrink-0 bg-white dark:bg-card rounded-xl text-sm"
+                />
               </div>
 
               {/* Results count — visible at all viewports (WEB-UX-003).

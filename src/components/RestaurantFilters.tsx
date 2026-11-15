@@ -3,13 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -101,6 +95,19 @@ const sortOptions = [
   },
 ];
 
+const SORT_SELECT_OPTIONS: DeferredSelectOption[] = sortOptions.map(({ value, label, icon: Icon, description }) => ({
+  value,
+  label: (
+    <div className="flex items-center gap-2">
+      <Icon className="h-4 w-4" />
+      <div>
+        <div className="font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground">{description}</div>
+      </div>
+    </div>
+  ),
+}));
+
 export function RestaurantFilters({
   filters,
   onFiltersChange,
@@ -191,32 +198,14 @@ export function RestaurantFilters({
 
             {/* Sort Dropdown */}
             <div className="flex gap-2">
-              <Select
+              <DeferredSelect
                 value={filters.sortBy}
                 onValueChange={(value) => updateFilter("sortBy", value)}
-              >
-                <SelectTrigger aria-label="Sort restaurants" className="w-48">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortOptions.map((option) => {
-                    const Icon = option.icon;
-                    return (
-                      <SelectItem key={option.value} value={option.value}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          <div>
-                            <div className="font-medium">{option.label}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {option.description}
-                            </div>
-                          </div>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                options={SORT_SELECT_OPTIONS}
+                placeholder="Sort by"
+                aria-label="Sort restaurants"
+                triggerClassName="w-48"
+              />
 
               {/* Filter Toggle */}
               <Button

@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. WEB-PERF-073 closed in loop 20.
+None. WEB-PERF-074 (DeferredSelect) closed in loop 21.
 
 What the next loop should know:
 - .content-auto's placeholder is `auto 0 auto calc(26rem + 3px)`: the card is
@@ -43,13 +43,21 @@ What the next loop should know:
   route, not the 2.6 KB estimated, because on Attraction/Playground/
   Restaurant/Article detail it was the only thing holding @radix-ui/
   react-dialog in the route closure: estimate a lazy cut by the libraries it
-  is the last importer of, not by the module's own size. Next candidate:
-  @radix-ui/react-select 6.9 KB (+ collection 2.8) on /events, /restaurants
-  and /attractions, only for a closed sort/type trigger, so it needs a
-  static look-alike trigger that swaps to the real Select on first
-  pointerdown/focus/keydown, and the smoke specs that drive those selects
-  must still pass. A dialog opened from a Slot trigger has no Radix
-  DialogTrigger, so return focus in onCloseAutoFocus yourself.
+  is the last importer of, not by the module's own size. A dialog opened
+  from a Slot trigger has no Radix DialogTrigger, so return focus in
+  onCloseAutoFocus yourself. Radix Select is done (WEB-PERF-074):
+  a closed single-choice control on a public route is `DeferredSelect` from
+  `@/components/ui/deferred-select` with an `options` array. It draws a
+  static role=combobox trigger and swaps in the Radix Select already open
+  (defaultOpen) on click or ArrowUp/Down; it swaps on click, not
+  pointerdown, so no stray pointerup lands on the fresh list.
+  deferredSelectLazy.test.ts pins the three hubs and that the static
+  trigger's classes equal SelectTrigger's. The class string is copied, not
+  shared: a shared select-styles.ts became its own chunk and added a file to
+  40 admin routes. /attractions dropped 21.4 KB gz, more than react-select's
+  own size, so it was the last importer of popper/focus-scope there too.
+  Other routes still using ui/select (EventsNearMe, Playgrounds, Hotels,
+  Articles, admin) are the next places to apply it if they measure.
 - A real-browser check of a lazy module needs no hooks into the app: build,
   `vite preview --port <free>`, `grep -l <a string unique to the module>
   dist/assets/*.js`, then in Chrome `import()` that chunk and find the export
@@ -100,3 +108,4 @@ a keydown on document.body to test "?".
 | 2026-11-08 | WEB-PERF-071 | this commit | .content-auto placeholder 420px -> auto calc(26rem + 3px), measured from a full card at 390/768/1024/1280 (419/471/523/523px); control under the dietary grid moved 1/51/103px at 390/768/1280 on the old value, 0 now; three smoke-lane tests with negative control (all 3 fail on 420px); dietary/open-now specs 63/63 over 3 repeats; story closed |
 | 2026-11-08 | WEB-PERF-072 | this commit | PremiumGate, PremiumButton, Save/Watch search buttons and TripPlanner open the app-root lazy GlobalUpgradeModal via openPaywall() instead of mounting UpgradeModal; useUpgradeModal deleted; /search -8.3, /search/advanced -7.8, /events -7.2, /trip-planner -7.2 KB gz beyond the critical path (5-8 fewer files each), plus the lazy RatingSystem chunk, none heavier, summed 8,605.3 -> 8,574.1; critical path 174.8 unchanged; graph test with negative control (4 then 3 fail on reverted sources); paywall/search-watch/search-results/trip-planner specs 27/27 in Chrome; story closed |
 | 2026-11-08 | WEB-PERF-073 | this commit | ShareDialog split into a Slot trigger and a lazy ShareDialogPanel fetched on first click (focus returned via onCloseAutoFocus); 15 routes lighter beyond the critical path, none heavier: AttractionDetails 105.6 -> 86.5, PlaygroundDetails 86.5 -> 67.6, RestaurantDetails 131.6 -> 118.0, ArticleDetails 140.1 -> 127.8, EventDetails 144.0 -> 136.8, event landings ~7, EventsPage 175.0 -> 171.9 KB gz; summed 8,570.3 -> 8,441.9, 135 fewer files; critical path 175.1 unchanged; graph test with negative controls (12 fail on a static panel import, 1 on the old trigger); panel fetched only on click and focus returned in Chrome; story closed |
+| 2026-11-15 | WEB-PERF-074 | this commit | Closed sort/filter selects on /events, /restaurants and /attractions (plus the calendar-feed select) are DeferredSelect, which loads @radix-ui/react-select on first click/arrow key; Attractions 134.3 -> 112.9, EventsPage 171.8 -> 164.2, Restaurants 147.3 -> 140.4 KB gz beyond the critical path (10/5/2 fewer files), no route heavier by more than 0.1; summed 8,454.8 -> 8,419.8; critical path 175.1 unchanged; graph test with negative control (2 fail on a static ui/select import); 111 smoke tests on those pages and 4 Chrome checks (click, ArrowDown, Enter, in-dialog; no layout shift, focus returned) pass; story closed |

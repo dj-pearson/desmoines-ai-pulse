@@ -16,13 +16,7 @@ import { useAnnounce } from "@/hooks/use-announce";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
 import { Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle, LocateFixed } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -101,6 +95,14 @@ const ATTRACTION_SORTS: SortOption[] = [
   { value: "name_asc", label: "Name (A-Z)" },
   { value: "rating", label: "Highest rated" },
   { value: "newest", label: "Recently added" },
+];
+
+const RATING_OPTIONS: DeferredSelectOption[] = [
+  { value: "any-rating", label: "Any Rating" },
+  { value: "4.5", label: "4.5+ Stars" },
+  { value: "4.0", label: "4.0+ Stars" },
+  { value: "3.5", label: "3.5+ Stars" },
+  { value: "3.0", label: "3.0+ Stars" },
 ];
 
 function readSort(value: string): AttractionSort {
@@ -254,6 +256,10 @@ export default function Attractions() {
   // not the current view, so they cannot be derived from a filtered list any
   // more. One narrow single-column query answers both.
   const { types: attractionTypes, counts: attractionTypeCounts } = useAttractionTypeCounts();
+  const typeOptions = useMemo<DeferredSelectOption[]>(
+    () => [{ value: "all", label: "All Types" }, ...(attractionTypes ?? []).map((type) => ({ value: type, label: type }))],
+    [attractionTypes]
+  );
   // The whole active catalogue, not the filtered view (item 11).
   const catalogueTotal = useMemo(
     () => Object.values(attractionTypeCounts).reduce((sum, n) => sum + n, 0),
@@ -475,19 +481,13 @@ export default function Attractions() {
                             <label htmlFor="m-filter-type" className="text-base font-medium">
                               Attraction Type
                             </label>
-                            <Select value={selectedType} onValueChange={setSelectedType}>
-                              <SelectTrigger id="m-filter-type" className="input-mobile">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Types</SelectItem>
-                                {attractionTypes?.map((type) => (
-                                  <SelectItem key={type} value={type}>
-                                    {type}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <DeferredSelect
+                              value={selectedType}
+                              onValueChange={setSelectedType}
+                              options={typeOptions}
+                              id="m-filter-type"
+                              triggerClassName="input-mobile"
+                            />
                           </div>
 
                           {/* Rating Filter */}
@@ -495,18 +495,13 @@ export default function Attractions() {
                             <label htmlFor="m-filter-rating" className="text-base font-medium">
                               Minimum Rating
                             </label>
-                            <Select value={minRating} onValueChange={setMinRating}>
-                              <SelectTrigger id="m-filter-rating" className="input-mobile">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="any-rating">Any Rating</SelectItem>
-                                <SelectItem value="4.5">4.5+ Stars</SelectItem>
-                                <SelectItem value="4.0">4.0+ Stars</SelectItem>
-                                <SelectItem value="3.5">3.5+ Stars</SelectItem>
-                                <SelectItem value="3.0">3.0+ Stars</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <DeferredSelect
+                              value={minRating}
+                              onValueChange={setMinRating}
+                              options={RATING_OPTIONS}
+                              id="m-filter-rating"
+                              triggerClassName="input-mobile"
+                            />
                           </div>
                         </div>
 
@@ -585,19 +580,12 @@ export default function Attractions() {
                 <label className="text-sm font-medium text-foreground">
                   Attraction Type
                 </label>
-                <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger aria-label="Attraction Type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    {attractionTypes?.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <DeferredSelect
+                  value={selectedType}
+                  onValueChange={setSelectedType}
+                  options={typeOptions}
+                  aria-label="Attraction Type"
+                />
               </div>
 
               {/* Rating Filter */}
@@ -605,18 +593,12 @@ export default function Attractions() {
                 <label className="text-sm font-medium text-foreground">
                   Minimum Rating
                 </label>
-                <Select value={minRating} onValueChange={setMinRating}>
-                  <SelectTrigger aria-label="Minimum Rating">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any-rating">Any Rating</SelectItem>
-                    <SelectItem value="4.5">4.5+ Stars</SelectItem>
-                    <SelectItem value="4.0">4.0+ Stars</SelectItem>
-                    <SelectItem value="3.5">3.5+ Stars</SelectItem>
-                    <SelectItem value="3.0">3.0+ Stars</SelectItem>
-                  </SelectContent>
-                </Select>
+                <DeferredSelect
+                  value={minRating}
+                  onValueChange={setMinRating}
+                  options={RATING_OPTIONS}
+                  aria-label="Minimum Rating"
+                />
               </div>
             </div>
 

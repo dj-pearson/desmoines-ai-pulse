@@ -1,10 +1,4 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect } from "@/components/ui/deferred-select";
 import { ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,30 +23,26 @@ interface SortDropdownProps {
 export function SortDropdown({ options, value, onChange, className, compact = false }: SortDropdownProps) {
   return (
     <div className={className}>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger
-          className={cn(
-            "h-11 text-sm",
-            compact
-              ? "w-11 justify-center px-0 sm:w-[180px] sm:justify-between sm:px-3 [&>svg:last-child]:hidden sm:[&>svg:last-child]:inline"
-              : "w-[180px]"
-          )}
-          aria-label="Sort results"
-        >
+      <DeferredSelect
+        value={value}
+        onValueChange={onChange}
+        options={options}
+        placeholder="Sort by"
+        aria-label="Sort results"
+        triggerClassName={cn(
+          "h-11 text-sm",
+          compact
+            ? "w-11 justify-center px-0 sm:w-[180px] sm:justify-between sm:px-3 [&>svg:last-child]:hidden sm:[&>svg:last-child]:inline"
+            : "w-[180px]"
+        )}
+        valueClassName={compact ? "sr-only sm:not-sr-only" : undefined}
+        leading={
           <ArrowUpDown
             className={cn("h-3.5 w-3.5 text-muted-foreground", compact ? "sm:mr-2" : "mr-2")}
             aria-hidden="true"
           />
-          <SelectValue placeholder="Sort by" className={compact ? "sr-only sm:not-sr-only" : undefined} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        }
+      />
     </div>
   );
 }
