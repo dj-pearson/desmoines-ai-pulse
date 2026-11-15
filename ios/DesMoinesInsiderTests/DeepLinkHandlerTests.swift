@@ -555,9 +555,31 @@ final class DeepLinkHandlerTests: XCTestCase {
     func testBareMapLinkOpensTheMapTabWithTheDefaultKinds() {
         XCTAssertTrue(handler.handle(site("/map")))
         XCTAssertEqual(handler.consumeDestination(), .map(MapLinkLayers()))
-        // The web's other map state (when, sel, bbox, sort) has no Map tab
-        // equivalent and does not change where the link goes.
-        XCTAssertEqual(dest("/map?when=tonight&sort=near&bbox=-93.7,41.5,-93.5,41.7"), .map(MapLinkLayers()))
+        // sel, bbox and sort have no Map tab equivalent and do not change
+        // where the link goes.
+        XCTAssertEqual(dest("/map?sort=near&sel=550e8400-e29b-41d4-a716-446655440000&bbox=-93.7,41.5,-93.5,41.7"),
+                       .map(MapLinkLayers()))
+    }
+
+    // MARK: - /map?when= (IOS-AUDIT-009)
+
+    func testMapLinkWhenSetsTheTimeChipWithTheWebParser() {
+        XCTAssertEqual(dest("/map?when=now"), .map(MapLinkLayers(when: .now)))
+        XCTAssertEqual(dest("/map?when=tonight&sort=near&bbox=-93.7,41.5,-93.5,41.7"),
+                       .map(MapLinkLayers(when: .tonight)))
+        XCTAssertEqual(dest("/map?when=weekend"), .map(MapLinkLayers(when: .weekend)))
+        XCTAssertEqual(dest("/map?when=any"), .map(MapLinkLayers(when: .anytime)))
+        XCTAssertEqual(dest("/map?layers=event&when=weekend"),
+                       .map(MapLinkLayers(events: true, restaurants: false, attractions: false, when: .weekend)))
+        // parseWhen: anything not a WHEN_OPTIONS key is no choice, and the
+        // native chip names are not web keys.
+        for value in ["", "Tonight", "anytime", "saturday", "at8pm", "bogus"] {
+            XCTAssertEqual(dest("/map?when=\(value)"), .map(MapLinkLayers()), value)
+        }
+    }
+
+    func testAWebOnlyLayerStillWinsOverWhen() {
+        XCTAssertEqual(dest("/map?layers=trail&when=tonight"), .web(site("/map?layers=trail&when=tonight")))
     }
 
     func testMapLinkLayersFollowTheWebParser() {

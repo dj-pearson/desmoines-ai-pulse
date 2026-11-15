@@ -43,6 +43,24 @@ function swiftList(name: string): string[] {
   return [...m![1].matchAll(/"([a-z]+)"/g)].map((x) => x[1]);
 }
 
+const MAP_TIME = "ios/DesMoinesInsider/Utilities/MapTimeFilter.swift";
+
+function webWhenKeys(): string[] {
+  const src = readFileSync(WEB_MAP, "utf8");
+  const start = src.indexOf("const WHEN_OPTIONS");
+  expect(start, "WHEN_OPTIONS not found").toBeGreaterThan(-1);
+  const block = src.slice(start, src.indexOf("];", start));
+  return [...block.matchAll(/key: '([a-z]+)'/g)].map((m) => m[1]);
+}
+
+function swiftWebWhenKeys(): string[] {
+  const src = readFileSync(MAP_TIME, "utf8");
+  const start = src.indexOf("init?(webWhen value: String?)");
+  expect(start, "MapTimeChip init?(webWhen:) not found").toBeGreaterThan(-1);
+  const block = src.slice(start, src.indexOf("default: return nil", start));
+  return [...block.matchAll(/case "([a-z]+)": self = \./g)].map((m) => m[1]);
+}
+
 describe("iOS opens /map links on the Map tab with the web's layers (IOS-AUDIT-007)", () => {
   it("the parse still finds both sides", () => {
     expect(webLayerKeys()).toEqual(expect.arrayContaining(["event", "playground"]));
@@ -59,6 +77,19 @@ describe("iOS opens /map links on the Map tab with the web's layers (IOS-AUDIT-0
     const web = webLayerKeys();
     expect(web.filter((k) => !ios.includes(k)), "web layers iOS would silently ignore").toEqual([]);
     expect(ios.filter((k) => !web.includes(k)), "iOS lists layers the web no longer has").toEqual([]);
+  });
+
+  // IOS-AUDIT-009: the web map writes its time chip to the URL as `when`,
+  // and MapTimeChip(webWhen:) reads it with parseWhen's rules.
+  it("every web `when` key sets a native chip, and nothing stale is listed", () => {
+    const web = webWhenKeys();
+    const ios = swiftWebWhenKeys();
+    expect(web).toEqual(expect.arrayContaining(["now", "weekend"]));
+    expect(web.filter((k) => !ios.includes(k)), "web when keys iOS would silently ignore").toEqual([]);
+    expect(ios.filter((k) => !web.includes(k)), "iOS reads when keys the web no longer writes").toEqual([]);
+    expect(readFileSync(DEEP_LINK, "utf8")).toContain(
+      'layers.when = MapTimeChip(webWhen: items.first { $0.name == "when" }?.value)'
+    );
   });
 
   it("/map is routed to mapDestination and claimed by the app", () => {

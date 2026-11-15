@@ -55,11 +55,13 @@ final class MapViewModel {
     /// Shows exactly the kinds a /map link names (IOS-AUDIT-007). The link
     /// replaces earlier choices, quick filters included, so the map shows
     /// what the shared web map shows. Only changed values are assigned, so
-    /// an unchanged kind does not recompute its pins.
+    /// an unchanged kind does not recompute its pins. A link's `when` sets the
+    /// time chip; without one the chip is left alone (IOS-AUDIT-009).
     func apply(_ link: MapLinkLayers) {
         if showEvents != link.events { showEvents = link.events }
         if showRestaurants != link.restaurants { showRestaurants = link.restaurants }
         if showAttractions != link.attractions { showAttractions = link.attractions }
+        if let chip = link.when, timeChip != chip { timeChip = chip }
         if openNowOnly { openNowOnly = false }
         if walkableOnly { walkableOnly = false }
     }

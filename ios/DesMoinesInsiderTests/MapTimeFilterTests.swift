@@ -114,4 +114,41 @@ final class MapTimeFilterTests: XCTestCase {
         XCTAssertNil(MapTimeChip.anytime.window(now: Date()))
         XCTAssertNil(MapTimeChip.anytime.probeTime(now: Date()))
     }
+
+    // This weekend, the web map's chip (IOS-AUDIT-009)
+
+    func testWeekendMidweekIsTheComingFridayToSundayInCentral() {
+        let window = MapTimeChip.weekend.window(now: central(2026, 9, 29, 12)) // Tuesday
+        XCTAssertEqual(window?.start, central(2026, 10, 2, 0))
+        XCTAssertEqual(window?.end, central(2026, 10, 5, 0))
+        XCTAssertEqual(MapTimeChip.weekend.label(now: central(2026, 9, 29, 12)), "This weekend")
+    }
+
+    func testWeekendOnSaturdayIsTheRestOfThisWeekendNotFridaysShows() {
+        let now = central(2026, 10, 3, 15)
+        let window = MapTimeChip.weekend.window(now: now)
+        XCTAssertEqual(window?.start, now)
+        XCTAssertEqual(window?.end, central(2026, 10, 5, 0))
+        let friday = MapFixtures.event("fri", start: central(2026, 10, 2, 19))
+        XCTAssertFalse(MapTimeChip.eventMatches(friday, window: window!))
+    }
+
+    func testWeekendLateSundayStillMeansThisWeekend() {
+        let window = MapTimeChip.weekend.window(now: central(2026, 10, 4, 23))
+        XCTAssertEqual(window?.end, central(2026, 10, 5, 0))
+    }
+
+    func testWeekendIsAlwaysOfferedAndDoesNotProbeRestaurants() {
+        XCTAssertTrue(MapTimeChip.available(now: central(2026, 9, 29, 23)).contains(.weekend))
+        XCTAssertNil(MapTimeChip.weekend.probeTime(now: central(2026, 9, 29, 12)))
+    }
+
+    func testWebWhenKeysMapToChips() {
+        XCTAssertEqual(MapTimeChip(webWhen: "now"), .now)
+        XCTAssertEqual(MapTimeChip(webWhen: "tonight"), .tonight)
+        XCTAssertEqual(MapTimeChip(webWhen: "weekend"), .weekend)
+        XCTAssertEqual(MapTimeChip(webWhen: "any"), .anytime)
+        XCTAssertNil(MapTimeChip(webWhen: nil))
+        XCTAssertNil(MapTimeChip(webWhen: "anytime"))
+    }
 }

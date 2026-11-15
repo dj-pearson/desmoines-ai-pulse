@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Row of time chips (Anytime, Now, Tonight, 6/8/10 PM while ahead, Sat
-/// night) that drives MapViewModel.timeChip, plus a pill saying what the
+/// night, This weekend) that drives MapViewModel.timeChip, plus a pill saying what the
 /// selected time shows.
 ///
 /// IOS-DISCOVER-2026-004, rebuilt in Central time for IOS-DD-MAP-07; the chip
@@ -54,7 +54,12 @@ struct MapTimeSlider: View {
     private func chipButton(_ option: MapTimeChip, now: Date) -> some View {
         let isActive = option == chip
         let label = option.label(now: now)
-        let spoken: String = option == .anytime ? "Any time" : "Show places at \(label)"
+        let spoken: String
+        switch option {
+        case .anytime: spoken = "Any time"
+        case .weekend: spoken = "Show events this weekend"
+        default: spoken = "Show places at \(label)"
+        }
         // The selection haptic and the VoiceOver count announcement come from
         // EventMapView's filter-change handler, once for every filter.
         return Button {
@@ -82,14 +87,16 @@ struct MapTimeSlider: View {
 
     /// "8:00 PM Friday: 12 events · 8 restaurants open · 30 with hours unknown
     /// hidden". Events are filtered by overlap with a window, not by opening
-    /// hours, so they are not called "open" (IOS-AUDIT-UX-027).
+    /// hours, so they are not called "open" (IOS-AUDIT-UX-027). A chip with
+    /// no probe time (This weekend) does not filter restaurants by hours, so
+    /// the pill counts events only rather than calling every restaurant open.
     static func pillText(chip: MapTimeChip, now: Date, eventCount: Int, openCount: Int, unknownCount: Int) -> String {
-        let when = chip.probeTime(now: now).map { $0.formatted(pillStyle) + DesMoinesTime.zoneSuffix(at: $0) }
+        let probe = chip.probeTime(now: now)
+        let when = probe.map { $0.formatted(pillStyle) + DesMoinesTime.zoneSuffix(at: $0) }
             ?? chip.label(now: now)
-        var parts = [
-            "\(eventCount) \(eventCount == 1 ? "event" : "events")",
-            "\(openCount) \(openCount == 1 ? "restaurant" : "restaurants") open",
-        ]
+        var parts = ["\(eventCount) \(eventCount == 1 ? "event" : "events")"]
+        guard probe != nil else { return "\(when): " + parts.joined(separator: " · ") }
+        parts.append("\(openCount) \(openCount == 1 ? "restaurant" : "restaurants") open")
         if unknownCount > 0 {
             parts.append("\(unknownCount) with hours unknown hidden")
         }

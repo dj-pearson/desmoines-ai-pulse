@@ -480,10 +480,18 @@ final class DeepLinkHandler {
     /// the layers the link names. It used to open the web map in a sheet over
     /// the app's own Map tab. A link naming playgrounds or trails, which the
     /// native map has no pins for, still opens on the web.
+    ///
+    /// The web map writes its time chip to the URL as `when` (Now, Tonight,
+    /// This weekend, Any time), so a map someone copies and shares carries it.
+    /// It sets the Map tab's chip (IOS-AUDIT-009); it was dropped, and the
+    /// person sent tonight's map saw whatever chip they last used. An absent
+    /// or unknown `when` leaves the chip alone. `sel` and `bbox` are still
+    /// ignored.
     static func mapDestination(_ url: URL) -> Destination {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let value = items.first { $0.name == "layers" }?.value
-        guard let layers = MapLinkLayers(webValue: value) else { return .web(url) }
+        guard var layers = MapLinkLayers(webValue: value) else { return .web(url) }
+        layers.when = MapTimeChip(webWhen: items.first { $0.name == "when" }?.value)
         return .map(layers)
     }
 
@@ -629,6 +637,9 @@ struct MapLinkLayers: Equatable {
     var events = true
     var restaurants = true
     var attractions = true
+    /// The time chip the link's `when` names, nil to keep the current one
+    /// (IOS-AUDIT-009).
+    var when: MapTimeChip?
 
     /// The web's layer keys the native map has pins for, which are also the
     /// web's DEFAULT_LAYERS.
@@ -636,10 +647,11 @@ struct MapLinkLayers: Equatable {
     /// The web's layer keys the native map does not draw.
     static let webOnlyKeys: [String] = ["playground", "trail"]
 
-    init(events: Bool = true, restaurants: Bool = true, attractions: Bool = true) {
+    init(events: Bool = true, restaurants: Bool = true, attractions: Bool = true, when: MapTimeChip? = nil) {
         self.events = events
         self.restaurants = restaurants
         self.attractions = attractions
+        self.when = when
     }
 
     /// Nil when the link names a layer only the web draws, so the person sent
