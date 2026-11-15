@@ -101,8 +101,8 @@ test('exclusions name pages that still exist, so the list cannot rot', () => {
 
 test('every page link resolves to a URL some sitemap submits', () => {
   const out = renderLlmsTxt({ baseUrl: BASE, asOf: '2026-10-01', counts, monthSlugs: [] });
-  // Feeds are files, not pages; they are in no sitemap by design.
-  const pages = linkedPaths(out).filter((p) => !/\.(xml|ics)$/.test(p));
+  // Feeds and the API description are files, not pages; they are in no sitemap by design.
+  const pages = linkedPaths(out).filter((p) => !/\.(xml|ics|yaml)$/.test(p));
   const known = new Set([...STATIC_PATHS, ...sitemapPaths('sitemap-guides.xml'), ...sitemapPaths('sitemap-articles.xml')]);
   const dead = pages.filter((p) => !known.has(p));
   assert.deepEqual(dead, [], `llms.txt links to pages no sitemap submits: ${dead.join(', ')}`);
