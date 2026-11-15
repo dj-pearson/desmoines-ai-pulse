@@ -206,7 +206,7 @@ const Articles: React.FC = () => {
                     variant={viewMode === 'grid' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('grid')}
-                    className="rounded-r-none"
+                    className="rounded-r-none coarse:min-w-[44px]"
                     aria-label="Grid view"
                     aria-pressed={viewMode === 'grid'}
                     title="Grid view"
@@ -217,7 +217,7 @@ const Articles: React.FC = () => {
                     variant={viewMode === 'list' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('list')}
-                    className="rounded-l-none"
+                    className="rounded-l-none coarse:min-w-[44px]"
                     aria-label="List view"
                     aria-pressed={viewMode === 'list'}
                     title="List view"
