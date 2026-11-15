@@ -26,7 +26,7 @@ import {
   type OpenNowRestaurantRow,
 } from "@/hooks/useOpenNowRestaurants";
 import { DIETS, dietFromParam } from "@/hooks/useDietaryRestaurants";
-import { useDishSearch, type DishMatch } from "@/hooks/useDishSearch";
+import { dishMenuHref, firstDishPerPlace, useDishSearch, type DishMatch } from "@/hooks/useDishSearch";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { EVENT_AREAS, findEventArea } from "@/lib/eventAreas";
@@ -196,7 +196,14 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-/** "Pho tai $13 at X, open until 9 PM" for the matches open at `at`. Nothing when the menus have nothing. */
+/** Where a closed place serving the dish appears, at most this many. */
+const DISH_CLOSED_PLACES_LIMIT = 6;
+
+/**
+ * "Pho tai $13 at X, open until 9 PM" for the matches open at `at`. When none
+ * is, the places that list it, with when they open. Each links to that
+ * restaurant's Menu section. Nothing when the menus have nothing.
+ */
 function DishResults({
   term,
   matches,
@@ -220,23 +227,30 @@ function DishResults({
     })
     .filter((x): x is { match: DishMatch; row: OpenNowRestaurantRow; line: string | null } => x !== null)
     .slice(0, 12);
+  const shown = open.length > 0
+    ? open
+    : firstDishPerPlace(matches, DISH_CLOSED_PLACES_LIMIT).flatMap((match) => {
+        const row = rowsById.get(match.restaurant_id);
+        return row ? [{ match, row, line: formatOpenStatusLine(openStatusOf(row, at)) }] : [];
+      });
 
   return (
     <section aria-labelledby="dish-results-heading" className="mb-8 max-w-3xl" data-open-now-dishes>
       <h2 id="dish-results-heading" className="mb-2 text-xl font-semibold">
         &ldquo;{term}&rdquo; on menus we have
       </h2>
-      {open.length === 0 ? (
-        <p className="text-muted-foreground">
+      {open.length === 0 && (
+        <p className="mb-2 text-muted-foreground">
           {places.size} {places.size === 1 ? "place lists" : "places list"} it; none is open {whenLabel}.
         </p>
-      ) : (
+      )}
+      {shown.length > 0 && (
         <ul className="divide-y divide-border rounded-xl border">
-          {open.map(({ match, row, line }) => (
+          {shown.map(({ match, row, line }) => (
             <li key={match.item_id} className="px-4 py-3">
               <span className="font-medium">{match.item_name}</span>
               {priceText(match.price) && <> <span className="tabular-nums">{priceText(match.price)}</span></>} at{" "}
-              <Link to={restaurantHref(row)} className="font-semibold text-primary hover:underline">
+              <Link to={dishMenuHref(row)} className="font-semibold text-primary hover:underline">
                 {row.name}
               </Link>
               {line ? `, ${lowerFirst(line)}` : ""}

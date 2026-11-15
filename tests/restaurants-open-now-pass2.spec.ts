@@ -147,8 +147,33 @@ test.describe('/restaurants/open-now, pass 2', () => {
     await page.getByLabel('Find a dish').fill('pho');
     const dishes = page.locator('[data-open-now-dishes]');
     await expect(dishes.getByRole('listitem')).toHaveText(['Pho tai $13 at Pho Place, closes at 9 PM']);
+    await expect(dishes.getByRole('link', { name: 'Pho Place' })).toHaveAttribute('href', `/restaurants/${rows[0].slug}#menu`);
     await expect(dishes).not.toContainText('Merged Pho');
     await expect(page).toHaveURL(/dish=pho/);
+  });
+
+  test('dish search with nothing open still names the places that list it, linked to their menus (WEB-FEAT-097)', async ({ page }) => {
+    const rows = [restaurant(1, 'Pho Breakfast', 'Daily 7am-2pm'), restaurant(2, 'Pho Lunch', 'Daily 10am-3pm')];
+    await setup(page, EVENING, rows);
+    await page.route('**/rest/v1/rpc/search_menu_items', (route) =>
+      json(route, [
+        { item_id: 'a', restaurant_id: rows[0].id, restaurant_name: 'Pho Breakfast', restaurant_slug: rows[0].slug, section_name: 'Soups', item_name: 'Pho tai', item_description: null, price: '13', price_numeric: 13, dietary_tags: [] },
+        { item_id: 'b', restaurant_id: rows[0].id, restaurant_name: 'Pho Breakfast', restaurant_slug: rows[0].slug, section_name: 'Soups', item_name: 'Pho ga', item_description: null, price: '$12', price_numeric: 12, dietary_tags: [] },
+        { item_id: 'c', restaurant_id: rows[1].id, restaurant_name: 'Pho Lunch', restaurant_slug: rows[1].slug, section_name: 'Soups', item_name: 'Pho bo', item_description: null, price: null, price_numeric: null, dietary_tags: [] },
+        { item_id: 'd', restaurant_id: 'merged-elsewhere', restaurant_name: 'Merged Pho', restaurant_slug: 'merged-pho', section_name: 'Soups', item_name: 'Pho bo', item_description: null, price: '$11', price_numeric: 11, dietary_tags: [] },
+      ]),
+    );
+    await page.goto('/restaurants/open-now');
+
+    await page.getByLabel('Find a dish').fill('pho');
+    const dishes = page.locator('[data-open-now-dishes]');
+    await expect(dishes).toContainText('2 places list it; none is open right now.');
+    const items = dishes.getByRole('listitem');
+    await expect(items).toHaveCount(2);
+    await expect(items.nth(0)).toContainText('Pho tai $13 at Pho Breakfast, closed');
+    await expect(items.nth(1)).toContainText('Pho bo at Pho Lunch, closed');
+    await expect(dishes.getByRole('link', { name: 'Pho Lunch' })).toHaveAttribute('href', `/restaurants/${rows[1].slug}#menu`);
+    await expect(dishes).not.toContainText('Merged Pho');
   });
 
   test('in the prerender: the method, no clock, count or list', async ({ page }) => {
