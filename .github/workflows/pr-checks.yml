@@ -150,6 +150,13 @@ jobs:
       - name: Every Playwright spec is run by some lane
         run: npm run check-e2e-lanes
 
+      # WEB-CI-038. The same hole for check scripts: four of 95
+      # ran in no workflow, check-dist-console and check-pseo-coverage among
+      # them. Fails on a scripts/check-* nothing reaches, unless it is listed
+      # as online-only (needs production credentials) with the reason.
+      - name: Every check script runs somewhere
+        run: npm run check-check-wiring
+
       # WEB-QA-041. Two required smoke specs dated their upcoming openings
       # '2026-11-01' with the clock unpinned, and went red on 2026-11-02 with
       # no code change. Flags a near-future date literal in a test file that
@@ -375,6 +382,15 @@ jobs:
       # prefix, and gating on them would be red from the first run.
       - name: pSEO taxonomy collisions
         run: npx tsx scripts/check-pseo-collisions.ts
+
+      # SEO-041 / SEO-064, offline half only: this step has no Supabase
+      # credentials on purpose, so the script compares the coverage thresholds
+      # in src/pseo/ with the copy generate-pseo-page carries in
+      # supabase/functions/_shared/pseoCoverage.ts, and checks that no
+      # duplicate-rule page is in sitemap-pseo.xml. It ran nowhere until
+      # WEB-CI-038, though its header said the half always runs.
+      - name: pSEO coverage rule agrees across the edge boundary
+        run: npm run check-pseo-coverage
 
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
