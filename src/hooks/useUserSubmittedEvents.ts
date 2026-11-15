@@ -6,6 +6,7 @@ import { useAuth } from "./useAuth";
 import { handleError } from "@/lib/errorHandler";
 import { formatEventPart } from "@/lib/timezone";
 import { SubmissionNotDeletedError, SubmissionNotEditableError } from "@/lib/submissionActions";
+import { notifySubmissionDecision } from "@/lib/submissionNotify";
 
 const log = createLogger('useUserSubmittedEvents');
 
@@ -433,31 +434,17 @@ export function useReviewEvent() {
 
       if (error) throw error;
 
-      // Notify the submitter about the review decision
-      if (data) {
-        const submittedEvent = data as UserSubmittedEvent;
-        // Look up submitter email via auth
-        const { data: userData } = await supabase.auth.admin.getUserById(submittedEvent.user_id).catch(() => ({ data: null }));
-        const submitterEmail = (userData as any)?.user?.email;
+      // TELL THE SUBMITTER (WEB-FEAT-085). This used to look the address up
+      // with supabase.auth.admin.getUserById from the browser, an admin API the
+      // anon client cannot call; the .catch() turned that into "no address" and
+      // no approved/rejected/needs-revision mail was ever sent from this
+      // screen. notify-event-submission takes the submission id, checks the
+      // caller is an admin and reads the recipient, title and notes from the
+      // row the code above just wrote, the same call /admin/event-submissions
+      // and triage-event-submission make.
+      const notified = await notifySubmissionDecision(id, status, admin_notes);
 
-        if (submitterEmail) {
-          const notificationType = status === 'approved'
-            ? 'event_approved'
-            : status === 'rejected'
-              ? 'event_rejected'
-              : 'event_needs_revision';
-
-          sendEventNotification({
-            notificationType,
-            eventId: submittedEvent.id,
-            eventTitle: submittedEvent.title,
-            submitterEmail,
-            adminNotes: admin_notes,
-          });
-        }
-      }
-
-      return data;
+      return { submission: data as UserSubmittedEvent, notified };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-submitted-events'] });
