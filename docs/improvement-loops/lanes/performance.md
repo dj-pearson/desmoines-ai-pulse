@@ -8,7 +8,27 @@
 
 ## Handoff
 
-None. WEB-PERF-075 (DeferredSelect on four more routes) closed in loop 22.
+None. WEB-PERF-076 (AddToCalendarButton's Radix DropdownMenu
+loaded on first click) closed in loop 23.
+
+What loop 23 added:
+- AddToCalendarButton is a static trigger; AddToCalendarMenu holds the Radix
+  DropdownMenu and the export handlers and mounts already open
+  (defaultOpen). It was the only DropdownMenu on the event routes, so it
+  carried react-menu, popper, floating-ui, roving focus and collection there:
+  seven event landings dropped 35.3 KB gz each. addToCalendarLazy.test.ts pins
+  ten routes. Trap for any lazy Radix Menu: Radix moves focus to the first
+  item on a keyboard open only if its document keydown listener saw the key,
+  and that listener is added when the menu root mounts, after the key that
+  opened it. The impl takes focusFirstItem (click with detail 0, or
+  ArrowDown) and hands focus from the content to the first item in onFocus;
+  onOpenAutoFocus would do it too but is a private Menu prop and fails
+  type-check. Radix Select (DeferredSelect) has no such step.
+- Next candidates by (gz x public routes) from a per-module walk:
+  restaurantHours.ts 4.0 KB on 42 routes (homepage reaches it via
+  tonightPairings; a split needs care, it is real logic), @floating-ui and
+  react-collection still on ~25 routes via tooltip/popover/dialog, and
+  react-select on 11 routes that are form fields (see below).
 
 What the next loop should know:
 - .content-auto's placeholder is `auto 0 auto calc(26rem + 3px)`: the card is
@@ -115,3 +135,4 @@ a keydown on document.body to test "?".
 | 2026-11-08 | WEB-PERF-073 | this commit | ShareDialog split into a Slot trigger and a lazy ShareDialogPanel fetched on first click (focus returned via onCloseAutoFocus); 15 routes lighter beyond the critical path, none heavier: AttractionDetails 105.6 -> 86.5, PlaygroundDetails 86.5 -> 67.6, RestaurantDetails 131.6 -> 118.0, ArticleDetails 140.1 -> 127.8, EventDetails 144.0 -> 136.8, event landings ~7, EventsPage 175.0 -> 171.9 KB gz; summed 8,570.3 -> 8,441.9, 135 fewer files; critical path 175.1 unchanged; graph test with negative controls (12 fail on a static panel import, 1 on the old trigger); panel fetched only on click and focus returned in Chrome; story closed |
 | 2026-11-15 | WEB-PERF-074 | this commit | Closed sort/filter selects on /events, /restaurants and /attractions (plus the calendar-feed select) are DeferredSelect, which loads @radix-ui/react-select on first click/arrow key; Attractions 134.3 -> 112.9, EventsPage 171.8 -> 164.2, Restaurants 147.3 -> 140.4 KB gz beyond the critical path (10/5/2 fewer files), no route heavier by more than 0.1; summed 8,454.8 -> 8,419.8; critical path 175.1 unchanged; graph test with negative control (2 fail on a static ui/select import); 111 smoke tests on those pages and 4 Chrome checks (click, ArrowDown, Enter, in-dialog; no layout shift, focus returned) pass; story closed |
 | 2026-11-15 | WEB-PERF-075 | this commit | Closed filter/sort selects on /playgrounds, /stay, /events/near-me and /articles are DeferredSelect; Articles 86.4 -> 52.9, Playgrounds 105.5 -> 84.5, Hotels 88.2 -> 67.9, EventsNearMe 122.8 -> 116.0 KB gz beyond the critical path (17/9/7/2 fewer files); EventsPage/Restaurants/Attractions +0.3-0.4 and one file (deferred-select now a shared chunk); summed 8,438.8 -> 8,361.0; critical path 175.2 unchanged; graph test extended to 7 routes with negative control (1 fails on a static ui/select import); 118 smoke tests on those pages plus 4 throwaway Chrome checks (click, ArrowDown, pick updates URL, focus returned, no size change) pass; vitest 3588/3588 |
+| 2026-11-15 | WEB-PERF-076 | this commit | AddToCalendarButton is a static trigger and loads AddToCalendarMenu (Radix DropdownMenu + export handlers) on first click/Enter/ArrowDown, opened with the first item focused on a keyboard open; seven event landings 118-124 -> 83-89 KB gz beyond the critical path (-35.3, 17 fewer files each), EventsPage 165.4 -> 142.7, EventsNearMe 116.5 -> 96.9, EventDetails 138.3 -> 120.3, none heavier by more than 0.1; summed 8,384.8 -> 8,080.7; critical path 175.2 unchanged; graph test with negative control (12 of 13 fail on the old button); 55 smoke tests on event pages plus 2 throwaway Chrome checks (chunk fetched only on use, keyboard focus, Escape returns focus, same size) pass |
