@@ -10378,8 +10378,8 @@
         "ForYouService.swift and ForYouRemoteDataSource.kt call v2 with v1 fallback"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Found 2026-11-02 on claude/15-loop-site-improvements-nambs4, not done. 2026-11-15: the v2-with-v1-fallback call in both apps landed with XPLAT-016 slice 1 (features lane). Still open: iOS ForYouCard sponsored label (decode is_sponsored/sponsored_until on v2 rows, SponsoredBadge, VoiceOver prefix). The ios lane built it this round but its commit conflicted with XPLAT-016 in ForYouService.swift and was dropped; redo it on top of fetchPersonalized."
+      "passes": true,
+      "notes": "Found 2026-11-02 on claude/15-loop-site-improvements-nambs4, not done. 2026-11-15: the v2-with-v1-fallback call in both apps landed with XPLAT-016 slice 1 (features lane). Still open: iOS ForYouCard sponsored label (decode is_sponsored/sponsored_until on v2 rows, SponsoredBadge, VoiceOver prefix). The ios lane built it this round but its commit conflicted with XPLAT-016 in ForYouService.swift and was dropped; redo it on top of fetchPersonalized. | 2026-11-15 (ios lane): iOS For You cards now decode is_sponsored/sponsored_until from v2 rows, show SponsoredBadge on the image and lead the VoiceOver label with \"Sponsored.\" while Event.sponsorshipIsActive holds; v1/trending rows carry no flags and stay unlabelled. Built on XPLAT-016's fetchPersonalized with no service-call change. 5 new XCTest cases. Not compiled (no Xcode here). Both halves are now done: Android's v2 call landed with XPLAT-016."
     },
     {
       "id": "WEB-FEAT-035",
@@ -12753,8 +12753,8 @@
       "id": "WEB-UX-070",
       "title": "Admin Selects use <SelectItem value=\"\">, which Radix Select 2.x rejects",
       "description": "PlaygroundManager (the inline edit and bulk edit for restrooms/shade/surface/age range) and SecurityDashboard (the event type and severity filters) render <SelectItem value=\"\">. @radix-ui/react-select ^2.3.7 throws 'A <Select.Item /> must have a value prop that is not an empty string', so these selects probably crash the admin page when opened. Reproduce with a render test, then switch to a sentinel value (e.g. 'unknown' or '__clear__') that maps back to null on save. Grep src for other value=\"\" SelectItems.",
-      "passes": false,
-      "notes": "Seen while doing WEB-UX-068 slice 2; not reproduced yet."
+      "passes": true,
+      "notes": "Seen while doing WEB-UX-068 slice 2; not reproduced yet. | The crash didn't reproduce: @radix-ui/react-select 2.3.7 accepts <SelectItem value=\"\"> (2.0-2.1 threw), so the PlaygroundManager editors open and save. The actual defect was that picking Unknown/Clear left a bare dash in the trigger. It now shows Unknown or Not set, and the option reads Clear. New playgroundManagerClearSelects.test.tsx renders the real component and checks the trigger text and that save writes null: it fails 4/4 on the old file and passes 4/4. Full vitest 3588/3588."
     },
     {
       "priority": 3,
@@ -12995,8 +12995,8 @@
         "Add a capped second read for runs (date < day start, end_date >= now) like useTonightStripEvents, and decide with the restaurants lane how pickTonightNear ranks them",
         "Fixture test evaluates the sent filters"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane; RestaurantDetails is restaurants-lane territory, so not touched."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane; RestaurantDetails is restaurants-lane territory, so not touched. | The restaurant page's Tonight nearby now does a second, capped read for runs that started before today and are still on (date < start of the Central day, end_date >= it, applyEventVisibility, 20 rows) via fetchTonightNearRestaurantRows. Ranking: timed starts still ahead first, then runs already on nearest first, then no-time events, with an \"On through Sun, Sep 27\" or \"On until 9:00 PM CT\" line. A fixture test evaluates the filters sent; the negative control turns 4 of 7 new tests red. src vitest 3310/3310, type-check ratchet 30/30, eslint clean, restaurant-detail-pass2 spec 10/10 on a production build."
     },
     {
       "priority": 4,
@@ -13075,7 +13075,7 @@
         "Port EventSeriesSchedule (this year's dates or '<year> date not announced yet', past years newest first)",
         "A native screen and route; a slug the app does not know still opens on the web"
       ],
-      "notes": "Slice 1 of 3 (AC1 done): android util/EventSeries.kt ports the web's 20 EVENT_SERIES and normaliseEventTitle (plus forEvent, forSlug, path, titlePatterns), held equal to src/lib/eventSeries.ts by new vitest androidEventSeriesParity.test.ts (3/3; an alias edit fails it). 7 EventSeriesTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation dropping the apostrophe step fails 1. Not wired to a screen yet; app module not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md"
+      "notes": "Slice 1 of 3 (AC1 done): android util/EventSeries.kt ports the web's 20 EVENT_SERIES and normaliseEventTitle (plus forEvent, forSlug, path, titlePatterns), held equal to src/lib/eventSeries.ts by new vitest androidEventSeriesParity.test.ts (3/3; an alias edit fails it). 7 EventSeriesTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation dropping the apostrophe step fails 1. Not wired to a screen yet; app module not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md | Slice 2 of 3: new android util/EventSeriesSchedule.kt ports the web's buildSeriesView rules (moderator vs sweep hidden, linkable, eventEnd/isOver, one instance per Central day, editions by year, current/past/unannounced, edition date labels). 14 new EventSeriesScheduleTest JVM tests carry the web/iOS test cases with the web's answers and pass, 48/48 counting the existing suites, on a stub harness (kotlinc 2.2.10). Three mutations each fail exactly one test. Nothing calls it yet, and the app module was not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "WEB-FEAT-083",
@@ -13261,7 +13261,7 @@
         "v1 is not changed while binaries at or above MIN_SUPPORTED_APP_VERSION still call it"
       ],
       "passes": false,
-      "notes": "Found 2026-11-08 by the features lane while gating the web rail. | Slice 1 of 2 (AC1, AC3): migration 20261108000104 re-creates get_personalized_recommendations_v2 (same signature, v1 untouched) so it returns no rows unless communication_preferences.event_recommendations is JSON true; iOS ForYouService and Android ForYouRemoteDataSource call v2 with v1 only on PGRST202/42883, and Android falls back to trending on an empty answer like iOS. Verified in PGlite (opted-in 5 rows; false/missing/null/string \"true\"/no profile 0; re-run ok), migration checks and useForYouRail vitest pass. iOS/Android not compiled. Needs supabase db push; this also satisfies WEB-FEAT-034's AC. Handoff: docs/improvement-loops/lanes/features.md"
+      "notes": "Found 2026-11-08 by the features lane while gating the web rail. | Slice 1 of 2 (AC1, AC3): migration 20261108000104 re-creates get_personalized_recommendations_v2 (same signature, v1 untouched) so it returns no rows unless communication_preferences.event_recommendations is JSON true; iOS ForYouService and Android ForYouRemoteDataSource call v2 with v1 only on PGRST202/42883, and Android falls back to trending on an empty answer like iOS. Verified in PGlite (opted-in 5 rows; false/missing/null/string \"true\"/no profile 0; re-run ok), migration checks and useForYouRail vitest pass. iOS/Android not compiled. Needs supabase db push; this also satisfies WEB-FEAT-034's AC. Handoff: docs/improvement-loops/lanes/features.md | Slice 2 of 3 (AC2, Android): Settings > Privacy & Data has a Personalized Suggestions switch (signed in only) that reads event_recommendations as opt-in via new CommunicationPreferences.isExplicitlyOn, writes it with the existing read-merge-write and rolls back on failure, and logs a personalization_ai consent_records row (platform android). New ProfileViewModelPersonalizationTest (5) and 2 CommunicationPreferences cases; Android not compiled; check-mobile-schema OK, check-marketing-consent OK, vitest src/lib 2147/2147. iOS switch remains (slice 3). Handoff: docs/improvement-loops/lanes/features.md"
     },
     {
       "priority": 3,
@@ -13327,7 +13327,7 @@
         "The opt-out writes a suppression that outreach-sequencer checks before the next step"
       ],
       "passes": false,
-      "notes": "Found by the marketing-growth lane while shipping WEB-ADS-035 slice 2."
+      "notes": "Found by the marketing-growth lane while shipping WEB-ADS-035 slice 2. | Slice 1 of 2: migration 20261115000101 adds outreach_unsubscribe_tokens (per crm_leads row, RLS on, no policy), service-role ensure_outreach_unsubscribe_token and anon outreach_unsubscribe_by_token (writes the outreach_suppression row and outreach_stopped the sequencer checks; newsletter and email_suppressions untouched), and email-unsubscribe answers ?outreach=. Exercised on a local Postgres 16 with Supabase-like grants plus a negative control (no revokes/RLS lets anon read and mint); vitest 3590/3590, Deno lane 167/167 (3 new, red without the branch). Owner: apply 20261115000101, deploy email-unsubscribe. Handoff: docs/improvement-loops/lanes/marketing-growth.md"
     },
     {
       "priority": 4,
@@ -13340,6 +13340,128 @@
       ],
       "passes": false,
       "notes": "Found by the reliability lane while wiring check-dist-console on 2026-11-15."
+    },
+    {
+      "id": "WEB-FEAT-088",
+      "title": "Add to Outlook puts untimed events at the placeholder time, and all-day .ics alarms ring at 11 PM the night before",
+      "description": "As a visitor adding an event with no published start time to my calendar, I need it to land as an all-day entry on the right day. outlookCalendarUrl ignored IcsEventInput.allDay and sent the placeholder instant, so a 19:31:58-sentinel row opened in Outlook at 7:31 PM and a SeatGeek row at 3:30 AM, while the .ics download and the Google link already exported DATE values. The single-event .ics also used TRIGGER:-PT1H for all-day entries, which fires at 11 PM the previous evening.",
+      "acceptanceCriteria": [
+        "outlookCalendarUrl sends allday=true, startdt and enddt as YYYY-MM-DD Central dates for an allDay event, with the same exclusive end as the ICS/Google paths (multi-day runs through their last Central day)",
+        "Timed events keep ISO instants and no allday param",
+        "The one-off .ics alarm for an all-day entry does not use -PT1H; timed entries keep -PT1H; subscribed feeds still carry no alarm",
+        "icsEvent.test.ts covers each case and fails against the old code"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Found and done 2026-11-15 by the events lane. src/lib/icsEvent.ts outlookCalendarUrl gains the all-day branch (dashedDate + allDayEndDate); VALARM uses TRIGGER:PT9H for allDay. icsEvent.test 42/42, red first (3 of 5 new cases); negative control (Outlook allDay branch off) 2 failed. vitest src/lib src/hooks src/components/events 2760/2760, eslint clean, type-check ratchet 30/30, check-imports, check-event-time-tz, test:offline 70/70. Outlook's parsing of allday with date-only enddt not checked against live outlook.live.com. | DONE 2026-11-15 (events lane). outlookCalendarUrl now sends allday=true with Central dates and the shared exclusive end (allDayEndDate) for untimed events, which used to open at 7:31 PM or 3:30 AM. The one-off .ics alarm for all-day entries moves from -PT1H (11 PM the night before) to PT9H (9 AM on the day). Verified: icsEvent.test 42/42, red first (3 of 5 new cases failed); negative control 2 failed; vitest 2760/2760; not checked against live outlook.live.com."
+    },
+    {
+      "id": "WEB-PERF-075",
+      "title": "Closed filter/sort selects on /playgrounds, /stay, /events/near-me and /articles ship Radix Select in the route closure",
+      "description": "These four public routes statically imported ui/select (which pulls in @radix-ui/react-select, popper and focus-scope) just to draw closed sort and filter triggers. WEB-PERF-074 built DeferredSelect for this and applied it to /events, /restaurants and /attractions. Apply it to these four routes as well.",
+      "acceptanceCriteria": [
+        "Playgrounds, Hotels, EventsNearMe and Articles render their closed selects with DeferredSelect, and none of them reaches ui/select statically",
+        "deferredSelectLazy.test.ts covers the four routes, and a static ui/select import makes it fail",
+        "The routes measure lighter with scripts/measure-route-preload.mjs and the critical path does not change",
+        "The smoke specs for these pages pass against a vite build"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "2026-11-15 performance lane. Articles 86.4 -> 52.9, Playgrounds 105.5 -> 84.5, Hotels 88.2 -> 67.9, EventsNearMe 122.8 -> 116.0 KB gz beyond the critical path. EventsPage/Restaurants/Attractions each +0.3-0.4 KB and one file (deferred-select is now a shared chunk). Sum 8,438.8 -> 8,361.0; critical 175.2 unchanged. Graph test has a negative control; vitest 3588/3588; 118 smoke tests and Chrome swap checks pass. | Closed filter/sort selects on /playgrounds, /stay, /events/near-me and /articles now use DeferredSelect, so @radix-ui/react-select loads on first click. Gzipped JS beyond the critical path: Articles 86.4 -> 52.9, Playgrounds 105.5 -> 84.5, Hotels 88.2 -> 67.9, EventsNearMe 122.8 -> 116.0 KB. The three earlier hubs each gained 0.3-0.4 KB and one file because deferred-select is now a shared chunk. Summed over all routes 8,438.8 -> 8,361.0 KB; critical path 175.2 unchanged. Verified by: deferredSelectLazy.test.ts extended to 7 routes (negative control fails), vitest 3588/3588, 118 smoke tests plus Chrome checks of the swap."
+    },
+    {
+      "id": "WEB-SEC-074",
+      "title": "restaurant_blacklist and hotel_blacklist are anon-readable, exposing the admin behind each block (blocked_by) and the reason typed",
+      "priority": 3,
+      "passes": true,
+      "description": "Both blacklists had SELECT USING (true) with no TO clause (20260127000000, 20260217000002), justified as 'needed for search filtering'. The only filtering readers, search-new-restaurants and search-new-hotels, already require an admin or API key, so the public read was not needed; it let the bundled anon key read blocked_by (auth.users id of the admin) and free-text reasons for every block.",
+      "acceptanceCriteria": [
+        "Anon and non-admin authenticated callers read zero rows from both tables",
+        "Admins still read, insert with RETURNING, and unblock by filter",
+        "search-new-restaurants and search-new-hotels still filter blacklisted places after the migration",
+        "Both tables leave .github/identity-read-baseline.json",
+        "A test fails if either edge function reads its blacklist with the anon key again"
+      ],
+      "notes": "Found 2026-11-15 by the security lane while auditing the remaining identity-read baseline. Done in one commit: migration 20261115000042 (admin read TO authenticated), service-role client for the blacklist read in both edge functions, baseline 8 -> 6, offline suite blacklist-admin-read. Verified on local Postgres 16 with auth stubs. OWNER: deploy search-new-restaurants and search-new-hotels before applying the migration, or admin search shows blocked places until the deploy (nothing fails). Not applied or deployed from here. | Migration 20261115000042 replaces the USING (true) reads on restaurant_blacklist and hotel_blacklist (anon could read blocked_by admin ids and reasons) with an admin read; search-new-restaurants/search-new-hotels, already admin-or-API-key gated, now read the blacklist with a service-role client so filtering keeps working (deploy them before the migration). Verified on local Postgres 16 with auth stubs (anon/non-admin 2/1 -> 0/0, admin reads, inserts RETURNING and unblocks unchanged, re-apply no-op), identity-read baseline 8 -> 6 by hand, new offline suite blacklist-admin-read 5/5; not applied or deployed."
+    },
+    {
+      "id": "WEB-SEO-069",
+      "title": "Sitemapped routes that skip the prerender serve the homepage's title and description to non-JS crawlers",
+      "description": "As a site owner, I need /privacy-policy, /terms, /advertise, /business-partnership, /submit-event and /whats-new to name themselves to crawlers that do not run JavaScript. They are in SITEMAP_ONLY_ROUTES: submitted, not prerendered. The SPA fallback is the prerendered homepage, and functions/_middleware.ts only rewrote its canonical and removed its JSON-LD, so GPTBot, ClaudeBot, PerplexityBot and link-preview bots read six submitted URLs with the homepage's title, meta description, og/twitter text and H1.",
+      "acceptanceCriteria": [
+        "Each SITEMAP_ONLY_ROUTES path served from the shell carries its own <title>, meta description, og:title/description and twitter:title/description, and an H1 matching the page",
+        "The page and the shell take those words from one source (src/lib/staticPageMeta.ts), not two copies",
+        "A test fails when a route is added to SITEMAP_ONLY_ROUTES without an entry, or when a page stops reading its entry",
+        "No JSON-LD is invented in the shell; the homepage's is still removed",
+        "Titles fit 60 characters with the brand suffix and descriptions 160, since check-seo-meta-length no longer sees these literals in src/pages"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed 2026-11-15 by the seo-geo lane. staticPageShellRewrites in functions/_middleware.ts, used for any homepage-shell response at a STATIC_PAGE_META path; SEOHead's brand-suffix rule moved to brandedTitle so both compute the same title. Offline suite middleware-static-page-shell (103 checks) runs the rules through html-rewriter-wasm; shell-selectors covers the new selectors. Not exercised on the deployed Pages runtime. Footer-linked policy pages that are not sitemapped (/cookie-policy, /dmca, /acceptable-use, /dpa, /affiliate-disclosure, /advertising-policies) still use bare Helmet with no canonical or og tags and fall through to the homepage shell; left out of scope. | The six SITEMAP_ONLY_ROUTES are submitted but not prerendered, so non-JS crawlers got the homepage shell with only the canonical fixed (homepage title, description, og/twitter text, H1). New src/lib/staticPageMeta.ts is the one copy of each page's title/description/heading: the pages pass it to SEOHead and the new middleware staticPageShellRewrites writes it into the shell. Verified by the new offline suite middleware-static-page-shell (103 checks, including the old rules reproducing the homepage title) plus shell-selectors; test:offline 71/71, vitest src/components+pages+lib 2739/2739, type-check:functions clean, app ratchet 30/30, eslint 0 errors, check-seo-routes/schema-dupes/seo-meta-length/document-title green. Not run on the deployed Pages runtime."
+    },
+    {
+      "id": "WEB-QA-059",
+      "priority": 3,
+      "title": "/attractions scrolls sideways on 320-375px phones: the hero action row cannot wrap",
+      "description": "The /attractions hero puts Surprise Me, Filters and the list/map toggle in one flex row without flex-wrap. That row needs 383px, so on any viewport narrower than that documentElement.scrollWidth is 383 and the page scrolls horizontally. The broad lane's mobile-responsive spec failed this at 320/360/375px on both projects, but that lane is continue-on-error, so nothing blocked it.",
+      "acceptanceCriteria": [
+        "/attractions has scrollWidth equal to clientWidth at 320, 360 and 375px",
+        "The list/map toggle stays inside the viewport at those widths",
+        "A required-lane spec guards it and fails on the old layout"
+      ],
+      "passes": true,
+      "notes": "Found and fixed by the reliability lane on 2026-11-15 while triaging the broad-lane failures in its WEB-CI-028 handoff. The row now uses flex-wrap with justify-center. A guard was added to attractions-hub.spec.ts (smoke lane); it fails on the pre-fix build (383 > 320) and passes after. attractions-hub ran 45/45 with --repeat-each=3, and mobile-responsive /attractions ran 20/20. | On phones narrower than 383px, /attractions scrolled sideways (scrollWidth 383 at 320, 360 and 375px), which accounted for 6 of the broad lane's 17 failures. The cause was the hero's action row (Surprise Me, Filters, list/map toggle), which could not wrap; it now uses flex-wrap and centres, and a guard in attractions-hub.spec.ts (required smoke lane) checks 320/360/375px. The new test fails on the pre-fix build and passes after the fix. attractions-hub ran 45/45 with --repeat-each=3, and mobile-responsive /attractions ran 20/20 on both projects. Handoff: docs/improvement-loops/lanes/reliability.md"
+    },
+    {
+      "priority": 4,
+      "id": "WEB-FEAT-089",
+      "title": "assemble-weekly-digest and generate-weekend-guide window events on UTC date strings with no running arm",
+      "description": "assemble-weekly-digest filters date >= today's UTC date and <= weekOut as a bare date (00:00Z, 6-7 PM Central the day before), so the last day is dropped and a festival running into the week is missing. generate-weekend-guide computes Friday-Sunday in server time and sends date-only bounds, so Saturday evening and all of Sunday fall outside its window, Thursday evening falls inside, and it applies none of the is_hidden/is_merged/archived_at filters. Found 2026-11-15 by the events lane, not done; the weekend guide currently has no public reader (WeekendGuideManager shows mock data), so the digest is the higher-value half.",
+      "acceptanceCriteria": [
+        "Digest window is Central-day based with upcomingOrRunningFilter and an end-of-Central-day upper bound",
+        "Weekend guide window is Fri 00:00 to Sun 23:59 Central, overlap semantics, with the three visibility filters",
+        "Deno or offline tests evaluate the sent filters against fixture rows"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the events lane while auditing bare date floors."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-SEC-075",
+      "title": "ad_rate_card exposes updated_by (the admin who last changed a price) to the anon key",
+      "passes": false,
+      "description": "ad_rate_card stays on the identity-read baseline: its public read is needed (advertisers are quoted from it), but every row carries updated_by. A column-level grant or a view without updated_by would keep pricing public without naming the admin; readers are useCampaigns and AdRateManager on web and calculate_campaign_pricing() in SQL.",
+      "acceptanceCriteria": [
+        "Anon cannot read ad_rate_card.updated_by",
+        "Advertiser quotes and calculate_campaign_pricing() are unchanged",
+        "ad_rate_card leaves the identity-read baseline"
+      ],
+      "notes": "Found 2026-11-15 by the security lane while shipping the blacklist admin-read story. Not started."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-070",
+      "title": "Six footer-linked policy pages emit no canonical or og tags and serve the homepage shell to non-JS crawlers",
+      "description": "/cookie-policy, /dmca, /acceptable-use, /dpa, /affiliate-disclosure and /advertising-policies write a bare Helmet title and description only. They are linked from the footer on every page, so they are crawled, but they have no canonical, no og:* or twitter:* tags (a shared link previews as the homepage), and the middleware serves them the homepage title and H1. Moving them onto SEOHead plus a STATIC_PAGE_META entry (without adding them to SITEMAP_ONLY_ROUTES, or deciding to sitemap them) would close it.",
+      "acceptanceCriteria": [
+        "Each page mounts SEOHead with a self canonical and og/twitter tags",
+        "The middleware shell for each says the page's own title and description",
+        "Decide and record whether they belong in the sitemap"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the seo-geo lane while shipping the sitemap-only shell fix."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-UX-076",
+      "title": "/events/today skips a heading level: h1 then h3 'More Event Ideas'",
+      "description": "accessibility.spec.ts:762 (broad lane) fails on /events/today on both projects: the headings go h1 -> h3 ('More Event Ideas') with no h2 between them, which breaks WCAG 1.3.1 heading hierarchy. Reproduced on a vite build with a placeholder backend on 2026-11-15.",
+      "acceptanceCriteria": [
+        "/events/today headings never go up by more than one level",
+        "accessibility.spec.ts 'events-today should not skip heading levels' passes on chromium-desktop and mobile-chrome"
+      ],
+      "passes": false,
+      "notes": "Found by the reliability lane while triaging broad-lane failures (WEB-CI-028 handoff) on 2026-11-15."
     }
   ]
 }
