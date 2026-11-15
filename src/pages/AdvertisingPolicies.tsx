@@ -1,5 +1,6 @@
-import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import SEOHead from "@/components/SEOHead";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 /**
  * Advertising policies (WEB-ADS-014).
@@ -22,13 +23,12 @@ export default function AdvertisingPolicies() {
 
   return (
     <>
-      <Helmet>
-        <title>Advertising Policies | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="What we require of ad creatives on Des Moines Insider: image sizes per placement, destination URL rules, content standards, and how review works."
-        />
-      </Helmet>
+      <SEOHead
+        title={STATIC_PAGE_META["/advertising-policies"].title}
+        description={STATIC_PAGE_META["/advertising-policies"].description}
+        url="https://desmoinesinsider.com/advertising-policies"
+        type="website"
+      />
 
       <div className="min-h-screen bg-background pb-24">
         <div className="container mx-auto px-4 py-12 max-w-3xl">

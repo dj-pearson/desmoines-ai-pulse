@@ -1,5 +1,6 @@
 /**
  * WEB-SEO-069: the shell for a sitemapped route that skips the prerender.
+ * WEB-SEO-070: and for the footer policy pages, which are not sitemapped.
  *
  *   npx tsx functions/__tests__/middleware-static-page-shell.test.mjs
  *
@@ -20,8 +21,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '../..');
 
 const { staticPageShellRewrites, selfCanonicalRewrites } = await import('../_middleware.ts');
-const { STATIC_PAGE_META, staticPageMeta, brandedTitle } = await import('../../src/lib/staticPageMeta.ts');
-const { SITEMAP_ONLY_ROUTES } = await import('../../scripts/prerender-routes.mjs');
+const { STATIC_PAGE_META, NOT_SITEMAPPED_STATIC_PAGES, staticPageMeta, brandedTitle } = await import('../../src/lib/staticPageMeta.ts');
+const { SITEMAP_ONLY_ROUTES, PRERENDER_ROUTES } = await import('../../scripts/prerender-routes.mjs');
 
 let bad = 0;
 const ck = (name, cond, detail = '') => {
@@ -89,8 +90,22 @@ ck('it kept the homepage title at /terms (the bug this fixes)', before.includes(
 // --- Coverage: every sitemap-only route has an entry, and nothing else does ---
 console.log('\ncoverage');
 const keys = Object.keys(STATIC_PAGE_META).sort();
-const routes = [...SITEMAP_ONLY_ROUTES].sort();
-ck('STATIC_PAGE_META keys equal SITEMAP_ONLY_ROUTES', JSON.stringify(keys) === JSON.stringify(routes), `meta ${keys.join(',')} vs routes ${routes.join(',')}`);
+const routes = [...SITEMAP_ONLY_ROUTES, ...NOT_SITEMAPPED_STATIC_PAGES].sort();
+ck('STATIC_PAGE_META keys equal SITEMAP_ONLY_ROUTES plus NOT_SITEMAPPED_STATIC_PAGES', JSON.stringify(keys) === JSON.stringify(routes), `meta ${keys.join(',')} vs routes ${routes.join(',')}`);
+ck('no path is both sitemap-only and not-sitemapped', !NOT_SITEMAPPED_STATIC_PAGES.some((r) => SITEMAP_ONLY_ROUTES.includes(r)));
+
+// WEB-SEO-070: the footer policy pages are indexable but not submitted. If one
+// is ever sitemapped or prerendered it must move lists, not sit in both.
+const sitemapPaths = new Set(
+  [...readFileSync(join(ROOT, 'public/sitemap-static.xml'), 'utf8').matchAll(/<loc>https?:\/\/[^/<]+(\/[^<]*)<\/loc>/g)].map((m) => m[1].replace(/\/$/, '') || '/'),
+);
+const appSrc = readFileSync(join(ROOT, 'src/App.tsx'), 'utf8');
+for (const route of NOT_SITEMAPPED_STATIC_PAGES) {
+  ck(`${route} is not in sitemap-static.xml`, !sitemapPaths.has(route));
+  ck(`${route} is not prerendered (the shell is what crawlers get)`, !PRERENDER_ROUTES.includes(route));
+  ck(`${route} is a route in App.tsx`, appSrc.includes(`path="${route}"`));
+}
+ck('the sitemap parse found URLs', sitemapPaths.size > 10, `${sitemapPaths.size}`);
 ck('an unknown path has no entry', staticPageMeta('/events') === null && staticPageMeta('/toString') === null && staticPageMeta('/__proto__') === null);
 
 // --- Each page reads its own entry, so the shell and the page say the same thing ---
@@ -102,12 +117,24 @@ const PAGE_FILES = {
   '/whats-new': 'src/pages/WhatsNew.tsx',
   '/privacy-policy': 'src/pages/PrivacyPolicy.tsx',
   '/terms': 'src/pages/Terms.tsx',
+  '/cookie-policy': 'src/pages/CookiePolicy.tsx',
+  '/dmca': 'src/pages/DMCAPolicy.tsx',
+  '/acceptable-use': 'src/pages/AcceptableUsePolicy.tsx',
+  '/dpa': 'src/pages/DataProcessingAgreement.tsx',
+  '/affiliate-disclosure': 'src/pages/AffiliateDisclosure.tsx',
+  '/advertising-policies': 'src/pages/AdvertisingPolicies.tsx',
 };
 for (const [route, file] of Object.entries(PAGE_FILES)) {
   const src = readFileSync(join(ROOT, file), 'utf8');
   ck(`${file} takes title and description from STATIC_PAGE_META["${route}"]`, src.includes(`STATIC_PAGE_META["${route}"]`));
   ck(`${file} renders the entry's heading as its H1`, src.includes(STATIC_PAGE_META[route].heading));
   ck(`${file} carries no literal copy of the description`, !src.includes(STATIC_PAGE_META[route].description));
+  // A bare Helmet title has no canonical or og/twitter tags (WEB-SEO-070).
+  ck(`${file} mounts SEOHead`, src.includes('<SEOHead'));
+  if (NOT_SITEMAPPED_STATIC_PAGES.includes(route)) {
+    ck(`${file} hands SEOHead its own URL`, src.includes(`url="https://desmoinesinsider.com${route}"`));
+  }
+  ck(`${file} writes no <title> of its own`, !/<title>/.test(src) && !src.includes('react-helmet-async'));
 }
 ck('every page file is mapped', Object.keys(PAGE_FILES).sort().join() === keys.join());
 

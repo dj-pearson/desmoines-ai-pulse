@@ -1052,7 +1052,8 @@ export function restaurantAreaShellRewrites(pageUrl: string, seo: RestaurantArea
 
 /**
  * WEB-SEO-069: the shell for a sitemapped route that skips the
- * prerender (SITEMAP_ONLY_ROUTES: /privacy-policy, /terms, /advertise ...).
+ * prerender (SITEMAP_ONLY_ROUTES: /privacy-policy, /terms, /advertise ...),
+ * and (WEB-SEO-070) the footer policy pages that are not sitemapped.
  *
  * withSelfCanonical fixed the canonical and dropped the homepage's JSON-LD, but
  * left the homepage's title, description, og:title and H1, so a crawler that

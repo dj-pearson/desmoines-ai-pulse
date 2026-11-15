@@ -15,7 +15,17 @@
  * writes the same ones into the shell, so the two cannot drift. Relative
  * imports only: Pages Functions bundles this file and does not read "@/".
  * functions/__tests__/middleware-static-page-shell.test.mjs holds the keys
- * equal to SITEMAP_ONLY_ROUTES and checks each page reads its own entry.
+ * equal to SITEMAP_ONLY_ROUTES plus NOT_SITEMAPPED_STATIC_PAGES and checks
+ * each page reads its own entry.
+ *
+ * FOOTER POLICY PAGES (WEB-SEO-070). Six more pages are linked from the footer
+ * on every page, so they are crawled, but they are not in the sitemap and not
+ * prerendered: the same homepage shell, and they had no canonical or og tags
+ * either. They get entries here so the page and the middleware share words.
+ * They stay out of the sitemap on purpose: nobody searches for "Des Moines
+ * Insider DMCA policy", the footer link already gets them crawled, and every
+ * URL in sitemap-static.xml has to be either prerendered or declared in
+ * SITEMAP_ONLY_ROUTES. Indexable, not submitted.
  */
 import { BRAND } from "./brandConfig";
 
@@ -64,9 +74,59 @@ export const STATIC_PAGE_META = {
       "Read the Terms of Service for Des Moines Insider. Understand your rights and responsibilities when using our AI-powered city guide platform.",
     heading: "Terms of Service",
   },
+  // Footer-linked, not sitemapped (NOT_SITEMAPPED_STATIC_PAGES below).
+  "/cookie-policy": {
+    title: "Cookie Policy | Des Moines Insider",
+    description:
+      "How Des Moines Insider uses cookies and similar technologies, what categories exist, and how to change your preferences.",
+    heading: "Cookie Policy",
+  },
+  "/dmca": {
+    title: "DMCA / Copyright Policy | Des Moines Insider",
+    description:
+      "How to submit a DMCA takedown notice or counter-notice to Des Moines Insider, and how we handle copyright infringement claims.",
+    heading: "DMCA / Copyright Policy",
+  },
+  "/acceptable-use": {
+    title: "Acceptable Use Policy | Des Moines Insider",
+    description:
+      "Rules for using Des Moines Insider. What's prohibited, how we enforce these rules, and how to report abuse.",
+    heading: "Acceptable Use Policy",
+  },
+  "/dpa": {
+    title: "Data Processing Agreement | Des Moines Insider",
+    description:
+      "Des Moines Insider's standard Data Processing Agreement (DPA) for business customers with GDPR, CCPA, or similar data-protection obligations.",
+    heading: "Data Processing Agreement",
+  },
+  "/affiliate-disclosure": {
+    title: "Affiliate Disclosure | Des Moines Insider",
+    description:
+      "Des Moines Insider affiliate disclosure. How we earn commissions through hotel booking links, Ticketmaster ticket links and banner ads.",
+    heading: "Affiliate Disclosure",
+  },
+  "/advertising-policies": {
+    title: "Advertising Policies | Des Moines Insider",
+    description:
+      "What we require of ad creatives on Des Moines Insider: image sizes per placement, destination URL rules, content standards, and how review works.",
+    heading: "Advertising Policies",
+  },
 } as const satisfies Record<string, StaticPageMeta>;
 
 export type StaticPagePath = keyof typeof STATIC_PAGE_META;
+
+/**
+ * Entries that are deliberately NOT in sitemap-static.xml (WEB-SEO-070). Every
+ * other key is a SITEMAP_ONLY_ROUTES path; the shell test holds the split.
+ */
+export const NOT_SITEMAPPED_STATIC_PAGES = [
+  "/cookie-policy",
+  "/dmca",
+  "/acceptable-use",
+  "/dpa",
+  "/affiliate-disclosure",
+  "/advertising-policies",
+] as const satisfies readonly StaticPagePath[];
 
 /** SEOHead's rule: append the site name unless the title already carries it. */
 export function brandedTitle(title: string): string {
