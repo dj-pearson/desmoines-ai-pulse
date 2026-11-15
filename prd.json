@@ -10379,7 +10379,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "Found 2026-11-02 on claude/15-loop-site-improvements-nambs4, not done."
+      "notes": "Found 2026-11-02 on claude/15-loop-site-improvements-nambs4, not done. 2026-11-15: the v2-with-v1-fallback call in both apps landed with XPLAT-016 slice 1 (features lane). Still open: iOS ForYouCard sponsored label (decode is_sponsored/sponsored_until on v2 rows, SponsoredBadge, VoiceOver prefix). The ios lane built it this round but its commit conflicted with XPLAT-016 in ForYouService.swift and was dropped; redo it on top of fetchPersonalized."
     },
     {
       "id": "WEB-FEAT-035",
@@ -12528,8 +12528,8 @@
         "Baseline .github/field-names-baseline.json reaches 0"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 3 named 34 admin/CMS fields across 8 files: CategoryTagManager, PartnershipsManager, AdminCampaigns, SupportTicketsConsole, SupportConsole, HotelManager, AttractionManager and ActivityLogViewer. Dialog Labels now have htmlFor/id, and filter searches and Selects have aria-label. The check-field-names baseline went from 123 to 89. The new adminFieldNamesSlice3.test.tsx fails 9/9 on the old code and passes 9/9. Full vitest is 3370/3370 and the type ratchet is 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 4 of 5: 40 unnamed admin/CMS fields in 12 files are now named. ContentEditor's Labels pointed at field.key and no control had that id; they now use useId-prefixed ids. Filter rows got aria-labels and visible Labels got htmlFor/id. check-field-names baseline went from 89 to 49. New adminFieldNamesSlice4.test.tsx fails 14/14 on the old code and passes 14/14 now; full vitest 3441/3441 and the type ratchet 30/30 both pass. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 5 of 6: named the last 37 unnamed fields in live files across 29 files (five Label htmlFor ids their SelectTrigger never carried now resolve, filter rows got aria-label, per-row fields name their row); check-field-names baseline 49 -> 12, all in five unimported files. New adminFieldNamesSlice5.test.tsx fails 30/30 on old code and passes 30/30; vitest 3491/3491, type ratchet 30/30. Note: this worktree started at 65138139 (a hotfix commit not on the rolling branch), so it was reset to the rolling branch head 3341b568 before work; the commit sits on 3341b568. Handoff: docs/improvement-loops/lanes/ui-ux.md"
+      "passes": true,
+      "notes": "Slice 1 of 3 done: ratchet added, 8 reader-facing fields fixed, baseline 170. | Slice 1 of 3. A new check-field-names ratchet (in validate, TypeScript AST) found 178 text fields and selects with no accessible name. The 8 live reader-facing ones are fixed: visible labels plus autocomplete on the NewsletterSignup default and modal forms, aria-label on the hero email, the /social planner search and notes, and the promotion-planner share link. Baseline is 170. fieldNames.test.tsx fails 4/8 on the old components and passes 8/8; vitest 3260/3260, type ratchet 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 2 of 3: named 47 admin/CMS fields in PlaygroundManager, AdRateManager (ids per placement via useId), ContentEditDialog (its Labels pointed at field.key, an id no control had), DealManager, FeedbackInbox and EnhancedArticleEditor. check-field-names baseline went from 170 to 123. New adminFieldNames.test.tsx fails 9/9 on the old code and passes 9/9; vitest 3308/3308, type ratchet 30/30, eslint 0 errors. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 3 named 34 admin/CMS fields across 8 files: CategoryTagManager, PartnershipsManager, AdminCampaigns, SupportTicketsConsole, SupportConsole, HotelManager, AttractionManager and ActivityLogViewer. Dialog Labels now have htmlFor/id, and filter searches and Selects have aria-label. The check-field-names baseline went from 123 to 89. The new adminFieldNamesSlice3.test.tsx fails 9/9 on the old code and passes 9/9. Full vitest is 3370/3370 and the type ratchet is 30/30. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 4 of 5: 40 unnamed admin/CMS fields in 12 files are now named. ContentEditor's Labels pointed at field.key and no control had that id; they now use useId-prefixed ids. Filter rows got aria-labels and visible Labels got htmlFor/id. check-field-names baseline went from 89 to 49. New adminFieldNamesSlice4.test.tsx fails 14/14 on the old code and passes 14/14 now; full vitest 3441/3441 and the type ratchet 30/30 both pass. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 5 of 6: named the last 37 unnamed fields in live files across 29 files (five Label htmlFor ids their SelectTrigger never carried now resolve, filter rows got aria-label, per-row fields name their row); check-field-names baseline 49 -> 12, all in five unimported files. New adminFieldNamesSlice5.test.tsx fails 30/30 on old code and passes 30/30; vitest 3491/3491, type ratchet 30/30. Note: this worktree started at 65138139 (a hotfix commit not on the rolling branch), so it was reset to the rolling branch head 3341b568 before work; the commit sits on 3341b568. Handoff: docs/improvement-loops/lanes/ui-ux.md | Slice 6 of 6: deleted six unimported components (SecurityDashboard, AttractionFilters, LocationAutocomplete, ContentEditor, CompetitorAnalysis, ArticleEditor; 2,380 lines) with their test cases and LOCATION_FEATURES doc sections, and named the two fields in EventSocialHub/EventFriendFinder (kept because WEB-QA-045 owns that product call and a Deno test reads EventSocialHub); check-field-names baseline 12 -> 0, check-raw-img 10 -> 9. This also completes WEB-UX-072 apart from those two hub files (orchestrator: mark 072 notes accordingly, leave passes false or close it as superseded by WEB-QA-045). New fieldNamesSlice6.test.ts fails 3/4 on old hub files, passes 4/4; vitest 3541/3541, type ratchet 30/30."
     },
     {
       "id": "WEB-PERF-069",
@@ -13027,7 +13027,8 @@
       "id": "WEB-UX-072",
       "title": "Delete admin/CMS components nothing imports",
       "description": "ContentEditor, CompetitorAnalysis, ArticleEditor, SecurityDashboard, AttractionFilters, EventSocialHub, EventFriendFinder and LocationAutocomplete have no component importer in src. They still count against the a11y ratchets, and adminIconButtonNames.test.ts reads three of them. Delete them, drop their test cases and baseline entries, and update the docs that name them (docs/LOCATION_FEATURES*.md).",
-      "passes": false
+      "passes": false,
+      "notes": " 2026-11-15: WEB-UX-068 slice 6 finished everything except EventSocialHub/EventFriendFinder, whose fate WEB-QA-045 owns."
     },
     {
       "priority": 4,
@@ -13074,7 +13075,7 @@
         "Port EventSeriesSchedule (this year's dates or '<year> date not announced yet', past years newest first)",
         "A native screen and route; a slug the app does not know still opens on the web"
       ],
-      "notes": ""
+      "notes": "Slice 1 of 3 (AC1 done): android util/EventSeries.kt ports the web's 20 EVENT_SERIES and normaliseEventTitle (plus forEvent, forSlug, path, titlePatterns), held equal to src/lib/eventSeries.ts by new vitest androidEventSeriesParity.test.ts (3/3; an alias edit fails it). 7 EventSeriesTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation dropping the apostrophe step fails 1. Not wired to a screen yet; app module not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "WEB-FEAT-083",
@@ -13136,7 +13137,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Found in the 2026-11-08 marketing-growth loop. Slice 1 done: sendNurtureEmail looks up the newsletter token by address (src/lib/__tests__/nurtureUnsubscribe.test.ts 6/6, two negative controls; full vitest 3467/3467; Deno lane 167/167; type-check ratchet 30/30; check-edge-auth, check-edge-types, check-marketing-consent). Slice 2 (account-only recipients) is the lane handoff. Owner: redeploy agent-onboarding-drip, agent-churn-winback, agent-reengagement, agent-milestones, agent-subscription-nurture, agent-weekly-digest and stripe-webhook. | Slice 1 of 2. Every nurture email (13 sendNurtureEmail callers) said \"unsubscribe in one click\" but linked to /profile?tab=settings, which needs a sign-in, and sent a mailto-only List-Unsubscribe. sendNurtureEmail now looks up the newsletter token by address for marketing mail (a failed lookup falls back to the old footer and the email still sends), so newsletter subscribers get RFC 8058 one-click and a footer link that works signed out. Verified: new vitest 6/6 with 2 negative controls, full vitest 3467/3467, Deno lane 167/167, eslint, type-check ratchet 30/30, type-check:functions, check-edge-auth/edge-types/marketing-consent/deno-lanes. Owner: redeploy the nurture agents and stripe-webhook. Handoff: docs/improvement-loops/lanes/marketing-growth.md"
+      "notes": "Found in the 2026-11-08 marketing-growth loop. Slice 1 done: sendNurtureEmail looks up the newsletter token by address (src/lib/__tests__/nurtureUnsubscribe.test.ts 6/6, two negative controls; full vitest 3467/3467; Deno lane 167/167; type-check ratchet 30/30; check-edge-auth, check-edge-types, check-marketing-consent). Slice 2 (account-only recipients) is the lane handoff. Owner: redeploy agent-onboarding-drip, agent-churn-winback, agent-reengagement, agent-milestones, agent-subscription-nurture, agent-weekly-digest and stripe-webhook. | Slice 1 of 2. Every nurture email (13 sendNurtureEmail callers) said \"unsubscribe in one click\" but linked to /profile?tab=settings, which needs a sign-in, and sent a mailto-only List-Unsubscribe. sendNurtureEmail now looks up the newsletter token by address for marketing mail (a failed lookup falls back to the old footer and the email still sends), so newsletter subscribers get RFC 8058 one-click and a footer link that works signed out. Verified: new vitest 6/6 with 2 negative controls, full vitest 3467/3467, Deno lane 167/167, eslint, type-check ratchet 30/30, type-check:functions, check-edge-auth/edge-types/marketing-consent/deno-lanes. Owner: redeploy the nurture agents and stripe-webhook. Handoff: docs/improvement-loops/lanes/marketing-growth.md | Slice 2 of 3 done in code: migration 20261108000104 adds marketing_unsubscribe_tokens (RLS on, no policy, revoked from anon/authenticated), service-role ensure_marketing_unsubscribe_token and anon marketing_unsubscribe_by_token (writes the same 'unsubscribe' suppression, keeps bounces, marks a same-address newsletter row unsubscribed); email-unsubscribe answers ?account=; a footer with no token no longer claims \"one click\". Exercised on local Postgres 16 with Supabase-like default grants (negative control without revokes lets anon read and mint tokens); vitest 3552/3552, Deno lane 167/167, edge/migration/schema checks clean. Owner: apply 20261108000104, deploy email-unsubscribe and the nurture agents. Handoff: docs/improvement-loops/lanes/marketing-growth.md"
     },
     {
       "id": "WEB-FEAT-084",
@@ -13193,8 +13194,8 @@
         "useReviewEvent notifies through notify-event-submission by submission id like EventSubmissionsManager, or EventReviewSystem is retired in favour of /admin/event-submissions",
         "A test asserts the notify call is made for each review decision"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane while fixing WEB-FEAT-NEW-events; not touched in that commit."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane while fixing WEB-FEAT-NEW-events; not touched in that commit. | useReviewEvent (/admin/tools EventReviewSystem) no longer calls supabase.auth.admin.getUserById from the browser; every decision now invokes notify-event-submission by submission id through the new src/lib/submissionNotify.ts helper, which EventSubmissionsManager also uses, and the screen warns when the email fails. New useReviewEvent.notify.test.tsx asserts the invoke for approved/rejected/needs_revision: 5/5, and 1/5 against the old hook (reproduced red)."
     },
     {
       "priority": 3,
@@ -13207,8 +13208,8 @@
         "Errors go through handleError",
         "Unit test asserts the request body for each action"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "The admin bulk updater (RestaurantBulkUpdaterSimple) now has an Opening hours section (src/components/restaurants/RestaurantHoursRefresh.tsx) with two actions. \"Fill missing hours\" sends {hoursOnly, batchSize} and passes lastId back as afterId. \"Refresh stale hours\" sends {hoursOnly, batchSize, staleDays}, clamped to 7-365 with a default of 30. Each run shows processed/updated/noHours/gone/errors. useBulkRestaurantUpdate forwards hoursOnly/staleDays/afterId through bulkUpdateRequestBody, leaves the enrichment body unchanged, and reports failures through handleError. The new component test asserts the body each action sends; 3 of its 6 cases go red when the hours fields are dropped. vitest src/components+src/hooks 1053/1053, type-check ratchet 30/30, eslint 0 errors."
     },
     {
       "priority": 3,
@@ -13233,8 +13234,8 @@
         "Probe production for event_photo_reactions first (it is not in types.ts; 42P01 means only the migration side matters)",
         "Verify on local Postgres with auth stubs, before and after; identity-read baseline shrinks by the tables fixed"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 while doing WEB-SEC-NEW-security."
+      "passes": true,
+      "notes": "Found 2026-11-08 while doing WEB-SEC-NEW-security. | Migration 20261115000041 replaces the USING (true) reads on user_follows and event_photo_reactions with an authenticated read for the people on the row (follower or followed; reaction owner) plus an admin read; no reader in web/iOS/Android/edge, activity_feed policy unaffected. Verified on local Postgres 16 with the original SQL and auth stubs (anon 2/2 -> 0/0, owner/admin/write paths unchanged, re-apply no-op); identity-read baseline 10 -> 8 by hand; production probe for event_photo_reactions not run (no credentials); not applied to production."
     },
     {
       "priority": 3,
@@ -13246,8 +13247,8 @@
         "SEOHead maps its non-OG type values to a valid og:type instead of emitting them raw",
         "A vitest guard fails if any component emits an og:type outside the OG list"
       ],
-      "passes": false,
-      "notes": "Found during the WEB-SEO-067 audit, 2026-11-08; not started."
+      "passes": true,
+      "notes": "Found during the WEB-SEO-067 audit, 2026-11-08; not started. | og:type had non-OG values: \"event\" on event pages, \"place\" on playgrounds, and the raw type/pageType props from SEOHead/LocalSEO/EnhancedLocalSEO. A new src/lib/ogType.ts (OG_TYPES, toOgType) now maps anything off the list to website. The new vitest ogType renders each component with a non-OG type and scans src for every og:type emitter: a literal must be on the list and a computed value must go through toOgType. 9/14 fail on the old sources, 14/14 pass now."
     },
     {
       "priority": 3,
@@ -13260,7 +13261,7 @@
         "v1 is not changed while binaries at or above MIN_SUPPORTED_APP_VERSION still call it"
       ],
       "passes": false,
-      "notes": "Found 2026-11-08 by the features lane while gating the web rail."
+      "notes": "Found 2026-11-08 by the features lane while gating the web rail. | Slice 1 of 2 (AC1, AC3): migration 20261108000104 re-creates get_personalized_recommendations_v2 (same signature, v1 untouched) so it returns no rows unless communication_preferences.event_recommendations is JSON true; iOS ForYouService and Android ForYouRemoteDataSource call v2 with v1 only on PGRST202/42883, and Android falls back to trending on an empty answer like iOS. Verified in PGlite (opted-in 5 rows; false/missing/null/string \"true\"/no profile 0; re-run ok), migration checks and useForYouRail vitest pass. iOS/Android not compiled. Needs supabase db push; this also satisfies WEB-FEAT-034's AC. Handoff: docs/improvement-loops/lanes/features.md"
     },
     {
       "priority": 3,
@@ -13272,6 +13273,73 @@
         "mobile-responsive.spec.ts no-horizontal-scroll tests pass for /attractions and /events/today on a vite build"
       ],
       "passes": false
+    },
+    {
+      "id": "WEB-PERF-074",
+      "title": "Hub sort and filter dropdowns ship @radix-ui/react-select with the route though they render closed",
+      "lane": "performance",
+      "priority": 2,
+      "description": "/events, /restaurants and /attractions statically imported ui/select.tsx (SortDropdown, the restaurants sort, RestaurantFilters, the Attractions type/rating filters, and the calendar-feed select in SubscribeCalendarDialog), so @radix-ui/react-select and its popper/collection/focus-scope helpers loaded with each route for controls that start closed.",
+      "acceptanceCriteria": [
+        "A DeferredSelect component draws a static trigger with the Radix trigger's classes, role=combobox and closed ARIA state, and loads the Radix Select on first click or ArrowUp/ArrowDown, mounting it already open",
+        "EventsPage, Restaurants and Attractions statically reach no ui/select.tsx; a graph test with a negative control enforces it",
+        "measure-route-preload shows the three routes lighter and no route heavier by more than 0.1 KB gz; critical path unchanged",
+        "The hub smoke specs pass, and in a real browser click, keyboard and in-dialog use work with no layout shift and focus returned to the trigger"
+      ],
+      "passes": true,
+      "notes": "Found and shipped by the performance lane, 2026-11-15. Attractions 134.3 -> 112.9, EventsPage 171.8 -> 164.2, Restaurants 147.3 -> 140.4 KB gz beyond the critical path; summed 8,454.8 -> 8,419.8. | Closed sort/filter selects on /events, /restaurants and /attractions (SortDropdown, Restaurants sort, RestaurantFilters sort, Attractions type/rating x2, calendar-feed select) now use the new ui/deferred-select.tsx, which draws a static combobox trigger and loads @radix-ui/react-select on first click/arrow key. JS beyond the critical path: Attractions 134.3 -> 112.9, EventsPage 171.8 -> 164.2, Restaurants 147.3 -> 140.4 KB gz, none heavier by >0.1, critical path 175.1 unchanged. Verified by a graph test with a negative control, full vitest and 111 hub smoke tests plus Chrome interaction checks."
+    },
+    {
+      "id": "WEB-CI-038",
+      "priority": 2,
+      "title": "Two check scripts ran in no workflow, and nothing fails when a new one is orphaned",
+      "description": "As a maintainer, I need every scripts/check-* to run somewhere in CI. check-e2e-lanes guards Playwright specs against being written and never run (WEB-CI-028); the 95 check scripts had no such guard. Measured 2026-11-15: check-dist-console (the only proof console.* is stripped from production, which CLAUDE.md's Logging rule relies on) and check-pseo-coverage (whose offline half compares src/pseo thresholds with supabase/functions/_shared/pseoCoverage.ts, and whose header says that half always runs) were called by no workflow and no npm script a workflow reaches. check-pseo-inventory and check-restaurant-seo-titles also ran nowhere, by design (they need production credentials).",
+      "acceptanceCriteria": [
+        "A check fails when a scripts/check-* is reached by no workflow, directly or through npm run, and comments do not count as reaching it",
+        "Checks that need production credentials are listed with a reason, and a listed check that becomes wired is reported stale",
+        "check-dist-console runs in CI against a build that still has its hidden sourcemaps",
+        "check-pseo-coverage's offline half runs in pr-checks without credentials",
+        "The new check runs in validate and pr-checks, with an offline suite including a negative control"
+      ],
+      "passes": true,
+      "notes": "Done 2026-11-15 by the reliability lane. check-dist-console runs in the e2e smoke job after its plain vite build: after pr-checks' npm run build the maps are stripped and the name-based fallback flags pdf-generator's dependency console.error as app code (reproduced). Offline suite 19/19, test:offline 70/70. | New check-check-wiring (validate + pr-checks) fails on any scripts/check-* no workflow reaches (directly or via npm run) unless listed online-only with a reason; it found check-dist-console and check-pseo-coverage running nowhere, now wired in e2e smoke (after vite build, since npm run build strips the maps it needs) and as a credential-less pr-checks step. Verified on a vite build (dist-console OK on 627 chunks, pseo-coverage offline OK), new offline suite 19/19 with a negative control reporting exactly the two, test:offline 70/70, eslint and type-check:scripts clean. Handoff: docs/improvement-loops/lanes/reliability.md"
+    },
+    {
+      "priority": 5,
+      "id": "WEB-FEAT-087",
+      "title": "RestaurantBulkUpdater.tsx is not rendered anywhere",
+      "description": "src/components/RestaurantBulkUpdater.tsx (264 lines) has no importer; AdminContent renders RestaurantBulkUpdaterSimple. The bulk-update-restaurants comment cites it as the admin form. Delete it or merge it into the Simple variant so the two copies cannot drift.",
+      "acceptanceCriteria": [
+        "No unrendered copy of the bulk updater remains",
+        "Comments in bulk-update-restaurants name the form that is actually rendered"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the restaurants lane while doing WEB-FEAT-086."
+    },
+    {
+      "priority": 2,
+      "id": "AOS-PROSPECT-009",
+      "title": "Outreach emails send prospects to the 'invalid link' unsubscribe page",
+      "description": "agent-outreach/index.ts and _shared/agents/outreach-sequencer.ts render the marketing footer with preferencesPath '/unsubscribe' and no token, so the footer's opt-out link opens /unsubscribe with no parameter, which shows 'This unsubscribe link is invalid or has expired'. Prospects have no account, so the sign-in preferences page is no answer either. Give outreach recipients a working signed-out opt-out (a token keyed by prospect, or the newsletter-style suppression RPC) and point the footer and List-Unsubscribe at it.",
+      "acceptanceCriteria": [
+        "An outreach email's footer link unsubscribes the prospect without sign-in and shows a success state",
+        "The List-Unsubscribe header carries an https one-click target for outreach mail",
+        "The opt-out writes a suppression that outreach-sequencer checks before the next step"
+      ],
+      "passes": false,
+      "notes": "Found by the marketing-growth lane while shipping WEB-ADS-035 slice 2."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-CI-039",
+      "title": "check-dist-console's no-sourcemap fallback flags dependency code in non-vendor chunks",
+      "description": "Without .map files, check-dist-console treats every chunk not named vendor-* as app code. On a stripped build (npm run build deletes maps) it fails on pdf-generator-*.js, whose one console.error comes from a dependency, so the check cannot run after npm run build. The manualChunks names that hold only dependencies (pdf-generator and similar) should count as dependency chunks in the fallback, or the check should read vite.config.ts manualChunks.",
+      "acceptanceCriteria": [
+        "check-dist-console passes on a build with maps stripped when the only console calls come from dependency-only chunks",
+        "It still fails when an app chunk keeps a console call"
+      ],
+      "passes": false,
+      "notes": "Found by the reliability lane while wiring check-dist-console on 2026-11-15."
     }
   ]
 }

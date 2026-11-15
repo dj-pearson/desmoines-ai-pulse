@@ -8,6 +8,8 @@
 
 ## Handoff
 
+WEB-FEAT-034 iOS sponsored label. The 2026-11-15 loop built it but was dropped at merge: XPLAT-016 (features lane) rewrote `ForYouService` in the same round, and its `fetchPersonalized` already calls v2 with the v1 fallback. Redo only the label on top of that: decode `is_sponsored`/`sponsored_until` on v2 rows, show `SponsoredBadge` in `ForYouCard` and lead its VoiceOver label with "Sponsored" (drop it once `sponsored_until` has passed). v1 rows carry no flags, so they stay unlabelled.
+
 None. `/events/date-night`, `/stay/near/<venue>` and the hub detail pages (`/music/venues/<slug>`, `/sports/<slug>`, `/outdoors/<slug>`) are the shared pages that still open on the web; a native venue, team or trail screen would replace the `hubDetailPrefixes` entry with a case, and `iosHubDetailParity.test.ts` lists what the web has. The kids filter (`SearchFilters.kidsOnly`) is not written into a saved search: the web's saved-search keys and the alert job have no kids key, so saving "storytime" with the Kids & family chip keeps only the keyword. If date night gets a native list, `DATE_NIGHT_FILTER` can follow the same shape (an `EventsService` constant, a `SearchFilters` flag, a parity test). `/map` opens the Map tab with the link's `layers`; its `when`, `sel` and `bbox` are ignored (the Map tab's time chips and camera have no URL form yet), and a link naming playgrounds or trails opens the web map until the native map draws them (`MapLinkLayers.webOnlyKeys`).
 
 ## Loop log
