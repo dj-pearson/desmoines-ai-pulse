@@ -23,6 +23,12 @@ final class ForYouService {
         /// `var` so the cold-start rerank can say why a row moved up
         /// (IOS-DD-ACCOUNT-04).
         var recommendationReason: String?
+        /// Paid-placement flags. Only get_personalized_recommendations_v2
+        /// returns them (migration 20261102000002); v1 and
+        /// get_trending_events rows decode them as nil and stay unlabelled
+        /// (WEB-FEAT-034).
+        var isSponsored: Bool? = nil
+        var sponsoredUntil: String? = nil
 
         enum CodingKeys: String, CodingKey {
             case id, title, date, category, venue
@@ -30,6 +36,15 @@ final class ForYouService {
             case isFeatured = "is_featured"
             case recommendationScore = "recommendation_score"
             case recommendationReason = "recommendation_reason"
+            case isSponsored = "is_sponsored"
+            case sponsoredUntil = "sponsored_until"
+        }
+
+        /// Same rule as Event.isActivelySponsored: the flag, until
+        /// `sponsored_until` has passed. Matches the web's isSponsoredActive
+        /// in ForYouRail.tsx.
+        func isActivelySponsored(now: Date = Date()) -> Bool {
+            Event.sponsorshipIsActive(isSponsored: isSponsored, sponsoredUntil: sponsoredUntil, now: now)
         }
     }
 
