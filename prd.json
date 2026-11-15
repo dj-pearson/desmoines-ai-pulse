@@ -13741,7 +13741,7 @@
         "Product call recorded on which digest is kept"
       ],
       "passes": false,
-      "notes": "Found by the marketing-growth lane on 2026-11-15 while shipping the weekly-digest switch fix."
+      "notes": "Found by the marketing-growth lane on 2026-11-15 while shipping the weekly-digest switch fix. | AC1 done in code. New _shared/weeklyDigestOverlap.ts makes each weekly digest sender read the other's ledger and skip anyone mailed in the last 6 days: weekly_digest_log rows with 'sent', or nurture_sends weekly_digest rows that were not skipped or failed. Both are re-checked in memory, and a failed read throws. weekly-digest-personal (both copies) reports skippedOtherDigest, and send-weekly-digest filters its list and reports skipped_other_digest. With today's crons the Thursday digest wins. AC2 (which digest is kept for good) is still the owner's product call. Verified: vitest 10/10 new, full 3757/3757; Deno marketing-optout-agents 23/23 (2 new); two negative controls; eslint, type-check ratchet 30/30, type-check:functions, check-edge-auth/edge-types/marketing-consent/schema/deno-lanes. Not run against PostgREST. Owner: deploy agent-runner and send-weekly-digest."
     },
     {
       "priority": 3,
@@ -13872,14 +13872,14 @@
       "priority": 3,
       "id": "WEB-FEAT-096",
       "title": "Social posting and SEO/enhancement selection read events with a bare now() floor, so a running festival is never posted or enhanced mid-run",
-      "passes": false,
+      "passes": true,
       "description": "social-daily-poster, social-media-manager (two reads), generate-seo-content/selection.ts and bulk-enhance-events/selection.ts filter `date >= now()` with no end_date arm, and social-daily-poster/social-media-manager apply no archived/hidden/merged visibility. A State Fair or festival is dropped from social posts on its second day, and a hidden or archived event can be posted.",
       "acceptanceCriteria": [
         "Each reader sends upcomingOrRunningFilter from _shared/eventWindow.ts where a running event is a valid pick",
         "Posting readers apply applyEventVisibility",
         "Deno tests evaluate the sent filters against fixture rows"
       ],
-      "notes": "Found 2026-11-15 by the events lane while shipping the trip planner runs read; not started."
+      "notes": "Found 2026-11-15 by the events lane while shipping the trip planner runs read; not started. | social-daily-poster, social-media-manager (pick + debug), bulk-enhance-events and generate-seo-content now read through applyEventVisibility + upcomingOrRunningFilter (new _shared/socialEventPick.ts for the posters, which also gives a running event an \"On now, running through <Central end day>\" prompt date; SEO sends one and(or(needs seo),or(window)) group). Verified offline: socialEventPick.test.ts 6/6 (new, in CI) and event-enrichment-queue.test.ts 22/22 (4 new) with fakes that apply filters to fixture rows; negative controls (no end_date arm 5 fail, no visibility 4 fail); type-check:functions, check-edge-types, check-edge-auth, check-deno-lanes pass. Not run against live PostgREST or a model."
     },
     {
       "priority": 3,
@@ -13890,8 +13890,8 @@
         "Probe search_menu_items in production (npm run check-schema:probe) before building on it",
         "Either a dish search surface that links each hit to /restaurants/:slug#menu and excludes merged/closed restaurants, or the hook removed"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-15 by the restaurants lane while auditing menu reads. Not started."
+      "passes": true,
+      "notes": "Found 2026-11-15 by the restaurants lane while auditing menu reads. Not started. | Decision: /restaurants/open-now's \"Find a dish\" (useDishSearch, already restricted to loaded non-merged, non-closed places) is the dish search. The unused, unfiltered useMenuSearch in useRestaurantMenu.ts is deleted. Hits now link to /restaurants/:slug#menu (dishMenuHref). When no place serving the dish is open, the section lists up to 6 places that do serve it (firstDishPerPlace), each with its \"closed, opens ...\" line. Verified: open-now specs 11/11 on a production build, with a new none-open case and an href assertion. With the old rendering restored, both dish specs fail. src/hooks+pages vitest 672/672, type-check ratchet 30/30, check-schema clean, eslint clean. AC1's production probe was not run (no credentials); search_menu_items is listed in scripts/db-snapshot.json."
     },
     {
       "priority": 4,
@@ -13902,8 +13902,8 @@
         "At 375px the venue name keeps a readable width before the neighborhood does",
         "A spec measures the venue span width with a typical neighborhood label"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-15 by the ui-ux lane while fixing clipped card titles."
+      "passes": true,
+      "notes": "Found 2026-11-15 by the ui-ux lane while fixing clipped card titles. | SocialEventCard meta line: the district span was flex-shrink-0, so with \"Downtown / Court Ave\" a long venue rendered at 0px at 320px (worse than the reported \"Fi...\" at 375). The district now shrinks 3x as fast, may clip to nothing and carries its own dot; venue measures 138px at 320 and 165px at 375. New case in card-long-titles.spec.ts (smoke lane) fails on the old build, passes now; 57/57 with the events/home/layout specs on a vite build."
     },
     {
       "priority": 3,
@@ -13915,8 +13915,8 @@
         "Light importers use it directly",
         "measure-route-preload shows a net decrease, and no route gains a file without a matching KB cut elsewhere"
       ],
-      "passes": false,
-      "notes": "Found by the performance lane while shipping the tonightTime split, 2026-11-15. Details are in the performance lane file's handoff notes for loop 26."
+      "passes": true,
+      "notes": "Found by the performance lane while shipping the tonightTime split, 2026-11-15. Details are in the performance lane file's handoff notes for loop 26. | Status helpers, closed filters, DES_MOINES_TIME_ZONE, formatOpenStatusLine and the result/stored types moved from restaurantHours.ts to new import-free src/lib/restaurantStatus.ts (re-exported from restaurantHours); 25 light importers switched. measure-route-preload before/after: 9 routes 3.5-3.6 KB gz lighter (PseoRoutePage, NeighborhoodPage, BestOfCategory, Deals, PlaygroundDetails, WhatsNew, AdvancedSearchPage, AdminTools, AdminAnalyticsPage), 22 parser routes +1 file and +0.1-0.2 KB, summed 7,898.8 -> 7,870.4 KB gz, critical path 175.2 unchanged; restaurantStatusSplit.test.ts pins it with a negative control."
     },
     {
       "priority": 3,
@@ -13927,8 +13927,8 @@
         "No client query returns oauth_providers.client_secret (column grant or named columns), verified by a check",
         "Non-GSC connect either completes server-side with HMAC-signed single-use state or the option is removed from the UI"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-15 by the security lane while doing WEB-SEC-078."
+      "passes": true,
+      "notes": "Found 2026-11-15 by the security lane while doing WEB-SEC-078. | OAuthProviderSetup's generic connect branch (select('*') on oauth_providers, then a redirect to the GSC-only callback) is removed: only Search Console has a Connect button, the others show \"Not available yet\". Migration 20261115000150 revokes table SELECT from anon/authenticated, grants every column but client_secret back to authenticated, and aborts if either role can still read it. Verified on local Postgres 16 with the real migrations (before: admin read every secret; after: 42501 on client_secret and select * for all three roles, named reads, Save Credentials UPDATE, refresh_oauth_token and service_role unchanged; PUBLIC grant aborts). New offline suite oauth-providers-secret-grants (6 tests, fails without the fix). Not applied to production."
     },
     {
       "priority": 3,
@@ -13939,8 +13939,8 @@
         "Confirm whether the shell ld+json is still present after hydration",
         "If so, the shell Event uses the same @id as the React Event node, or the duplicate is removed"
       ],
-      "passes": false,
-      "notes": "Seen by the seo-geo lane 2026-11-15 while fixing the shell startDate; not reproduced."
+      "passes": true,
+      "notes": "Seen by the seo-geo lane 2026-11-15 while fixing the shell startDate; not reproduced. | The edge shell gave every entity node the bare page URL as its @id. The React pages use <url>#event, #place or #hotel, and the bare URL is the @id of their own WebPage node. Helmet leaves the shell's ld+json in place, so a crawler that runs JavaScript read two Events, and the shell's Event merged into the WebPage. New src/lib/schemaNodeIds.ts (entityNodeId) now sets the @id for the shell and for eventSchema, EnhancedAttractionSEO, EnhancedPlaygroundSEO, HotelSchema and buildRestaurantSchema; restaurant stays the bare URL. The React Article gains @id <url>#article. middleware-entity-shell gains 17 checks, 7 red on the old middleware and 0 failures now; test:offline 77/77, vitest 2844/2844."
     },
     {
       "priority": 4,
@@ -13951,8 +13951,8 @@
         "A console call at an unmapped position in a non-vendor chunk fails the check",
         "The current production build still passes (its one hit is jsPDF's, which is mapped)"
       ],
-      "passes": false,
-      "notes": "Found by the reliability lane while doing WEB-CI-039 on 2026-11-15."
+      "passes": true,
+      "notes": "Found by the reliability lane while doing WEB-CI-039 on 2026-11-15. | check-dist-console now fails on a console call at an unmapped position in any non-vendor chunk. A one-field mappings segment now ends the previous source, which closes the same hole mid-line. Reproduced on a vite build by prepending console.log to EventCard-*.js: the old check exits 0, the new one exits 1. The unmodified build still passes before and after strip-sourcemaps (638 chunks, 1 dependency hit, which is jsPDF's). Offline suite 18/18, and 3 of the new cases fail against the old script."
     },
     {
       "priority": 3,
@@ -13963,21 +13963,85 @@
         "Redeem Offer Code is hidden (or explains where the plan is billed) when PlansLinkScreen.screen(tier:hasAppStoreSubscription:) is .planInfo",
         "XCTest covers free, App Store and web/Play subscribers"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-15 by the ios lane while doing IOS-AUDIT-011."
+      "passes": true,
+      "notes": "Found 2026-11-15 by the ios lane while doing IOS-AUDIT-011. | Settings > Account > Redeem Offer Code now shows only when PlansLinkScreen picks the store (free or App Store subscriber), via new PlansLinkScreen.offersCodeRedemption. A web or Google Play subscriber no longer sees it, so they can't start a duplicate App Store plan that way. 4 new XCTest cases (not compiled, no Xcode here). vitest iosSubscriptionStoreEntry gains a gate check, negative-controlled twice (1 fails each time)."
     },
     {
       "priority": 3,
       "id": "AND-AUDIT-045",
       "title": "/events/date-night and month archive links (/events/june-2026) open Home on Android",
-      "passes": false,
+      "passes": true,
       "description": "DeepLinkHandler.eventDestination sends date-night and month pages to Home, losing the link's content. iOS opens month pages as Search limited to that Central month (IOS-AUDIT-003) and date-night with the web's DATE_NIGHT_FILTER (IOS-AUDIT-008). At minimum both should open the web view rather than Home.",
       "acceptanceCriteria": [
         "AC1: /events/<month>-<year> opens events limited to that Central month, or the web view",
         "AC2: /events/date-night opens the date-night filter or the web view, never Home",
         "AC3: DeepLink JVM tests cover both"
       ],
-      "notes": "Found by the android lane 2026-11-15 while auditing DeepLinkHandler against the iOS lane log."
+      "notes": "Found by the android lane 2026-11-15 while auditing DeepLinkHandler against the iOS lane log. | AC1-AC3 done 2026-11-15: DeepLinkHandler.eventDestination now opens /events/date-night and /events/<month>-<year> in the in-app web view of the same URL, query string kept (was Home). Month archives go to the web on purpose because native event reads floor at today in Central. 3 new DeepLinkWebDestinationTest tests (10 runs) pass, 125/125 across the DeepLink/series/calendar/day JVM suites on a stub harness (kotlinc 2.2.10); restoring Home fails exactly 5. Instrumented test updated but not run, app module not compiled (no Android SDK), and the device check (adb am start each link) is still owed."
+    },
+    {
+      "id": "WEB-FEAT-098",
+      "title": "Event reminder emails still go out for events that were unpublished (is_hidden) or archived",
+      "priority": 2,
+      "description": "get_pending_reminders, which send-event-reminders reads every hour, joined events with no visibility check. A reminder on a submitted event the submitter took down (unpublish_submission sets is_hidden, including while an edit is re-reviewed), or on a row the unpublish switch archived (archived_at), still emailed 'starts in 3 hours' with a link to it. Every public read already filters both columns.",
+      "acceptanceCriteria": [
+        "get_pending_reminders returns no row for an event with is_hidden true or archived_at set",
+        "Skipped reminders stay pending (sent_at NULL), so an event that is republished before its window closes still gets its reminder",
+        "Reminders on merged rows are not dropped (merge_duplicate_content repoints them to the kept row)",
+        "Signature, return columns, windows, untimed exclusion and service_role-only grants unchanged",
+        "A test reads the newest definition and fails without the filters"
+      ],
+      "passes": true,
+      "notes": "Found and done 2026-11-15 by the features lane. Migration 20261115000141. Verified in PGlite: old 5 rows, new 3, the republished row comes back, grants unchanged. The new vitest fails 2 of 5 without the migration. Needs supabase db push. | Migration 20261115000141 redefines get_pending_reminders with e.is_hidden IS NOT TRUE and e.archived_at IS NULL. Nothing else in the function changes: same signature, same windows, same untimed exclusion, same service_role-only grants. Skipped rows stay pending, so a listing that is republished still gets its reminder. Merged rows are not filtered, because merge_duplicate_content repoints the reminder to the kept row. Verified in PGlite: old definition 5 rows, new 3 (hidden and archived dropped, merged kept), the republished row comes back, grants unchanged. The new vitest fails 2 of 5 without the migration and passes 5/5 with it. Takes effect only after `supabase db push`."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-UX-080",
+      "title": "Event card lead time is flex-shrink-0, so a multi-day run that hasn't started leaves the venue about 50px at 320px",
+      "description": "SocialEventCard's lead time ('10:00 AM CT, Sep 22 - Sep 27', about 185px at text-sm) never shrinks. At 320px the venue gets roughly 50px after the clock icon and separators. Either let the run dates truncate or move them to their own line on narrow cards.",
+      "acceptanceCriteria": [
+        "At 320px a card for a multi-day run that hasn't started shows at least 100px of venue",
+        "A spec measures it with a fixture row whose run spans several days"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the ui-ux lane while fixing WEB-UX-079."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-080",
+      "title": "OAuthProviderSetup still stores client secrets in oauth_providers that no flow reads",
+      "description": "Save Credentials writes client_id/client_secret into oauth_providers for all four providers, but gsc-oauth reads GOOGLE_CLIENT_ID/SECRET from the environment and no other flow exists since WEB-SEC-078/079. The dialog collects and stores live OAuth secrets for nothing and tells the admin the redirect URI is /admin/oauth/callback for providers that cannot complete. Remove the dialog (or limit it to providers with a server-side flow) and decide whether to null the stored client_secret values.",
+      "acceptanceCriteria": [
+        "No UI writes a client_secret that no server flow reads",
+        "Existing stored client_secret values are either used by a server flow or cleared by a reviewed migration"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the security lane while doing WEB-SEC-079."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-099",
+      "title": "Reminder card and My Plans show a reminder on a hidden event as Active",
+      "description": "Since migration 20261115000141, get_pending_reminders skips hidden and archived events. But get_user_reminders_for_event and the My Plans reminders query (useMyPlans, delivery_status pending) still list those reminders. The event card and Your Week therefore say a reminder is set that will not be sent.",
+      "acceptanceCriteria": [
+        "The reminder card and My Plans either leave out a reminder on a hidden or archived event, or label it as not scheduled",
+        "Test covers a hidden event"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the features lane while shipping the get_pending_reminders visibility fix. Not started."
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-046",
+      "title": "/events/date-night opens the web view; iOS has a native date-night Search",
+      "passes": false,
+      "description": "After AND-AUDIT-045, Android opens /events/date-night in the in-app web view. iOS (IOS-AUDIT-008) runs it natively as Search on Events with the web's DATE_NIGHT_FILTER (category.in.(Music,Comedy,Arts) or title imatch concert/live music/wine/dinner/comedy/jazz/tasting) over a 14-day Central window, evening starts only unless ?time=all. Android could follow the KidsEvents pattern (pending flag, removable chip, or-group in EventsRemoteDataSource) plus a window and an evening filter.",
+      "acceptanceCriteria": [
+        "AC1: /events/date-night opens Search with a removable Date night filter sending DATE_NIGHT_FILTER as one or-group, held equal to src/hooks/useEventLanding.ts by a vitest parity test",
+        "AC2: the list covers 14 Central days and keeps evening starts only unless the link carries ?time=all",
+        "AC3: DeepLink JVM tests and a filter test cover it"
+      ],
+      "notes": "Found by the android lane 2026-11-15 while doing AND-AUDIT-045."
     }
   ]
 }
