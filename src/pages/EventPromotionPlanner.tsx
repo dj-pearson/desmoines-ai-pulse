@@ -34,11 +34,16 @@ import {
 } from '@/lib/analytics-tracker';
 import { storage } from '@/lib/safeStorage';
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { ShareMeta } from '@/components/seo/ShareMeta';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import type { EventFormData, PromotionTimeline, EmailCaptureData } from '@/types/event-promotion';
 import { saveEmailCapture } from '@/lib/email-integration';
 import { logConsent } from '@/lib/consentLog';
 import { handleError } from '@/lib/errorHandler';
+
+const PAGE_TITLE = 'Event Promotion Timeline Generator | Des Moines Insider';
+const PAGE_DESCRIPTION =
+  'Generate a custom 8-week event promotion plan in 2 minutes. Free tool for Des Moines event organizers. Get your timeline now.';
 
 // Recharts (~96 KB gz) only renders on the Charts tab and jsPDF only runs when
 // someone asks for a PDF. Neither belongs in the first paint of a public
@@ -200,12 +205,10 @@ export default function EventPromotionPlanner() {
 
   return (
     <>
+      <ShareMeta title={PAGE_TITLE} description={PAGE_DESCRIPTION} path="/tools/event-promotion-planner" />
       <Helmet>
-        <title>Event Promotion Timeline Generator | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="Generate a custom 8-week event promotion plan in 2 minutes. Free tool for Des Moines event organizers. Get your timeline now."
-        />
+        <title>{PAGE_TITLE}</title>
+        <meta name="description" content={PAGE_DESCRIPTION} />
         <meta
           name="keywords"
           content="event promotion timeline, event marketing checklist, des moines event promotion, event planning calendar free"

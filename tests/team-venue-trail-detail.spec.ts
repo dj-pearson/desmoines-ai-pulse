@@ -153,6 +153,28 @@ async function expectBreadcrumbListMatchesNav(page: Page, expected: Array<[strin
   expect(items.map((i) => new URL(i.item).pathname)).toEqual(expected.map(([, path]) => path));
 }
 
+/**
+ * WEB-SEO-071: index.html's og/twitter text is data-rh, so Helmet
+ * deletes it once the page renders. These pages wrote a title only and were
+ * left with no og:title, og:url or twitter text. One of each, the page's own.
+ */
+async function expectOwnShareText(page: Page, path: string) {
+  const head = page.locator('head');
+  const title = await page.title();
+  for (const sel of ['meta[property="og:title"]', 'meta[name="twitter:title"]']) {
+    await expect(head.locator(sel), sel).toHaveCount(1);
+    await expect(head.locator(sel), sel).toHaveAttribute('content', title);
+  }
+  const description = await head.locator('meta[name="description"]').getAttribute('content');
+  for (const sel of ['meta[property="og:description"]', 'meta[name="twitter:description"]']) {
+    await expect(head.locator(sel), sel).toHaveCount(1);
+    await expect(head.locator(sel), sel).toHaveAttribute('content', description ?? '');
+  }
+  await expect(head.locator('meta[property="og:url"]')).toHaveCount(1);
+  expect(new URL((await head.locator('meta[property="og:url"]').getAttribute('content')) ?? '').pathname).toBe(path);
+  await expect(head.locator('meta[property="og:type"]')).toHaveCount(1);
+}
+
 /** Poll the page for `ms` and fail if it ever says "No upcoming". */
 async function neverSaysNoUpcoming(page: Page, ms: number) {
   const deadline = Date.now() + ms;
@@ -204,6 +226,7 @@ test.describe('/sports/iowa-cubs', () => {
       ['Sports', '/sports'],
       ['Iowa Cubs', '/sports/iowa-cubs'],
     ]);
+    await expectOwnShareText(page, '/sports/iowa-cubs');
 
     expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
     const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
@@ -244,6 +267,7 @@ test.describe('/music/venues/woolys', () => {
       ['Music', '/music'],
       ['Woolys', '/music/venues/woolys'],
     ]);
+    await expectOwnShareText(page, '/music/venues/woolys');
   });
 });
 
@@ -298,6 +322,7 @@ test.describe('/outdoors/high-trestle-trail', () => {
       ['Trails & Outdoors', '/outdoors'],
       ['High Trestle Trail', '/outdoors/high-trestle-trail'],
     ]);
+    await expectOwnShareText(page, '/outdoors/high-trestle-trail');
   });
 
   test('a trail that is not a guide destination has no guide block', async ({ page }) => {
