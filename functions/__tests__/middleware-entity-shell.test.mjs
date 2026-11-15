@@ -444,5 +444,46 @@ console.log('\nno start time published when the source gave none (WEB-SEO-072)')
   ck('a stated time keeps its instant', en?.startDate === '2026-10-10T01:00:00Z', en?.startDate);
 }
 
+// WEB-SEO-073. Helmet removes only the tags it wrote, so a crawler that runs
+// JavaScript sees the shell's node AND the React page's. The shell used the bare
+// page URL as @id for every type: the React Event is `<url>#event`, so that
+// crawler read two Events, and the bare URL is the page's own WebPage @id, so
+// the shell's Event also merged into "a WebPage that is an Event".
+console.log('\nthe entity @id matches the React page (WEB-SEO-073)');
+{
+  const { buildEventJsonLd } = await import('../../src/lib/eventSchema.ts');
+  const { buildArticleJsonLd } = await import('../../src/lib/articleSchema.ts');
+  const { entityNodeId } = await import('../../src/lib/schemaNodeIds.ts');
+
+  // Full row: the React builder and the shell, one row, one id rule.
+  const evPage = 'https://desmoinesinsider.com/events/red-leather-2026-10-09';
+  ck('full-row shell Event is <url>#event', en?.['@id'] === `${evPage}#event`, en?.['@id']);
+  const reactEvent = buildEventJsonLd({ ...eventRow, slug: 'red-leather-2026-10-09' });
+  ck(
+    'and the React Event uses the same rule',
+    reactEvent['@id'] === `${reactEvent.url}#event` && reactEvent['@id'] === entityNodeId('event', reactEvent.url),
+    reactEvent['@id'],
+  );
+  ck('the shell Event @id is not the bare page URL', en?.['@id'] !== evPage);
+
+  const reactArticle = buildArticleJsonLd({ slug: 'fall-guide', title: 'Fall guide', published_at: '2026-10-01T00:00:00Z' });
+  ck(
+    'the React Article has <url>#article, apart from its WebPage',
+    reactArticle['@id'] === `${reactArticle.url}#article` && reactArticle.mainEntityOfPage['@id'] === reactArticle.url,
+    reactArticle['@id'],
+  );
+
+  // Minimal path, every type: the fragment the React page uses.
+  const want = { event: '#event', attraction: '#place', playground: '#place', hotel: '#hotel', article: '#article', restaurant: '' };
+  for (const [type, frag] of Object.entries(want)) {
+    const page = `https://desmoinesinsider.com/${type}s/x-1`;
+    const node = injectedNode(await rewrite(SHELL, { pageUrl: page, sbBase: SB, type, entity: { id: 'x1', title: 'X' } }));
+    ck(`minimal ${type} node @id is <url>${frag}`, node?.['@id'] === `${page}${frag}`, node?.['@id']);
+    ck(`minimal ${type} node url stays the page`, node?.url === page, node?.url);
+  }
+  const other = injectedNode(await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'somethingelse', entity: { id: 'x', title: 'X' } }));
+  ck('an unmapped type keeps the bare URL', other?.['@id'] === PAGE, other?.['@id']);
+}
+
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);

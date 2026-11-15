@@ -25,6 +25,7 @@ import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
 import { brandedTitle, staticPageMeta, type StaticPageMeta } from "../src/lib/staticPageMeta";
 import { hasSpecificTime } from "../src/lib/timezone";
 import { eventCentralDate, eventCentralEndDate } from "../src/lib/eventTime";
+import { entityNodeId, isEntityNodeKind } from "../src/lib/schemaNodeIds";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -745,7 +746,8 @@ export function eventShellNode(row: Record<string, any>, pageUrl: string): Recor
   return {
     "@context": "https://schema.org",
     "@type": "Event",
-    "@id": pageUrl,
+    // The React page's id (WEB-SEO-073). The bare URL is its WebPage's @id.
+    "@id": entityNodeId("event", pageUrl),
     url: pageUrl,
     name: row.title,
     ...(row.seo_description || row.geo_summary ? { description: truncate(row.seo_description || row.geo_summary) } : {}),
@@ -884,7 +886,9 @@ export function entityShellRewrites(opts: {
   let node: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": SCHEMA_TYPE[type] || "Thing",
-    "@id": pageUrl,
+    // The same @id the React page gives its entity (WEB-SEO-073): a crawler
+    // that runs JavaScript sees both blocks, since Helmet leaves this one.
+    "@id": isEntityNodeKind(type) ? entityNodeId(type, pageUrl) : pageUrl,
     name: entity.title,
     url: pageUrl,
   };

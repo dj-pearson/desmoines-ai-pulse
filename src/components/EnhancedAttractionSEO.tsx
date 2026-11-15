@@ -3,6 +3,7 @@ import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
 import { attractionOpeningHoursSpec } from "@/lib/attractionHours";
 import { attractionPageTitle } from "@/lib/attractionMeta";
+import { entityNodeId } from "@/lib/schemaNodeIds";
 
 interface AttractionData {
   id?: string | null;
@@ -96,7 +97,7 @@ export default function EnhancedAttractionSEO({
     // "#place", not the bare URL: the WebPage node below has the bare URL as
     // its @id, and two nodes with one @id merge into a single entity in a
     // parser's graph (explore pass 2 WP3 item 4).
-    "@id": `${attractionUrl}#place`,
+    "@id": entityNodeId("attraction", attractionUrl),
     name: attraction.name,
     description: getGEODescription(),
     ...(attraction.image_url && { image: [attraction.image_url] }),

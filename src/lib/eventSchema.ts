@@ -48,6 +48,7 @@ import { markdownToPlainText } from '@/lib/aiText';
 import { isHttpUrl } from '@/lib/dashboardItems';
 import { buildEventOffers, isEventAccessibleForFree, parseEventPrice } from '@/lib/eventOffers';
 import { DEFAULT_EVENT_HOURS } from '@/lib/eventTiming';
+import { entityNodeId } from '@/lib/schemaNodeIds';
 
 /**
  * Affiliate redirect hosts that carry the real destination in their `u` query
@@ -312,7 +313,7 @@ export function buildEventJsonLd(
     // @id is the URL (the Speakable node, and this node's own
     // mainEntityOfPage), and a graph parser merges nodes that share an @id -
     // so the Event and its page were read as one thing that was both.
-    '@id': `${url}#event`,
+    '@id': entityNodeId('event', url),
     name: event.title,
     // The detail page keeps the full text; lists pass descriptionMax.
     description: opts.descriptionMax
