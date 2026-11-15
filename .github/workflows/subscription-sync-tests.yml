@@ -615,6 +615,9 @@ jobs:
       # visibility switches the four suites below share (WEB-FEAT-091).
       # --allow-read is for the guard that reads those four callers.
       - run: deno test --allow-read supabase/functions/_shared/eventWindow.test.ts
+      # The social posters' event pick: visible and upcoming-or-running, and a
+      # running event's prompt date names its end day (WEB-FEAT-096).
+      - run: deno test --allow-read supabase/functions/_shared/socialEventPick.test.ts
       - run: deno test supabase/functions/nlp-search/dateWindow.test.ts
       - run: deno test --allow-read supabase/functions/nlp-search/search.test.ts
       - run: deno test supabase/functions/nlp-search/handler.test.ts

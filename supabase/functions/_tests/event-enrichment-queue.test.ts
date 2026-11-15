@@ -72,24 +72,39 @@ function op(col: string, operator: string, value: string): Pred {
   }
 }
 
-/** "a.is.null,b.lt.\"x\"" - flat lists only, which is all the code uses. */
-function parseOr(expr: string): Pred {
+/** Split on top-level commas: not inside quotes or parentheses. */
+function splitTop(expr: string): string[] {
   const parts: string[] = [];
   let cur = '';
   let quoted = false;
+  let depth = 0;
   for (const ch of expr) {
     if (ch === '"') quoted = !quoted;
-    if (ch === ',' && !quoted) {
+    if (!quoted && ch === '(') depth++;
+    if (!quoted && ch === ')') depth--;
+    if (ch === ',' && !quoted && depth === 0) {
       parts.push(cur);
       cur = '';
     } else cur += ch;
   }
   parts.push(cur);
-  const preds = parts.map((p) => {
-    const [col, operator, ...rest] = p.split('.');
-    return op(col, operator, unquote(rest.join('.')));
-  });
-  return (r) => preds.some((pr) => pr(r));
+  return parts;
+}
+
+/** One term: `col.op.value`, or a nested `and(...)` / `or(...)` group. */
+function parseTerm(term: string): Pred {
+  const group = /^(and|or)\((.*)\)$/.exec(term);
+  if (group) {
+    const preds = splitTop(group[2]).map(parseTerm);
+    return group[1] === 'and' ? (r) => preds.every((p) => p(r)) : (r) => preds.some((p) => p(r));
+  }
+  const [col, operator, ...rest] = term.split('.');
+  return op(col, operator, unquote(rest.join('.')));
+}
+
+/** The value of an or= parameter: "a.is.null,and(or(b.eq.x,c.gte.y),...)". */
+function parseOr(expr: string): Pred {
+  return parseTerm(`or(${expr})`);
 }
 
 class Query {
@@ -116,6 +131,11 @@ class Query {
   }
   gte(col: string, v: string) {
     this.preds.push(op(col, 'gte', v));
+    return this;
+  }
+  neq(col: string, v: boolean) {
+    // PostgREST neq is SQL <>: a NULL flag matches neither true nor not-true.
+    this.preds.push((r) => r[col] !== null && r[col] !== undefined && r[col] !== v);
     return this;
   }
   lt(col: string, v: string) {
@@ -188,7 +208,19 @@ const hours = (h: number) => new Date(NOW.getTime() + h * 3_600_000).toISOString
 const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
 
 function event(id: string, p: Partial<Row> = {}): Row {
-  return { id, title: `Event ${id}`, date: hours(48), ai_writeup: null, seo_title: null, seo_locked_at: null, ...p };
+  return {
+    id,
+    title: `Event ${id}`,
+    date: hours(48),
+    end_date: null,
+    ai_writeup: null,
+    seo_title: null,
+    seo_locked_at: null,
+    is_merged: false,
+    is_hidden: false,
+    archived_at: null,
+    ...p,
+  };
 }
 
 // ---- writeup step ---------------------------------------------------------
@@ -382,6 +414,46 @@ Deno.test('neither step writes to a past event', async () => {
   assert.equal(past.ai_writeup, null);
   assert.equal(past.seo_locked_at, null);
   assert.equal(pastWithWriteup.seo_locked_at, null);
+});
+
+// ---- running events and visibility (WEB-FEAT-096) --------------------------
+// Both queues read `date >= now` alone, so a festival that opened before the
+// queue reached it was never written up or given SEO, on any of its days.
+
+function fairAndFriends(): Row[] {
+  return [
+    // Opened two days ago, runs four more: still on.
+    event('fair', { date: hours(-48), end_date: hours(96) }),
+    // Opened and closed already.
+    event('closed-run', { date: hours(-72), end_date: hours(-1) }),
+    // A one-night show that started an hour ago, no end_date.
+    event('started', { date: hours(-1) }),
+    event('hidden', { date: hours(4), is_hidden: true }),
+    event('merged', { date: hours(4), is_merged: true }),
+    event('archived', { date: hours(4), archived_at: hours(-200) }),
+    event('upcoming', { date: hours(6) }),
+  ];
+}
+
+Deno.test('writeups: a running festival is written up; past, hidden, merged and archived are not', async () => {
+  const picked = await selectEventsNeedingWriteup(fakeDb({ events: fairAndFriends() }), 10, NOW);
+  assert.deepEqual(picked.map((e) => e.id), ['fair', 'upcoming']);
+});
+
+Deno.test('seo: a running festival with a writeup is selected first; past and unpublished rows are not', async () => {
+  const rows = fairAndFriends().map((r) => ({ ...r, ai_writeup: 'w' }));
+  const picked = await selectSeoCandidates(fakeDb({ events: rows }), 'event', 10, NOW);
+  assert.deepEqual(picked.map((e) => e.id), ['fair', 'upcoming']);
+});
+
+Deno.test('seo: a running festival without a writeup counts as imminent', async () => {
+  const picked = await selectSeoCandidates(fakeDb({ events: fairAndFriends() }), 'event', 10, NOW);
+  assert.deepEqual(picked.map((e) => e.id), ['fair', 'upcoming']);
+});
+
+Deno.test('seo: a running festival that already has SEO is not selected again', async () => {
+  const db = fakeDb({ events: [event('fair', { date: hours(-48), end_date: hours(96), ai_writeup: 'w', seo_title: 'Done' })] });
+  assert.deepEqual(await selectSeoCandidates(db, 'event', 10, NOW), []);
 });
 
 // ---- the schedule ---------------------------------------------------------
