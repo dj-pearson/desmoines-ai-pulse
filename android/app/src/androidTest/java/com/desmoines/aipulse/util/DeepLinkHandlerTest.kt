@@ -82,7 +82,15 @@ class DeepLinkHandlerTest {
         assertEquals(Destination.KidsEvents, parse("https://desmoinesinsider.com/events/kids"))
         assertEquals(Destination.Search("events in ankeny"), parse("https://desmoinesinsider.com/events/ankeny"))
         assertEquals(Destination.Tab(TabDestination.MAP), parse("https://desmoinesinsider.com/events/near-me"))
-        assertEquals(Destination.Tab(TabDestination.HOME), parse("https://desmoinesinsider.com/events/may-2026"))
+        // AND-AUDIT-045: month archives and date night open the web page, not Home.
+        assertEquals(
+            Destination.Web("https://desmoinesinsider.com/events/may-2026"),
+            parse("https://desmoinesinsider.com/events/may-2026"),
+        )
+        assertEquals(
+            Destination.Web("https://desmoinesinsider.com/events/date-night"),
+            parse("https://desmoinesinsider.com/events/date-night"),
+        )
     }
 
     @Test

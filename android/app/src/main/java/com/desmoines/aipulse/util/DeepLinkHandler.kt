@@ -18,6 +18,8 @@ import javax.inject.Singleton
  *   the other web landing pages (src/App.tsx) -> the matching tab or list
  * - `/events/series/:slug` -> the native series screen for a slug the app
  *   knows, else the WebView
+ * - `/events/date-night`, `/events/<month>-<year>` -> the WebView, which has
+ *   the date-night rule and the past months native lists cannot show
  * - `/restaurants/:slug-or-id` -> Restaurant detail; `/restaurants/open-now`
  *   -> Dining tab with Open now on; `/new`, `/dietary` -> Dining tab
  * - `/attractions/:slug-or-id` -> Attraction detail
@@ -415,11 +417,22 @@ class DeepLinkHandler @Inject constructor() {
                 // Bare /events/series; /events/series/:slug goes through
                 // seriesDestination before this is reached.
                 "series" -> return Destination.Web(url)
+                // The web page is DATE_NIGHT_FILTER over a 14-day Central
+                // window, evening starts unless ?time=all. Android has none of
+                // that natively, and Home dropped the link's content
+                // (AND-AUDIT-045), so the page opens as the web has it.
+                "date-night" -> return Destination.Web(url)
             }
             if (segment in EVENT_SUBURB_SEGMENTS) {
                 return Destination.Search("events in " + segment.replace('-', ' '))
             }
-            if (segment in EVENT_LANDING_SEGMENTS || isMonthPage(segment)) {
+            // /events/<month>-<year> is an archive: june-2026 lists June's
+            // events after June is over. Every native events read floors at
+            // today in Central, so it could show at most the rest of the
+            // current month; the web page shows the whole one (AND-AUDIT-045).
+            if (isMonthPage(segment)) return Destination.Web(url)
+            // A landing not handled above is still never an Event detail.
+            if (segment in EVENT_LANDING_SEGMENTS) {
                 return Destination.Tab(TabDestination.HOME)
             }
             return webLinkId(segment, maxLength = 160)?.let { Destination.Event(it) }

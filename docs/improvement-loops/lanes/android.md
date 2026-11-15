@@ -169,6 +169,16 @@ confirm the banner shows and Add to Calendar is gone; then open a festival on it
 it still offers Add to Calendar. The trap: if a linked archived row opens as not-found instead, the by-id
 read is not returning archived rows (look at the events RLS policy), which this change does not touch.
 
+AND-AUDIT-045 (date-night and month links) is code-complete and JVM-tested. /events/date-night and
+/events/<month>-<year> now open the in-app web view of the same URL (query string kept, so ?time=all
+survives) instead of Home. Month pages go to the web on purpose: every native events read floors at
+today in Central, so june-2026 could never be shown natively. A native date-night Search (the web's
+DATE_NIGHT_FILTER over 14 Central days, evenings unless ?time=all, as iOS IOS-AUDIT-008 does) is a
+separate open story. One device check closes it: adb am start
+https://desmoinesinsider.com/events/june-2026 and /events/date-night and confirm each opens the web
+page in the app, not Home. The trap: if the web view hands off to the system browser instead, its
+initialHost check is comparing against a different host spelling (www vs bare).
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -199,3 +209,4 @@ read is not returning archived rows (look at the events RLS policy), which this 
 | 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3b (last): native series screen wired. /events/series/<slug> opens EventSeriesScreen for the 20 catalogued slugs (unknown or malformed stays in the web view); EventSeriesViewModel reads fetchSeriesRows through EventsRepository and builds the schedule; current/unannounced, past years, linked vs plain rows, Try again on error, share. 4 new EventSeriesScheduleTest and 2 new DeepLinkWebDestinationTest JVM tests (1 rewritten) pass, 114/114 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); mutations (series link back to web, time on untimed rows) fail exactly 3. Route registration checked by the RouteRegistrationTest regexes in node (0 missing). Parity vitest 5/5. ViewModel, screen, nav and app module not compiled (no Android SDK); no device check |
 | 2026-11-15 | AND-AUDIT-043 | this commit | Event detail links an annual edition to its native series screen ("<name> happens every year." + "Every year's dates for <name>"), matching the web event page; neither mobile app linked detail to the series. 1 new EventSeriesTest JVM test passes, 9/9 in the suite on a stub harness (kotlinc 2.2.10, JUnit 5.10); parity vitest 6/6 (1 new, pins both strings to src/pages/EventDetails.tsx); changing the link label fails 1 JVM and 1 vitest. Compose screen, nav and app module not compiled (no Android SDK); no device check |
 | 2026-11-15 | AND-AUDIT-044 | this commit | Event detail treats an ended or archived row as past, as the web event page does (!isOver && !archived): "This event has already happened" banner (iOS wording), no urgency chip, no Add to Calendar; Event decodes archived_at. 7 new EventPastStateTest JVM tests pass, 122/122 with the series, calendar, day and DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); ignoring archived_at fails 2, a start-based rule fails 3. check-mobile-schema OK. Compose screen and app module not compiled (no Android SDK); no device check |
+| 2026-11-15 | AND-AUDIT-045 | this commit | /events/date-night and /events/<month>-<year> open the in-app web view of the same URL (was Home, which dropped the link); month archives go to the web because native reads floor at today. 3 new DeepLinkWebDestinationTest tests (10 runs) pass, 125/125 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); restoring Home fails exactly 5. Instrumented DeepLinkHandlerTest updated, not run. App module not compiled (no Android SDK); no device check |

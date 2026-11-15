@@ -77,8 +77,31 @@ class DeepLinkWebDestinationTest {
         assertEquals(Destination.Search("events in west des moines"), web("/events/west-des-moines"))
         assertEquals(Destination.Search("events in ankeny"), web("/events/ankeny"))
         assertEquals(Destination.Tab(TabDestination.MAP), web("/events/near-me"))
-        assertEquals(Destination.Tab(TabDestination.HOME), web("/events/date-night"))
-        assertEquals(Destination.Tab(TabDestination.HOME), web("/events/may-2026"))
+    }
+
+    @Test
+    fun `date night opens the web page, never Home`() {
+        // AND-AUDIT-045: it landed on Home, which has nothing of the link.
+        assertEquals(
+            Destination.Web("https://desmoinesinsider.com/events/date-night"),
+            web("/events/date-night"),
+        )
+        // The ?time=all toggle survives, since the whole URL is opened.
+        val withQuery = "https://desmoinesinsider.com/events/date-night?time=all"
+        assertEquals(Destination.Web(withQuery), webDestination(listOf("events", "date-night"), null, withQuery))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["may-2026", "june-2026", "december-2025", "january-2027"])
+    fun `a month archive opens the web page, never Home`(segment: String) {
+        // AND-AUDIT-045: past months included, which no native list can show.
+        assertEquals(Destination.Web("https://desmoinesinsider.com/events/$segment"), web("/events/$segment"))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["june-26", "jun-2026", "June-2026", "june-2026-extra", "smarch-2026"])
+    fun `a month-like event slug is not a month archive`(segment: String) {
+        assertFalse(web("/events/$segment") is Destination.Web, segment)
     }
 
     @ParameterizedTest
