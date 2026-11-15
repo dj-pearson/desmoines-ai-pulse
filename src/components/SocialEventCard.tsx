@@ -338,14 +338,19 @@ function SocialEventCardComponent({
             {venueName && (
               <>
                 <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
-                <span className="truncate">{venueName}</span>
+                <span className="min-w-0 truncate">{venueName}</span>
               </>
             )}
+            {/* The venue is the half a reader acts on, so the district gives
+                way first: it shrinks three times as fast and may clip to
+                nothing, and its dot sits inside it so none is left dangling.
+                It used to be flex-shrink-0, which cut a long venue to "Fi..."
+                at 375px and to zero width at 320px (WEB-UX-079). */}
             {place && (
-              <>
-                <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
-                <span className="flex-shrink-0">{place}</span>
-              </>
+              <span className="min-w-0 shrink-[3] truncate">
+                <span aria-hidden="true" className="mx-1.5">&middot;</span>
+                {place}
+              </span>
             )}
           </p>
 

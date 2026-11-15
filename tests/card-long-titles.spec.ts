@@ -95,3 +95,39 @@ test.describe('a card title with one long word wraps instead of being clipped', 
     });
   }
 });
+
+/**
+ * WEB-UX-079. The event card's meta line is time, venue, then district. The
+ * district span was flex-shrink-0, so a typical label ("Downtown / Court Ave",
+ * which every fixture row falls in) kept its full width and squeezed the venue
+ * to "Fi..." at 375px and to zero width at 320px. The venue is the half a
+ * reader acts on, so it keeps its width and the district gives way first.
+ */
+const LONG_VENUE = 'Fierce Mountain Brewing Taproom';
+
+test('/events card keeps the venue readable before the district', async ({ page }) => {
+  await installFixtureBackend(page);
+  const rows = fixtureEvents().map((r, i) => (i === 1 ? { ...r, venue: LONG_VENUE } : r));
+  await page.route('**/rest/v1/events?**', (route) => reply(route, rows));
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/events');
+    const venue = page.getByText(LONG_VENUE, { exact: true });
+    await expect(venue).toHaveCount(1, { timeout: 30_000 });
+    const widths = await venue.evaluate((el) => {
+      // The district is the last item on the meta line.
+      const last = el.parentElement?.lastElementChild as HTMLElement | null;
+      const place = last && last !== el ? last : null;
+      return {
+        venue: el.getBoundingClientRect().width,
+        venueText: (el as HTMLElement).scrollWidth,
+        place: place ? place.getBoundingClientRect().width : 0,
+        placeText: (place?.textContent ?? '').trim(),
+      };
+    });
+    expect(widths.placeText, 'the fixture row sits in a named district').toMatch(/Downtown \/ Court Ave$/);
+    // "Fierce Mountain" is about 105px at text-sm; less reads as a fragment.
+    expect(widths.venue, `venue width at ${width}px`).toBeGreaterThanOrEqual(Math.min(100, widths.venueText));
+    expect(widths.venue, `venue gets more room than the district at ${width}px`).toBeGreaterThan(widths.place);
+  }
+});
