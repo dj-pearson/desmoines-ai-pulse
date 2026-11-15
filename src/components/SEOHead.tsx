@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
 import { toOgType } from "@/lib/ogType";
+import { brandedTitle } from "@/lib/staticPageMeta";
 
 interface SEOHeadProps {
   title: string;
@@ -84,9 +85,8 @@ export default function SEOHead({
   const image = imageUrl || defaultImage;
 
   // Enhanced title with branding
-  const enhancedTitle = title.includes(BRAND.name)
-    ? title
-    : `${title} | ${BRAND.name}`;
+  // Shared with the middleware's static-page shell (staticPageMeta.ts).
+  const enhancedTitle = brandedTitle(title);
 
   // Generate comprehensive keywords
   const defaultKeywords = [

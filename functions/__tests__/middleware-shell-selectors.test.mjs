@@ -32,7 +32,7 @@ const MIDDLEWARE = readFileSync(join(HERE, '../_middleware.ts'), 'utf8');
 // read App.tsx after the move and failed on code that was still correct.
 const SITE_LAYOUT = readFileSync(join(HERE, '../../src/components/layout/SiteLayout.tsx'), 'utf8');
 
-const { selfCanonicalRewrites, entityShellRewrites } = await import('../_middleware.ts');
+const { selfCanonicalRewrites, entityShellRewrites, staticPageShellRewrites } = await import('../_middleware.ts');
 
 let bad = 0;
 const ck = (name, cond, detail = '') => {
@@ -61,6 +61,11 @@ const RULE_SETS = {
     sbBase: 'https://proj.supabase.co',
     type: 'event',
     entity: { id: '1', title: 'T', description: 'D', startDate: '2026-01-01' },
+  }),
+  staticPageShellRewrites: staticPageShellRewrites('https://desmoinesinsider.com/terms', {
+    title: 'Terms of Service',
+    description: 'D',
+    heading: 'Terms of Service',
   }),
 };
 

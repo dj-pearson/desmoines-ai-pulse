@@ -22,6 +22,7 @@ import { safeHttpUrl } from "../src/lib/safeUrl";
 import { isRestaurantPseoSlug } from "../src/pseo/restaurantAreaSlugs";
 import { markdownToPlainText } from "../src/lib/aiText";
 import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
+import { brandedTitle, staticPageMeta, type StaticPageMeta } from "../src/lib/staticPageMeta";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -1050,6 +1051,41 @@ export function restaurantAreaShellRewrites(pageUrl: string, seo: RestaurantArea
 }
 
 /**
+ * WEB-SEO-069: the shell for a sitemapped route that skips the
+ * prerender (SITEMAP_ONLY_ROUTES: /privacy-policy, /terms, /advertise ...).
+ *
+ * withSelfCanonical fixed the canonical and dropped the homepage's JSON-LD, but
+ * left the homepage's title, description, og:title and H1, so a crawler that
+ * does not run JavaScript read six submitted URLs as six copies of the
+ * homepage. These rules write the page's own words, from the same
+ * STATIC_PAGE_META entry the page hands SEOHead. No JSON-LD is put back: the
+ * client renders SEOHead's own, and an invented node here would be a claim only
+ * the shell makes.
+ */
+export function staticPageShellRewrites(pageUrl: string, page: StaticPageMeta): EntityShellRewrite[] {
+  const title = brandedTitle(page.title);
+  const desc = escapeHtml(page.description);
+  return [
+    { selector: 'script[type="application/ld+json"]', remove: true },
+    { selector: 'link[rel="canonical"]', setAttribute: "href", to: pageUrl },
+    { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
+    { selector: 'meta[property="og:type"]', setAttribute: "content", to: "website" },
+    // RAW for the text sink, escaped for the attribute sinks (see EntityShellRewrite).
+    { selector: "title", setText: title },
+    { selector: 'meta[property="og:title"]', setAttribute: "content", to: escapeHtml(title) },
+    { selector: 'meta[name="twitter:title"]', setAttribute: "content", to: escapeHtml(title) },
+    { selector: 'meta[name="description"]', setAttribute: "content", to: desc },
+    { selector: 'meta[property="og:description"]', setAttribute: "content", to: desc },
+    { selector: 'meta[name="twitter:description"]', setAttribute: "content", to: desc },
+    {
+      selector: "main#main-content",
+      setInnerHtml:
+        `<h1>${escapeHtml(page.heading)}</h1><p>${desc}</p>` + linkList([["/", "Des Moines Insider home"]]),
+    },
+  ];
+}
+
+/**
  * The JSON-LD block, with `<` escaped so a title containing `</script>` cannot
  * end the block early and inject markup.
  */
@@ -1352,6 +1388,14 @@ export async function onRequest(context: EventContext) {
           // it its own identity instead of the homepage's (WEB-SEO-030 AC3).
           return entityShell(passthrough(), { pageUrl, sbBase, type: type!, entity: plan.entity });
         }
+      }
+
+      // A sitemapped route that skips the prerender: its own title and
+      // description rather than the homepage's (WEB-SEO-069).
+      const staticPage = staticPageMeta(pathname);
+      if (staticPage) {
+        const rewritten = rewriterFor(staticPageShellRewrites(pageUrl, staticPage)).transform(passthrough());
+        return new Response(rewritten.body, { status: response.status, headers: response.headers });
       }
 
       // Any other shell-at-a-non-root-path: unchanged behaviour.

@@ -42,6 +42,7 @@ import {
   saveAdvertiseDraft,
 } from "@/lib/advertiseDraft";
 import type { AdvertiseDraftListing } from "@/lib/advertiseDraft";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 const PLACEMENTS = Object.values(PLACEMENT_SPECS);
 
@@ -436,8 +437,8 @@ export default function Advertise() {
   return (
     <BusinessLayout footerClearanceClassName="h-40 lg:hidden">
       <SEOHead
-        title="Advertise on Des Moines Insider"
-        description="Buy a banner or a sponsored listing on Des Moines Insider's event, restaurant and attraction pages. Pick your dates, see the exact total, pay by card."
+        title={STATIC_PAGE_META["/advertise"].title}
+        description={STATIC_PAGE_META["/advertise"].description}
         canonicalUrl={getCanonicalUrl("/advertise")}
         url={getCanonicalUrl("/advertise")}
         imageUrl={getCanonicalUrl(BRAND.ogImage)}

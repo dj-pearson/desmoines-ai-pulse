@@ -15,6 +15,7 @@ import {
   type SceneUpdateType,
 } from '@/hooks/useSceneUpdates';
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 const PAGE_PATH = '/whats-new';
 
@@ -83,8 +84,8 @@ export default function WhatsNew() {
   return (
     <>
       <SEOHead
-        title="What's New in Des Moines"
-        description="Restaurant openings, closings and other changes on the Des Moines scene, newest first, with the date each was posted in Central time."
+        title={STATIC_PAGE_META["/whats-new"].title}
+        description={STATIC_PAGE_META["/whats-new"].description}
         url={PAGE_PATH}
         canonicalUrl={canonicalUrl}
         breadcrumbs={[
