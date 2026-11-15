@@ -136,6 +136,8 @@ struct MainTabView: View {
         /// One annual event series (IOS-AUDIT-FEAT-046). Static definition;
         /// EventSeriesView reads its rows.
         case eventSeries(EventSeriesDef)
+        /// The plans screen for a web billing link (IOS-AUDIT-010).
+        case plans
         /// A first-party page with no native screen, in SafariView
         /// (IOS-DD-PLATFORM-02).
         case web(URL)
@@ -151,6 +153,7 @@ struct MainTabView: View {
             case .neighborhood(let n): return "neighborhood-\(n.slug)"
             case .bestOfCategory(let slug): return "best-of-\(slug)"
             case .eventSeries(let def): return "event-series-\(def.slug)"
+            case .plans: return "plans"
             case .web(let url): return "web-\(url.absoluteString)"
             }
         }
@@ -319,6 +322,7 @@ struct MainTabView: View {
             } else if let url = URL(string: EventSeries.pathPrefix + slug, relativeTo: Config.siteURL)?.absoluteURL {
                 present(.web(url))
             }
+        case .plans: present(.plans)
         case .web(let url): present(.web(url))
         case .search(let query):
             // Through the intent path, so Search applies it the way it
@@ -638,6 +642,16 @@ struct DeepLinkResolverView: View {
     static let maxMergeHops = 3
 
     var body: some View {
+        if case .plans = presentation {
+            // SubscriptionView and the plan sheet bring their own
+            // NavigationStack and Done button (IOS-AUDIT-010).
+            PlansLinkView()
+        } else {
+            resolvedBody
+        }
+    }
+
+    private var resolvedBody: some View {
         NavigationStack {
             content
                 // Discover surfaces render with ownsNavigationStack:false and
@@ -668,6 +682,8 @@ struct DeepLinkResolverView: View {
             BestOfCategoryLinkView(slug: slug)
         case .eventSeries(let def):
             EventSeriesView(def: def)
+        case .plans:
+            PlansLinkView()
         case .web(let url):
             SafariView(url: url).ignoresSafeArea()
         case .event, .restaurant, .attraction, .hotel, .article:
@@ -740,7 +756,7 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): path = "attractions/\(id)"
         case .hotel(let id): path = "stay/\(id)"
         case .article(let id): path = "articles/\(id)"
-        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web: return nil
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .plans, .web: return nil
         }
         return URL(string: path, relativeTo: Config.siteURL)?.absoluteURL
     }
@@ -753,13 +769,13 @@ struct DeepLinkResolverView: View {
         case .attraction(let id): return "attraction-\(id)"
         case .hotel(let id): return "hotel-\(id)"
         case .article(let id): return "article-\(id)"
-        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web: return nil
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .plans, .web: return nil
         }
     }
 
     private func resolve() async {
         switch presentation {
-        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web:
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .plans, .web:
             return // rendered directly
         case .event, .restaurant, .attraction, .hotel, .article:
             break
@@ -800,7 +816,7 @@ struct DeepLinkResolverView: View {
                 return .article(try await ArticlesService.shared.fetchArticle(id: id))
             }
             return .article(try await ArticlesService.shared.fetchArticle(slug: id))
-        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .web:
+        case .discover, .neighborhood, .bestOfCategory, .eventSeries, .plans, .web:
             return .loading
         }
     }

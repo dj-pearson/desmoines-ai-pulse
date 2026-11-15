@@ -723,6 +723,50 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.destination(for: bare), .web(bare))
     }
 
+    // MARK: - Stripe billing pages (IOS-AUDIT-010)
+
+    func testPricingLinkOpensTheNativePlansScreen() {
+        // A push url or article link to /pricing opened Stripe Checkout in
+        // SafariView inside the app (Guideline 3.1.1).
+        XCTAssertEqual(dest("/pricing"), .plans)
+        XCTAssertEqual(dest("/pricing?canceled=true"), .plans)
+        XCTAssertEqual(dest("/pricing/"), .plans)
+    }
+
+    func testSubscriptionPortalLinksOpenTheNativePlansScreen() {
+        XCTAssertEqual(dest("/subscription"), .plans)
+        XCTAssertEqual(dest("/subscription?plan_change=scheduled"), .plans)
+        XCTAssertEqual(dest("/subscription/success?session_id=cs_test_1"), .plans)
+    }
+
+    func testBillingLinkFromANotificationIsRouted() {
+        XCTAssertTrue(handler.handleNotification(userInfo: ["url": "https://www.desmoinesinsider.com/pricing"]))
+        XCTAssertEqual(handler.consumeDestination(), .plans)
+    }
+
+    func testOnlyTheExactBillingPathsAreBillingLinks() {
+        // An article about pricing is an article, and an unrelated page that
+        // starts with the word is not a billing page.
+        XCTAssertEqual(dest("/articles/pricing"), .article(id: "pricing"))
+        let other = URL(string: "https://desmoinesinsider.com/subscription/other")!
+        XCTAssertEqual(handler.destination(for: other), .web(other))
+        let lookalike = URL(string: "https://desmoinesinsider.com/pricing-guide")!
+        XCTAssertEqual(handler.destination(for: lookalike), .web(lookalike))
+    }
+
+    func testBillingLinkOnAnotherHostIsNotRouted() {
+        XCTAssertNil(handler.destination(for: URL(string: "http://desmoinesinsider.com/pricing")!))
+        XCTAssertNil(handler.destination(for: URL(string: "https://desmoinesinsider.com.attacker.net/pricing")!))
+    }
+
+    func testPlansScreenMatchesThePlanCard() {
+        XCTAssertEqual(PlansLinkScreen.screen(tier: .free, hasAppStoreSubscription: false), .store)
+        XCTAssertEqual(PlansLinkScreen.screen(tier: .vip, hasAppStoreSubscription: true), .store)
+        // A web or Google Play subscriber is told where the plan is billed,
+        // never shown a store to buy a second plan in.
+        XCTAssertEqual(PlansLinkScreen.screen(tier: .insider, hasAppStoreSubscription: false), .planInfo)
+    }
+
     // MARK: - Exact host (IOS-DD-PLATFORM-10)
 
     func testLookAlikeHostsAndHttpAreRejected() {

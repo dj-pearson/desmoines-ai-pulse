@@ -27,6 +27,8 @@ import os
 ///   Best Of hub for a malformed slug
 /// - `desmoinesinsider.com/map?layers=` → the Map tab showing the kinds the
 ///   link names, or the web map when it names playgrounds or trails
+/// - `desmoinesinsider.com/pricing`, `/subscription`, `/subscription/success`
+///   → the native plans screen, never the web's Stripe checkout
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
 /// - `com.desmoines.aipulse://auth-callback` → Auth callback (handled by Supabase)
@@ -70,6 +72,11 @@ final class DeepLinkHandler {
         /// or the web hub's /events?preset=this-weekend&price=free
         /// (IOS-AUDIT-FEAT-041). Never both empty.
         case eventSearch(query: String, filters: SearchFilters)
+        /// The web's Stripe subscription pages (`billingPaths`), shown as
+        /// the native plans screen (IOS-AUDIT-010). A push `url` or an
+        /// article link to /pricing used to open Stripe Checkout for Insider
+        /// and VIP in SafariView inside the app, which Guideline 3.1.1 rejects.
+        case plans
         /// A first-party page with no native screen, shown in SafariView so a
         /// claimed link never opens the app to nothing (IOS-DD-PLATFORM-02).
         /// Only ever a URL that passed isFirstPartyWebURL.
@@ -487,6 +494,18 @@ final class DeepLinkHandler {
     /// person sent tonight's map saw whatever chip they last used. An absent
     /// or unknown `when` leaves the chip alone. `sel` and `bbox` are still
     /// ignored.
+    /// Web pages that sell or manage a Stripe subscription, as their path
+    /// with no leading slash: /pricing calls create-subscription-checkout,
+    /// /subscription opens the Stripe billing portal, /subscription/success
+    /// is where Stripe Checkout returns (it says "Billed through Stripe").
+    /// None of them may open in the app's own browser, so they open the
+    /// native plans screen instead (IOS-AUDIT-010). The AASA does not
+    /// claim them: an iPhone owner with a web plan tapping "manage your
+    /// subscription" in an email still reaches the Stripe portal in Safari.
+    /// src/lib/__tests__/iosBillingLinkParity.test.ts fails when a web page
+    /// that starts a Stripe checkout or opens the portal is missing here.
+    static let billingPaths: Set<String> = ["pricing", "subscription", "subscription/success"]
+
     static func mapDestination(_ url: URL) -> Destination {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let value = items.first { $0.name == "layers" }?.value
@@ -499,6 +518,10 @@ final class DeepLinkHandler {
         guard Self.isFirstPartyWebURL(url) else { return nil }
 
         let path = url.pathComponents.filter { $0 != "/" }
+
+        // Stripe billing pages open the native plans screen, whatever their
+        // query (/pricing?canceled=true, /subscription?plan_change=scheduled).
+        if Self.billingPaths.contains(path.joined(separator: "/")) { return .plans }
 
         // /search, /search?q=, /search/advanced (IOS-DD-PLATFORM-02).
         if path.first == "search" {
