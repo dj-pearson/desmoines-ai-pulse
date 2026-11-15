@@ -136,3 +136,6 @@ scripts/.generated/
 
 # IndexNow sitemap snapshot written by scripts/indexnow-ping.ts --state (SEO-047)
 .indexnow/
+
+# Build sourcemaps moved out of dist/ by scripts/strip-sourcemaps.mjs (WEB-CI-039)
+.sourcemaps

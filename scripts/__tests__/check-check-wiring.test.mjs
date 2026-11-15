@@ -84,6 +84,8 @@ try {
   };
   strip('pr-checks.yml', 'run: npm run check-pseo-coverage');
   strip('e2e.yml', 'run: npm run check-dist-console');
+  // WEB-CI-039 added a second step for it, after pr-checks' npm run build.
+  strip('pr-checks.yml', 'run: npm run check-dist-console');
   const before = evaluate(tmp);
   const named = before.problems.map((p) => p.split(' ')[0]).sort().join();
   check(

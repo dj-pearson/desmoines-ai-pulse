@@ -20,8 +20,15 @@
  *     not ours to strip: esbuild's `drop` runs on our modules, not on
  *     pre-bundled dependencies.
  *
- * A chunk with no .map is checked by name instead: anything not named
- * vendor-* is treated as app code, so a missing map can't hide a hit.
+ * Where the map is: next to the chunk after a plain `vite build`, or under
+ * .sourcemaps/<same path> after `npm run build`, whose strip-sourcemaps step
+ * moves maps out of the publish directory (WEB-CI-039). A map whose `file`
+ * names a different chunk is not used.
+ *
+ * A chunk with no map in either place is checked by name instead: anything
+ * not named vendor-* is treated as app code, so a missing map can't hide a
+ * hit. Classifying more chunks as dependency-only by name is not safe:
+ * pdf-generator-*.js looks like one and carries src/lib/pdf-generator.ts.
  *
  * Usage: npm run build && node scripts/check-dist-console.mjs [outDir]
  */
@@ -30,6 +37,9 @@ import path from 'node:path';
 
 // Optional first argument: a build output directory other than dist/.
 const ASSETS = path.resolve(process.argv[2] ?? 'dist', 'assets');
+// Written by scripts/strip-sourcemaps.mjs; keep the two in step.
+const MOVED_ASSETS = path.resolve('.sourcemaps', path.relative(process.cwd(), ASSETS));
+const movedMapsUsable = !path.relative(process.cwd(), ASSETS).startsWith('..');
 const CALL = /\bconsole\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
 
 if (!existsSync(ASSETS)) {
@@ -107,6 +117,19 @@ function lineAndColumn(text, index) {
   return { line, column: index - last - 1 };
 }
 
+/** The chunk's sourcemap, beside it or moved out of dist, or null. */
+function loadMap(file) {
+  const candidates = [path.join(ASSETS, `${file}.map`)];
+  if (movedMapsUsable) candidates.push(path.join(MOVED_ASSETS, `${file}.map`));
+  for (const mapPath of candidates) {
+    if (!existsSync(mapPath)) continue;
+    const map = JSON.parse(readFileSync(mapPath, 'utf8'));
+    if (map.file && path.basename(map.file) !== file) continue;
+    return map;
+  }
+  return null;
+}
+
 const failures = [];
 let checked = 0;
 let vendorHits = 0;
@@ -117,8 +140,8 @@ for (const file of readdirSync(ASSETS).filter((f) => f.endsWith('.js')).sort()) 
   checked += 1;
   if (hits.length === 0) continue;
 
-  const mapPath = path.join(ASSETS, `${file}.map`);
-  if (!existsSync(mapPath)) {
+  const map = loadMap(file);
+  if (!map) {
     if (!file.startsWith('vendor-')) {
       failures.push({ file, source: '(no sourcemap)', call: hits[0][0] });
     } else {
@@ -127,7 +150,6 @@ for (const file of readdirSync(ASSETS).filter((f) => f.endsWith('.js')).sort()) 
     continue;
   }
 
-  const map = JSON.parse(readFileSync(mapPath, 'utf8'));
   const lines = parseMappings(map.mappings ?? '');
   for (const hit of hits) {
     const { line, column } = lineAndColumn(code, hit.index);
