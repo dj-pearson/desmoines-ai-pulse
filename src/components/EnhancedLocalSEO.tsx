@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
+import { toOgType } from "@/lib/ogType";
 
 interface BreadcrumbItem {
   name: string;
@@ -322,7 +323,7 @@ export default function EnhancedLocalSEO({
       <meta name="country-name" content="United States" />
 
       {/* Open Graph */}
-      <meta property="og:type" content={pageType} />
+      <meta property="og:type" content={toOgType(pageType)} />
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={pageDescription} />
       <meta property="og:url" content={canonicalUrl} />

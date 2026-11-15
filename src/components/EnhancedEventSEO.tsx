@@ -179,7 +179,8 @@ export default function EnhancedEventSEO({
       <meta name="bingbot" content={isStale ? "noindex, follow" : "index, follow"} />
 
       {/* Open Graph for Social + AI */}
-      <meta property="og:type" content="event" />
+      {/* "event" is not an Open Graph type (WEB-SEO-068); the Event JSON-LD node says what this is. */}
+      <meta property="og:type" content="website" />
       <meta property="og:title" content={getOptimizedTitle()} />
       <meta property="og:description" content={getGEODescription()} />
       {city && <meta property="og:locality" content={city} />}

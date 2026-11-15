@@ -185,7 +185,7 @@ export default function EnhancedPlaygroundSEO({
       <meta name="googlebot" content="index, follow" />
       <meta name="bingbot" content="index, follow" />
 
-      <meta property="og:type" content="place" />
+      <meta property="og:type" content="website" />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       {locality && <meta property="og:locality" content={locality} />}

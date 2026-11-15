@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
+import { toOgType } from "@/lib/ogType";
 
 interface SEOHeadProps {
   title: string;
@@ -158,7 +159,7 @@ export default function SEOHead({
       {/* Open Graph Tags */}
       <meta property="og:title" content={enhancedTitle} />
       <meta property="og:description" content={description} />
-      <meta property="og:type" content={type} />
+      <meta property="og:type" content={toOgType(type)} />
       <meta property="og:url" content={fullUrl} />
       <meta property="og:image" content={image} />
       <meta property="og:image:width" content="1200" />
