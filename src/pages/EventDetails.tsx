@@ -55,7 +55,7 @@ import { eventPriceLabel, isFreePrice } from "@/lib/eventPrice";
 import { findEventArea, isInBBox } from "@/lib/eventAreas";
 import { handleError } from "@/lib/errorHandler";
 import { markdownToPlainText } from "@/lib/aiText";
-import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
+import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightTime";
 import { EventProvenance } from "@/components/events/EventProvenance";
 import { EventAiAnswers } from "@/components/events/EventAiAnswers";
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";

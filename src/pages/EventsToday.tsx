@@ -28,7 +28,7 @@ import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
 import { EventLinkList, HubTopPicks } from "@/components/events/HubEventLinks";
 import { useLatestWeekendArticle } from "@/hooks/useLatestWeekendArticle";
 import { hubTopPicks, todayHeadline } from "@/lib/eventHubSummary";
-import { EVENING_START_HOUR } from "@/lib/tonightPairings";
+import { EVENING_START_HOUR } from "@/lib/tonightTime";
 import { WeatherNotice } from "@/components/WeatherNotice";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";

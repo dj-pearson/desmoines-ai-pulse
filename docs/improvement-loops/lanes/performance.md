@@ -8,8 +8,40 @@
 
 ## Handoff
 
-None. WEB-PERF-078 (RestaurantInlineFilters' Popover and Slider loaded on
-first pill click) closed in loop 25.
+None. WEB-PERF-079 (the Tonight clock split out of
+tonightPairings.ts) closed in loop 26.
+
+What loop 26 added:
+- tonightTime.ts holds the Tonight constants, TonightEvent and the window
+  types, centralDayWindow, tonightWindow, tonightQueryBounds,
+  eventStartInstant and the card formatters (formatMiles, formatCentralTime,
+  formatTonightDate, formatCentralShortDate, truncateName). It imports only
+  date-fns and date-fns-tz. tonightPairings.ts re-exports all of it, so old
+  imports still work. hubEventPartition, eventsHubQuery, useEventLanding,
+  tripShortlist and the cards that only format now import tonightTime, which
+  took restaurantHours.ts, the pairing code and useWeather off 15 routes
+  (event landings, music/sports/outdoors hubs, /stay, venue, playgrounds):
+  -5.6 to -6.5 KB gz each, and 12 more routes -1.9 to -2.6. Eight routes
+  that still need the pairing code (Index, EventDetails, EventsPage,
+  Restaurants, RestaurantDetails, AttractionDetails, SearchResults,
+  TripPlanner) gained 0.5 KB gz and two small files (tonightTime and a
+  useWeather chunk that no longer shares one with tonightPairings).
+  tonightTimeSplit.test.ts pins the 15 routes and the re-export identity.
+- Next candidate, now worth more: a restaurantStatus.ts split of
+  restaurantHours.ts (the status helpers, NOT_CLOSED_RESTAURANT_FILTER,
+  DES_MOINES_TIME_ZONE, formatOpenStatusLine and the result/stored types,
+  re-exported from restaurantHours). Tried first this loop, before the
+  tonight split: 7 routes -3.5 KB gz but 39 routes +1 file and +0.1-0.2 KB,
+  because most routes reached the parser through tonightPairings anyway.
+  After this loop, Articles, ArticleDetails, Deals, DiscoverMap and
+  PlaygroundDetails reach restaurantHours only through those light names
+  (useDeals, useNearbyListings, the page's DES_MOINES_TIME_ZONE import), so
+  re-measure before deciding. HotelDetails, Attractions, VisitorsGuide and
+  ThingsToDoHub need real parser calls (OpenStatusChip, attractionAtAGlance's
+  formatClockLabel/desMoinesNow, useOpenNowRestaurants).
+- Trap: `export { X } from "./m"` makes no local binding. When moving names
+  out of a module, every name its remaining code still uses needs a plain
+  import as well as the re-export (MAX_TONIGHT_CARDS bit here).
 
 What loop 25 added:
 - RestaurantInlineFilters draws four static PillButtons (forwardRef, same
@@ -174,3 +206,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-076 | this commit | AddToCalendarButton is a static trigger and loads AddToCalendarMenu (Radix DropdownMenu + export handlers) on first click/Enter/ArrowDown, opened with the first item focused on a keyboard open; seven event landings 118-124 -> 83-89 KB gz beyond the critical path (-35.3, 17 fewer files each), EventsPage 165.4 -> 142.7, EventsNearMe 116.5 -> 96.9, EventDetails 138.3 -> 120.3, none heavier by more than 0.1; summed 8,384.8 -> 8,080.7; critical path 175.2 unchanged; graph test with negative control (12 of 13 fail on the old button); 55 smoke tests on event pages plus 2 throwaway Chrome checks (chunk fetched only on use, keyboard focus, Escape returns focus, same size) pass |
 | 2026-11-15 | WEB-PERF-077 | this commit | AIDisclosureBadge renders the pill alone and loads AIDisclosureTooltip (Radix Tooltip) on the first mouse hover; EventDetails 120.3 -> 100.5, HotelDetails 88.5 -> 68.9, RestaurantDetails 119.8 -> 103.8, ArticleDetails 129.0 -> 113.2, TripPlanner 116.9 -> 114.0 KB gz beyond the critical path (6-10 fewer files), none heavier; summed 8,120.1 -> 8,042.0; critical path 175.2 unchanged; graph test with negative control (6 of 7 fail on the old badge); new smoke test in restaurant-detail.spec.ts (chunk only on hover, tooltip opens, same size) passes 3/3 repeats with 50 other detail-page smoke tests; vitest 3659/3659 |
 | 2026-11-15 | WEB-PERF-078 | this commit | RestaurantInlineFilters pills are static buttons and load RestaurantFilterPopover (Radix Popover, the four panels, the rating Slider) on first click/Enter; /restaurants 141.9 -> 108.5 KB gz beyond the critical path (18 fewer files); 17 other routes moved by 0.1 either way (chunk reshuffle), none more; summed 8,046.7 -> 8,012.8; critical path 175.2 unchanged; graph test with negative control (2 of 4 fail on a static ui/popover import); new smoke test (no chunk on load, click and Enter open, Escape returns focus, same size) 3/3 repeats plus 108 smoke tests on filter/restaurant pages; vitest 3692/3692 |
+| 2026-11-15 | WEB-PERF-079 | this commit | Tonight clock (constants, window, eventStartInstant, card formatters) moved from tonightPairings.ts to new tonightTime.ts and re-exported; 15 routes 5.6-6.5 KB gz lighter beyond the critical path (Hotels 68.8 -> 62.5, EventsNearMe 97.3 -> 90.8, MusicHub 51.4 -> 45.1, event landings ~-6.3) and 12 more 1.9-2.6 lighter; 8 pairing routes +0.5 and +2 files; summed 8,013.4 -> 7,900.9, files 6,773 -> 6,771; critical path 175.2 unchanged; graph test with negative control (12 of 18 fail on one reverted import); 128 + 75 smoke tests on the touched pages in Chrome; vitest 3731/3731 |

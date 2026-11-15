@@ -10,8 +10,8 @@ import {
   PAIR_MAX_MILES,
   formatCentralTime,
   formatMiles,
-  type TonightDinner,
-} from "@/lib/tonightPairings";
+} from "@/lib/tonightTime";
+import type { TonightDinner } from "@/lib/tonightPairings";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { runsUntilLabel, type TonightNearbyEvent } from "@/hooks/useTonightNearRestaurant";
 

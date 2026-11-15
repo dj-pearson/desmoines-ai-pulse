@@ -8,7 +8,7 @@ import { hotelRateLabel } from "@/lib/hotelBooking";
 import { markdownToPlainText } from "@/lib/aiText";
 import { searchResultHref, type SearchResultType } from "@/lib/searchResultHref";
 import { formatEventDateShort } from "@/lib/timezone";
-import { formatCentralTime, formatMiles } from "@/lib/tonightPairings";
+import { formatCentralTime, formatMiles } from "@/lib/tonightTime";
 
 interface SearchResultCardProps {
   item: SearchRow;

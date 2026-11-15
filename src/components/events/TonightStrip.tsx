@@ -8,7 +8,7 @@ import { useStripDinners } from "@/hooks/useStripDinners";
 import type { BatchEventSocialResult } from "@/hooks/useBatchEventSocial";
 import { restaurantHref } from "@/lib/dashboardItems";
 import { isPrerender } from "@/lib/isPrerender";
-import { formatMiles } from "@/lib/tonightPairings";
+import { formatMiles } from "@/lib/tonightTime";
 import { relativeStartLabel, stripHeading, type HubEvent, type TonightItem } from "./eventsHubQuery";
 
 /**
