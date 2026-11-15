@@ -8269,7 +8269,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "2026-09-19 (claude/admiring-cori-ukwzcp). AC2 and AC4 done, AC3's writes done and its hiding deferred, AC5 and AC6 need the migration applied.\n\nAC1 CONFIRMED, WITH TWO CORRECTIONS. The field mask really does ask Places for businessStatus and really does throw the answer away, and no migration gives restaurants hours or a status column. But the evidence names auto-enrich-restaurants as the writer and it is not one - it delegates entirely to bulk-update-restaurants, which holds the mask and the update. And AC3 says CLOSED_PERMANENTLY rows get is_hidden = true: `restaurants` HAS NO is_hidden COLUMN. That is on `events`. Restaurants have `status`, which useRestaurants already reads for opening_soon/closed, so the hiding decision is a different one than the AC assumes and is recorded here rather than guessed at.\n\nAC2. 20260919000009 adds business_status text and hours_json jsonb, both nullable, plus two partial indexes - one on the closed statuses, one on rows that have hours at all. No CHECK constraint on business_status, for the reason WEB-BE-049's migration gives: tightening a constraint in the release that introduces the shape would reject writes from any function not yet redeployed.\n\nAC3's WRITES. supabase/functions/_shared/placeHours.ts is a pure leaf module - normalizeBusinessStatus, normalizeOpeningHours, isPermanentlyClosed - and bulk-update-restaurants now asks for regularOpeningHours and writes both columns through it. Both new fields are in the existing isUnknownColumnError retry's strip list, so the window between deploying the function and applying the migration costs hours and a closure flag rather than the entire update.\n  TWO DECISIONS THE NORMALIZER MAKES THAT A QUERY LATER DEPENDS ON. An unrecognised status is DROPPED rather than stored, because the column is filtered on and a value nobody anticipated must not be read as a closure OR as an operating venue - null says 'unknown', which is true. And hours are null rather than an empty periods array, because `{periods: []}` reads as 'closed all week' and means 'Google did not answer' - that difference decides whether a restaurant is published as closed.\n  openNow is deliberately NOT stored: it is true at the instant of the fetch and wrong within hours, and a stored copy looks authoritative. secondaryOpeningHours (drive-through, delivery) is out too - a reader that treated them as opening hours would report a restaurant open when only its drive-through is.\n\nAC4. RestaurantDetails' JSON-LD goes through resolveOpeningHoursSpecification: hours_json first, the free-text `opening` parser second, null when neither yields anything so the node is omitted (WEB-SEO-024). Two reader decisions are pinned by tests: a period with no `close` is DROPPED rather than published as 00:00-23:59, because Places uses that for a 24-hour venue and writing a closing time would be a claim rather than a transcription; and a midnight-crossing period stays on its OPENING day, because splitting Friday 20:00-Saturday 02:00 into two entries advertises Saturday morning as a separate opening.\n\nAC3's HIDING, AC5 AND AC6 ARE NOT DONE and each needs the migration applied first. Filtering on business_status or hours_json from the client before then is 42703 on the whole select, which blanks /restaurants rather than degrading it. AC5 also wants a decision this container cannot take: the open-now RPC has to evaluate periods against the current Central time, and whether 'hours unknown' rows appear at all is a product call, not a technical one. AC6 is a count after one nightly run.\n\nVerified: npm run validate passes; npx vitest run 675/675 across 71 files, 8 of them new for the JSON hours reader; place-hours.test.ts 11/11 under Deno, wired into subscription-sync-tests.yml; type-check:edge clean and the edge-types ratchet re-baselined DOWN from 137/30 to 134/29 (typing the two new fields fixed four pre-existing errors in that file). Seven negative controls: storing openNow, returning an empty shape instead of null, passing an unknown status through, `hour || 9`, preferring the free text over the column, publishing a close-less period, and emitting a midnight-crossing period against the closing day. Not verified: nothing was written to a database, so AC6's counts are zero by construction and the Places response shape is taken from the API reference rather than from a live call."
+      "notes": "2026-09-19 (claude/admiring-cori-ukwzcp). AC2 and AC4 done, AC3's writes done and its hiding deferred, AC5 and AC6 need the migration applied.\n\nAC1 CONFIRMED, WITH TWO CORRECTIONS. The field mask really does ask Places for businessStatus and really does throw the answer away, and no migration gives restaurants hours or a status column. But the evidence names auto-enrich-restaurants as the writer and it is not one - it delegates entirely to bulk-update-restaurants, which holds the mask and the update. And AC3 says CLOSED_PERMANENTLY rows get is_hidden = true: `restaurants` HAS NO is_hidden COLUMN. That is on `events`. Restaurants have `status`, which useRestaurants already reads for opening_soon/closed, so the hiding decision is a different one than the AC assumes and is recorded here rather than guessed at.\n\nAC2. 20260919000009 adds business_status text and hours_json jsonb, both nullable, plus two partial indexes - one on the closed statuses, one on rows that have hours at all. No CHECK constraint on business_status, for the reason WEB-BE-049's migration gives: tightening a constraint in the release that introduces the shape would reject writes from any function not yet redeployed.\n\nAC3's WRITES. supabase/functions/_shared/placeHours.ts is a pure leaf module - normalizeBusinessStatus, normalizeOpeningHours, isPermanentlyClosed - and bulk-update-restaurants now asks for regularOpeningHours and writes both columns through it. Both new fields are in the existing isUnknownColumnError retry's strip list, so the window between deploying the function and applying the migration costs hours and a closure flag rather than the entire update.\n  TWO DECISIONS THE NORMALIZER MAKES THAT A QUERY LATER DEPENDS ON. An unrecognised status is DROPPED rather than stored, because the column is filtered on and a value nobody anticipated must not be read as a closure OR as an operating venue - null says 'unknown', which is true. And hours are null rather than an empty periods array, because `{periods: []}` reads as 'closed all week' and means 'Google did not answer' - that difference decides whether a restaurant is published as closed.\n  openNow is deliberately NOT stored: it is true at the instant of the fetch and wrong within hours, and a stored copy looks authoritative. secondaryOpeningHours (drive-through, delivery) is out too - a reader that treated them as opening hours would report a restaurant open when only its drive-through is.\n\nAC4. RestaurantDetails' JSON-LD goes through resolveOpeningHoursSpecification: hours_json first, the free-text `opening` parser second, null when neither yields anything so the node is omitted (WEB-SEO-024). Two reader decisions are pinned by tests: a period with no `close` is DROPPED rather than published as 00:00-23:59, because Places uses that for a 24-hour venue and writing a closing time would be a claim rather than a transcription; and a midnight-crossing period stays on its OPENING day, because splitting Friday 20:00-Saturday 02:00 into two entries advertises Saturday morning as a separate opening.\n\nAC3's HIDING, AC5 AND AC6 ARE NOT DONE and each needs the migration applied first. Filtering on business_status or hours_json from the client before then is 42703 on the whole select, which blanks /restaurants rather than degrading it. AC5 also wants a decision this container cannot take: the open-now RPC has to evaluate periods against the current Central time, and whether 'hours unknown' rows appear at all is a product call, not a technical one. AC6 is a count after one nightly run.\n\nVerified: npm run validate passes; npx vitest run 675/675 across 71 files, 8 of them new for the JSON hours reader; place-hours.test.ts 11/11 under Deno, wired into subscription-sync-tests.yml; type-check:edge clean and the edge-types ratchet re-baselined DOWN from 137/30 to 134/29 (typing the two new fields fixed four pre-existing errors in that file). Seven negative controls: storing openNow, returning an empty shape instead of null, passing an unknown status through, `hour || 9`, preferring the free text over the column, publishing a close-less period, and emitting a midnight-crossing period against the closing day. Not verified: nothing was written to a database, so AC6's counts are zero by construction and the Places response shape is taken from the API reference rather than from a live call. | 2026-11-15 (restaurants lane), AC3's sitemap half: regenerate-sitemaps (6-hourly, overwrites the storage sitemap and pings IndexNow/Indexing API with changed rows) read restaurants unfiltered, publishing merged duplicates and closed-for-good (noindex) pages and pinging a row the moment the hours refresh flipped it to CLOSED_PERMANENTLY. It now drops is_merged, closed-for-good statuses and Google CLOSED_PERMANENTLY; all three writers name every closed spelling (closed, permanently_closed, closed_permanently). sitemap-event-filters.test.mjs holds the three to it (negative control: 5 checks red); test:offline 74/74 and the edge/script type checks clean. AC5 (server-side open-now RPC) and AC6 (post-run counts) still need the database, so the story stays open."
     },
     {
       "id": "WEB-BE-046",
@@ -13007,8 +13007,8 @@
         "public/openapi.yaml documents end_date in the Event schema and states that start_date/end_date are Central-time days and an overlap test",
         "llms.txt wording matches"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the events lane; seo-geo owns openapi/llms.txt."
+      "passes": true,
+      "notes": "Found 2026-11-08 by the events lane; seo-geo owns openapi/llms.txt. | public/openapi.yaml now documents end_date (nullable date-time), start_date/end_date as Central time days with the overlap test and running arm, date as a timestamp, time as 24-hour HH:MM, and the location alias; llms.txt (renderer and checked-in file) links openapi.yaml with the same wording. New offline suite openapi-api-events compares the schema keys and listEvents params with api-events/index.ts and pins the wording: 9/9 red on the old files, 9/9 green; test:offline 75/75."
     },
     {
       "priority": 4,
@@ -13274,7 +13274,8 @@
         "Find the element wider than the viewport on /attractions at 320px and fix it",
         "mobile-responsive.spec.ts no-horizontal-scroll tests pass for /attractions and /events/today on a vite build"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "WEB-QA-059 had already fixed /attractions (0px overflow at 320/360/375px on a vite build). /events/today still scrolled sideways once a busy day passed the 36-card cap, for two reasons. The \"See the day on the events page...\" Button is whitespace-nowrap and made the page 412px wide. EventLinkList, also used on /events/this-weekend, would not break a title or venue with no spaces and made it 533px wide. The Button now wraps, and the list items use overflow-wrap:anywhere. A new busy-day guard in events-landings.spec.ts (smoke lane) fails 4/4 on the old build and passes after the fix. A filtered run of mobile-responsive, attractions-hub and events-landings passed 78/78 on chromium-desktop and mobile-chrome."
     },
     {
       "id": "WEB-PERF-074",
@@ -13615,21 +13616,21 @@
         "nlp-search, api-events, assemble-weekly-digest and generate-weekend-guide import it; their existing suites still pass unchanged",
         "The shared suite runs in the subscription-sync Deno lane"
       ],
-      "passes": false,
-      "notes": "Found by the events lane while shipping WEB-FEAT-089 slice 2."
+      "passes": true,
+      "notes": "Found by the events lane while shipping WEB-FEAT-089 slice 2. | New supabase/functions/_shared/eventWindow.ts holds the Central day/span/weekend helpers (currentWeekendFriday, nextWeekendFriday), upcomingOrRunningFilter and applyEventVisibility. nlp-search/dateWindow.ts, api-events/listQuery.ts, assemble-weekly-digest/content.ts and generate-weekend-guide/window.ts now import it and keep their exported names. Verified with a container deno: the new eventWindow.test.ts passes 11/11 and is in the subscription-sync lane. It includes a guard that none of the four callers keeps its own centralWallClockToUtc call or `date.gte.${` group. The existing suites pass with no edits. A negative control turned the shared, listQuery, digest and weekend suites red."
     },
     {
       "priority": 3,
       "id": "WEB-PERF-078",
       "title": "RestaurantInlineFilters' Radix Popover is the last popper on /restaurants",
-      "passes": false,
+      "passes": true,
       "description": "Per-module walk on 2026-11-15: /restaurants still reaches @radix-ui/react-popover, react-popper and floating-ui (about 9 KB gz of floating-ui alone) only through RestaurantInlineFilters' ui/popover. The popover is closed on load. Same lazy-on-first-click pattern as AddToCalendarButton (WEB-PERF-076) and DeferredSelect (WEB-PERF-074).",
       "acceptanceCriteria": [
         "/restaurants has no static path to ui/popover.tsx",
         "The filter popover opens on click and on keyboard as before, focus returned on close",
         "No route heavier; measured with scripts/measure-route-preload.mjs"
       ],
-      "notes": "Found by the performance lane while shipping the AIDisclosureBadge tooltip story."
+      "notes": "Found by the performance lane while shipping the AIDisclosureBadge tooltip story. | RestaurantInlineFilters' pills are static buttons that load RestaurantFilterPopover (Radix Popover, the four panels, the rating Slider) on first click/Enter, mounted open with focus returned on Escape. /restaurants dropped 141.9 -> 108.5 KB gz beyond the critical path with 18 fewer files; no other route moved by more than 0.1 (17 shifted 0.1 either way from chunk reshuffling); summed 8,046.7 -> 8,012.8; critical path 175.2 unchanged. Verified with measure-route-preload, a graph test with a negative control, a new restaurants-hub smoke test (3/3 repeats) plus 108 smoke tests in Chrome, and vitest 3692/3692."
     },
     {
       "priority": 3,
@@ -13642,8 +13643,129 @@
         "An already-saved reminder that can no longer fire is not shown as 'Active'",
         "Component test covers each threshold and the untimed case"
       ],
+      "passes": true,
+      "notes": "Found 2026-11-15 by the features lane while fixing the reminder windows (migration 20261115000103). | EventDetails now passes date/event_start_utc/time_tbd to EventReminderSettings. New src/lib/reminderAvailability.ts applies get_pending_reminders' lower bounds (1_day 23h, 3_hours 2h30m, 1_hour 30m), measured from the next top-of-hour cron run, and blocks hour-level reminders on untimed events. Those options are disabled with a reason. A saved one reads \"No longer scheduled\" or \"Won't send: no start time listed\" instead of Active and can still be unticked. The new vitest file has 12 cases, and 4 of its component cases fail on the old card. vitest src/components+pages+lib 2823/2823, type ratchet 30/30, eslint clean."
+    },
+    {
+      "id": "WEB-SEC-077",
+      "title": "cron_logs is readable and writable by any signed-in account under a policy named admin-only",
+      "description": "20251123000000_setup_cron_scraping.sql created \"Admin access for cron_logs\" FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role'). auth.role() is 'authenticated' for every account, so anyone who signs up can read cron job error_details, insert rows the admin health panels trust (useSystemMonitoring uptime from the newest row, AIEnhancementManager's last bulk-enhancement run), and update or delete real rows to hide failures. The admin read from 20251110000011 never narrowed anything because policies are OR'd.",
+      "acceptanceCriteria": [
+        "A migration drops \"Admin access for cron_logs\" and leaves an admin-only SELECT (is_admin_or_root()) TO authenticated",
+        "Writers enumerated: every SQL function that writes cron_logs is SECURITY DEFINER and bulk-enhance-events uses the service role, so no write policy is needed",
+        "Readers enumerated: only admin web pages; no iOS/Android reference",
+        "Reproduced before and after on Postgres: a non-admin can no longer read, insert or delete; admin read, service role and definer writers unchanged",
+        "An offline check fails if any current policy lets any signed-in session UPDATE/DELETE/ALL, with negative controls"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found 2026-11-15 by the security lane while sweeping migration policies for conditions that only require a session. Migration 20261115000137; offline suite scripts/__tests__/authenticated-write-policies.test.mjs. Not applied to production from here (no credentials). | cron_logs' \"Admin access for cron_logs\" FOR ALL USING (auth.role() = 'authenticated' OR ...) let any signed-up account read job error_details, forge the rows admin health panels trust, and delete real ones; migration 20261115000137 drops it and restates the admin read TO authenticated (all SQL writers are SECURITY DEFINER, the edge writer uses the service role, readers are two admin pages, no mobile reader). Reproduced before/after on local Postgres 16 with auth stubs, and a new offline suite authenticated-write-policies sweeps all current policies for any-session UPDATE/DELETE/ALL (none left; 4 checks fail without the migration). Not applied to production from here."
+    },
+    {
+      "id": "WEB-ADS-036",
+      "title": "The personal weekly digest ignores the account page's 'Weekly event digest' switch",
+      "description": "As a member who turned the weekly digest off, I need to stop getting a weekly digest. The switch writes user_email_preferences.weekly_digest_enabled. send-weekly-digest reads it through get_weekly_digest_recipients, but weekly-digest-personal (agent-runner, 'Your week in Des Moines') gated only on lifecycle_signals.messagingAllowed, which comes from the separate 'Account and activity emails' switch. So switching the digest off left one weekly digest still arriving every week.",
+      "acceptanceCriteria": [
+        "Evidence: supabase/functions/_shared/agents/weekly-digest-personal.ts and agent-weekly-digest/index.ts never read user_email_preferences; src/components/EmailPreferencesCard.tsx writes weekly_digest_enabled",
+        "A user whose preferences row does not say true gets no personal digest, and is counted as skippedPref",
+        "A user with no preferences row is still decided by messagingAllowed (nothing new is mailed)",
+        "A failed preferences read sends nothing for the run (fail closed)",
+        "Deno marketing-optout-agents covers switch off, switch on and no row; a vitest covers the failed read and chunking"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by the marketing-growth lane on 2026-11-15 while auditing the digest senders. Done in code: _shared/weeklyDigestOptOut.ts (100 ids a request, throws on error), and both agent copies skip opted-out users. Deno marketing-optout-agents 21/21 (3 new; dropping the skip fails 1/21), vitest 4/4 (reading only false as off fails 1/4), full vitest 3692/3692, eslint, type-check:functions, check-edge-auth, check-edge-types, check-marketing-consent. Owner: deploy agent-runner (and agent-weekly-digest if it is still deployed). | The personal weekly digest (weekly-digest-personal, \"Your week in Des Moines\") checked only messagingAllowed, so turning off the account page's \"Weekly event digest\" switch didn't stop it. A new helper, _shared/weeklyDigestOptOut.ts, reads user_email_preferences in chunks of 100. A row that doesn't say true counts as opted out. No row leaves the decision to messagingAllowed. A failed read throws, so the run sends nothing. Both agent copies skip opted-out users and report skippedPref. Verified: Deno marketing-optout-agents 21/21 (3 new; removing the skip fails 1/21), new vitest 4/4 (negative control fails 1/4), full vitest 3692/3692. Owner: deploy agent-runner. Handoff: docs/improvement-loops/lanes/marketing-growth.md"
+    },
+    {
+      "id": "WEB-QA-062",
+      "priority": 3,
+      "title": "Broad-lane navigation and SEO-037 tests fail on correct pages: hidden first link and live slugs",
+      "description": "links-and-buttons 'Navigation Testing' clicked the first a[href] in the DOM, which is the mobile bottom nav, hidden at desktop width, so both tests timed out on chromium-desktop on every backend. On mobile-chrome the cookie banner could cover that nav (1 in 10). The SEO-037 preferred-source tests named live slugs (corn-mazes-near-des-moines, jesses-embers), so on the placeholder build the article test failed on both projects and the restaurant test passed against the 'We couldn't load this restaurant' page.",
+      "acceptanceCriteria": [
+        "The navigation tests click a visible link and seed cookie consent",
+        "The SEO-037 tests run on fixtureBackend rows and assert the detail page's h1 before checking the button",
+        "links-and-buttons passes whole on chromium-desktop and mobile-chrome against a placeholder vite build",
+        "Turning the footer button on for restaurants, or removing the article button, makes the SEO-037 tests fail"
+      ],
+      "passes": true,
+      "notes": "Found and fixed by the reliability lane on 2026-11-15 from the WEB-CI-028 handoff. Verified on a vite build: links-and-buttons 176 passed, 2 skipped (was 4 failed); the four tests passed 80/80 at --repeat-each=10; the negative control fails 4/4. | Found and fixed by the reliability lane on 2026-11-15 from the WEB-CI-028 handoff's broad-lane list. The navigation tests (links-and-buttons:195/214) were not placeholder-only: .first() picked the mobile bottom nav, which is hidden at desktop width. They now click the first visible link, with consent seeded, because the cookie banner covered the bottom nav on mobile-chrome. The SEO-037 tests used live slugs; they now use fixtureBackend rows and check the detail h1 first. On a vite build the spec went from 4 failed to 176 passed and 2 skipped, the four tests passed 80/80 at --repeat-each=10, and the negative control fails 4/4. Handoff: docs/improvement-loops/lanes/reliability.md"
+    },
+    {
+      "id": "IOS-AUDIT-010",
+      "title": "Web billing links (/pricing, /subscription, /subscription/success) open Stripe Checkout inside the iOS app",
+      "priority": 1,
+      "description": "DeepLinkHandler sent any first-party page with no native screen to .web, shown in SafariView inside the app. A push notification url or an article body link to /pricing therefore showed Stripe Checkout for Insider and VIP inside the app, an external purchase of the app's own digital subscription that App Review rejects under Guideline 3.1.1. /subscription opened the Stripe billing portal the same way.",
+      "acceptanceCriteria": [
+        "/pricing, /subscription and /subscription/success, with any query, route to a native plans destination from universal links, push url payloads and article body links",
+        "A free user or App Store subscriber sees the StoreKit SubscriptionView; a web or Google Play subscriber sees which store bills the plan, never a store to buy a second plan in",
+        "The AASA does not claim these paths, so emailed manage-subscription links still reach the Stripe portal in Safari",
+        "A vitest guard fails when a web page that calls startCheckout or openCustomerPortal is missing from DeepLinkHandler.billingPaths, or billingPaths names an unrouted path",
+        "XCTest covers the routing, the notification path, exact-path matching, host checks and the store/plan-info decision"
+      ],
+      "passes": true,
+      "notes": "Found and fixed by the ios lane 2026-11-15. 7 XCTest cases (not compiled, no Xcode here); vitest iosBillingLinkParity.test.ts negative-controlled 3x; check-aasa, check-privacy-manifest, check-unused-members OK. | /pricing, /subscription and /subscription/success (push url, article links) now open a native plans screen (StoreKit store for free/App Store plans, the billed-through sheet for web/Play plans) instead of Stripe Checkout in an in-app SafariView (Guideline 3.1.1); AASA unchanged so emailed manage links still reach Stripe in Safari. 7 new XCTest cases, not compiled (no Xcode here); new vitest iosBillingLinkParity.test.ts guards billingPaths against App.tsx pages calling startCheckout/openCustomerPortal (negative-controlled 3x)."
+    },
+    {
+      "id": "AND-AUDIT-043",
+      "title": "Android event detail never links an annual edition to its series screen, which the web event page does",
+      "priority": 3,
+      "passes": true,
+      "description": "The web event page prints '<name> happens every year.' and links /events/series/<slug> under an edition of one of the 20 annual series (SEO-043). Android got a native series screen in AND-AUDIT-042, but the only way in was a deep link, because event detail said nothing about the series.",
+      "acceptanceCriteria": [
+        "Event detail shows '<name> happens every year.' and an 'Every year's dates for <name>' link when EventSeries.forEvent matches the row (title, venue, location), and shows nothing for any other row",
+        "The link opens Route.EventSeries for the series slug",
+        "The two strings are held equal to src/pages/EventDetails.tsx by androidEventSeriesParity.test.ts",
+        "Device check: from an edition, the link opens the series screen and Back returns to the event"
+      ],
+      "notes": "Found and done by the android lane 2026-11-15. Code-complete and JVM-tested: EventSeriesTest 9/9 (1 new) on a stub kotlinc 2.2.10 harness, parity vitest 6/6 (1 new); changing the link label fails 1 test in each. Compose screen and app module not compiled (no Android SDK). AC4 needs a device. | Event detail now shows \"<name> happens every year.\" and an \"Every year's dates for <name>\" link when EventSeries.forEvent places the row in a series. The link opens the native series screen (Route.EventSeries), matching the web event page (SEO-043); before this, only a deep link reached that screen. EventSeriesTest passes 9/9 (1 new) on a stub kotlinc 2.2.10 harness and the parity vitest passes 6/6 (1 new, pins both strings to src/pages/EventDetails.tsx). Changing the link label fails 1 test in each. The Compose screen, nav and app module were not compiled (no Android SDK), and nothing was checked on a device. Handoff: docs/improvement-loops/lanes/android.md"
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-078",
+      "title": "oauth-callback exchanges a code on unsigned state and discards the tokens",
+      "description": "supabase/functions/oauth-callback/index.ts is public (verify_jwt off, on the edge-auth DO NOT GUARD list) and takes provider and timestamp from base64 JSON state that nothing signs, then POSTs code plus the provider's client_secret to oauth_providers.token_url and throws the tokens away. Either it is dead (find oauth-start / any caller) and should go through the endpoint deprecation path, or state needs an HMAC and a single-use nonce.",
+      "acceptanceCriteria": [
+        "Callers of oauth-callback and any oauth-start enumerated",
+        "Decision recorded: retire via deprecation, or sign state with an HMAC and reject replays"
+      ],
       "passes": false,
-      "notes": "Found 2026-11-15 by the features lane while fixing the reminder windows (migration 20261115000103)."
+      "notes": "Found 2026-11-15 by the security lane while auditing the edge-auth baseline notes."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-ADS-037",
+      "title": "A member with the weekly digest on gets two weekly digests",
+      "description": "send-weekly-digest (Sunday, get_weekly_digest_recipients) and weekly-digest-personal (agent-runner) both mail a weekly digest. They have separate frequency ledgers (weekly_digest_log and nurture_sends), and neither checks the other, so a member with the switch on and messagingAllowed true gets both. Pick one sender, or have each skip users the other mailed in the last 6 days.",
+      "acceptanceCriteria": [
+        "A member gets at most one weekly digest in any 6-day window",
+        "Product call recorded on which digest is kept"
+      ],
+      "passes": false,
+      "notes": "Found by the marketing-growth lane on 2026-11-15 while shipping the weekly-digest switch fix."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-ADS-038",
+      "title": "send-weekly-digest sends to every recipient at once",
+      "description": "send-weekly-digest maps every recipient into one Promise.allSettled. Each one makes an RPC call, a newsletter_subscribers read and an SES send, all at the same moment. SES throttles beyond its per-second rate, and a throttled send is logged as failed in weekly_digest_log. get_weekly_digest_recipients then excludes that user for 6 days, so re-running the job doesn't retry them. newsletterDispatch.ts already sends in batches of 5; this sender should too.",
+      "acceptanceCriteria": [
+        "Sends run in bounded batches",
+        "A failed send does not exclude the user from a same-week retry (the RPC counts only email_status = 'sent')"
+      ],
+      "passes": false,
+      "notes": "Found by the marketing-growth lane on 2026-11-15 while auditing the digest senders."
+    },
+    {
+      "priority": 2,
+      "id": "IOS-AUDIT-011",
+      "title": "Settings > Subscription opens a purchase store for web and Google Play subscribers",
+      "description": "SettingsView's Account > Subscription row always presents SubscriptionView (SettingsView.swift ~line 51), the StoreKit store. SubscriptionBanner's subscribed card was fixed for this in IOS-DD-MONETIZATION-16 (web/Play subscribers get PlanInfoSheet), but Settings was not, so a web subscriber can still buy a duplicate App Store plan from Settings. PlansLinkScreen.screen(tier:hasAppStoreSubscription:) now holds the decision and can be reused.",
+      "acceptanceCriteria": [
+        "Settings > Subscription shows PlanInfoSheet for a web or Google Play subscriber and SubscriptionView otherwise, via PlansLinkScreen",
+        "XCTest covers the three cases"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the ios lane while doing the web billing links story."
     }
   ]
 }
