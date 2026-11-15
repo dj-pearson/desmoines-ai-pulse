@@ -13019,8 +13019,8 @@
         "No rendered or exported component offers an Open Now toggle that the restaurant query ignores",
         "RestaurantFilterOptions lives where its importers can read it without the dead component"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted src/components/RestaurantFilters.tsx (477 lines, unrendered, imported only for its type) with its Open Now switch/badge/count over a field nothing read; RestaurantFilterOptions moved to src/lib/restaurantFilterOptions.ts without openNow, also dropped from Restaurants.tsx, restaurantPresets.ts and useRestaurants' RestaurantFilters. A @ts-expect-error in restaurantPresets.test.ts makes re-adding openNow a type-check ratchet regression (negative control: 31 vs baseline 30, TS2578); vitest 2550/2550 + 657/657, ratchet 30/30, eslint clean."
     },
     {
       "priority": 4,
@@ -13075,7 +13075,7 @@
         "Port EventSeriesSchedule (this year's dates or '<year> date not announced yet', past years newest first)",
         "A native screen and route; a slug the app does not know still opens on the web"
       ],
-      "notes": "Slice 1 of 3 (AC1 done): android util/EventSeries.kt ports the web's 20 EVENT_SERIES and normaliseEventTitle (plus forEvent, forSlug, path, titlePatterns), held equal to src/lib/eventSeries.ts by new vitest androidEventSeriesParity.test.ts (3/3; an alias edit fails it). 7 EventSeriesTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation dropping the apostrophe step fails 1. Not wired to a screen yet; app module not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md | Slice 2 of 3: new android util/EventSeriesSchedule.kt ports the web's buildSeriesView rules (moderator vs sweep hidden, linkable, eventEnd/isOver, one instance per Central day, editions by year, current/past/unannounced, edition date labels). 14 new EventSeriesScheduleTest JVM tests carry the web/iOS test cases with the web's answers and pass, 48/48 counting the existing suites, on a stub harness (kotlinc 2.2.10). Three mutations each fail exactly one test. Nothing calls it yet, and the app module was not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md"
+      "notes": "Slice 1 of 3 (AC1 done): android util/EventSeries.kt ports the web's 20 EVENT_SERIES and normaliseEventTitle (plus forEvent, forSlug, path, titlePatterns), held equal to src/lib/eventSeries.ts by new vitest androidEventSeriesParity.test.ts (3/3; an alias edit fails it). 7 EventSeriesTest JVM tests pass on a stub harness (kotlinc 2.2.10); a mutation dropping the apostrophe step fails 1. Not wired to a screen yet; app module not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md | Slice 2 of 3: new android util/EventSeriesSchedule.kt ports the web's buildSeriesView rules (moderator vs sweep hidden, linkable, eventEnd/isOver, one instance per Central day, editions by year, current/past/unannounced, edition date labels). 14 new EventSeriesScheduleTest JVM tests carry the web/iOS test cases with the web's answers and pass, 48/48 counting the existing suites, on a stub harness (kotlinc 2.2.10). Three mutations each fail exactly one test. Nothing calls it yet, and the app module was not compiled (no Android SDK). Handoff: docs/improvement-loops/lanes/android.md | Slice 3a: EventsRemoteDataSource.fetchSeriesRows ports the web/iOS series read (neq is_merged, title ilikes from the new EventSeries.titleLikePatterns, hidden and archived rows kept, limit 200), and util/SeriesEventRows decodes the body lossily into SeriesEventRow, dropping bad rows the way iOS LossySeriesRows does. 54/54 JVM tests pass on a kotlinc harness with the real kotlinx-serialization, and the parity vitest (5/5) pins the read against web and iOS. The data source and app module were not compiled (no Android SDK), and nothing calls the read yet. Handoff: docs/improvement-loops/lanes/android.md"
     },
     {
       "id": "WEB-FEAT-083",
@@ -13221,7 +13221,8 @@
         "The shadcn Slider wrapper accepts a thumb label prop without breaking other callers",
         "A rendered test finds each slider by role and name"
       ],
-      "passes": false
+      "passes": true,
+      "notes": "ui/slider now takes thumbLabel/thumbLabelledBy/thumbValueText and puts them on the Radix Thumb (role=slider). All six Slider uses are named: the TrendingTuner weights after their labels, RestaurantInlineFilters (replaces the ref hack), RestaurantFilters, the promotion planner attendance slider, and VideoPlayer seek/volume. check-field-names now scans Slider: it found exactly those 6 on the old code, and the baseline stays 0. The new rendered sliderThumbNames.test.tsx fails 4/10 on the old code and passes 10/10. The full vitest suite passes 3621/3621. Merged by hand over WEB-FEAT-082, which deleted RestaurantFilters.tsx in the same round; the deleted file's case was dropped from sliderThumbNames.test.tsx."
     },
     {
       "priority": 3,
@@ -13260,8 +13261,8 @@
         "The apps offer a way to change the setting, or link to /profile?tab=settings",
         "v1 is not changed while binaries at or above MIN_SUPPORTED_APP_VERSION still call it"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-08 by the features lane while gating the web rail. | Slice 1 of 2 (AC1, AC3): migration 20261108000104 re-creates get_personalized_recommendations_v2 (same signature, v1 untouched) so it returns no rows unless communication_preferences.event_recommendations is JSON true; iOS ForYouService and Android ForYouRemoteDataSource call v2 with v1 only on PGRST202/42883, and Android falls back to trending on an empty answer like iOS. Verified in PGlite (opted-in 5 rows; false/missing/null/string \"true\"/no profile 0; re-run ok), migration checks and useForYouRail vitest pass. iOS/Android not compiled. Needs supabase db push; this also satisfies WEB-FEAT-034's AC. Handoff: docs/improvement-loops/lanes/features.md | Slice 2 of 3 (AC2, Android): Settings > Privacy & Data has a Personalized Suggestions switch (signed in only) that reads event_recommendations as opt-in via new CommunicationPreferences.isExplicitlyOn, writes it with the existing read-merge-write and rolls back on failure, and logs a personalization_ai consent_records row (platform android). New ProfileViewModelPersonalizationTest (5) and 2 CommunicationPreferences cases; Android not compiled; check-mobile-schema OK, check-marketing-consent OK, vitest src/lib 2147/2147. iOS switch remains (slice 3). Handoff: docs/improvement-loops/lanes/features.md"
+      "passes": true,
+      "notes": "Found 2026-11-08 by the features lane while gating the web rail. | Slice 1 of 2 (AC1, AC3): migration 20261108000104 re-creates get_personalized_recommendations_v2 (same signature, v1 untouched) so it returns no rows unless communication_preferences.event_recommendations is JSON true; iOS ForYouService and Android ForYouRemoteDataSource call v2 with v1 only on PGRST202/42883, and Android falls back to trending on an empty answer like iOS. Verified in PGlite (opted-in 5 rows; false/missing/null/string \"true\"/no profile 0; re-run ok), migration checks and useForYouRail vitest pass. iOS/Android not compiled. Needs supabase db push; this also satisfies WEB-FEAT-034's AC. Handoff: docs/improvement-loops/lanes/features.md | Slice 2 of 3 (AC2, Android): Settings > Privacy & Data has a Personalized Suggestions switch (signed in only) that reads event_recommendations as opt-in via new CommunicationPreferences.isExplicitlyOn, writes it with the existing read-merge-write and rolls back on failure, and logs a personalization_ai consent_records row (platform android). New ProfileViewModelPersonalizationTest (5) and 2 CommunicationPreferences cases; Android not compiled; check-mobile-schema OK, check-marketing-consent OK, vitest src/lib 2147/2147. iOS switch remains (slice 3). Handoff: docs/improvement-loops/lanes/features.md | Slice 3 of 3 (AC2, iOS), closes the story: new PersonalizationPreferenceService plus a Settings > Privacy & Data toggle. It reads event_recommendations as explicit-true opt-in, writes the bag back with only that key changed (and refuses if the read failed or found no row), rolls back with a toast on failure, logs a personalization_ai consent_records row (platform ios), resets on sign-out and refreshes For You after a change. New PersonalizationPreferenceTests (5 cases) are written but iOS was not compiled. check-mobile-schema OK, check-marketing-consent OK. Migration 20261108000105 still needs supabase db push."
     },
     {
       "priority": 3,
@@ -13327,7 +13328,7 @@
         "The opt-out writes a suppression that outreach-sequencer checks before the next step"
       ],
       "passes": false,
-      "notes": "Found by the marketing-growth lane while shipping WEB-ADS-035 slice 2. | Slice 1 of 2: migration 20261115000101 adds outreach_unsubscribe_tokens (per crm_leads row, RLS on, no policy), service-role ensure_outreach_unsubscribe_token and anon outreach_unsubscribe_by_token (writes the outreach_suppression row and outreach_stopped the sequencer checks; newsletter and email_suppressions untouched), and email-unsubscribe answers ?outreach=. Exercised on a local Postgres 16 with Supabase-like grants plus a negative control (no revokes/RLS lets anon read and mint); vitest 3590/3590, Deno lane 167/167 (3 new, red without the branch). Owner: apply 20261115000101, deploy email-unsubscribe. Handoff: docs/improvement-loops/lanes/marketing-growth.md"
+      "notes": "Found by the marketing-growth lane while shipping WEB-ADS-035 slice 2. | Slice 1 of 2: migration 20261115000101 adds outreach_unsubscribe_tokens (per crm_leads row, RLS on, no policy), service-role ensure_outreach_unsubscribe_token and anon outreach_unsubscribe_by_token (writes the outreach_suppression row and outreach_stopped the sequencer checks; newsletter and email_suppressions untouched), and email-unsubscribe answers ?outreach=. Exercised on a local Postgres 16 with Supabase-like grants plus a negative control (no revokes/RLS lets anon read and mint); vitest 3590/3590, Deno lane 167/167 (3 new, red without the branch). Owner: apply 20261115000101, deploy email-unsubscribe. Handoff: docs/improvement-loops/lanes/marketing-growth.md | This shipped the casing half of slice 2. Before, outreach-reply looked up the lead with an exact match on the lowercased address. For a mixed-case crm_leads address it found nothing and returned before writing outreach_suppression. Both senders also checked the suppression list with an exact, unquoted match. Now _shared/outreachSuppression.ts gives both senders a lowercased, quoted check that still fails closed. outreach-reply records the opt-out before the lead lookup, finds leads case-insensitively and halts every lead with the address. Verified: new vitest 13/13, plus three negative controls that fail 4, 2 and 1 cases. Full vitest 3624/3624 and Deno lane 167/167 pass, and eslint, type-check:functions, check-edge-auth and check-edge-types are clean. Owner: deploy outreach-reply, agent-runner and agent-outreach. The token footer half still waits on migration 20261115000101. Handoff: docs/improvement-loops/lanes/marketing-growth.md"
     },
     {
       "priority": 4,
@@ -13423,20 +13424,20 @@
         "Deno or offline tests evaluate the sent filters against fixture rows"
       ],
       "passes": false,
-      "notes": "Found 2026-11-15 by the events lane while auditing bare date floors."
+      "notes": "Found 2026-11-15 by the events lane while auditing bare date floors. | Slice 1 of 2 (weekly digest), 2026-11-15. The old window used UTC date strings, which opened it last night and closed it a day early with no runs, and its date line printed \"Invalid Date\" for every timestamptz. New assemble-weekly-digest/content.ts sets a Central-day window, keeps the starts read, adds a runs read capped at 2 and appended after the starts, and prints the date line in Central (\"Through <day>\" for runs). content.test.ts runs 8/8 under deno; the negative control (old logic) gives 1/8. The test is in the subscription-sync Deno lane. type-check:functions, check-edge-auth, check-deno-lanes 168/168 and check-edge-types pass. Not run against a live DB. Handoff: docs/improvement-loops/lanes/events.md"
     },
     {
       "priority": 4,
       "id": "WEB-SEC-075",
       "title": "ad_rate_card exposes updated_by (the admin who last changed a price) to the anon key",
-      "passes": false,
+      "passes": true,
       "description": "ad_rate_card stays on the identity-read baseline: its public read is needed (advertisers are quoted from it), but every row carries updated_by. A column-level grant or a view without updated_by would keep pricing public without naming the admin; readers are useCampaigns and AdRateManager on web and calculate_campaign_pricing() in SQL.",
       "acceptanceCriteria": [
         "Anon cannot read ad_rate_card.updated_by",
         "Advertiser quotes and calculate_campaign_pricing() are unchanged",
         "ad_rate_card leaves the identity-read baseline"
       ],
-      "notes": "Found 2026-11-15 by the security lane while shipping the blacklist admin-read story. Not started."
+      "notes": "Found 2026-11-15 by the security lane while shipping the blacklist admin-read story. Not started. | Migration 20261115000102 revokes anon/authenticated table-level SELECT on ad_rate_card and grants back every column except updated_by (the USING (true) row read stays for advertiser quotes). It also calls calculate_campaign_pricing as anon and aborts on 42501. AdRateManager now names its columns instead of select('*'); deploy web first. check-identity-reads replays GRANT/REVOKE for anon (anonColumnGrants), so the baseline went 6 -> 5 by hand. Verified on local Postgres 16 with the real table/policy SQL: anon and non-admin get 42501 on updated_by and select=*, quotes for all four placements unchanged, admin UPDATE saves, service_role reads updated_by, and an invoker SELECT * pricing function rolls the migration back. New offline suite (9 tests); test:offline 73/73. Not applied or deployed."
     },
     {
       "priority": 3,
@@ -13448,8 +13449,8 @@
         "The middleware shell for each says the page's own title and description",
         "Decide and record whether they belong in the sitemap"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-15 by the seo-geo lane while shipping the sitemap-only shell fix."
+      "passes": true,
+      "notes": "Found 2026-11-15 by the seo-geo lane while shipping the sitemap-only shell fix. | The six footer policy pages (/cookie-policy, /dmca, /acceptable-use, /dpa, /affiliate-disclosure, /advertising-policies) used to write a bare Helmet title. Each now has a STATIC_PAGE_META entry and mounts SEOHead with its own URL, so it gets a canonical and og/twitter tags, and the middleware shell carries its own title, description and H1. Sitemap decision, recorded as NOT_SITEMAPPED_STATIC_PAGES: they stay out of the sitemap. Verified by middleware-static-page-shell, now 249 checks, 30 of which fail on the old pages; test:offline 72/72, vitest 2754/2754, eslint 0 errors and the SEO checks are green. Not exercised on the deployed Pages runtime."
     },
     {
       "priority": 4,
@@ -13462,6 +13463,75 @@
       ],
       "passes": false,
       "notes": "Found by the reliability lane while triaging broad-lane failures (WEB-CI-028 handoff) on 2026-11-15."
+    },
+    {
+      "id": "WEB-PERF-076",
+      "title": "Event routes ship Radix DropdownMenu for the Add to Calendar button; load it on first use",
+      "description": "AddToCalendarButton (on every event card, the quick view and event detail) was the only Radix DropdownMenu on the event routes. Because of it, each event landing carried @radix-ui/react-menu, popper, floating-ui, roving-focus and collection, about 35 KB gz beyond the critical path, for a button few people press.",
+      "acceptanceCriteria": [
+        "AddToCalendarButton draws a static trigger with the closed ARIA state and loads the Radix menu with import() on the first click, Enter/Space or ArrowDown",
+        "A keyboard open focuses the first menu item and Escape returns focus to the trigger",
+        "No static path from the event routes to ui/dropdown-menu.tsx, pinned by a graph test with a negative control",
+        "Event landings lighter beyond the critical path with no route heavier, measured with scripts/measure-route-preload.mjs",
+        "add-to-calendar-card.spec.ts and the event-page smoke specs pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and shipped by the performance lane, 2026-11-15. Seven event landings -35.3 KB gz each (17 fewer files), EventsPage 165.4 -> 142.7, EventsNearMe 116.5 -> 96.9, EventDetails 138.3 -> 120.3; summed 8,384.8 -> 8,080.7; critical path 175.2 unchanged. Verified by addToCalendarLazy.test.ts (12 of 13 fail on revert), vitest 3624/3624, and 55 smoke tests plus 2 throwaway Chrome checks. | AddToCalendarButton is now a static trigger. AddToCalendarMenu (the Radix DropdownMenu plus the export handlers) loads on the first click, Enter or ArrowDown, and a keyboard open puts focus on the first item. Seven event landings lost 35.3 KB gz each beyond the critical path (118-124 -> 83-89), EventsPage went 165.4 -> 142.7, EventsNearMe 116.5 -> 96.9 and EventDetails 138.3 -> 120.3; no route got heavier by more than 0.1 and the critical path stayed at 175.2. Verified by a static-graph test with a negative control, vitest 3624/3624, 55 smoke-lane tests on the event pages in Chrome, and two throwaway Chrome checks of lazy fetch, keyboard focus and focus return."
+    },
+    {
+      "id": "WEB-QA-060",
+      "title": "Heading outline (WCAG 1.3.1) guarded in the required lane",
+      "description": "The check that no route's headings skip a level (h1 -> h3) ran only in accessibility.spec.ts, in the broad lane, which does not gate a merge, and covered 8 routes. On a vite build with the placeholder backend, 7 routes skipped: ErrorState rendered its title as an h3 directly under the page h1 on every hub that failed to load, and /contact's CardTitle cards were h3s under the h1.",
+      "acceptanceCriteria": [
+        "page-headings.spec.ts (required smoke lane) fails when any of 30 public routes skips a heading level in any state it shows (loading, error, loaded)",
+        "ErrorState's title no longer skips a level under a page h1",
+        "/contact and /events/today have no heading skips",
+        "The new check fails on the pre-fix build"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by the reliability lane while working through its broad-lane triage list (events-today heading skip, accessibility:762). | The heading-skip check now runs in the required smoke lane: page-headings.spec samples the outlines of 30 routes and fails on any skip it sees. It found 7 routes skipping. ErrorState's title is now an h2 (6 hubs that skipped when their data failed to load), and CardTitle takes as=\"h2\", used on /contact and on events-today's More Event Ideas card. On the old build the check fails exactly those 7 routes; on the fixed build page-headings passes 171/171 with --repeat-each=3, and nine related smoke specs pass 185/185. Handoff: docs/improvement-loops/lanes/reliability.md"
+    },
+    {
+      "id": "IOS-AUDIT-008",
+      "title": "/events/date-night opens a web sheet instead of a native date-night list",
+      "description": "As an iOS user following a Date Night link (Things To Do hub tile, shared /events/date-night URL), I want the app's own event list with the web page's date-night rule, so I can save events and add them to my calendar without leaving native UI.",
+      "acceptanceCriteria": [
+        "/events/date-night opens Search on Events with a removable Date night chip, not the web page",
+        "The events query uses the web's DATE_NIGHT_FILTER byte for byte, as its own or-group",
+        "With no date of its own, the list covers the web page's WINDOW_DAYS (14) Central days from today",
+        "Evening starts only (Central hour >= EVENING_START_HOUR or < NIGHT_END_HOUR, known start time only) unless the link has ?time=all",
+        "Restaurants are not searched for a date-night-only query",
+        "A vitest parity test reads the Swift and fails when the filter, window, evening hours or routing drift from the web"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Found 2026-11-15 by the ios lane from its own handoff (date night was the remaining /events landing that opened on the web). Done in the same loop: SearchFilters.dateNight (.evening/.anyTime), EventsService.dateNightEventsFilter + dateNightWindow, Event.startsInTheEvening, SearchViewModel filters evenings on the device from a 60-row page. Not written to saved searches (web saved-search keys have no date-night key). vitest iosDateNightParity 5/5 (negative-controlled), 13 XCTest cases written, not compiled (no Xcode here). | /events/date-night now opens Search on Events with the web's DATE_NIGHT_FILTER (byte-for-byte copy), its 14-day Central window and its evening-only default (4 PM to before 4 AM Central, known times only; ?time=all keeps every start), with a removable Date night chip; it opened the web page in a sheet. Verified by vitest iosDateNightParity.test.ts (5/5, negative-controlled 3 of 5 fail), vitest src/lib/__tests__ + useEventLanding 2183/2183, eslint, check-mobile-schema/app-versions/privacy-manifest OK; 13 XCTest cases written; not compiled (no Xcode here)."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-SEC-076",
+      "title": "newsletter_subscribers token column REVOKEs are no-ops under the table-level grant",
+      "passes": false,
+      "description": "20260413000002 and 20260918000002 run REVOKE SELECT (unsubscribe_token) / (confirm_token) ON newsletter_subscribers FROM anon, authenticated. Postgres ignores a column-level REVOKE while the role holds table-level SELECT, so these lines protect nothing. RLS is what keeps the tokens from anon today. The comments call them belt-and-suspenders, so a later loosening of RLS would leak both tokens.",
+      "acceptanceCriteria": [
+        "Either the table-level SELECT is revoked and the other columns are granted back (as WEB-SEC-075 did for ad_rate_card), or the comments stop claiming column protection",
+        "Every reader of newsletter_subscribers (web, iOS, Android, edge) is enumerated before any grant change"
+      ],
+      "notes": "Found 2026-11-15 by the security lane while shipping WEB-SEC-075. Not started."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-UX-077",
+      "title": "Home page keeps an aria-busy skeleton forever when the backend fails",
+      "description": "On a vite build with the placeholder backend, the home page keeps a role=status aria-busy=true skeleton region (class space-y-6 md:space-y-8) for at least 24s after load. It never switches to an error or empty state, so screen readers keep announcing it as loading.",
+      "acceptanceCriteria": [
+        "With the backend unreachable, no element on / is still aria-busy 15s after load",
+        "The region shows an error or empty state instead"
+      ],
+      "passes": false,
+      "notes": "Found by the reliability lane while building the heading-outline guard (WEB-QA-NEW-reliability)."
     }
   ]
 }
