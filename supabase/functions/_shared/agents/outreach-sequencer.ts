@@ -18,6 +18,7 @@ import { createApproval } from "../agentApprovals.ts";
 import { writeAgentAudit } from "../auditLog.ts";
 import { listUnsubscribeHeaders, renderEmail } from "../emailLayout.ts";
 import { sendEmail } from "../email.ts";
+import { isOutreachSuppressed } from "../outreachSuppression.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "outreach-sequencer";
@@ -26,26 +27,8 @@ const STEP_GAP_DAYS = 4; // frequency cap between steps
 const MAX_STEP = 3;
 const DAY = 24 * 60 * 60 * 1000;
 
-// deno-lint-ignore no-explicit-any
-type Client = any;
-
 function fill(t: string, name: string): string {
   return t.replace(/\{\{business_name\}\}/g, name);
-}
-
-async function suppressed(supabase: Client, email: string): Promise<boolean> {
-  const domain = email.split("@")[1] ?? "";
-  const { data, error } = await supabase.from("outreach_suppression").select("id").or(`email.eq.${email},domain.eq.${domain}`).limit(1);
-  // FAIL CLOSED, and this is the one in this file that is not merely a cadence
-  // question. Returning false means NOT suppressed, which sends - so a dropped
-  // error emails everyone on the suppression list. A suppression list is the
-  // one place where "we could not check" has to mean "do not send"
-  // (WEB-BE-032 AC2).
-  if (error) {
-    console.warn(`[outreach-sequencer] suppression check failed for ${email}; treating as suppressed: ${error.message}`);
-    return true;
-  }
-  return (data ?? []).length > 0;
 }
 
 export const run: AgentRun = async (ctx, { supabase }) => {
@@ -89,7 +72,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   for (const l of rows) {
     const email = l.contact_email;
-    if (await suppressed(supabase, email)) { skipped++; continue; }
+    if (await isOutreachSuppressed(supabase, email, "outreach-sequencer")) { skipped++; continue; }
 
     // Determine next step from prior sends + cadence.
     const { data: prior, error: priorError } = await supabase.from("outreach_sends").select("step, created_at").eq("lead_id", l.id).order("created_at", { ascending: false });

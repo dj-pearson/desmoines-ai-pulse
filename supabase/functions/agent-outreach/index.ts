@@ -25,6 +25,7 @@ import { createApproval } from "../_shared/agentApprovals.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { listUnsubscribeHeaders, renderEmail } from "../_shared/emailLayout.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { isOutreachSuppressed } from "../_shared/outreachSuppression.ts";
 
 const AGENT_KEY = "outreach-sequencer";
 const BATCH = 100;
@@ -41,21 +42,6 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 
 function fill(t: string, name: string): string {
   return t.replace(/\{\{business_name\}\}/g, name);
-}
-
-async function suppressed(supabase: Client, email: string): Promise<boolean> {
-  const domain = email.split("@")[1] ?? "";
-  const { data, error } = await supabase.from("outreach_suppression").select("id").or(`email.eq.${email},domain.eq.${domain}`).limit(1);
-  // FAIL CLOSED, and this is the one in this file that is not merely a cadence
-  // question. Returning false means NOT suppressed, which sends - so a dropped
-  // error emails everyone on the suppression list. A suppression list is the
-  // one place where "we could not check" has to mean "do not send"
-  // (WEB-BE-032 AC2).
-  if (error) {
-    console.warn(`[outreach-sequencer] suppression check failed for ${email}; treating as suppressed: ${error.message}`);
-    return true;
-  }
-  return (data ?? []).length > 0;
 }
 
 Deno.serve(async (req) => {
@@ -112,7 +98,7 @@ Deno.serve(async (req) => {
 
     for (const l of rows) {
       const email = l.contact_email;
-      if (await suppressed(supabase, email)) { skipped++; continue; }
+      if (await isOutreachSuppressed(supabase, email, "agent-outreach")) { skipped++; continue; }
 
       // Determine next step from prior sends + cadence.
       const { data: prior, error: priorError } = await supabase.from("outreach_sends").select("step, created_at").eq("lead_id", l.id).order("created_at", { ascending: false });
