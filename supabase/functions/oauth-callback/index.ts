@@ -1,112 +1,53 @@
+/**
+ * OAuth Callback Edge Function (DEPRECATED, inert)
+ *
+ * WEB-SEC-078. This endpoint is public (no bearer: the caller would be a
+ * provider redirecting a browser) and it used to take `provider` from base64
+ * JSON `state` that nothing signed, look the provider up in oauth_providers
+ * with the service role, and POST the caller's `code` together with that
+ * provider's client_secret to its token_url. The tokens that came back were
+ * thrown away. So anyone could make it spend a stored client secret on a code
+ * of their choosing, and a successful exchange stored nothing.
+ *
+ * It also never worked for a real provider. The redirect_uri it sent was
+ * `${url.origin}/admin/oauth/callback` with url.origin being the functions
+ * host, while every authorize URL the site builds (OAuthProviderSetup,
+ * gsc-oauth) registers the site's own /admin/oauth/callback, a web route that
+ * AdminGscCallback serves by calling gsc-oauth. A provider rejects a
+ * token request whose redirect_uri differs from the authorize request's.
+ *
+ * Callers enumerated 2026-11-15: none. No reference in src/, ios/, android/
+ * or supabase/functions/; no authorize URL anywhere points at
+ * /functions/v1/oauth-callback. The name is kept (endpoint deprecation flow in
+ * CLAUDE.md) and the body answers 410 without reading the database, so a
+ * stale caller is visible in the function logs instead of 404ing. Delete the
+ * directory in a later release once the logs show nothing.
+ *
+ * Returns: 410 { error: "deprecated", use: "gsc-oauth" }
+ */
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 
-serve(async (req) => {
+serve((req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
-  try {
-    const url = new URL(req.url);
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-    const error = url.searchParams.get("error");
+  // Log that a call arrived and which params it carried, never their values:
+  // `code` is a live authorization code until it expires.
+  const url = new URL(req.url);
+  console.warn(
+    `[oauth-callback] deprecated endpoint called: code=${url.searchParams.has("code")}, state=${url.searchParams.has("state")}`,
+  );
 
-    if (error) {
-      throw new Error("OAuth authorization was denied");
-    }
-
-    if (!code || !state) {
-      throw new Error("Missing required OAuth parameters");
-    }
-
-    // Parse and validate state
-    let stateData;
-    try {
-      stateData = JSON.parse(atob(state));
-    } catch {
-      throw new Error("Invalid state parameter");
-    }
-
-    const provider = stateData.provider;
-
-    // Validate state timestamp (reject if older than 10 minutes)
-    if (stateData.timestamp) {
-      const stateAge = Date.now() - stateData.timestamp;
-      const maxAge = 10 * 60 * 1000; // 10 minutes
-      if (stateAge > maxAge) {
-        throw new Error("OAuth state has expired. Please try again.");
-      }
-    }
-
-    if (!provider || typeof provider !== 'string') {
-      throw new Error("Invalid state parameter");
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
-
-    // Get provider configuration
-    const { data: providerConfig, error: providerError } = await supabaseClient
-      .from("oauth_providers")
-      .select("*")
-      .eq("provider_name", provider)
-      .single();
-
-    if (providerError || !providerConfig) {
-      throw new Error("Provider not found");
-    }
-
-    // Exchange code for tokens
-    const tokenResponse = await fetch(providerConfig.token_url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        code,
-        client_id: providerConfig.client_id,
-        client_secret: providerConfig.client_secret,
-        redirect_uri: `${url.origin}/admin/oauth/callback`,
-        grant_type: "authorization_code",
-      }),
-    });
-
-    if (!tokenResponse.ok) {
-      console.error("Token exchange failed:", tokenResponse.statusText);
-      throw new Error("Token exchange failed");
-    }
-
-    const tokens = await tokenResponse.json();
-
-    // Redirect to admin with success
-    const redirectUrl = `${url.origin}/admin?oauth_success=true&provider=${encodeURIComponent(provider)}`;
-
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: redirectUrl,
-        ...corsHeaders,
-      },
-    });
-  } catch (error) {
-    console.error("OAuth callback error:", error);
-    const url = new URL(req.url);
-    // Sanitize error message - don't expose internal details
-    const safeMessage = "OAuth authentication failed. Please try again.";
-    const redirectUrl = `${url.origin}/admin?oauth_error=${encodeURIComponent(safeMessage)}`;
-
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: redirectUrl,
-        ...corsHeaders,
-      },
-    });
-  }
+  return new Response(
+    JSON.stringify({ error: "deprecated", use: "gsc-oauth" }),
+    {
+      status: 410,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 });

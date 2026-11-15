@@ -1,6 +1,6 @@
 {
   "_comment": "Edge functions that build a service-role client and verify no caller. TRIAGE, not a vulnerability list - some are public by design. Each needs its callers enumerated before being guarded. This list must only ever shrink. See scripts/check-edge-auth.mjs.",
-  "generated": "2026-11-08",
+  "generated": "2026-11-15",
   "unguarded": [
     "check-login-attempt",
     "get-sponsored-pick",
@@ -8,7 +8,6 @@
     "log-error",
     "newsletter-subscribe",
     "nlp-search",
-    "oauth-callback",
     "og-image",
     "support-chat",
     "track-ad-event"
@@ -21,7 +20,7 @@
     "newsletter-subscribe": "DO NOT GUARD. Public by design (WEB-FEAT-019): the caller is an anonymous visitor typing their own address into the signup form, so there is no bearer to check and an admin gate deletes the feature. It needs the service role for two writes a browser cannot be trusted with - setting status='pending' with a confirm token the client must never see, and upserting on email so a previously unsubscribed address can come back (the table has no UPDATE policy for any role, which is why resubscribing was impossible before). Bounded by checkRateLimit (5 / 15 min) like check-login-attempt, which is the same shape: public, sends mail via SES, rate-limited rather than role-checked. It answers one identical sentence for every outcome, so it is not a subscription oracle, and it never resets an already-active row - doing so would let anyone unsubscribe a stranger by typing their address.",
     "nlp-search": "DO NOT GUARD. Public search box on web (src/hooks/useNLPSearch.ts, useSearchResults.ts; no native caller): anonymous visitors must get results. auth.getUser on an optional bearer only keys the rate limit (30 / min) and picks the AI quota tier; an anon or invalid token falls back to the IP and the 'anon' tier. Claude spend is bounded by guardAi (_shared/aiQuota.ts), not by a role check. Was hidden from this list until 2026-11-08 (WEB-SEC-064) because the sweep took any auth.getUser call as a gate.",
     "notify-event-submission": "DO NOT GUARD as admin. Called from src/hooks/useUserSubmittedEvents.ts - public users submitting an event - and server-to-server by triage-event-submission. Now bounded by checkRateLimit (max 20 / 15 min) and, more importantly, it no longer trusts the body: recipient and title are read from user_submitted_events by eventId. It used to take the `to:` address from the request body, which made it an open mail relay.",
-    "oauth-callback": "DO NOT GUARD. Its caller is an external OAuth provider redirecting a browser here; there is no bearer to check. Deliberately NOT rate-limited either: callers share NAT addresses and a limit here would break sign-in for a whole network. It neither sends mail nor spends money - verify the state/code handling instead if this needs attention.",
+    "oauth-callback": "Off the list since WEB-SEC-078 (2026-11-15): it had no caller, so it answers 410 with no service-role client and no token exchange. If an OAuth callback is ever needed, build a new endpoint with HMAC-signed, single-use state rather than reviving this one.",
     "og-image": "DO NOT GUARD. Renders the social card that any crawler or unfurler fetches; the middleware points og:image straight at it.",
     "support-chat": "DO NOT GUARD. Public in-app support chat (AOS-CS-006), verify_jwt = false, available to every tier and to signed-out users. auth.getUser on an optional bearer only attaches user_id to the ticket it may open and picks the AI quota tier. Bounded by checkRateLimitPersistent (15 / 15 min per IP), guardAi on the drafting path, and 5 anonymous tickets per IP per day. Was hidden from this list until 2026-11-08 (WEB-SEC-064) twice over: by its auth.getUser call, and by the outgoing 'x-api-key' header it sends to Anthropic, which the sweep read as a caller check.",
     "track-ad-event": "DO NOT GUARD. The only path that records a web ad impression or click (WEB-ADS-002); anonymous visitors are most of the traffic, so a guard deletes advertiser reporting. Bounded by checkRateLimitPersistent (120 / 15 min per IP per campaign), a crawler User-Agent filter, an active-campaign and approved-creative check, and client_event_id idempotency. auth.getUser on an optional bearer only fills user_id for the frequency cap. Was hidden from this list until 2026-11-08 (WEB-SEC-064) because the sweep took any auth.getUser call as a gate."
