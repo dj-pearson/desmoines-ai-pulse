@@ -67,7 +67,6 @@ describe("files fixed in WEB-UX-056 slice 1", () => {
     "src/components/cms/EnhancedArticleEditor.tsx",
     "src/components/cms/RichTextEditor.tsx",
     "src/components/cms/CategoryTagManager.tsx",
-    "src/components/RestaurantFilters.tsx",
     "src/components/EventPhotoUpload.tsx",
   ];
 

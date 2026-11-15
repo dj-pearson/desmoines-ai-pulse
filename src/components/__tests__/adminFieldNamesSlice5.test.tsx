@@ -21,7 +21,6 @@ describe("files fixed in slice 5 have no unnamed fields", () => {
     "src/components/EventDataEnhancer.tsx",
     "src/components/EventEditor.tsx",
     "src/components/GroupEventPlannerSimple.tsx",
-    "src/components/RestaurantFilters.tsx",
     "src/components/ScraperConfigWizard.tsx",
     "src/components/ScrapingJobManager.tsx",
     "src/components/SocialMediaManager.tsx",

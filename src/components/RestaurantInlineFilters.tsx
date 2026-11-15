@@ -5,7 +5,7 @@ import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Link } from "react-router-dom";
 import { ChefHat, DollarSign, Star, Leaf, ChevronDown, Check } from "lucide-react";
-import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import type { RestaurantFilterOptions } from "@/lib/restaurantFilterOptions";
 import { useCuisineCounts } from "@/hooks/useRestaurants";
 import { DIETARY_OPTIONS } from "@/lib/restaurantPresets";
 import { cn } from "@/lib/utils";

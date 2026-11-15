@@ -3,9 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AdBanner } from "@/components/LazyAdBanner";
 import SEOHead from "@/components/SEOHead";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
-import {
-  type RestaurantFilterOptions,
-} from "@/components/RestaurantFilters";
+import type { RestaurantFilterOptions } from "@/lib/restaurantFilterOptions";
 import { RestaurantSmartPresets } from "@/components/RestaurantSmartPresets";
 import { RestaurantInlineFilters } from "@/components/RestaurantInlineFilters";
 import { RestaurantsTonightStrip } from "@/components/RestaurantsTonightStrip";
@@ -178,7 +176,6 @@ export default function Restaurants() {
       location: getList("location"),
       sortBy: getStr("sort", "popularity") as RestaurantFilterOptions["sortBy"],
       featuredOnly: getStr("featured", "") === "1",
-      openNow: false,
       // Only tags a query applies (WEB-FEAT-060): a link carrying a retired
       // tag such as "Happy Hour" no longer shows a chip and a filter count
       // over an unfiltered list.

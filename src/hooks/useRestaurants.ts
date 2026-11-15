@@ -54,7 +54,6 @@ export interface RestaurantFilters {
    * a performance decision, so the page now fetches those rows on their own.
    */
   sponsoredOnly?: boolean;
-  openNow?: boolean;
   tags?: string[];
   dietary?: string[];
   limit?: number;
