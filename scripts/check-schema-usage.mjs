@@ -230,14 +230,15 @@ const PENDING_MIGRATIONS = [
   // events read on PGRST202 and stops asking for v2 for the session.
   { rpc: 'get_personalized_recommendations_v2', migration: '20261102000002' },
   // One-click marketing unsubscribe for members with no newsletter row
-  // (WEB-ADS-035). Only email-unsubscribe's ?account= branch calls it, and no
-  // email carries an ?account= link until the next slice, so the pending
-  // window answers 503 to a request nobody sends.
+  // (WEB-ADS-035). email-unsubscribe's ?account= branch and /unsubscribe
+  // (src/lib/tokenOptOut.ts) call it, and no email carries an ?account= link
+  // until the sender slice, so the pending window answers 503 or the page's
+  // fixed error copy to a request nobody sends.
   { rpc: 'marketing_unsubscribe_by_token', migration: '20261108000104' },
   // One-click outreach opt-out for crm_leads prospects (AOS-PROSPECT-009).
-  // Only email-unsubscribe's ?outreach= branch calls it, and no email carries
-  // an ?outreach= link until the next slice, so the pending window answers 503
-  // to a request nobody sends.
+  // email-unsubscribe's ?outreach= branch and /unsubscribe call it, and no
+  // email carries an ?outreach= link until the sender slice, so the pending
+  // window answers 503 or the page's fixed error copy to a request nobody sends.
   { rpc: 'outreach_unsubscribe_by_token', migration: '20261115000101' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
