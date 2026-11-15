@@ -6,13 +6,7 @@ import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import {
   Sheet,
   SheetContent,
@@ -407,6 +401,10 @@ export default function Hotels() {
     }
     return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [venues]);
+  const nearOptions = useMemo<DeferredSelectOption[]>(
+    () => [{ value: NEAR_ANY, label: "Anywhere" }, ...nearPlaces.map((p) => ({ value: p.slug, label: p.name }))],
+    [nearPlaces]
+  );
   const nearPlace = nearSlug ? nearPlaces.find((p) => p.slug === nearSlug) ?? null : null;
   // A slug that is not a fixed place is unknown until the venues arrive; show
   // the skeleton rather than a default list that is about to be reordered.
@@ -658,22 +656,14 @@ export default function Hotels() {
                 <Label htmlFor="stay-near" className="sr-only sm:not-sr-only text-sm text-muted-foreground">
                   Near
                 </Label>
-                <Select
+                <DeferredSelect
                   value={nearPlace ? nearPlace.slug : NEAR_ANY}
                   onValueChange={(v) => setParam("near", v === NEAR_ANY ? null : v)}
-                >
-                  <SelectTrigger id="stay-near" className="w-full min-w-0 sm:w-[200px] min-h-11">
-                    <SelectValue placeholder="Anywhere" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NEAR_ANY}>Anywhere</SelectItem>
-                    {nearPlaces.map((p) => (
-                      <SelectItem key={p.slug} value={p.slug}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={nearOptions}
+                  placeholder="Anywhere"
+                  id="stay-near"
+                  triggerClassName="w-full min-w-0 sm:w-[200px] min-h-11"
+                />
               </div>
 
               {/* Sort. Distance decides the order while Near is set. */}
@@ -682,21 +672,13 @@ export default function Hotels() {
                   <Label htmlFor="stay-sort" className="sr-only sm:not-sr-only text-sm text-muted-foreground">
                     Sort
                   </Label>
-                  <Select
+                  <DeferredSelect
                     value={sortBy}
                     onValueChange={(v) => setParam("sort", v, { def: DEFAULT_SORT })}
-                  >
-                    <SelectTrigger id="stay-sort" className="w-full min-w-0 sm:w-[210px] min-h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={SORT_OPTIONS}
+                    id="stay-sort"
+                    triggerClassName="w-full min-w-0 sm:w-[210px] min-h-11"
+                  />
                 </div>
               )}
             </div>

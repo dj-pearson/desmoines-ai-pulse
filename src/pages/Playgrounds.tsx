@@ -26,13 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import {
   Sheet,
   SheetContent,
@@ -87,6 +81,11 @@ interface PlaygroundFilterFieldsProps {
   onClearAmenities: () => void;
 }
 
+const FEATURED_OPTIONS: readonly DeferredSelectOption[] = [
+  { value: "all", label: "All Playgrounds" },
+  { value: "featured", label: "Featured Only" },
+];
+
 /**
  * The filter controls, once. The mobile sheet and the desktop panel rendered
  * two hand-kept copies, which is how the mobile triggers ended up with no
@@ -111,6 +110,16 @@ function PlaygroundFilterFields({
 }: PlaygroundFilterFieldsProps) {
   const labelClass = layout === "stack" ? "text-base font-medium" : "text-sm font-medium text-foreground";
   const triggerClass = layout === "stack" ? "input-mobile" : undefined;
+  const ageOptions: DeferredSelectOption[] = [
+    { value: "all", label: "All Ages" },
+    ...ageRanges.map((range) => ({ value: range, label: range })),
+  ];
+  // Only suburbs read from metro rows, each with the number of playgrounds
+  // the filter will return for it.
+  const locationOptions: DeferredSelectOption[] = [
+    { value: "any-location", label: "Any location" },
+    ...locations.map((loc) => ({ value: loc, label: `${loc} (${locationCounts[loc] ?? 0})` })),
+  ];
   return (
     <div
       className={
@@ -123,55 +132,39 @@ function PlaygroundFilterFields({
         <label htmlFor={`${idPrefix}-age`} className={labelClass}>
           Age Range
         </label>
-        <Select value={ageValue} onValueChange={onAgeChange}>
-          <SelectTrigger id={`${idPrefix}-age`} className={triggerClass}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Ages</SelectItem>
-            {ageRanges.map((range) => (
-              <SelectItem key={range} value={range}>
-                {range}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <DeferredSelect
+          value={ageValue}
+          onValueChange={onAgeChange}
+          options={ageOptions}
+          id={`${idPrefix}-age`}
+          triggerClassName={triggerClass}
+        />
       </div>
 
       <div className="space-y-2">
         <label htmlFor={`${idPrefix}-location`} className={labelClass}>
           Location
         </label>
-        <Select value={locationValue} onValueChange={onLocationChange}>
-          <SelectTrigger id={`${idPrefix}-location`} className={triggerClass}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any-location">Any location</SelectItem>
-            {/* Only suburbs read from metro rows, each with the number of
-                playgrounds the filter will return for it. */}
-            {locations.map((loc) => (
-              <SelectItem key={loc} value={loc}>
-                {loc} ({locationCounts[loc] ?? 0})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <DeferredSelect
+          value={locationValue}
+          onValueChange={onLocationChange}
+          options={locationOptions}
+          id={`${idPrefix}-location`}
+          triggerClassName={triggerClass}
+        />
       </div>
 
       <div className="space-y-2">
         <label htmlFor={`${idPrefix}-featured`} className={labelClass}>
           Featured
         </label>
-        <Select value={featuredValue} onValueChange={onFeaturedChange}>
-          <SelectTrigger id={`${idPrefix}-featured`} className={triggerClass}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Playgrounds</SelectItem>
-            <SelectItem value="featured">Featured Only</SelectItem>
-          </SelectContent>
-        </Select>
+        <DeferredSelect
+          value={featuredValue}
+          onValueChange={onFeaturedChange}
+          options={FEATURED_OPTIONS}
+          id={`${idPrefix}-featured`}
+          triggerClassName={triggerClass}
+        />
       </div>
 
       <fieldset className="space-y-2">

@@ -11,6 +11,9 @@ import { SELECT_TRIGGER_CLASS } from "@/components/ui/deferred-select";
  * Those controls are now DeferredSelect, which draws a static trigger and
  * loads the Radix half on the first click or arrow key.
  *
+ * WEB-PERF-075 applied the same to /playgrounds, /stay,
+ * /events/near-me and /articles.
+ *
  * The regression is any static path from these routes to ui/select.tsx or to
  * the lazy impl, wherever it comes from.
  */
@@ -18,7 +21,17 @@ const SELECT = join(SRC, "components/ui/select.tsx");
 const IMPL = join(SRC, "components/ui/deferred-select-impl.tsx");
 const DEFERRED = join(SRC, "components/ui/deferred-select.tsx");
 
-const ROUTES = ["pages/EventsPage.tsx", "pages/Restaurants.tsx", "pages/Attractions.tsx"];
+const ROUTES = [
+  "pages/EventsPage.tsx",
+  "pages/Restaurants.tsx",
+  "pages/Attractions.tsx",
+  // WEB-PERF-075: the next four public routes with closed
+  // sort/filter selects.
+  "pages/Playgrounds.tsx",
+  "pages/Hotels.tsx",
+  "pages/EventsNearMe.tsx",
+  "pages/Articles.tsx",
+];
 
 describe("Radix Select stays out of the hub routes (WEB-PERF-074)", () => {
   it("walker control: the impl itself reaches ui/select statically", () => {

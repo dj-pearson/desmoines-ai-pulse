@@ -8,7 +8,7 @@
 
 ## Handoff
 
-None. WEB-PERF-074 (DeferredSelect) closed in loop 21.
+None. WEB-PERF-075 (DeferredSelect on four more routes) closed in loop 22.
 
 What the next loop should know:
 - .content-auto's placeholder is `auto 0 auto calc(26rem + 3px)`: the card is
@@ -56,8 +56,13 @@ What the next loop should know:
   shared: a shared select-styles.ts became its own chunk and added a file to
   40 admin routes. /attractions dropped 21.4 KB gz, more than react-select's
   own size, so it was the last importer of popper/focus-scope there too.
-  Other routes still using ui/select (EventsNearMe, Playgrounds, Hotels,
-  Articles, admin) are the next places to apply it if they measure.
+  Playgrounds, Hotels, EventsNearMe and Articles followed in loop 22
+  (WEB-PERF-075). With seven importers, deferred-select.tsx
+  became its own shared chunk, so the three earlier hubs gained one file and
+  0.3-0.4 KB gz; that is the floor for any new user. Public routes still on
+  ui/select are form fields (Contact, TripPlanner, BusinessPartnership,
+  InteractiveDateSelector) that may rely on Radix's hidden native select;
+  check a form posts before converting one, and measure first.
 - A real-browser check of a lazy module needs no hooks into the app: build,
   `vite preview --port <free>`, `grep -l <a string unique to the module>
   dist/assets/*.js`, then in Chrome `import()` that chunk and find the export
@@ -109,3 +114,4 @@ a keydown on document.body to test "?".
 | 2026-11-08 | WEB-PERF-072 | this commit | PremiumGate, PremiumButton, Save/Watch search buttons and TripPlanner open the app-root lazy GlobalUpgradeModal via openPaywall() instead of mounting UpgradeModal; useUpgradeModal deleted; /search -8.3, /search/advanced -7.8, /events -7.2, /trip-planner -7.2 KB gz beyond the critical path (5-8 fewer files each), plus the lazy RatingSystem chunk, none heavier, summed 8,605.3 -> 8,574.1; critical path 174.8 unchanged; graph test with negative control (4 then 3 fail on reverted sources); paywall/search-watch/search-results/trip-planner specs 27/27 in Chrome; story closed |
 | 2026-11-08 | WEB-PERF-073 | this commit | ShareDialog split into a Slot trigger and a lazy ShareDialogPanel fetched on first click (focus returned via onCloseAutoFocus); 15 routes lighter beyond the critical path, none heavier: AttractionDetails 105.6 -> 86.5, PlaygroundDetails 86.5 -> 67.6, RestaurantDetails 131.6 -> 118.0, ArticleDetails 140.1 -> 127.8, EventDetails 144.0 -> 136.8, event landings ~7, EventsPage 175.0 -> 171.9 KB gz; summed 8,570.3 -> 8,441.9, 135 fewer files; critical path 175.1 unchanged; graph test with negative controls (12 fail on a static panel import, 1 on the old trigger); panel fetched only on click and focus returned in Chrome; story closed |
 | 2026-11-15 | WEB-PERF-074 | this commit | Closed sort/filter selects on /events, /restaurants and /attractions (plus the calendar-feed select) are DeferredSelect, which loads @radix-ui/react-select on first click/arrow key; Attractions 134.3 -> 112.9, EventsPage 171.8 -> 164.2, Restaurants 147.3 -> 140.4 KB gz beyond the critical path (10/5/2 fewer files), no route heavier by more than 0.1; summed 8,454.8 -> 8,419.8; critical path 175.1 unchanged; graph test with negative control (2 fail on a static ui/select import); 111 smoke tests on those pages and 4 Chrome checks (click, ArrowDown, Enter, in-dialog; no layout shift, focus returned) pass; story closed |
+| 2026-11-15 | WEB-PERF-075 | this commit | Closed filter/sort selects on /playgrounds, /stay, /events/near-me and /articles are DeferredSelect; Articles 86.4 -> 52.9, Playgrounds 105.5 -> 84.5, Hotels 88.2 -> 67.9, EventsNearMe 122.8 -> 116.0 KB gz beyond the critical path (17/9/7/2 fewer files); EventsPage/Restaurants/Attractions +0.3-0.4 and one file (deferred-select now a shared chunk); summed 8,438.8 -> 8,361.0; critical path 175.2 unchanged; graph test extended to 7 routes with negative control (1 fails on a static ui/select import); 118 smoke tests on those pages plus 4 throwaway Chrome checks (click, ArrowDown, pick updates URL, focus returned, no size change) pass; vitest 3588/3588 |
