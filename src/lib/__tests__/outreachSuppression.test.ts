@@ -60,8 +60,8 @@ function fakeClient(tables: Record<string, Row[]>, opts: { error?: string } = {}
     from(table: string) {
       const preds: Array<(r: Row) => boolean> = [];
       const q = {
-        select: () => q,
-        limit: () => q,
+        select: (_columns?: string) => q,
+        limit: (_count?: number) => q,
         eq: (col: string, v: string) => { preds.push((r) => r[col] === v); return q; },
         ilike: (col: string, p: string) => { preds.push((r) => ilikeMatches(r[col] ?? "", p)); return q; },
         or: (list: string) => {
