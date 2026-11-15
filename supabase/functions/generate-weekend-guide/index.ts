@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { applyWeekendGuideFilters, formatGuideEventDate, nextWeekendWindow } from "./window.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,29 +41,17 @@ serve(async (req) => {
 
     console.log('Starting weekend guide generation...');
 
-    // Get upcoming weekend events (Friday, Saturday, Sunday)
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
-    // Calculate days until next Friday
-    const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
-    const nextFriday = new Date(now);
-    nextFriday.setDate(now.getDate() + (daysUntilFriday === 0 ? 7 : daysUntilFriday));
-    nextFriday.setHours(0, 0, 0, 0);
-    
-    const nextSunday = new Date(nextFriday);
-    nextSunday.setDate(nextFriday.getDate() + 2);
-    nextSunday.setHours(23, 59, 59, 999);
+    // The coming Friday-Sunday in Central time, with runs that are still on.
+    // WEB-FEAT-089: this used to send UTC bare dates, which covered Thursday
+    // evening through Saturday evening and skipped Sunday entirely.
+    const weekend = nextWeekendWindow();
 
-    console.log('Fetching events from', nextFriday.toISOString(), 'to', nextSunday.toISOString());
+    console.log('Fetching events from', weekend.start, 'to', weekend.end);
 
-    // Fetch weekend events
-    const { data: events, error: eventsError } = await supabase
-      .from('events')
-      .select('*')
-      .gte('date', nextFriday.toISOString().split('T')[0])
-      .lte('date', nextSunday.toISOString().split('T')[0])
-      .order('date', { ascending: true });
+    const { data: events, error: eventsError } = await applyWeekendGuideFilters(
+      supabase.from('events').select('*'),
+      weekend,
+    ).order('date', { ascending: true });
 
     if (eventsError) {
       throw new Error(`Failed to fetch events: ${eventsError.message}`);
@@ -77,7 +66,7 @@ serve(async (req) => {
       const { error: insertError } = await supabase
         .from('weekend_guides')
         .upsert({
-          week_start: nextFriday.toISOString().split('T')[0],
+          week_start: weekend.friday,
           content: "No specific events found for this weekend, but Des Moines always has something happening! Check out the farmers markets, local restaurants, and outdoor activities.",
           events_count: 0,
           created_at: new Date().toISOString(),
@@ -103,6 +92,7 @@ serve(async (req) => {
       title: event.title,
       description: event.enhanced_description || event.original_description,
       date: event.date,
+      when: formatGuideEventDate(event, weekend),
       venue: event.venue,
       location: event.location,
       category: event.category,
@@ -115,7 +105,7 @@ serve(async (req) => {
 
 ${eventsData.map((event, index) => 
   `${index + 1}. ${event.title}
-   Date: ${event.date}
+   When: ${event.when}
    Venue: ${event.venue || event.location}
    Category: ${event.category}
    Price: ${event.price || 'Not specified'}
@@ -174,7 +164,7 @@ Structure it with clear day sections and make it sound exciting and informative!
     const { error: insertError } = await supabase
       .from('weekend_guides')
       .upsert({
-        week_start: nextFriday.toISOString().split('T')[0],
+        week_start: weekend.friday,
         content: generatedContent,
         events_count: events.length,
         events_featured: eventsData.slice(0, 8), // Store top 8 events
@@ -194,7 +184,7 @@ Structure it with clear day sections and make it sound exciting and informative!
         message: 'Weekend guide generated successfully',
         eventsFound: events.length,
         contentLength: generatedContent.length,
-        weekStart: nextFriday.toISOString().split('T')[0]
+        weekStart: weekend.friday
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

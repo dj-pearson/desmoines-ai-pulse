@@ -612,6 +612,9 @@ jobs:
       # The weekly digest's event window (Central days, running arm, capped
       # runs) and its date line. Offline, no remote imports. WEB-FEAT-089.
       - run: deno test supabase/functions/assemble-weekly-digest/content.test.ts
+      # The weekend guide's window (next Fri-Sun in Central, running arm,
+      # visibility) and the Central date line it gives the model. Offline.
+      - run: deno test supabase/functions/generate-weekend-guide/window.test.ts
       # Saved-search alert matching and the email it builds (WP5).
       - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts
       # support-chat is anon-callable; these caps are what bound one request's
