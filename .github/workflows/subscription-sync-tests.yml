@@ -603,6 +603,10 @@ jobs:
       # thenable with no catch turned every search into a 500. All offline:
       # handler.test.ts stubs the Supabase client and the Claude fetch.
       # --allow-read is for the src/ files the suites compare against.
+      # The Central day/weekend windows, the running or= group and the
+      # visibility switches the four suites below share (WEB-FEAT-091).
+      # --allow-read is for the guard that reads those four callers.
+      - run: deno test --allow-read supabase/functions/_shared/eventWindow.test.ts
       - run: deno test supabase/functions/nlp-search/dateWindow.test.ts
       - run: deno test --allow-read supabase/functions/nlp-search/search.test.ts
       - run: deno test supabase/functions/nlp-search/handler.test.ts

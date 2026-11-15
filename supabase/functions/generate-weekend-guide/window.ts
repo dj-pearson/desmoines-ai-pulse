@@ -17,9 +17,13 @@
 // a Friday or Saturday run the guide for this weekend is already out.
 
 import {
-  centralWallClockFromUtc,
-  centralWallClockToUtc,
-} from "../_shared/centralTime.ts";
+  applyEventVisibility,
+  centralToday,
+  formatCentralDay,
+  nextWeekendFriday,
+  upcomingOrRunningFilter,
+  weekendSpan,
+} from "../_shared/eventWindow.ts";
 
 /** The slice of the postgrest-js filter builder these helpers use. */
 export interface WeekendFilterBuilder<Q> {
@@ -43,56 +47,26 @@ export interface WeekendEventDates {
   end_date?: string | null;
 }
 
-// Calendar arithmetic on noon UTC so a DST change cannot move the day.
-function centralMidnight(year: number, month: number, day: number): Date {
-  const t = new Date(Date.UTC(year, month - 1, day, 12));
-  return centralWallClockToUtc(
-    t.getUTCFullYear(),
-    t.getUTCMonth() + 1,
-    t.getUTCDate(),
-    0,
-    0,
-    0,
-  )!;
-}
-
 /** The coming Friday-Sunday in Central time. On a Friday, the one after. */
 export function nextWeekendWindow(now: Date = new Date()): WeekendWindow {
-  const [y, m, d] = centralWallClockFromUtc(now).slice(0, 10).split("-").map(
-    Number,
-  );
-  const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay(); // 0 = Sunday
-  const toFriday = dow === 5 ? 7 : (5 - dow + 7) % 7;
-  const fri = new Date(Date.UTC(y, m - 1, d + toFriday, 12));
-  const fy = fri.getUTCFullYear();
-  const fm = fri.getUTCMonth() + 1;
-  const fd = fri.getUTCDate();
-  const start = centralMidnight(fy, fm, fd);
-  const monday = centralMidnight(fy, fm, fd + 3);
-  return {
-    friday: `${fy}-${String(fm).padStart(2, "0")}-${String(fd).padStart(2, "0")}`,
-    start: start.toISOString(),
-    end: new Date(monday.getTime() - 1).toISOString(),
-  };
+  const friday = nextWeekendFriday(centralToday(now));
+  return { friday: formatCentralDay(friday), ...weekendSpan(friday) };
 }
 
 /**
  * Visible events that start in the weekend, plus runs that began before it
  * and are still on by Friday. A row with no end_date matches only on its own
- * date, so a past one-night show stays out. Same or= group as
- * upcomingOrRunningFilter in nlp-search/dateWindow.ts. Callers add select and
- * order.
+ * date, so a past one-night show stays out. The visibility switches and the
+ * or= group come from _shared/eventWindow.ts (WEB-FEAT-091). Callers add
+ * select and order.
  */
 export function applyWeekendGuideFilters<Q extends WeekendFilterBuilder<Q>>(
   q: Q,
   w: WeekendWindow,
 ): Q {
-  return q
-    .neq("is_hidden", true)
-    .neq("is_merged", true)
-    .is("archived_at", null)
+  return applyEventVisibility(q)
     .lte("date", w.end)
-    .or(`date.gte.${w.start},end_date.gte.${w.start}`);
+    .or(upcomingOrRunningFilter(w.start));
 }
 
 const DAY_TIME: Intl.DateTimeFormatOptions = {

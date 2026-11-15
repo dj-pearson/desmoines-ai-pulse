@@ -11,9 +11,11 @@
 // event in every digest read "Invalid Date".
 
 import {
-  centralWallClockFromUtc,
-  centralWallClockToUtc,
-} from "../_shared/centralTime.ts";
+  addCentralDays,
+  applyEventVisibility,
+  centralDaySpan,
+  centralToday,
+} from "../_shared/eventWindow.ts";
 
 /** Days in the digest window, today included. */
 export const DIGEST_WINDOW_DAYS = 7;
@@ -46,44 +48,22 @@ export interface DigestEventDates {
   end_date?: string | null;
 }
 
-function centralMidnight(year: number, month: number, day: number): Date {
-  // Calendar arithmetic on noon UTC so a DST change cannot move the day.
-  const t = new Date(Date.UTC(year, month - 1, day, 12));
-  return centralWallClockToUtc(
-    t.getUTCFullYear(),
-    t.getUTCMonth() + 1,
-    t.getUTCDate(),
-    0,
-    0,
-    0,
-  )!;
-}
-
 /** Today through the end of the seventh Central day, as UTC instants. */
 export function digestWindow(now: Date = new Date()): DigestWindow {
-  const [y, m, d] = centralWallClockFromUtc(now).slice(0, 10).split("-").map(
-    Number,
-  );
-  const start = centralMidnight(y, m, d);
-  const afterLast = centralMidnight(y, m, d + DIGEST_WINDOW_DAYS);
-  return {
-    start: start.toISOString(),
-    end: new Date(afterLast.getTime() - 1).toISOString(),
-  };
+  const today = centralToday(now);
+  return centralDaySpan(today, addCentralDays(today, DIGEST_WINDOW_DAYS - 1));
 }
 
-function applyVisibility<Q extends DigestFilterBuilder<Q>>(q: Q): Q {
-  // WEB-BE-034: archived_at is the other unpublish switch. A digest that mails
-  // an archived, hidden or merged-away event is what these filters prevent.
-  return q.neq("is_hidden", true).neq("is_merged", true).is("archived_at", null);
-}
+// WEB-BE-034: archived_at is the other unpublish switch. A digest that mails
+// an archived, hidden or merged-away event is what applyEventVisibility
+// (_shared/eventWindow.ts, WEB-FEAT-091) prevents.
 
 /** Events that start inside the window. Callers add select, order and limit. */
 export function applyDigestStartsFilters<Q extends DigestFilterBuilder<Q>>(
   q: Q,
   w: DigestWindow,
 ): Q {
-  return applyVisibility(q).gte("date", w.start).lte("date", w.end);
+  return applyEventVisibility(q).gte("date", w.start).lte("date", w.end);
 }
 
 /**
@@ -95,7 +75,7 @@ export function applyDigestRunsFilters<Q extends DigestFilterBuilder<Q>>(
   q: Q,
   w: DigestWindow,
 ): Q {
-  return applyVisibility(q).lt("date", w.start).gte("end_date", w.start);
+  return applyEventVisibility(q).lt("date", w.start).gte("end_date", w.start);
 }
 
 /** Starts first (the subject leads with the first one), runs fill the tail. */
