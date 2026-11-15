@@ -20,6 +20,7 @@ struct SettingsView: View {
     /// (IOS-DD-ACCOUNT-11).
     @State private var consent = ConsentService.shared
     @State private var emailPreferences = EmailPreferencesService.shared
+    @State private var personalization = PersonalizationPreferenceService.shared
     @State private var toast: ToastMessage?
     /// Set after a deletion that left a store subscription billing; the sheet
     /// dismisses once it is acknowledged (IOS-DD-ACCOUNT-08).
@@ -378,6 +379,30 @@ struct SettingsView: View {
             Text("The Sunday email with this week's best events. Also controllable on the website.")
         }
         .task { await emailPreferences.load() }
+
+        // The account's "Personalized suggestions" switch, the same one as
+        // the web's /profile?tab=settings. get_personalized_recommendations_v2
+        // ranks For You only when it is on (XPLAT-016).
+        Section {
+            Toggle(isOn: Binding(
+                get: { personalization.enabled ?? false },
+                set: { newValue in
+                    Task {
+                        do {
+                            try await personalization.setEnabled(newValue)
+                        } catch {
+                            toast = .error("Couldn't update your suggestions preference. Try again.")
+                        }
+                    }
+                }
+            )) {
+                Label("Personalized Suggestions", systemImage: "sparkles")
+            }
+            .disabled(personalization.enabled == nil)
+        } footer: {
+            Text("Rank For You from the events you swipe and save. When off, you see what's trending. Also controllable on the website.")
+        }
+        .task { await personalization.load() }
 
         Section {
             Button {
