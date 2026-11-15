@@ -366,8 +366,18 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/near-me?from=ankeny&r=10"), .tab(.map))
     }
 
-    func testDateNightLinkOpensTheWebPage() {
-        XCTAssertEqual(dest("/events/date-night"), .web(site("/events/date-night")))
+    func testDateNightLinkOpensEventsSearchWithEveningStarts() {
+        // IOS-AUDIT-008: was the web page in a sheet.
+        var filters = SearchFilters(tabHint: .events)
+        filters.dateNight = .evening
+        XCTAssertEqual(dest("/events/date-night"), .eventSearch(query: "", filters: filters))
+        XCTAssertEqual(dest("/events/date-night?utm_source=newsletter"), .eventSearch(query: "", filters: filters))
+    }
+
+    func testDateNightTimeAllKeepsEveryStart() {
+        var filters = SearchFilters(tabHint: .events)
+        filters.dateNight = .anyTime
+        XCTAssertEqual(dest("/events/date-night?time=all"), .eventSearch(query: "", filters: filters))
     }
 
     // MARK: - Month archive and day ranges (IOS-AUDIT-003)

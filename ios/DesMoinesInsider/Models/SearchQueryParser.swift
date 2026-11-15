@@ -21,11 +21,16 @@ struct SearchFilters: Equatable {
     /// never parsed from typed words, so "kids" typed in the field stays a
     /// keyword.
     var kidsOnly = false
+    /// Date night events: the web's /events/date-night rule
+    /// (EventsService.dateNightEventsFilter, IOS-AUDIT-008). Set by that
+    /// link only, like `kidsOnly`. `.evening` is the web page's default;
+    /// `.anyTime` is its `?time=all`.
+    var dateNight: DateNightTimes?
 
     /// True when nothing here narrows a query. `tabHint` does not count.
     var isEmpty: Bool {
         datePreset == nil && dayRange == nil && !freeOnly && !openNow && areas.isEmpty && category == nil
-            && !kidsOnly
+            && !kidsOnly && dateNight == nil
     }
 
     /// `self`, with every field `explicit` sets taking precedence.
@@ -45,8 +50,17 @@ struct SearchFilters: Equatable {
         if let category = explicit.category { out.category = category }
         if let hint = explicit.tabHint { out.tabHint = hint }
         if explicit.kidsOnly { out.kidsOnly = true }
+        if let dateNight = explicit.dateNight { out.dateNight = dateNight }
         return out
     }
+}
+
+/// Which starts the date night list keeps (IOS-AUDIT-008). The web page
+/// shows evening starts by default (isEveningStart in
+/// src/hooks/useEventLanding.ts) and every start for `?time=all`.
+enum DateNightTimes: Equatable {
+    case evening
+    case anyTime
 }
 
 /// A query split into the words that go to text search and the filters the
@@ -258,6 +272,7 @@ enum SearchFilterChip: Hashable, Identifiable {
     case area(LocationArea)
     case category(EventCategory)
     case kids
+    case dateNight(DateNightTimes)
 
     var id: String {
         switch self {
@@ -268,6 +283,7 @@ enum SearchFilterChip: Hashable, Identifiable {
         case .area(let area): return "area-\(area.rawValue)"
         case .category(let category): return "category-\(category.rawValue)"
         case .kids: return "kids"
+        case .dateNight: return "date-night"
         }
     }
 
@@ -280,6 +296,8 @@ enum SearchFilterChip: Hashable, Identifiable {
         case .area(let area): return area.displayName
         case .category(let category): return category.displayName
         case .kids: return "Kids & family"
+        case .dateNight(.evening): return "Date night, evenings"
+        case .dateNight(.anyTime): return "Date night"
         }
     }
 }
@@ -295,6 +313,7 @@ extension SearchFilters {
         out += areas.map { .area($0) }
         if let category { out.append(.category(category)) }
         if kidsOnly { out.append(.kids) }
+        if let dateNight { out.append(.dateNight(dateNight)) }
         return out
     }
 
@@ -313,6 +332,7 @@ extension SearchFilters {
         case .area(let area): out.areas.removeAll { $0 == area }
         case .category: out.category = nil
         case .kids: out.kidsOnly = false
+        case .dateNight: out.dateNight = nil
         }
         return out
     }

@@ -6,8 +6,8 @@ import os
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id-or-slug` → Event detail
 /// - `desmoinesinsider.com/events/near-me` → Map tab; `/events/date-night`
-///   → the web page; `/events/<month>-<year>` → Search on Events for that
-///   month, or the web page once the month is over
+///   → Search on Events with the date night filter; `/events/<month>-<year>`
+///   → Search on Events for that month, or the web page once the month is over
 /// - `desmoinesinsider.com/events/series/:slug` → that annual-event series
 ///   natively, or on the web for a slug the app does not know
 /// - `desmoinesinsider.com/search?q=` → Search tab with the query
@@ -348,7 +348,7 @@ final class DeepLinkHandler {
     ///
     /// Every web landing page has a case here (IOS-AUDIT-002). /events/near-me
     /// opens the Map tab, the app's nearby-events surface. /events/date-night
-    /// has no native screen, so it opens on the web. The monthly archive is
+    /// is `dateNightDestination`. The monthly archive is
     /// `monthDestination`. All three used to open Home, which shows neither
     /// what is near nor that month. Only bare "series" still lands on Home;
     /// src/lib/__tests__/iosEventLinkParity.test.ts fails when a landing
@@ -362,7 +362,7 @@ final class DeepLinkHandler {
         case "west-des-moines", "ankeny", "urbandale", "johnston", "altoona", "clive", "windsor-heights", "waukee":
             return .search(query: "events in " + raw.replacingOccurrences(of: "-", with: " "))
         case "near-me": return .tab(.map)
-        case "date-night": return .web(url)
+        case "date-night": return dateNightDestination(url: url)
         default: break
         }
         if EventSlug.isMonthPage(raw) { return monthDestination(raw, url: url, now: now) }
@@ -379,6 +379,18 @@ final class DeepLinkHandler {
     static var kidsDestination: Destination {
         var filters = SearchFilters(tabHint: .events)
         filters.kidsOnly = true
+        return .eventSearch(query: "", filters: filters)
+    }
+
+    /// /events/date-night opens Search on Events with the web page's rule
+    /// (IOS-AUDIT-008, DATE_NIGHT_FILTER over the next two weeks, evening
+    /// starts unless the link says `?time=all`). It opened the web page in a
+    /// sheet, outside the app's own event rows, saves and calendar actions.
+    static func dateNightDestination(url: URL) -> Destination {
+        let time = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "time" })?.value
+        var filters = SearchFilters(tabHint: .events)
+        filters.dateNight = time == "all" ? DateNightTimes.anyTime : DateNightTimes.evening
         return .eventSearch(query: "", filters: filters)
     }
 
