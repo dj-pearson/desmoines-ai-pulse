@@ -13341,8 +13341,8 @@
         "check-dist-console passes on a build with maps stripped when the only console calls come from dependency-only chunks",
         "It still fails when an app chunk keeps a console call"
       ],
-      "passes": false,
-      "notes": "Found by the reliability lane while wiring check-dist-console on 2026-11-15."
+      "passes": true,
+      "notes": "Found by the reliability lane while wiring check-dist-console on 2026-11-15. | strip-sourcemaps now moves maps to .sourcemaps/ (gitignored, outside dist) instead of deleting them. check-dist-console reads them from there and refuses a map whose `file` names another chunk, and pr-checks runs it after npm run build. The story's suggested name-based fix was unsafe because pdf-generator-*.js also carries src/lib/pdf-generator.ts. On a copy of a real vite build, the old check fails after strip, the new one passes (636 chunks), and an injected app console.log still fails it. The offline suite passes 11/11 (5 of those fail against the old scripts). Handoff: docs/improvement-loops/lanes/reliability.md"
     },
     {
       "id": "WEB-FEAT-088",
@@ -13728,8 +13728,8 @@
         "Callers of oauth-callback and any oauth-start enumerated",
         "Decision recorded: retire via deprecation, or sign state with an HMAC and reject replays"
       ],
-      "passes": false,
-      "notes": "Found 2026-11-15 by the security lane while auditing the edge-auth baseline notes."
+      "passes": true,
+      "notes": "Found 2026-11-15 by the security lane while auditing the edge-auth baseline notes. | oauth-callback had no caller anywhere (src/, ios/, android/, functions; every authorize URL registers the web route /admin/oauth/callback served by AdminGscCallback -> gsc-oauth, and the function's own redirect_uri used the functions host so no provider could accept it), so it was retired by the deprecation path: the name is kept and it answers 410 {error:'deprecated', use:'gsc-oauth'} with no service-role client, DB read or outbound call; delete the directory in a later release once logs show no calls. Verified by new Deno suite _tests/oauth-callback-inert.test.ts (3/3, fails against the old file, wired into subscription-sync-tests.yml), edge-auth baseline 10 -> 9, type-check:functions, check-deno-lanes/paths and test:offline 76/76; not deployed."
     },
     {
       "priority": 3,
@@ -13752,8 +13752,8 @@
         "Sends run in bounded batches",
         "A failed send does not exclude the user from a same-week retry (the RPC counts only email_status = 'sent')"
       ],
-      "passes": false,
-      "notes": "Found by the marketing-growth lane on 2026-11-15 while auditing the digest senders."
+      "passes": true,
+      "notes": "Found by the marketing-growth lane on 2026-11-15 while auditing the digest senders. | Done in code: send-weekly-digest now sends five at a time through _shared/weeklyDigestBatches.ts. It stops starting batches after 100s and reports the rest as deferred. Migration 20261115000140 makes get_weekly_digest_recipients count only email_status = 'sent' rows, so a throttled or failed send can be retried the same week. Verified on a local Postgres 16: a user whose only row this week is a failure is now included, sent-this-week users stay excluded, and grants, return shape and re-apply are unchanged. New vitest 8/8 with 3 negative controls, full vitest 3721/3721. Owner: apply 20261115000140, deploy send-weekly-digest."
     },
     {
       "priority": 2,
@@ -13764,8 +13764,220 @@
         "Settings > Subscription shows PlanInfoSheet for a web or Google Play subscriber and SubscriptionView otherwise, via PlansLinkScreen",
         "XCTest covers the three cases"
       ],
+      "passes": true,
+      "notes": "Found 2026-11-15 by the ios lane while doing the web billing links story. | Settings > Account > Subscription now presents PlansLinkView (store for free/App Store plans, the billed-through PlanInfoSheet for web/Google Play plans) instead of always the StoreKit store, so a web subscriber can't buy a duplicate plan there. 3 new XCTest cases (not compiled, no Xcode here); new vitest iosSubscriptionStoreEntry.test.ts allowlists every direct SubscriptionView() construction with a reason and checks Settings and the banner's subscribed card, negative-controlled twice."
+    },
+    {
+      "id": "WEB-FEAT-093",
+      "title": "Trip planner never offers an event run that opened before the trip (State Fair, multi-day festivals)",
+      "priority": 2,
+      "passes": true,
+      "description": "generate-itinerary read only events whose date falls on the trip's Central days (`date >= trip start AND date < day after end`). A multi-day run that opened before the trip (the Iowa State Fair on its third day, a Thu-Sun festival for a Saturday trip, a museum exhibit) was never in the model's event list, so the AI itinerary for the biggest weekends in Des Moines planned around them as if they did not exist. Every listing surface already keeps running events (upcomingOrRunningFilter); the trip planner was the remaining reader without an end_date arm.",
+      "acceptanceCriteria": [
+        "generate-itinerary offers events that started before the trip and whose end_date is on or after the trip's first Central day",
+        "Runs keep the same archived/hidden/merged visibility as the starts read",
+        "Runs cannot crowd out the trip's own starts: separate read, ordered by end_date, capped, appended after starts, each id once",
+        "The model is told a run's Central end day so it can schedule it on any trip day",
+        "A failed runs read does not fail the plan",
+        "Deno tests evaluate the sent filters against fixture rows, with a negative control"
+      ],
+      "notes": "Found 2026-11-15 by the events lane auditing remaining event reads without an end_date arm. Done in the same loop: planning.ts applyTripStartsFilters/applyTripRunsFilters/mergeTripEvents/runningThrough, TRIP_RUNNING_LIMIT = 10; planning.test.ts 17/17, negative controls 15/17; type-check:functions, check-edge-types, check-edge-auth, check-deno-lanes pass. Not run against a live PostgREST or model. | generate-itinerary now adds a second events read for runs that opened before the trip and are still on at its start (same visibility, ordered by end_date, capped at TRIP_RUNNING_LIMIT=10), appended after the starts, with a runningThrough Central date per run in the prompt; helpers live in generate-itinerary/planning.ts. Verified by planning.test.ts 17/17 (5 new cases evaluate the sent filters against fixture rows; negative controls give 15/17), type-check:functions, check-edge-types, check-edge-auth and check-deno-lanes; not run against a live PostgREST."
+    },
+    {
+      "id": "WEB-FEAT-094",
+      "title": "/restaurants cards lose their hours line and closure label on every sort but the default",
+      "description": "As a visitor sorting /restaurants by rating, searching, or filtering by diet, I need the same card I see under the default sort, because the default browse goes through get_rotated_restaurants (to_jsonb row with hours_json and business_status) while every other path selected RESTAURANT_LIST_COLUMNS, which has neither. With a date in production `opening`, those cards printed no 'Open until' line, a CLOSED_TEMPORARILY place read as an ordinary listing, and a search (which keeps closed places so the card can say so) could not label a Google-only CLOSED_PERMANENTLY row. NOT_CLOSED_RESTAURANT_FILTER also ignores business_status, which the daily hours refresh writes without touching status.",
+      "acceptanceCriteria": [
+        "fetchRestaurantList's table path selects hours_json and business_status (a projection under check-list-columns)",
+        "A browse on the table path leaves Google CLOSED_PERMANENTLY rows out in the query, so the count matches the pages; a search and the admin table keep them",
+        "A temporarily closed place sinks below places serving today on both the RPC and table paths, order kept within each group",
+        "Unit tests drive fetchRestaurantList for rating sort, search, diet tag and admin, and fail with the old projection"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found 2026-11-15 by the restaurants lane while auditing which restaurant reads carry hours_json/business_status. Fixed in the same loop: RESTAURANT_HUB_LIST_COLUMNS, NOT_GOOGLE_CLOSED_RESTAURANT_FILTER, deprioritizeUnvisitable via isServingToday. Negative control turns 4 of 4 new tests red; src/hooks+lib+pages vitest 2869/2869, type-check ratchet 30/30, check-list-columns 22/22, restaurants hub and dietary-filter specs 25/25 on a production build. | /restaurants' table path (any non-default sort, search, diet filter, sponsored pool) now selects RESTAURANT_HUB_LIST_COLUMNS (list columns + hours_json + business_status, as the rotation RPC row already had), so card hours lines and closure labels no longer depend on the sort. A browse also drops Google CLOSED_PERMANENTLY in the query (NOT_GOOGLE_CLOSED_RESTAURANT_FILTER), and temporarily closed places sink below serving ones on both paths (isServingToday). Verified: 4 new tests in useRestaurants.closed.test.ts, all red with the old useRestaurants.ts restored; src/hooks+lib+pages vitest 2869/2869; type-check ratchet 30/30; eslint clean; check-list-columns 22/22; restaurants hub/dietary specs 25/25 on a production build."
+    },
+    {
+      "id": "WEB-UX-078",
+      "title": "Card titles that are one long word are clipped mid-letter on phones",
+      "description": "Card titles are line-clamped, and line-clamp sets overflow:hidden. A scraped title or name with no spaces (for example 'WinterlightsFestivalAtTheDesMoinesBotanicalGardenFamilyNight') could not wrap, so the card cut it off mid-letter with no ellipsis. This affected SocialEventCard on /events, RestaurantCard on /restaurants and the attraction cards on /attractions. The page did not scroll sideways, so the mobile width guards never caught it.",
+      "acceptanceCriteria": [
+        "Every line-clamp-* element breaks a long token (overflow-wrap:anywhere), so the clamp's ellipsis shows instead of a clipped letter",
+        "At 320 and 375px, a long-token title on /events, /restaurants and /attractions has scrollWidth <= clientWidth",
+        "The guard runs in the required smoke lane"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "2026-11-15: one rule in src/index.css covers all 96 line-clamp uses. The new card-long-titles.spec.ts (smoke lane) fails 3/3 on the old build and passes 3/3 on the new one. | At phone width, event, restaurant and attraction card titles that were a single long token were cut off mid-letter with no ellipsis. line-clamp sets overflow:hidden, so the page never scrolled sideways and no existing width check caught it (at 320px the title box was 256px and the text 580px). Fixed with one rule in src/index.css that gives every line-clamp-* element overflow-wrap:anywhere. The new smoke-lane spec card-long-titles.spec.ts fails 3/3 on a build of the old CSS and passes 3/3 on the new one."
+    },
+    {
+      "id": "WEB-PERF-079",
+      "title": "Event hubs, landings and hotel/venue pages download the hours parser and the dinner-pairing code to read tonight's clock",
+      "description": "tonightPairings.ts held both the Tonight clock (tonightWindow, EVENING_START_HOUR, eventStartInstant, formatMiles) and the pairing logic, which statically imports restaurantHours.ts (the free-text hours parser, about 4 KB gz) and the useWeather hook. hubEventPartition, eventsHubQuery, useEventLanding, tripShortlist and several cards imported only clock names from it, so 15 public routes (event landings, music/sports/outdoors hubs, /stay, /stay near venue, venue detail, playgrounds, events near me) carried about 6 KB gz they never ran.",
+      "acceptanceCriteria": [
+        "The clock half (constants, TonightEvent and window types, centralDayWindow, tonightWindow, tonightQueryBounds, eventStartInstant, card formatters) lives in a module that imports none of our own modules",
+        "tonightPairings.ts re-exports every moved name, and the re-exports are the same functions and values",
+        "The 15 clock-only routes have no static path to tonightPairings.ts or restaurantHours.ts, pinned by a graph test with a negative control",
+        "Summed per-route JS beyond the critical path goes down, and the critical path does not grow"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and done in one loop by the performance lane, 2026-11-15. measure-route-preload: summed 8,013.4 -> 7,900.9 KB gz, files 6,773 -> 6,771. 15 routes 5.6-6.5 KB lighter, 12 more 1.9-2.6 lighter, 8 pairing routes +0.5 KB and +2 files. Critical path 175.2 unchanged. tonightTimeSplit.test.ts: 12 of 18 fail on one reverted import. vitest 3731/3731, 203 smoke tests in Chrome. | The Tonight constants, window functions, eventStartInstant and card formatters moved from tonightPairings.ts to a new tonightTime.ts, which imports only date-fns and date-fns-tz. tonightPairings re-exports them, and the clock-only importers now use tonightTime directly. That takes restaurantHours, the pairing code and useWeather off 15 routes (5.6-6.5 KB gz lighter beyond the critical path each). 12 more routes are 1.9-2.6 KB lighter. The 8 routes that still pair dinners gain 0.5 KB and 2 small files. Summed 8,013.4 -> 7,900.9 KB gz, critical path 175.2 unchanged. Verified by tonightTimeSplit.test.ts with a negative control (12 of 18 fail on one reverted import), vitest 3731/3731, the type ratchet with no regressions, and 203 smoke tests in Chrome."
+    },
+    {
+      "id": "WEB-SEO-072",
+      "title": "Edge shell publishes a placeholder showtime in Event JSON-LD and body text for events with no announced time",
+      "description": "functions/_middleware.ts serves the event shell at /events/<slug>, which is what non-JS crawlers (AI crawlers included) read. It used event_start_utc as-is for startDate and printed the clock time in the body. So time_tbd rows (SeatGeek 03:30 placeholder) and 19:31:58-marker rows were published with a made-up showtime, even though the React page has published a date-only startDate since WEB-BE-038.",
+      "acceptanceCriteria": [
+        "The shell Event startDate is the Central calendar date when hasSpecificTime is false (time_tbd, the 19:31:58 marker, the SeatGeek 03:30 placeholder)",
+        "endDate for such a row is the real end date as a Central day, or omitted",
+        "The shell body prints no clock time for such a row and says the time is not listed",
+        "The minimal-select fallback also catches the marker",
+        "A stated showtime keeps its instant unchanged",
+        "Offline suite middleware-entity-shell covers each case"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed by the seo-geo lane 2026-11-15. eventShellStart reuses the page's own hasSpecificTime; EVENT_SHELL_COLUMNS gains time_tbd, source_url and event_start_local. middleware-entity-shell: 8 of 9 new checks red on the old middleware, 0 failures now; test:offline 76/76, type-check:functions clean. Not checked against the deployed Pages runtime. | The edge shell for /events/<slug> used to publish event_start_utc as-is. A time_tbd row came out as an Event starting at 08:30Z with \"at 3:30 AM\" in the body, and a 19:31:58-marker row said \"at 7:31 PM\". New eventShellStart in functions/_middleware.ts applies hasSpecificTime: the startDate becomes the Central date only, the endDate becomes a Central day, the body says \"(time not listed)\", and the minimal-select path is covered too. EVENT_SHELL_COLUMNS now also selects time_tbd, source_url and event_start_local. middleware-entity-shell gained 9 checks: 8 fail on the old middleware and all 9 pass now. test:offline 76/76, type-check:functions clean, eslint 0 errors. Not checked against the deployed Pages runtime."
+    },
+    {
+      "id": "WEB-FEAT-095",
+      "title": "Account erasure leaves the user's mail log, and the data export omits every table keyed by email address",
+      "description": "As someone who deletes my account or asks for a copy of my data, I need the mail data held about my address covered too. delete-user-account deleted newsletter_subscribers inline and nothing else keyed by email. email_log keeps to_email and its user_id is ON DELETE SET NULL, so every send ever made to the address survived erasure. export-user-data read only user_id tables, so newsletter_subscribers (signup IP, user agent, UTM source), email_log and email_suppressions never reached the user. email_log is missing from types.ts, so user-data-tables.test.ts (which reads user_id columns from the types) could not flag it.",
+      "acceptanceCriteria": [
+        "One shared list (supabase/functions/_shared/addressKeyedData.ts) names each email-keyed table, its address column, an optional user_id column and an erasure decision (purge or retain, with a basis if retained)",
+        "export-user-data includes every entry. A row matched by both address and user_id appears once, an unreadable table is listed in unavailable, and each retained entry's basis is in retentionBasis",
+        "delete-user-account purges newsletter_subscribers and email_log (by address, and email_log also by user_id), keeps email_suppressions, reports failures in tables_incomplete, and never runs a delete without a filter",
+        "A Deno suite in CI checks both walks against an in-memory client, checks that each table and column exists in a migration, and fails if an inline newsletter delete comes back"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and done 2026-11-15 by the features lane. New Deno suite address-keyed-data 11/11 (the source assertion fails on the old handlers). export-user-data, user-data-tables, account-deletion-contract, client-contract and purge-user-storage suites pass, type-check:functions is clean, and check-edge-types shows no new errors. Both functions need a deploy. Web export stays the client-side list in PrivacyControls.tsx until export-user-data is deployed. | New supabase/functions/_shared/addressKeyedData.ts lists newsletter_subscribers, email_log and email_suppressions with their address column and an erasure decision. export-user-data now reads all three, and delete-user-account deletes newsletter_subscribers and email_log by address (email_log also by user_id) and keeps email_suppressions, whose stated basis goes into the export. Previously erasure left every email_log row with to_email intact, and the export left all three out. Verified with the new address-keyed-data Deno suite (11/11, wired into subscription-sync-tests.yml; its source assertion fails on the old handlers), the 5 related erasure/export suites, type-check:functions, check-edge-types, check-edge-auth and check-deno-lanes. Both functions need a deploy."
+    },
+    {
+      "id": "AND-AUDIT-044",
+      "title": "Event detail presents ended and archived events as upcoming, offering Add to Calendar",
+      "priority": 3,
       "passes": false,
-      "notes": "Found 2026-11-15 by the ios lane while doing the web billing links story."
+      "description": "Android event detail never checks whether a row is over. Past editions reached from the native series screen (AND-AUDIT-042/043), Saved's Past section and old links show Add to Calendar and no past marker, and a timed show that ended an hour ago still reads Today. The web's event page uses isUpcoming = !timing.isOver && !archived and badges Past event; iOS shows 'This event has already happened' for an archived row (IOS-AUDIT-001).",
+      "acceptanceCriteria": [
+        "AC1: A pure rule decides past as the web does: archived_at set, or now after the web's eventEnd (end_date, else end of the Central day untimed, else start + 3h)",
+        "AC2: Event detail shows 'This event has already happened' under the date for a past row and drops the urgency chip",
+        "AC3: Add to Calendar is not offered for a past row; day two of a multi-day run and an untimed row before its Central day ends still offer it",
+        "AC4: Device check: a linked past edition from /events/series/cloris-awards shows the banner and no Add to Calendar"
+      ],
+      "notes": "Found by the android lane 2026-11-15 after AND-AUDIT-042/043 made past editions reachable from detail. AC1-AC3 done in this commit: util/EventPastState, Event decodes archived_at, EventDetailScreen banner/chip/calendar gating. 7 JVM tests on a stub harness; not compiled (no Android SDK). AC4 needs a device. | Code-complete 2026-11-15: event detail treats a row as past when archived_at is set (Event now decodes it) or the web's isEventOver holds (via EventSeriesSchedule.isOver), shows iOS's \"This event has already happened\" banner, drops the Today/In n days chip and hides Add to Calendar. 7 new EventPastStateTest JVM tests pass, 122/122 with series/calendar/day/DeepLink suites on a stub harness (kotlinc 2.2.10); mutations ignoring archived_at (fails 2) and using a start-based rule (fails 3) are caught. Compose screen not compiled (no Android SDK); the device check (AC4) is still open. Handoff: docs/improvement-loops/lanes/android.md"
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-096",
+      "title": "Social posting and SEO/enhancement selection read events with a bare now() floor, so a running festival is never posted or enhanced mid-run",
+      "passes": false,
+      "description": "social-daily-poster, social-media-manager (two reads), generate-seo-content/selection.ts and bulk-enhance-events/selection.ts filter `date >= now()` with no end_date arm, and social-daily-poster/social-media-manager apply no archived/hidden/merged visibility. A State Fair or festival is dropped from social posts on its second day, and a hidden or archived event can be posted.",
+      "acceptanceCriteria": [
+        "Each reader sends upcomingOrRunningFilter from _shared/eventWindow.ts where a running event is a valid pick",
+        "Posting readers apply applyEventVisibility",
+        "Deno tests evaluate the sent filters against fixture rows"
+      ],
+      "notes": "Found 2026-11-15 by the events lane while shipping the trip planner runs read; not started."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-FEAT-097",
+      "title": "useMenuSearch (search_menu_items RPC) has no caller, so no page lets a visitor find a dish across restaurants",
+      "description": "src/hooks/useRestaurantMenu.ts exports useMenuSearch over search_menu_items (migration 20260317000001), but nothing in src renders it. Menus are captured per restaurant (restaurant_menus/restaurant_menu_items with dietary_tags and price_numeric), so 'vegan tacos under $12' is answerable and no surface asks. Decide: build a dish search on /restaurants or delete the hook.",
+      "acceptanceCriteria": [
+        "Probe search_menu_items in production (npm run check-schema:probe) before building on it",
+        "Either a dish search surface that links each hit to /restaurants/:slug#menu and excludes merged/closed restaurants, or the hook removed"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the restaurants lane while auditing menu reads. Not started."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-UX-079",
+      "title": "Event card venue name truncates to two letters at phone width while the neighborhood keeps its full width",
+      "description": "On SocialEventCard at 375px, the meta line is time, venue, then place. The place span is flex-shrink-0, so it keeps its full width (for example 'Downtown / Court Ave') and squeezes the venue down to 'Fi...'. The venue is probably the more useful of the two.",
+      "acceptanceCriteria": [
+        "At 375px the venue name keeps a readable width before the neighborhood does",
+        "A spec measures the venue span width with a typical neighborhood label"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the ui-ux lane while fixing clipped card titles."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-PERF-080",
+      "title": "Pages that only filter restaurants by status download the free-text hours parser (restaurantHours.ts)",
+      "description": "Many modules import only NOT_CLOSED_RESTAURANT_FILTER, DES_MOINES_TIME_ZONE, isVisitableStatus, isPermanentlyClosedRestaurant, isServingToday, isShutRestaurant, businessStatusLabel or formatOpenStatusLine from restaurantHours.ts, which also holds the free-text parser and toZonedTime. After the tonightTime split, Articles, ArticleDetails, Deals, DiscoverMap and PlaygroundDetails reach the parser only through those names. A first try before that split (a restaurantStatus.ts re-exported from restaurantHours) made 7 routes 3.5 KB gz lighter and gave 39 routes one extra file each, so re-measure before shipping.",
+      "acceptanceCriteria": [
+        "Status helpers and the result/stored types live in an import-free module re-exported from restaurantHours.ts",
+        "Light importers use it directly",
+        "measure-route-preload shows a net decrease, and no route gains a file without a matching KB cut elsewhere"
+      ],
+      "passes": false,
+      "notes": "Found by the performance lane while shipping the tonightTime split, 2026-11-15. Details are in the performance lane file's handoff notes for loop 26."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEC-079",
+      "title": "OAuthProviderSetup reads oauth_providers.client_secret into the browser and its generic flow lands on the GSC-only callback",
+      "description": "src/components/admin/SearchTrafficDashboard/OAuthProviderSetup.tsx handleConnect runs supabase.from('oauth_providers').select('*') for non-GSC providers, which ships client_secret to the admin's browser, then builds an authorize URL whose redirect is /admin/oauth/callback; that route is AdminGscCallback, which always calls gsc-oauth, so a Bing/Yandex connect can never complete. Either name the non-secret columns (or revoke column SELECT on client_secret as WEB-SEC-075/076 did) and give non-GSC providers a real server-side callback with signed single-use state, or remove the generic branch.",
+      "acceptanceCriteria": [
+        "No client query returns oauth_providers.client_secret (column grant or named columns), verified by a check",
+        "Non-GSC connect either completes server-side with HMAC-signed single-use state or the option is removed from the UI"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the security lane while doing WEB-SEC-078."
+    },
+    {
+      "priority": 3,
+      "id": "WEB-SEO-073",
+      "title": "Edge shell Event node @id differs from the React page's Event @id",
+      "description": "functions/_middleware.ts eventShellNode sets @id to the page URL, while src/lib/eventSchema.ts uses `${pageUrl}#event` (eventSeriesView references that #event id). It has not been checked whether the shell's ld+json survives hydration next to the Helmet one. If it does, a JS-rendering crawler could see two Event nodes with different ids for the same page.",
+      "acceptanceCriteria": [
+        "Confirm whether the shell ld+json is still present after hydration",
+        "If so, the shell Event uses the same @id as the React Event node, or the duplicate is removed"
+      ],
+      "passes": false,
+      "notes": "Seen by the seo-geo lane 2026-11-15 while fixing the shell startDate; not reproduced."
+    },
+    {
+      "priority": 4,
+      "id": "WEB-CI-040",
+      "title": "check-dist-console counts a console call at an unmapped position as dependency code",
+      "description": "In check-dist-console.mjs, a hit whose generated column has no mapping segment (sourceAt returns null) goes into vendorHits. A console.log added at line 0, column 0 of EventCard-*.js (before the first mapped segment) passed the check on a real build. A hit with no source should count as app code, as a chunk with no map already does, unless the chunk is vendor-*.",
+      "acceptanceCriteria": [
+        "A console call at an unmapped position in a non-vendor chunk fails the check",
+        "The current production build still passes (its one hit is jsPDF's, which is mapped)"
+      ],
+      "passes": false,
+      "notes": "Found by the reliability lane while doing WEB-CI-039 on 2026-11-15."
+    },
+    {
+      "priority": 3,
+      "id": "IOS-AUDIT-012",
+      "title": "Settings > Redeem Offer Code is offered to web and Google Play subscribers",
+      "description": "SettingsView shows Redeem Offer Code (offerCodeRedemption) to every signed-in user. An App Store subscription offer code redeemed by someone already billed through Stripe or Google Play starts a second, App Store-billed plan, the duplicate IOS-DD-MONETIZATION-16 and IOS-AUDIT-011 closed for the plan card and the Subscription row.",
+      "acceptanceCriteria": [
+        "Redeem Offer Code is hidden (or explains where the plan is billed) when PlansLinkScreen.screen(tier:hasAppStoreSubscription:) is .planInfo",
+        "XCTest covers free, App Store and web/Play subscribers"
+      ],
+      "passes": false,
+      "notes": "Found 2026-11-15 by the ios lane while doing IOS-AUDIT-011."
+    },
+    {
+      "priority": 3,
+      "id": "AND-AUDIT-045",
+      "title": "/events/date-night and month archive links (/events/june-2026) open Home on Android",
+      "passes": false,
+      "description": "DeepLinkHandler.eventDestination sends date-night and month pages to Home, losing the link's content. iOS opens month pages as Search limited to that Central month (IOS-AUDIT-003) and date-night with the web's DATE_NIGHT_FILTER (IOS-AUDIT-008). At minimum both should open the web view rather than Home.",
+      "acceptanceCriteria": [
+        "AC1: /events/<month>-<year> opens events limited to that Central month, or the web view",
+        "AC2: /events/date-night opens the date-night filter or the web view, never Home",
+        "AC3: DeepLink JVM tests cover both"
+      ],
+      "notes": "Found by the android lane 2026-11-15 while auditing DeepLinkHandler against the iOS lane log."
     }
   ]
 }
