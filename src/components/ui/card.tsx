@@ -29,11 +29,18 @@ const CardHeader = React.forwardRef<
 ))
 CardHeader.displayName = "CardHeader"
 
-const CardTitle = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h3
+interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
+  /**
+   * The heading level. Defaults to h3; a card that opens a page section
+   * directly under the page's h1 needs h2, or the outline skips a level
+   * (WCAG 1.3.1, WEB-QA-060).
+   */
+  as?: "h2" | "h3" | "h4";
+}
+
+const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
+  ({ className, as: Heading = "h3", ...props }, ref) => (
+  <Heading
     ref={ref}
     className={cn(
       "text-2xl font-semibold leading-none tracking-tight",
@@ -41,7 +48,8 @@ const CardTitle = React.forwardRef<
     )}
     {...props}
   />
-))
+  )
+)
 CardTitle.displayName = "CardTitle"
 
 const CardDescription = React.forwardRef<

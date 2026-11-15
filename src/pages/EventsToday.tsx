@@ -356,7 +356,7 @@ export default function EventsToday() {
 
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>More Event Ideas</CardTitle>
+            <CardTitle as="h2">More Event Ideas</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -75,14 +75,14 @@ export function ErrorState({
         />
       </div>
 
-      <h3
+      <h2
         className={cn(
           'font-semibold text-foreground mb-2',
           compact ? 'text-base' : 'text-lg md:text-xl'
         )}
       >
         {resolvedTitle}
-      </h3>
+      </h2>
 
       <p
         className={cn(
