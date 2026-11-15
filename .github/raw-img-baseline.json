@@ -1,7 +1,7 @@
 {
   "_comment": "Reader-facing raw <img> per file (WEB-PERF-041). These bypass OptimizedImage, so no transform srcset is emitted and the original is served. This list must only ever SHRINK - route them through OptimizedImage. clsRisk counts the ones that also reserve no height.",
-  "generated": "2026-11-07",
-  "total": 10,
+  "generated": "2026-11-15",
+  "total": 9,
   "clsRisk": 0,
   "files": {
     "src/components/AffiliateAdBanner.tsx": 1,

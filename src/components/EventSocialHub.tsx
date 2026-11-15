@@ -307,6 +307,7 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
                   </Avatar>
                   <div className="flex-1 space-y-3">
                     <Textarea
+                      aria-label="Comment on this event"
                       placeholder="Share your thoughts about this event..."
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}

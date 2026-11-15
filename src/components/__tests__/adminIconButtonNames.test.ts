@@ -64,7 +64,6 @@ describe("findUnnamedIconButtons", () => {
 describe("files fixed in WEB-UX-056 slice 1", () => {
   const fixed = [
     "src/components/ContentTable.tsx",
-    "src/components/ArticleEditor.tsx",
     "src/components/cms/EnhancedArticleEditor.tsx",
     "src/components/cms/RichTextEditor.tsx",
     "src/components/cms/CategoryTagManager.tsx",
@@ -91,14 +90,12 @@ describe("files fixed in WEB-UX-056 slice 2", () => {
     "src/components/CatchDesmoinUrlExtractor.tsx",
     "src/components/cms/AuthorManager.tsx",
     "src/components/ContentEditDialog.tsx",
-    "src/components/ContentEditor.tsx",
     "src/components/ContentQueue.tsx",
     "src/components/DataQualityDashboard.tsx",
     "src/components/DomainHighlightManager.tsx",
     "src/components/EventEditor.tsx",
     "src/components/media/VideoUpload.tsx",
     "src/components/ScraperConfigWizard.tsx",
-    "src/components/SecurityDashboard.tsx",
     "src/components/SocialMediaManager.tsx",
     "src/components/URLSourceManager.tsx",
     "src/components/WebsiteAnalysisDialog.tsx",

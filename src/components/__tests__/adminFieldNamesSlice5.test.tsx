@@ -6,9 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { findUnnamedFields } from "../../../scripts/check-field-names.mjs";
 
 /**
- * WEB-UX-068 slice 5. The last 37 unnamed fields outside the five files with
- * no importer (AttractionFilters, SecurityDashboard, EventSocialHub,
- * EventFriendFinder, LocationAutocomplete). Labels whose htmlFor pointed at
+ * WEB-UX-068 slice 5. The last 37 unnamed fields outside the five files that
+ * then had no importer (AttractionFilters, SecurityDashboard and
+ * LocationAutocomplete, since deleted by WEB-UX-072; EventSocialHub and
+ * EventFriendFinder, named in slice 6). Labels whose htmlFor pointed at
  * an id the SelectTrigger never carried, filter-row searches and Selects
  * named only by a placeholder, and per-row fields that now name their row.
  */
