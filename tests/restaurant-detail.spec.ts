@@ -177,4 +177,35 @@ test.describe('restaurant detail', () => {
       await expect(robots.nth(i)).not.toHaveAttribute('content', /noindex/);
     }
   });
+
+  // WEB-PERF-077: the AI disclosure pill renders without the
+  // Radix tooltip, which is fetched on the first mouse hover and then opens.
+  test('the AI-assisted pill loads its tooltip on hover, not with the page', async ({ page }) => {
+    await installFixtureBackend(page);
+    await serveRestaurants(page, [
+      { ...BASE, geo_faq: [{ question: 'Is there parking?', answer: 'Street parking on Locust.' }] },
+    ]);
+    const tooltipChunks: string[] = [];
+    page.on('request', (req) => {
+      if (/\/AIDisclosureTooltip-[^/]*\.js/.test(req.url())) tooltipChunks.push(req.url());
+    });
+    await page.goto(`/restaurants/${BASE.slug}`);
+
+    const pill = page.getByRole('note', { name: /^AI-assisted\. Written with AI/ });
+    await expect(pill).toBeVisible();
+    const size = async () => {
+      const box = await pill.boundingBox();
+      return box && { width: box.width, height: box.height };
+    };
+    const before = await size();
+    expect(tooltipChunks).toEqual([]);
+
+    await pill.hover();
+    await expect.poll(() => tooltipChunks.length).toBe(1);
+    // Radix opens on pointermove over its own trigger, after its delay.
+    await pill.hover({ position: { x: 4, y: 4 } });
+    await expect(page.getByRole('tooltip')).toContainText('Check anything that matters');
+    // The swap keeps the pill's size (boxes are viewport-relative, and hover scrolls).
+    expect(await size()).toEqual(before);
+  });
 });

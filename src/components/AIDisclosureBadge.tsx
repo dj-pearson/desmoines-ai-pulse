@@ -20,10 +20,11 @@
  * on the output.
  */
 
+import { useState, type ComponentType, type PointerEvent } from "react";
 import { Info } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import type { AIDisclosureTooltipProps } from "@/components/AIDisclosureTooltip";
 
 interface AIDisclosureBadgeProps {
   /** Short tooltip text. Keep it plain-English. */
@@ -33,37 +34,69 @@ interface AIDisclosureBadgeProps {
   className?: string;
 }
 
+type TooltipHalf = ComponentType<AIDisclosureTooltipProps>;
+
+let loaded: TooltipHalf | null = null;
+let pending: Promise<TooltipHalf> | null = null;
+
+/** Fetch the Radix half once; a failed fetch is retried on the next hover. */
+function loadTooltip(): Promise<TooltipHalf> {
+  if (loaded) return Promise.resolve(loaded);
+  pending ??= import("@/components/AIDisclosureTooltip").then(
+    (m) => (loaded = m.AIDisclosureTooltip),
+    (error: unknown) => {
+      pending = null;
+      throw error;
+    }
+  );
+  return pending;
+}
+
 /**
  * Inline pill — use next to titles like restaurant descriptions or article
  * summaries that were produced by generative AI.
+ *
+ * WEB-PERF-077. The hover tooltip is the only Radix popper on
+ * the event, restaurant, article and hotel detail routes, and it brought
+ * @radix-ui/react-tooltip, react-popper and all of floating-ui with it for
+ * text the pill already carries in its aria-label. The pill now renders
+ * alone and fetches AIDisclosureTooltip on the first mouse hover. Touch is
+ * skipped on purpose: Radix tooltips never open on touch, so a tap would
+ * download the chunk for nothing. The span is not focusable, before or
+ * after, so keyboard and screen-reader users get the aria-label either way.
  */
 export function AIDisclosureBadge({
   tooltip = "This content was generated or substantially assisted by AI. It may contain inaccuracies — please verify before relying on it.",
   label = "AI-generated",
   className,
 }: AIDisclosureBadgeProps) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            role="note"
-            aria-label={`${label}. ${tooltip}`}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary",
-              className
-            )}
-          >
-            <SpriteIcon name="sparkles" className="h-3 w-3" aria-hidden="true" />
-            {label}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs text-xs">
-          {tooltip}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+  const [Half, setHalf] = useState<TooltipHalf | null>(() => loaded);
+
+  const onPointerEnter = (pointerEvent: PointerEvent<HTMLSpanElement>) => {
+    if (Half || pointerEvent.pointerType === "touch") return;
+    loadTooltip()
+      .then((component) => setHalf(() => component))
+      .catch(() => {
+        // The pill is complete without its tooltip; the next hover retries.
+      });
+  };
+
+  const pill = (
+    <span
+      role="note"
+      aria-label={`${label}. ${tooltip}`}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary",
+        className
+      )}
+      onPointerEnter={Half ? undefined : onPointerEnter}
+    >
+      <SpriteIcon name="sparkles" className="h-3 w-3" aria-hidden="true" />
+      {label}
+    </span>
   );
+
+  return Half ? <Half tooltip={tooltip}>{pill}</Half> : pill;
 }
 
 interface AIDisclosureNoticeProps {

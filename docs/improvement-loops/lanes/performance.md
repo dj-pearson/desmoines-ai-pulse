@@ -8,10 +8,28 @@
 
 ## Handoff
 
-None. WEB-PERF-076 (AddToCalendarButton's Radix DropdownMenu
-loaded on first click) closed in loop 23.
+None. WEB-PERF-077 (AIDisclosureBadge's Radix Tooltip loaded on
+first mouse hover) closed in loop 24.
 
-What loop 23 added:
+What loop 24 added:
+- AIDisclosureBadge renders the pill alone and fetches AIDisclosureTooltip
+  (the Radix half) on the first non-touch pointerenter. The tooltip was the
+  only popper on EventDetails, RestaurantDetails, ArticleDetails and
+  HotelDetails, so it carried react-tooltip, react-popper and all four
+  floating-ui packages there: those four routes dropped 15.8-19.8 KB gz.
+  The half mounts closed and Radix opens it on the next pointermove over its
+  trigger; mounting it open under a pointer risks a tooltip that never gets
+  its pointerleave. aiDisclosureTooltipLazy.test.ts pins the four routes and
+  restaurant-detail.spec.ts has a smoke test (chunk fetched only on hover,
+  tooltip opens, pill keeps its size).
+- Remaining popper users on public routes, from the same per-module walk:
+  RestaurantInlineFilters' Popover on /restaurants (the next candidate:
+  @floating-ui is about 9 KB gz of the closure there), and form-field
+  ui/select on Contact, TripPlanner, BusinessPartnership, GroupTravel.
+  restaurantHours.ts (4.0 KB on 46 routes) is still the biggest app module
+  by gz x routes.
+
+What loop 23 added (WEB-PERF-076):
 - AddToCalendarButton is a static trigger; AddToCalendarMenu holds the Radix
   DropdownMenu and the export handlers and mounts already open
   (defaultOpen). It was the only DropdownMenu on the event routes, so it
@@ -136,3 +154,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-074 | this commit | Closed sort/filter selects on /events, /restaurants and /attractions (plus the calendar-feed select) are DeferredSelect, which loads @radix-ui/react-select on first click/arrow key; Attractions 134.3 -> 112.9, EventsPage 171.8 -> 164.2, Restaurants 147.3 -> 140.4 KB gz beyond the critical path (10/5/2 fewer files), no route heavier by more than 0.1; summed 8,454.8 -> 8,419.8; critical path 175.1 unchanged; graph test with negative control (2 fail on a static ui/select import); 111 smoke tests on those pages and 4 Chrome checks (click, ArrowDown, Enter, in-dialog; no layout shift, focus returned) pass; story closed |
 | 2026-11-15 | WEB-PERF-075 | this commit | Closed filter/sort selects on /playgrounds, /stay, /events/near-me and /articles are DeferredSelect; Articles 86.4 -> 52.9, Playgrounds 105.5 -> 84.5, Hotels 88.2 -> 67.9, EventsNearMe 122.8 -> 116.0 KB gz beyond the critical path (17/9/7/2 fewer files); EventsPage/Restaurants/Attractions +0.3-0.4 and one file (deferred-select now a shared chunk); summed 8,438.8 -> 8,361.0; critical path 175.2 unchanged; graph test extended to 7 routes with negative control (1 fails on a static ui/select import); 118 smoke tests on those pages plus 4 throwaway Chrome checks (click, ArrowDown, pick updates URL, focus returned, no size change) pass; vitest 3588/3588 |
 | 2026-11-15 | WEB-PERF-076 | this commit | AddToCalendarButton is a static trigger and loads AddToCalendarMenu (Radix DropdownMenu + export handlers) on first click/Enter/ArrowDown, opened with the first item focused on a keyboard open; seven event landings 118-124 -> 83-89 KB gz beyond the critical path (-35.3, 17 fewer files each), EventsPage 165.4 -> 142.7, EventsNearMe 116.5 -> 96.9, EventDetails 138.3 -> 120.3, none heavier by more than 0.1; summed 8,384.8 -> 8,080.7; critical path 175.2 unchanged; graph test with negative control (12 of 13 fail on the old button); 55 smoke tests on event pages plus 2 throwaway Chrome checks (chunk fetched only on use, keyboard focus, Escape returns focus, same size) pass |
+| 2026-11-15 | WEB-PERF-077 | this commit | AIDisclosureBadge renders the pill alone and loads AIDisclosureTooltip (Radix Tooltip) on the first mouse hover; EventDetails 120.3 -> 100.5, HotelDetails 88.5 -> 68.9, RestaurantDetails 119.8 -> 103.8, ArticleDetails 129.0 -> 113.2, TripPlanner 116.9 -> 114.0 KB gz beyond the critical path (6-10 fewer files), none heavier; summed 8,120.1 -> 8,042.0; critical path 175.2 unchanged; graph test with negative control (6 of 7 fail on the old badge); new smoke test in restaurant-detail.spec.ts (chunk only on hover, tooltip opens, same size) passes 3/3 repeats with 50 other detail-page smoke tests; vitest 3659/3659 |
