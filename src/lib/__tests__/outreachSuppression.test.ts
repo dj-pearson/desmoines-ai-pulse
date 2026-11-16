@@ -95,7 +95,8 @@ describe("isOutreachSuppressed (AOS-PROSPECT-009)", () => {
 
   it("the old exact filter missed the same row (the defect)", async () => {
     const { client } = fakeClient({ outreach_suppression: [{ id: "s1", email: "owner@biz.com" }] });
-    const { data } = await client.from("outreach_suppression").select("id").or("email.eq.Owner@Biz.com,domain.eq.Biz.com").limit(1) as unknown as { data: Row[] };
+    const { data, error } = await client.from("outreach_suppression").select("id").or("email.eq.Owner@Biz.com,domain.eq.Biz.com").limit(1) as unknown as { data: Row[]; error: unknown };
+    expect(error).toBeNull();
     expect(data).toEqual([]);
   });
 
