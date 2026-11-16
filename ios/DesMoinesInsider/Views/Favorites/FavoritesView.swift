@@ -770,12 +770,20 @@ private struct FavoriteEventRow: View {
         Task { onCalendarResult(await EventCalendarWriter.add(event)) }
     }
 
+    /// Typed on its own: written inline as `showsAddToCalendar ? addToCalendar : nil`
+    /// inside the row's builder, Swift 6.2 (Xcode 26.3) gives up with "failed to
+    /// produce diagnostic for expression".
+    private var addToCalendarAction: (() -> Void)? {
+        guard showsAddToCalendar else { return nil }
+        return { addToCalendar() }
+    }
+
     var body: some View {
         SavedRowShell(
             name: event.title,
             onOpen: onOpen,
             onRemove: onRemove,
-            onAddToCalendar: showsAddToCalendar ? addToCalendar : nil
+            onAddToCalendar: addToCalendarAction
         ) {
             SavedRowLayout {
                 savedThumbnail(url: event.imageUrl, icon: event.eventCategory.icon, tint: event.eventCategory.color, dimmed: isPast)
