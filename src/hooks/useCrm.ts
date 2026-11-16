@@ -34,6 +34,8 @@ export interface CrmAccount {
   category: string | null;
   city: string | null;
   website: string | null;
+  /** Source listing, e.g. "restaurants:<uuid>". Absent from an older crm-console. */
+  business_ref?: string | null;
   advertiser_user_id: string | null;
 }
 
