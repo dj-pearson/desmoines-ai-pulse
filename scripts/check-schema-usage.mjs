@@ -235,6 +235,11 @@ const PENDING_MIGRATIONS = [
   // until the sender slice, so the pending window answers 503 or the page's
   // fixed error copy to a request nobody sends.
   { rpc: 'marketing_unsubscribe_by_token', migration: '20261108000104' },
+  // The sender half of WEB-ADS-035: sendNurtureEmail mints a member's token
+  // through it. The pending window is safe because the call is non-fatal: it
+  // errors, the email keeps the sign-in-or-mailto footer, and no ?account=
+  // link is written until the function answers.
+  { rpc: 'ensure_marketing_unsubscribe_token', migration: '20261108000104' },
   // One-click outreach opt-out for crm_leads prospects (AOS-PROSPECT-009).
   // email-unsubscribe's ?outreach= branch and /unsubscribe call it, and no
   // email carries an ?outreach= link until the sender slice, so the pending

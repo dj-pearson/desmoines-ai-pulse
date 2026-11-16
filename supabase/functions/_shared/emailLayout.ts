@@ -59,6 +59,15 @@ export interface EmailRecipient {
    */
   alertsToken?: string | null;
   /**
+   * WEB-ADS-035: marketing_unsubscribe_tokens.token for a member with no
+   * newsletter row. Used only when there is no reminder, alerts or newsletter
+   * token: the footer links to /unsubscribe?account= and the one-click header
+   * to email-unsubscribe?account=, both running marketing_unsubscribe_by_token,
+   * which writes the same 'unsubscribe' suppression the newsletter token does.
+   * Without it a member's marketing mail had only a sign-in link and mailto.
+   */
+  accountToken?: string | null;
+  /**
    * Optional per-email unsubscribe path. If the link should cancel a specific
    * kind of email (e.g. event reminders only) rather than all marketing,
    * pass `?tab=settings` or `/profile?tab=settings`.
@@ -107,6 +116,9 @@ export function buildUnsubscribeUrl(recipient: EmailRecipient): string {
       recipient.unsubscribeToken
     )}`;
   }
+  if (recipient.accountToken) {
+    return `${SITE_URL}/unsubscribe?account=${encodeURIComponent(recipient.accountToken)}`;
+  }
   return `${SITE_URL}${recipient.preferencesPath ?? "/profile?tab=settings"}`;
 }
 
@@ -146,6 +158,15 @@ export function buildOneClickAlertsUrl(
   return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?alerts=${encodeURIComponent(alertsToken)}`;
 }
 
+/** The one-click target for a member's account token: email-unsubscribe?account=. */
+export function buildOneClickAccountUrl(
+  accountToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!accountToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?account=${encodeURIComponent(accountToken)}`;
+}
+
 /** Where a saved-search alert's footer sends the reader to manage alerts. */
 const SAVED_SEARCHES_PATH = "/dashboard?tab=saved-searches";
 
@@ -172,7 +193,7 @@ export function listUnsubscribeHeaders(rendered: RenderedEmail): Record<string, 
 }
 
 /*
- * Without a token (no reminder, alerts or newsletter token) the footer link
+ * Without a token (no reminder, alerts, newsletter or account token) the footer link
  * goes to a page behind a sign-in, so it must not promise "one click"
  * (WEB-ADS-035). It names the mailto opt-out instead, which works signed out
  * and is the same address the List-Unsubscribe header carries.
@@ -210,6 +231,18 @@ function renderMarketingFooterHtml(recipient: EmailRecipient): string {
         ${escapeHtml(POSTAL_ADDRESS.name)}. You can
         <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
           unsubscribe in one click
+        </a>
+        or update your
+        <a href="${SITE_URL}/profile?tab=settings" style="color:#666;text-decoration:underline;">
+          email preferences</a>.
+      </p>`
+    : recipient.accountToken
+    ? `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because you have an account on
+        ${escapeHtml(POSTAL_ADDRESS.name)}. You can
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          unsubscribe from marketing emails in one click
         </a>
         or update your
         <a href="${SITE_URL}/profile?tab=settings" style="color:#666;text-decoration:underline;">
@@ -257,6 +290,10 @@ Your saved searches: ${SITE_URL}${SAVED_SEARCHES_PATH}`
     : recipient.unsubscribeToken
     ? `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
 Unsubscribe (one click): ${unsubscribeUrl}
+Email preferences: ${SITE_URL}/profile?tab=settings`
+    : recipient.accountToken
+    ? `You're receiving this email because you have an account on ${POSTAL_ADDRESS.name}.
+Unsubscribe from marketing emails (one click): ${unsubscribeUrl}
 Email preferences: ${SITE_URL}/profile?tab=settings`
     : `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
 To stop these emails, sign in and change your email preferences: ${unsubscribeUrl}
@@ -349,7 +386,9 @@ export function renderEmail(opts: RenderEmailOptions): RenderedEmail {
       ? buildOneClickReminderUrl(opts.recipient.reminderToken)
       : opts.recipient.alertsToken
       ? buildOneClickAlertsUrl(opts.recipient.alertsToken)
-      : buildOneClickUnsubscribeUrl(opts.recipient.unsubscribeToken);
+      : opts.recipient.unsubscribeToken
+      ? buildOneClickUnsubscribeUrl(opts.recipient.unsubscribeToken)
+      : buildOneClickAccountUrl(opts.recipient.accountToken);
     if (!oneClick) return { html, text, listUnsubscribe: MAILTO_UNSUBSCRIBE };
     return {
       html,
