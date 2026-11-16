@@ -21,6 +21,7 @@ import {
   orderByDistance,
   resolveOpenAt,
   useOpenNowRestaurants,
+  useServingWithoutHoursCount,
   type Coordinates,
   type EvaluatedRestaurant,
   type OpenNowRestaurantRow,
@@ -75,7 +76,7 @@ const FAQ_DATA: FAQItem[] = [
   {
     question: "How does this page decide a place is open?",
     answer:
-      "It reads the opening hours Google lists for each restaurant and checks them against the time in Des Moines. When we can't read a place's hours, we don't call it open or closed; it goes in the \"Hours we couldn't read\" list with a link to its page.",
+      "It reads the opening hours Google lists for each restaurant and checks them against the time in Des Moines. When we can't read a place's hours, we don't call it open or closed; it goes in the \"Hours we couldn't read\" list with a link to its page. Places with no listed hours at all aren't checked either; the page says how many there are.",
   },
   {
     question: "Can I see what's open later tonight?",
@@ -328,8 +329,9 @@ function HowThisWorks() {
         How this page works
       </h2>
       <p className="mb-3 text-muted-foreground">
-        Each restaurant's listing carries its hours as text. We read that text and check it against the time in Des Moines,
-        once a minute while the page is open. A place whose hours we can't read isn't counted as open or closed.
+        We read the opening hours Google lists for each restaurant and check them against the time in Des Moines, once a
+        minute while the page is open. A place whose hours we can't read, or that has no listed hours, isn't counted as
+        open or closed.
       </p>
       <p className="mb-3 text-muted-foreground">
         Holiday and seasonal hours aren't in our listings, and a kitchen can stop taking orders before the posted close.
@@ -350,6 +352,7 @@ export default function OpenNowRestaurants() {
   const prerender = isPrerender();
   const now = useMinuteClock();
   const { data: rows, isLoading, error, refetch } = useOpenNowRestaurants({ enabled: !prerender });
+  const { data: withoutHours } = useServingWithoutHoursCount({ enabled: !prerender });
   const { getStr, setParam, clearParams } = useUrlFilters();
   const formId = useId();
   const [nearMe, setNearMe] = useState<NearMeState>({ kind: "off" });
@@ -484,6 +487,16 @@ export default function OpenNowRestaurants() {
                   <strong className="text-foreground">Checking listed hours against the time in Des Moines.</strong>
                 )}
               </p>
+              {view && typeof withoutHours === "number" && withoutHours > 0 && (
+                <p className="mb-2 max-w-[70ch] text-muted-foreground" data-open-now-no-hours>
+                  {withoutHours} more {withoutHours === 1 ? "place has" : "places have"} no listed hours, so{" "}
+                  {withoutHours === 1 ? "it isn't" : "they aren't"} counted here.{" "}
+                  <Link to="/restaurants" className="font-semibold text-primary hover:underline">
+                    Browse all restaurants
+                  </Link>
+                  .
+                </p>
+              )}
               <p className="max-w-[70ch] text-sm text-muted-foreground">
                 Hours come from each restaurant's listing and can be out of date. Call ahead to confirm, especially on
                 holidays.
