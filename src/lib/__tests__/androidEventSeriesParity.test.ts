@@ -100,7 +100,7 @@ describe("Android annual event series match the web (AND-AUDIT-042)", () => {
 
   it("the title patterns are built the way the web builds them", () => {
     const src = readFileSync(SERIES, "utf8");
-    expect(src).toContain('def.aliases.map { "title.ilike.*${it.split(" ").joinToString("*")}*" }');
+    expect(src).toContain(`def.aliases.map { "title.ilike.*\${it.split(" ").joinToString("*")}*" }`);
     // The Kotlin template above, evaluated here, is the web's output.
     for (const def of EVENT_SERIES) {
       const kotlin = def.aliases.map((a) => `title.ilike.*${a.split(" ").join("*")}*`);
@@ -147,7 +147,7 @@ describe("Android annual event series match the web (AND-AUDIT-042)", () => {
 
   it("the like patterns are the web's title patterns in supabase-kt form", () => {
     const src = readFileSync(SERIES, "utf8");
-    expect(src).toContain('def.aliases.map { "%\\${it.split(" ").joinToString("%")}%" }');
+    expect(src).toContain(`def.aliases.map { "%\${it.split(" ").joinToString("%")}%" }`);
     for (const def of EVENT_SERIES) {
       const kotlin = def.aliases.map((a) => `%${a.split(" ").join("%")}%`);
       const web = seriesTitlePatterns(def).map((p) => p.replace(/^title\.ilike\./, "").replace(/\*/g, "%"));
