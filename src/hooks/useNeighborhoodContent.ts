@@ -27,6 +27,7 @@ export interface NeighborhoodRestaurant {
 export interface NeighborhoodAttraction {
   id: string;
   name: string;
+  slug: string | null;
   type: string | null;
   location: string | null;
   address: string | null;

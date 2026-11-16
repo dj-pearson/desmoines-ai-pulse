@@ -8,8 +8,32 @@
 
 ## Handoff
 
-Loop 29 (drain round) did WEB-PERF-031's code steps; the story stays open
-only for a real types.ts regeneration.
+Loop 30 (drain round) moved six more link builders on WEB-PERF-031 to the
+stored slug. The story stays open for a real types.ts regeneration and the
+link builders listed below.
+
+What loop 30 did:
+- AttractionsMap (popup; its private createSlug copy is gone), PlaygroundsMap
+  (marker slug), PlaygroundHubGuide (best-by-age and splash-pad links and their
+  ItemList URLs), AttractionsFactsIntro (free-admission links; useAttractionFacts
+  now selects slug), NeighborhoodGuide (attraction cards; ATTRACTION_LIST_COLUMNS
+  already had slug) and useOutdoorsNearby (both selects add slug) all link
+  through slugHref. So every attraction/playground link on /attractions,
+  /playgrounds, /outdoors and /neighborhoods/:slug now agrees with the cards.
+- useOutdoorAttractions de-duplicated by path; with stored slugs a duplicate
+  pair has two paths (union-park, union-park-2), so it now keys on
+  createSlug(name) to keep listing one of each name, as before.
+- storedSlugLinks.test.tsx renders the hub guide and the free list with a
+  suffixed slug and scans the six files; all 9 tests fail on the old sources.
+
+Still building attraction/playground links from createSlug(name), each needing
+its select checked for slug first: FavoritesView (playgrounds), useVoting,
+useMyBusinessClaims, useDeals, pseo/listingHrefs, claimOutreach, DiscoverMap,
+AdvancedSearchPage, SEOTools (admin), and the sitemap generator in scripts/.
+DiscoverMap and the sitemap matter most: the map is a public page and the
+sitemap tells search engines the wrong URL for riverview-park-2.
+
+Loop 29 did WEB-PERF-031's code steps.
 
 What loop 29 did and left:
 - fetchBySlug is one `.eq("slug")` request; the (id, name) fallback and the
@@ -26,12 +50,6 @@ What loop 29 did and left:
 - Why it matters beyond the fallback: the seo-061 export has riverview-park-2
   and union-park-2, so every name-built link and the detail page's own
   canonical pointed at the other park.
-- Still building links from createSlug(name), to move to slugHref when their
-  query selects slug: FavoritesView (playgrounds; attractions link by id),
-  PlaygroundHubGuide, AttractionsFactsIntro, AttractionsMap,
-  NeighborhoodGuide, useOutdoorsNearby, useVoting, useMyBusinessClaims,
-  useDeals, pseo/listingHrefs, claimOutreach, DiscoverMap, and the sitemap
-  generator in scripts/. Each needs its select checked for slug first.
 
 What loop 28 found, worth more than the one-line change:
 - Migrations 20260919000007 (restaurants.is_brewery) and 20260919000008
@@ -279,3 +297,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-080 | this commit | Status helpers and result/stored types moved from restaurantHours.ts to new import-free restaurantStatus.ts and re-exported; 25 light importers switched; 9 routes 3.5-3.6 KB gz lighter beyond the critical path (PseoRoutePage 68.8 -> 65.3, PlaygroundDetails 65.4 -> 61.8, Deals 44.6 -> 41.1, NeighborhoodPage 33.1 -> 29.6), 22 parser routes +1 file and +0.1-0.2; summed 7,898.8 -> 7,870.4, files 6,771 -> 6,793; critical path 175.2 unchanged; graph test with negative control (1 fails on one reverted import); vitest 3760/3760 |
 | 2026-11-15 | WEB-PERF-035 | this commit | useBreweries filters on is_brewery plus the two cuisine patterns instead of nine hardcoded name ILIKEs (BREWERY_NAMES deleted); column confirmed live from 2026-10-01 production exports in scripts/content-backups; 4 new unit tests, all 4 fail against the old hook; brewery-trail smoke spec 21/21 over 3 repeats; type-check ratchet 30/30, check-schema/list-columns/select-star clean; story closed |
 | 2026-11-16 | WEB-PERF-031 | this commit | fetchBySlug fallback and cast deleted (one slug request, 42703 throws); slug hand-added to types.ts and to the attraction/playground list and card projections; new slugHref.ts drives hub cards, schema, detail canonicals, side cards and trending links by stored slug (riverview-park-2 linked to the wrong park before); check-list-columns 22/22, check-schema clean, type ratchet 30/30, vitest 3836/3836, 48 attraction/playground smoke tests; resolveBySlug and dashboardItems tests with negative controls (1 and 2 fail on revert); story open for real types regeneration |
+| 2026-11-16 | WEB-PERF-031 | this commit | Six more link builders on the stored slug: attractions/playgrounds maps, playground hub guide (and its ItemList URLs), free-admission list (useAttractionFacts selects slug), neighborhood attraction cards, outdoors nearby/outdoor-attraction links (both selects add slug; dedupe now by name); new storedSlugLinks.test.tsx, 9 of 9 fail on revert; eslint clean, type ratchet 30/30, check-schema clean, check-list-columns 22/22, vitest 3885/3885, 57 attraction/playground/outdoors smoke tests in Chrome; story open for types regeneration and 10 remaining builders |
