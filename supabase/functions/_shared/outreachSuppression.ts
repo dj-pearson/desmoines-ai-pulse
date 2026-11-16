@@ -102,3 +102,36 @@ export async function recordOutreachOptOut(supabase: Client, email: string, reas
   if (insertError) throw new Error(`outreach_suppression insert failed: ${insertError.message}`);
   return true;
 }
+
+/** outreach_unsubscribe_tokens.token: 48 lowercase hex, as the table's CHECK requires. */
+const OUTREACH_TOKEN = /^[0-9a-f]{48}$/;
+
+/**
+ * The lead's one-click outreach opt-out token, minted on first use by
+ * ensure_outreach_unsubscribe_token (migration 20261115000101), or null.
+ *
+ * Null means DO NOT SEND. Unlike the nurture account token, which falls back to
+ * a sign-in-or-mailto footer, a cold partnership email is sent to someone who
+ * never signed up and has no account to sign in to; a footer without a working
+ * opt-out is the defect AOS-PROSPECT-009 exists to fix. Never throws, so one
+ * failed mint skips one lead and the batch goes on.
+ *
+ * Deploy order: the senders that call this halt every step until the migration
+ * is applied, because the RPC does not exist before it.
+ */
+export async function ensureOutreachUnsubscribeToken(supabase: Client, leadId: string, tag: string): Promise<string | null> {
+  if (!leadId) return null;
+  try {
+    const { data, error } = await supabase.rpc("ensure_outreach_unsubscribe_token", { p_lead_id: leadId });
+    if (error) {
+      console.warn(`[${tag}] outreach unsubscribe token mint failed for lead ${leadId}; not sending: ${error.message}`);
+      return null;
+    }
+    if (typeof data === "string" && OUTREACH_TOKEN.test(data)) return data;
+    console.warn(`[${tag}] outreach unsubscribe token mint returned no usable token for lead ${leadId}; not sending`);
+    return null;
+  } catch (err) {
+    console.warn(`[${tag}] outreach unsubscribe token mint threw for lead ${leadId}; not sending: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}

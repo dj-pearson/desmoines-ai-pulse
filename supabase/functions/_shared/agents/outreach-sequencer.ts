@@ -18,7 +18,7 @@ import { createApproval } from "../agentApprovals.ts";
 import { writeAgentAudit } from "../auditLog.ts";
 import { listUnsubscribeHeaders, renderEmail } from "../emailLayout.ts";
 import { sendEmail } from "../email.ts";
-import { isOutreachSuppressed } from "../outreachSuppression.ts";
+import { ensureOutreachUnsubscribeToken, isOutreachSuppressed } from "../outreachSuppression.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "outreach-sequencer";
@@ -98,11 +98,17 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     const gate = await scoreOutput(supabase, { agentKey: AGENT_KEY, category: "prospect", content: `${subject}\n\n${bodyText}` });
     if (!gate.passed) { gated++; continue; }
 
+    // AOS-PROSPECT-009: the footer and List-Unsubscribe carry this lead's
+    // opt-out token. No token, no send: the old footer linked to /unsubscribe
+    // with nothing, which shows "invalid link" to a prospect who never signed up.
+    const outreachToken = await ensureOutreachUnsubscribeToken(supabase, l.id, "outreach-sequencer");
+    if (!outreachToken) { skipped++; continue; }
+
     // CAN-SPAM compliant render (physical address + one-click unsubscribe).
     const rendered = renderEmail({
       bodyHtml: `<p>${bodyText.replace(/\n/g, "<br>")}</p>`,
       bodyText,
-      recipient: { email, preferencesPath: "/unsubscribe" },
+      recipient: { email, outreachToken },
       category: "marketing",
     });
 

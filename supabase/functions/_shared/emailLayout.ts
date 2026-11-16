@@ -68,6 +68,18 @@ export interface EmailRecipient {
    */
   accountToken?: string | null;
   /**
+   * AOS-PROSPECT-009: outreach_unsubscribe_tokens.token for a crm_leads
+   * prospect on a partnership (outreach) email. Checked right after the
+   * reminder and alerts tokens and before the newsletter and account tokens:
+   * the footer links to /unsubscribe?outreach= and the one-click header to
+   * email-unsubscribe?outreach=, both running outreach_unsubscribe_by_token,
+   * which suppresses outreach to that address and leaves the newsletter alone.
+   * A prospect never signed up for anything, so the footer must not say they
+   * did; before this the outreach footer linked to /unsubscribe with no token,
+   * which shows "invalid link".
+   */
+  outreachToken?: string | null;
+  /**
    * Optional per-email unsubscribe path. If the link should cancel a specific
    * kind of email (e.g. event reminders only) rather than all marketing,
    * pass `?tab=settings` or `/profile?tab=settings`.
@@ -110,6 +122,9 @@ export function buildUnsubscribeUrl(recipient: EmailRecipient): string {
   }
   if (recipient.alertsToken) {
     return `${SITE_URL}/unsubscribe?alerts=${encodeURIComponent(recipient.alertsToken)}`;
+  }
+  if (recipient.outreachToken) {
+    return `${SITE_URL}/unsubscribe?outreach=${encodeURIComponent(recipient.outreachToken)}`;
   }
   if (recipient.unsubscribeToken) {
     return `${SITE_URL}/unsubscribe?token=${encodeURIComponent(
@@ -167,6 +182,15 @@ export function buildOneClickAccountUrl(
   return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?account=${encodeURIComponent(accountToken)}`;
 }
 
+/** The one-click target for a prospect's outreach token: email-unsubscribe?outreach=. */
+export function buildOneClickOutreachUrl(
+  outreachToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!outreachToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?outreach=${encodeURIComponent(outreachToken)}`;
+}
+
 /** Where a saved-search alert's footer sends the reader to manage alerts. */
 const SAVED_SEARCHES_PATH = "/dashboard?tab=saved-searches";
 
@@ -193,7 +217,7 @@ export function listUnsubscribeHeaders(rendered: RenderedEmail): Record<string, 
 }
 
 /*
- * Without a token (no reminder, alerts, newsletter or account token) the footer link
+ * Without a token (no reminder, alerts, outreach, newsletter or account token) the footer link
  * goes to a page behind a sign-in, so it must not promise "one click"
  * (WEB-ADS-035). It names the mailto opt-out instead, which works signed out
  * and is the same address the List-Unsubscribe header carries.
@@ -223,6 +247,18 @@ function renderMarketingFooterHtml(recipient: EmailRecipient): string {
         or manage your
         <a href="${SITE_URL}${SAVED_SEARCHES_PATH}" style="color:#666;text-decoration:underline;">
           saved searches</a>.
+      </p>`
+    : recipient.outreachToken
+    ? `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because ${escapeHtml(POSTAL_ADDRESS.name)}
+        found your business contact and is reaching out about a partnership.
+        You can
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          stop these partnership emails in one click
+        </a>
+        or email
+        <a href="mailto:${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}?subject=unsubscribe" style="color:#666;text-decoration:underline;">${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}</a>.
       </p>`
     : recipient.unsubscribeToken
     ? `
@@ -287,6 +323,10 @@ Your reminders: ${SITE_URL}/my-events?tab=reminders`
     ? `You're receiving this email because you turned on alerts for a saved search on ${POSTAL_ADDRESS.name}.
 Turn off saved-search alerts (one click): ${unsubscribeUrl}
 Your saved searches: ${SITE_URL}${SAVED_SEARCHES_PATH}`
+    : recipient.outreachToken
+    ? `You're receiving this email because ${POSTAL_ADDRESS.name} found your business contact and is reaching out about a partnership.
+Stop these partnership emails (one click): ${unsubscribeUrl}
+Or email ${POSTAL_ADDRESS.unsubscribeEmail} with the subject "unsubscribe".`
     : recipient.unsubscribeToken
     ? `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
 Unsubscribe (one click): ${unsubscribeUrl}
@@ -386,6 +426,8 @@ export function renderEmail(opts: RenderEmailOptions): RenderedEmail {
       ? buildOneClickReminderUrl(opts.recipient.reminderToken)
       : opts.recipient.alertsToken
       ? buildOneClickAlertsUrl(opts.recipient.alertsToken)
+      : opts.recipient.outreachToken
+      ? buildOneClickOutreachUrl(opts.recipient.outreachToken)
       : opts.recipient.unsubscribeToken
       ? buildOneClickUnsubscribeUrl(opts.recipient.unsubscribeToken)
       : buildOneClickAccountUrl(opts.recipient.accountToken);

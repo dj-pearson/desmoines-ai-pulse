@@ -241,10 +241,16 @@ const PENDING_MIGRATIONS = [
   // link is written until the function answers.
   { rpc: 'ensure_marketing_unsubscribe_token', migration: '20261108000104' },
   // One-click outreach opt-out for crm_leads prospects (AOS-PROSPECT-009).
-  // email-unsubscribe's ?outreach= branch and /unsubscribe call it, and no
-  // email carries an ?outreach= link until the sender slice, so the pending
-  // window answers 503 or the page's fixed error copy to a request nobody sends.
+  // email-unsubscribe's ?outreach= branch and /unsubscribe call it. No email
+  // carries an ?outreach= link until ensure_outreach_unsubscribe_token below has
+  // answered, and that needs the same migration, so the pending window answers
+  // 503 or the page's fixed error copy to a request nobody sends.
   { rpc: 'outreach_unsubscribe_by_token', migration: '20261115000101' },
+  // The sender half of AOS-PROSPECT-009: both outreach senders mint the lead's
+  // token through it before each step and DO NOT SEND without one, so in the
+  // pending window outreach is halted, not sent with a dead opt-out link.
+  // Apply the migration before deploying agent-runner or agent-outreach.
+  { rpc: 'ensure_outreach_unsubscribe_token', migration: '20261115000101' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];
