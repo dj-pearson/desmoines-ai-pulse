@@ -1929,7 +1929,13 @@ Deno.serve(async (req) => {
       // extractor starts returning nothing, and this branch used to answer 200
       // and leave no trace of it anywhere.
       const emptyRun = await runJob("ai-crawler", async (ctx) => {
-        ctx.meta({ url, category, sources: { [crawlSource]: emptyCounts } });
+        ctx.meta({
+          url,
+          category,
+          // WEB-BE-051: an adapter run that found nothing new still read pages.
+          ...(adapterResult?.listing ? { listing: adapterResult.listing } : {}),
+          sources: { [crawlSource]: emptyCounts },
+        });
       });
       return new Response(
         JSON.stringify({
@@ -2009,6 +2015,8 @@ Deno.serve(async (req) => {
       ctx.meta({
         url,
         category,
+        // How far a paginated adapter read (WEB-BE-051).
+        ...(adapterResult?.listing ? { listing: adapterResult.listing } : {}),
         sources: {
           [crawlSource]: {
             fetched: filteredItems.length,

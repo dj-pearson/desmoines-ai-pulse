@@ -1065,6 +1065,9 @@ serve(async (req) => {
         url,
         category,
         modelSkipped,
+        // How far a paginated adapter read (WEB-BE-051): pages, why the walk
+        // stopped, and the latest event day reached against the 90-day horizon.
+        ...(adapterResult?.listing ? { listing: adapterResult.listing } : {}),
         // An unchanged page is left OUT of `sources`. It inserted nothing
         // because nothing changed, and counting it would start the
         // zero_inserted_streak alert (ingestionHealth.ts) on a healthy source.

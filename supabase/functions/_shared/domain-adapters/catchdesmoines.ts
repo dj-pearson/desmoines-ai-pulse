@@ -42,8 +42,8 @@ import {
   selectDetailUrls,
   toAdapterEvent,
 } from "./catchdesmoinesParse.ts";
+import { listingReport, walkListing } from "./catchdesmoinesListing.ts";
 
-const SITE_ORIGIN = "https://www.catchdesmoines.com";
 const PAGE_SIZE = 12;
 // Three pages was 36 events, which on the unfiltered /events/ listing the
 // scheduled job crawls is two or three days of the calendar. Eight pages is
@@ -54,10 +54,6 @@ const MAX_LIST_PAGES = 8;
 const LIST_BUDGET_MS = 75_000;
 const MAX_DETAIL_PAGES = 100;
 const DETAIL_CONCURRENCY = 6;
-
-const VALID_DETAIL_PATH = /^\/event\/[a-z0-9-]+\/\d+\/?$/i;
-const EVENT_LINK_RE =
-  /href="(https?:\/\/(?:www\.)?catchdesmoines\.com)?(\/event\/[a-z0-9-]+\/\d+\/?)"/gi;
 
 // WEB-SEC-024: BROWSER_HEADERS used to be declared here, with its own pasted
 // Chrome/120 User-Agent. adapterHeaders() builds them from getScraperConfig(),
@@ -86,8 +82,19 @@ export const catchdesmoinesAdapter: DomainAdapter = {
   ): Promise<AdapterResult> {
     console.log(`🏛️ [catchdesmoines] Discovering events from ${url}`);
 
-    const detailUrls = await discoverEventUrls(url);
-    if (detailUrls.size === 0) {
+    const walk = await walkListing(
+      url,
+      async (pageUrl) => {
+        const r = await scrapeUrl(pageUrl, { waitTime: 5000, timeout: 30000 });
+        return { ok: r.success, html: r.html, error: r.error };
+      },
+      { maxPages: MAX_LIST_PAGES, pageSize: PAGE_SIZE, budgetMs: LIST_BUDGET_MS },
+    );
+    const detailUrls = walk.urls;
+    console.log(
+      `[catchdesmoines] list walk read ${walk.pagesRead} page(s) (${walk.pagesFailed} failed), stopped on ${walk.listingStop}`,
+    );
+    if (detailUrls.length === 0) {
       return {
         success: false,
         items: [],
@@ -96,7 +103,7 @@ export const catchdesmoinesAdapter: DomainAdapter = {
       };
     }
     console.log(
-      `📌 [catchdesmoines] ${detailUrls.size} unique event URL(s) to fetch`,
+      `📌 [catchdesmoines] ${detailUrls.length} unique event URL(s) to fetch`,
     );
 
     // Stored listings are dropped before the budget is applied, so the 100
@@ -124,60 +131,23 @@ export const catchdesmoinesAdapter: DomainAdapter = {
     console.log(
       `✅ [catchdesmoines] ${items.length} events parsed from ${urls.length} detail pages`,
     );
-    return { success: true, items, adapter: "catchdesmoines", skippedKnown };
+    const listing = listingReport(
+      walk,
+      { fetched: urls.length, skippedKnown, parsed: items },
+      new Date(),
+    );
+    console.log(
+      `[catchdesmoines] read through ${listing.latestFetchedDay ?? "no dated event"} (horizon ${listing.horizonDay}${listing.reachedHorizon ? ", reached" : ""})`,
+    );
+    return {
+      success: true,
+      items,
+      adapter: "catchdesmoines",
+      skippedKnown,
+      listing,
+    };
   },
 };
-
-async function discoverEventUrls(baseUrl: string): Promise<Set<string>> {
-  const eventUrls = new Set<string>();
-  const startedAt = Date.now();
-
-  for (let page = 0; page < MAX_LIST_PAGES; page++) {
-    if (page > 0 && Date.now() - startedAt > LIST_BUDGET_MS) {
-      console.log(
-        `  ⏱️ [catchdesmoines] list budget spent after ${page} page(s); continuing with ${eventUrls.size} URL(s)`,
-      );
-      break;
-    }
-    const pageUrl = new URL(baseUrl);
-    pageUrl.searchParams.set("bounds", "false");
-    pageUrl.searchParams.set("view", "grid");
-    pageUrl.searchParams.set("sort", "date");
-    if (page > 0) {
-      pageUrl.searchParams.set("skip", String(page * PAGE_SIZE));
-    }
-
-    const before = eventUrls.size;
-    console.log(
-      `🔎 [catchdesmoines] list page ${page + 1}/${MAX_LIST_PAGES}: ${pageUrl}`,
-    );
-
-    const result = await scrapeUrl(pageUrl.toString(), {
-      waitTime: 5000,
-      timeout: 30000,
-    });
-    if (!result.success || !result.html) {
-      console.log(
-        `  ⚠️ [catchdesmoines] list page ${page + 1} failed: ${result.error}`,
-      );
-      continue;
-    }
-
-    EVENT_LINK_RE.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = EVENT_LINK_RE.exec(result.html)) !== null) {
-      const path = m[2];
-      if (!VALID_DETAIL_PATH.test(path.replace(/\/$/, "/"))) continue;
-      eventUrls.add(`${SITE_ORIGIN}${path.replace(/\/?$/, "/")}`);
-    }
-
-    const added = eventUrls.size - before;
-    console.log(`  → page added ${added} new URL(s) (total ${eventUrls.size})`);
-    if (page > 0 && added === 0) break; // no more pages
-  }
-
-  return eventUrls;
-}
 
 async function fetchEventDetail(url: string): Promise<AdapterEvent | null> {
   try {
