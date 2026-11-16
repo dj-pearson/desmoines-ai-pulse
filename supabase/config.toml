@@ -400,6 +400,53 @@ verify_jwt = false
 # appended passes. Fix the chain check before opening it to anonymous callers.
 
 # ---------------------------------------------------------------------------
+# Supabase Auth rules (WEB-AUTH-009). Before this block the password policy,
+# the redirect allow-list and the confirmation setting lived only in the
+# dashboard, so the client's rules (src/lib/passwordStrength.ts) had nothing in
+# the repo to agree with. src/lib/__tests__/authConfigReconciled.test.ts fails
+# when either side moves without the other.
+#
+# Like the SMTP block below, this applies to `supabase start` and reaches the
+# hosted project only through `supabase config push`. It was written from the
+# code, not read from the dashboard (no dashboard access when it was added), so
+# before the first push compare the diff the CLI prints with Auth > URL
+# Configuration and Auth > Providers > Email, and add anything the dashboard
+# has that this list lacks (a preview deploy, say): a push replaces the hosted
+# redirect list with this one.
+[auth]
+# Fallback when a client sends no redirect. Every client here sends one; GoTrue
+# also accepts any path on this host without a list entry.
+site_url = "https://desmoinesinsider.com"
+# Exact paths, with ** only to admit the query string the callers append
+# (/auth/callback?redirect=/auth/verified, auth-callback?flow=recovery).
+#   web:      src/lib/authActions.ts, src/pages/AuthVerified.tsx
+#   iOS:      SupabaseService.swift redirectToURL <bundle>://auth-callback
+#   Android:  AuthCallbackRouter.OAUTH_REDIRECT_URL,
+#             AuthRemoteDataSource.RECOVERY_REDIRECT_URL
+additional_redirect_urls = [
+  "https://desmoinesinsider.com/auth/callback**",
+  "https://desmoinesinsider.com/auth/verified**",
+  "https://desmoinesinsider.com/auth/reset-password**",
+  "https://www.desmoinesinsider.com/auth/callback**",
+  "https://www.desmoinesinsider.com/auth/verified**",
+  "https://www.desmoinesinsider.com/auth/reset-password**",
+  "http://localhost:8080/auth/callback**",
+  "http://localhost:8080/auth/verified**",
+  "http://localhost:8080/auth/reset-password**",
+  "com.desmoines.aipulse://auth-callback**",
+]
+# PASSWORD_MIN_LENGTH and PASSWORD_RULES in src/lib/passwordStrength.ts: a
+# lowercase letter, an uppercase letter, a number and a symbol. GoTrue's symbol
+# set is the SYMBOLS class there.
+minimum_password_length = 8
+password_requirements = "lower_upper_letters_digits_symbols"
+
+[auth.email]
+# A new account cannot sign in until the address is confirmed. AuthVerified and
+# the "check your email" step in Auth.tsx assume this.
+enable_confirmations = true
+
+# ---------------------------------------------------------------------------
 # Supabase Auth mail through Amazon SES (WP2). Applies to `supabase start`, and
 # to the hosted project only if someone runs `supabase config push`; the
 # hosted project's SMTP settings are otherwise set in the dashboard (Auth >
@@ -412,9 +459,7 @@ verify_jwt = false
 #                      region cannot be spliced into the host string here)
 #   SES_SMTP_USER      SES SMTP username (IAM SMTP credentials, not the API key)
 #   SES_SMTP_PASSWORD  SES SMTP password
-# site_url / additional_redirect_urls are deliberately not set here: the
-# hosted redirect list may hold callback URLs this file does not know about
-# (mobile apps, preview deploys), and a push from this file would replace it.
+# site_url and additional_redirect_urls are set in [auth] above.
 [auth.email.smtp]
 enabled = false
 host = "env(SES_SMTP_HOST)"
