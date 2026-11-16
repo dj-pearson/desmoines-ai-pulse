@@ -62,7 +62,10 @@ export default function HotelCard({
 
   return (
     <Card className="group overflow-hidden transition-shadow duration-200 hover:shadow-md">
-      <Link to={`/stay/${hotel.slug}`} className="block">
+      {/* Named on the link itself: a hotel with no photo renders a role="img"
+          placeholder, whose label does not name the link around it, so the
+          link had no accessible name (check-prerender-content on /stay). */}
+      <Link to={`/stay/${hotel.slug}`} className="block" aria-label={hotel.name}>
         <div className={`relative ${imageHeight} overflow-hidden bg-muted`}>
           {hotel.image_url ? (
             <OptimizedImage
