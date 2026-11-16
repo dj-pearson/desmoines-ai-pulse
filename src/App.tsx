@@ -252,6 +252,7 @@ const AdminSocial = lazyWithRetry(() => import("./pages/AdminSocial"));
 const AdminEmail = lazyWithRetry(() => import("./pages/AdminEmail"));
 const AdminDeals = lazyWithRetry(() => import("./pages/AdminDeals"));
 const AdminGuides = lazyWithRetry(() => import("./pages/AdminGuides"));
+const AdminVenuePages = lazyWithRetry(() => import("./pages/AdminVenuePages"));
 const AdminPartnerships = lazyWithRetry(() => import("./pages/AdminPartnerships"));
 const AdminFeedback = lazyWithRetry(() => import("./pages/AdminFeedback"));
 const AdminTrending = lazyWithRetry(() => import("./pages/AdminTrending"));
@@ -469,6 +470,7 @@ const App = () => (
               <Route path="/admin/email" element={<ProtectedRoute requireAdmin><AdminEmail /></ProtectedRoute>} />
               <Route path="/admin/deals" element={<ProtectedRoute requireAdmin><AdminDeals /></ProtectedRoute>} />
               <Route path="/admin/guides" element={<ProtectedRoute requireAdmin><AdminGuides /></ProtectedRoute>} />
+              <Route path="/admin/venue-pages" element={<ProtectedRoute requireAdmin><AdminVenuePages /></ProtectedRoute>} />
               <Route path="/admin/partnerships" element={<ProtectedRoute requireAdmin><AdminPartnerships /></ProtectedRoute>} />
               <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
               <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />

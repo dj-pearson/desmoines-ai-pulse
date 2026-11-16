@@ -160,7 +160,7 @@ export function formFromGuide(guide: AdminSeasonalGuide): GuideFormState {
   };
 }
 
-function absoluteHttpUrl(raw: string): boolean {
+export function absoluteHttpUrl(raw: string): boolean {
   try {
     const url = new URL(raw);
     return url.protocol === "https:" || url.protocol === "http:";
