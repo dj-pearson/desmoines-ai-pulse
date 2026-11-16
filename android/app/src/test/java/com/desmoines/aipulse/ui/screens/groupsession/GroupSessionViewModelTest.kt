@@ -46,7 +46,7 @@ class GroupSessionViewModelTest {
     @AfterEach
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun session(host: String = "u1") = SwipeSession(
+    private fun session(host: String? = "u1") = SwipeSession(
         id = "s1", code = "DSM-AB12", hostUserId = host, mode = "mixed", status = "active",
         expiresAt = "2999-01-01T00:00:00Z",
     )
@@ -85,6 +85,22 @@ class GroupSessionViewModelTest {
         advanceUntilIdle()
 
         assertEquals("DSM-AB12", viewModel.uiState.value.joinCode)
+        assertEquals("s1", viewModel.uiState.value.session?.id)
+        assertFalse(viewModel.uiState.value.isHost)
+    }
+
+    @Test
+    fun `join with the host id hidden enters as non-host`() = runTest(testDispatcher) {
+        // lookup_swipe_session returns host_user_id = null to anyone but the
+        // host (WEB-SEC-070); a null must read as "not host", not crash.
+        coEvery { repository.joinByCode("DSM-AB12", "u1", null) } returns Result.success(session(host = null))
+        coEvery { repository.fetchSession("s1") } returns Result.success(session(host = null))
+        val viewModel = vm()
+
+        viewModel.onJoinCodeChanged("dsm-ab12")
+        viewModel.joinSession()
+        advanceUntilIdle()
+
         assertEquals("s1", viewModel.uiState.value.session?.id)
         assertFalse(viewModel.uiState.value.isHost)
     }
