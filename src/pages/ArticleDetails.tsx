@@ -17,6 +17,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import SEOHead from '@/components/SEOHead';
 import { RouteCanonical } from '@/components/RouteCanonical';
 import ShareDialog from '@/components/ShareDialog';
+import { FavoriteButton } from '@/components/FavoriteButton';
 import SpeakableSchema from '@/components/schema/SpeakableSchema';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
 import { NewsletterSignup } from '@/components/NewsletterSignup';
@@ -333,8 +334,17 @@ const ArticleDetails: React.FC = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center gap-3 mb-8">
-                  {/* Save and Like were buttons with no handler and no table
-                      behind them (WP4 item 5); Share is the one real action. */}
+                  {/* Save writes content_favorites (content_type 'article'),
+                      the row iOS writes, so a guide saved on either shows on
+                      both (XPLAT-013). Like stays gone: no table behind it. */}
+                  <FavoriteButton
+                    contentType="article"
+                    contentId={article.id}
+                    itemName={article.title}
+                    variant="outline"
+                    size="sm"
+                    showText
+                  />
                   <ShareDialog
                     kind="article"
                     title={article.title}
