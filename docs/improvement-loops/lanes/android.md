@@ -195,14 +195,21 @@ AND-AUDIT-017 (unmounted composables) is partly done. The cosmetic and supersede
 CategoryMapMarker), ToastOverlay (with ToastMessage), AnimatedTabItem, GlassTextField, AppTypography
 (AppText, rememberAppTextStyle, AppTextStyle), GlassCard and BrandDestructiveButton. BrandSecondaryButton
 was on that list and is now used, so it stays; BackdropBlurScope is a false positive of the scan (it is the
-type of LocalBackdropBlurState). What is left is not a cleanup:
+type of LocalBackdropBlurState). The second slice (2026-11-16) found the "wire-ups" were already shipped
+another way: SearchScreen's private SearchSuggestions renders Trending chips, the last 5 recent searches
+with Clear all, and Recently viewed; SearchViewModel debounces at 300ms; OnboardingScreen draws its own
+pill indicator, Skip and Next/Get Started. So SearchSuggestions.kt (TrendingChipsRow, RecentSearchesList,
+SuggestionChip, DebouncedQueryState, rememberDebouncedQuery) and the OnboardingPage, OnboardingPageIndicator
+and OnboardingNavRow composables were duplicates and are deleted; iOS deleted its own unused
+RecentSearchesList the same way (docs/ios-deep-dive/05-search.md S08). PermissionPrimingCard, the one live
+piece of OnboardingPage.kt, now sits alone in PermissionPrimingCard.kt. What is left is not a cleanup:
   1. Owner decision (AC4): AffiliateAdBanner, PaywallSheet, SubscriptionTierCard + BillingCycleToggle are
      revenue surfaces; ask before wiring or deleting them.
-  2. Wire-ups: RecentSearchesList, TrendingChipsRow, rememberDebouncedQuery (a search-suggestions feature),
-     OnboardingPageIndicator and OnboardingNavRow, and Modifier.entranceAnimation (new since the triage;
-     iOS uses its twin on Home, Search, Restaurants and Attractions).
+  2. One wire-up: Modifier.entranceAnimation (iOS uses its twin on Home, Search, Restaurants and
+     Attractions). Before wiring it into a LazyColumn, note its Animatable lives in `remember` inside
+     `composed`, so an item that scrolls off and back replays the fade; key it per item or accept that.
   3. Leave the Category* colour tokens, StatusWarning and CardShadow (design tokens, per the triage).
-A Gradle build is the check this deletion has not had: run :app:compileDebugKotlin once on a machine with
+A Gradle build is the check these deletions have not had: run :app:compileDebugKotlin once on a machine with
 the SDK. The static check found 0 references to any removed name and 0 unresolved project imports, so a
 failure there would point at a reference the scan cannot see (reflection or a string-built class name).
 Three iOS comments still say they match the deleted Android files (AnimatedTabItem.swift,
@@ -241,3 +248,4 @@ ParallaxHeroHeader.swift, BrandedRefreshView.swift); they are iOS-lane files and
 | 2026-11-15 | AND-AUDIT-045 | this commit | /events/date-night and /events/<month>-<year> open the in-app web view of the same URL (was Home, which dropped the link); month archives go to the web because native reads floor at today. 3 new DeepLinkWebDestinationTest tests (10 runs) pass, 125/125 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); restoring Home fails exactly 5. Instrumented DeepLinkHandlerTest updated, not run. App module not compiled (no Android SDK); no device check |
 | 2026-11-16 | AND-AUDIT-046 | this commit | /events/date-night opens a native Search with the web's DATE_NIGHT_FILTER over 14 Central days, evenings only unless ?time=all, and a removable chip (was the in-app web view); matches iOS IOS-AUDIT-008. 8 new DateNightFilterTest and 2 new DeepLinkPendingFilterTest JVM tests pass, 86/86 across six util suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); a mutation routing date-night back to the web and counting no-time rows as evenings fails exactly 2. New vitest androidDateNightParity 5/5, src/lib/__tests__ 2273/2273, check-mobile-schema OK. SearchViewModel, SearchScreen, EventsRemoteDataSource and app module not compiled (no Android SDK); instrumented DeepLinkHandlerTest updated, not run; no device check |
 | 2026-11-16 | AND-AUDIT-017 | this commit | Deleted the 14 cosmetic/superseded orphans from the AC2 triage (6 whole files, AppTypography.kt, GlassCard, BrandDestructiveButton; 968 lines). A static check over android/app/src finds 0 remaining references to any removed name and 0 unresolved com.desmoines.aipulse imports across 1305 (a planted reference fails it); the orphan scan drops 49 -> 35, the rest being revenue surfaces, wire-up candidates, tokens and scan false positives. Not compiled (no Android SDK); no device check needed (nothing reachable changed) |
+| 2026-11-16 | AND-AUDIT-017 | this commit | Slice 2: the search-suggestion and onboarding "wire-up candidates" were duplicates of UI SearchScreen and OnboardingScreen already render inline, so SearchSuggestions.kt and three OnboardingPage.kt composables are deleted (355 lines net) and PermissionPrimingCard moves to its own file. Static check over android/app/src: 0 references to any removed name; 1305 project imports, the only unresolved being generated R/BuildConfig (11, same as before), and a planted import of a removed name fails it; orphan scan 35 -> 27, the rest being revenue surfaces, entranceAnimation, tokens and scan false positives. Not compiled (no Android SDK); no device check needed (nothing reachable changed) |
