@@ -1,5 +1,5 @@
 {
-  "total": 30,
+  "total": 29,
   "files": {
     "src/components/AIConfigurationManager.tsx": 2,
     "src/components/ScrapingJobManager.tsx": 2,
@@ -13,7 +13,6 @@
     "src/hooks/useAnalytics.ts": 1,
     "src/hooks/useContactForm.ts": 4,
     "src/hooks/useContentQueue.ts": 3,
-    "src/hooks/useEventReminders.ts": 1,
     "src/hooks/useExperiment.ts": 1,
     "src/lib/consentLog.ts": 1,
     "src/pages/AdminCampaignDetail.tsx": 4,

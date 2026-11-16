@@ -202,7 +202,7 @@ export function ShareDialogPanel({
           </div>
 
           {/* Native Share (if available) */}
-          {navigator.share && (
+          {typeof navigator.share === 'function' && (
             <Button
               onClick={handleNativeShare}
               variant="outline"

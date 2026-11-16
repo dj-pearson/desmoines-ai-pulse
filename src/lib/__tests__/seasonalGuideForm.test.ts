@@ -35,6 +35,7 @@ describe("seasonal guide form", () => {
     expect(form.publish_date).toBe("2026-11-15");
     const built = buildGuideRow(form);
     expect(built.errors).toEqual({});
+    if (!built.row) throw new Error("expected a row for a valid seeded guide");
     expect(built.row.content).toEqual(seeded.content);
     expect(built.row.slug).toBe("holiday-lights");
     expect(built.row.is_published).toBe(true);
@@ -82,6 +83,7 @@ describe("seasonal guide form", () => {
     expect(published.errors.sectionsText).toBeTruthy();
     const draft = buildGuideRow(base);
     expect(draft.errors).toEqual({});
+    if (!draft.row) throw new Error("expected a row for a valid draft");
     expect(draft.row.content).toEqual({ sections: [] });
     expect(draft.row.publish_date).toBeNull();
     expect(draft.row.cover_image).toBeNull();
