@@ -5,6 +5,7 @@ import {
   fixtureRestaurants,
   installFixtureBackend,
 } from './support/fixtureBackend';
+import { centralDay, shortDay } from './support/fixtureClock';
 
 /**
  * WEB-UX-078. Card titles are line-clamped, and a clamp sets
@@ -129,5 +130,51 @@ test('/events card keeps the venue readable before the district', async ({ page 
     // "Fierce Mountain" is about 105px at text-sm; less reads as a fragment.
     expect(widths.venue, `venue width at ${width}px`).toBeGreaterThanOrEqual(Math.min(100, widths.venueText));
     expect(widths.venue, `venue gets more room than the district at ${width}px`).toBeGreaterThan(widths.place);
+  }
+});
+
+/**
+ * WEB-UX-080. A multi-day run that hasn't started printed its start time and
+ * its dates on the meta line ("10:00 AM CT, Sep 22 - Sep 27"), and that lead
+ * never shrinks: about 185px at text-sm, leaving the venue roughly 50px at
+ * 320px. The dates now sit on their own line under the time, so the venue
+ * keeps the room it had for a one-night show.
+ *
+ * The row is dated from today (centralDay), not with a literal, because the
+ * run has to be in the future for the card to print its dates.
+ */
+test('/events card keeps the venue readable on a multi-day run that has not started', async ({ page }) => {
+  await installFixtureBackend(page);
+  const startDay = centralDay(3);
+  const endDay = centralDay(8);
+  const rows = fixtureEvents().map((r, i) =>
+    i === 1
+      ? {
+          ...r,
+          venue: LONG_VENUE,
+          date: startDay,
+          // 10:00 AM in Central, either side of DST: 15:00Z or 16:00Z both
+          // land on the start day, which is all the run label reads.
+          event_start_utc: `${startDay}T16:00:00Z`,
+          start_time: '10:00:00',
+          end_date: endDay,
+        }
+      : r,
+  );
+  await page.route('**/rest/v1/events?**', (route) => reply(route, rows));
+  const runText = `${shortDay(startDay)} - ${shortDay(endDay)}`;
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/events');
+    const venue = page.getByText(LONG_VENUE, { exact: true });
+    await expect(venue).toHaveCount(1, { timeout: 30_000 });
+    // The card still says when the run is.
+    const card = venue.locator('xpath=ancestor::div[contains(@class,"p-4")][1]');
+    await expect(card).toContainText(runText);
+    const width_ = await venue.evaluate((el) => ({
+      venue: el.getBoundingClientRect().width,
+      venueText: (el as HTMLElement).scrollWidth,
+    }));
+    expect(width_.venue, `venue width at ${width}px`).toBeGreaterThanOrEqual(Math.min(100, width_.venueText));
   }
 });
