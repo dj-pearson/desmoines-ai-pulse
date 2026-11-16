@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from dateutil import parser as date_parser
 from zoneinfo import ZoneInfo
@@ -242,6 +242,12 @@ DEFAULT_MAX_PAGES = 20
 DEFAULT_TIME_BUDGET_MINUTES = 30
 # Share of the budget the listing walk may spend before processing starts.
 LIST_BUDGET_SHARE = 0.5
+# How far ahead the listing walk reads. The listing is sorted by date, so once a
+# whole page starts past this day every later page does too, and reading them
+# spends a render and a model call per page on events a later run will meet
+# anyway. Planning-ahead coverage is the goal of WEB-BE-051, and 90 days is the
+# horizon it names.
+HORIZON_DAYS = 90
 
 DEFAULT_LIST_DELAY_SECONDS = 2.0
 DEFAULT_DETAIL_DELAY_SECONDS = 1.0
@@ -371,6 +377,38 @@ def page_adds_new_events(events: list, seen_detail_urls: set) -> bool:
     return added
 
 
+_LISTED_DAY_RE = re.compile(r"^\s*(\d{4}-\d{2}-\d{2})")
+
+
+def listed_days(events: list) -> list:
+    """The Central calendar days ('YYYY-MM-DD') the extraction gave, sorted.
+
+    The model is told to write `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS` in Central
+    time, so the day is the first ten characters and needs no timezone
+    arithmetic. An event whose date is missing or in another shape is left out
+    rather than guessed: it must never make a page look further ahead (or
+    nearer) than it is. ISO days sort as strings.
+    """
+    days = []
+    for event in events:
+        m = _LISTED_DAY_RE.match(str(event.get("date") or ""))
+        if m:
+            days.append(m.group(1))
+    return sorted(days)
+
+
+def page_starts_past_horizon(events: list, horizon_day: str) -> bool:
+    """True when the EARLIEST listed day on this page is after horizon_day.
+
+    The earliest, not the first card: a featured or pinned card can sit above
+    the date order, and one stray far-future card must not end the walk while
+    the rest of the page is still inside the horizon. A page with no readable
+    date is never past the horizon - unknown is not "far away".
+    """
+    days = listed_days(events)
+    return bool(days) and days[0] > horizon_day
+
+
 class CatchDesMoinesCrawler:
     """Crawler for catchdesmoines.com events."""
 
@@ -385,6 +423,13 @@ class CatchDesMoinesCrawler:
         self.time_budget_seconds = time_budget_minutes * 60
         # Events extracted but left for the next run because the budget ran out.
         self.events_deferred: int = 0
+        # How far ahead this run's listing walk got, and why it stopped. Both go
+        # to the run ledger, because "coverage stops at a few days" (WEB-BE-051)
+        # was invisible: nothing recorded how far a run had read.
+        self.horizon_day: Optional[str] = None
+        self.latest_listed_day: Optional[str] = None
+        self.pages_read: int = 0
+        self.listing_stop: str = "max_pages"
         self.supabase: Optional[Client] = None
         self.anthropic_client: Optional[anthropic.Anthropic] = None
         self.events_found: list = []
@@ -925,6 +970,13 @@ Return ONLY the JSON array. No other text."""
                 "runner": "github-actions",
                 "maxPages": self.max_pages,
                 "deferred": self.events_deferred,
+                # WEB-BE-051: how far ahead the listing walk got. A run that
+                # stops on "list_budget" or "max_pages" with latestListedDay a
+                # few days out is the short-horizon shape, now visible per run.
+                "pagesRead": self.pages_read,
+                "latestListedDay": self.latest_listed_day,
+                "horizonDay": self.horizon_day,
+                "listingStop": self.listing_stop,
                 # The shape supabase/functions/_shared/ingestionHealth.ts reads.
                 "sources": {
                     "catchdesmoines.com": {
@@ -960,11 +1012,16 @@ Return ONLY the JSON array. No other text."""
         run_start = time.monotonic()
         list_deadline = run_start + self.time_budget_seconds * LIST_BUDGET_SHARE
         run_deadline = run_start + self.time_budget_seconds
+        self.horizon_day = (
+            datetime.now(CENTRAL_TZ).date() + timedelta(days=HORIZON_DAYS)
+        ).isoformat()
+        logger.info(f"Listing horizon: {self.horizon_day} ({HORIZON_DAYS} days)")
 
         # Crawl event listing pages
         for page in range(self.max_pages):
             if page > 0 and time.monotonic() > list_deadline:
                 logger.info(f"Listing budget spent after {page} page(s); processing what was found")
+                self.listing_stop = "list_budget"
                 break
 
             html = await self.crawl_events_list(page)
@@ -974,6 +1031,7 @@ Return ONLY the JSON array. No other text."""
                 if page == 0:
                     logger.error("First page failed, aborting")
                     return
+                self.listing_stop = "page_failed"
                 break
 
             # Extract events using Claude
@@ -987,6 +1045,9 @@ Return ONLY the JSON array. No other text."""
                     )
                 else:
                     logger.info(f"No more events found on page {page + 1}")
+                self.listing_stop = (
+                    "extraction_error" if self.extraction_errors else "end_of_listing"
+                )
                 break
 
             # Past the end of the calendar the listing repeats or empties. A
@@ -994,16 +1055,38 @@ Return ONLY the JSON array. No other text."""
             # the end, whatever max_pages says.
             if page > 0 and not page_adds_new_events(events, seen_detail_urls):
                 logger.info(f"Page {page + 1} added no new events; end of the listing")
+                self.listing_stop = "end_of_listing"
+                break
+
+            # Sorted by date, so a page that starts past the horizon means every
+            # later page does too. Its events are not processed: a later run
+            # reaches them while they are inside the horizon.
+            if page_starts_past_horizon(events, self.horizon_day):
+                logger.info(
+                    f"Page {page + 1} starts on {listed_days(events)[0]}, past the "
+                    f"{HORIZON_DAYS}-day horizon ({self.horizon_day}); stopping the listing walk"
+                )
+                self.listing_stop = "horizon"
                 break
 
             all_events.extend(events)
+            self.pages_read = page + 1
+            page_days = listed_days(events)
+            if page_days and (
+                self.latest_listed_day is None or page_days[-1] > self.latest_listed_day
+            ):
+                self.latest_listed_day = page_days[-1]
             logger.info(f"Total events found so far: {len(all_events)}")
 
             # Delay between pages, at least what the site asks for
             if page < self.max_pages - 1:
                 await asyncio.sleep(robots_delay(EVENTS_LIST_URL, DEFAULT_LIST_DELAY_SECONDS))
 
-        logger.info(f"Extracted {len(all_events)} total events from {self.max_pages} pages")
+        logger.info(
+            f"Extracted {len(all_events)} total events from {self.pages_read} page(s); "
+            f"listing read through {self.latest_listed_day or 'no readable date'}, "
+            f"stopped by {self.listing_stop}"
+        )
 
         # Process each event
         for i, event in enumerate(all_events):
@@ -1117,6 +1200,8 @@ async def main():
             f.write(f"events_inserted={result['inserted']}\n")
             f.write(f"duplicates_skipped={result['duplicates']}\n")
             f.write(f"extraction_errors={result['extraction_errors']}\n")
+            f.write(f"latest_listed_day={crawler.latest_listed_day or 'none'}\n")
+            f.write(f"listing_stop={crawler.listing_stop}\n")
 
     return result
 
