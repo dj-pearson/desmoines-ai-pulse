@@ -65,6 +65,7 @@ describe("stored-slug links on the attraction and playground pages", () => {
     "src/components/playgrounds/PlaygroundHubGuide.tsx",
     "src/components/attractions/AttractionsFactsIntro.tsx",
     "src/hooks/useOutdoorsNearby.ts",
+    "src/pages/DiscoverMap.tsx",
   ])("%s builds no attraction/playground link from the name", (file) => {
     const src = read(file);
     expect(src).not.toMatch(nameBuilt);
@@ -76,5 +77,15 @@ describe("stored-slug links on the attraction and playground pages", () => {
     const outdoors = read("src/hooks/useOutdoorsNearby.ts");
     expect(outdoors).toContain(".select('name, slug, latitude, longitude')");
     expect(outdoors).toContain(".select('name, slug, type, location')");
+    const map = read("src/pages/DiscoverMap.tsx");
+    expect(map).toContain(".select('id, name, slug, latitude, longitude, description, type,");
+    expect(map).toContain(".select('id, name, slug, latitude, longitude, description, age_range')");
+  });
+
+  it("the sitemap submits the stored slug for attractions and playgrounds", () => {
+    const gen = read("scripts/generate-dynamic-sitemaps.ts");
+    expect(gen).not.toMatch(/createSlug\((attraction|playground)\.name\)/);
+    expect(gen).toContain(".select('id, name, slug, updated_at')");
+    expect(gen).toContain(".select('id, name, slug, updated_at, latitude, longitude')");
   });
 });

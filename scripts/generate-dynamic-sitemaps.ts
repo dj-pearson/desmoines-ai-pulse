@@ -30,7 +30,7 @@ import {
 } from '../src/lib/monthPages';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
-import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+import { createSlug, createEventSlug, storedSlug } from './lib/sitemapSlugs';
 // SEO-043. No `@/` imports in eventSeries.ts, for the same reason as monthPages.
 import { EVENT_SERIES, allSeriesTitlePatterns, seriesForEvent, seriesPath } from '../src/lib/eventSeries';
 
@@ -424,7 +424,7 @@ async function generateAttractionsSitemap(): Promise<number | null> {
   // the detail page resolved them anyway, which is the other half of the fix.
   const { data: attractions, error } = await supabase
     .from('attractions')
-    .select('id, name, updated_at')
+    .select('id, name, slug, updated_at')
     .eq('is_active', true)
     .order('name')
     .order('id');
@@ -435,7 +435,7 @@ async function generateAttractionsSitemap(): Promise<number | null> {
   }
 
   const urls = attractions.map(attraction => {
-    const slug = createSlug(attraction.name);
+    const slug = storedSlug(attraction);
     const lastmod = attraction.updated_at ? attraction.updated_at.split('T')[0] : currentDate;
     return {
       loc: `${baseUrl}/attractions/${slug}`,
@@ -467,7 +467,7 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
   // 69 rows.
   const { data: playgrounds, error } = await supabase
     .from('playgrounds')
-    .select('id, name, updated_at, latitude, longitude')
+    .select('id, name, slug, updated_at, latitude, longitude')
     .order('name')
     .order('id');
 
@@ -483,7 +483,7 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
   }
 
   const urls = inMetro.map(playground => {
-    const slug = createSlug(playground.name);
+    const slug = storedSlug(playground);
     const lastmod = playground.updated_at ? playground.updated_at.split('T')[0] : currentDate;
     return {
       loc: `${baseUrl}/playgrounds/${slug}`,

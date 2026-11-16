@@ -8,6 +8,31 @@
 
 ## Handoff
 
+Loop 31 (drain round) moved the two builders loop 30 named as most
+important, /map and the sitemap generator, to the stored slug. WEB-PERF-031
+stays open for a real types.ts regeneration and eight link builders.
+
+What loop 31 did:
+- DiscoverMap's attraction and playground layers select slug and link through
+  attractionHref/playgroundHref, so a map pin for riverview-park-2 opens that
+  park, not the first Riverview Park.
+- generate-dynamic-sitemaps selects slug for attractions and playgrounds and
+  writes storedSlug(row) (new in scripts/lib/sitemapSlugs.ts, same rule as
+  contentSlug: stored slug, else the name). The sitemap used to submit the
+  first park's URL twice and the second park's never.
+- storedSlugLinks.test.tsx scans DiscoverMap and the generator (3 of 11 fail
+  on the old sources); sitemap-slugs.test.mjs pins storedSlug.
+
+Still building attraction/playground links from createSlug(name), each needing
+its select checked for slug first: FavoritesView (playgrounds), useVoting,
+useMyBusinessClaims, useDeals, pseo/listingHrefs, claimOutreach,
+AdvancedSearchPage, SEOTools (admin). pseo/listingHrefs is public; do it next.
+
+Smoke lane in this container: `vite preview` binds ::1 and dies with
+EAFNOSUPPORT. Build with placeholder VITE_SUPABASE_* env, run
+`npx vite preview --port 4173 --host 127.0.0.1` in the background, and
+Playwright reuses it (reuseExistingServer is on outside CI).
+
 Loop 30 (drain round) moved six more link builders on WEB-PERF-031 to the
 stored slug. The story stays open for a real types.ts regeneration and the
 link builders listed below.
@@ -298,3 +323,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-035 | this commit | useBreweries filters on is_brewery plus the two cuisine patterns instead of nine hardcoded name ILIKEs (BREWERY_NAMES deleted); column confirmed live from 2026-10-01 production exports in scripts/content-backups; 4 new unit tests, all 4 fail against the old hook; brewery-trail smoke spec 21/21 over 3 repeats; type-check ratchet 30/30, check-schema/list-columns/select-star clean; story closed |
 | 2026-11-16 | WEB-PERF-031 | this commit | fetchBySlug fallback and cast deleted (one slug request, 42703 throws); slug hand-added to types.ts and to the attraction/playground list and card projections; new slugHref.ts drives hub cards, schema, detail canonicals, side cards and trending links by stored slug (riverview-park-2 linked to the wrong park before); check-list-columns 22/22, check-schema clean, type ratchet 30/30, vitest 3836/3836, 48 attraction/playground smoke tests; resolveBySlug and dashboardItems tests with negative controls (1 and 2 fail on revert); story open for real types regeneration |
 | 2026-11-16 | WEB-PERF-031 | this commit | Six more link builders on the stored slug: attractions/playgrounds maps, playground hub guide (and its ItemList URLs), free-admission list (useAttractionFacts selects slug), neighborhood attraction cards, outdoors nearby/outdoor-attraction links (both selects add slug; dedupe now by name); new storedSlugLinks.test.tsx, 9 of 9 fail on revert; eslint clean, type ratchet 30/30, check-schema clean, check-list-columns 22/22, vitest 3885/3885, 57 attraction/playground/outdoors smoke tests in Chrome; story open for types regeneration and 10 remaining builders |
+| 2026-11-16 | WEB-PERF-031 | this commit | /map attraction and playground pins and the attractions/playgrounds sitemaps use the stored slug (both selects add slug; new storedSlug in scripts/lib/sitemapSlugs.ts); storedSlugLinks.test.tsx 11/11, 3 fail on the old sources; sitemap-slugs test 0 failures; eslint clean on touched files, type ratchet 30/30, type-check:scripts clean, check-schema clean, check-list-columns 22/22; discover-map + discover-map-time smoke 15/15 in Chrome; story open for types regeneration and 8 remaining builders |

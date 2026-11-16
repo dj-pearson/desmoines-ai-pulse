@@ -28,6 +28,19 @@ export function createSlug(name: string): string {
 }
 
 /**
+ * The path segment for a row with a stored `slug` column (attractions,
+ * playgrounds), matching contentSlug in src/lib/slugHref.ts (WEB-PERF-031).
+ *
+ * The slug backfill suffixed duplicate names, so the second "Riverview Park"
+ * playground is riverview-park-2. Rebuilding it from the name submits the
+ * first park's URL twice and never the second's. The name is the fallback
+ * for a row whose slug is still null.
+ */
+export function storedSlug(row: { slug?: string | null; name: string }): string {
+  return row.slug || createSlug(row.name);
+}
+
+/**
  * Event slug matching the app's createEventSlugWithCentralTime.
  *
  * Falls back to the bare title slug when there is no date or the date will not
