@@ -45,6 +45,11 @@ final class ArticleLinkRouteTests: XCTestCase {
         XCTAssertNil(ArticleDetailView.nativePresentation(for: nil))
     }
 
+    func testPricingLinkInAGuideOpensThePlansScreen() {
+        // IOS-AUDIT-010: the browse fallback showed Stripe Checkout.
+        XCTAssertEqual(ArticleDetailView.nativePresentation(for: .plans)?.id, "plans")
+    }
+
     func testNeighborhoodLinkOpensTheNativeGuide() {
         // IOS-AUDIT-FEAT-038: a guide that links /neighborhoods/<slug>.
         let presentation = ArticleDetailView.nativePresentation(for: .neighborhood(slug: "ankeny"))

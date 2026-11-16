@@ -13,7 +13,6 @@ import { runAgent } from "../_shared/agentRun.ts";
 import {
   findExistingVenueRecord,
   scrapeImageFromWebsite,
-  getGooglePlacesPhoto,
   getCategoryDefaultImage,
 } from "../_shared/imageFallbacks.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
@@ -49,7 +48,6 @@ type ImageSource =
   | "source_url"
   | "venue_existing"
   | "venue_website"
-  | "google_places"
   | "category_default"
   | "none";
 
@@ -100,13 +98,13 @@ const URL_COL: Record<Category, string> = {
   playgrounds: "source_url",
 };
 
-// Per-category SELECT lists. Includes coords + venue/category for events so
-// the fallback chain can hit Google Places without a second query.
+// Per-category SELECT lists. venue/category for events feed the venue lookup
+// and the category default.
 const SELECT_COLS: Record<Category, string> = {
-  events: "id, title, source_url, image_url, venue, category, latitude, longitude",
-  restaurants: "id, name, website, image_url, latitude, longitude",
-  attractions: "id, name, website, image_url, latitude, longitude",
-  playgrounds: "id, name, image_url, latitude, longitude",
+  events: "id, title, source_url, image_url, venue, category",
+  restaurants: "id, name, website, image_url",
+  attractions: "id, name, website, image_url",
+  playgrounds: "id, name, image_url",
 };
 
 // ─── Image extraction from a page URL ────────────────────────────────────────
@@ -349,10 +347,8 @@ Deno.serve(async (req) => {
       const pageUrl: string | null = record[urlCol] ?? null;
       const venueName: string | null = record.venue ?? null;
       const recordCategory: string | null = record.category ?? null;
-      const lat: number | null = record.latitude ?? null;
-      const lng: number | null = record.longitude ?? null;
-      // For Places lookup: events use venue, other categories use the row's own name
-      const lookupName = venueName || (category === "events" ? name : name);
+      // For the venue lookup: an event's venue, otherwise the row's own name.
+      const lookupName = venueName || name;
 
       if (dryRun) {
         result.details.push({
@@ -361,7 +357,7 @@ Deno.serve(async (req) => {
           sourceUrl: pageUrl,
           imageUrl: null,
           status: "dry_run",
-          reason: `Would try: source_url${venueName ? ", venue lookup" : ""}, Places, default`,
+          reason: "Would try: source_url, venue lookup, default",
         });
         continue;
       }
@@ -427,16 +423,15 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 3) Google Places photo by venue/business name
-      if (!rawImageUrl && lookupName) {
-        const placesPhoto = await getGooglePlacesPhoto(lookupName, lat, lng);
-        if (placesPhoto) {
-          rawImageUrl = placesPhoto;
-          source = "google_places";
-        }
-      }
+      // No Google Places step (WEB-BE-044 AC2, the "stop using Places as an
+      // image source" branch, for every category but hotels). There was one
+      // here: a Places Text Search per imageless row, whose media URL then
+      // went to fetchAndStoreImage, which refuses Places media for a permanent
+      // copy. So every call was billed and every result thrown away, and the
+      // row was reported as "Image download or storage upload failed". Hotels
+      // keep Places photos through the 30-day refresh path in hotels.ts.
 
-      // 4) Category default
+      // 3) Category default
       if (!rawImageUrl) {
         const defaultUrl = getCategoryDefaultImage(category, recordCategory);
         if (defaultUrl) {
@@ -458,8 +453,8 @@ Deno.serve(async (req) => {
           status: "failed",
           source: "none",
           reason: pageUrl
-            ? "No image from source, venue lookup, Places, or default"
-            : "No source_url, and venue/Places/default all empty",
+            ? "No image from source, venue lookup, or default"
+            : "No source_url, and venue/default both empty",
         });
         continue;
       }

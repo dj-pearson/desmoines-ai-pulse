@@ -211,8 +211,9 @@ export function EventFriendFinder({
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Personal Message</label>
+                <label htmlFor="invite-message" className="text-sm font-medium">Personal Message</label>
                 <Textarea
+                  id="invite-message"
                   value={inviteMessage}
                   onChange={(e) => setInviteMessage(e.target.value)}
                   placeholder="Add a personal message to your invitation..."

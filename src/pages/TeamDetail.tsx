@@ -3,6 +3,7 @@ import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } 
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { Helmet } from 'react-helmet-async';
 import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
+import { ShareMeta } from "@/components/seo/ShareMeta";
 import { useTeam, useTeamGames } from '@/hooks/useTeams';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +88,9 @@ export default function TeamDetail() {
     ...(venueName ? { location: { '@type': 'Place', name: venueName } } : {}),
   };
 
+  const pageTitle = `${team.name} - ${team.sport} in Des Moines | Des Moines Insider`;
+  const pageDescription = team.description || `${team.name}: ${team.league} ${team.sport} in Des Moines, Iowa.`;
+
   return (
     <>
       {/* WEB-SEO-033. RouteCanonical was only in the LOADING branch, so the
@@ -97,9 +101,10 @@ export default function TeamDetail() {
           because it should stop existing once data arrives. It belongs in
           both. */}
       <RouteCanonical path={`/sports/${slug}`} />
+      <ShareMeta title={pageTitle} description={pageDescription} path={`/sports/${slug}`} />
       <Helmet>
-        <title>{`${team.name} - ${team.sport} in Des Moines | Des Moines Insider`}</title>
-        <meta name="description" content={team.description || `${team.name}: ${team.league} ${team.sport} in Des Moines, Iowa.`} />
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
         {/* Item 11: escaped through toJsonLd, like every ld+json block. */}
         <script type="application/ld+json">{toJsonLd(teamJsonLd)}</script>
       </Helmet>

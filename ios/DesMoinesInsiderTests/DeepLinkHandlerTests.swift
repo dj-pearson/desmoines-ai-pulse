@@ -366,8 +366,18 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest("/events/near-me?from=ankeny&r=10"), .tab(.map))
     }
 
-    func testDateNightLinkOpensTheWebPage() {
-        XCTAssertEqual(dest("/events/date-night"), .web(site("/events/date-night")))
+    func testDateNightLinkOpensEventsSearchWithEveningStarts() {
+        // IOS-AUDIT-008: was the web page in a sheet.
+        var filters = SearchFilters(tabHint: .events)
+        filters.dateNight = .evening
+        XCTAssertEqual(dest("/events/date-night"), .eventSearch(query: "", filters: filters))
+        XCTAssertEqual(dest("/events/date-night?utm_source=newsletter"), .eventSearch(query: "", filters: filters))
+    }
+
+    func testDateNightTimeAllKeepsEveryStart() {
+        var filters = SearchFilters(tabHint: .events)
+        filters.dateNight = .anyTime
+        XCTAssertEqual(dest("/events/date-night?time=all"), .eventSearch(query: "", filters: filters))
     }
 
     // MARK: - Month archive and day ranges (IOS-AUDIT-003)
@@ -545,9 +555,31 @@ final class DeepLinkHandlerTests: XCTestCase {
     func testBareMapLinkOpensTheMapTabWithTheDefaultKinds() {
         XCTAssertTrue(handler.handle(site("/map")))
         XCTAssertEqual(handler.consumeDestination(), .map(MapLinkLayers()))
-        // The web's other map state (when, sel, bbox, sort) has no Map tab
-        // equivalent and does not change where the link goes.
-        XCTAssertEqual(dest("/map?when=tonight&sort=near&bbox=-93.7,41.5,-93.5,41.7"), .map(MapLinkLayers()))
+        // sel, bbox and sort have no Map tab equivalent and do not change
+        // where the link goes.
+        XCTAssertEqual(dest("/map?sort=near&sel=550e8400-e29b-41d4-a716-446655440000&bbox=-93.7,41.5,-93.5,41.7"),
+                       .map(MapLinkLayers()))
+    }
+
+    // MARK: - /map?when= (IOS-AUDIT-009)
+
+    func testMapLinkWhenSetsTheTimeChipWithTheWebParser() {
+        XCTAssertEqual(dest("/map?when=now"), .map(MapLinkLayers(when: .now)))
+        XCTAssertEqual(dest("/map?when=tonight&sort=near&bbox=-93.7,41.5,-93.5,41.7"),
+                       .map(MapLinkLayers(when: .tonight)))
+        XCTAssertEqual(dest("/map?when=weekend"), .map(MapLinkLayers(when: .weekend)))
+        XCTAssertEqual(dest("/map?when=any"), .map(MapLinkLayers(when: .anytime)))
+        XCTAssertEqual(dest("/map?layers=event&when=weekend"),
+                       .map(MapLinkLayers(events: true, restaurants: false, attractions: false, when: .weekend)))
+        // parseWhen: anything not a WHEN_OPTIONS key is no choice, and the
+        // native chip names are not web keys.
+        for value in ["", "Tonight", "anytime", "saturday", "at8pm", "bogus"] {
+            XCTAssertEqual(dest("/map?when=\(value)"), .map(MapLinkLayers()), value)
+        }
+    }
+
+    func testAWebOnlyLayerStillWinsOverWhen() {
+        XCTAssertEqual(dest("/map?layers=trail&when=tonight"), .web(site("/map?layers=trail&when=tonight")))
     }
 
     func testMapLinkLayersFollowTheWebParser() {
@@ -689,6 +721,50 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.destination(for: url), .web(url))
         let bare = URL(string: "https://desmoinesinsider.com/attractions")!
         XCTAssertEqual(handler.destination(for: bare), .web(bare))
+    }
+
+    // MARK: - Stripe billing pages (IOS-AUDIT-010)
+
+    func testPricingLinkOpensTheNativePlansScreen() {
+        // A push url or article link to /pricing opened Stripe Checkout in
+        // SafariView inside the app (Guideline 3.1.1).
+        XCTAssertEqual(dest("/pricing"), .plans)
+        XCTAssertEqual(dest("/pricing?canceled=true"), .plans)
+        XCTAssertEqual(dest("/pricing/"), .plans)
+    }
+
+    func testSubscriptionPortalLinksOpenTheNativePlansScreen() {
+        XCTAssertEqual(dest("/subscription"), .plans)
+        XCTAssertEqual(dest("/subscription?plan_change=scheduled"), .plans)
+        XCTAssertEqual(dest("/subscription/success?session_id=cs_test_1"), .plans)
+    }
+
+    func testBillingLinkFromANotificationIsRouted() {
+        XCTAssertTrue(handler.handleNotification(userInfo: ["url": "https://www.desmoinesinsider.com/pricing"]))
+        XCTAssertEqual(handler.consumeDestination(), .plans)
+    }
+
+    func testOnlyTheExactBillingPathsAreBillingLinks() {
+        // An article about pricing is an article, and an unrelated page that
+        // starts with the word is not a billing page.
+        XCTAssertEqual(dest("/articles/pricing"), .article(id: "pricing"))
+        let other = URL(string: "https://desmoinesinsider.com/subscription/other")!
+        XCTAssertEqual(handler.destination(for: other), .web(other))
+        let lookalike = URL(string: "https://desmoinesinsider.com/pricing-guide")!
+        XCTAssertEqual(handler.destination(for: lookalike), .web(lookalike))
+    }
+
+    func testBillingLinkOnAnotherHostIsNotRouted() {
+        XCTAssertNil(handler.destination(for: URL(string: "http://desmoinesinsider.com/pricing")!))
+        XCTAssertNil(handler.destination(for: URL(string: "https://desmoinesinsider.com.attacker.net/pricing")!))
+    }
+
+    func testPlansScreenMatchesThePlanCard() {
+        XCTAssertEqual(PlansLinkScreen.screen(tier: .free, hasAppStoreSubscription: false), .store)
+        XCTAssertEqual(PlansLinkScreen.screen(tier: .vip, hasAppStoreSubscription: true), .store)
+        // A web or Google Play subscriber is told where the plan is billed,
+        // never shown a store to buy a second plan in.
+        XCTAssertEqual(PlansLinkScreen.screen(tier: .insider, hasAppStoreSubscription: false), .planInfo)
     }
 
     // MARK: - Exact host (IOS-DD-PLATFORM-10)

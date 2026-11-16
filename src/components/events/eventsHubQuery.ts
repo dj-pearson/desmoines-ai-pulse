@@ -10,7 +10,7 @@ import { hubSearchQuery } from "@/lib/eventSearchQuery";
 import { FREE_PRICE_FILTER, isFreePrice } from "@/lib/eventPrice";
 import { roundCoordinate } from "@/lib/nearMeOrigins";
 import { isSponsoredActive, SPONSORED_CAP } from "@/lib/sponsored";
-import { EVENING_START_HOUR, eventStartInstant, type TonightEvent } from "@/lib/tonightPairings";
+import { EVENING_START_HOUR, eventStartInstant, type TonightEvent } from "@/lib/tonightTime";
 import { ongoingStartFilter } from "@/hooks/useEventLanding";
 import {
   addCentralDays,

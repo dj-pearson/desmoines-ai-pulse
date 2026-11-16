@@ -20,6 +20,8 @@ struct SettingsView: View {
     /// (IOS-DD-ACCOUNT-11).
     @State private var consent = ConsentService.shared
     @State private var emailPreferences = EmailPreferencesService.shared
+    @State private var personalization = PersonalizationPreferenceService.shared
+    @State private var accountEmails = AccountEmailPreferenceService.shared
     @State private var toast: ToastMessage?
     /// Set after a deletion that left a store subscription billing; the sheet
     /// dismisses once it is acknowledged (IOS-DD-ACCOUNT-08).
@@ -77,12 +79,20 @@ struct SettingsView: View {
                         .disabled(isRestoring)
                         .accessibilityLabel("Restore previous purchases")
 
-                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014)
-                        Button {
-                            AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
-                            showOfferCodeRedeem = true
-                        } label: {
-                            Label("Redeem Offer Code", systemImage: "tag")
+                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014).
+                        // Hidden for a web or Google Play subscriber, for whom
+                        // a code would start a second, App Store-billed plan
+                        // (IOS-AUDIT-012).
+                        if PlansLinkScreen.screen(
+                            tier: storeKit.currentTier,
+                            hasAppStoreSubscription: storeKit.hasAppStoreSubscription
+                        ).offersCodeRedemption {
+                            Button {
+                                AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
+                                showOfferCodeRedeem = true
+                            } label: {
+                                Label("Redeem Offer Code", systemImage: "tag")
+                            }
                         }
                     }
 
@@ -246,7 +256,10 @@ struct SettingsView: View {
                 }
             }
             .sheet(isPresented: $showSubscription) {
-                SubscriptionView()
+                // The StoreKit store for a free or App Store plan; where the
+                // plan is billed for a web or Google Play subscriber, who
+                // could otherwise buy a second plan here (IOS-AUDIT-011).
+                PlansLinkView()
             }
             .offerCodeRedemption(isPresented: $showOfferCodeRedeem) { result in
                 switch result {
@@ -369,6 +382,54 @@ struct SettingsView: View {
             Text("The Sunday email with this week's best events. Also controllable on the website.")
         }
         .task { await emailPreferences.load() }
+
+        // communication_preferences.email_notifications, the key the
+        // lifecycle classifier turns into messagingAllowed. The digest switch
+        // above never stopped these (WEB-LEGAL-012).
+        Section {
+            Toggle(isOn: Binding(
+                get: { accountEmails.enabled ?? false },
+                set: { newValue in
+                    Task {
+                        do {
+                            try await accountEmails.setEnabled(newValue)
+                        } catch {
+                            toast = .error("Couldn't update your email preference. Try again.")
+                        }
+                    }
+                }
+            )) {
+                Label("Account and activity emails", systemImage: "envelope.badge")
+            }
+            .disabled(accountEmails.enabled == nil)
+        } footer: {
+            Text("Getting-started tips after you join, notes when you hit a milestone, and a nudge if you haven't visited in a while. Security and password emails always send. Also controllable on the website.")
+        }
+        .task { await accountEmails.load() }
+
+        // The account's "Personalized suggestions" switch, the same one as
+        // the web's /profile?tab=settings. get_personalized_recommendations_v2
+        // ranks For You only when it is on (XPLAT-016).
+        Section {
+            Toggle(isOn: Binding(
+                get: { personalization.enabled ?? false },
+                set: { newValue in
+                    Task {
+                        do {
+                            try await personalization.setEnabled(newValue)
+                        } catch {
+                            toast = .error("Couldn't update your suggestions preference. Try again.")
+                        }
+                    }
+                }
+            )) {
+                Label("Personalized Suggestions", systemImage: "sparkles")
+            }
+            .disabled(personalization.enabled == nil)
+        } footer: {
+            Text("Rank For You from the events you swipe and save. When off, you see what's trending. Also controllable on the website.")
+        }
+        .task { await personalization.load() }
 
         Section {
             Button {

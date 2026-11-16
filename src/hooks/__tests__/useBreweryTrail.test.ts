@@ -6,6 +6,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: null }) }));
 
 import {
+  BREWERY_MEMBERSHIP_FILTER,
   breweryEventNotOver,
   breweryStatusLine,
   breweryVenueClause,
@@ -124,6 +125,38 @@ describe("breweryStatusLine (WEB-FEAT-044)", () => {
 
   it("prints no hours for a place that is not open yet", () => {
     expect(breweryStatusLine({ ...productionRow, status: "opening_soon" }, wednesdayAt("17:00"))).toBeNull();
+  });
+});
+
+describe("useBreweries membership (WEB-PERF-035 AC3)", () => {
+  const hook = readFileSync("src/hooks/useBreweryTrail.ts", "utf8");
+
+  it("reads trail membership from the is_brewery flag, not a name list", () => {
+    expect(BREWERY_MEMBERSHIP_FILTER).toContain("is_brewery.eq.true");
+    expect(BREWERY_MEMBERSHIP_FILTER).not.toMatch(/name\.ilike/);
+    expect(hook).not.toMatch(/BREWERY_NAMES/);
+    expect(hook).not.toMatch(/name\.ilike/);
+  });
+
+  it("keeps the cuisine signal, since nothing at ingest sets the flag", () => {
+    expect(BREWERY_MEMBERSHIP_FILTER).toContain("cuisine.ilike.%Brewery%");
+    expect(BREWERY_MEMBERSHIP_FILTER).toContain("cuisine.ilike.%Craft Beer%");
+  });
+
+  it("still keeps NULL-status rows and drops closed ones in the same or= param", () => {
+    expect(BREWERY_MEMBERSHIP_FILTER.startsWith("and(or(status.is.null,status.neq.closed),or(")).toBe(true);
+    let depth = 0;
+    for (const ch of BREWERY_MEMBERSHIP_FILTER) {
+      if (ch === "(") depth++;
+      if (ch === ")") depth--;
+      expect(depth).toBeGreaterThanOrEqual(0);
+    }
+    expect(depth).toBe(0);
+  });
+
+  it("the hook filters with the exported constant", () => {
+    expect(hook).toMatch(/\.or\(BREWERY_MEMBERSHIP_FILTER\)/);
+    expect(hook).toMatch(/\.neq\('is_merged', true\)/);
   });
 });
 

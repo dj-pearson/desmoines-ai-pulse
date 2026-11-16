@@ -4,7 +4,8 @@
  * and the weekly digest. Sends through _shared/email.ts (SES)
  * with the emailLayout CAN-SPAM footer and one-click
  * unsubscribe (the token is looked up by address when the caller has none, see
- * lookupUnsubscribeToken). Callers MUST have already checked consent/unsubscribe; this
+ * lookupUnsubscribeToken, and a member with no newsletter row gets their
+ * account token, see ensureAccountUnsubscribeToken). Callers MUST have already checked consent/unsubscribe; this
  * records the send, it does not decide policy. sendEmail still drops
  * suppressed addresses, which is recorded here as `skipped`.
  *
@@ -63,6 +64,38 @@ export async function lookupUnsubscribeToken(
   }
 }
 
+/**
+ * The member's account unsubscribe token (WEB-ADS-035), or null.
+ *
+ * For a recipient with no newsletter row, which is most members: without it
+ * their footer pointed at a sign-in page and List-Unsubscribe was mailto only.
+ * ensure_marketing_unsubscribe_token (migration 20261108000104, service role
+ * only) returns the member's token, minting it on first use.
+ *
+ * Non-fatal for the same reason as lookupUnsubscribeToken, and it is also what
+ * makes this safe to deploy before the migration: until the function exists
+ * the call errors, this returns null, and the email goes out with the
+ * sign-in-or-mailto footer it had before. A link to /unsubscribe?account= is
+ * only ever written when the RPC that link runs has answered.
+ */
+export async function ensureAccountUnsubscribeToken(
+  supabase: NurtureDb,
+  userId: string | null,
+): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const { data, error } = await supabase.rpc("ensure_marketing_unsubscribe_token", { p_user_id: userId });
+    if (error) {
+      console.warn(`[sendNurtureEmail] account unsubscribe token mint failed: ${error.message}`);
+      return null;
+    }
+    return typeof data === "string" && UNSUBSCRIBE_TOKEN.test(data) ? data : null;
+  } catch (err) {
+    console.warn(`[sendNurtureEmail] account unsubscribe token mint threw: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
 export interface NurtureEmailDeps {
   /** Pinned in tests. */
   send?: typeof sendEmail;
@@ -107,11 +140,15 @@ export async function sendNurtureEmail(
   const unsubscribeToken = category === "marketing"
     ? args.unsubscribeToken ?? await lookupUnsubscribeToken(supabase, args.email)
     : null;
+  // A newsletter token wins; a member without one gets their account token.
+  const accountToken = category === "marketing" && !unsubscribeToken
+    ? await ensureAccountUnsubscribeToken(supabase, args.userId)
+    : null;
 
   const rendered = renderEmail({
     bodyHtml: args.bodyHtml,
     bodyText: args.bodyText,
-    recipient: { email: args.email, unsubscribeToken },
+    recipient: { email: args.email, unsubscribeToken, accountToken },
     category,
   });
 

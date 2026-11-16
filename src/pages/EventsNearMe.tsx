@@ -6,7 +6,7 @@ import SEOHead from '@/components/SEOHead';
 import { EventListJsonLd } from '@/components/schema/EventListJsonLd';
 import { SocialEventCard } from '@/components/SocialEventCard';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DeferredSelect, type DeferredSelectOption } from '@/components/ui/deferred-select';
 import {
   Sheet,
   SheetContent,
@@ -88,6 +88,16 @@ const PAGE_URL = `${BRAND.baseUrl}/events/near-me`;
  */
 const CANONICAL_URL = `${BRAND.baseUrl}/events/today`;
 
+const ORIGIN_OPTIONS: readonly DeferredSelectOption[] = NEAR_ME_ORIGINS.map((o) => ({ value: o.slug, label: o.label }));
+const ORIGIN_OPTIONS_WITH_CURRENT: readonly DeferredSelectOption[] = [
+  { value: CURRENT_LOCATION, label: 'My current location' },
+  ...ORIGIN_OPTIONS,
+];
+const CATEGORY_OPTIONS: readonly DeferredSelectOption[] = [
+  { value: 'all', label: 'All categories' },
+  ...EVENT_CATEGORIES.map((c) => ({ value: c, label: c })),
+];
+
 function readStoredOrigin(): string {
   const stored = storage.get<string>(NEAR_ME_ORIGIN_STORAGE_KEY);
   return findNearMeOrigin(stored)?.slug ?? DEFAULT_NEAR_ME_ORIGIN;
@@ -153,6 +163,7 @@ export default function EventsNearMe() {
 
   const origin = findNearMeOrigin(originSlug) ?? NEAR_ME_ORIGINS[0];
   const fromCurrent = useCurrentLocation && !!location;
+  const originOptions = location ? ORIGIN_OPTIONS_WITH_CURRENT : ORIGIN_OPTIONS;
   const center = fromCurrent
     ? { latitude: location.latitude, longitude: location.longitude }
     : { latitude: origin.latitude, longitude: origin.longitude };
@@ -278,24 +289,13 @@ export default function EventsNearMe() {
                 <label htmlFor="near-me-origin" className="text-sm font-medium">
                   Measure distance from
                 </label>
-                <Select
+                <DeferredSelect
                   value={fromCurrent ? CURRENT_LOCATION : origin.slug}
                   onValueChange={handleOriginChange}
-                >
-                  <SelectTrigger id="near-me-origin" className="min-h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {location && (
-                      <SelectItem value={CURRENT_LOCATION}>My current location</SelectItem>
-                    )}
-                    {NEAR_ME_ORIGINS.map((o) => (
-                      <SelectItem key={o.slug} value={o.slug}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={originOptions}
+                  id="near-me-origin"
+                  triggerClassName="min-h-11"
+                />
               </div>
               <Button
                 onClick={() => (location ? setUseCurrentLocation(true) : requestLocation())}
@@ -364,19 +364,14 @@ export default function EventsNearMe() {
                         <label htmlFor="near-me-category" className="text-sm font-medium">
                           Category
                         </label>
-                        <Select value={category} onValueChange={setCategory}>
-                          <SelectTrigger id="near-me-category" className="min-h-11">
-                            <SelectValue placeholder="All categories" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All categories</SelectItem>
-                            {EVENT_CATEGORIES.map((c) => (
-                              <SelectItem key={c} value={c}>
-                                {c}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <DeferredSelect
+                          value={category}
+                          onValueChange={setCategory}
+                          options={CATEGORY_OPTIONS}
+                          placeholder="All categories"
+                          id="near-me-category"
+                          triggerClassName="min-h-11"
+                        />
                       </div>
                     </div>
                   </SheetContent>

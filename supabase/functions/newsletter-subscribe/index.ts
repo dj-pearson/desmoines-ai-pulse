@@ -86,6 +86,7 @@ const ALLOWED_SOURCES = [
   "visitors_guide",
   "confirm_page",
   "reminder_notice",
+  "unsubscribe_page",
 ];
 
 function buildConfirmEmail(email: string, confirmUrl: string, firstName: string | null) {

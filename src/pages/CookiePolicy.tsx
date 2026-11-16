@@ -1,5 +1,6 @@
-import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import SEOHead from "@/components/SEOHead";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 import { Button } from "@/components/ui/button";
 import { reopenConsentBanner } from "@/lib/cookieConsent";
 
@@ -7,13 +8,12 @@ export default function CookiePolicy() {
 
   return (
     <>
-      <Helmet>
-        <title>Cookie Policy | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="How Des Moines Insider uses cookies and similar technologies, what categories exist, and how to change your preferences."
-        />
-      </Helmet>
+      <SEOHead
+        title={STATIC_PAGE_META["/cookie-policy"].title}
+        description={STATIC_PAGE_META["/cookie-policy"].description}
+        url="https://desmoinesinsider.com/cookie-policy"
+        type="website"
+      />
 
       <div className="min-h-screen bg-background pb-24">
         <div className="container mx-auto px-4 py-12 max-w-3xl">

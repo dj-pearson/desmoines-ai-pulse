@@ -618,34 +618,74 @@ test.describe('Responsive Accessibility', () => {
     expect(criticalViolations.length, 'Mobile view should have no critical a11y violations').toBe(0);
   });
 
-  test('touch targets should be accessible on mobile', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/events', { waitUntil: 'networkidle' });
+  test.describe('on a touch screen', () => {
+    // A touch device, not just a narrow window (WEB-QA-061). The
+    // app sizes targets for thumbs under `@media (pointer: coarse)` (the
+    // tailwind `coarse:` variant, .footer-link, .footer-link-compact), so on
+    // chromium-desktop with only setViewportSize every one of those rules was
+    // off and the footer measured 17px: 34.7% passed there, 58.1% on Pixel 5.
+    test.use({ hasTouch: true });
 
-    const touchTargets = await page.$$eval('button, a, input, select', elements =>
-      elements
-        .map(el => {
-          const rect = el.getBoundingClientRect();
-          return {
-            tag: el.tagName,
-            width: rect.width,
-            height: rect.height,
-            meetsSize: rect.width >= 44 && rect.height >= 44,
-            visible: rect.width > 0 && rect.height > 0,
-          };
-        })
-        .filter(el => el.visible)
-    );
+    test('touch targets should be accessible on mobile', async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 667 });
+      await page.goto('/events', { waitUntil: 'networkidle' });
 
-    const tooSmall = touchTargets.filter(t => !t.meetsSize);
+      const touchTargets = await page.$$eval('button, a, input, select', elements =>
+        elements
+          .map(el => {
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            // The hit area, not the painted box. .tap-area-44 grows an
+            // icon's target with an absolutely positioned ::after of
+            // min 44x44 (src/index.css); the browser hit-tests that box.
+            const after = getComputedStyle(el, '::after');
+            const hasHitPseudo =
+              after.content !== 'none' &&
+              after.content !== 'normal' &&
+              after.display !== 'none' &&
+              after.position === 'absolute' &&
+              after.pointerEvents !== 'none';
+            const width = hasHitPseudo ? Math.max(rect.width, parseFloat(after.minWidth) || 0) : rect.width;
+            const height = hasHitPseudo ? Math.max(rect.height, parseFloat(after.minHeight) || 0) : rect.height;
+            // sr-only content (the skip link until focused) is clipped to
+            // 1x1 and cannot be tapped.
+            const clipped = style.clip === 'rect(0px, 0px, 0px, 0px)' || style.clipPath === 'inset(50%)';
+            // WCAG 2.5.8's inline exception: a link inside a sentence is
+            // sized by the line it sits on.
+            const parentText = (el.parentElement?.textContent ?? '').trim();
+            const inline = style.display === 'inline' && parentText.length > (el.textContent ?? '').trim().length;
+            return {
+              label: `${el.tagName} "${(el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40)}"`,
+              width: Math.round(width),
+              height: Math.round(height),
+              // The SEO site directory's documented tier: 24px rows, the
+              // WCAG 2.5.8 AA minimum (WEB-UX-036 in src/index.css).
+              directory: el.classList.contains('footer-link-compact'),
+              counted: rect.width > 0 && rect.height > 0 && !clipped && !inline,
+            };
+          })
+          .filter(t => t.counted)
+      );
 
-    if (tooSmall.length > 0) {
-      console.log(`${tooSmall.length} of ${touchTargets.length} touch targets are below 44x44px`);
-    }
+      // Every target clears WCAG 2.5.8's 24x24 AA floor. The old test let
+      // 30% of targets be any size at all, 1px included.
+      const underFloor = touchTargets.filter(t => t.width < 24 || t.height < 24);
+      expect(
+        underFloor.map(t => `${t.label} ${t.width}x${t.height}`),
+        'No touch target may be under 24x24px (WCAG 2.5.8)'
+      ).toEqual([]);
 
-    // At least 70% should meet the size requirement
-    const percentageMeetingSize = ((touchTargets.length - tooSmall.length) / touchTargets.length) * 100;
-    expect(percentageMeetingSize, 'At least 70% of touch targets should be 44x44px or larger').toBeGreaterThan(70);
+      // Outside the 24px directory tier, the project's 44px standard holds
+      // for at least 70% of targets.
+      const primary = touchTargets.filter(t => !t.directory);
+      const tooSmall = primary.filter(t => t.width < 44 || t.height < 44);
+      if (tooSmall.length > 0) {
+        console.log(`${tooSmall.length} of ${primary.length} touch targets are below 44x44px:`, tooSmall);
+      }
+      expect(primary.length, 'the page rendered its controls').toBeGreaterThan(10);
+      const percentageMeetingSize = ((primary.length - tooSmall.length) / primary.length) * 100;
+      expect(percentageMeetingSize, 'At least 70% of touch targets should be 44x44px or larger').toBeGreaterThan(70);
+    });
   });
 });
 

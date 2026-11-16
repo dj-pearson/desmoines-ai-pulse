@@ -134,6 +134,87 @@ check closes it: open /events/kids (adb am start) and confirm a storytime or chi
 if the list is empty and logcat shows a PostgREST 400 "failed to parse logic tree", the double quotes
 around each pattern are not reaching the URL intact; the colons and parentheses inside need them.
 
+AND-AUDIT-042 (native event-series screen) is code-complete; slices 1, 2, 3a and 3b landed 2026-11-15.
+/events/series/<slug> now opens ui/screens/series/EventSeriesScreen (Route.EventSeries,
+"event_series/{slug}") when EventSeries.forSlug knows the slug; an unknown slug, bare /events/series or
+an extra segment still opens the web view (DeepLinkHandler.seriesDestination). EventSeriesViewModel calls
+EventsRepository.fetchSeriesRows (uncached, logged on failure) then EventSeriesSchedule.build; the screen
+shows name and blurb, "<year> dates" with the current edition or "<year> date not announced yet", then
+past years newest first with editionSummary; rows with a linkId open event detail, sweep-hidden rows are
+plain text; a failed read shows Try again instead of the unannounced line; the toolbar shares
+SITE_URL/events/series/<slug>. The row and heading text live in EventSeriesSchedule (currentHeading,
+editionSummary, instanceTitle, instanceDetail) and are JVM-tested. One device check closes it: open
+/events/series/cloris-awards (adb am start) and confirm past years are listed, a sweep-hidden edition is
+plain text, and tapping a linked past row opens its detail. Two traps: if the list is empty and logcat
+shows a PostgREST 400, the % in the ilike values is not reaching the URL encoded; if a linked archived
+row opens detail as not-found, the by-id read is not returning archived rows (Android's fetchEvent has
+no archived_at filter today, so look at RLS; iOS hit this and passes the row it already has instead).
+
+AND-AUDIT-043 (event detail links to its series) is code-complete and JVM-tested. Event detail now
+shows "<name> happens every year." and an "Every year's dates for <name>" link under the action buttons
+when EventSeries.forEvent places the row in one of the 20 series, as the web's event page does (SEO-043);
+the link opens Route.EventSeries. The two strings live in EventSeries.everyYearSentence/everyYearLinkLabel
+and androidEventSeriesParity.test.ts holds them to the web's JSX. One device check closes it: open an
+edition of Cloris Awards or Panda Fest, tap the link, confirm the series screen opens, then tap a past
+row and Back twice to land on the original event. The trap: a venue-qualified series (Jazz in July,
+Pumpkin Fest) shows the line only when the venue or location names the place; a row with neither is
+not a missing link.
+
+AND-AUDIT-044 (past events on detail) is code-complete and JVM-tested. Event detail now shows
+"This event has already happened" under the date, drops the Today/In n days chip and hides Add to Calendar
+when util/EventPastState.isPast says the row is over: archived_at set (Event decodes it now), or the web's
+isEventOver through EventSeriesSchedule.isOver (end_date, else end of the Central day untimed, else three
+hours in). One device check closes it: from /events/series/cloris-awards tap a linked past edition and
+confirm the banner shows and Add to Calendar is gone; then open a festival on its second day and confirm
+it still offers Add to Calendar. The trap: if a linked archived row opens as not-found instead, the by-id
+read is not returning archived rows (look at the events RLS policy), which this change does not touch.
+
+AND-AUDIT-045 (month links) is code-complete and JVM-tested. /events/<month>-<year> opens the in-app web
+view of the same URL instead of Home. Month pages go to the web on purpose: every native events read
+floors at today in Central, so june-2026 could never be shown natively. One device check closes it: adb am
+start https://desmoinesinsider.com/events/june-2026 and confirm the web page opens in the app, not Home.
+The trap: if the web view hands off to the system browser instead, its initialHost check is comparing
+against a different host spelling (www vs bare). (/events/date-night no longer goes to the web view; see
+AND-AUDIT-046.)
+
+AND-AUDIT-046 (native date night) is code-complete and JVM-tested. /events/date-night opens Search on
+Events with a removable "Date night" chip (Destination.DateNight; the times wait in pendingDateNight until
+SearchViewModel applies and consumes them). util/DateNightFilter holds the web's DATE_NIGHT_FILTER
+(category.in.(Music,Comedy,Arts) or the title words, one supabase-kt or { isIn; imatch } group), the 14
+Central days and the 4pm-4am Central evening rule, held equal to the web by
+src/lib/__tests__/androidDateNightParity.test.ts. Evenings are filtered on the phone from 60 fetched rows,
+as iOS does; ?time=all keeps every time. Kids and date night are exclusive (each is its own or() param).
+One device check closes it: adb am start https://desmoinesinsider.com/events/date-night and confirm the
+chip reads "Date night - Evenings" and every row starts 4pm or later Central, then the same with
+?time=all and confirm an afternoon or Time TBA row can appear. Two traps: a PostgREST 400 "failed to parse
+logic tree" means the quotes around the imatch pattern are not reaching the URL; an empty evening list
+on a busy week means the 60-row fetch is all daytime rows, not a broken filter (check with ?time=all).
+
+AND-AUDIT-017 (unmounted composables) is partly done. The cosmetic and superseded orphans from the
+2026-08-29 triage are deleted: ParallaxHeroHeader, BrandedRefreshIndicator, MapPreviewSheet (with
+CategoryMapMarker), ToastOverlay (with ToastMessage), AnimatedTabItem, GlassTextField, AppTypography
+(AppText, rememberAppTextStyle, AppTextStyle), GlassCard and BrandDestructiveButton. BrandSecondaryButton
+was on that list and is now used, so it stays; BackdropBlurScope is a false positive of the scan (it is the
+type of LocalBackdropBlurState). The second slice (2026-11-16) found the "wire-ups" were already shipped
+another way: SearchScreen's private SearchSuggestions renders Trending chips, the last 5 recent searches
+with Clear all, and Recently viewed; SearchViewModel debounces at 300ms; OnboardingScreen draws its own
+pill indicator, Skip and Next/Get Started. So SearchSuggestions.kt (TrendingChipsRow, RecentSearchesList,
+SuggestionChip, DebouncedQueryState, rememberDebouncedQuery) and the OnboardingPage, OnboardingPageIndicator
+and OnboardingNavRow composables were duplicates and are deleted; iOS deleted its own unused
+RecentSearchesList the same way (docs/ios-deep-dive/05-search.md S08). PermissionPrimingCard, the one live
+piece of OnboardingPage.kt, now sits alone in PermissionPrimingCard.kt. What is left is not a cleanup:
+  1. Owner decision (AC4): AffiliateAdBanner, PaywallSheet, SubscriptionTierCard + BillingCycleToggle are
+     revenue surfaces; ask before wiring or deleting them.
+  2. One wire-up: Modifier.entranceAnimation (iOS uses its twin on Home, Search, Restaurants and
+     Attractions). Before wiring it into a LazyColumn, note its Animatable lives in `remember` inside
+     `composed`, so an item that scrolls off and back replays the fade; key it per item or accept that.
+  3. Leave the Category* colour tokens, StatusWarning and CardShadow (design tokens, per the triage).
+A Gradle build is the check these deletions have not had: run :app:compileDebugKotlin once on a machine with
+the SDK. The static check found 0 references to any removed name and 0 unresolved project imports, so a
+failure there would point at a reference the scan cannot see (reflection or a string-built class name).
+Three iOS comments still say they match the deleted Android files (AnimatedTabItem.swift,
+ParallaxHeroHeader.swift, BrandedRefreshView.swift); they are iOS-lane files and were left alone.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -158,3 +239,13 @@ around each pattern are not reaching the URL intact; the colons and parentheses 
 | 2026-11-08 | AND-AUDIT-039 | this commit | Guide reading time rounds up (ceil of words / 200, min 1) to match web readTimeLabel and iOS readingMinutes; it truncated, so 201-399 word guides read one minute short on cards and detail. 3 new MarkdownParserTest JVM tests pass on a stub harness (kotlinc 2.2.10), 17/17 across MarkdownParserTest and ArticleTest; restoring truncation fails exactly 2 (rounding boundaries, newline/tab split). App module not compiled (no Android SDK); no device check needed beyond reading a card |
 | 2026-11-08 | AND-AUDIT-040 | this commit | /restaurants/open-now opens Dining with Open now on (was the unfiltered tab) and /events/near-me opens the Map tab (was Home), matching iOS. 3 new DeepLinkPendingFilterTest JVM tests pass with the 55 existing DeepLink tests (58/58) on a stub harness (kotlinc 2.2.10); a mutation dropping the pending flag and the near-me case fails the 3 expected tests. RestaurantsViewModel tests, MainScreen and app module not compiled (no Android SDK, no mockk in cache); no device check |
 | 2026-11-08 | AND-AUDIT-041 | this commit | /events/kids opens Search with a Kids & family filter that sends the web's KIDS_EVENTS_FILTER as one or-group (was a full-text search for "kids events", which missed storytimes and children's shows); the chip removes it, and the fuzzy fallback is skipped so adult events cannot return. 6 new JVM tests (4 KidsEventsFilterTest, 2 DeepLinkPendingFilterTest) pass with the updated DeepLink suites, 58/58 on a stub harness (kotlinc 2.2.10); a mutation restoring the text search and dropping "family" fails 3. New vitest parity test 4/4, fails on the same mutation. SearchViewModel, SearchScreen, EventsRemoteDataSource and app module not compiled (no Android SDK); no device check |
+| 2026-11-15 | AND-AUDIT-042 | this commit | Slice 1 of 3: util/EventSeries.kt ports the web's 20 annual series and normaliseEventTitle (plus forEvent, forSlug, path, titlePatterns); new vitest androidEventSeriesParity.test.ts holds the catalogue and 16 normalise cases equal to src/lib/eventSeries.ts, 3/3 (an alias edit fails it). 7 EventSeriesTest JVM tests pass on a stub harness (kotlinc 2.2.10, JUnit 5.10); a mutation dropping the apostrophe step fails 1, an alias edit fails 1. Not wired to any screen yet; app module not compiled (no Android SDK) |
+| 2026-11-15 | AND-AUDIT-042 | this commit | Slice 2 of 3: util/EventSeriesSchedule.kt ports the web's buildSeriesView rules (moderator vs sweep hidden, linkable, eventEnd/isOver, one instance per Central day, editions by year, current/past/unannounced, date labels). 14 EventSeriesScheduleTest JVM tests (the iOS/web cases plus an isOver case) pass with 34 existing EventSeries/EventCalendarEntry/EventDesMoinesDay tests, 48/48 on a stub harness (kotlinc 2.2.10, JUnit 5.10); three mutations (moderator rule off, no live preference, untimed end_date not run to day end) each fail exactly 1. Not wired to a screen; app module not compiled (no Android SDK) |
+| 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3a: EventsRemoteDataSource.fetchSeriesRows ports the web/iOS series read (neq is_merged, or of title ilikes via new EventSeries.titleLikePatterns, hidden and archived rows kept, limit 200) and util/SeriesEventRows decodes it lossily into SeriesEventRow. 5 new SeriesEventRowsTest and 1 new EventSeriesTest JVM tests pass with the 48 existing series/calendar/day tests, 54/54 on a stub harness (kotlinc 2.2.10 with the real kotlinx-serialization 1.6.2 plugin and runtime, JUnit 5.10); two mutations (rethrow instead of drop, wrong hidden_at name) each fail exactly 1. Parity vitest extended to pin the read and the 200 against web and iOS, 5/5. Not wired to a screen; data source and app module not compiled (no Android SDK) |
+| 2026-11-15 | AND-AUDIT-042 | this commit | Slice 3b (last): native series screen wired. /events/series/<slug> opens EventSeriesScreen for the 20 catalogued slugs (unknown or malformed stays in the web view); EventSeriesViewModel reads fetchSeriesRows through EventsRepository and builds the schedule; current/unannounced, past years, linked vs plain rows, Try again on error, share. 4 new EventSeriesScheduleTest and 2 new DeepLinkWebDestinationTest JVM tests (1 rewritten) pass, 114/114 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); mutations (series link back to web, time on untimed rows) fail exactly 3. Route registration checked by the RouteRegistrationTest regexes in node (0 missing). Parity vitest 5/5. ViewModel, screen, nav and app module not compiled (no Android SDK); no device check |
+| 2026-11-15 | AND-AUDIT-043 | this commit | Event detail links an annual edition to its native series screen ("<name> happens every year." + "Every year's dates for <name>"), matching the web event page; neither mobile app linked detail to the series. 1 new EventSeriesTest JVM test passes, 9/9 in the suite on a stub harness (kotlinc 2.2.10, JUnit 5.10); parity vitest 6/6 (1 new, pins both strings to src/pages/EventDetails.tsx); changing the link label fails 1 JVM and 1 vitest. Compose screen, nav and app module not compiled (no Android SDK); no device check |
+| 2026-11-15 | AND-AUDIT-044 | this commit | Event detail treats an ended or archived row as past, as the web event page does (!isOver && !archived): "This event has already happened" banner (iOS wording), no urgency chip, no Add to Calendar; Event decodes archived_at. 7 new EventPastStateTest JVM tests pass, 122/122 with the series, calendar, day and DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); ignoring archived_at fails 2, a start-based rule fails 3. check-mobile-schema OK. Compose screen and app module not compiled (no Android SDK); no device check |
+| 2026-11-15 | AND-AUDIT-045 | this commit | /events/date-night and /events/<month>-<year> open the in-app web view of the same URL (was Home, which dropped the link); month archives go to the web because native reads floor at today. 3 new DeepLinkWebDestinationTest tests (10 runs) pass, 125/125 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); restoring Home fails exactly 5. Instrumented DeepLinkHandlerTest updated, not run. App module not compiled (no Android SDK); no device check |
+| 2026-11-16 | AND-AUDIT-046 | this commit | /events/date-night opens a native Search with the web's DATE_NIGHT_FILTER over 14 Central days, evenings only unless ?time=all, and a removable chip (was the in-app web view); matches iOS IOS-AUDIT-008. 8 new DateNightFilterTest and 2 new DeepLinkPendingFilterTest JVM tests pass, 86/86 across six util suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); a mutation routing date-night back to the web and counting no-time rows as evenings fails exactly 2. New vitest androidDateNightParity 5/5, src/lib/__tests__ 2273/2273, check-mobile-schema OK. SearchViewModel, SearchScreen, EventsRemoteDataSource and app module not compiled (no Android SDK); instrumented DeepLinkHandlerTest updated, not run; no device check |
+| 2026-11-16 | AND-AUDIT-017 | this commit | Deleted the 14 cosmetic/superseded orphans from the AC2 triage (6 whole files, AppTypography.kt, GlassCard, BrandDestructiveButton; 968 lines). A static check over android/app/src finds 0 remaining references to any removed name and 0 unresolved com.desmoines.aipulse imports across 1305 (a planted reference fails it); the orphan scan drops 49 -> 35, the rest being revenue surfaces, wire-up candidates, tokens and scan false positives. Not compiled (no Android SDK); no device check needed (nothing reachable changed) |
+| 2026-11-16 | AND-AUDIT-017 | this commit | Slice 2: the search-suggestion and onboarding "wire-up candidates" were duplicates of UI SearchScreen and OnboardingScreen already render inline, so SearchSuggestions.kt and three OnboardingPage.kt composables are deleted (355 lines net) and PermissionPrimingCard moves to its own file. Static check over android/app/src: 0 references to any removed name; 1305 project imports, the only unresolved being generated R/BuildConfig (11, same as before), and a planted import of a removed name fails it; orphan scan 35 -> 27, the rest being revenue surfaces, entranceAnimation, tokens and scan false positives. Not compiled (no Android SDK); no device check needed (nothing reachable changed) |

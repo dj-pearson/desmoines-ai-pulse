@@ -69,6 +69,7 @@ struct MapOverlayView: View {
         case .now: when = "right now"
         case .tonight: when = "tonight"
         case .saturday: when = chip.label(now: Date())
+        case .weekend: when = "this weekend"
         case .anytime: when = "then"
         }
         return "Nothing on \(when) nearby"

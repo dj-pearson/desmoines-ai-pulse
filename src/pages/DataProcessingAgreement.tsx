@@ -1,5 +1,6 @@
-import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import SEOHead from "@/components/SEOHead";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 import { Button } from "@/components/ui/button";
 import { Mail } from "lucide-react";
 
@@ -19,13 +20,12 @@ export default function DataProcessingAgreement() {
 
   return (
     <>
-      <Helmet>
-        <title>Data Processing Agreement | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="Des Moines Insider's standard Data Processing Agreement (DPA) for business customers with GDPR, CCPA, or similar data-protection obligations."
-        />
-      </Helmet>
+      <SEOHead
+        title={STATIC_PAGE_META["/dpa"].title}
+        description={STATIC_PAGE_META["/dpa"].description}
+        url="https://desmoinesinsider.com/dpa"
+        type="website"
+      />
 
       <div className="min-h-screen bg-background pb-24">
         <div className="container mx-auto px-4 py-12 max-w-3xl">

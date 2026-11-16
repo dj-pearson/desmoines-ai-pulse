@@ -19,9 +19,9 @@ SOURCE = open(os.path.join(HERE, "catchdesmoines_crawler.py"), encoding="utf-8")
 def load_helper():
     start = SOURCE.index("def page_adds_new_events(")
     end = SOURCE.index("\nclass CatchDesMoinesCrawler")
-    ns = {}
+    ns = {"re": re}
     exec(SOURCE[start:end], ns)  # noqa: S102
-    return ns["page_adds_new_events"]
+    return ns
 
 
 def constant(name):
@@ -37,7 +37,10 @@ def main():
         if not cond:
             failures.append(name)
 
-    page_adds_new_events = load_helper()
+    helpers = load_helper()
+    page_adds_new_events = helpers["page_adds_new_events"]
+    listed_days = helpers["listed_days"]
+    page_starts_past_horizon = helpers["page_starts_past_horizon"]
     seen = set()
     p1 = [{"detail_url": "/event/a/1/"}, {"detail_url": "/event/b/2/"}]
     check("first page is new", page_adds_new_events(p1, seen))
@@ -47,6 +50,29 @@ def main():
     check("one new link is enough", page_adds_new_events(p1 + [{"detail_url": "/event/c/3/"}], seen))
     check("an event with no link is not proof of the end", page_adds_new_events([{"title": "x"}], seen))
     check("an empty page adds nothing", not page_adds_new_events([], seen))
+
+    # The 90-day horizon (WEB-BE-051 AC2). Days are Central 'YYYY-MM-DD'.
+    horizon = "2027-02-13"
+    check("timed and date-only dates both give the day",
+          listed_days([{"date": "2027-01-05 19:30:00"}, {"date": "2027-01-02"}]) == ["2027-01-02", "2027-01-05"])
+    check("a missing or unreadable date is left out, not guessed",
+          listed_days([{"date": None}, {}, {"date": "Jan 5"}, {"date": "2027-01-03"}]) == ["2027-01-03"])
+    check("a page inside the horizon goes on",
+          not page_starts_past_horizon([{"date": "2027-01-10"}, {"date": "2027-02-13 20:00:00"}], horizon))
+    check("a page on the horizon day itself goes on",
+          not page_starts_past_horizon([{"date": "2027-02-13"}], horizon))
+    check("a page that starts after the horizon stops the walk",
+          page_starts_past_horizon([{"date": "2027-02-14"}, {"date": "2027-03-01"}], horizon))
+    check("one stray far-future card does not end a page that is still inside",
+          not page_starts_past_horizon([{"date": "2028-06-01"}, {"date": "2027-01-20"}], horizon))
+    check("a page with no readable date is not past the horizon",
+          not page_starts_past_horizon([{"date": ""}, {"title": "x"}], horizon))
+    check("an empty page is not past the horizon", not page_starts_past_horizon([], horizon))
+    check("the horizon is 90 days", constant("HORIZON_DAYS") == 90)
+    check("run() stops the walk on the horizon",
+          "page_starts_past_horizon(events, self.horizon_day)" in SOURCE)
+    check("the ledger records how far the walk got and why it stopped",
+          all(k in SOURCE for k in ('"latestListedDay"', '"horizonDay"', '"listingStop"', '"pagesRead"')))
 
     check("default horizon is well past 5 pages", (constant("DEFAULT_MAX_PAGES") or 0) >= 15)
     check("a time budget exists", (constant("DEFAULT_TIME_BUDGET_MINUTES") or 0) > 0)

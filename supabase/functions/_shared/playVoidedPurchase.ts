@@ -218,7 +218,7 @@ export async function processVoidedPurchase(
     };
   }
 
-  if (!check.confirmed) {
+  if (check.confirmed === false) {
     await log('void_unconfirmed', `${check.reason}: ${check.detail}`);
     return { status: 200, body: { ok: true, revoked: false } };
   }

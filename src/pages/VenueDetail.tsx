@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ShareMeta } from "@/components/seo/ShareMeta";
 import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { Helmet } from 'react-helmet-async';
 import { useVenue, useVenueEvents } from '@/hooks/useVenues';
@@ -130,14 +131,13 @@ export default function VenueDetail() {
           because it should stop existing once data arrives. It belongs in
           both. */}
       <RouteCanonical path={`/music/venues/${slug}`} />
+      <ShareMeta title={`Upcoming Events at ${venueName}, ${city}`} description={metaDescription} path={`/music/venues/${slug}`} />
       {/* SEO-018. Title and description are built from the row and the
           event list, so they answer the query this page exists for - "what is
           on at <venue>" - instead of restating the seed's marketing copy. */}
       <Helmet>
         <title>{`Upcoming Events at ${venueName}, ${city}`}</title>
         <meta name="description" content={metaDescription} />
-        <meta property="og:title" content={`Upcoming Events at ${venueName}, ${city}`} />
-        <meta property="og:description" content={metaDescription} />
         <script type="application/ld+json">{toJsonLd(buildVenueJsonLd({ ...venue, name: venueName }))}</script>
         {upcoming.length > 0 && (
           <script type="application/ld+json">

@@ -22,6 +22,7 @@
 
 import { titleNamesCity } from "./seoTitleLocation";
 import { hoursTextOf } from "./hoursText";
+import { entityNodeId } from "./schemaNodeIds";
 
 export interface RestaurantMetaInput {
   name: string;
@@ -492,7 +493,7 @@ export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantS
   return {
     "@context": "https://schema.org",
     "@type": "Restaurant",
-    "@id": ctx.url,
+    "@id": entityNodeId("restaurant", ctx.url),
     name: row.name,
     description: ctx.description,
     ...(row.cuisine ? { servesCuisine: row.cuisine } : {}),

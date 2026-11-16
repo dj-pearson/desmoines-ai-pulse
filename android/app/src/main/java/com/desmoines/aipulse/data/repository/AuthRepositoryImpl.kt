@@ -117,6 +117,35 @@ class AuthRepositoryImpl @Inject constructor(
             )
         }.onFailure { AppLogger.auth.warning("Write email preference failed: ${it.message}") }
 
+    override suspend fun isPersonalizationEnabled(userId: String): Result<Boolean> =
+        suspendRunCatching {
+            CommunicationPreferences.isExplicitlyOn(
+                remoteDataSource.fetchCommunicationPreferences(userId),
+                CommunicationPreferences.EVENT_RECOMMENDATIONS,
+            )
+        }.onFailure { AppLogger.auth.warning("Read personalization preference failed: ${it.message}") }
+
+    override suspend fun setPersonalizationEnabled(userId: String, enabled: Boolean): Result<Unit> =
+        suspendRunCatching {
+            remoteDataSource.setCommunicationPreference(
+                userId,
+                CommunicationPreferences.EVENT_RECOMMENDATIONS,
+                enabled,
+            )
+            // The setting is saved at this point. A failed audit row is logged
+            // and not reported as a failed save, as on the web (logConsent never
+            // throws): rolling the switch back here would show the old state
+            // while the server holds the new one.
+            suspendRunCatching {
+                remoteDataSource.recordConsent(
+                    userId,
+                    CommunicationPreferences.PERSONALIZATION_CONSENT_TYPE,
+                    enabled,
+                )
+            }.onFailure { AppLogger.auth.warning("Consent record failed: ${it.message}") }
+            Unit
+        }.onFailure { AppLogger.auth.warning("Write personalization preference failed: ${it.message}") }
+
     override suspend fun checkAdminRole(userId: String): Result<Boolean> =
         suspendRunCatching { remoteDataSource.checkAdminRole(userId) }
             .onFailure { AppLogger.auth.warning("Admin role check failed: ${it.message}") }

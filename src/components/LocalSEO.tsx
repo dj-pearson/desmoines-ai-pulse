@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { toOgType } from "@/lib/ogType";
 
 interface LocalSEOProps {
   pageTitle?: string;
@@ -165,7 +166,7 @@ export default function LocalSEO({
       {/* Enhanced Open Graph for Local */}
       <meta property="og:title" content={enhancedTitle} />
       <meta property="og:description" content={pageDescription} />
-      <meta property="og:type" content={pageType} />
+      <meta property="og:type" content={toOgType(pageType)} />
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:locale" content="en_US" />
       <meta property="og:region" content="IA" />

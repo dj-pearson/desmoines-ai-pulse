@@ -18,7 +18,7 @@ import {
   type RestaurantMapPoint,
 } from '@/hooks/useRestaurantMapPoints';
 import { haversineDistance } from '@/lib/geo';
-import { isPermanentlyClosedRestaurant, type StoredOpeningHours } from '@/lib/restaurantHours';
+import { isPermanentlyClosedRestaurant, type StoredOpeningHours } from '@/lib/restaurantStatus';
 import type { Json } from '@/integrations/supabase/types';
 
 /** A page row, accepted only as a fallback when the map query fails. */

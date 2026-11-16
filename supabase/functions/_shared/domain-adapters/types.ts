@@ -49,6 +49,32 @@ export interface AdapterResult {
    * the URL to the Browserless + Claude path.
    */
   skippedKnown?: number;
+  /**
+   * How far a paginated adapter read this run (WEB-BE-051). Callers copy it
+   * into the run ledger's metadata as `listing`; adapters without a list walk
+   * leave it out.
+   */
+  listing?: AdapterListingReport;
+}
+
+/** Why a list walk ended. Same words the Python crawler's listingStop uses. */
+export type ListingStop = "end_of_listing" | "list_budget" | "max_pages";
+
+export interface AdapterListingReport {
+  pagesRead: number;
+  pagesFailed: number;
+  listingStop: ListingStop;
+  /** Unique detail listings found on the list pages. */
+  listed: number;
+  skippedKnown: number;
+  detailFetched: number;
+  /** Listings found but left unread by the detail-page budget. */
+  detailBudgetLeft: number;
+  /** Latest Central start day among the fetched detail pages ("YYYY-MM-DD"). */
+  latestFetchedDay: string | null;
+  /** Today (Central) + 90 days, the day the walk is meant to reach. */
+  horizonDay: string;
+  reachedHorizon: boolean;
 }
 
 export interface AdapterFetchOptions {

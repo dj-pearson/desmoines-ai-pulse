@@ -37,7 +37,7 @@ import {
   type SearchTab,
   type SearchUrlState,
 } from "@/lib/searchUrlState";
-import type { TonightEvent } from "@/lib/tonightPairings";
+import type { TonightEvent } from "@/lib/tonightTime";
 
 /** What the results area is showing, and why. Drives the status line and the data source. */
 type Phase =

@@ -15,7 +15,16 @@ paths:
     get:
       operationId: listEvents
       summary: List and search upcoming events in Des Moines area
-      description: Get a paginated list of upcoming events in Des Moines, Iowa and surrounding suburbs. Filter by category, location, date range, or search by keywords. Returns events with details including title, date, venue, price, and description.
+      description: >-
+        Get a paginated list of upcoming events in Des Moines, Iowa and surrounding suburbs, plus
+        multi-day runs (a festival, the State Fair) that started earlier and are still on. Filter by
+        category, location, date range, or search by keywords. Dates are Central time
+        (America/Chicago) calendar days. The window is an overlap test: an event is returned when it
+        starts on or before the last moment of end_date, and either starts on or after the first
+        moment of start_date or has an end_date on or after it. A row with no end_date is a
+        single-day event and matches on its start alone. Results are ordered by start, so a run that
+        began before start_date comes first; compare its date and end_date to tell. Hidden,
+        archived and merged-duplicate events are never returned.
       parameters:
         - name: limit
           in: query
@@ -40,7 +49,13 @@ paths:
             type: string
         - name: city
           in: query
-          description: Filter by city or location (e.g., Des Moines, West Des Moines, Ankeny, Urbandale)
+          description: Filter by city, address or venue name, case-insensitive substring (e.g., Des Moines, West Des Moines, Ankeny, Urbandale)
+          required: false
+          schema:
+            type: string
+        - name: location
+          in: query
+          description: Same filter as city; when both are sent, location wins
           required: false
           schema:
             type: string
@@ -52,14 +67,19 @@ paths:
             type: string
         - name: start_date
           in: query
-          description: Filter events starting from this date (YYYY-MM-DD format, defaults to today)
+          description: >-
+            First day of the window, YYYY-MM-DD, read as a Central time day (from 00:00
+            America/Chicago). Defaults to today in Central time, not UTC. Returns events starting on
+            or after it and runs whose end_date reaches it.
           required: false
           schema:
             type: string
             format: date
         - name: end_date
           in: query
-          description: Filter events until this date (YYYY-MM-DD format)
+          description: >-
+            Last day of the window, YYYY-MM-DD, read as a Central time day (through 23:59:59.999
+            America/Chicago). Returns events that start on or before the end of that day.
           required: false
           schema:
             type: string
@@ -233,11 +253,19 @@ components:
           description: Event title
         date:
           type: string
-          format: date
-          description: Event date (YYYY-MM-DD)
+          format: date-time
+          description: When the event starts, as a timestamp with offset (e.g., "2026-08-13T14:00:00+00:00")
+        end_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When a multi-day run ends, as a timestamp with offset; null for a single-day event. A
+            listed event whose date is before start_date is a run still in progress.
         time:
           type: string
-          description: Event time (e.g., "7:00 PM")
+          nullable: true
+          description: Local start time in Central time, 24-hour HH:MM (e.g., "19:00"); null when the start time is unknown
         venue:
           type: string
           description: Venue name

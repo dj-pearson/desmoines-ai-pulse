@@ -7,10 +7,24 @@
 // here matches it: Fri 00:00 through Sun 23:59:59.999 America/Chicago, and on
 // Fri/Sat/Sun it is the weekend in progress.
 
+import { centralWallClockFromUtc } from "../_shared/centralTime.ts";
 import {
-  centralWallClockFromUtc,
-  centralWallClockToUtc,
-} from "../_shared/centralTime.ts";
+  addCentralDays,
+  centralDaySpan,
+  centralDayStartUtc,
+  centralToday,
+  centralWeekday,
+  currentWeekendFriday,
+  parseCentralDay,
+  upcomingOrRunningFilter,
+  type UtcWindow,
+  weekendSpan,
+} from "../_shared/eventWindow.ts";
+
+// The Central-day arithmetic and the or= group live in _shared/eventWindow.ts
+// (WEB-FEAT-091); search.ts and the suites keep importing them from here.
+export { upcomingOrRunningFilter };
+export type { UtcWindow };
 
 export type NlpDateFilter =
   | "today"
@@ -20,65 +34,9 @@ export type NlpDateFilter =
   | "next_week"
   | "specific";
 
-export interface UtcWindow {
-  start: string;
-  end: string;
-}
-
-interface CentralDay {
-  year: number;
-  month: number;
-  day: number;
-}
-
-function centralToday(now: Date): CentralDay {
-  const [y, m, d] = centralWallClockFromUtc(now).slice(0, 10).split("-").map(
-    Number,
-  );
-  return { year: y, month: m, day: d };
-}
-
-// Calendar arithmetic on the Central date itself (noon UTC avoids any DST edge).
-function addDays(day: CentralDay, n: number): CentralDay {
-  const t = new Date(Date.UTC(day.year, day.month - 1, day.day + n, 12));
-  return { year: t.getUTCFullYear(), month: t.getUTCMonth() + 1, day: t.getUTCDate() };
-}
-
-function weekday(day: CentralDay): number {
-  return new Date(Date.UTC(day.year, day.month - 1, day.day, 12)).getUTCDay();
-}
-
-function dayStartUtc(day: CentralDay): string {
-  return centralWallClockToUtc(day.year, day.month, day.day, 0, 0, 0)!
-    .toISOString();
-}
-
-function dayEndUtc(day: CentralDay): string {
-  const next = addDays(day, 1);
-  return new Date(
-    centralWallClockToUtc(next.year, next.month, next.day, 0, 0, 0)!.getTime() -
-      1,
-  ).toISOString();
-}
-
-function span(from: CentralDay, to: CentralDay): UtcWindow {
-  return { start: dayStartUtc(from), end: dayEndUtc(to) };
-}
-
 /** Start of today in Central time, as a UTC ISO instant. */
 export function centralTodayStartUtc(now: Date = new Date()): string {
-  return dayStartUtc(centralToday(now));
-}
-
-/**
- * The PostgREST `or=` group that keeps an event starting at or after
- * `lowerIso`, OR a run whose end_date is at or after it. Same string as
- * upcomingOrRunningFilter in src/hooks/useEvents.ts (search.test.ts guards the
- * drift). A row with no end_date matches only on its own date, so a past
- * one-night show stays off. WEB-FEAT-068.
- */
-export function upcomingOrRunningFilter(lowerIso: string): string {
-  return `date.gte.${lowerIso},end_date.gte.${lowerIso}`;
+  return centralDayStartUtc(centralToday(now));
 }
 
 /** Central date of `now` as YYYY-MM-DD, for the prompt given to the model. */
@@ -96,38 +54,31 @@ export function nlpDateWindow(
   specificDate?: string | null,
 ): UtcWindow | null {
   const today = centralToday(now);
-  const dow = weekday(today); // 0 = Sunday
+  const dow = centralWeekday(today); // 0 = Sunday
   switch (filter) {
     case "today":
-      return span(today, today);
+      return centralDaySpan(today, today);
     case "tomorrow": {
-      const t = addDays(today, 1);
-      return span(t, t);
+      const t = addCentralDays(today, 1);
+      return centralDaySpan(t, t);
     }
-    case "this_weekend": {
-      // Fri=5, Sat=6, Sun=0 are inside the weekend in progress.
-      const offsetToFri = dow === 0 ? -2 : dow === 6 ? -1 : 5 - dow;
-      const fri = addDays(today, offsetToFri);
-      return span(fri, addDays(fri, 2));
-    }
+    case "this_weekend":
+      // Fri, Sat and Sun are inside the weekend in progress.
+      return weekendSpan(currentWeekendFriday(today));
     case "this_week": {
       // Today through Sunday.
       const toSunday = dow === 0 ? 0 : 7 - dow;
-      return span(today, addDays(today, toSunday));
+      return centralDaySpan(today, addCentralDays(today, toSunday));
     }
     case "next_week": {
       // The Monday-Sunday week after this one.
       const toNextMonday = dow === 0 ? 1 : 8 - dow;
-      const mon = addDays(today, toNextMonday);
-      return span(mon, addDays(mon, 6));
+      const mon = addCentralDays(today, toNextMonday);
+      return centralDaySpan(mon, addCentralDays(mon, 6));
     }
     case "specific": {
-      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(specificDate ?? "");
-      if (!m) return null;
-      const d = { year: +m[1], month: +m[2], day: +m[3] };
-      const check = addDays(d, 0);
-      if (check.month !== d.month || check.day !== d.day) return null;
-      return span(d, d);
+      const d = parseCentralDay(specificDate);
+      return d ? centralDaySpan(d, d) : null;
     }
     default:
       return null;

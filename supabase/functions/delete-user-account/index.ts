@@ -26,7 +26,8 @@
  * store_subscriptions_still_active so the client can say so.
  *
  * Permanently deletes every table listed in _shared/userDataTables.ts
- * (PURGE_TABLES), plus newsletter_subscribers (by email) and auth.users.
+ * (PURGE_TABLES), the "purge" entries of _shared/addressKeyedData.ts
+ * (newsletter_subscribers and email_log, by address) and auth.users.
  * Tables kept on purpose, each with its stated basis, are RETAINED_TABLES in
  * the same file. Both lists are covered by _tests/user-data-tables.test.ts.
  *
@@ -48,6 +49,7 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { purgeUserStorage, type BucketPurgeResult } from "../_shared/purgeUserStorage.ts";
 import { PURGE_TABLES } from "../_shared/userDataTables.ts";
+import { purgeAddressKeyedData, type AddressDataClient } from "../_shared/addressKeyedData.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import {
   cancelBillingBeforeErasure,
@@ -170,24 +172,18 @@ async function performDeletion(
     }
   }
 
-  // Newsletter subscriptions are keyed by email, not user_id. Remove any
-  // subscription tied to this account's email so marketing data is purged too.
-  if (user.email) {
-    const { error: newsletterError } = await supabase
-      .from("newsletter_subscribers")
-      .delete()
-      .eq("email", user.email.toLowerCase());
-    if (newsletterError) {
-      tableFailures.push({
-        table: "newsletter_subscribers",
-        code: newsletterError.code,
-        message: newsletterError.message,
-      });
-      console.error(
-        "Failed deleting from newsletter_subscribers:",
-        newsletterError.message,
-      );
-    }
+  // Mail data keyed by address: the newsletter row, and email_log, which keeps
+  // the address in to_email after the auth user is gone (its user_id is ON
+  // DELETE SET NULL). The list is _shared/addressKeyedData.ts, which the export
+  // walks too, so the two rights cannot drift on these tables either.
+  const addressPurge = await purgeAddressKeyedData(
+    supabase as AddressDataClient,
+    userId,
+    user.email,
+  );
+  for (const failure of addressPurge.failures) {
+    tableFailures.push(failure);
+    console.error(`Failed deleting from ${failure.table} (${failure.code}):`, failure.message);
   }
 
   // Purge uploaded files (WEB-LEGAL-003). Runs BEFORE the auth user is deleted:
@@ -233,6 +229,7 @@ async function performDeletion(
       storage_files_removed: storageRemoved,
       storage_buckets: storageResults,
       tables_attempted: PURGE_TABLES.length,
+      address_deletes_attempted: addressPurge.attempted,
       table_failures: tableFailures,
       stripe_subscriptions_cancelled: billing.cancelled,
       stripe_customers_deleted: billing.customersDeleted,

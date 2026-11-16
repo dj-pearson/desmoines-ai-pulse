@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // The hook module imports the client and auth at load time; the pure helpers
 // under test touch neither.
@@ -14,6 +16,7 @@ import {
   pickUpcoming,
   type AttendanceRow,
   type PlanEvent,
+  type ReminderEvent,
   type ReminderRow,
 } from "@/hooks/useMyPlans";
 
@@ -117,6 +120,60 @@ describe("reminders", () => {
     const grouped = groupReminders(rows, NOW);
     expect(grouped).toHaveLength(1);
     expect(grouped[0].reminderTypes).toEqual(["1_day", "1_hour"]);
+  });
+});
+
+/**
+ * WEB-FEAT-099. get_pending_reminders (20261115000141) skips an event that is
+ * hidden or archived, so a pending reminder on one will not be emailed. My
+ * Plans and Your Week must not list it as a reminder that is set.
+ */
+describe("reminders on unpublished events", () => {
+  const show = ev("show", "2026-09-27T01:00:00Z");
+  const hidden: ReminderEvent = { ...ev("hidden", "2026-09-27T02:00:00Z"), is_hidden: true, archived_at: null };
+  const archived: ReminderEvent = {
+    ...ev("archived", "2026-09-27T03:00:00Z"),
+    is_hidden: false,
+    archived_at: "2026-09-20T00:00:00Z",
+  };
+  const listed: ReminderEvent = { ...show, is_hidden: false, archived_at: null };
+
+  const rows: ReminderRow[] = [
+    { id: "h", reminder_type: "3_hours", created_at: "", events: hidden },
+    { id: "a", reminder_type: "1_day", created_at: "", events: archived },
+    { id: "l", reminder_type: "1_hour", created_at: "", events: listed },
+  ];
+
+  it("leaves out a reminder on a hidden event", () => {
+    const grouped = groupReminders(rows, NOW);
+    expect(grouped.map((p) => p.event.id)).not.toContain("hidden");
+  });
+
+  it("leaves out a reminder on an archived event", () => {
+    expect(groupReminders(rows, NOW).map((p) => p.event.id)).not.toContain("archived");
+  });
+
+  it("keeps a listed event and does not leak the switches into the plan", () => {
+    const grouped = groupReminders(rows, NOW);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].event).toEqual(show);
+  });
+
+  it("keeps a row whose switches were not read (null is not hidden)", () => {
+    const unread: ReminderEvent = { ...show, is_hidden: null };
+    expect(groupReminders([{ id: "u", reminder_type: "1_day", created_at: "", events: unread }], NOW)).toHaveLength(1);
+  });
+
+  it("is absent from Your Week", () => {
+    const week = buildWeek({ upcoming: [], saved: [], reminders: groupReminders(rows, NOW) }, NOW);
+    const ids = week.flatMap((d) => d.items.map((i) => i.event.id));
+    expect(ids).toEqual(["show"]);
+  });
+
+  it("asks PostgREST for both switches on the reminder read", () => {
+    const src = readFileSync(resolve(__dirname, "../useMyPlans.ts"), "utf8");
+    expect(src).toMatch(/REMINDER_EVENT_COLUMNS = `\$\{PLAN_EVENT_COLUMNS\}, is_hidden, archived_at`/);
+    expect(src).toMatch(/from\("user_event_reminders"\)\s*\.select\(`[^`]*events!inner\(\$\{REMINDER_EVENT_COLUMNS\}\)`\)/);
   });
 });
 

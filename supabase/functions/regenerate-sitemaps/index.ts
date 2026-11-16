@@ -155,6 +155,20 @@ async function buildSitemaps(supabase: Supa) {
     const { data, error } = await supabase
       .from("restaurants")
       .select("id, name, slug, is_featured, updated_at")
+      // THE SAME THREE PREDICATES AS scripts/generate-dynamic-sitemaps.ts,
+      // which writes this file at build time (sitemap-event-filters.test.mjs
+      // holds all three writers to them). This read had none, so every 6h it
+      // published merged duplicates and places closed for good, both noindex
+      // pages, and when the hours refresh flipped a row to CLOSED_PERMANENTLY
+      // the queue fed that URL to IndexNow as "changed": a crawl request for
+      // a page that says do not index it. urlIndex is built from these rows,
+      // so leaving them out also keeps them out of the ping (WEB-BE-045).
+      // All three spellings of our own "closed for good": nothing filters
+      // this list after the read, unlike the listing hooks, which run
+      // isPermanentlyClosedRestaurant over status.neq.closed.
+      .neq("is_merged", true)
+      .or("status.is.null,status.not.in.(closed,permanently_closed,closed_permanently)")
+      .or("business_status.is.null,business_status.neq.CLOSED_PERMANENTLY")
       .order("name")
       .limit(5000);
     if (error) throw new Error(`restaurants read failed: ${error.message}`);

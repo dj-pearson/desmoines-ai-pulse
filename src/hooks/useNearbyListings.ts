@@ -13,7 +13,7 @@ import {
   type NearbyRestaurantRow,
 } from "@/lib/nearbyLinks";
 import { STALE_TIME } from "@/lib/queryConfig";
-import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantHours";
+import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantStatus";
 
 /**
  * Restaurants or upcoming events within NEARBY_MILES of a point (SEO-015,

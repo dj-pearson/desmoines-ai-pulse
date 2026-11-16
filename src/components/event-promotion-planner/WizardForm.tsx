@@ -224,6 +224,8 @@ export function WizardForm({ onComplete, onStepChange }: WizardFormProps) {
                           {field.value >= 5000 && '+'}
                         </div>
                         <Slider
+                          thumbLabel="Expected attendance"
+                          thumbValueText={`${field.value}${field.value >= 5000 ? ' or more' : ''} people`}
                           min={0}
                           max={6}
                           step={1}

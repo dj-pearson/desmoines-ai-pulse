@@ -3,6 +3,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ROUTER_FUTURE } from "@/lib/routerFuture";
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
 import { lazyOrNothing } from "@/lib/lazyOrNothing";
@@ -251,6 +252,9 @@ const AdminPlaygrounds = lazyWithRetry(() => import("./pages/AdminPlaygrounds"))
 const AdminSocial = lazyWithRetry(() => import("./pages/AdminSocial"));
 const AdminEmail = lazyWithRetry(() => import("./pages/AdminEmail"));
 const AdminDeals = lazyWithRetry(() => import("./pages/AdminDeals"));
+const AdminGuides = lazyWithRetry(() => import("./pages/AdminGuides"));
+const AdminVenuePages = lazyWithRetry(() => import("./pages/AdminVenuePages"));
+const AdminTrails = lazyWithRetry(() => import("./pages/AdminTrails"));
 const AdminPartnerships = lazyWithRetry(() => import("./pages/AdminPartnerships"));
 const AdminFeedback = lazyWithRetry(() => import("./pages/AdminFeedback"));
 const AdminTrending = lazyWithRetry(() => import("./pages/AdminTrending"));
@@ -383,7 +387,7 @@ const App = () => (
         anyway, for delayDuration={0}) - so this one was redundant, and it
         was the only thing pulling the Radix tooltip and its floating-ui
         popper into the render-blocking entry chunk. WEB-PERF-020. */}
-    <BrowserRouter>
+    <BrowserRouter future={ROUTER_FUTURE}>
       <ScrollRestoration />
       <AuthProvider>
         <SessionManager />
@@ -467,6 +471,9 @@ const App = () => (
               <Route path="/admin/social" element={<ProtectedRoute requireAdmin><AdminSocial /></ProtectedRoute>} />
               <Route path="/admin/email" element={<ProtectedRoute requireAdmin><AdminEmail /></ProtectedRoute>} />
               <Route path="/admin/deals" element={<ProtectedRoute requireAdmin><AdminDeals /></ProtectedRoute>} />
+              <Route path="/admin/guides" element={<ProtectedRoute requireAdmin><AdminGuides /></ProtectedRoute>} />
+              <Route path="/admin/venue-pages" element={<ProtectedRoute requireAdmin><AdminVenuePages /></ProtectedRoute>} />
+              <Route path="/admin/trails" element={<ProtectedRoute requireAdmin><AdminTrails /></ProtectedRoute>} />
               <Route path="/admin/partnerships" element={<ProtectedRoute requireAdmin><AdminPartnerships /></ProtectedRoute>} />
               <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
               <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />

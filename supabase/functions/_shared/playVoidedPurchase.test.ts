@@ -61,7 +61,7 @@ Deno.test("a token Google does not list is not confirmed", async () => {
   const f = fakeFetch([json({ voidedPurchases: [{ purchaseToken: "someone-else" }] })]);
   const r = await confirm(f.fn);
   assertEquals(r.confirmed, false);
-  assertEquals(!r.confirmed && r.reason, "not_listed");
+  assertEquals(r.confirmed === false && r.reason, "not_listed");
   // An empty list comes back as {} with no voidedPurchases key.
   assertEquals((await confirm(fakeFetch([json({})]).fn)).confirmed, false);
 });
@@ -71,7 +71,7 @@ Deno.test("network errors, 5xx and 429 are transient; 403 is a permanent refusal
     await assertRejects(() => confirm(fakeFetch([res]).fn), TransientPlayApiError);
   }
   const r = await confirm(fakeFetch([json({ error: "no financial permission" }, 403)]).fn);
-  assertEquals(!r.confirmed && r.reason, "play_api_error");
+  assertEquals(r.confirmed === false && r.reason, "play_api_error");
 });
 
 Deno.test("the lookup window stays inside the 30 days Play accepts", () => {

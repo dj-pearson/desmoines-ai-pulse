@@ -133,6 +133,7 @@ jobs:
           echo "- **Events Found**: ${{ steps.crawler.outputs.events_found || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Events Inserted**: ${{ steps.crawler.outputs.events_inserted || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Duplicates Skipped**: ${{ steps.crawler.outputs.duplicates_skipped || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Listing Read Through**: ${{ steps.crawler.outputs.latest_listed_day || 'N/A' }} (stopped by ${{ steps.crawler.outputs.listing_stop || 'N/A' }})" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify on Failure
         if: failure()

@@ -3,8 +3,10 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { supabase } from "@/integrations/supabase/client";
 import { rowMentionsDiet, type Diet } from "@/hooks/useDietaryRestaurants";
 import { eventInArea, type EventArea } from "@/lib/eventAreas";
+import { ErrorSeverity, handleError } from "@/lib/errorHandler";
 import { haversineDistance } from "@/lib/geo";
 import {
+  applyServingRestaurantFilters,
   DES_MOINES_TIME_ZONE,
   hoursTextOf,
   isServingToday,
@@ -115,6 +117,43 @@ export function useOpenNowRestaurants(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["restaurants", "open-now", "with-hours"],
     queryFn: fetchRestaurantsWithHours,
+    staleTime: 10 * 60 * 1000,
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * WEB-BE-045 AC5, the "hours unknown" half: how many places someone could eat
+ * at today have no hours_json, so the page can say they exist rather than
+ * leave them out without a word. The rows fetchRestaurantsWithHours skips for
+ * want of hours, filtered the same way (merged duplicates out, isServingToday
+ * as a query), and only counted: a HEAD request, no rows.
+ *
+ * null when the count could not be read. The list does not depend on it, so a
+ * failure is reported (handleError, warning) and the line is left out rather
+ * than shown with a wrong number or turned into an error state.
+ */
+export async function fetchServingWithoutHoursCount(): Promise<number | null> {
+  const query = supabase
+    .from("restaurants")
+    .select("id", { count: "exact", head: true })
+    .is("hours_json", null)
+    .not("is_merged", "is", true);
+  const { count, error } = await applyServingRestaurantFilters(query);
+  if (error || typeof count !== "number") {
+    handleError(error ?? new Error("restaurants without hours: no count returned"), {
+      component: "useOpenNowRestaurants",
+      action: "countWithoutHours",
+    }, ErrorSeverity.WARNING);
+    return null;
+  }
+  return count;
+}
+
+export function useServingWithoutHoursCount(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: ["restaurants", "open-now", "without-hours-count"],
+    queryFn: fetchServingWithoutHoursCount,
     staleTime: 10 * 60 * 1000,
     enabled: options.enabled ?? true,
   });

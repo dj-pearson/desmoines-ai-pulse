@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NOTIFICATION_TYPE } from '@/components/admin/EventSubmissionsManager';
+import { NOTIFICATION_TYPE } from '@/lib/submissionNotify';
 
 /**
  * WEB-ADS-008. EventSubmissionForm tells every organizer "We'll email you when

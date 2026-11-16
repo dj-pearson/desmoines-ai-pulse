@@ -8,14 +8,13 @@ import { BusinessLayout } from "@/components/business/BusinessLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { SUBMISSION_REVIEW_COPY } from "@/lib/businessCopy";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 // Only the signed-in branch renders the form, so a signed-out visitor doesn't
 // download it.
 const EventSubmissionForm = lazy(() => import("@/components/EventSubmissionForm"));
 
-const TITLE = "Submit an Event";
-const DESCRIPTION =
-  "Add your Des Moines event to the Des Moines Insider calendar. Sign in, fill in the details and follow its status from your dashboard.";
+const { title: TITLE, description: DESCRIPTION } = STATIC_PAGE_META["/submit-event"];
 
 function SubmitEventHead() {
   // SEOHead is the one title source here (WEB-SEO-028); useDocumentTitle would

@@ -111,6 +111,15 @@ restart it from `develop` (or `main` if there is no `develop`).
    the next merge. Rounds 10-12 shipped a required-lane break (WEB-QA-052) that
    validate and vitest cannot see.
 
+### Drain mode
+
+Lanes that may define and fix their own stories keep the open count flat: rounds
+20-26 closed about 10 stories each and logged nearly as many, so open went
+151 -> 146 over seven rounds. Pass `mode: "drain"` to `improvement-loop-round`
+to work the existing backlog only. Each lane takes an open story or commits
+nothing, no "found and done" story is created, and a lane may log at most one
+new story, only for a defect a user would hit.
+
 ### Continuous mode
 
 The scheduler's minimum interval is one hour, and a round takes about 30
@@ -151,3 +160,15 @@ that lock as the remote branch `loops-lock`.
 | 2026-11-08 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits, all by script; 9 closed, 2 split. validate exit 0, vitest 3427/3427, edge checks clean; round-17 smoke 811 passed, 0 flaky |
 | 2026-11-08 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits; 7 closed, 4 split; script renumbered two migration clashes (099 -> 100, 101); pending-column registration. validate exit 0, vitest 3461/3461, edge checks clean; round-18 smoke 814 passed, 0 flaky |
 | 2026-11-09 | claude/continuous-improvement-loops-76i72u | all eleven | 11 commits, all by script (one migration clash renumbered, 102 -> 103); 9 closed, 2 split. validate exit 0, vitest 3544/3544, edge and cron checks clean; round-19 smoke 814 passed, 0 flaky |
+| 2026-11-15 | claude/awesome-cannon-5o3hxr | all eleven | 10 commits by script (one migration renumbered, 104 -> 105); ios dropped, it duplicated XPLAT-016 in ForYouService.swift and its sponsored-label work is now the ios handoff. 7 closed, 3 split, 3 new. validate exit 0, vitest 3584/3584, edge checks clean |
+| 2026-11-15 | claude/awesome-cannon-5o3hxr | all eleven | 11 commits, all by script; 8 closed, 3 split, 4 new found plus 4 found-and-done. validate exit 0, vitest 3611/3611, edge checks clean |
+| 2026-11-15 | claude/awesome-cannon-5o3hxr | all eleven | 11 commits (ui-ux hand-merged over the RestaurantFilters.tsx deletion); 8 closed, 3 split. Type ratchet caught 2 errors in the marketing lane's test, fixed in a follow-up commit. validate exit 0, vitest 3652/3652, edge checks clean; round-21 smoke 813 passed, 2 flaky |
+| 2026-11-15 | claude/awesome-cannon-5o3hxr | all eleven | 11 commits, all by script; 9 closed, 2 split. validate exit 0, vitest 3688/3688, edge checks clean; round-22 smoke 841 passed, 0 flaky |
+| 2026-11-15 | claude/awesome-cannon-5o3hxr | all eleven | 11 commits, all by script; 10 closed, 1 split. validate exit 0, vitest 3713/3713, edge checks clean; round-23 smoke 842 passed, 0 flaky |
+| 2026-11-15 | claude/awesome-cannon-5o3hxr | all eleven | 11 commits, all by script; 10 closed, 1 split. check-error-handling flagged a helper result in the features lane's test as a discarded error; fixed in a follow-up, baseline 94 -> 91. validate exit 0, vitest 3747/3747, edge checks clean; round-24 smoke 845 passed, 0 flaky |
+| 2026-11-15 | claude/awesome-cannon-5o3hxr | all eleven | 11 commits, all by script; 10 closed, 1 split. validate exit 0, vitest 3778/3778, edge checks clean; round-25 smoke 848 passed, 0 flaky |
+| 2026-11-16 | claude/awesome-cannon-5o3hxr | all eleven, drain mode | 7 commits; ios, android, reliability hit the account's weekly usage limit; seo-geo found no workable story (all need GSC or production). 5 closed, 2 split, 0 new. Two cross-round test breaks fixed in a follow-up. validate exit 0, vitest 3837/3837, edge checks clean; round-26 smoke 850 passed |
+| 2026-11-16 | claude/awesome-cannon-5o3hxr | ten (no seo-geo), drain mode | 9 commits, all by script; ui-ux found no workable story. 3 closed, 6 advanced, 0 new. validate exit 0, vitest 3876/3876, edge checks clean; round-27 smoke 851 passed |
+| 2026-11-16 | claude/awesome-cannon-5o3hxr | nine, drain mode | 9 commits, all by script; 1 closed, 8 advanced, 0 new. validate exit 0, vitest 3909/3909, edge checks clean; round-28 smoke 851 passed |
+| 2026-11-16 | claude/awesome-cannon-5o3hxr | nine, drain mode | 8 commits; restaurants found no workable story. 1 closed, 7 advanced, 0 new. check-schema read a scraper filter against the wrong table; restructured in a follow-up. validate exit 0, vitest 3938/3938, edge checks clean; round-29 smoke 852 passed |
+| 2026-11-16 | claude/awesome-cannon-5o3hxr | platform deep dive (6 read-only auditors) | Drain rounds 27-30 closed 5, 3, 1, 1 as the workable backlog ran out. Deep dive filed 33 evidence-backed stories (14 high): WEB-UX-081..083, WEB-FEAT-100..101, WEB-ADS-039..046, WEB-PERF-081..085, WEB-SEO-074..078, WEB-SEC-081..084, WEB-LEGAL-015..016, WEB-BE-061..062, WEB-OPS-025, WEB-QA-063 |

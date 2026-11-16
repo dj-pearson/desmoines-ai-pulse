@@ -132,6 +132,7 @@ export function isVerifiedFree(row: AttractionFactRow): boolean {
 
 export interface HubFactRow extends AttractionFactRow {
   name: string;
+  slug?: string | null;
 }
 
 export interface HubFactsSummary {

@@ -29,6 +29,8 @@ actor EventsService {
         var freeOnly: Bool = false
         /// Kids and family only (IOS-AUDIT-005): `kidsEventsFilter`.
         var kidsOnly: Bool = false
+        /// Date night only (IOS-AUDIT-008): `dateNightEventsFilter`.
+        var dateNightOnly: Bool = false
         var dateStart: Date?
         var dateEnd: Date?
         var isFeatured: Bool?
@@ -114,6 +116,11 @@ actor EventsService {
             orGroups.append(Self.kidsEventsFilter)
         }
 
+        // Date night: the web's /events/date-night or-group (IOS-AUDIT-008).
+        if query.dateNightOnly {
+            orGroups.append(Self.dateNightEventsFilter)
+        }
+
         if let combined = Self.combineOrGroups(orGroups) {
             request = request.or(combined)
         }
@@ -189,6 +196,29 @@ actor EventsService {
         #"category.imatch."[[:<:]](kids?|family|children)[[:>:]]""#,
         #"enhanced_description.imatch."[[:<:]](kids|children|toddlers)[[:>:]]""#,
     ].joined(separator: ",")
+
+    /// Mirrors DATE_NIGHT_FILTER in src/hooks/useEventLanding.ts byte for
+    /// byte (IOS-AUDIT-008): the Music, Comedy and Arts categories, or an
+    /// evening-out word as a whole word in the title. A bare "night" does not
+    /// qualify. src/lib/__tests__/iosDateNightParity.test.ts fails when the
+    /// two drift.
+    static let dateNightEventsFilter = [
+        #"category.in.(Music,Comedy,Arts)"#,
+        #"title.imatch."[[:<:]](concerts?|live music|wine|dinner|comedy|jazz|tasting)[[:>:]]""#,
+    ].joined(separator: ",")
+
+    /// Days the date night list covers, today included: WINDOW_DAYS in
+    /// src/pages/DateNightEvents.tsx.
+    static let dateNightWindowDays = 14
+
+    /// Midnight Central today to midnight Central `dateNightWindowDays` later
+    /// (exclusive), the web page's fixed window. Used only when the search
+    /// names no day of its own.
+    static func dateNightWindow(now: Date, calendar: Calendar = DesMoinesTime.calendar) -> (start: Date, end: Date)? {
+        let start = calendar.startOfDay(for: now)
+        guard let end = calendar.date(byAdding: .day, value: dateNightWindowDays, to: start) else { return nil }
+        return (start, end)
+    }
 
     /// "Not over yet", three arms, as notOverFilter in
     /// src/components/events/eventsHubQuery.ts: started in the last two hours

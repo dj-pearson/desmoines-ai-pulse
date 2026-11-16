@@ -5,6 +5,7 @@ import com.desmoines.aipulse.data.model.SwipeSession
 import com.desmoines.aipulse.data.model.SwipeSessionMatch
 import com.desmoines.aipulse.util.suspendRunCatching
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -43,7 +44,7 @@ class GroupSessionRemoteDataSource @Inject constructor(
                 db().from("swipe_sessions").insert(SessionInsert(code, hostUserId, mode))
             }
             if (inserted.isSuccess) {
-                return fetchByCode(code) ?: throw IllegalStateException("Session created but could not be loaded.")
+                return fetchOwnByCode(code, hostUserId) ?: throw IllegalStateException("Session created but could not be loaded.")
             }
             lastError = inserted.exceptionOrNull()
         }
@@ -55,10 +56,44 @@ class GroupSessionRemoteDataSource @Inject constructor(
         return "DSM-$suffix"
     }
 
-    /** Looks up a session by its shareable code (any case), or null. */
-    suspend fun fetchByCode(code: String): SwipeSession? =
+    @Serializable
+    private data class LookupParams(@SerialName("p_code") val code: String)
+
+    /**
+     * Looks up a session by its shareable code (any case), or null, for a
+     * joiner. Asks lookup_swipe_session first (WEB-SEC-070): one code per call,
+     * host_user_id only for the host, never filter_context, and it keeps
+     * working once swipe_sessions stops being world-readable. The direct table
+     * read is the fallback only while the function does not exist, so this
+     * build works whether or not migration 20261108000096 is applied yet.
+     * Every status comes back; the repository decides "ended or expired".
+     */
+    suspend fun fetchByCode(code: String): SwipeSession? {
+        val normalized = normalizeCode(code)
+        return try {
+            db().postgrest.rpc(LOOKUP_FUNCTION, LookupParams(code = normalized))
+                .decodeList<SwipeSession>()
+                .firstOrNull()
+        } catch (error: PostgrestRestException) {
+            if (!isMissingFunction(error.code)) throw error
+            db().from("swipe_sessions").select {
+                filter { eq("code", normalized) }
+                limit(1L)
+            }.decodeSingleOrNull<SwipeSession>()
+        }
+    }
+
+    /**
+     * The host reading back the row it just inserted. Filtered to its own
+     * host_user_id, so it stays inside the host-or-member read that replaces
+     * the open policy in slice 3.
+     */
+    private suspend fun fetchOwnByCode(code: String, hostUserId: String): SwipeSession? =
         db().from("swipe_sessions").select {
-            filter { eq("code", code.trim().uppercase()) }
+            filter {
+                eq("code", normalizeCode(code))
+                eq("host_user_id", hostUserId)
+            }
             limit(1L)
         }.decodeSingleOrNull<SwipeSession>()
 
@@ -156,8 +191,14 @@ class GroupSessionRemoteDataSource @Inject constructor(
         }.decodeList<EntityRow>()
     }
 
-    private companion object {
-        const val CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        const val MAX_CODE_ATTEMPTS = 4
+    companion object {
+        private const val CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        private const val MAX_CODE_ATTEMPTS = 4
+        const val LOOKUP_FUNCTION = "lookup_swipe_session"
+
+        fun normalizeCode(code: String): String = code.trim().uppercase()
+
+        /** PostgREST's "no such function" (PGRST202) or Postgres's (42883). */
+        fun isMissingFunction(code: String?): Boolean = code == "PGRST202" || code == "42883"
     }
 }

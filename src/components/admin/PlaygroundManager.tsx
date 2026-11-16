@@ -82,6 +82,11 @@ const AGE_RANGE_OPTIONS = [
   "teen",
 ] as const;
 
+// The "Unknown" / "Clear" options below use <SelectItem value="">. Radix
+// Select 2.0-2.1 threw on that; 2.3.x (pinned ^2.3.7) accepts it and treats
+// "" as "show the placeholder", so each placeholder names the cleared state
+// rather than a bare dash. playgroundManagerClearSelects.test.tsx renders
+// these and checks "" saves as null (WEB-UX-070).
 type EditableField =
   | "name"
   | "has_restrooms"
@@ -212,7 +217,7 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
           {field === "has_restrooms" || field === "has_shade" ? (
             <Select value={value} onValueChange={setValue}>
               <SelectTrigger id={fieldId}>
-                <SelectValue placeholder="—" />
+                <SelectValue placeholder="Unknown" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Unknown</SelectItem>
@@ -223,10 +228,10 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
           ) : field === "surface_type" ? (
             <Select value={value} onValueChange={setValue}>
               <SelectTrigger id={fieldId}>
-                <SelectValue placeholder="—" />
+                <SelectValue placeholder="Not set" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— clear —</SelectItem>
+                <SelectItem value="">Clear</SelectItem>
                 {SURFACE_OPTIONS.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
@@ -237,10 +242,10 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
           ) : field === "age_range" ? (
             <Select value={value} onValueChange={setValue}>
               <SelectTrigger id={fieldId}>
-                <SelectValue placeholder="—" />
+                <SelectValue placeholder="Not set" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— clear —</SelectItem>
+                <SelectItem value="">Clear</SelectItem>
                 {AGE_RANGE_OPTIONS.map((a) => (
                   <SelectItem key={a} value={a}>
                     {a}
@@ -716,7 +721,7 @@ export default function PlaygroundManager() {
                 }
               >
                 <SelectTrigger aria-label={bulkValueLabel}>
-                  <SelectValue placeholder="—" />
+                  <SelectValue placeholder="Unknown" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Unknown</SelectItem>
@@ -732,10 +737,10 @@ export default function PlaygroundManager() {
                 }
               >
                 <SelectTrigger aria-label={bulkValueLabel}>
-                  <SelectValue placeholder="—" />
+                  <SelectValue placeholder="Not set" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— clear —</SelectItem>
+                  <SelectItem value="">Clear</SelectItem>
                   {SURFACE_OPTIONS.map((s) => (
                     <SelectItem key={s} value={s}>
                       {s}
@@ -751,10 +756,10 @@ export default function PlaygroundManager() {
                 }
               >
                 <SelectTrigger aria-label={bulkValueLabel}>
-                  <SelectValue placeholder="—" />
+                  <SelectValue placeholder="Not set" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— clear —</SelectItem>
+                  <SelectItem value="">Clear</SelectItem>
                   {AGE_RANGE_OPTIONS.map((a) => (
                     <SelectItem key={a} value={a}>
                       {a}

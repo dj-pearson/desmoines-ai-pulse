@@ -7,10 +7,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -87,34 +83,6 @@ fun Modifier.glassSurface(
 }
 
 /**
- * Composable wrapper around `Modifier.glassSurface` that also paints a bottom
- * highlight (a subtle lit edge) — useful when you want the content you compose
- * inside the box to sit on a clearly defined "lifted glass" panel.
- */
-@Composable
-fun GlassCard(
-    modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(PremiumTokens.CornerLg),
-    intensity: GlassIntensity = GlassIntensity.Card,
-    elevation: Dp = PremiumTokens.Elevation4,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .glassSurface(shape = shape, intensity = intensity, elevation = elevation)
-    ) {
-        // Top lit highlight: thin gradient at the top of the surface
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(1.dp)
-        ) {
-            content()
-        }
-    }
-}
-
-/**
  * Tri-state for Android 12+ runtime blur availability. Callers can check
  * whether a real `Modifier.blur()` is safe to use before enabling it for a
  * surface that expects true backdrop blur. On older devices glass falls back
@@ -136,7 +104,7 @@ object GlassCapabilities {
  * (API 31+), with a graceful no-op on older devices. Use on a background or
  * sibling layer *behind* a glass surface when you want a true frosted-backdrop
  * look — for example, a wallpaper-style hero image layered under a
- * translucent `GlassCard` title panel.
+ * translucent `glassSurface` title panel.
  *
  * Note: [Modifier.blur] operates on the compositing layer itself, so this
  * should be applied to the layer you want blurred (e.g., the image), not the

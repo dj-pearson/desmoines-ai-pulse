@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { toJsonLd } from "@/lib/jsonLd";
 import { safeWebUrl } from "@/lib/reservations";
 import { parseHotelTime } from "@/lib/hotelTimes";
+import { entityNodeId } from "@/lib/schemaNodeIds";
 
 interface HotelSchemaProps {
   name: string;
@@ -66,7 +67,7 @@ export default function HotelSchema({
     // SEO-013: this node used to put the hotel's own website in `url` and had
     // no @id and no coordinates. `url` is the page this markup is on; the
     // hotel's site is sameAs. geo and amenities come from stored columns.
-    ...(pageUrl && { "@id": `${pageUrl}#hotel`, url: pageUrl }),
+    ...(pageUrl && { "@id": entityNodeId("hotel", pageUrl), url: pageUrl }),
     name,
     ...(description && { description }),
     address: {

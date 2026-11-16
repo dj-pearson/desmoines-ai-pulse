@@ -41,7 +41,8 @@ export function useEventReminders(eventId: string) {
         throw error;
       }
 
-      return data as UserReminders;
+      // The RPC returns Json; its shape is the UserReminders object.
+      return data as unknown as UserReminders;
     },
     enabled: !!eventId,
   });

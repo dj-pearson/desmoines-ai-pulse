@@ -16,6 +16,10 @@ import javax.inject.Singleton
  * Supported URL patterns (https on desmoinesinsider.com or www. only):
  * - `/events/:slug-or-id` -> Event detail; `/events/today`, `/events/free` and
  *   the other web landing pages (src/App.tsx) -> the matching tab or list
+ * - `/events/series/:slug` -> the native series screen for a slug the app
+ *   knows, else the WebView
+ * - `/events/date-night`, `/events/<month>-<year>` -> the WebView, which has
+ *   the date-night rule and the past months native lists cannot show
  * - `/restaurants/:slug-or-id` -> Restaurant detail; `/restaurants/open-now`
  *   -> Dining tab with Open now on; `/new`, `/dietary` -> Dining tab
  * - `/attractions/:slug-or-id` -> Attraction detail
@@ -53,6 +57,8 @@ class DeepLinkHandler @Inject constructor() {
         data class Article(val id: LinkId) : Destination()
         /** One guide, by a slug [NeighborhoodGuide.bySlug] knows (AND-AUDIT-025). */
         data class Neighborhood(val slug: String) : Destination()
+        /** One annual series, by a slug [EventSeries.forSlug] knows (AND-AUDIT-042). */
+        data class Series(val slug: String) : Destination()
         data class Tab(val tab: TabDestination) : Destination()
         data class Screen(val screen: ScreenDestination) : Destination()
         data class Search(val query: String) : Destination()
@@ -71,6 +77,14 @@ class DeepLinkHandler @Inject constructor() {
          * [pendingKidsEvents] until SearchViewModel applies it.
          */
         data object KidsEvents : Destination()
+
+        /**
+         * Search on Events with the date night filter on: /events/date-night
+         * (iOS dateNightDestination, AND-AUDIT-046), evenings only unless the
+         * link says ?time=all. The times wait in [pendingDateNight] until
+         * SearchViewModel applies them.
+         */
+        data class DateNight(val times: DateNightFilter.Times) : Destination()
     }
 
     enum class TabDestination {
@@ -107,6 +121,10 @@ class DeepLinkHandler @Inject constructor() {
     // An /events/kids link, held for SearchViewModel for the same reason.
     private val _pendingKidsEvents = MutableStateFlow(false)
     val pendingKidsEvents: StateFlow<Boolean> = _pendingKidsEvents.asStateFlow()
+
+    // An /events/date-night link's times, held for SearchViewModel likewise.
+    private val _pendingDateNight = MutableStateFlow<DateNightFilter.Times?>(null)
+    val pendingDateNight: StateFlow<DateNightFilter.Times?> = _pendingDateNight.asStateFlow()
 
     /**
      * Attempts to parse a URL into a navigation destination.
@@ -189,11 +207,19 @@ class DeepLinkHandler @Inject constructor() {
         return pending
     }
 
+    /** Consumes an /events/date-night link's times: them once, then null. */
+    fun consumeDateNight(): DateNightFilter.Times? {
+        val pending = _pendingDateNight.value
+        _pendingDateNight.value = null
+        return pending
+    }
+
     /** Internal, not private, so JVM tests can publish without an android.net.Uri. */
     internal fun publish(destination: Destination) {
         if (destination is Destination.Search) _pendingSearchQuery.value = destination.query
         if (destination is Destination.RestaurantsOpenNow) _pendingRestaurantsOpenNow.value = true
         if (destination is Destination.KidsEvents) _pendingKidsEvents.value = true
+        if (destination is Destination.DateNight) _pendingDateNight.value = destination.times
         _pendingDestination.value = destination
     }
 
@@ -408,17 +434,38 @@ class DeepLinkHandler @Inject constructor() {
                 "kids" -> return Destination.KidsEvents
                 // The Map tab is the app's nearby-events surface (iOS .tab(.map)).
                 "near-me" -> return Destination.Tab(TabDestination.MAP)
-                // /events/series/:slug has no native screen.
+                // Bare /events/series; /events/series/:slug goes through
+                // seriesDestination before this is reached.
                 "series" -> return Destination.Web(url)
+                // The web's rule natively, as iOS does (AND-AUDIT-046): it
+                // opened the web page (AND-AUDIT-045), and Home before that.
+                "date-night" -> return Destination.DateNight(DateNightFilter.timesFor(url))
             }
             if (segment in EVENT_SUBURB_SEGMENTS) {
                 return Destination.Search("events in " + segment.replace('-', ' '))
             }
-            if (segment in EVENT_LANDING_SEGMENTS || isMonthPage(segment)) {
+            // /events/<month>-<year> is an archive: june-2026 lists June's
+            // events after June is over. Every native events read floors at
+            // today in Central, so it could show at most the rest of the
+            // current month; the web page shows the whole one (AND-AUDIT-045).
+            if (isMonthPage(segment)) return Destination.Web(url)
+            // A landing not handled above is still never an Event detail.
+            if (segment in EVENT_LANDING_SEGMENTS) {
                 return Destination.Tab(TabDestination.HOME)
             }
             return webLinkId(segment, maxLength = 160)?.let { Destination.Event(it) }
                 ?: Destination.Tab(TabDestination.HOME)
+        }
+
+        /**
+         * /events/series/<slug>: the native series screen for a slug the app's
+         * catalogue has (AND-AUDIT-042), else the web view, which keeps a
+         * series the web added after this build working. Anything but exactly
+         * three segments is not the web's route and opens on the web too.
+         */
+        fun seriesDestination(segments: List<String>, url: String): Destination {
+            val slug = segments.getOrNull(2)?.takeIf { segments.size == 3 }
+            return EventSeries.forSlug(slug)?.let { Destination.Series(it.slug) } ?: Destination.Web(url)
         }
 
         /**
@@ -448,7 +495,12 @@ class DeepLinkHandler @Inject constructor() {
 
             val segment = segments[1]
             return when (first) {
-                "events" -> eventDestination(segment, url)
+                "events" ->
+                    if (segment == "series") {
+                        seriesDestination(segments, url)
+                    } else {
+                        eventDestination(segment, url)
+                    }
                 "restaurants" ->
                     if (segment == "open-now") {
                         // A shared "open now" page used to open every restaurant.

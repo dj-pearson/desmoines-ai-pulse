@@ -42,7 +42,8 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 const { fetchRestaurantList, listHidesClosed, withoutPermanentlyClosed } = await import('../useRestaurants');
-const { NOT_CLOSED_RESTAURANT_FILTER, isPermanentlyClosedRestaurant } = await import('@/lib/restaurantHours');
+const { NOT_CLOSED_RESTAURANT_FILTER, NOT_GOOGLE_CLOSED_RESTAURANT_FILTER, isPermanentlyClosedRestaurant } =
+  await import('@/lib/restaurantHours');
 
 function row(id: string, extra: Record<string, unknown> = {}) {
   return { id, name: `R${id}`, slug: `r-${id}`, status: 'open', ...extra };
@@ -138,5 +139,75 @@ describe('fetchRestaurantList', () => {
     const result = await fetchRestaurantList({ limit: 30, offset: 0 });
     expect(rpc).toHaveBeenCalledWith('get_rotated_restaurants', expect.anything());
     expect(result.restaurants.map((r) => r.id)).toEqual(['1']);
+  });
+});
+
+/**
+ * The table path reads what the RPC path reads (WEB-FEAT-094).
+ * Any sort but the default, a search or a diet filter took the table path,
+ * which selected neither hours_json nor business_status: the card under
+ * "Highest rated" printed no hours line, a CLOSED_TEMPORARILY place read as
+ * open for business, and a search could not label a Google-only closure.
+ */
+describe('fetchRestaurantList table path, hours and Google status', () => {
+  function selectArg(i = 0): string {
+    const call = (tableCalls[i] ?? []).find((c) => c.method === 'select');
+    return String(call?.args[0] ?? '');
+  }
+
+  it('selects hours_json and business_status for every table-path list', async () => {
+    for (const filters of [
+      { sortBy: 'rating' as const },
+      { search: 'proof', sortBy: 'popularity' as const },
+      { tags: ['vegan'] },
+      { includeAdminFields: true },
+    ]) {
+      tableCalls.length = 0;
+      listResponse = { data: [], error: null, count: 0 };
+      await fetchRestaurantList({ ...filters, limit: 30, offset: 0 });
+      const columns = selectArg().split(',').map((c) => c.trim());
+      expect(columns).toContain('hours_json');
+      expect(columns).toContain('business_status');
+    }
+  });
+
+  it('a browse leaves Google CLOSED_PERMANENTLY rows out in the query; a search keeps them', async () => {
+    await fetchRestaurantList({ sortBy: 'rating', limit: 30, offset: 0 });
+    expect(orArgs()).toContain(NOT_GOOGLE_CLOSED_RESTAURANT_FILTER);
+    expect(NOT_GOOGLE_CLOSED_RESTAURANT_FILTER).toBe(
+      'business_status.is.null,business_status.neq.CLOSED_PERMANENTLY',
+    );
+
+    tableCalls.length = 0;
+    await fetchRestaurantList({ search: 'proof', sortBy: 'rating', limit: 30, offset: 0 });
+    expect(orArgs()).not.toContain(NOT_GOOGLE_CLOSED_RESTAURANT_FILTER);
+  });
+
+  it('a temporarily closed place sinks below the places serving today, order kept', async () => {
+    listResponse = {
+      data: [
+        row('1', { business_status: 'CLOSED_TEMPORARILY' }),
+        row('2'),
+        row('3', { status: 'opening_soon' }),
+        row('4', { business_status: 'OPERATIONAL' }),
+        row('5', { business_status: 'CLOSED_PERMANENTLY' }),
+      ],
+      error: null,
+      count: 5,
+    };
+    const result = await fetchRestaurantList({ search: 'proof', sortBy: 'rating', limit: 30, offset: 0 });
+    expect(result.restaurants.map((r) => r.id)).toEqual(['2', '4', '1', '3', '5']);
+  });
+
+  it('the rotation RPC path sinks a temporarily closed place too', async () => {
+    rpc.mockResolvedValue({
+      data: [
+        { restaurant_data: row('1', { business_status: 'CLOSED_TEMPORARILY' }), total_count: 2 },
+        { restaurant_data: row('2'), total_count: 2 },
+      ],
+      error: null,
+    });
+    const result = await fetchRestaurantList({ limit: 30, offset: 0 });
+    expect(result.restaurants.map((r) => r.id)).toEqual(['2', '1']);
   });
 });

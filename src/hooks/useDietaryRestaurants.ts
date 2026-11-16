@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DIETARY_RESTAURANT_COLUMNS } from "@/lib/listColumns";
-import { isPermanentlyClosedRestaurant, isServingToday } from "@/lib/restaurantHours";
+import { isPermanentlyClosedRestaurant, isServingToday } from "@/lib/restaurantStatus";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { DIETS, type Diet } from "@/lib/restaurantDiets";
 import type { RestaurantCardProps } from "@/components/RestaurantCard";

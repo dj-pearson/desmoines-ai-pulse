@@ -8,8 +8,8 @@ import { isPlanLimitError, planLimitMessage } from "@/lib/planLimitError";
 import { STALE_TIME } from "@/lib/queryConfig";
 
 /**
- * Non-event content favorites (restaurants / attractions / hotels / playgrounds)
- * stored in the additive `content_favorites` table. Event favorites stay in
+ * Non-event content favorites (restaurants / attractions / hotels / playgrounds
+ * / articles) stored in the additive `content_favorites` table. Event favorites stay in
  * useFavorites() / user_event_interactions. (WEB-UX-010)
  *
  * Mirrors useFavorites: optimistic add/remove, owner-only via RLS, and the
@@ -20,7 +20,21 @@ export type FavoriteContentType =
   | "restaurant"
   | "attraction"
   | "hotel"
-  | "playground";
+  | "playground"
+  | "article";
+
+/**
+ * Content types the favourites cap leaves out. Saved guides are free on every
+ * plan: iOS has never capped them, and 20261116000010 skips article rows in
+ * enforce_favorites_limit and in its count (XPLAT-013). Checking the client
+ * cap for an article would refuse a fourth guide the server accepts, and open
+ * the paywall over something no plan sells.
+ */
+export const CAP_EXEMPT_CONTENT_TYPES: readonly FavoriteContentType[] = ["article"];
+
+export function countsTowardFavoritesCap(contentType: FavoriteContentType): boolean {
+  return !CAP_EXEMPT_CONTENT_TYPES.includes(contentType);
+}
 
 /**
  * The query key FavoritesView uses for the hydrated list of one content type.
@@ -153,7 +167,9 @@ export function useContentFavorites(contentType: FavoriteContentType) {
   const savedCount = useSavedCount();
   const totalSaved = Math.max(savedCount.count ?? 0, favoritedIds.length);
 
-  const canAddFavorite = () => canPerformAction("favorite", totalSaved);
+  const canAddFavorite = () =>
+    !countsTowardFavoritesCap(contentType) ||
+    canPerformAction("favorite", totalSaved);
 
   /** Toggle; returns whether an upgrade is needed when the free cap is hit. */
   const toggleFavorite = (

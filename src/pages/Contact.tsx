@@ -117,7 +117,7 @@ export default function Contact() {
                 {/* Quick Contact Cards */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Contact Information</CardTitle>
+                    <CardTitle as="h2" className="text-lg">Contact Information</CardTitle>
                     <CardDescription>Reach out to us directly</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -159,7 +159,7 @@ export default function Contact() {
                     CCPA/GDPR response-time requirements. */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Legal &amp; compliance</CardTitle>
+                    <CardTitle as="h2" className="text-lg">Legal &amp; compliance</CardTitle>
                     <CardDescription>
                       Use the address that matches your concern so we can route
                       it to the right person.
@@ -235,7 +235,7 @@ export default function Contact() {
                 {/* Inquiry Type Cards */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">How Can We Help?</CardTitle>
+                    <CardTitle as="h2" className="text-lg">How Can We Help?</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {inquiryTypes.map((type) => (
@@ -265,7 +265,7 @@ export default function Contact() {
                 {/* Quick Links */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Quick Links</CardTitle>
+                    <CardTitle as="h2" className="text-lg">Quick Links</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <a
@@ -297,7 +297,7 @@ export default function Contact() {
               <div className="lg:col-span-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle as="h2" className="flex items-center gap-2">
                       <MessageSquare className="w-5 h-5" />
                       Send Us a Message
                     </CardTitle>

@@ -281,6 +281,7 @@ export default function Deals() {
           ) : filtered ? (
             <EmptyState
               icon={Tag}
+              headingLevel="h2"
               title={when === 'now' ? 'No deals running right now' : when === 'today' ? 'No deals running today' : 'No deals in this category'}
               description="Nothing listed matches this filter."
               actions={[
@@ -296,7 +297,7 @@ export default function Deals() {
               {emptyLinks}
             </EmptyState>
           ) : (
-            <EmptyState icon={Tag} title="No deals listed right now">
+            <EmptyState icon={Tag} headingLevel="h2" title="No deals listed right now">
               {emptyLinks}
             </EmptyState>
           )}

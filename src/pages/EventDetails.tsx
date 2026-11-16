@@ -55,7 +55,7 @@ import { eventPriceLabel, isFreePrice } from "@/lib/eventPrice";
 import { findEventArea, isInBBox } from "@/lib/eventAreas";
 import { handleError } from "@/lib/errorHandler";
 import { markdownToPlainText } from "@/lib/aiText";
-import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
+import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightTime";
 import { EventProvenance } from "@/components/events/EventProvenance";
 import { EventAiAnswers } from "@/components/events/EventAiAnswers";
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
@@ -733,7 +733,15 @@ export default function EventDetails() {
 
                 {isUpcoming && (
                   <DeferredWidget minHeight={160} label="Event reminders">
-                    <EventReminderSettings eventId={event.id} eventTitle={event.title} />
+                    <EventReminderSettings
+                      eventId={event.id}
+                      eventTitle={event.title}
+                      eventTiming={{
+                        date: event.date,
+                        event_start_utc: event.event_start_utc,
+                        time_tbd: (event as { time_tbd?: boolean | null }).time_tbd ?? null,
+                      }}
+                    />
                   </DeferredWidget>
                 )}
 

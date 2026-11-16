@@ -38,6 +38,15 @@ import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
+import {
+  applyDigestRunsFilters,
+  applyDigestStartsFilters,
+  DIGEST_RUNNING_LIMIT,
+  type DigestWindow,
+  digestWindow,
+  formatDigestEventDate,
+  mergeDigestEvents,
+} from './content.ts';
 
 const PAUSE_FLAG = 'weekly_digest_enabled';
 const SUBJECT_MAX = 120;        // inbox-safe subject cap
@@ -51,6 +60,7 @@ interface EventRow {
   id: string;
   title: string;
   date: string;
+  end_date: string | null;
   location: string | null;
   venue: string | null;
   category: string | null;
@@ -73,6 +83,7 @@ interface ArticleRow {
 }
 
 interface DigestContent {
+  range: DigestWindow;
   events: EventRow[];
   restaurants: RestaurantRow[];
   article: ArticleRow | null;
@@ -96,39 +107,28 @@ function articleUrl(a: ArticleRow): string {
   return `${SITE_URL}/articles/${a.slug}`;
 }
 
-function formatEventDate(iso: string): string {
-  // America/Chicago, date-only string (no extra tz lib needed for a date).
-  const d = new Date(`${iso}T12:00:00Z`);
-  return d.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'America/Chicago',
-  });
-}
-
 async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
-  const weekOut = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  // Central days with the running arm (WEB-FEAT-089); see content.ts.
+  const range = digestWindow();
+  const EVENT_COLUMNS = 'id, title, date, end_date, location, venue, category';
 
-  // Top upcoming events in the next 7 days (featured first, then soonest).
-  const { data: events, error: eventsError } = await supabase
-    .from('events')
-    .select('id, title, date, location, venue, category')
-    .gte('date', todayStr)
-    .lte('date', weekOut)
-    .neq('is_hidden', true)
-    .neq('is_merged', true)
-    // WEB-BE-034: the other unpublish switch. A digest that mails an archived
-    // event is the failure this pair of filters exists to prevent.
-    .is('archived_at', null)
+  // Events starting in the next 7 Central days (featured first, then soonest).
+  const { data: starts, error: startsError } = await applyDigestStartsFilters(
+    supabase.from('events').select(EVENT_COLUMNS),
+    range,
+  )
     .order('is_featured', { ascending: false, nullsFirst: false })
     .order('date', { ascending: true })
     .limit(MAX_EVENTS);
+
+  // Runs that opened before today and are still on, soonest-ending first, so a
+  // festival weekend sorts before a three-month exhibit.
+  const { data: runs, error: runsError } = await applyDigestRunsFilters(
+    supabase.from('events').select(EVENT_COLUMNS),
+    range,
+  )
+    .order('end_date', { ascending: true })
+    .limit(DIGEST_RUNNING_LIMIT);
 
   // Top-rated / featured restaurants (no live "trending" metric exists; rating
   // + featured is the best available signal).
@@ -154,7 +154,8 @@ async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
   // from three failed queries, and those need different responses from whoever
   // reads the alert.
   const contentErrors = [
-    eventsError && `events: ${eventsError.message}`,
+    startsError && `events: ${startsError.message}`,
+    runsError && `running events: ${runsError.message}`,
     restaurantsError && `restaurants: ${restaurantsError.message}`,
     articleError && `article: ${articleError.message}`,
   ].filter(Boolean);
@@ -163,7 +164,12 @@ async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
   }
 
   return {
-    events: (events ?? []) as unknown as EventRow[],
+    range,
+    events: mergeDigestEvents(
+      (starts ?? []) as unknown as EventRow[],
+      (runs ?? []) as unknown as EventRow[],
+      MAX_EVENTS,
+    ),
     restaurants: (restaurants ?? []) as unknown as RestaurantRow[],
     article: (article ?? null) as unknown as ArticleRow | null,
   };
@@ -192,7 +198,7 @@ function buildBodyHtml(content: DigestContent): string {
         <div style="margin:0 0 16px;padding:0 0 16px;border-bottom:1px solid #eee;">
           <a href="${eventUrl(e)}" style="font-size:16px;font-weight:600;color:#1a73e8;text-decoration:none;">${escapeHtml(e.title)}</a>
           <div style="font-size:13px;color:#666;margin-top:2px;">
-            ${escapeHtml(formatEventDate(e.date))}${
+            ${escapeHtml(formatDigestEventDate(e, content.range))}${
               e.venue || e.location
                 ? ` · ${escapeHtml(e.venue || e.location || '')}`
                 : ''
@@ -245,7 +251,7 @@ function buildBodyText(content: DigestContent): string {
   if (content.events.length > 0) {
     lines.push('Upcoming events:');
     for (const e of content.events) {
-      lines.push(`- ${e.title} (${formatEventDate(e.date)}) ${eventUrl(e)}`);
+      lines.push(`- ${e.title} (${formatDigestEventDate(e, content.range)}) ${eventUrl(e)}`);
     }
     lines.push('');
   }

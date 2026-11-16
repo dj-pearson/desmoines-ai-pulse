@@ -1,17 +1,17 @@
-import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import SEOHead from "@/components/SEOHead";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 export default function AcceptableUsePolicy() {
 
   return (
     <>
-      <Helmet>
-        <title>Acceptable Use Policy | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="Rules for using Des Moines Insider. What's prohibited, how we enforce these rules, and how to report abuse."
-        />
-      </Helmet>
+      <SEOHead
+        title={STATIC_PAGE_META["/acceptable-use"].title}
+        description={STATIC_PAGE_META["/acceptable-use"].description}
+        url="https://desmoinesinsider.com/acceptable-use"
+        type="website"
+      />
 
       <div className="min-h-screen bg-background pb-24">
         <div className="container mx-auto px-4 py-12 max-w-3xl">

@@ -279,6 +279,9 @@ struct ArticleDetailView: View {
         case .eventSeries(let slug):
             guard let def = EventSeries.series(slug: slug) else { return nil }
             return .eventSeries(def)
+        // A guide linking /pricing opens the native plans screen; the
+        // browse fallback would show Stripe Checkout (IOS-AUDIT-010).
+        case .plans: return .plans
         // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
         case .tab, .restaurantLanding, .map, .search, .eventSearch, .web: return nil
         }

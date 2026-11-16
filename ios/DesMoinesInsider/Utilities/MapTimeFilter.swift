@@ -13,7 +13,7 @@ import Foundation
 /// on DesMoinesTime.calendar, so 8 PM is 8 PM Central on any phone and on the
 /// days the clocks change.
 enum MapTimeChip: String, CaseIterable, Identifiable {
-    case anytime, now, tonight, at6pm, at8pm, at10pm, saturday
+    case anytime, now, tonight, at6pm, at8pm, at10pm, saturday, weekend
 
     var id: String { rawValue }
 
@@ -23,7 +23,22 @@ enum MapTimeChip: String, CaseIterable, Identifiable {
         case .at6pm: return 18
         case .at8pm: return 20
         case .at10pm: return 22
-        case .anytime, .now, .tonight, .saturday: return nil
+        case .anytime, .now, .tonight, .saturday, .weekend: return nil
+        }
+    }
+
+    /// The chip a web /map link's `when` names (IOS-AUDIT-009), read
+    /// with DiscoverMap.tsx's parseWhen: one of its WHEN_OPTIONS keys, else
+    /// nil, which leaves the map's chip as it was.
+    /// src/lib/__tests__/iosMapLinkParity.test.ts fails when the web adds or
+    /// drops a key and this switch is not updated.
+    init?(webWhen value: String?) {
+        switch value {
+        case "now": self = .now
+        case "tonight": self = .tonight
+        case "weekend": self = .weekend
+        case "any": self = .anytime
+        default: return nil
         }
     }
 
@@ -62,6 +77,7 @@ enum MapTimeChip: String, CaseIterable, Identifiable {
         case .saturday:
             guard calendar.component(.weekday, from: now) == 7 else { return "Sat night" }
             return calendar.component(.hour, from: now) >= 22 ? "Next Sat" : "This Sat"
+        case .weekend: return "This weekend"
         }
     }
 
@@ -89,6 +105,14 @@ enum MapTimeChip: String, CaseIterable, Identifiable {
                   let sunday = calendar.date(byAdding: .day, value: 1, to: saturday),
                   let end = calendar.date(bySettingHour: 2, minute: 0, second: 0, of: sunday) else { return nil }
             return DateInterval(start: start, end: end)
+        case .weekend:
+            // The web's weekend chip (eventWindow in src/lib/mapEventWindow.ts):
+            // Friday 00:00 to the end of Sunday, Central, and never earlier
+            // than now, so on Saturday it is the rest of the weekend.
+            let weekend = WeekendWindow.current(now: now, calendar: calendar)
+            let start = max(now, weekend.fridayStart)
+            guard weekend.mondayStart > start else { return nil }
+            return DateInterval(start: start, end: weekend.mondayStart)
         }
     }
 
@@ -110,6 +134,10 @@ enum MapTimeChip: String, CaseIterable, Identifiable {
             let saturday = Self.targetSaturday(now: now, calendar: calendar)
             let seven = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: saturday) ?? saturday
             return max(now, seven)
+        case .weekend:
+            // Three days have no single instant to be open at. The web map
+            // does not time-filter restaurants under This weekend either.
+            return nil
         }
     }
 

@@ -43,7 +43,7 @@ private struct SwipeRecapRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CachedAsyncImage(url: item.imageUrl) {
+            CachedAsyncImage(url: item.imageUrl, blurUp: false) {
                 Color(.systemGray5)
                     .overlay(
                         Image(systemName: item.typeIcon)

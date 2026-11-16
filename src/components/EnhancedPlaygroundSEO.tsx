@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
 import { playgroundAgeText, playgroundTitle, suburbFromLocation } from "@/lib/playgroundMeta";
+import { entityNodeId } from "@/lib/schemaNodeIds";
 
 interface PlaygroundData {
   name: string;
@@ -85,7 +86,7 @@ export default function EnhancedPlaygroundSEO({
   const playgroundSchema = {
     "@context": "https://schema.org",
     "@type": "Playground",
-    "@id": `${playgroundUrl}#place`,
+    "@id": entityNodeId("playground", playgroundUrl),
     name: playground.name,
     description: getGEODescription(),
     url: playgroundUrl,
@@ -185,7 +186,7 @@ export default function EnhancedPlaygroundSEO({
       <meta name="googlebot" content="index, follow" />
       <meta name="bingbot" content="index, follow" />
 
-      <meta property="og:type" content="place" />
+      <meta property="og:type" content="website" />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       {locality && <meta property="og:locality" content={locality} />}

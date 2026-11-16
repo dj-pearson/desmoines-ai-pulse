@@ -190,6 +190,7 @@ internal fun NavGraphBuilder.addTabDestinations(
             onTabSelected = viewModel::onTabSelected,
             onClearSearch = viewModel::clearSearch,
             onClearKidsFilter = viewModel::clearKidsFilter,
+            onClearDateNightFilter = viewModel::clearDateNightFilter,
             onSaveCurrentSearch = {
                 savedSearchViewModel.save(state.searchText, state.selectedTab.displayName)
             },

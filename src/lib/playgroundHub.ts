@@ -21,6 +21,7 @@
 export interface PlaygroundHubRow {
   id: string;
   name: string;
+  slug?: string | null;
   location?: string | null;
   description?: string | null;
   age_range?: string | null;

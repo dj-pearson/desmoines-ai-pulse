@@ -30,7 +30,7 @@ import {
 } from '../src/lib/monthPages';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
-import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+import { createSlug, createEventSlug, storedSlug } from './lib/sitemapSlugs';
 // SEO-043. No `@/` imports in eventSeries.ts, for the same reason as monthPages.
 import { EVENT_SERIES, allSeriesTitlePatterns, seriesForEvent, seriesPath } from '../src/lib/eventSeries';
 
@@ -377,8 +377,10 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     // shell both say so), so submitting it asks Google to crawl a page we've
     // told it not to index. status is nullable and a bare neq would also drop
     // the NULL rows, so "not closed" is an OR that keeps them
-    // (useBreweryTrail.ts uses the same filter).
-    .or('status.is.null,status.neq.closed')
+    // (useBreweryTrail.ts uses the same filter). It names all three spellings
+    // of closed-for-good the restaurant page reads as closed (WEB-BE-045):
+    // nothing filters this list after the query, unlike the listing hooks.
+    .or('status.is.null,status.not.in.(closed,permanently_closed,closed_permanently)')
     // SEO-059: the page is also noindex when Google's business_status says
     // CLOSED_PERMANENTLY, so that row leaves the sitemap too. A second `or`
     // param is ANDed with the first by PostgREST.
@@ -422,7 +424,7 @@ async function generateAttractionsSitemap(): Promise<number | null> {
   // the detail page resolved them anyway, which is the other half of the fix.
   const { data: attractions, error } = await supabase
     .from('attractions')
-    .select('id, name, updated_at')
+    .select('id, name, slug, updated_at')
     .eq('is_active', true)
     .order('name')
     .order('id');
@@ -433,7 +435,7 @@ async function generateAttractionsSitemap(): Promise<number | null> {
   }
 
   const urls = attractions.map(attraction => {
-    const slug = createSlug(attraction.name);
+    const slug = storedSlug(attraction);
     const lastmod = attraction.updated_at ? attraction.updated_at.split('T')[0] : currentDate;
     return {
       loc: `${baseUrl}/attractions/${slug}`,
@@ -465,7 +467,7 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
   // 69 rows.
   const { data: playgrounds, error } = await supabase
     .from('playgrounds')
-    .select('id, name, updated_at, latitude, longitude')
+    .select('id, name, slug, updated_at, latitude, longitude')
     .order('name')
     .order('id');
 
@@ -481,7 +483,7 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
   }
 
   const urls = inMetro.map(playground => {
-    const slug = createSlug(playground.name);
+    const slug = storedSlug(playground);
     const lastmod = playground.updated_at ? playground.updated_at.split('T')[0] : currentDate;
     return {
       loc: `${baseUrl}/playgrounds/${slug}`,

@@ -27,7 +27,7 @@ import {
   centralWindow,
   type CentralWindow,
 } from "@/lib/timezone";
-import { tonightWindow } from "@/lib/tonightPairings";
+import { tonightWindow } from "@/lib/tonightTime";
 import { currentVenueName, matchVenue, normaliseVenueName } from "@/lib/venuePages";
 import {
   eventCentralDate,

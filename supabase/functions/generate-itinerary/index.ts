@@ -13,10 +13,36 @@ import {
   centralEventWindow,
   centralMonthStartUtc,
   centralToday,
+  applyTripRunsFilters,
+  applyTripStartsFilters,
+  mergeTripEvents,
+  runningThrough,
   sanitizeItems,
+  TRIP_RUNNING_LIMIT,
   stringList,
   validateTripRequest,
 } from "./planning.ts";
+
+const TRIP_EVENT_COLUMNS =
+  'id, title, enhanced_description, original_description, date, end_date, event_start_local, location, venue, category, price, image_url, latitude, longitude';
+
+/** One row of TRIP_EVENT_COLUMNS. */
+interface TripEventRow {
+  id: string;
+  title: string | null;
+  enhanced_description: string | null;
+  original_description: string | null;
+  date: string | null;
+  end_date: string | null;
+  event_start_local: string | null;
+  location: string | null;
+  venue: string | null;
+  category: string | null;
+  price: string | null;
+  image_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
 
 // Monthly trip-planner quota per tier (matches the web useSubscription copy /
 // WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
@@ -288,20 +314,19 @@ serve(async (req) => {
     // and the bare-date comparison ran the window in UTC (IOS-DD-TRIP-PLANNER-08).
     const eventWindow = centralEventWindow(startDate, endDate);
 
-    // The three reads are independent, so they run together. Each applies the
+    // The four reads are independent, so they run together. Each applies the
     // same visibility the listing pages do: no archived, hidden or merged
     // events, no merged restaurants, no inactive attractions.
-    const [eventsResult, restaurantsResult, attractionsResult] = await Promise.all([
-      supabaseClient
-        .from('events')
-        .select('id, title, enhanced_description, original_description, date, event_start_local, location, venue, category, price, image_url, latitude, longitude')
-        .gte('date', eventWindow.fromIso)
-        .lt('date', eventWindow.toIso)
-        .is('archived_at', null)
-        .not('is_hidden', 'is', true)
-        .not('is_merged', 'is', true)
+    const [eventsResult, runsResult, restaurantsResult, attractionsResult] = await Promise.all([
+      applyTripStartsFilters(supabaseClient.from('events').select(TRIP_EVENT_COLUMNS), eventWindow)
         .order('date', { ascending: true })
         .limit(100),
+      // Runs that opened before the trip (WEB-FEAT-093): the starts
+      // read above never held the State Fair on a trip that begins on its
+      // fourth day.
+      applyTripRunsFilters(supabaseClient.from('events').select(TRIP_EVENT_COLUMNS), eventWindow)
+        .order('end_date', { ascending: true })
+        .limit(TRIP_RUNNING_LIMIT),
       supabaseClient
         .from('restaurants')
         // `hours` DROPPED: restaurants has no opening-hours column, so asking for it
@@ -320,10 +345,17 @@ serve(async (req) => {
         .limit(50),
     ]);
 
-    const { data: events, error: eventsError } = eventsResult;
+    const { data: startRows, error: eventsError } = eventsResult;
+    const { data: runRows, error: runsError } = runsResult;
+    // A failed runs read costs only the runs; the trip still gets its starts.
+    const events = mergeTripEvents(
+      (startRows ?? []) as unknown as TripEventRow[],
+      (runsError ? [] : runRows ?? []) as unknown as TripEventRow[],
+    );
     const { data: restaurants, error: restaurantsError } = restaurantsResult;
     const { data: attractions, error: attractionsError } = attractionsResult;
     if (eventsError) console.error('Error fetching events:', eventsError);
+    if (runsError) console.error('Error fetching running events:', runsError);
     if (restaurantsError) console.error('Error fetching restaurants:', restaurantsError);
     if (attractionsError) console.error('Error fetching attractions:', attractionsError);
 
@@ -336,6 +368,9 @@ serve(async (req) => {
       // Des Moines wall-clock start, so the model plans around the real
       // showtime rather than a UTC instant.
       startsLocal: e.event_start_local,
+      // Set only for a run that opened before the trip: it is on every trip
+      // day through this Central date, not just its opening day.
+      runningThrough: runningThrough(e, eventWindow),
       location: e.location,
       venue: e.venue,
       category: e.category,
@@ -437,6 +472,7 @@ PLANNING GUIDELINES:
    - Meals: 45-90 minutes
    - Major attractions: 2-3 hours
    - Events: varies by type
+   - An event with a runningThrough date opened before the trip and is on every trip day through that date; schedule it on whichever day fits
    - Walking/transit: 15-30 minutes between locations
 
 CREATE A DETAILED ITINERARY with this exact JSON structure:

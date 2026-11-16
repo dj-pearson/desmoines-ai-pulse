@@ -52,6 +52,53 @@ final class SwipeSessionServiceTests: XCTestCase {
         XCTAssertFalse(SwipeSessionService.isAlreadyJoined(URLError(.notConnectedToInternet)))
     }
 
+    // MARK: Lookup by code (WEB-SEC-070)
+
+    private func session(status: String = "active", expiresAt: String?) -> SwipeSessionService.Session {
+        SwipeSessionService.Session(
+            id: UUID(), code: "DSM-AB12", mode: "mixed", status: status,
+            expiresAt: expiresAt, endedAt: nil,
+        )
+    }
+
+    private let now = ISO8601DateFormatter().date(from: "2026-11-16T12:00:00Z")!
+
+    func testAnActiveUnexpiredSessionIsJoinable() {
+        XCTAssertTrue(SwipeSessionService.isJoinable(session(expiresAt: "2026-11-16T13:00:00+00:00"), now: now))
+    }
+
+    func testFractionalSecondsParse() {
+        // PostgREST sends timestamptz with microseconds.
+        XCTAssertTrue(SwipeSessionService.isJoinable(session(expiresAt: "2026-11-16T13:00:00.123456+00:00"), now: now))
+    }
+
+    func testAnExpiredSessionIsNotJoinable() {
+        // lookup_swipe_session returns every status and expiry, so the filter
+        // the old table read applied server-side now runs here.
+        XCTAssertFalse(SwipeSessionService.isJoinable(session(expiresAt: "2026-11-16T11:59:59Z"), now: now))
+    }
+
+    func testAnEndedSessionIsNotJoinable() {
+        XCTAssertFalse(SwipeSessionService.isJoinable(session(status: "ended", expiresAt: "2026-11-16T13:00:00Z"), now: now))
+    }
+
+    func testAnUnparseableExpiryIsNotJoinable() {
+        XCTAssertFalse(SwipeSessionService.isJoinable(session(expiresAt: "tomorrow"), now: now))
+    }
+
+    func testAMissingFunctionFallsBackToTheTableRead() {
+        // Migration 20261108000096 not applied yet.
+        XCTAssertTrue(SwipeSessionService.isMissingFunctionError(StubPostgrestError(code: "PGRST202")))
+        XCTAssertTrue(SwipeSessionService.isMissingFunctionError(StubPostgrestError(code: "42883")))
+    }
+
+    func testOtherErrorsDoNotFallBack() {
+        // A refusal or an outage must surface, not quietly retry the read
+        // slice 3 retires.
+        XCTAssertFalse(SwipeSessionService.isMissingFunctionError(StubPostgrestError(code: "42501")))
+        XCTAssertFalse(SwipeSessionService.isMissingFunctionError(URLError(.notConnectedToInternet)))
+    }
+
     func testTheFeatureStaysHiddenUntilTheGameIsWired() {
         // Hosting and joining work; swiping inside a session does not exist
         // yet, so a group would never see a match (D7-DEF-01).

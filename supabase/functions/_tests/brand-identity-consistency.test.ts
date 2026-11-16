@@ -62,7 +62,15 @@ Deno.test('entity ids are on the canonical origin', async () => {
   );
   assert(/buildRestaurantSchema\(restaurant, \{\s*url: canonicalUrl,/.test(rd));
   const meta = codeOnly(await read('src/lib/restaurantMeta.ts'));
-  assert(/"@id": ctx\.url,/.test(meta), 'the node id is the canonical url it was given');
+  // WEB-SEO-073 routed the id through entityNodeId so the edge shell emits the
+  // same one; for a restaurant that helper must still return the url unchanged.
+  assert(/"@id": entityNodeId\("restaurant", ctx\.url\),/.test(meta), 'the node id is built from the canonical url it was given');
+  const ids = codeOnly(await read('src/lib/schemaNodeIds.ts'));
+  assert(/\brestaurant: "",/.test(ids), 'the restaurant node id is the bare canonical url, no fragment');
+  assert(
+    /return `\$\{pageUrl\}\$\{ENTITY_NODE_FRAGMENT\[kind\]\}`;/.test(ids),
+    'entityNodeId appends only the fragment to the url it was given',
+  );
 
   const menu = codeOnly(await read('src/components/schema/MenuSchema.tsx'));
   assert(/getCanonicalUrl\(`\/restaurants\/\$\{restaurantSlug\}`\)/.test(menu));

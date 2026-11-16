@@ -40,6 +40,15 @@ import {
 const PLAN_EVENT_COLUMNS =
   "id, title, date, event_start_utc, event_start_local, venue, location, category, image_url, price";
 
+/**
+ * WEB-FEAT-099. The reminder read also asks for both unpublish switches.
+ * get_pending_reminders (20261115000141) skips an event with is_hidden true or
+ * archived_at set, so a pending reminder on one will not be emailed, and My
+ * Plans and Your Week must not list it as set. The events SELECT policy does
+ * not hide these rows, so the inner embed still returns them.
+ */
+const REMINDER_EVENT_COLUMNS = `${PLAN_EVENT_COLUMNS}, is_hidden, archived_at`;
+
 export const PAST_PLAN_LIMIT = 20;
 /** Safety cap on the past read, which is sorted client-side before the slice. */
 const PAST_FETCH_CAP = 500;
@@ -67,11 +76,17 @@ export interface AttendanceRow {
   events: PlanEvent | null;
 }
 
+/** A plan event plus the two switches that take it off the site. */
+export interface ReminderEvent extends PlanEvent {
+  is_hidden?: boolean | null;
+  archived_at?: string | null;
+}
+
 export interface ReminderRow {
   id: string;
   reminder_type: string;
   created_at: string;
-  events: PlanEvent | null;
+  events: ReminderEvent | null;
 }
 
 export interface FavoriteRow {
@@ -188,13 +203,23 @@ export function pickPast(
   return plans.sort((a, b) => instantMs(b.event) - instantMs(a.event)).slice(0, limit);
 }
 
-/** Pending reminders grouped by event, today onward, soonest first. */
+/** True when get_pending_reminders would skip this event (unpublished). */
+export function isReminderEventUnpublished(event: ReminderEvent): boolean {
+  return event.is_hidden === true || !!event.archived_at;
+}
+
+/**
+ * Pending reminders grouped by event, today onward, soonest first. A reminder
+ * on a hidden or archived event is left out: it stays pending in the table (a
+ * republished listing still gets it) but no run will send it while unlisted.
+ */
 export function groupReminders(rows: ReminderRow[], now: Date = new Date()): ReminderPlan[] {
   const today = centralDateOf(now);
   const byEvent = new Map<string, ReminderPlan>();
   for (const row of rows) {
-    const event = row.events;
-    if (!event) continue;
+    const source = row.events;
+    if (!source || isReminderEventUnpublished(source)) continue;
+    const { is_hidden: _hidden, archived_at: _archived, ...event } = source;
     const day = eventDay(event);
     if (!day || day < today) continue;
     const existing = byEvent.get(event.id);
@@ -392,7 +417,7 @@ export function useMyPlans(options: UseMyPlansOptions = {}) {
       if (!userId) return [];
       const { data, error } = await supabase
         .from("user_event_reminders")
-        .select(`id, reminder_type, created_at, events!inner(${PLAN_EVENT_COLUMNS})`)
+        .select(`id, reminder_type, created_at, events!inner(${REMINDER_EVENT_COLUMNS})`)
         .eq("user_id", userId)
         .eq("delivery_status", "pending")
         .gte("events.date", upcomingFloorUtc());
@@ -411,6 +436,8 @@ export function useMyPlans(options: UseMyPlansOptions = {}) {
         .from("content_favorites")
         .select("content_type, content_id, created_at")
         .eq("user_id", userId)
+        // Saved articles share the table (XPLAT-013) but are not places.
+        .neq("content_type", "article")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as PlaceFavorite[];

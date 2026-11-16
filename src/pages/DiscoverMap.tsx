@@ -14,7 +14,7 @@ import { handleError } from '@/lib/errorHandler';
 import { markdownToPlainText } from '@/lib/aiText';
 import { createLogger } from '@/lib/logger';
 import { STALE_TIME } from '@/lib/queryConfig';
-import { formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
+import { formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantStatus';
 import { discoverMapRestaurantStatus, isDiscoverMapRestaurantListed } from '@/lib/discoverMapRestaurant';
 import { DISCOVER_MAP_RESTAURANT_COLUMNS } from '@/lib/listColumns';
 import { attractionOpenStatus } from '@/lib/attractionHours';
@@ -28,7 +28,7 @@ import {
   TONIGHT_EVENTS_FROM_HOUR,
   type When,
 } from '@/lib/mapEventWindow';
-import { createSlug } from '@/lib/slug';
+import { attractionHref, playgroundHref } from '@/lib/slugHref';
 import { centralHour, createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 import { getCanonicalUrl } from '@/lib/brandConfig';
@@ -337,6 +337,7 @@ async function fetchRestaurants(bounds: MapBounds, deep: boolean): Promise<Layer
 interface AttractionRow {
   id: string;
   name: string;
+  slug: string | null;
   latitude: number | string;
   longitude: number | string;
   description: string | null;
@@ -350,7 +351,7 @@ async function fetchAttractions(bounds: MapBounds): Promise<LayerResult> {
   const query = supabase
     .from('attractions')
     // public.attractions classifies with `type`, not `category`.
-    .select('id, name, latitude, longitude, description, type, hours, hours_summary, is_active')
+    .select('id, name, slug, latitude, longitude, description, type, hours, hours_summary, is_active')
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     // The filter /attractions uses (useAttractions): a closed or retired
@@ -367,9 +368,9 @@ async function fetchAttractions(bounds: MapBounds): Promise<LayerResult> {
     type: 'attraction',
     latitude: Number(a.latitude),
     longitude: Number(a.longitude),
-    // The slug resolver's own fallback until attractions.slug is confirmed
-    // live (explore plan deferred D2).
-    href: `/attractions/${createSlug(a.name)}`,
+    // The stored slug (WEB-PERF-031): a duplicate name was backfilled with a
+    // suffix, so a link rebuilt from the name opens the other place.
+    href: attractionHref(a),
     description: a.description?.slice(0, 120),
     category: a.type ?? undefined,
     hours: a.hours,
@@ -381,6 +382,7 @@ async function fetchAttractions(bounds: MapBounds): Promise<LayerResult> {
 interface PlaygroundRow {
   id: string;
   name: string;
+  slug: string | null;
   latitude: number | string;
   longitude: number | string;
   description: string | null;
@@ -392,7 +394,7 @@ async function fetchPlaygrounds(bounds: MapBounds): Promise<LayerResult> {
   // (useOutdoorsNearby.ts explains where they came from).
   const query = supabase
     .from('playgrounds')
-    .select('id, name, latitude, longitude, description, age_range')
+    .select('id, name, slug, latitude, longitude, description, age_range')
     .not('latitude', 'is', null)
     .not('longitude', 'is', null);
   const { data, error } = (await inBounds(query, bounds)
@@ -405,8 +407,8 @@ async function fetchPlaygrounds(bounds: MapBounds): Promise<LayerResult> {
     type: 'playground',
     latitude: Number(p.latitude),
     longitude: Number(p.longitude),
-    // playgrounds has no slug column; PlaygroundDetails matches createSlug(name).
-    href: `/playgrounds/${createSlug(p.name)}`,
+    // Stored slug, as above: the second Riverview Park is riverview-park-2.
+    href: playgroundHref(p),
     description: p.description?.slice(0, 120),
     category: p.age_range ? `Ages ${p.age_range}` : undefined,
   }));

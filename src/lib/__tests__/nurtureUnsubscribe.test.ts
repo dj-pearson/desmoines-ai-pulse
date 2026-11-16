@@ -23,11 +23,26 @@ beforeAll(() => {
 
 type Row = { unsubscribe_token: string | null } | null;
 
-/** The newsletter_subscribers read and the nurture_sends insert, nothing else. */
-function fakeClient(opts: { row?: Row; readError?: string; throws?: boolean } = {}) {
+/**
+ * What ensure_marketing_unsubscribe_token answers. Absent means the client has
+ * no rpc at all, as the earlier fakes did.
+ */
+type Mint = { data?: unknown; error?: string; throws?: boolean };
+
+/** The newsletter_subscribers read, the token mint and the nurture_sends insert, nothing else. */
+function fakeClient(opts: { row?: Row; readError?: string; throws?: boolean; mint?: Mint } = {}) {
   const reads: Array<{ table: string; column: string; value: string }> = [];
   const inserts: Array<Record<string, unknown>> = [];
+  const rpcs: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  const rpc = async (fn: string, args: Record<string, unknown>) => {
+    rpcs.push({ fn, args });
+    const m = opts.mint as Mint;
+    if (m.throws) throw new Error("network down");
+    if (m.error) return { data: null, error: { message: m.error } };
+    return { data: m.data ?? null, error: null };
+  };
   const client = {
+    ...(opts.mint ? { rpc } : {}),
     from(table: string) {
       if (table === "nurture_sends") {
         return {
@@ -53,7 +68,7 @@ function fakeClient(opts: { row?: Row; readError?: string; throws?: boolean } = 
       };
     },
   };
-  return { client: client as unknown as Db, reads, inserts };
+  return { client: client as unknown as Db, reads, inserts, rpcs };
 }
 
 function capture() {
@@ -109,6 +124,30 @@ describe("sendNurtureEmail unsubscribe token", () => {
     expect(out.sent[0].headers?.["List-Unsubscribe-Post"]).toBeUndefined();
   });
 
+  it("does not promise one click when the footer link needs a sign-in (slice 2)", async () => {
+    const { sendNurtureEmail } = await load();
+    const db = fakeClient({ row: null });
+    const out = capture();
+    await sendNurtureEmail(db.client, base, { send: out.send });
+
+    const { html, text } = out.sent[0];
+    expect(html).not.toMatch(/one click/i);
+    expect(text).not.toMatch(/one click/i);
+    expect(html).toContain("/profile?tab=settings");
+    expect(html).toContain("mailto:unsubscribe@desmoinesinsider.com?subject=unsubscribe");
+    expect(text).toContain("sign in and change your email preferences");
+    expect(text).toContain("unsubscribe@desmoinesinsider.com");
+  });
+
+  it("keeps the one-click wording when a token is in the footer", async () => {
+    const { sendNurtureEmail } = await load();
+    const db = fakeClient({ row: { unsubscribe_token: TOKEN } });
+    const out = capture();
+    await sendNurtureEmail(db.client, base, { send: out.send });
+    expect(out.sent[0].html).toContain("unsubscribe in one click");
+    expect(out.sent[0].text).toContain(`Unsubscribe (one click): `);
+  });
+
   it("sends without the token when the lookup errors or throws", async () => {
     const { sendNurtureEmail } = await load();
     for (const opts of [{ readError: "permission denied" }, { throws: true }]) {
@@ -146,5 +185,73 @@ describe("sendNurtureEmail unsubscribe token", () => {
     expect(db.reads).toHaveLength(0);
     expect(out.sent[0].html).not.toContain("unsubscribe");
     expect(out.sent[0].headers).toEqual({});
+  });
+});
+
+/**
+ * WEB-ADS-035 slice 3. A member with no newsletter row (most of them) got the
+ * sign-in-or-mailto footer and a mailto-only List-Unsubscribe. sendNurtureEmail
+ * now asks ensure_marketing_unsubscribe_token for their account token.
+ */
+describe("sendNurtureEmail account unsubscribe token", () => {
+  const ACCOUNT = "c".repeat(16) + "0123456789abcdef0123456789abcdef";
+
+  it("gives a member with no newsletter row the account link and one-click header", async () => {
+    const { sendNurtureEmail } = await load();
+    const db = fakeClient({ row: null, mint: { data: ACCOUNT } });
+    const out = capture();
+    const res = await sendNurtureEmail(db.client, base, { send: out.send });
+
+    expect(res.ok).toBe(true);
+    expect(db.rpcs).toEqual([{ fn: "ensure_marketing_unsubscribe_token", args: { p_user_id: "u-1" } }]);
+    const msg = out.sent[0];
+    expect(msg.html).toContain(`/unsubscribe?account=${ACCOUNT}`);
+    expect(msg.text).toContain(`/unsubscribe?account=${ACCOUNT}`);
+    expect(msg.html).toContain("unsubscribe from marketing emails in one click");
+    expect(msg.html).not.toContain("/unsubscribe?token=");
+    expect(msg.headers?.["List-Unsubscribe"]).toContain(`${SUPABASE_URL}/functions/v1/email-unsubscribe?account=${ACCOUNT}`);
+    expect(msg.headers?.["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+  });
+
+  it("prefers the newsletter token and does not mint an account token", async () => {
+    const { sendNurtureEmail } = await load();
+    const db = fakeClient({ row: { unsubscribe_token: TOKEN }, mint: { data: ACCOUNT } });
+    const out = capture();
+    await sendNurtureEmail(db.client, base, { send: out.send });
+    expect(db.rpcs).toHaveLength(0);
+    expect(out.sent[0].html).toContain(`/unsubscribe?token=${TOKEN}`);
+    expect(out.sent[0].html).not.toContain("?account=");
+  });
+
+  it("sends the old footer when the mint fails, as before the migration is applied", async () => {
+    const { sendNurtureEmail } = await load();
+    const failures: Mint[] = [
+      { error: "Could not find the function public.ensure_marketing_unsubscribe_token(p_user_id)" },
+      { throws: true },
+      { data: "not-a-token" },
+      { data: ACCOUNT.toUpperCase() },
+      { data: null },
+    ];
+    for (const mint of failures) {
+      const db = fakeClient({ row: null, mint });
+      const out = capture();
+      const res = await sendNurtureEmail(db.client, base, { send: out.send });
+      expect(res.ok).toBe(true);
+      expect(out.sent).toHaveLength(1);
+      expect(out.sent[0].html).not.toContain("?account=");
+      expect(out.sent[0].html).not.toMatch(/one click/i);
+      expect(out.sent[0].headers?.["List-Unsubscribe-Post"]).toBeUndefined();
+    }
+  });
+
+  it("does not mint without a user id or for transactional mail", async () => {
+    const { sendNurtureEmail } = await load();
+    for (const extra of [{ userId: null }, { category: "transactional" as const }]) {
+      const db = fakeClient({ row: null, mint: { data: ACCOUNT } });
+      const out = capture();
+      await sendNurtureEmail(db.client, { ...base, ...extra }, { send: out.send });
+      expect(db.rpcs).toHaveLength(0);
+      expect(out.sent[0].html).not.toContain("?account=");
+    }
   });
 });

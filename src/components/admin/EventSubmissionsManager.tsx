@@ -74,6 +74,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 import { safeWebUrl } from "@/lib/reservations";
+import { NOTIFICATION_TYPE, notifySubmissionDecision } from "@/lib/submissionNotify";
 
 const log = createLogger("EventSubmissionsManager");
 
@@ -137,35 +138,17 @@ const INFO_TEMPLATES = [
  * Best-effort per submission and never throws: the status change has already
  * committed by the time this runs, and an email failure must not make the
  * admin think the decision did not land. The caller reports the count.
- *
  * `pending` sends nothing - it is not a decision.
  */
-export const NOTIFICATION_TYPE: Record<string, string | null> = {
-  approved: "event_approved",
-  rejected: "event_rejected",
-  needs_revision: "event_needs_revision",
-  pending: null,
-};
-
 async function notifySubmitters(
   ids: string[],
   next: Submission["status"],
   notes?: string,
 ): Promise<{ sent: number; failed: number }> {
-  const notificationType = NOTIFICATION_TYPE[next];
-  if (!notificationType) return { sent: 0, failed: 0 };
+  if (!NOTIFICATION_TYPE[next]) return { sent: 0, failed: 0 };
 
   const outcomes = await Promise.all(
-    ids.map(async (id) => {
-      try {
-        const { error } = await supabase.functions.invoke("notify-event-submission", {
-          body: { notificationType, eventId: id, adminNotes: notes },
-        });
-        return !error;
-      } catch {
-        return false;
-      }
-    }),
+    ids.map((id) => notifySubmissionDecision(id, next, notes)),
   );
 
   return {

@@ -8,15 +8,25 @@
  * unpublish filters useTonightPairings uses, and keeps the ones that haven't
  * started yet via selectTonightEvents.
  *
- * One request. The weather reorder is skipped on purpose (WEATHER_UNAVAILABLE
- * keeps start order), so the page does not take on a weather call for a
- * three-row list.
+ * Two requests in parallel: today's starts, and runs that opened before today
+ * and are still on (WEB-FEAT-080). Without the second read a festival a block
+ * away, opened yesterday and running through Sunday, never appeared here while
+ * /events/today listed it. The weather reorder is skipped on purpose
+ * (WEATHER_UNAVAILABLE keeps start order), so the page does not take on a
+ * weather call for a four-row list.
+ *
+ * Ranking (pickTonightNear): events with a start time still ahead come first,
+ * in start order, because "what starts after dinner" is the rail's question.
+ * Runs already on come next, nearest first. Today's events with no listed time
+ * come last, as before.
  */
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { formatInTimeZone } from "date-fns-tz";
 import { supabase } from "@/integrations/supabase/client";
 import { WEATHER_UNAVAILABLE } from "@/hooks/useWeather";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { applyEventVisibility } from "@/lib/eventQuery";
 import { handleError } from "@/lib/errorHandler";
 import { shouldRetry } from "@/lib/queryConfig";
 import { haversineDistance } from "@/lib/geo";
@@ -26,6 +36,8 @@ import {
   PAIR_MAX_MILES,
   centralDayWindow,
   eventStartInstant,
+  formatCentralShortDate,
+  formatCentralTime,
   selectTonightEvents,
   type TonightEvent,
 } from "@/lib/tonightPairings";
@@ -38,6 +50,8 @@ export const MAX_TONIGHT_NEAR_RESTAURANT = 4;
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 const EVENT_ROW_LIMIT = 40;
+/** Runs already on near one restaurant; a handful at most outside fair week. */
+export const RUN_ROW_LIMIT = 20;
 
 export interface TonightNearbyEvent {
   event: TonightEvent;
@@ -45,6 +59,11 @@ export interface TonightNearbyEvent {
   startsAt: Date | null;
   distanceMiles: number;
   walkable: boolean;
+  /**
+   * Set when the event started before now and its end_date is still ahead: a
+   * festival or exhibit already on. startsAt is null for these.
+   */
+  runsUntil: Date | null;
 }
 
 interface Origin {
@@ -52,9 +71,31 @@ interface Origin {
   longitude: number;
 }
 
+function milesFrom(origin: Origin, event: TonightEvent): number | null {
+  if (typeof event.latitude !== "number" || typeof event.longitude !== "number") return null;
+  if (!Number.isFinite(event.latitude) || !Number.isFinite(event.longitude)) return null;
+  if (event.latitude === 0 && event.longitude === 0) return null;
+  const miles = haversineDistance(origin, { latitude: event.latitude, longitude: event.longitude });
+  return miles > PAIR_MAX_MILES ? null : miles;
+}
+
 /**
- * Tonight's events within PAIR_MAX_MILES of `origin`, not yet started,
- * in start order (no-time events last). Pure, for a fixed-clock test.
+ * The run's end, when the event has started and is still on at `now`.
+ * A row with no end_date is never running: a one-night show that began an
+ * hour ago is not something to walk over to after dinner.
+ */
+export function runningUntil(event: TonightEvent, now: Date): Date | null {
+  const started = Date.parse(event.event_start_utc ?? event.date ?? "");
+  const ends = Date.parse(event.end_date ?? "");
+  if (!Number.isFinite(started) || !Number.isFinite(ends)) return null;
+  const nowMs = now.getTime();
+  return started < nowMs && ends > nowMs ? new Date(ends) : null;
+}
+
+/**
+ * Tonight's events within PAIR_MAX_MILES of `origin`: timed starts still
+ * ahead in start order, then runs already on (nearest first), then today's
+ * no-time events. Pure, for a fixed-clock test.
  */
 export function pickTonightNear(
   rows: readonly TonightEvent[],
@@ -62,25 +103,101 @@ export function pickTonightNear(
   now: Date,
   limit: number = MAX_TONIGHT_NEAR_RESTAURANT,
 ): TonightNearbyEvent[] {
-  const out: TonightNearbyEvent[] = [];
+  const timed: TonightNearbyEvent[] = [];
+  const untimed: TonightNearbyEvent[] = [];
+  const seen = new Set<string>();
   for (const event of selectTonightEvents(rows, now, WEATHER_UNAVAILABLE)) {
-    if (typeof event.latitude !== "number" || typeof event.longitude !== "number") continue;
-    if (!Number.isFinite(event.latitude) || !Number.isFinite(event.longitude)) continue;
-    if (event.latitude === 0 && event.longitude === 0) continue;
-    const distanceMiles = haversineDistance(origin, {
-      latitude: event.latitude,
-      longitude: event.longitude,
-    });
-    if (distanceMiles > PAIR_MAX_MILES) continue;
-    out.push({
+    const distanceMiles = milesFrom(origin, event);
+    if (distanceMiles === null) continue;
+    seen.add(event.id);
+    const startsAt = eventStartInstant(event);
+    (startsAt ? timed : untimed).push({
       event,
-      startsAt: eventStartInstant(event),
+      startsAt,
       distanceMiles,
       walkable: distanceMiles < WALKABLE_MILES,
+      runsUntil: null,
     });
-    if (out.length >= limit) break;
   }
-  return out;
+
+  const running: TonightNearbyEvent[] = [];
+  for (const event of rows) {
+    if (!event?.id || seen.has(event.id)) continue;
+    const runsUntil = runningUntil(event, now);
+    if (!runsUntil) continue;
+    const distanceMiles = milesFrom(origin, event);
+    if (distanceMiles === null) continue;
+    seen.add(event.id);
+    running.push({
+      event,
+      startsAt: null,
+      distanceMiles,
+      walkable: distanceMiles < WALKABLE_MILES,
+      runsUntil,
+    });
+  }
+  running.sort((a, b) => a.distanceMiles - b.distanceMiles);
+
+  return [...timed, ...running, ...untimed].slice(0, limit);
+}
+
+/**
+ * "On until 9:00 PM CT" when the run ends today (Central), else "On through
+ * Sun, Sep 27". An end_date written as midnight of the last day is read as the
+ * day before, so a run ending 2026-09-28T00:00 CT says "On through Sun, Sep 27".
+ */
+export function runsUntilLabel(runsUntil: Date, now: Date): string {
+  const CENTRAL = "America/Chicago";
+  const atMidnight = formatInTimeZone(runsUntil, CENTRAL, "HH:mm") === "00:00";
+  const lastDay = atMidnight ? new Date(runsUntil.getTime() - 60_000) : runsUntil;
+  const sameDay =
+    formatInTimeZone(lastDay, CENTRAL, "yyyy-MM-dd") === formatInTimeZone(now, CENTRAL, "yyyy-MM-dd");
+  if (sameDay) {
+    return atMidnight ? "On until midnight" : `On until ${formatCentralTime(runsUntil)} CT`;
+  }
+  return `On through ${formatCentralShortDate(lastDay)}`;
+}
+
+interface CentralDay {
+  startISO: string;
+  endISO: string;
+}
+
+/**
+ * The two reads behind the rail, exported so a test can run them against a
+ * client that evaluates the filters. The run read's end_date bound is the
+ * start of the Central day, not now, so the cache key stays per day;
+ * pickTonightNear drops a run that has ended since.
+ */
+export async function fetchTonightNearRestaurantRows(
+  lat: number,
+  lng: number,
+  day: CentralDay,
+): Promise<TonightEvent[]> {
+  const nearby = () =>
+    applyEventVisibility(supabase.from("events").select(EVENT_LIST_COLUMNS))
+      .gte("latitude", lat - LAT_PAD_DEG)
+      .lte("latitude", lat + LAT_PAD_DEG)
+      .gte("longitude", lng - LNG_PAD_DEG)
+      .lte("longitude", lng + LNG_PAD_DEG);
+  const [today, runs] = await Promise.all([
+    nearby()
+      .gte("date", day.startISO)
+      .lt("date", day.endISO)
+      .order("date", { ascending: true })
+      .limit(EVENT_ROW_LIMIT),
+    nearby()
+      .lt("date", day.startISO)
+      .gte("end_date", day.startISO)
+      .order("end_date", { ascending: true })
+      .limit(RUN_ROW_LIMIT),
+  ]);
+  if (today.error) throw today.error;
+  if (runs.error) throw runs.error;
+  return [
+    ...((today.data ?? []) as unknown as TonightEvent[]),
+    ...((runs.data ?? []) as unknown as TonightEvent[]),
+  ];
 }
 
 function toCoord(value: number | string | null | undefined): number {
@@ -179,25 +296,7 @@ export function useTonightNearRestaurant(
     enabled: located,
     staleTime: FIVE_MINUTES,
     retry: shouldRetry,
-    queryFn: async (): Promise<TonightEvent[]> => {
-      const { data, error } = await supabase
-        .from("events")
-        .select(EVENT_LIST_COLUMNS)
-        .gte("date", day.startISO)
-        .lt("date", day.endISO)
-        // Same three unpublish switches as useEvents and useTonightPairings.
-        .neq("is_merged", true)
-        .neq("is_hidden", true)
-        .is("archived_at", null)
-        .gte("latitude", lat - LAT_PAD_DEG)
-        .lte("latitude", lat + LAT_PAD_DEG)
-        .gte("longitude", lng - LNG_PAD_DEG)
-        .lte("longitude", lng + LNG_PAD_DEG)
-        .order("date", { ascending: true })
-        .limit(EVENT_ROW_LIMIT);
-      if (error) throw error;
-      return (data ?? []) as unknown as TonightEvent[];
-    },
+    queryFn: () => fetchTonightNearRestaurantRows(lat, lng, day),
   });
 
   const error = query.error;

@@ -17,6 +17,7 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
+import { findLeadIdsByEmail, normalizeOutreachEmail, recordOutreachOptOut } from "../_shared/outreachSuppression.ts";
 
 const AGENT_KEY = "outreach-sequencer";
 const OPT_OUT_RE = /\b(unsubscribe|remove me|stop|not interested|do not (contact|email))\b/i;
@@ -43,28 +44,33 @@ Deno.serve(async (req) => {
   );
 
   const body = await req.json().catch(() => ({}));
-  const email = body.email ? String(body.email).toLowerCase() : null;
+  const email = body.email ? normalizeOutreachEmail(String(body.email)) || null : null;
   const message = body.message ? String(body.message).slice(0, 2000) : "";
   let leadId = body.leadId ? String(body.leadId) : null;
   if (!leadId && !email) return j({ error: "leadId or email required" }, 400, corsHeaders);
 
-  // Resolve the lead by email if needed.
-  if (!leadId && email) {
-    const { data } = await supabase.from("crm_leads").select("id").eq("contact_email", email).limit(1).maybeSingle();
-    leadId = data?.id ?? null;
-  }
-  if (!leadId) return j({ ok: true, note: "no matching lead" }, 200, corsHeaders);
+  // An opt-out is about the ADDRESS, not the lead row, so it is recorded
+  // before the lead lookup: an address that matches no lead today must still
+  // be skipped when it is imported tomorrow. It used to sit after the
+  // "no matching lead" return, so an opt-out from an unmatched address was
+  // dropped (AOS-PROSPECT-009). A failed write throws, the request fails and
+  // the mail provider redelivers, rather than the opt-out being lost quietly.
+  const optOut = OPT_OUT_RE.test(message);
+  if (optOut && email) await recordOutreachOptOut(supabase, email, "opt-out reply");
+
+  // Resolve the lead by email if needed, in any casing: contact_email keeps
+  // the source's casing and this address is lowercased, so the old exact match
+  // missed "Owner@Biz.com" and halted nothing. Every lead with the address is
+  // halted, not just the first.
+  const leadIds = leadId ? [leadId] : email ? await findLeadIdsByEmail(supabase, email) : [];
+  leadId = leadIds[0] ?? null;
+  if (!leadId) return j({ ok: true, note: "no matching lead", optOut }, 200, corsHeaders);
 
   // Halt the sequence.
-  await supabase.from("crm_leads").update({ outreach_stopped: true }).eq("id", leadId);
+  await supabase.from("crm_leads").update({ outreach_stopped: true }).in("id", leadIds);
   // Mark the most recent send as replied.
   const { data: lastSend } = await supabase.from("outreach_sends").select("id").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (lastSend) await supabase.from("outreach_sends").update({ status: "replied", replied_at: new Date().toISOString() }).eq("id", lastSend.id);
-
-  const optOut = OPT_OUT_RE.test(message);
-  if (optOut && email) {
-    await supabase.from("outreach_suppression").insert({ email, reason: "opt-out reply" });
-  }
 
   // Land the escalation in the CRM: log a reply activity on the lead's
   // opportunity (if any), so the pipeline console shows it for the closer.

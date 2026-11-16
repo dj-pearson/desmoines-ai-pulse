@@ -21,7 +21,7 @@ import { useDeals, filterDealsByWhen } from '@/hooks/useDeals';
 import { useNow } from '@/hooks/useNow';
 import { useWeather, reorderForWeather } from '@/hooks/useWeather';
 import { attractionOpenStatus } from '@/lib/attractionHours';
-import { formatOpenStatusLine } from '@/lib/restaurantHours';
+import { formatOpenStatusLine } from '@/lib/restaurantStatus';
 import { attractionHref } from '@/lib/dashboardItems';
 import { formatCount } from '@/lib/pluralize';
 import { isPrerender } from '@/lib/isPrerender';

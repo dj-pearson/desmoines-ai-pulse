@@ -20,8 +20,21 @@
 //
 // The response shape is unchanged apart from one added field (end_date).
 
-import { centralWallClockFromUtc, centralWallClockToUtc } from "../_shared/centralTime.ts";
+import {
+  applyEventVisibility,
+  centralDayEndUtc as dayEndUtc,
+  centralDayStartUtc as dayStartUtc,
+  centralToday,
+  formatCentralDay,
+  parseCentralDay,
+  upcomingOrRunningFilter,
+} from "../_shared/eventWindow.ts";
 import { sanitizePostgrestPattern } from "../_shared/validation.ts";
+
+// The day arithmetic, the or= group and the visibility switches live in
+// _shared/eventWindow.ts (WEB-FEAT-091). index.ts and the suite keep
+// importing them from here.
+export { applyEventVisibility, upcomingOrRunningFilter };
 
 /** The slice of the postgrest-js filter builder these helpers use. */
 export interface EventFilterBuilder<Q> {
@@ -40,59 +53,21 @@ export interface EventListParams {
   end_date?: string;
 }
 
-const YMD = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-function centralMidnightUtc(year: number, month: number, day: number): Date | null {
-  // Round-trip through UTC noon so 2026-02-30 is refused rather than rolled
-  // into March.
-  const probe = new Date(Date.UTC(year, month - 1, day, 12));
-  if (
-    probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 ||
-    probe.getUTCDate() !== day
-  ) {
-    return null;
-  }
-  return centralWallClockToUtc(year, month, day, 0, 0, 0);
-}
-
 /** Central midnight at the start of a YYYY-MM-DD date, as a UTC ISO instant. */
 export function centralDayStartUtc(ymd: string): string | null {
-  const m = YMD.exec(ymd);
-  if (!m) return null;
-  return centralMidnightUtc(Number(m[1]), Number(m[2]), Number(m[3]))?.toISOString() ?? null;
+  const d = parseCentralDay(ymd);
+  return d ? dayStartUtc(d) : null;
 }
 
 /** The last millisecond of a YYYY-MM-DD date in Central time, as a UTC ISO instant. */
 export function centralDayEndUtc(ymd: string): string | null {
-  const m = YMD.exec(ymd);
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (!centralMidnightUtc(y, mo, d)) return null;
-  const next = new Date(Date.UTC(y, mo - 1, d + 1, 12));
-  const nextStart = centralMidnightUtc(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
-  return nextStart ? new Date(nextStart.getTime() - 1).toISOString() : null;
+  const d = parseCentralDay(ymd);
+  return d ? dayEndUtc(d) : null;
 }
 
 /** Today's Central date as YYYY-MM-DD. */
 export function centralTodayYmd(now: Date = new Date()): string {
-  return centralWallClockFromUtc(now).slice(0, 10);
-}
-
-/**
- * The same `or=` group useEvents sends (src/hooks/useEvents.ts
- * upcomingOrRunningFilter): starts at or after `lowerIso`, or a run whose
- * end_date is still at or after it. A row with no end_date matches only on its
- * own date, so a past one-night show stays off.
- */
-export function upcomingOrRunningFilter(lowerIso: string): string {
-  return `date.gte.${lowerIso},end_date.gte.${lowerIso}`;
-}
-
-/** Merged, hidden and archived rows are off the site, so they are off the API. */
-export function applyEventVisibility<Q extends EventFilterBuilder<Q>>(q: Q): Q {
-  return q.neq("is_merged", true).neq("is_hidden", true).is("archived_at", null);
+  return formatCentralDay(centralToday(now));
 }
 
 /**

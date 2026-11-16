@@ -10,7 +10,7 @@ import {
   eventStartInstant,
   EVENING_START_HOUR,
   NIGHT_END_HOUR,
-} from "@/lib/tonightPairings";
+} from "@/lib/tonightTime";
 import {
   addCentralDays,
   centralDateOf,

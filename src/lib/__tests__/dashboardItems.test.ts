@@ -40,7 +40,12 @@ describe("dashboard card hrefs use the row's own slug", () => {
     );
   });
 
-  it("slugs playgrounds from the name, which is what PlaygroundDetails matches", () => {
+  it("links playgrounds by the stored slug, which can differ from the name", () => {
+    // The backfill suffixed the second same-named park; rebuilding from the
+    // name would open the first one.
+    expect(playgroundHref({ id: "p2", name: "Riverview Park", slug: "riverview-park-2" })).toBe(
+      "/playgrounds/riverview-park-2",
+    );
     expect(playgroundHref({ id: "p1", name: "Grays Lake Park Playground" })).toBe(
       "/playgrounds/grays-lake-park-playground",
     );

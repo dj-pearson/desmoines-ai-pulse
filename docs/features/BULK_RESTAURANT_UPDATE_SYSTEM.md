@@ -40,9 +40,9 @@ This system provides bulk restaurant updates using the Google Places (New) API t
 - **Returns**: Progress updates, results, and error handling
 
 ### 4. Admin Component
-- **File**: `src/components/RestaurantBulkUpdater.tsx`
+- **File**: `src/components/RestaurantBulkUpdaterSimple.tsx`, with the opening-hours actions in `src/components/restaurants/RestaurantHoursRefresh.tsx`
 - **Purpose**: User interface for running bulk updates
-- **Location**: Admin panel → Restaurants tab
+- **Location**: Admin content page (`src/pages/AdminContent.tsx`), Restaurants tab
 
 #### UI Features:
 - 📊 **Configuration**: Batch size, force update toggle

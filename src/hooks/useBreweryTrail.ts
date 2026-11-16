@@ -28,33 +28,33 @@ export interface BreweryCheckin {
 }
 
 /**
- * WHY THIS LIST STILL EXISTS (WEB-PERF-035 AC3).
+ * Who is on the trail (WEB-PERF-035 AC3).
  *
- * A trail built from nine hardcoded names is wrong in both directions: a new
- * brewery is invisible until someone edits this file, and a restaurant that
- * happens to contain one of these strings joins the trail. The fix is a column,
- * and supabase/migrations/20260919000007_restaurants_is_brewery.sql adds
- * `restaurants.is_brewery` and backfills it from exactly these two signals.
+ * This used to be nine hardcoded names ORed together as ILIKE patterns on name,
+ * which was wrong in both directions: a new brewery stayed invisible until
+ * someone edited this file, and any restaurant whose name contained one of the
+ * strings joined the trail. supabase/migrations/20260919000007 added
+ * `restaurants.is_brewery` and backfilled it from the name list and the two
+ * cuisine patterns, so the flag already holds every row the list matched.
  *
- * The READER cannot switch in the same release. Cloudflare Pages deploys on
- * push to main while migrations are applied by hand, so a hook filtering on
- * `is_brewery` before that migration lands gets 42703 from PostgREST - which
- * rejects the WHOLE select, blanking the trail rather than degrading it
- * (CLAUDE.md, Backward Compatibility). Switch this to
- * `.eq('is_brewery', true)` in the release AFTER the migration is live, and
- * delete the list then.
+ * The migration is live: production exports taken 2026-10-01 for the SEO-061
+ * and SEO-063 data fixes (scripts/content-backups/seo-061, seo-063) carry
+ * `is_brewery` on every restaurant row, with Exile Brewing Co. flagged true.
+ * Filtering on a column PostgREST did not know would 42703 the whole select,
+ * which is why this waited for that evidence.
+ *
+ * The cuisine patterns stay beside the flag on purpose. Nothing at ingest sets
+ * `is_brewery` (it was backfilled once), so a brewery scraped in after the
+ * backfill is found by its cuisine, as it was before; the flag is for a place
+ * someone curates onto the trail whose cuisine says otherwise.
+ *
+ * Merged duplicates and closed places are not on the trail, and must not count
+ * toward the passport's "N of M" denominator either. status is nullable and
+ * neq('status', 'closed') would also drop the NULL rows, so "not closed" is an
+ * OR that keeps them, nested with the membership test in one `or=` param.
  */
-const BREWERY_NAMES = [
-  'Confluence Brewing',
-  'Exile Brewing',
-  'Peace Tree Brewing',
-  'Firetrucker Brewery',
-  'Brightside Aleworks',
-  '515 Brewing',
-  'Mistress Brewing',
-  'Fox Brewing',
-  'Kinship Brewing',
-];
+export const BREWERY_MEMBERSHIP_FILTER =
+  'and(or(status.is.null,status.neq.closed),or(is_brewery.eq.true,cuisine.ilike.%Brewery%,cuisine.ilike.%Craft Beer%))';
 
 export function useBreweries() {
   return useQuery({
@@ -63,18 +63,8 @@ export function useBreweries() {
       const { data, error } = await supabase
         .from('restaurants')
         .select(BREWERY_TRAIL_COLUMNS)
-        // Merged duplicates and closed places are not on the trail, and must
-        // not count toward the passport's "N of M" denominator either.
-        // status is nullable and neq('status', 'closed') would also drop the
-        // NULL rows, so "not closed" is an OR that keeps them, nested with the
-        // name match in one `or=` param.
         .neq('is_merged', true)
-        .or(
-          `and(or(status.is.null,status.neq.closed),or(${
-            // postgrest-safe: BREWERY_NAMES is a fixed list in this file, no commas or parentheses
-            BREWERY_NAMES.map(n => `name.ilike.%${n}%`).join(',') + ',cuisine.ilike.%Brewery%,cuisine.ilike.%Craft Beer%'
-          }))`,
-        )
+        .or(BREWERY_MEMBERSHIP_FILTER)
         .order('name');
 
       if (error) throw error;

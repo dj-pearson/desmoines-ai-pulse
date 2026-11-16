@@ -71,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.desmoines.aipulse.util.DateNightFilter
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -101,6 +102,7 @@ fun SearchScreen(
     onTabSelected: (SearchTab) -> Unit = {},
     onClearSearch: () -> Unit = {},
     onClearKidsFilter: () -> Unit = {},
+    onClearDateNightFilter: () -> Unit = {},
     onSaveCurrentSearch: () -> Unit = {},
     onRerunSavedSearch: (com.desmoines.aipulse.data.model.SavedSearch) -> Unit = {},
     onToggleSavedSearchAlerts: (com.desmoines.aipulse.data.model.SavedSearch) -> Unit = {},
@@ -141,7 +143,21 @@ fun SearchScreen(
 
         // The /events/kids filter (AND-AUDIT-041), removable on its own.
         if (state.kidsOnly) {
-            KidsFilterChip(onRemove = { haptics.light(); onClearKidsFilter() })
+            LandingFilterChip(
+                label = "Kids & family",
+                spokenName = "Kids and family",
+                icon = Icons.Filled.FamilyRestroom,
+                onRemove = { haptics.light(); onClearKidsFilter() },
+            )
+        }
+        // The /events/date-night filter (AND-AUDIT-046), likewise.
+        state.dateNight?.let { times ->
+            LandingFilterChip(
+                label = DateNightFilter.chipLabel(times),
+                spokenName = DateNightFilter.chipSpokenName(times),
+                icon = Icons.Filled.Nightlife,
+                onRemove = { haptics.light(); onClearDateNightFilter() },
+            )
         }
 
         // Save the active query as a saved search.
@@ -164,7 +180,7 @@ fun SearchScreen(
 
         // Content
         when {
-            state.searchText.isEmpty() && !state.hasSearched && !state.kidsOnly -> {
+            state.searchText.isEmpty() && !state.hasSearched && !state.hasEventFilter -> {
                 val suggestionsViewModel: SearchSuggestionsViewModel = hiltViewModel()
                 val recentSearches by suggestionsViewModel.recentSearches.collectAsStateWithLifecycle()
                 val recentlyViewed by suggestionsViewModel.recentlyViewed.collectAsStateWithLifecycle()
@@ -202,10 +218,10 @@ fun SearchScreen(
                 EmptyStateView(
                     icon = Icons.Outlined.SearchOff,
                     title = "No Results",
-                    message = if (state.kidsOnly) {
-                        "No kids and family events match. Try removing the filter."
-                    } else {
-                        "Try a different search term."
+                    message = when {
+                        state.kidsOnly -> "No kids and family events match. Try removing the filter."
+                        state.dateNight != null -> DateNightFilter.emptyMessage(state.dateNight)
+                        else -> "Try a different search term."
                     },
                     actionTitle = "Clear",
                     onAction = onClearSearch,
@@ -275,18 +291,24 @@ private fun SearchBar(
 
 // endregion
 
-// region Kids Filter
+// region Landing Filter
 
+/** A removable chip for a landing link's filter (/events/kids, /events/date-night). */
 @Composable
-private fun KidsFilterChip(onRemove: () -> Unit) {
+private fun LandingFilterChip(
+    label: String,
+    spokenName: String,
+    icon: ImageVector,
+    onRemove: () -> Unit,
+) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.SpacingMd)) {
         InputChip(
             selected = true,
             onClick = onRemove,
-            label = { Text("Kids & family") },
+            label = { Text(label) },
             leadingIcon = {
                 Icon(
-                    Icons.Filled.FamilyRestroom,
+                    icon,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
@@ -299,7 +321,7 @@ private fun KidsFilterChip(onRemove: () -> Unit) {
                 )
             },
             modifier = Modifier.semantics {
-                contentDescription = "Kids and family filter on. Double tap to remove."
+                contentDescription = "$spokenName filter on. Double tap to remove."
             },
         )
     }

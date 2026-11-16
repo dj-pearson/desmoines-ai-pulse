@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ShareMeta } from "@/components/seo/ShareMeta";
 import { ErrorState } from "@/components/ui/error-state";
 import { Helmet } from 'react-helmet-async';
 import { useItinerary, getDurationLabel, getThemeLabel } from '@/hooks/useItineraries';
@@ -145,13 +146,14 @@ export default function ItineraryDetail() {
           because it should stop existing once data arrives. It belongs in
           both. */}
       <RouteCanonical path={`/itineraries/${slug}`} />
+      <ShareMeta
+        title={itinerary.seo_title || itinerary.title}
+        description={itinerary.seo_description || itinerary.description || ''}
+        path={`/itineraries/${slug}`}
+      />
       <Helmet>
         <title>{itinerary.seo_title || itinerary.title} | Des Moines Insider</title>
         <meta name="description" content={itinerary.seo_description || itinerary.description || ''} />
-        <meta property="og:title" content={itinerary.seo_title || itinerary.title} />
-        <meta property="og:description" content={itinerary.seo_description || itinerary.description || ''} />
-        <meta property="og:url" content={pageUrl} />
-        <meta property="og:type" content="website" />
       </Helmet>
 
       <TouristTripSchema

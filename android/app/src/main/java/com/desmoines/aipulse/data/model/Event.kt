@@ -50,6 +50,12 @@ data class Event(
     @SerialName("time_tbd") val timeTbd: Boolean? = null,
     /** Which ingest path wrote the row, e.g. "seatgeek". */
     val source: String? = null,
+    /**
+     * Set when the archive sweep retired the row (20260823000007). Detail
+     * reads it to show the row as past (EventPastState); list queries filter
+     * archived rows out, so it is null everywhere else.
+     */
+    @SerialName("archived_at") val archivedAt: String? = null,
 ) {
 
     // region Computed Properties

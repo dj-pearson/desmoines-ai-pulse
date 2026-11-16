@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { formatInTimeZone } from 'date-fns-tz';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
-import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
+import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantStatus';
 
 const log = createLogger('useSceneUpdates');
 

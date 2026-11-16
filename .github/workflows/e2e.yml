@@ -97,6 +97,17 @@ jobs:
       - name: Run smoke suite against a production build
         run: npm run test:smoke
 
+      # CLAUDE.md says console.* is stripped from production; this is the only
+      # check that says so, and until WEB-CI-038 nothing ran it.
+      # It needs the hidden sourcemaps to tell app code from dependency code;
+      # the smoke config's plain `vite build` leaves them in dist/. pr-checks
+      # runs it too, after `npm run build`, which moves them to .sourcemaps/
+      # (WEB-CI-039). Without maps, pdf-generator's one dependency
+      # console.error would read as ours.
+      - name: No console call from app code survived the build
+        if: ${{ !cancelled() }}
+        run: npm run check-dist-console
+
       - name: Upload smoke report
         if: always()
         uses: actions/upload-artifact@v4

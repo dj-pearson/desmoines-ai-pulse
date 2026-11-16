@@ -11,11 +11,18 @@ export const meta = {
 // args.trailers commit trailer lines, newline-separated
 // args.base     sha of the rolling branch head; worktrees are created from the
 //               remote default branch, so each agent resets onto this first
+// args.mode     optional. "drain" works the existing backlog only: no new
+//               story is picked up, and findings are logged at most one per lane
 const LANES = args.lanes
 const REPO = args.repo
 const DATE = args.date
 const TRAILERS = args.trailers
 const BASE = args.base
+const DRAIN = args.mode === 'drain'
+
+const stepOne = (lane) => DRAIN
+  ? `1. DRAIN MODE: this round works the existing backlog only. If the lane file has a Handoff, continue it. Otherwise pick the highest-value open story ("passes": false) in prd.json for your lane's prefixes that you can complete or meaningfully advance in this container. For shared prefixes (WEB-FEAT, WEB-BE, XPLAT) only take stories about your lane's topic. A story whose notes say another lane found it ("Found ... by the <lane> lane" or "while shipping" that lane's story) belongs to that lane; leave it. Lanes run in parallel and two lanes taking one story wastes a loop. Skip a story only if it truly needs something this container lacks (production credentials, a deployed function, a store console); if you skip one, say which and why in notes. Do NOT define a new story and do it ("found and done"): story_is_new must be false. If no open story in your lane is workable, commit nothing, return commit_sha "" and list in notes the open stories you ruled out and why. additional_stories: at most ONE, and only for a defect a user would hit (a security hole, data loss, a broken journey), never for cleanup or polish; its id is <PREFIX>-NEW-${lane}.`
+  : null
 
 const SCHEMA = {
   type: 'object',
@@ -44,7 +51,7 @@ Setup, before anything else:
 - If node_modules is missing in your worktree, run: ln -s ${REPO}/node_modules node_modules
 
 Read docs/improvement-loops/README.md (the protocol) and docs/improvement-loops/lanes/${lane}.md, then run exactly one loop:
-1. If the lane file has a Handoff, continue it. Otherwise pick the highest-value open story ("passes": false) in prd.json for your lane's prefixes. For shared prefixes (WEB-FEAT, WEB-BE, XPLAT) only take stories about your lane's topic. A story whose notes say another lane found it ("Found ... by the <lane> lane" or "while shipping" that lane's story) belongs to that lane; leave it. Lanes run in parallel and two lanes taking one story wastes a loop (round 12: events and features both did WEB-FEAT-058). If nothing open fits or is worth it, audit your lane's paths and define the single most valuable gap as a new story. A NEW story's id is the placeholder <PREFIX>-NEW-${lane} (for example WEB-FEAT-NEW-${lane}); use exactly that string in new_story.id, the commit subject, the lane file and any code comment. Other lanes run in parallel, so never pick a number yourself; the orchestrator assigns it and rewrites the placeholder.
+${stepOne(lane) || `1. If the lane file has a Handoff, continue it. Otherwise pick the highest-value open story ("passes": false) in prd.json for your lane's prefixes. For shared prefixes (WEB-FEAT, WEB-BE, XPLAT) only take stories about your lane's topic. A story whose notes say another lane found it ("Found ... by the <lane> lane" or "while shipping" that lane's story) belongs to that lane; leave it. Lanes run in parallel and two lanes taking one story wastes a loop (round 12: events and features both did WEB-FEAT-058). If nothing open fits or is worth it, audit your lane's paths and define the single most valuable gap as a new story. A NEW story's id is the placeholder <PREFIX>-NEW-${lane} (for example WEB-FEAT-NEW-${lane}); use exactly that string in new_story.id, the commit subject, the lane file and any code comment. Other lanes run in parallel, so never pick a number yourself; the orchestrator assigns it and rewrites the placeholder.`}
 2. Size it to one commit (~400 changed lines, one concern). If bigger, do a complete, shippable first slice and describe the rest as handoff.
 3. Implement it, following CLAUDE.md (backward-compatible DB/edge changes, server decides money, safeStorage, handleError, no any). Reproduce bugs first. Do not touch code owned by another lane unless the fix requires it.
 4. Verify with the checks for the area you touched (README "Checks by area"). Run them; report real results. Never skip/disable a test or loosen a baseline. For ios/android, no compiler is available: say "not compiled" plainly.

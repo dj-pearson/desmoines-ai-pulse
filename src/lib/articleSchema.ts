@@ -1,5 +1,6 @@
 import { BRAND } from "@/lib/brandConfig";
 import { WEEKEND_ARTICLE_SLUG_PREFIX } from "@/lib/weekendArticle";
+import { entityNodeId } from "@/lib/schemaNodeIds";
 
 /**
  * Article JSON-LD for /articles/:slug (SEO-037).
@@ -84,6 +85,9 @@ export function buildArticleJsonLd(article: ArticleSchemaInput) {
   return {
     "@context": "https://schema.org",
     "@type": articleSchemaType(article.slug),
+    // Not the bare URL: that is the WebPage in mainEntityOfPage below, and the
+    // edge shell's Article node uses this same id (WEB-SEO-073).
+    "@id": entityNodeId("article", url),
     headline: article.title,
     description: article.excerpt || article.seo_description || "",
     image: article.featured_image_url || `${BRAND.baseUrl}${BRAND.logo}`,

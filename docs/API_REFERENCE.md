@@ -725,12 +725,10 @@ Rate-limited responses return `429 Too Many Requests` with `Retry-After` header.
 - **Response**: Redirect to Google OAuth consent screen
 
 ### oauth-callback
-- **Method**: GET
+- **Status**: Deprecated, inert (WEB-SEC-078). No caller; kept by name so a stale one is logged, not 404'd.
+- **Method**: any
 - **Auth**: None
-- **Rate Limit**: Default
-- **Description**: Handles OAuth callback from Google after authorization.
-- **Request**: Query params from Google: `?code=<code>&state=<state>`
-- **Response**: Redirect back to admin panel with token stored
+- **Response**: `410 { "error": "deprecated", "use": "gsc-oauth" }`. It no longer exchanges a code or reads `oauth_providers`.
 
 ### gsc-fetch-properties
 - **Method**: POST

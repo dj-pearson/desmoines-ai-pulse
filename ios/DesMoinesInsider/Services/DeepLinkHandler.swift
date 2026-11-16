@@ -6,8 +6,8 @@ import os
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id-or-slug` → Event detail
 /// - `desmoinesinsider.com/events/near-me` → Map tab; `/events/date-night`
-///   → the web page; `/events/<month>-<year>` → Search on Events for that
-///   month, or the web page once the month is over
+///   → Search on Events with the date night filter; `/events/<month>-<year>`
+///   → Search on Events for that month, or the web page once the month is over
 /// - `desmoinesinsider.com/events/series/:slug` → that annual-event series
 ///   natively, or on the web for a slug the app does not know
 /// - `desmoinesinsider.com/search?q=` → Search tab with the query
@@ -27,6 +27,8 @@ import os
 ///   Best Of hub for a malformed slug
 /// - `desmoinesinsider.com/map?layers=` → the Map tab showing the kinds the
 ///   link names, or the web map when it names playgrounds or trails
+/// - `desmoinesinsider.com/pricing`, `/subscription`, `/subscription/success`
+///   → the native plans screen, never the web's Stripe checkout
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
 /// - `com.desmoines.aipulse://auth-callback` → Auth callback (handled by Supabase)
@@ -70,6 +72,11 @@ final class DeepLinkHandler {
         /// or the web hub's /events?preset=this-weekend&price=free
         /// (IOS-AUDIT-FEAT-041). Never both empty.
         case eventSearch(query: String, filters: SearchFilters)
+        /// The web's Stripe subscription pages (`billingPaths`), shown as
+        /// the native plans screen (IOS-AUDIT-010). A push `url` or an
+        /// article link to /pricing used to open Stripe Checkout for Insider
+        /// and VIP in SafariView inside the app, which Guideline 3.1.1 rejects.
+        case plans
         /// A first-party page with no native screen, shown in SafariView so a
         /// claimed link never opens the app to nothing (IOS-DD-PLATFORM-02).
         /// Only ever a URL that passed isFirstPartyWebURL.
@@ -348,7 +355,7 @@ final class DeepLinkHandler {
     ///
     /// Every web landing page has a case here (IOS-AUDIT-002). /events/near-me
     /// opens the Map tab, the app's nearby-events surface. /events/date-night
-    /// has no native screen, so it opens on the web. The monthly archive is
+    /// is `dateNightDestination`. The monthly archive is
     /// `monthDestination`. All three used to open Home, which shows neither
     /// what is near nor that month. Only bare "series" still lands on Home;
     /// src/lib/__tests__/iosEventLinkParity.test.ts fails when a landing
@@ -362,7 +369,7 @@ final class DeepLinkHandler {
         case "west-des-moines", "ankeny", "urbandale", "johnston", "altoona", "clive", "windsor-heights", "waukee":
             return .search(query: "events in " + raw.replacingOccurrences(of: "-", with: " "))
         case "near-me": return .tab(.map)
-        case "date-night": return .web(url)
+        case "date-night": return dateNightDestination(url: url)
         default: break
         }
         if EventSlug.isMonthPage(raw) { return monthDestination(raw, url: url, now: now) }
@@ -379,6 +386,18 @@ final class DeepLinkHandler {
     static var kidsDestination: Destination {
         var filters = SearchFilters(tabHint: .events)
         filters.kidsOnly = true
+        return .eventSearch(query: "", filters: filters)
+    }
+
+    /// /events/date-night opens Search on Events with the web page's rule
+    /// (IOS-AUDIT-008, DATE_NIGHT_FILTER over the next two weeks, evening
+    /// starts unless the link says `?time=all`). It opened the web page in a
+    /// sheet, outside the app's own event rows, saves and calendar actions.
+    static func dateNightDestination(url: URL) -> Destination {
+        let time = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "time" })?.value
+        var filters = SearchFilters(tabHint: .events)
+        filters.dateNight = time == "all" ? DateNightTimes.anyTime : DateNightTimes.evening
         return .eventSearch(query: "", filters: filters)
     }
 
@@ -468,10 +487,30 @@ final class DeepLinkHandler {
     /// the layers the link names. It used to open the web map in a sheet over
     /// the app's own Map tab. A link naming playgrounds or trails, which the
     /// native map has no pins for, still opens on the web.
+    ///
+    /// The web map writes its time chip to the URL as `when` (Now, Tonight,
+    /// This weekend, Any time), so a map someone copies and shares carries it.
+    /// It sets the Map tab's chip (IOS-AUDIT-009); it was dropped, and the
+    /// person sent tonight's map saw whatever chip they last used. An absent
+    /// or unknown `when` leaves the chip alone. `sel` and `bbox` are still
+    /// ignored.
+    /// Web pages that sell or manage a Stripe subscription, as their path
+    /// with no leading slash: /pricing calls create-subscription-checkout,
+    /// /subscription opens the Stripe billing portal, /subscription/success
+    /// is where Stripe Checkout returns (it says "Billed through Stripe").
+    /// None of them may open in the app's own browser, so they open the
+    /// native plans screen instead (IOS-AUDIT-010). The AASA does not
+    /// claim them: an iPhone owner with a web plan tapping "manage your
+    /// subscription" in an email still reaches the Stripe portal in Safari.
+    /// src/lib/__tests__/iosBillingLinkParity.test.ts fails when a web page
+    /// that starts a Stripe checkout or opens the portal is missing here.
+    static let billingPaths: Set<String> = ["pricing", "subscription", "subscription/success"]
+
     static func mapDestination(_ url: URL) -> Destination {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let value = items.first { $0.name == "layers" }?.value
-        guard let layers = MapLinkLayers(webValue: value) else { return .web(url) }
+        guard var layers = MapLinkLayers(webValue: value) else { return .web(url) }
+        layers.when = MapTimeChip(webWhen: items.first { $0.name == "when" }?.value)
         return .map(layers)
     }
 
@@ -479,6 +518,10 @@ final class DeepLinkHandler {
         guard Self.isFirstPartyWebURL(url) else { return nil }
 
         let path = url.pathComponents.filter { $0 != "/" }
+
+        // Stripe billing pages open the native plans screen, whatever their
+        // query (/pricing?canceled=true, /subscription?plan_change=scheduled).
+        if Self.billingPaths.contains(path.joined(separator: "/")) { return .plans }
 
         // /search, /search?q=, /search/advanced (IOS-DD-PLATFORM-02).
         if path.first == "search" {
@@ -617,6 +660,9 @@ struct MapLinkLayers: Equatable {
     var events = true
     var restaurants = true
     var attractions = true
+    /// The time chip the link's `when` names, nil to keep the current one
+    /// (IOS-AUDIT-009).
+    var when: MapTimeChip?
 
     /// The web's layer keys the native map has pins for, which are also the
     /// web's DEFAULT_LAYERS.
@@ -624,10 +670,11 @@ struct MapLinkLayers: Equatable {
     /// The web's layer keys the native map does not draw.
     static let webOnlyKeys: [String] = ["playground", "trail"]
 
-    init(events: Bool = true, restaurants: Bool = true, attractions: Bool = true) {
+    init(events: Bool = true, restaurants: Bool = true, attractions: Bool = true, when: MapTimeChip? = nil) {
         self.events = events
         self.restaurants = restaurants
         self.attractions = attractions
+        self.when = when
     }
 
     /// Nil when the link names a layer only the web draws, so the person sent

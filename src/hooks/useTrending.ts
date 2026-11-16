@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
-import { NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
+import { NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantStatus';
 import {
   EVENT_LIST_COLUMNS,
   RESTAURANT_LIST_COLUMNS,

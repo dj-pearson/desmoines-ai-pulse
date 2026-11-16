@@ -78,7 +78,7 @@ struct SponsoredPickCard: View {
     @ViewBuilder
     private var thumbnail: some View {
         if let imageUrl = pick.imageUrl, !imageUrl.isEmpty {
-            CachedAsyncImage(url: imageUrl) {
+            CachedAsyncImage(url: imageUrl, blurUp: false) {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(.systemGray6))
             }

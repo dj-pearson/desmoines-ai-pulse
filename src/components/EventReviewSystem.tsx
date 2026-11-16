@@ -60,13 +60,19 @@ export default function EventReviewSystem() {
     if (!selectedEvent) return;
 
     try {
-      await reviewEvent.mutateAsync({
+      const { notified } = await reviewEvent.mutateAsync({
         id: selectedEvent.id,
         status,
         admin_notes: adminNotes.trim() || undefined,
       });
 
-      toast.success(`Event ${status} successfully!`);
+      if (notified) {
+        toast.success(`Event ${status} successfully!`);
+      } else {
+        // The decision committed; only the email failed. Say so, or the admin
+        // assumes the organizer was told.
+        toast.warning(`Event ${status}, but the organizer's email could not be sent`);
+      }
       setSelectedEvent(null);
       setAdminNotes("");
       setReviewAction(null);

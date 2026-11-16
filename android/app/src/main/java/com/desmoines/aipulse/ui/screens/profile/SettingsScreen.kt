@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
@@ -101,8 +102,11 @@ fun SettingsScreen(
     emailConsent: Boolean = true,
     emailConsentError: String? = null,
     analyticsConsent: Boolean = false,
+    personalization: Boolean = false,
+    personalizationError: String? = null,
     onToggleLocationConsent: (Boolean) -> Unit = {},
     onToggleEmailConsent: (Boolean) -> Unit = {},
+    onTogglePersonalization: (Boolean) -> Unit = {},
     onToggleAnalyticsConsent: (Boolean) -> Unit = {},
     // Navigation
     onNavigateBack: () -> Unit = {},
@@ -265,6 +269,28 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp),
                 )
+            }
+
+            // XPLAT-016. The account's "Personalized suggestions" switch, the
+            // same one as on the web. It lives on the profile, so signed out
+            // there is nothing to change and the row is not shown.
+            if (isAuthenticated) {
+                SettingsToggleRow(
+                    icon = Icons.Default.AutoAwesome,
+                    title = "Personalized Suggestions",
+                    subtitle = "Rank For You from the events you swipe and save",
+                    checked = personalization,
+                    onCheckedChange = onTogglePersonalization,
+                )
+
+                if (personalizationError != null) {
+                    Text(
+                        text = personalizationError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp),
+                    )
+                }
             }
 
             SettingsToggleRow(

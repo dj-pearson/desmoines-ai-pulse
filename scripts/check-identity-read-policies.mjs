@@ -45,6 +45,14 @@
  * parts[1]). Any other EXECUTE format(...) touching a policy is reported as
  * unreadable and FAILS the check, so the blind spot cannot reopen quietly.
  *
+ * COLUMN PRIVILEGES (WEB-SEC-075). A row policy cannot hide one column, so a
+ * table whose rows must stay public (ad_rate_card, quoted to advertisers) hides
+ * its identity column by taking anon's table-level SELECT and granting SELECT
+ * back on the other columns. anonColumnGrants() replays GRANT/REVOKE for anon;
+ * a table counts as exposed only while anon can still read one of its identity
+ * columns. A column-level REVOKE while anon holds the table grant changes
+ * nothing, in Postgres and here.
+ *
  *   node scripts/check-identity-read-policies.mjs           # check
  *   node scripts/check-identity-read-policies.mjs --write   # re-baseline
  */
@@ -236,10 +244,15 @@ export function expandDynamicPolicies(sql) {
  *
  * @param {{ file: string, sql: string }[]} migrations  sorted chronologically
  * @param {Set<string>} withIdentity  tables carrying an identity column
+ * @param {Map<string, Set<string>>} [identityColumns]  table -> its identity
+ *   columns. Without it a column-restricted table still counts as exposed
+ *   unless anon can read none of its columns, since the check cannot tell
+ *   which columns name a person.
  */
-export function computeExposure(migrations, withIdentity) {
+export function computeExposure(migrations, withIdentity, identityColumns) {
   const current = new Map();
   const unreadable = [];
+  const anonCols = anonColumnGrants(migrations);
   for (const { file, sql } of migrations) {
     const dyn = expandDynamicPolicies(sql);
     for (const u of dyn.unreadable) unreadable.push(`${file}: ${u}`);
@@ -265,10 +278,84 @@ export function computeExposure(migrations, withIdentity) {
     if (!PUBLIC_ROLE.test(p.roles)) continue;
     if (p.using !== 'true') continue;
     if (!withIdentity.has(p.table)) continue;
+    const readable = anonCols.get(p.table);
+    if (readable) {
+      const cols = identityColumns?.get(p.table);
+      if (readable.size === 0) continue;
+      if (cols && cols.size > 0 && ![...cols].some((c) => readable.has(c))) continue;
+    }
     exposed.add(p.table);
     detail.push(`${p.table}  "${p.name}"  (${p.file})`);
   }
   return { current, exposed, detail, unreadable };
+}
+
+/**
+ * What anon may SELECT, per table, after replaying the migrations' GRANT and
+ * REVOKE statements in order (WEB-SEC-075). A table missing from the map has
+ * Supabase's default table-level grant. A table present maps to the columns
+ * anon was granted after its table-level SELECT was revoked (an empty set:
+ * nothing). Only statements naming anon count; PUBLIC is not anon's grant in
+ * Supabase, which grants anon directly.
+ *
+ *   REVOKE SELECT|ALL ON t FROM anon          -> t: {}
+ *   GRANT SELECT (a, b) ON t TO anon          -> adds a, b while t is restricted
+ *   REVOKE SELECT (a) ON t FROM anon          -> removes a while t is restricted;
+ *                                                no effect under a table grant
+ *   GRANT SELECT|ALL ON t TO anon             -> t back to the table grant
+ *   GRANT ... ON ALL TABLES IN SCHEMA public  -> every table back to it
+ *   DROP TABLE t                              -> t back to the default
+ *
+ * @param {{ file: string, sql: string }[]} migrations  sorted chronologically
+ * @returns {Map<string, Set<string>>}
+ */
+export function anonColumnGrants(migrations) {
+  const state = new Map();
+  const norm = (t) => t.trim().replace(/"/g, '').replace(/^public\./i, '').toLowerCase();
+  const NOT_TABLE =
+    /^(FUNCTIONS?|ROUTINES?|PROCEDURES?|SEQUENCES?|SCHEMA|TYPE|DOMAIN|LANGUAGE|LARGE|FOREIGN|DATABASE|TABLESPACE|PARAMETER|ALL\s+(FUNCTIONS|SEQUENCES|ROUTINES|PROCEDURES))\b/i;
+  const stmt = /\b(GRANT|REVOKE)\s+([^;]*?)\s+ON\s+([^;]*?)\s+(TO|FROM)\s+([^;]+);/gi;
+  for (const { sql: raw } of migrations) {
+    const sql = stripLineComments(raw);
+    const events = [];
+    for (const m of sql.matchAll(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:"?public"?\.)?"?[A-Za-z0-9_]+"?)/gi)) {
+      events.push({ at: m.index, drop: norm(m[1]) });
+    }
+    for (const m of sql.matchAll(stmt)) events.push({ at: m.index, m });
+    events.sort((a, b) => a.at - b.at);
+
+    for (const e of events) {
+      if (e.drop) {
+        state.delete(e.drop);
+        continue;
+      }
+      const [, verb, privs, rawTarget, , roles] = e.m;
+      const target = rawTarget.trim();
+      if (!/\banon\b/i.test(roles) || NOT_TABLE.test(target)) continue;
+      const colPriv = privs.match(/\bSELECT\s*\(([^)]*)\)/i);
+      const tablePriv = /\bSELECT\b(?!\s*\()/i.test(privs) || /^\s*ALL\b/i.test(privs);
+      const isGrant = verb.toUpperCase() === 'GRANT';
+      if (/^ALL\s+TABLES\s+IN\s+SCHEMA\b/i.test(target)) {
+        if (isGrant && tablePriv) state.clear();
+        continue;
+      }
+      const tables = target.replace(/^TABLE\s+/i, '').split(',').map(norm).filter(Boolean);
+      const cols = colPriv
+        ? colPriv[1].split(',').map((c) => c.trim().replace(/"/g, '').toLowerCase()).filter(Boolean)
+        : [];
+      for (const t of tables) {
+        if (isGrant) {
+          if (tablePriv) state.delete(t);
+          else if (cols.length && state.has(t)) for (const c of cols) state.get(t).add(c);
+        } else if (tablePriv) {
+          state.set(t, new Set());
+        } else if (cols.length && state.has(t)) {
+          for (const c of cols) state.get(t).delete(c);
+        }
+      }
+    }
+  }
+  return state;
 }
 
 /** SQL with `-- ...` comments blanked, so a commented-out DROP TABLE is not read. */
@@ -312,6 +399,17 @@ const isIdentityDef = (name, def) => IDENTITY_COLUMNS.test(name) || PERSON_FK.te
  * @returns {Set<string>}
  */
 export function migrationIdentityTables(migrations) {
+  return new Set(migrationIdentityColumns(migrations).keys());
+}
+
+/**
+ * The same replay as migrationIdentityTables, keeping the columns: table ->
+ * its identity columns (only tables with at least one).
+ *
+ * @param {{ file: string, sql: string }[]} migrations  sorted chronologically
+ * @returns {Map<string, Set<string>>}
+ */
+export function migrationIdentityColumns(migrations) {
   const tables = new Map(); // table -> Set of identity columns
   const TABLE = '((?:"?public"?\\.)?"?[A-Za-z0-9_]+"?)';
   const norm = (t) => t.replace(/"/g, '').replace(/^public\./, '').toLowerCase();
@@ -365,14 +463,14 @@ export function migrationIdentityTables(migrations) {
       }
     }
   }
-  return new Set([...tables].filter(([, cols]) => cols.size > 0).map(([t]) => t));
+  return new Map([...tables].filter(([, cols]) => cols.size > 0));
 }
 
-/** Tables that carry an identity column, read from the generated types. */
+/** Tables that carry an identity column, read from the generated types: table -> columns. */
 function identityTables() {
   if (!existsSync(TYPES)) return null;
   const src = readFileSync(TYPES, 'utf8');
-  const tables = new Set();
+  const tables = new Map();
   // Each table block starts `      <name>: {` and its Row block lists columns.
   const re = /^ {6}([a-z0-9_]+): \{\n {8}Row: \{\n([\s\S]*?)\n {8}\}/gm;
   let m;
@@ -381,8 +479,8 @@ function identityTables() {
     for (const line of rowBody.split('\n')) {
       const col = line.trim().split(':')[0];
       if (IDENTITY_COLUMNS.test(col)) {
-        tables.add(table);
-        break;
+        if (!tables.has(table)) tables.set(table, new Set());
+        tables.get(table).add(col);
       }
     }
   }
@@ -403,7 +501,7 @@ function main() {
   const migrations = files.map((file) => ({ file, sql: readFileSync(join(MIGRATIONS, file), 'utf8') }));
 
   const fromTypes = identityTables();
-  const fromMigrations = migrationIdentityTables(migrations);
+  const fromMigrations = migrationIdentityColumns(migrations);
   // Either source parsing to nothing means that parse broke; the union would
   // hide it, so each is checked on its own.
   for (const [what, set] of [['the generated types', fromTypes], ['the migrations', fromMigrations]]) {
@@ -415,9 +513,16 @@ function main() {
       process.exit(1);
     }
   }
-  const withIdentity = new Set([...fromTypes, ...fromMigrations]);
+  const identityColumns = new Map();
+  for (const source of [fromTypes, fromMigrations]) {
+    for (const [table, cols] of source) {
+      if (!identityColumns.has(table)) identityColumns.set(table, new Set());
+      for (const c of cols) identityColumns.get(table).add(c);
+    }
+  }
+  const withIdentity = new Set(identityColumns.keys());
 
-  const { current, exposed, detail, unreadable } = computeExposure(migrations, withIdentity);
+  const { current, exposed, detail, unreadable } = computeExposure(migrations, withIdentity, identityColumns);
 
   if (current.size === 0) {
     console.error('[identity-read] parsed no policies at all - refusing to pass on that.');

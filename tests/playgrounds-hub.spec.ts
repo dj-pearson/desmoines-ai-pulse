@@ -240,6 +240,10 @@ test.describe('/playgrounds hub (explore WP4)', () => {
 
     await options.filter({ hasText: 'Ankeny (1)' }).click();
     await expect(page).toHaveURL(/location=Ankeny/);
+    // The URL changes before the list re-queries: navigation renders in a
+    // transition (router v7_startTransition, WEB-QUAL-017), so wait for the
+    // request as the amenity test below does rather than reading it at once.
+    await expect.poll(() => listRequests(seen).at(-1) ?? '').toContain('location.ilike."%, Ankeny,%"');
     const last = listRequests(seen).at(-1) ?? '';
     // A comma segment, not location=ilike.%Ankeny%.
     expect(last).not.toContain('location=ilike.%Ankeny%');

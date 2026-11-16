@@ -38,6 +38,7 @@ const PLACEMENTS: Array<[file: string, pattern: RegExp]> = [
   ["src/pages/ArticleDetails.tsx", /<NewsletterSignup[^>]*source="article"/],
   ["src/pages/VisitorsGuide.tsx", /<NewsletterSignup[^>]*source="visitors_guide"/],
   ["src/pages/NewsletterConfirm.tsx", /<NewsletterSignup[^>]*source="confirm_page"/],
+  ["src/pages/Unsubscribe.tsx", /<NewsletterSignup[^>]*source="unsubscribe_page"/],
   ["src/components/Footer.tsx", /subscribe\(\{[^}]*source: "footer"/],
 ];
 

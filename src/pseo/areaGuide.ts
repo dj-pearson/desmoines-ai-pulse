@@ -20,7 +20,7 @@ import {
   type LatLng,
   type NeighborhoodBoundary,
 } from '../lib/neighborhoodBoundaries';
-import { isVisitableStatus } from '../lib/restaurantHours';
+import { isServingToday } from '../lib/restaurantStatus';
 import { upcomingOrRunningFilter } from '../lib/eventRunningFilter';
 import { upcomingFloorUtc } from '../lib/timezone';
 
@@ -104,6 +104,8 @@ export interface AreaPlaceRow {
   price_range: string | null;
   rating: number | null;
   status: string | null;
+  /** Google's OPERATIONAL / CLOSED_TEMPORARILY / CLOSED_PERMANENTLY (WEB-BE-045). */
+  business_status?: string | null;
   latitude: number | null;
   longitude: number | null;
 }
@@ -126,8 +128,8 @@ function placeKey(row: AreaPlaceRow): string {
 }
 
 /**
- * Rows arrive highest-rated first. Drops places that are closed or not open
- * yet, collapses duplicates, then splits bars from restaurants.
+ * Rows arrive highest-rated first. Drops places that are closed (our status
+ * or Google's, for now or for good) or not open yet, collapses duplicates, then splits bars from restaurants.
  */
 export function splitAreaPlaces(rows: readonly AreaPlaceRow[]): {
   restaurants: AreaPlaceRow[];
@@ -137,7 +139,7 @@ export function splitAreaPlaces(rows: readonly AreaPlaceRow[]): {
   const seen = new Set<string>();
   const unique: AreaPlaceRow[] = [];
   for (const row of rows) {
-    if (!isVisitableStatus(row.status)) continue;
+    if (!isServingToday(row)) continue;
     const key = placeKey(row);
     if (seen.has(key)) continue;
     seen.add(key);

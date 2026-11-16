@@ -1052,3 +1052,20 @@ All colors MUST be HSL. Touch targets minimum 44px.
   word-spacing: inherit;
   line-height: inherit;
 }
+
+/*
+ * Clamped text breaks a long token instead of clipping it (WEB-UX-078).
+ * A clamp sets overflow:hidden, so a scraped title with no spaces
+ * ("WinterlightsFestivalAtTheDesMoinesBotanicalGarden...") ran past the card
+ * edge and was cut mid-letter with no ellipsis: on /events at 375px the title
+ * box was 311px wide and its text 580px. overflow-wrap:anywhere lets the
+ * token wrap onto the next line, and past the last clamped line the ellipsis
+ * shows as it does for ordinary text. It also lowers the element's min-content
+ * width, so a clamped title in a flex row no longer props the row open.
+ * Outside @layer on purpose: an attribute selector carries no class name for
+ * Tailwind to find, and this covers responsive variants (sm:line-clamp-2) and
+ * Tailwind's own line-clamp-N alike.
+ */
+[class*="line-clamp-"] {
+  overflow-wrap: anywhere;
+}

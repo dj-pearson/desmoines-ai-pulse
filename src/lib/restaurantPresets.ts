@@ -1,4 +1,4 @@
-import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import type { RestaurantFilterOptions } from "@/lib/restaurantFilterOptions";
 import { DIETS } from "@/lib/restaurantDiets";
 
 /**
@@ -28,7 +28,6 @@ export const DEFAULT_RESTAURANT_FILTERS: RestaurantFilterOptions = {
   location: [],
   sortBy: "popularity",
   featuredOnly: false,
-  openNow: false,
   tags: [],
 };
 
@@ -40,8 +39,8 @@ export interface RestaurantPreset {
   description: string;
   icon: RestaurantPresetIcon;
   /**
-   * Only fields the query actually models. No `openNow` (nothing reads it
-   * server-side yet, plan D2) and no non-dietary `tags` (the hook drops them),
+   * Only fields the query actually models. No open-now (the type has no such
+   * field since WEB-FEAT-082; /restaurants/open-now is the real one) and no non-dietary `tags` (the hook drops them),
    * which is why Quick Lunch and Late Night are gone and Date Night / Family
    * Friendly lost their tag.
    */
@@ -139,8 +138,7 @@ export function sameRestaurantFilters(
     a.rating[0] === b.rating[0] &&
     a.rating[1] === b.rating[1] &&
     a.sortBy === b.sortBy &&
-    a.featuredOnly === b.featuredOnly &&
-    a.openNow === b.openNow
+    a.featuredOnly === b.featuredOnly
   );
 }
 

@@ -1357,6 +1357,7 @@ export type Database = {
           seo_h1: string | null
           seo_keywords: string[] | null
           seo_title: string | null
+          slug: string | null
           sponsored_until: string | null
           type: string
           updated_at: string | null
@@ -1396,6 +1397,7 @@ export type Database = {
           seo_h1?: string | null
           seo_keywords?: string[] | null
           seo_title?: string | null
+          slug?: string | null
           sponsored_until?: string | null
           type: string
           updated_at?: string | null
@@ -1435,6 +1437,7 @@ export type Database = {
           seo_h1?: string | null
           seo_keywords?: string[] | null
           seo_title?: string | null
+          slug?: string | null
           sponsored_until?: string | null
           type?: string
           updated_at?: string | null
@@ -6916,6 +6919,7 @@ export type Database = {
           manually_curated: boolean
           name: string
           rating: number | null
+          slug: string | null
           source: string
           surface_type: string | null
           updated_at: string | null
@@ -6938,6 +6942,7 @@ export type Database = {
           manually_curated?: boolean
           name: string
           rating?: number | null
+          slug?: string | null
           source?: string
           surface_type?: string | null
           updated_at?: string | null
@@ -6960,6 +6965,7 @@ export type Database = {
           manually_curated?: boolean
           name?: string
           rating?: number | null
+          slug?: string | null
           source?: string
           surface_type?: string | null
           updated_at?: string | null

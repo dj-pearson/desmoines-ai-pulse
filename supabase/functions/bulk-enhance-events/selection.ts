@@ -14,11 +14,17 @@
  * the backlog in the order it matters and keeps up with new events after.
  *
  * WHY THE DATE FILTER. A writeup for an event that has already happened is money
- * spent on a page nobody will visit to plan anything.
+ * spent on a page nobody will visit to plan anything. A run that is still going
+ * (the State Fair on day three) is not over, so it stays in: the floor used to be
+ * `date >= now` alone, which never wrote up a festival that opened before the
+ * cron reached it (WEB-FEAT-096). Hidden, archived and merged-away rows are off
+ * the site, so they are not paid for either.
  */
 
+import { applyEventVisibility, upcomingOrRunningFilter } from '../_shared/eventWindow.ts';
+
 export const EVENT_WRITEUP_COLUMNS =
-  'id, title, original_description, enhanced_description, location, venue, category, date, source_url';
+  'id, title, original_description, enhanced_description, location, venue, category, date, end_date, source_url';
 
 export const DEFAULT_WRITEUP_BATCH = 10;
 export const MAX_WRITEUP_BATCH = 20;
@@ -35,6 +41,7 @@ export interface WriteupCandidate {
   venue?: string | null;
   category?: string | null;
   date: string;
+  end_date?: string | null;
   source_url?: string | null;
 }
 
@@ -44,16 +51,16 @@ export function clampWriteupBatch(raw: unknown): number {
   return Math.min(n, MAX_WRITEUP_BATCH);
 }
 
-/** Upcoming events with no writeup, soonest first. */
+/** Visible upcoming or running events with no writeup, soonest first. */
 export async function selectEventsNeedingWriteup(
   db: Db,
   batchSize: number,
   now: Date = new Date(),
 ): Promise<WriteupCandidate[]> {
-  const { data, error } = await db
-    .from('events')
-    .select(EVENT_WRITEUP_COLUMNS)
-    .gte('date', now.toISOString())
+  const { data, error } = await applyEventVisibility(
+    db.from('events').select(EVENT_WRITEUP_COLUMNS),
+  )
+    .or(upcomingOrRunningFilter(now.toISOString()))
     .is('ai_writeup', null)
     .order('date', { ascending: true })
     .limit(batchSize);

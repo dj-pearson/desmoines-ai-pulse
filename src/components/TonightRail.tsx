@@ -12,8 +12,8 @@ import {
   formatMiles,
   formatTonightDate,
   truncateName,
-  type TonightPairing,
-} from "@/lib/tonightPairings";
+} from "@/lib/tonightTime";
+import type { TonightPairing } from "@/lib/tonightPairings";
 import { cn } from "@/lib/utils";
 
 /**

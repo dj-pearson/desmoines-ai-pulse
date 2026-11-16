@@ -78,7 +78,7 @@ describe.each(pages)("%s error states (WEB-ADS-024)", (name, Page, url, action, 
     rpc.mockResolvedValue({ data: [{ success: true }], error: null });
     renderAt(Page, url);
 
-    expect(await screen.findByText(/confirmed|unsubscribed/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/confirmed|unsubscribed/i)).length).toBeGreaterThan(0);
     expect(handleError).not.toHaveBeenCalled();
   });
 });

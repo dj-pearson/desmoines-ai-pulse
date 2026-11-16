@@ -3,7 +3,14 @@
  * against a fixed clock: 2026-09-24 17:00 CDT.
  */
 import { describe, it, expect } from "vitest";
-import { clockLabelMinutes, pickTonightNear, tonightHeading, WALKABLE_MILES } from "../useTonightNearRestaurant";
+import {
+  clockLabelMinutes,
+  pickTonightNear,
+  runningUntil,
+  runsUntilLabel,
+  tonightHeading,
+  WALKABLE_MILES,
+} from "../useTonightNearRestaurant";
 import type { TonightEvent } from "@/lib/tonightPairings";
 
 const NOW = new Date("2026-09-24T22:00:00Z");
@@ -67,6 +74,69 @@ describe("pickTonightNear", () => {
       ev(`e${i}`, `2026-09-25T0${i}:00:00Z`, 0.1),
     );
     expect(pickTonightNear(rows, ORIGIN, NOW, 3)).toHaveLength(3);
+  });
+});
+
+describe("pickTonightNear with runs already on (WEB-FEAT-080)", () => {
+  // Opened yesterday 10 AM CT, ends at midnight starting Monday Sep 28.
+  const festival = ev("fest", "2026-09-23T15:00:00Z", 0.3, { end_date: "2026-09-28T05:00:00Z" });
+
+  it("keeps a run that opened before today and is still on", () => {
+    const picked = pickTonightNear([festival], ORIGIN, NOW);
+    expect(picked.map((p) => p.event.id)).toEqual(["fest"]);
+    expect(picked[0].startsAt).toBeNull();
+    expect(picked[0].runsUntil?.toISOString()).toBe("2026-09-28T05:00:00.000Z");
+  });
+
+  it("ranks timed starts first, then runs nearest first, then no-time events", () => {
+    const rows = [
+      ev("notime", "2026-09-24T05:00:00Z", 0.2, { time_tbd: true }),
+      ev("far-run", "2026-09-20T15:00:00Z", 1.2, { end_date: "2026-09-30T05:00:00Z" }),
+      festival,
+      ev("show", "2026-09-25T00:30:00Z", 0.9),
+      // Opened at 10 AM today, closes 9 PM tonight: started, still on.
+      ev("today-run", "2026-09-24T15:00:00Z", 0.6, { end_date: "2026-09-25T02:00:00Z" }),
+    ];
+    expect(pickTonightNear(rows, ORIGIN, NOW).map((p) => p.event.id)).toEqual([
+      "show",
+      "fest",
+      "today-run",
+      "far-run",
+    ]);
+    expect(pickTonightNear(rows, ORIGIN, NOW, 10).map((p) => p.event.id).at(-1)).toBe("notime");
+  });
+
+  it("drops a run that has ended, one outside the radius, and a started show with no end", () => {
+    const rows = [
+      ev("ended", "2026-09-20T15:00:00Z", 0.2, { end_date: "2026-09-24T21:00:00Z" }), // 4 PM CT today
+      ev("far", "2026-09-20T15:00:00Z", 3, { end_date: "2026-09-30T05:00:00Z" }),
+      ev("begun", "2026-09-24T20:00:00Z", 0.2), // 3 PM CT, no end_date
+    ];
+    expect(pickTonightNear(rows, ORIGIN, NOW)).toEqual([]);
+  });
+
+  it("lists a row once even when both reads return it", () => {
+    expect(pickTonightNear([festival, festival], ORIGIN, NOW)).toHaveLength(1);
+  });
+});
+
+describe("runningUntil", () => {
+  it("is null before the start, after the end and without an end", () => {
+    expect(runningUntil(ev("a", "2026-09-25T00:00:00Z", 0, { end_date: "2026-09-26T00:00:00Z" }), NOW)).toBeNull();
+    expect(runningUntil(ev("b", "2026-09-20T00:00:00Z", 0, { end_date: "2026-09-24T21:59:00Z" }), NOW)).toBeNull();
+    expect(runningUntil(ev("c", "2026-09-20T00:00:00Z", 0), NOW)).toBeNull();
+  });
+});
+
+describe("runsUntilLabel", () => {
+  it("names the last day, reading a midnight end as the day before", () => {
+    expect(runsUntilLabel(new Date("2026-09-28T05:00:00Z"), NOW)).toBe("On through Sun, Sep 27");
+    expect(runsUntilLabel(new Date("2026-09-27T23:00:00Z"), NOW)).toBe("On through Sun, Sep 27");
+  });
+
+  it("gives the closing time when the run ends today", () => {
+    expect(runsUntilLabel(new Date("2026-09-25T02:00:00Z"), NOW)).toBe("On until 9:00 PM CT");
+    expect(runsUntilLabel(new Date("2026-09-25T05:00:00Z"), NOW)).toBe("On until midnight");
   });
 });
 

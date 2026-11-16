@@ -180,6 +180,10 @@ jobs:
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.
       - run: deno test --allow-read supabase/functions/_tests/export-user-data.test.ts
+      # Mail data is keyed by address, so the user_id lists above never saw it:
+      # erasure left email_log (to_email kept, user_id nulled) and the export
+      # omitted newsletter_subscribers, email_log and email_suppressions.
+      - run: deno test --allow-read supabase/functions/_tests/address-keyed-data.test.ts
       # XPLAT-008. Two admin diagnostics that returned 404 on every press.
       # test-article-webhook POSTs to a caller-supplied URL, so the SSRF guard
       # running BEFORE the request is the assertion that matters.
@@ -219,6 +223,7 @@ jobs:
       # og:image) and external-link fallbacks, and that x.com excludes x.com
       # and not dropbox.com.
       - run: deno test --allow-read supabase/functions/_tests/catchdesmoines-detail.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/catchdesmoines-listing.test.ts
       # WEB-BE-037. Four ingestion paths had four answers for "the source
       # published a day but no time" (19:31:58, 19:30, 19:00, 19:00), plus two
       # prompt instructions telling the model to invent 7 PM - so the same event
@@ -332,6 +337,12 @@ jobs:
       # inserted forty events. Pins reachability, the removed read, that no
       # scraper fires a promise it will not await, and the batch arithmetic.
       - run: deno test --allow-read supabase/functions/_tests/scraper-dead-code.test.ts
+      # WEB-BE-046 AC2. Restaurants, playgrounds, attractions and competitor
+      # content were checked with one PostgREST read per item, and competitor
+      # content looked up the same competitor once per item. Pins the batched
+      # .in() reads, the shared key rule between insert and lookup, that a
+      # failed read still skips the item, and that an in-run insert is caught.
+      - run: deno test --allow-read supabase/functions/_tests/firecrawl-existing-rows.test.ts
       # WEB-BE-048. ai-crawler's policy on a failed duplicate check was "On
       # error, still add the item", so one PostgREST hiccup re-inserted the
       # whole batch - that check is the only thing between a re-crawl and a
@@ -465,6 +476,10 @@ jobs:
       # to any signed-in caller without asking Apple. It now answers 410 and
       # must never write a subscription row again.
       - run: deno test --allow-read supabase/functions/_tests/verify-apple-receipt-inert.test.ts
+      # WEB-SEC-078. oauth-callback was public and spent a stored client_secret
+      # on any caller's code under unsigned state, then dropped the tokens. No
+      # caller exists; it answers 410 and must not regain the exchange.
+      - run: deno test --allow-read supabase/functions/_tests/oauth-callback-inert.test.ts
       # IOS-DD-MONETIZATION-02. One Apple subscription unlocked every account
       # that validated it. Pins the appAccountToken / explicit-Restore rules.
       - run: deno test supabase/functions/_shared/appleOwnership.test.ts
@@ -603,12 +618,25 @@ jobs:
       # thenable with no catch turned every search into a 500. All offline:
       # handler.test.ts stubs the Supabase client and the Claude fetch.
       # --allow-read is for the src/ files the suites compare against.
+      # The Central day/weekend windows, the running or= group and the
+      # visibility switches the four suites below share (WEB-FEAT-091).
+      # --allow-read is for the guard that reads those four callers.
+      - run: deno test --allow-read supabase/functions/_shared/eventWindow.test.ts
+      # The social posters' event pick: visible and upcoming-or-running, and a
+      # running event's prompt date names its end day (WEB-FEAT-096).
+      - run: deno test --allow-read supabase/functions/_shared/socialEventPick.test.ts
       - run: deno test supabase/functions/nlp-search/dateWindow.test.ts
       - run: deno test --allow-read supabase/functions/nlp-search/search.test.ts
       - run: deno test supabase/functions/nlp-search/handler.test.ts
       # The public events API's filters: visibility, Central-time window with
       # the running arm, one or= group. Offline, no remote imports.
       - run: deno test supabase/functions/api-events/listQuery.test.ts
+      # The weekly digest's event window (Central days, running arm, capped
+      # runs) and its date line. Offline, no remote imports. WEB-FEAT-089.
+      - run: deno test supabase/functions/assemble-weekly-digest/content.test.ts
+      # The weekend guide's window (next Fri-Sun in Central, running arm,
+      # visibility) and the Central date line it gives the model. Offline.
+      - run: deno test supabase/functions/generate-weekend-guide/window.test.ts
       # Saved-search alert matching and the email it builds (WP5).
       - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts
       # support-chat is anon-callable; these caps are what bound one request's

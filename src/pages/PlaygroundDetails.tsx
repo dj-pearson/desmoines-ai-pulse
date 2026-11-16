@@ -2,7 +2,7 @@ import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { ErrorState } from "@/components/ui/error-state";
-import { createSlug } from "@/lib/slug";
+import { contentSlug, playgroundHref } from "@/lib/slugHref";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import type { Database } from "@/integrations/supabase/types";
 import { useQuery } from "@tanstack/react-query";
@@ -70,9 +70,7 @@ export default function PlaygroundDetails() {
     refetch,
   } = useQuery({
     queryKey: detailQueryKey("playground", slug ?? ""),
-    // One row by slug, not the whole table (WEB-PERF-031). fetchBySlug keeps
-    // the createSlug(name) scan as a fallback for the window between this
-    // deploying and migration 20260919000008 being applied.
+    // One row by slug, not the whole table (WEB-PERF-031).
     queryFn: () => fetchBySlug<Playground>("playgrounds", slug ?? ""),
     enabled: Boolean(slug),
     staleTime: DETAIL_STALE_TIME,
@@ -165,7 +163,9 @@ export default function PlaygroundDetails() {
   }
 
   const showImage = playground.image_url && !imageError;
-  const playgroundSlug = createSlug(playground.name);
+  // The stored slug, not one rebuilt from the name: for a suffixed duplicate
+  // (riverview-park-2) the name form is the other park's URL (WEB-PERF-031).
+  const playgroundSlug = contentSlug(playground);
   const playgroundUrl = `${BRAND.baseUrl}/playgrounds/${playgroundSlug}`;
   // The suburb the row's own location names, or none (WP4 item 3).
   const locality = suburbFromLocation(playground.location);
@@ -554,14 +554,10 @@ interface SideCardProps {
   item: PlaygroundCard;
 }
 
-/**
- * A related/nearby card. Linked by name-derived slug: the list columns carry
- * no `slug` until plan D2's column is live, and fetchBySlug resolves the
- * name form.
- */
+/** A related/nearby card, linked by the row's stored slug (WEB-PERF-031). */
 function PlaygroundSideCard({ item }: SideCardProps) {
   return (
-    <Link to={`/playgrounds/${createSlug(item.name)}`} className="block" data-playground-side-card>
+    <Link to={playgroundHref(item)} className="block" data-playground-side-card>
       <Card className="h-full hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">
         {item.image_url ? (
           <div className="aspect-video overflow-hidden">

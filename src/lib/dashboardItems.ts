@@ -1,4 +1,3 @@
-import { createSlug } from "@/lib/slug";
 import { openingDay, openingLabel } from "@/lib/restaurantOpenings";
 import {
   addCentralDays,
@@ -32,22 +31,10 @@ export function restaurantHref(row: SlugRow): string {
   return `/restaurants/${row.slug || row.id}`;
 }
 
-/**
- * Attractions: the row slug when the projection carries it, otherwise the
- * name slug, which fetchBySlug still matches for rows the slug migration has
- * not reached. ATTRACTION_LIST_COLUMNS does not select `slug` yet (gated on a
- * schema probe), so today this is the name path.
- */
-export function attractionHref(row: SlugRow): string {
-  const slug = row.slug || (row.name ? createSlug(row.name) : "") || row.id;
-  return `/attractions/${slug}`;
-}
-
-/** Playgrounds have no slug column; PlaygroundDetails matches createSlug(name). */
-export function playgroundHref(row: SlugRow): string {
-  const slug = (row.name ? createSlug(row.name) : "") || row.id;
-  return `/playgrounds/${slug}`;
-}
+// Attractions and playgrounds link by their stored slug (WEB-PERF-031); the
+// rule lives in slugHref.ts so list pages can share it without this module's
+// date imports.
+export { attractionHref, playgroundHref } from "@/lib/slugHref";
 
 /** Hotels live under /stay and carry a stored slug. */
 export function hotelHref(row: SlugRow): string {

@@ -154,5 +154,6 @@ ${months.join('\n')}${months.length ? '\n' : ''}
 - [Calendar feed, all events](${base}/calendar/all.ics): iCalendar, next 60 days, refreshed hourly
 - [Calendar feed, free events](${base}/calendar/free.ics): iCalendar, events listed as free
 - Per-category calendar feeds: ${base}/calendar/<category>.ics, e.g. music, sports, arts, family, food
+- [Events and restaurants API](${base}/openapi.yaml): OpenAPI description of the public JSON API. Event dates are Central time days, and start_date/end_date is an overlap window, so a multi-day run still on is included and carries its end_date
 `;
 }
