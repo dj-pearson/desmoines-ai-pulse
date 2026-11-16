@@ -11,7 +11,7 @@ release cycle (CLAUDE.md, URL params and route shapes).
 | `seasonal_guides` | `/guides`, `/guides/:slug` (useSeasonalGuides) | Keep. SEO-019: seasonal editorial is what ranks | `/admin/guides` (done) |
 | `venues` | `/music/venues/:slug`, `/music`, event-page hotel callout, `/stay/near/:slug` (useVenues) | Keep. SEO-018 wants venue pages fed with verified facts | `/admin/venue-pages` (done; create and edit, no delete) |
 | `curated_itineraries` | `/itineraries`, `/itineraries/:slug` (useItineraries) | Keep | Not built yet. Its "Admins can manage itineraries" policy already allows full CRUD |
-| `trails` | `/outdoors`, `/outdoors/:slug` (useTrails) | Keep | Not built yet. RLS allows admin insert and update, no delete |
+| `trails` | `/outdoors`, `/outdoors/:slug` (useTrails) | Keep | `/admin/trails` (done; create and edit, no delete) |
 | `teams` | `/sports`, `/sports/:slug` (useTeams) | Keep | Not built yet. RLS allows admin insert and update, no delete |
 | `meeting_venues` | `/group-travel` (useMeetingVenues) | Keep | Not built yet. RLS allows admin insert only; editing needs an additive UPDATE policy first |
 

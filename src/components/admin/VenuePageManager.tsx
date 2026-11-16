@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ExternalLink, Loader2, Pencil, Plus } from "lucide-react";
+import { AdminTextField as TextField } from "@/components/admin/AdminTextField";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -44,47 +44,6 @@ import {
 } from "@/lib/venuePageForm";
 
 const venuePath = (slug: string) => `/music/venues/${slug}`;
-
-interface TextFieldProps {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-  hint?: string;
-  type?: string;
-  inputMode?: "decimal" | "numeric";
-  disabled?: boolean;
-}
-
-function TextField({ id, label, value, onChange, error, hint, type, inputMode, disabled }: TextFieldProps) {
-  const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-err` : null].filter(Boolean).join(" ");
-  return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type={type}
-        inputMode={inputMode}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        aria-invalid={!!error}
-        aria-describedby={describedBy || undefined}
-      />
-      {hint && (
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
-          {hint}
-        </p>
-      )}
-      {error && (
-        <p id={`${id}-err`} className="text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
 
 /**
  * Admin list and editor for public.venues, the rows behind /music/venues

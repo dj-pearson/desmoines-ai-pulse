@@ -71,7 +71,7 @@ export type VenuePageRow = {
 
 export type VenuePageFormErrors = Partial<Record<keyof VenuePageFormState, string>>;
 
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
  * A box around Iowa. Every venue here is in the metro; the box exists to
@@ -82,6 +82,33 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const IOWA = { latMin: 40.3, latMax: 43.6, lngMin: -96.7, lngMax: -90.1 };
 
 export const slugifyVenueName = slugifyGuideTitle;
+
+export interface CheckedCoordinates {
+  latitude: number | null;
+  longitude: number | null;
+  errors: Partial<Record<"latitude" | "longitude", string>>;
+}
+
+/**
+ * Both coordinates or neither, inside the IOWA box. Shared by every admin
+ * editor whose rows put a pin on a public map (venues, trails).
+ */
+export function checkIowaCoordinates(latInput: string, lngInput: string): CheckedCoordinates {
+  const errors: CheckedCoordinates["errors"] = {};
+  const latRaw = latInput.trim();
+  const lngRaw = lngInput.trim();
+  if (!latRaw && !lngRaw) return { latitude: null, longitude: null, errors };
+  const latitude = Number(latRaw);
+  const longitude = Number(lngRaw);
+  if (!latRaw || !lngRaw) {
+    errors[latRaw ? "longitude" : "latitude"] = "Enter both coordinates, or neither.";
+  } else if (Number.isNaN(latitude) || latitude < IOWA.latMin || latitude > IOWA.latMax) {
+    errors.latitude = "Latitude should be in Iowa, around 41.6.";
+  } else if (Number.isNaN(longitude) || longitude < IOWA.lngMin || longitude > IOWA.lngMax) {
+    errors.longitude = "Longitude should be in Iowa and negative, around -93.6.";
+  }
+  return { latitude, longitude, errors };
+}
 
 export function emptyVenuePageForm(): VenuePageFormState {
   return {
@@ -152,21 +179,9 @@ export function buildVenuePageRow(form: VenuePageFormState): BuiltVenuePageRow {
     if (value && !absoluteHttpUrl(value)) errors[key] = "Use a full https:// URL, or leave it empty.";
   }
 
-  const latRaw = form.latitude.trim();
-  const lngRaw = form.longitude.trim();
-  let latitude: number | null = null;
-  let longitude: number | null = null;
-  if (latRaw || lngRaw) {
-    latitude = Number(latRaw);
-    longitude = Number(lngRaw);
-    if (!latRaw || !lngRaw) {
-      errors[latRaw ? "longitude" : "latitude"] = "Enter both coordinates, or neither.";
-    } else if (Number.isNaN(latitude) || latitude < IOWA.latMin || latitude > IOWA.latMax) {
-      errors.latitude = "Latitude should be in Iowa, around 41.6.";
-    } else if (Number.isNaN(longitude) || longitude < IOWA.lngMin || longitude > IOWA.lngMax) {
-      errors.longitude = "Longitude should be in Iowa and negative, around -93.6.";
-    }
-  }
+  const coords = checkIowaCoordinates(form.latitude, form.longitude);
+  Object.assign(errors, coords.errors);
+  const { latitude, longitude } = coords;
 
   if (Object.keys(errors).length > 0) return { row: null, errors };
 
