@@ -337,6 +337,12 @@ jobs:
       # inserted forty events. Pins reachability, the removed read, that no
       # scraper fires a promise it will not await, and the batch arithmetic.
       - run: deno test --allow-read supabase/functions/_tests/scraper-dead-code.test.ts
+      # WEB-BE-046 AC2. Restaurants, playgrounds, attractions and competitor
+      # content were checked with one PostgREST read per item, and competitor
+      # content looked up the same competitor once per item. Pins the batched
+      # .in() reads, the shared key rule between insert and lookup, that a
+      # failed read still skips the item, and that an in-run insert is caught.
+      - run: deno test --allow-read supabase/functions/_tests/firecrawl-existing-rows.test.ts
       # WEB-BE-048. ai-crawler's policy on a failed duplicate check was "On
       # error, still add the item", so one PostgREST hiccup re-inserted the
       # whole batch - that check is the only thing between a re-crawl and a

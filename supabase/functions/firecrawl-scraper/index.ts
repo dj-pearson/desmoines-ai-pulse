@@ -28,6 +28,13 @@ import {
 } from "../_shared/htmlContentWindow.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
 import { runJob } from "../_shared/jobRunner.ts";
+import {
+  ExistingRowIndex,
+  competitorTitle,
+  isNameKeyed,
+  planReads,
+  rowName,
+} from "./existingRows.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
 import { checkEventTitle } from "../_shared/scheduleTitleGuard.ts";
 import {
@@ -622,6 +629,57 @@ serve(async (req) => {
       console.log(`🧮 Dedup index: ${dedupIndex.size} existing event(s) around the dates being written`);
     }
 
+    // THE SAME FOR EVERY OTHER CATEGORY (WEB-BE-046 AC2). These asked the
+    // database once per item for a row with the same name, and competitor
+    // content also looked its competitor up once per item although the URL -
+    // and so the answer - is fixed for the run. Now the competitor is read once
+    // and the existing rows in batched `.in()` reads (existingRows.ts). A
+    // failed read is kept and fails every item's check below, which skips the
+    // item: the policy the per-item read had (WEB-BE-048).
+    let competitorId: string | null = null;
+    if (category === 'competitor_analysis' && itemsToWrite.length > 0) {
+      const { data: competitor } = await supabase
+        .from('competitors')
+        .select('id')
+        .eq('website_url', url)
+        .single();
+      competitorId = competitor?.id || null;
+    }
+    let existingRows: ExistingRowIndex<Record<string, unknown>> | null = null;
+    let existingRowsError: { message?: string } | null = null;
+    if ((isNameKeyed(category) || category === 'competitor_analysis') && itemsToWrite.length > 0) {
+      const keyField = isNameKeyed(category) ? 'name' : 'title';
+      const keys = itemsToWrite.map((item) =>
+        isNameKeyed(category) ? rowName(category, item) : competitorTitle(item)
+      );
+      const { batches, singles } = planReads(keys);
+      const found: Record<string, unknown>[] = [];
+      // deno-lint-ignore no-explicit-any
+      const scoped = (query: any) =>
+        category !== 'competitor_analysis'
+          ? query
+          : competitorId
+          ? query.eq('competitor_id', competitorId)
+          : query.is('competitor_id', null);
+      for (const batch of batches) {
+        if (existingRowsError) break;
+        const { data, error } = await scoped(supabase.from(tableName).select('*').in(keyField, batch));
+        if (error) existingRowsError = error;
+        else found.push(...(data || []));
+      }
+      for (const key of singles) {
+        if (existingRowsError) break;
+        const { data, error } = await scoped(supabase.from(tableName).select('*').eq(keyField, key));
+        if (error) existingRowsError = error;
+        else found.push(...(data || []));
+      }
+      existingRows = new ExistingRowIndex(keyField, found);
+      console.log(
+        `🧮 Existing ${tableName}: ${existingRows.size} of ${new Set(keys).size} name(s) found in ` +
+        `${batches.length + singles.length} read(s)`,
+      );
+    }
+
     if (itemsToWrite.length > 0) {
       // How many rows are handled per inner pass. NOT the request's batchSize -
       // this one used to shadow it, which is how a documented request field
@@ -717,7 +775,7 @@ serve(async (req) => {
                 
               case 'restaurants':
                 transformedData = {
-                  name: item.name?.substring(0, 200) || "Unnamed Restaurant",
+                  name: rowName(category, item),
                   cuisine: item.cuisine?.substring(0, 100) || "American",
                   location: item.location?.substring(0, 200) || "Des Moines, IA",
                   rating: item.rating || null,
@@ -733,7 +791,7 @@ serve(async (req) => {
                 
               case 'playgrounds':
                 transformedData = {
-                  name: item.name?.substring(0, 200) || "Playground",
+                  name: rowName(category, item),
                   location: item.location?.substring(0, 200) || "Des Moines, IA",
                   description: item.description?.substring(0, 500) || "",
                   age_range: item.age_range?.substring(0, 50) || "All ages",
@@ -747,7 +805,7 @@ serve(async (req) => {
                 
               case 'attractions':
                 transformedData = {
-                  name: item.name?.substring(0, 200) || "Attraction",
+                  name: rowName(category, item),
                   type: item.type?.substring(0, 100) || "General",
                   location: item.location?.substring(0, 200) || "Des Moines, IA",
                   description: item.description?.substring(0, 500) || "",
@@ -760,16 +818,10 @@ serve(async (req) => {
                 break;
                 
               case 'competitor_analysis':
-                // Find the competitor_id based on the URL
-                const { data: competitors } = await supabase
-                  .from('competitors')
-                  .select('id')
-                  .eq('website_url', url)
-                  .single();
-                
                 transformedData = {
-                  competitor_id: competitors?.id || null,
-                  title: item.title?.substring(0, 200) || "Untitled Content",
+                  // Read once before the loop: the URL is the same for every item.
+                  competitor_id: competitorId,
+                  title: competitorTitle(item),
                   description: item.description?.substring(0, 1000) || "",
                   url: item.url?.substring(0, 500) || url,
                   content_type: item.content_type?.substring(0, 100) || "General",
@@ -821,21 +873,12 @@ serve(async (req) => {
                 existingItems = [verdict.existingEvent];
                 console.log(`🔁 Duplicate (${verdict.reason}): ${transformedData.title}`);
               }
-            } else if (category === 'competitor_analysis') {
-              const { data, error } = await supabase
-                .from(tableName)
-                .select('*')
-                .eq('title', transformedData.title)
-                .eq('competitor_id', transformedData.competitor_id);
-              existingItems = data || [];
-              dupCheckError = error;
-            } else {
-              const { data, error } = await supabase
-                .from(tableName)
-                .select('*')
-                .eq('name', transformedData.name);
-              existingItems = data || [];
-              dupCheckError = error;
+            } else if (existingRows) {
+              const match = existingRows.find(
+                category === 'competitor_analysis' ? transformedData.title : transformedData.name,
+              );
+              existingItems = match ? [match] : [];
+              dupCheckError = existingRowsError;
             }
 
             if (dupCheckError) {
@@ -1012,6 +1055,10 @@ serve(async (req) => {
                 errors.push(insertError);
               } else {
                 insertedCount++;
+                // The per-item read found this row on a second copy later in
+                // the run because it was already in the table; the index has
+                // to be told.
+                existingRows?.add(transformedData);
                 console.log(`✅ Inserted new ${category}: ${transformedData.title || transformedData.name}`);
 
                 // WEB-BE-046. THE SEO CALL THAT USED TO BE HERE NEVER FINISHED.
