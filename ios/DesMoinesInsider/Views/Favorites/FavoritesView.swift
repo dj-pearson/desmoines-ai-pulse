@@ -734,7 +734,7 @@ private struct SavedRowLayout<Thumbnail: View, Details: View>: View {
 }
 
 private func savedThumbnail(url: String?, icon: String, tint: Color, dimmed: Bool = false) -> some View {
-    CachedAsyncImage(url: url) {
+    CachedAsyncImage(url: url, blurUp: false) {
         ZStack {
             Rectangle().fill(tint.opacity(0.15))
             Image(systemName: icon)

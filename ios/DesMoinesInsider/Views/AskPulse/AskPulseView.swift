@@ -575,7 +575,7 @@ private struct AskPulsePickCard: View {
     private var content: some View {
         HStack(alignment: .top, spacing: 12) {
             if let imageUrl = pick.imageUrl {
-                CachedAsyncImage(url: imageUrl) {
+                CachedAsyncImage(url: imageUrl, blurUp: false) {
                     Color(.systemGray5)
                 }
                 .frame(width: 56, height: 56)

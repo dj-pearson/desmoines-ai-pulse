@@ -166,7 +166,7 @@ struct MapPlacePopup: View {
     }
 
     private var thumbnail: some View {
-        CachedAsyncImage(url: model.imageURL) {
+        CachedAsyncImage(url: model.imageURL, blurUp: false) {
             ZStack {
                 Rectangle().fill(model.tint.opacity(0.15))
                 Image(systemName: model.placeholderIcon)
