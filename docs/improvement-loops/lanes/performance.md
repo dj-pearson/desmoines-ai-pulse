@@ -8,8 +8,30 @@
 
 ## Handoff
 
-None. WEB-PERF-080 (restaurantStatus.ts split out of restaurantHours.ts)
-closed in loop 27.
+None. Loop 28 (drain round) closed WEB-PERF-035's last line: useBreweries
+filters on `is_brewery` instead of nine name ILIKEs.
+
+What loop 28 found, worth more than the one-line change:
+- Migrations 20260919000007 (restaurants.is_brewery) and 20260919000008
+  (attractions/playgrounds slug) ARE applied in production. Evidence is in the
+  repo, not a probe: the production exports under
+  scripts/content-backups/seo-061 and seo-063 (taken 2026-10-01) carry
+  `is_brewery` on every restaurant row (Exile Brewing Co. = true) and `slug`
+  on the attractions (seo-046) and playgrounds (seo-061) rows. Before writing
+  "OWNER-BLOCKED on applying the migration", grep those backups for the column.
+- So WEB-PERF-031's remaining code steps are workable now: delete the fallback
+  branch in resolveBySlug's fetchBySlug, add slug to ATTRACTION_LIST_COLUMNS
+  and PLAYGROUND_LIST_COLUMNS, switch AttractionDetails' related links to it.
+  Only the types.ts regeneration still needs credentials; check-list-columns
+  reads types.ts, so adding slug there may need the column registered first.
+- The brewery filter keeps the two cuisine patterns beside the flag, because
+  nothing at ingest sets is_brewery (it was backfilled once). Dropping them
+  would hide any brewery scraped in after 2026-09-19.
+- WEB-PERF-023 (DOM size) needs design calls the notes reserve for the owner;
+  WEB-PERF-034 AC2 needs a new RPC migration plus regenerated types.
+
+Loop 27 closed WEB-PERF-080 (restaurantStatus.ts split out of
+restaurantHours.ts).
 
 What loop 27 added:
 - restaurantStatus.ts holds OpenStatus, RestaurantOpenResult,
@@ -233,3 +255,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-078 | this commit | RestaurantInlineFilters pills are static buttons and load RestaurantFilterPopover (Radix Popover, the four panels, the rating Slider) on first click/Enter; /restaurants 141.9 -> 108.5 KB gz beyond the critical path (18 fewer files); 17 other routes moved by 0.1 either way (chunk reshuffle), none more; summed 8,046.7 -> 8,012.8; critical path 175.2 unchanged; graph test with negative control (2 of 4 fail on a static ui/popover import); new smoke test (no chunk on load, click and Enter open, Escape returns focus, same size) 3/3 repeats plus 108 smoke tests on filter/restaurant pages; vitest 3692/3692 |
 | 2026-11-15 | WEB-PERF-079 | this commit | Tonight clock (constants, window, eventStartInstant, card formatters) moved from tonightPairings.ts to new tonightTime.ts and re-exported; 15 routes 5.6-6.5 KB gz lighter beyond the critical path (Hotels 68.8 -> 62.5, EventsNearMe 97.3 -> 90.8, MusicHub 51.4 -> 45.1, event landings ~-6.3) and 12 more 1.9-2.6 lighter; 8 pairing routes +0.5 and +2 files; summed 8,013.4 -> 7,900.9, files 6,773 -> 6,771; critical path 175.2 unchanged; graph test with negative control (12 of 18 fail on one reverted import); 128 + 75 smoke tests on the touched pages in Chrome; vitest 3731/3731 |
 | 2026-11-15 | WEB-PERF-080 | this commit | Status helpers and result/stored types moved from restaurantHours.ts to new import-free restaurantStatus.ts and re-exported; 25 light importers switched; 9 routes 3.5-3.6 KB gz lighter beyond the critical path (PseoRoutePage 68.8 -> 65.3, PlaygroundDetails 65.4 -> 61.8, Deals 44.6 -> 41.1, NeighborhoodPage 33.1 -> 29.6), 22 parser routes +1 file and +0.1-0.2; summed 7,898.8 -> 7,870.4, files 6,771 -> 6,793; critical path 175.2 unchanged; graph test with negative control (1 fails on one reverted import); vitest 3760/3760 |
+| 2026-11-15 | WEB-PERF-035 | this commit | useBreweries filters on is_brewery plus the two cuisine patterns instead of nine hardcoded name ILIKEs (BREWERY_NAMES deleted); column confirmed live from 2026-10-01 production exports in scripts/content-backups; 4 new unit tests, all 4 fail against the old hook; brewery-trail smoke spec 21/21 over 3 repeats; type-check ratchet 30/30, check-schema/list-columns/select-star clean; story closed |
