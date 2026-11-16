@@ -5,6 +5,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { applyServingRestaurantFilters } from '@/lib/restaurantStatus';
 import type { NeighborhoodBoundary } from '@/lib/neighborhoodBoundaries';
 import {
   areaEventsWindow,
@@ -24,11 +25,15 @@ export function useAreaPlaces(boundary: NeighborhoodBoundary | undefined) {
     staleTime: STALE_MS,
     queryFn: async () => {
       if (!boundary) throw new Error('useAreaPlaces: no boundary');
-      const { data, error } = await supabase
-        .from('restaurants')
-        .select('id, name, slug, cuisine, price_range, rating, status, latitude, longitude')
-        .eq('neighborhood', boundary.slug)
-        .neq('is_merged', true)
+      // WEB-BE-045: places not serving today (Google's business_status
+      // included) are left out in the query, so they cannot take the 100 rows.
+      const { data, error } = await applyServingRestaurantFilters(
+        supabase
+          .from('restaurants')
+          .select('id, name, slug, cuisine, price_range, rating, status, business_status, latitude, longitude')
+          .eq('neighborhood', boundary.slug)
+          .neq('is_merged', true),
+      )
         .order('rating', { ascending: false, nullsFirst: false })
         .order('name', { ascending: true })
         .limit(100);

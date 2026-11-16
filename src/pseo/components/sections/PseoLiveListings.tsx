@@ -18,7 +18,7 @@ import { CATEGORY_FILTERS, pseoEventFilters, resolveEntityType, restaurantLocati
 import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
-import { isVisitableStatus } from "@/lib/restaurantStatus";
+import { applyServingRestaurantFilters, isServingToday } from "@/lib/restaurantStatus";
 import { attractionListingHref, eventListingHref, restaurantListingHref } from '../../listingHrefs';
 
 interface PseoLiveListingsProps {
@@ -234,12 +234,20 @@ async function fetchListings(
   }
 
   if (entityType === 'restaurants') {
-    let query = supabase
-      .from('restaurants')
-      .select('id, name, description, location, price_range, rating, cuisine, image_url, slug, status')
-      .neq('is_merged', true) // WEB-AUTO-005, as useRestaurants does
+    // WEB-BE-045: closed, temporarily closed and not-yet-open places are
+    // left out in the query, Google's business_status included, so they
+    // cannot take the twelve slots. It used to drop only our own status after
+    // the read, so a place the hours refresh marked CLOSED_PERMANENTLY stayed
+    // a "Top Restaurant" on every pSEO page that matched it.
+    let query = applyServingRestaurantFilters(
+      supabase
+        .from('restaurants')
+        .select('id, name, description, location, price_range, rating, cuisine, image_url, slug, status, business_status')
+        .neq('is_merged', true), // WEB-AUTO-005, as useRestaurants does
+    )
       .order('rating', { ascending: false })
-      // Over-fetch: closed and not-yet-open rows are dropped below.
+      // Over-fetch: a row the server filter lets through on spelling alone
+      // ('Closed') is dropped below.
       .limit(24);
 
     if (location) {
@@ -263,7 +271,7 @@ async function fetchListings(
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data ?? []).filter((r) => isVisitableStatus(r.status)).slice(0, 12).map((r) => ({
+    return (data ?? []).filter((r) => isServingToday(r)).slice(0, 12).map((r) => ({
       id: r.id,
       name: r.name,
       description: r.description ?? undefined,

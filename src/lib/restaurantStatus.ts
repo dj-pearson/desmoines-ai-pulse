@@ -157,6 +157,34 @@ export const NOT_CLOSED_RESTAURANT_FILTER = 'status.is.null,status.neq.closed';
 export const NOT_GOOGLE_CLOSED_RESTAURANT_FILTER = 'business_status.is.null,business_status.neq.CLOSED_PERMANENTLY';
 
 /**
+ * PostgREST `or` filter for isVisitableStatus: our status says you can eat
+ * there today. Built from NOT_VISITABLE_STATUSES so the two cannot drift. SQL
+ * compares exactly, so a row spelled 'Closed' passes this and is caught by
+ * isServingToday on the client; every writer stores the lower-case spelling.
+ */
+export const VISITABLE_STATUS_RESTAURANT_FILTER = `status.is.null,status.not.in.(${[
+  ...NOT_VISITABLE_STATUSES,
+].join(',')})`;
+
+/**
+ * PostgREST `or` filter for the business_status half of isServingToday:
+ * Google does not call the place closed, for now or for good.
+ */
+export const SERVING_BUSINESS_STATUS_RESTAURANT_FILTER = `business_status.is.null,business_status.not.in.(${[
+  ...NOT_SERVING_BUSINESS_STATUSES,
+].join(',')})`;
+
+/**
+ * isServingToday as a query, for a list that is capped or counted on the
+ * server (WEB-BE-045): filtering after the read lets closed rows take the
+ * capped slots, and a head-only count has no rows to filter. Two `or` params,
+ * which PostgREST ANDs with each other and with any other `or` on the query.
+ */
+export function applyServingRestaurantFilters<Q extends { or(filters: string): Q }>(query: Q): Q {
+  return query.or(VISITABLE_STATUS_RESTAURANT_FILTER).or(SERVING_BUSINESS_STATUS_RESTAURANT_FILTER);
+}
+
+/**
  * One short line for a card or list row, or null when there is nothing honest
  * to say: "Open until 10 PM", "Closes at 10 PM", "Open 24 hours",
  * "Closed, opens 11 AM", "Closed".
