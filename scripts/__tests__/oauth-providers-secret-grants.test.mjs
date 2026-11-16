@@ -130,7 +130,24 @@ test('no web query on oauth_providers selects * or client_secret', () => {
       }
     }
   }
-  assert.ok(chains >= 1, 'expected the Save Credentials update in OAuthProviderSetup');
+  // WEB-SEC-080 removed the Save Credentials update, the last chain.
+  assert.ok(chains >= 0);
+});
+
+test('no web code writes client_secret (WEB-SEC-080: no flow reads it)', () => {
+  for (const file of srcFiles('src')) {
+    const src = readFileSync(file, 'utf8');
+    assert.equal(/\bclient_secret\s*:/.test(src), false, `${file} writes a client_secret`);
+  }
+  const setup = readFileSync('src/components/admin/SearchTrafficDashboard/OAuthProviderSetup.tsx', 'utf8');
+  assert.equal(/Configure Credentials|handleSaveCredentials|type="password"/.test(setup), false, 'credentials form is back');
+});
+
+test('a later migration clears every stored client_secret (WEB-SEC-080)', () => {
+  const clear = ALL.filter((m) => m.file > FIX_FILE && /UPDATE\s+(?:public\.)?oauth_providers\s+SET\s+client_secret\s*=\s*NULL/i.test(m.sql));
+  assert.equal(clear.length, 1, 'expected exactly one clearing migration after the grant fix');
+  const later = ALL.filter((m) => m.file > clear[0].file && /client_secret\s*=\s*'/i.test(m.sql));
+  assert.deepEqual(later.map((m) => m.file), [], 'a later migration writes a client_secret value');
 });
 
 test('the setup page has no client-built authorize URL for non-GSC providers', () => {
