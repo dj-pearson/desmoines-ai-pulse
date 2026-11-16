@@ -654,22 +654,25 @@ serve(async (req) => {
       );
       const { batches, singles } = planReads(keys);
       const found: Record<string, unknown>[] = [];
-      // deno-lint-ignore no-explicit-any
-      const scoped = (query: any) =>
-        category !== 'competitor_analysis'
-          ? query
-          : competitorId
+      // The competitor scope is applied straight after .from(tableName) so
+      // check-schema-usage reads competitor_id against competitor_content, not
+      // against the competitors lookup above (its chain runs to the next .from).
+      const readExisting = () => {
+        const query = supabase.from(tableName).select('*');
+        if (category !== 'competitor_analysis') return query;
+        return competitorId
           ? query.eq('competitor_id', competitorId)
           : query.is('competitor_id', null);
+      };
       for (const batch of batches) {
         if (existingRowsError) break;
-        const { data, error } = await scoped(supabase.from(tableName).select('*').in(keyField, batch));
+        const { data, error } = await readExisting().in(keyField, batch);
         if (error) existingRowsError = error;
         else found.push(...(data || []));
       }
       for (const key of singles) {
         if (existingRowsError) break;
-        const { data, error } = await scoped(supabase.from(tableName).select('*').eq(keyField, key));
+        const { data, error } = await readExisting().eq(keyField, key);
         if (error) existingRowsError = error;
         else found.push(...(data || []));
       }
