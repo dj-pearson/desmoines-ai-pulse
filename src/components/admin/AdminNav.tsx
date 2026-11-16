@@ -102,6 +102,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Campaigns", href: "/admin/campaigns", icon: CreditCard },
       { label: "Deals", href: "/admin/deals", icon: Tag },
+      { label: "Seasonal guides", href: "/admin/guides", icon: BookOpen, description: "The editorial guides at /guides" },
       { label: "Email", href: "/admin/email", icon: Mail },
       { label: "Social", href: "/admin/social", icon: Share2 },
       { label: "Partnerships", href: "/admin/partnerships", icon: HandCoins },
