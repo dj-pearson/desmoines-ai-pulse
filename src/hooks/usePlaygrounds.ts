@@ -30,17 +30,19 @@ export const PLAYGROUND_METRO_FILTER =
 
 /**
  * What a related/nearby card on the detail page renders, and nothing else
- * (explore plan WP4 item 2). No `slug`: the column is not live yet (plan D2)
- * and naming a missing column fails the whole query with 42703. No `rating`
+ * (explore plan WP4 item 2). `slug` is the link (WEB-PERF-031): migration
+ * 20260919000008 is live and a duplicate name was suffixed, so the name alone
+ * can open the wrong playground. No `rating`
  * (WEB-SEO-056): a model read it off a crawled page, so no card shows it.
  */
 export const PLAYGROUND_CARD_COLUMNS =
-  "id, name, image_url, age_range, location, latitude, longitude, has_shade, has_restrooms";
+  "id, name, slug, image_url, age_range, location, latitude, longitude, has_shade, has_restrooms";
 
 export type PlaygroundCard = Pick<
   Playground,
   | "id"
   | "name"
+  | "slug"
   | "image_url"
   | "age_range"
   | "location"

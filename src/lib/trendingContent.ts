@@ -7,7 +7,7 @@ import {
   PLAYGROUND_LIST_COLUMNS,
   RESTAURANT_LIST_COLUMNS,
 } from '@/lib/listColumns';
-import { createSlug } from '@/lib/slug';
+import { attractionHref, playgroundHref } from '@/lib/slugHref';
 import { centralDayStartUtcISO, createEventSlugWithCentralTime } from '@/lib/timezone';
 
 /**
@@ -113,8 +113,8 @@ export function contentHref(type: TrendingContentType, row: Record<string, unkno
     case 'restaurant':
       return `/restaurants/${str(row?.slug) ?? id}`;
     case 'attraction':
-      return row && str(row.name) ? `/attractions/${createSlug(row.name as string)}` : '/attractions';
+      return row && (str(row.slug) || str(row.name)) ? attractionHref({ slug: str(row.slug), name: str(row.name) }) : '/attractions';
     case 'playground':
-      return row && str(row.name) ? `/playgrounds/${createSlug(row.name as string)}` : '/playgrounds';
+      return row && (str(row.slug) || str(row.name)) ? playgroundHref({ slug: str(row.slug), name: str(row.name) }) : '/playgrounds';
   }
 }

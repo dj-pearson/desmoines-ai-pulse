@@ -43,7 +43,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { createSlug } from "@/lib/slug";
+import { contentSlug } from "@/lib/slugHref";
 import { PlaygroundHubGuide } from "@/components/playgrounds/PlaygroundHubGuide";
 import {
   buildPlaygroundHubSections,
@@ -453,14 +453,15 @@ export default function Playgrounds() {
   // the page, which is the defect SEO-003 removed.
 
   // The rendered set, capped, so every URL here is a link the crawler can
-  // also see on the page. createSlug above is the same function the cards
-  // use, so the schema URL and the href cannot drift apart.
+  // also see on the page. contentSlug is the same function the cards use
+  // (the stored slug, WEB-PERF-031), so the schema URL and the href cannot
+  // drift apart.
   const SCHEMA_LIMIT = 20;
   const schemaItems = filteredPlaygrounds
     .slice(0, SCHEMA_LIMIT)
     .map((item) => ({
       name: item.name,
-      url: getCanonicalUrl(`/playgrounds/${createSlug(item.name)}`),
+      url: getCanonicalUrl(`/playgrounds/${contentSlug(item)}`),
       ...(item.image_url && { image: item.image_url }),
       ...(item.description && { description: item.description }),
     }));
@@ -768,7 +769,7 @@ export default function Playgrounds() {
             {displayedPlaygrounds.map((playground, index) => (
               <Link
                 key={playground.id}
-                to={`/playgrounds/${createSlug(playground.name)}`}
+                to={`/playgrounds/${contentSlug(playground)}`}
                 className="block"
               >
                 <Card className="h-full hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">

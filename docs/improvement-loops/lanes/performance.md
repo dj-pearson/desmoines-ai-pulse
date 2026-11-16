@@ -8,8 +8,30 @@
 
 ## Handoff
 
-None. Loop 28 (drain round) closed WEB-PERF-035's last line: useBreweries
-filters on `is_brewery` instead of nine name ILIKEs.
+Loop 29 (drain round) did WEB-PERF-031's code steps; the story stays open
+only for a real types.ts regeneration.
+
+What loop 29 did and left:
+- fetchBySlug is one `.eq("slug")` request; the (id, name) fallback and the
+  SlugQueryable cast are gone, and a 42703 now throws instead of scanning.
+- types.ts carries `slug: string | null` on playgrounds and attractions,
+  added by hand (precedent: 97a7dfc6, 1f80f308 hand-add RPCs). A real
+  regeneration will produce the same lines; it still needs credentials.
+- slug is in ATTRACTION_LIST_COLUMNS, PLAYGROUND_LIST_COLUMNS and
+  PLAYGROUND_CARD_COLUMNS. New src/lib/slugHref.ts (imports only createSlug)
+  holds contentSlug/attractionHref/playgroundHref; dashboardItems re-exports
+  the two hrefs. Switched: Attractions and Playgrounds cards, schema and
+  Surprise Me; both detail pages' canonical/SEO slug and side cards;
+  trendingContent.
+- Why it matters beyond the fallback: the seo-061 export has riverview-park-2
+  and union-park-2, so every name-built link and the detail page's own
+  canonical pointed at the other park.
+- Still building links from createSlug(name), to move to slugHref when their
+  query selects slug: FavoritesView (playgrounds; attractions link by id),
+  PlaygroundHubGuide, AttractionsFactsIntro, AttractionsMap,
+  NeighborhoodGuide, useOutdoorsNearby, useVoting, useMyBusinessClaims,
+  useDeals, pseo/listingHrefs, claimOutreach, DiscoverMap, and the sitemap
+  generator in scripts/. Each needs its select checked for slug first.
 
 What loop 28 found, worth more than the one-line change:
 - Migrations 20260919000007 (restaurants.is_brewery) and 20260919000008
@@ -256,3 +278,4 @@ a keydown on document.body to test "?".
 | 2026-11-15 | WEB-PERF-079 | this commit | Tonight clock (constants, window, eventStartInstant, card formatters) moved from tonightPairings.ts to new tonightTime.ts and re-exported; 15 routes 5.6-6.5 KB gz lighter beyond the critical path (Hotels 68.8 -> 62.5, EventsNearMe 97.3 -> 90.8, MusicHub 51.4 -> 45.1, event landings ~-6.3) and 12 more 1.9-2.6 lighter; 8 pairing routes +0.5 and +2 files; summed 8,013.4 -> 7,900.9, files 6,773 -> 6,771; critical path 175.2 unchanged; graph test with negative control (12 of 18 fail on one reverted import); 128 + 75 smoke tests on the touched pages in Chrome; vitest 3731/3731 |
 | 2026-11-15 | WEB-PERF-080 | this commit | Status helpers and result/stored types moved from restaurantHours.ts to new import-free restaurantStatus.ts and re-exported; 25 light importers switched; 9 routes 3.5-3.6 KB gz lighter beyond the critical path (PseoRoutePage 68.8 -> 65.3, PlaygroundDetails 65.4 -> 61.8, Deals 44.6 -> 41.1, NeighborhoodPage 33.1 -> 29.6), 22 parser routes +1 file and +0.1-0.2; summed 7,898.8 -> 7,870.4, files 6,771 -> 6,793; critical path 175.2 unchanged; graph test with negative control (1 fails on one reverted import); vitest 3760/3760 |
 | 2026-11-15 | WEB-PERF-035 | this commit | useBreweries filters on is_brewery plus the two cuisine patterns instead of nine hardcoded name ILIKEs (BREWERY_NAMES deleted); column confirmed live from 2026-10-01 production exports in scripts/content-backups; 4 new unit tests, all 4 fail against the old hook; brewery-trail smoke spec 21/21 over 3 repeats; type-check ratchet 30/30, check-schema/list-columns/select-star clean; story closed |
+| 2026-11-16 | WEB-PERF-031 | this commit | fetchBySlug fallback and cast deleted (one slug request, 42703 throws); slug hand-added to types.ts and to the attraction/playground list and card projections; new slugHref.ts drives hub cards, schema, detail canonicals, side cards and trending links by stored slug (riverview-park-2 linked to the wrong park before); check-list-columns 22/22, check-schema clean, type ratchet 30/30, vitest 3836/3836, 48 attraction/playground smoke tests; resolveBySlug and dashboardItems tests with negative controls (1 and 2 fail on revert); story open for real types regeneration |

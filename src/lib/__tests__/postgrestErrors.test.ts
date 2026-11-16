@@ -28,9 +28,10 @@ describe("isUnknownColumnError", () => {
   });
 
   it("does NOT swallow other failures", () => {
-    // This is the half that matters. fetchBySlug falls back to a table scan on
-    // a true answer, so a permission error or an outage answering true turns a
-    // broken table into a slow empty page instead of a visible failure.
+    // This is the half that matters. A caller that falls back on a true answer
+    // (restaurantDetail retries without the newer columns) would turn a
+    // permission error or an outage into a slow empty page instead of a
+    // visible failure.
     expect(isUnknownColumnError({ code: "42P01", message: "relation does not exist" })).toBe(false);
     expect(isUnknownColumnError({ code: "42501", message: "permission denied" })).toBe(false);
     expect(isUnknownColumnError({ code: "PGRST116" })).toBe(false);

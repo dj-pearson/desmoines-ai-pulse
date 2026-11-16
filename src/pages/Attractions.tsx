@@ -58,16 +58,10 @@ import { useGeolocation } from "@/hooks/useProximitySearch";
 import { sortByDistanceFrom, formatMilesAway } from "@/hooks/usePlaygrounds";
 import { attractionFactParts, attractionOpenStatus } from "@/lib/attractionHours";
 import { isPrerender } from "@/lib/isPrerender";
+import { contentSlug } from "@/lib/slugHref";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const AttractionsMap = lazy(() => import("@/components/AttractionsMap"));
-
-const createSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-};
 
 /** The 600px block the lazy map swaps into, so pressing Map shifts nothing. */
 function AttractionsMapSkeleton() {
@@ -300,7 +294,7 @@ export default function Attractions() {
   const handleSurpriseMe = () => {
     if (!filteredAttractions || filteredAttractions.length === 0) return;
     const random = filteredAttractions[Math.floor(Math.random() * filteredAttractions.length)];
-    navigate(`/attractions/${createSlug(random.name)}`);
+    navigate(`/attractions/${contentSlug(random)}`);
   };
 
   // Pagination
@@ -369,14 +363,15 @@ export default function Attractions() {
 
 
   // The rendered set, capped, so every URL here is a link the crawler can
-  // also see on the page. createSlug above is the same function the cards
-  // use, so the schema URL and the href cannot drift apart.
+  // also see on the page. contentSlug is the same function the cards use
+  // (the stored slug, WEB-PERF-031), so the schema URL and the href cannot
+  // drift apart.
   const SCHEMA_LIMIT = 20;
   const schemaItems = paginatedAttractions
     .slice(0, SCHEMA_LIMIT)
     .map((item) => ({
       name: item.name,
-      url: getCanonicalUrl(`/attractions/${createSlug(item.name)}`),
+      url: getCanonicalUrl(`/attractions/${contentSlug(item)}`),
       ...(item.image_url && { image: item.image_url }),
       ...(item.description && { description: item.description }),
     }));
@@ -786,7 +781,7 @@ export default function Attractions() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {paginatedAttractions.map((attraction, index) => {
                 const sponsored = isSponsoredActive(attraction);
-                const href = `/attractions/${createSlug(attraction.name)}`;
+                const href = `/attractions/${contentSlug(attraction)}`;
                 // An <article> with the title as a stretched link, and Save as
                 // a sibling above it (explore pass 2 WP3 item 7). The whole
                 // card was one <Link> with an aria-label, so a screen reader
@@ -857,8 +852,8 @@ export default function Attractions() {
                         <Link
                           to={href}
                           className="after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:outline-none"
-                          onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
-                          onFocus={() => prefetchAttraction(createSlug(attraction.name))}
+                          onMouseEnter={() => prefetchAttraction(contentSlug(attraction))}
+                          onFocus={() => prefetchAttraction(contentSlug(attraction))}
                           onClick={() => {
                             if (sponsored) logSponsoredClick("attraction", attraction.id);
                           }}

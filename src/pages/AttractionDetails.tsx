@@ -32,7 +32,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { createSlug } from "@/lib/slug";
+import { attractionHref, contentSlug } from "@/lib/slugHref";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import { activeHoursSeason, attractionOpenStatus, weeklyHoursRows } from "@/lib/attractionHours";
 import {
@@ -102,7 +102,7 @@ const NEAR_LAT_PAD = 0.15;
 const NEAR_LNG_PAD = 0.2;
 const NEAR_MAX_MILES = 10;
 
-type AttractionCardRow = Pick<Attraction, "id" | "name" | "type" | "image_url" | "latitude" | "longitude">;
+type AttractionCardRow = Pick<Attraction, "id" | "name" | "slug" | "type" | "image_url" | "latitude" | "longitude">;
 
 export default function AttractionDetails() {
   const { slug } = useParams();
@@ -120,10 +120,8 @@ export default function AttractionDetails() {
     refetch,
   } = useQuery({
     queryKey: detailQueryKey("attraction", slug ?? ""),
-    // attractions now has a slug column (migration 20260919000008), so this is
-    // one row by unique key. The (id, name) scan this replaces is still in
-    // fetchBySlug as the fallback for the window before that migration is
-    // applied (WEB-PERF-031).
+    // One row by the unique slug column (migration 20260919000008,
+    // WEB-PERF-031).
     queryFn: () => fetchBySlug<Attraction>("attractions", slug ?? ""),
     enabled: Boolean(slug),
     // Shared with usePrefetchAttraction through detailQueryKeys, or the
@@ -289,7 +287,8 @@ export default function AttractionDetails() {
   }
 
   const showImage = attraction.image_url && !imageError;
-  const attractionSlug = createSlug(attraction.name);
+  // The stored slug; a suffixed duplicate's name form is another row's URL.
+  const attractionSlug = contentSlug(attraction);
   const directionsUrl = getDirectionsUrl({
     latitude: attraction.latitude,
     longitude: attraction.longitude,
@@ -847,7 +846,7 @@ interface AttractionMiniCardProps {
 
 function AttractionMiniCard({ row, miles }: AttractionMiniCardProps) {
   return (
-    <Link to={`/attractions/${createSlug(row.name)}`} className="block">
+    <Link to={attractionHref(row)} className="block">
       <Card className="h-full hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
         {row.image_url ? (
           <div className="aspect-video overflow-hidden">

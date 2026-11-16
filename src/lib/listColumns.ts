@@ -109,8 +109,13 @@ export const EVENT_LIST_COLUMNS =
 // admission_summary, parking_summary, fact_sources and facts_verified_at are
 // SEO-046: the detail page states them under the h1, and the /attractions
 // free-admission list reads the sources to show only verified "free".
+//
+// slug is WEB-PERF-031: cards link by the stored slug (lib/slugHref.ts),
+// because a duplicate name was suffixed by the backfill and the name no longer
+// identifies the row. Migration 20260919000008 is live (the 2026-10-01
+// production export in scripts/content-backups/seo-046 carries it).
 export const ATTRACTION_LIST_COLUMNS =
-  "created_at, description, id, image_url, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, name, rating, type, updated_at, website, address, hours_summary, hours, is_indoor, is_kid_friendly, is_free, is_active, accessibility_notes, admission_summary, parking_summary, fact_sources, facts_verified_at";
+  "created_at, description, id, image_url, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, name, rating, slug, type, updated_at, website, address, hours_summary, hours, is_indoor, is_kid_friendly, is_free, is_active, accessibility_notes, admission_summary, parking_summary, fact_sources, facts_verified_at";
 
 // Hotels: 43 columns, of which the list UI reads none of the SEO/GEO text or
 // the gallery array. Verified by grepping every useHotels caller
@@ -150,9 +155,14 @@ export const HOTEL_PLACES_PHOTO_COLUMNS = "places_photo_attribution";
  * no list card reads (checked pages/Playgrounds.tsx, hooks/usePlaygrounds.ts,
  * hooks/useAdvancedSearch.ts). PlaygroundManager reads manually_curated, so the
  * admin path keeps its own query.
+ *
+ * slug (WEB-PERF-031, migration 20260919000008, present on every row of the
+ * 2026-10-01 export in scripts/content-backups/seo-061): two of those five rows
+ * are riverview-park-2 and union-park-2, so a link built from the name opens a
+ * different playground. Cards link with lib/slugHref.ts.
  */
 export const PLAYGROUND_LIST_COLUMNS =
-  "accessibility_notes, age_range, amenities, created_at, description, has_restrooms, has_shade, id, image_url, is_featured, latitude, location, longitude, name, rating, source, surface_type, updated_at";
+  "accessibility_notes, age_range, amenities, created_at, description, has_restrooms, has_shade, id, image_url, is_featured, latitude, location, longitude, name, rating, slug, source, surface_type, updated_at";
 
 /**
  * The Tonight rail and everything that reads its cache (home pass-2 WP2 item
