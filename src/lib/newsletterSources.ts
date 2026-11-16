@@ -23,6 +23,7 @@ export const NEWSLETTER_SOURCES = [
   "visitors_guide",
   "confirm_page",
   "reminder_notice",
+  "unsubscribe_page",
 ] as const;
 
 export type NewsletterSource = (typeof NEWSLETTER_SOURCES)[number];

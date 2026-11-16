@@ -20,6 +20,13 @@
  * stops all marketing email like the newsletter link does. A B2B outreach
  * prospect gets ?outreach=<token> (AOS-PROSPECT-009), which stops partnership
  * emails only. See src/lib/tokenOptOut.ts.
+ *
+ * A newsletter link that worked (or had already worked) offers a way back
+ * (WEB-ADS-023): a mis-click, or a colleague clicking a forwarded digest,
+ * otherwise ended at "Back to home". The form goes through newsletter-subscribe,
+ * so the address gets a fresh double opt-in rather than being reactivated here.
+ * Reminder, alerts, account and outreach links do not show it: none of them
+ * took the reader off the newsletter.
  */
 
 import { useEffect, useState } from "react";
@@ -34,6 +41,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { logConsent } from "@/lib/consentLog";
@@ -70,6 +78,11 @@ export default function Unsubscribe() {
   const outreachToken = params.get("outreach");
   const [status, setStatus] = useState<Status>("loading");
   const [reminderEvent, setReminderEvent] = useState<string | null>(null);
+  const isNewsletterLink =
+    reminderToken === null &&
+    alertsToken === null &&
+    accountToken === null &&
+    outreachToken === null;
 
   useEffect(() => {
     let cancelled = false;
@@ -301,6 +314,19 @@ export default function Unsubscribe() {
                   You were already unsubscribed. No further action is needed.
                 </AlertDescription>
               </Alert>
+            )}
+
+            {isNewsletterLink && (status === "success" || status === "already") && (
+              <section aria-labelledby="unsubscribe-undo-heading" className="space-y-2">
+                <h2 id="unsubscribe-undo-heading" className="text-sm font-semibold">
+                  Unsubscribed by mistake?
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Enter your email and we&apos;ll send a confirmation link. The
+                  weekly email starts again once you click it.
+                </p>
+                <NewsletterSignup variant="compact" source="unsubscribe_page" />
+              </section>
             )}
 
             {status === "invalid" && (
