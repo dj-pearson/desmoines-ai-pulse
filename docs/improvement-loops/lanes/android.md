@@ -190,6 +190,24 @@ chip reads "Date night - Evenings" and every row starts 4pm or later Central, th
 logic tree" means the quotes around the imatch pattern are not reaching the URL; an empty evening list
 on a busy week means the 60-row fetch is all daytime rows, not a broken filter (check with ?time=all).
 
+AND-AUDIT-017 (unmounted composables) is partly done. The cosmetic and superseded orphans from the
+2026-08-29 triage are deleted: ParallaxHeroHeader, BrandedRefreshIndicator, MapPreviewSheet (with
+CategoryMapMarker), ToastOverlay (with ToastMessage), AnimatedTabItem, GlassTextField, AppTypography
+(AppText, rememberAppTextStyle, AppTextStyle), GlassCard and BrandDestructiveButton. BrandSecondaryButton
+was on that list and is now used, so it stays; BackdropBlurScope is a false positive of the scan (it is the
+type of LocalBackdropBlurState). What is left is not a cleanup:
+  1. Owner decision (AC4): AffiliateAdBanner, PaywallSheet, SubscriptionTierCard + BillingCycleToggle are
+     revenue surfaces; ask before wiring or deleting them.
+  2. Wire-ups: RecentSearchesList, TrendingChipsRow, rememberDebouncedQuery (a search-suggestions feature),
+     OnboardingPageIndicator and OnboardingNavRow, and Modifier.entranceAnimation (new since the triage;
+     iOS uses its twin on Home, Search, Restaurants and Attractions).
+  3. Leave the Category* colour tokens, StatusWarning and CardShadow (design tokens, per the triage).
+A Gradle build is the check this deletion has not had: run :app:compileDebugKotlin once on a machine with
+the SDK. The static check found 0 references to any removed name and 0 unresolved project imports, so a
+failure there would point at a reference the scan cannot see (reflection or a string-built class name).
+Three iOS comments still say they match the deleted Android files (AnimatedTabItem.swift,
+ParallaxHeroHeader.swift, BrandedRefreshView.swift); they are iOS-lane files and were left alone.
+
 ## Loop log
 
 | Date | Story | Commit | Result |
@@ -222,3 +240,4 @@ on a busy week means the 60-row fetch is all daytime rows, not a broken filter (
 | 2026-11-15 | AND-AUDIT-044 | this commit | Event detail treats an ended or archived row as past, as the web event page does (!isOver && !archived): "This event has already happened" banner (iOS wording), no urgency chip, no Add to Calendar; Event decodes archived_at. 7 new EventPastStateTest JVM tests pass, 122/122 with the series, calendar, day and DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); ignoring archived_at fails 2, a start-based rule fails 3. check-mobile-schema OK. Compose screen and app module not compiled (no Android SDK); no device check |
 | 2026-11-15 | AND-AUDIT-045 | this commit | /events/date-night and /events/<month>-<year> open the in-app web view of the same URL (was Home, which dropped the link); month archives go to the web because native reads floor at today. 3 new DeepLinkWebDestinationTest tests (10 runs) pass, 125/125 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); restoring Home fails exactly 5. Instrumented DeepLinkHandlerTest updated, not run. App module not compiled (no Android SDK); no device check |
 | 2026-11-16 | AND-AUDIT-046 | this commit | /events/date-night opens a native Search with the web's DATE_NIGHT_FILTER over 14 Central days, evenings only unless ?time=all, and a removable chip (was the in-app web view); matches iOS IOS-AUDIT-008. 8 new DateNightFilterTest and 2 new DeepLinkPendingFilterTest JVM tests pass, 86/86 across six util suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); a mutation routing date-night back to the web and counting no-time rows as evenings fails exactly 2. New vitest androidDateNightParity 5/5, src/lib/__tests__ 2273/2273, check-mobile-schema OK. SearchViewModel, SearchScreen, EventsRemoteDataSource and app module not compiled (no Android SDK); instrumented DeepLinkHandlerTest updated, not run; no device check |
+| 2026-11-16 | AND-AUDIT-017 | this commit | Deleted the 14 cosmetic/superseded orphans from the AC2 triage (6 whole files, AppTypography.kt, GlassCard, BrandDestructiveButton; 968 lines). A static check over android/app/src finds 0 remaining references to any removed name and 0 unresolved com.desmoines.aipulse imports across 1305 (a planted reference fails it); the orphan scan drops 49 -> 35, the rest being revenue surfaces, wire-up candidates, tokens and scan false positives. Not compiled (no Android SDK); no device check needed (nothing reachable changed) |
