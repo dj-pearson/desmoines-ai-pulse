@@ -11,6 +11,7 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.DateNightFilter
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.ShortcutDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,7 +41,13 @@ data class SearchScreenState(
     val selectedTab: SearchTab = SearchTab.EVENTS,
     /** The /events/kids filter (AND-AUDIT-041); narrows event results only. */
     val kidsOnly: Boolean = false,
+    /** The /events/date-night filter (AND-AUDIT-046); null when off. */
+    val dateNight: DateNightFilter.Times? = null,
 ) {
+    /** A landing filter that lists events with no text of its own. */
+    val hasEventFilter: Boolean
+        get() = kidsOnly || dateNight != null
+
     val totalResults: Int
         get() = eventResults.size + restaurantResults.size + attractionResults.size
 
@@ -71,14 +78,15 @@ class SearchViewModel @Inject constructor(
     private val _isSearching = MutableStateFlow(false)
     private val _hasSearched = MutableStateFlow(false)
     private val _kidsOnly = MutableStateFlow(false)
+    private val _dateNight = MutableStateFlow<DateNightFilter.Times?>(null)
 
     val uiState: StateFlow<SearchScreenState> = combine(
         _searchText,
         _selectedTab,
         _eventResults,
         _restaurantResults,
-        combine(_attractionResults, _isSearching, _hasSearched, _kidsOnly) { a, s, h, k ->
-            SearchProgress(a, s, h, k)
+        combine(_attractionResults, _isSearching, _hasSearched, _kidsOnly, _dateNight) { a, s, h, k, d ->
+            SearchProgress(a, s, h, k, d)
         }
     ) { searchText, selectedTab, events, restaurants, progress ->
         SearchScreenState(
@@ -90,6 +98,7 @@ class SearchViewModel @Inject constructor(
             searchText = searchText,
             selectedTab = selectedTab,
             kidsOnly = progress.kidsOnly,
+            dateNight = progress.dateNight,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -115,6 +124,12 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             deepLinkHandler.pendingKidsEvents.collect { pending ->
                 if (pending && deepLinkHandler.consumeKidsEvents()) showKidsEvents()
+            }
+        }
+        // An /events/date-night link (AND-AUDIT-046), the same way.
+        viewModelScope.launch {
+            deepLinkHandler.pendingDateNight.collect { pending ->
+                if (pending != null) deepLinkHandler.consumeDateNight()?.let { showDateNight(it) }
             }
         }
         // App Shortcut / Assistant deep links (ANDP-015): apply pre-filled
@@ -164,6 +179,8 @@ class SearchViewModel @Inject constructor(
      * without a text query, as iOS's kidsDestination does.
      */
     fun showKidsEvents() {
+        // One landing filter at a time: each is its own or() group.
+        _dateNight.value = null
         _kidsOnly.value = true
         _selectedTab.value = SearchTab.EVENTS
         performDebouncedSearch()
@@ -175,22 +192,42 @@ class SearchViewModel @Inject constructor(
         performDebouncedSearch()
     }
 
+    /**
+     * Lists date night events by the web's rule over its 14 Central days,
+     * evenings only unless [times] is ANY_TIME, as iOS's dateNightDestination
+     * does.
+     */
+    fun showDateNight(times: DateNightFilter.Times) {
+        _kidsOnly.value = false
+        _dateNight.value = times
+        _selectedTab.value = SearchTab.EVENTS
+        performDebouncedSearch()
+    }
+
+    /** Drops the date night filter and re-runs whatever text is left. */
+    fun clearDateNightFilter() {
+        _dateNight.value = null
+        performDebouncedSearch()
+    }
+
     fun onTabSelected(tab: SearchTab) {
         _selectedTab.value = tab
     }
 
     fun clearSearch() {
-        // A kids list can be in flight with no text; stop it repopulating.
+        // A kids or date night list can be in flight with no text; stop it
+        // repopulating.
         searchJob?.cancel()
         _isSearching.value = false
         _searchText.value = ""
         _kidsOnly.value = false
+        _dateNight.value = null
         clearResults()
     }
 
     fun refresh() {
         val current = _searchText.value
-        if (current.isEmpty() && !_kidsOnly.value) return
+        if (current.isEmpty() && !_kidsOnly.value && _dateNight.value == null) return
         clearResults()
         _searchText.value = current
         performDebouncedSearch()
@@ -201,7 +238,8 @@ class SearchViewModel @Inject constructor(
 
         val query = _searchText.value
         val kidsOnly = _kidsOnly.value
-        if (query.isEmpty() && !kidsOnly) {
+        val dateNight = _dateNight.value
+        if (query.isEmpty() && !kidsOnly && dateNight == null) {
             clearResults()
             return
         }
@@ -212,9 +250,9 @@ class SearchViewModel @Inject constructor(
             _isSearching.value = true
             _hasSearched.value = true
 
-            // Parallel search across all content types. The kids filter alone
+            // Parallel search across all content types. A landing filter alone
             // is an events list: there is no text to match places against.
-            val eventsDeferred = launch { searchEvents(query, kidsOnly) }
+            val eventsDeferred = launch { searchEvents(query, kidsOnly, dateNight) }
             val restaurantsDeferred = launch {
                 if (query.isEmpty()) _restaurantResults.value = emptyList() else searchRestaurants(query)
             }
@@ -230,14 +268,30 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private suspend fun searchEvents(query: String, kidsOnly: Boolean) {
+    private suspend fun searchEvents(query: String, kidsOnly: Boolean, dateNight: DateNightFilter.Times?) {
+        // Date night is bounded to the web's 14 Central days; evenings are
+        // filtered on the phone, as iOS does, so ask for more to filter.
+        val window = dateNight?.let { DateNightFilter.windowBounds() }
+        val eveningOnly = dateNight == DateNightFilter.Times.EVENING
         val result = eventsRepository.fetchEvents(
-            EventsQuery(searchText = query.ifEmpty { null }, kidsOnly = kidsOnly, limit = 20)
+            EventsQuery(
+                searchText = query.ifEmpty { null },
+                kidsOnly = kidsOnly,
+                dateNightOnly = dateNight != null,
+                dateStart = window?.first,
+                dateEnd = window?.second,
+                limit = if (eveningOnly) DateNightFilter.EVENING_FETCH_LIMIT else DateNightFilter.RESULT_LIMIT,
+            )
         )
-        val events = result.getOrNull()?.events ?: emptyList()
-        // The fuzzy RPC knows nothing of the kids rule, so it would put adult
-        // events back into a kids list.
-        if (events.isEmpty() && !kidsOnly) {
+        val fetched = result.getOrNull()?.events ?: emptyList()
+        val events = if (eveningOnly) {
+            fetched.filter(DateNightFilter::isEveningStart).take(DateNightFilter.RESULT_LIMIT)
+        } else {
+            fetched
+        }
+        // The fuzzy RPC knows nothing of the kids or date night rule, so it
+        // would put unrelated events back into a filtered list.
+        if (events.isEmpty() && !kidsOnly && dateNight == null) {
             val fuzzyResult = eventsRepository.fuzzySearchEvents(query, limit = 20)
             _eventResults.value = fuzzyResult.getOrDefault(emptyList())
         } else {
@@ -270,6 +324,7 @@ class SearchViewModel @Inject constructor(
         val isSearching: Boolean,
         val hasSearched: Boolean,
         val kidsOnly: Boolean,
+        val dateNight: DateNightFilter.Times?,
     )
 
     private fun clearResults() {

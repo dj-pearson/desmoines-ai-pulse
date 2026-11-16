@@ -77,6 +77,14 @@ class DeepLinkHandler @Inject constructor() {
          * [pendingKidsEvents] until SearchViewModel applies it.
          */
         data object KidsEvents : Destination()
+
+        /**
+         * Search on Events with the date night filter on: /events/date-night
+         * (iOS dateNightDestination, AND-AUDIT-046), evenings only unless the
+         * link says ?time=all. The times wait in [pendingDateNight] until
+         * SearchViewModel applies them.
+         */
+        data class DateNight(val times: DateNightFilter.Times) : Destination()
     }
 
     enum class TabDestination {
@@ -113,6 +121,10 @@ class DeepLinkHandler @Inject constructor() {
     // An /events/kids link, held for SearchViewModel for the same reason.
     private val _pendingKidsEvents = MutableStateFlow(false)
     val pendingKidsEvents: StateFlow<Boolean> = _pendingKidsEvents.asStateFlow()
+
+    // An /events/date-night link's times, held for SearchViewModel likewise.
+    private val _pendingDateNight = MutableStateFlow<DateNightFilter.Times?>(null)
+    val pendingDateNight: StateFlow<DateNightFilter.Times?> = _pendingDateNight.asStateFlow()
 
     /**
      * Attempts to parse a URL into a navigation destination.
@@ -195,11 +207,19 @@ class DeepLinkHandler @Inject constructor() {
         return pending
     }
 
+    /** Consumes an /events/date-night link's times: them once, then null. */
+    fun consumeDateNight(): DateNightFilter.Times? {
+        val pending = _pendingDateNight.value
+        _pendingDateNight.value = null
+        return pending
+    }
+
     /** Internal, not private, so JVM tests can publish without an android.net.Uri. */
     internal fun publish(destination: Destination) {
         if (destination is Destination.Search) _pendingSearchQuery.value = destination.query
         if (destination is Destination.RestaurantsOpenNow) _pendingRestaurantsOpenNow.value = true
         if (destination is Destination.KidsEvents) _pendingKidsEvents.value = true
+        if (destination is Destination.DateNight) _pendingDateNight.value = destination.times
         _pendingDestination.value = destination
     }
 
@@ -417,11 +437,9 @@ class DeepLinkHandler @Inject constructor() {
                 // Bare /events/series; /events/series/:slug goes through
                 // seriesDestination before this is reached.
                 "series" -> return Destination.Web(url)
-                // The web page is DATE_NIGHT_FILTER over a 14-day Central
-                // window, evening starts unless ?time=all. Android has none of
-                // that natively, and Home dropped the link's content
-                // (AND-AUDIT-045), so the page opens as the web has it.
-                "date-night" -> return Destination.Web(url)
+                // The web's rule natively, as iOS does (AND-AUDIT-046): it
+                // opened the web page (AND-AUDIT-045), and Home before that.
+                "date-night" -> return Destination.DateNight(DateNightFilter.timesFor(url))
             }
             if (segment in EVENT_SUBURB_SEGMENTS) {
                 return Destination.Search("events in " + segment.replace('-', ' '))

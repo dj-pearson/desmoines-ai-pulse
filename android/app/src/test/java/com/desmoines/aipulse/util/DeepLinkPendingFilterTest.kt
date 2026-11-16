@@ -69,4 +69,29 @@ class DeepLinkPendingFilterTest {
         other.publish(Destination.Search("kids events"))
         assertFalse(other.pendingKidsEvents.value)
     }
+
+    // /events/date-night hands its times to SearchViewModel likewise (AND-AUDIT-046).
+
+    @Test
+    fun `a date night link holds its times until they are consumed once`() {
+        val handler = DeepLinkHandler()
+        handler.publish(Destination.DateNight(DateNightFilter.Times.ANY_TIME))
+
+        assertEquals(Destination.DateNight(DateNightFilter.Times.ANY_TIME), handler.pendingDestination.value)
+        assertEquals(DateNightFilter.Times.ANY_TIME, handler.pendingDateNight.value)
+        assertEquals(DateNightFilter.Times.ANY_TIME, handler.consumeDateNight())
+        assertNull(handler.consumeDateNight())
+    }
+
+    @Test
+    fun `a date night link sets no kids filter or search text`() {
+        val handler = DeepLinkHandler()
+        handler.publish(Destination.DateNight(DateNightFilter.Times.EVENING))
+        assertFalse(handler.pendingKidsEvents.value)
+        assertNull(handler.pendingSearchQuery.value)
+
+        val kids = DeepLinkHandler()
+        kids.publish(Destination.KidsEvents)
+        assertNull(kids.pendingDateNight.value)
+    }
 }

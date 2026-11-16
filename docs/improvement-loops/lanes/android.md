@@ -169,15 +169,26 @@ confirm the banner shows and Add to Calendar is gone; then open a festival on it
 it still offers Add to Calendar. The trap: if a linked archived row opens as not-found instead, the by-id
 read is not returning archived rows (look at the events RLS policy), which this change does not touch.
 
-AND-AUDIT-045 (date-night and month links) is code-complete and JVM-tested. /events/date-night and
-/events/<month>-<year> now open the in-app web view of the same URL (query string kept, so ?time=all
-survives) instead of Home. Month pages go to the web on purpose: every native events read floors at
-today in Central, so june-2026 could never be shown natively. A native date-night Search (the web's
-DATE_NIGHT_FILTER over 14 Central days, evenings unless ?time=all, as iOS IOS-AUDIT-008 does) is a
-separate open story. One device check closes it: adb am start
-https://desmoinesinsider.com/events/june-2026 and /events/date-night and confirm each opens the web
-page in the app, not Home. The trap: if the web view hands off to the system browser instead, its
-initialHost check is comparing against a different host spelling (www vs bare).
+AND-AUDIT-045 (month links) is code-complete and JVM-tested. /events/<month>-<year> opens the in-app web
+view of the same URL instead of Home. Month pages go to the web on purpose: every native events read
+floors at today in Central, so june-2026 could never be shown natively. One device check closes it: adb am
+start https://desmoinesinsider.com/events/june-2026 and confirm the web page opens in the app, not Home.
+The trap: if the web view hands off to the system browser instead, its initialHost check is comparing
+against a different host spelling (www vs bare). (/events/date-night no longer goes to the web view; see
+AND-AUDIT-046.)
+
+AND-AUDIT-046 (native date night) is code-complete and JVM-tested. /events/date-night opens Search on
+Events with a removable "Date night" chip (Destination.DateNight; the times wait in pendingDateNight until
+SearchViewModel applies and consumes them). util/DateNightFilter holds the web's DATE_NIGHT_FILTER
+(category.in.(Music,Comedy,Arts) or the title words, one supabase-kt or { isIn; imatch } group), the 14
+Central days and the 4pm-4am Central evening rule, held equal to the web by
+src/lib/__tests__/androidDateNightParity.test.ts. Evenings are filtered on the phone from 60 fetched rows,
+as iOS does; ?time=all keeps every time. Kids and date night are exclusive (each is its own or() param).
+One device check closes it: adb am start https://desmoinesinsider.com/events/date-night and confirm the
+chip reads "Date night - Evenings" and every row starts 4pm or later Central, then the same with
+?time=all and confirm an afternoon or Time TBA row can appear. Two traps: a PostgREST 400 "failed to parse
+logic tree" means the quotes around the imatch pattern are not reaching the URL; an empty evening list
+on a busy week means the 60-row fetch is all daytime rows, not a broken filter (check with ?time=all).
 
 ## Loop log
 
@@ -210,3 +221,4 @@ initialHost check is comparing against a different host spelling (www vs bare).
 | 2026-11-15 | AND-AUDIT-043 | this commit | Event detail links an annual edition to its native series screen ("<name> happens every year." + "Every year's dates for <name>"), matching the web event page; neither mobile app linked detail to the series. 1 new EventSeriesTest JVM test passes, 9/9 in the suite on a stub harness (kotlinc 2.2.10, JUnit 5.10); parity vitest 6/6 (1 new, pins both strings to src/pages/EventDetails.tsx); changing the link label fails 1 JVM and 1 vitest. Compose screen, nav and app module not compiled (no Android SDK); no device check |
 | 2026-11-15 | AND-AUDIT-044 | this commit | Event detail treats an ended or archived row as past, as the web event page does (!isOver && !archived): "This event has already happened" banner (iOS wording), no urgency chip, no Add to Calendar; Event decodes archived_at. 7 new EventPastStateTest JVM tests pass, 122/122 with the series, calendar, day and DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); ignoring archived_at fails 2, a start-based rule fails 3. check-mobile-schema OK. Compose screen and app module not compiled (no Android SDK); no device check |
 | 2026-11-15 | AND-AUDIT-045 | this commit | /events/date-night and /events/<month>-<year> open the in-app web view of the same URL (was Home, which dropped the link); month archives go to the web because native reads floor at today. 3 new DeepLinkWebDestinationTest tests (10 runs) pass, 125/125 across the series, calendar, day and three DeepLink suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); restoring Home fails exactly 5. Instrumented DeepLinkHandlerTest updated, not run. App module not compiled (no Android SDK); no device check |
+| 2026-11-16 | AND-AUDIT-046 | this commit | /events/date-night opens a native Search with the web's DATE_NIGHT_FILTER over 14 Central days, evenings only unless ?time=all, and a removable chip (was the in-app web view); matches iOS IOS-AUDIT-008. 8 new DateNightFilterTest and 2 new DeepLinkPendingFilterTest JVM tests pass, 86/86 across six util suites on a stub harness (kotlinc 2.2.10, JUnit 5.10); a mutation routing date-night back to the web and counting no-time rows as evenings fails exactly 2. New vitest androidDateNightParity 5/5, src/lib/__tests__ 2273/2273, check-mobile-schema OK. SearchViewModel, SearchScreen, EventsRemoteDataSource and app module not compiled (no Android SDK); instrumented DeepLinkHandlerTest updated, not run; no device check |

@@ -9,6 +9,7 @@ import com.desmoines.aipulse.util.EventSlug
 import com.desmoines.aipulse.util.SeriesEventRow
 import com.desmoines.aipulse.util.SeriesEventRows
 import com.desmoines.aipulse.util.KidsEventsFilter
+import com.desmoines.aipulse.util.DateNightFilter
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -34,6 +35,11 @@ data class EventsQuery(
     val isFeatured: Boolean? = null,
     /** The web's /events/kids rule, [KidsEventsFilter] (AND-AUDIT-041). */
     val kidsOnly: Boolean = false,
+    /**
+     * The web's /events/date-night rule, [DateNightFilter] (AND-AUDIT-046).
+     * Never set with [kidsOnly]: two or() params are not one condition.
+     */
+    val dateNightOnly: Boolean = false,
     val limit: Int = Config.DEFAULT_PAGE_SIZE,
     val offset: Int = 0,
 )
@@ -106,6 +112,14 @@ class EventsRemoteDataSource @Inject constructor(
                 if (query.kidsOnly) {
                     or {
                         KidsEventsFilter.ARMS.forEach { imatch(it.column, it.pattern) }
+                    }
+                }
+
+                // Date night: the web's DATE_NIGHT_FILTER or-group.
+                if (query.dateNightOnly) {
+                    or {
+                        isIn("category", DateNightFilter.CATEGORIES)
+                        imatch("title", DateNightFilter.TITLE_PATTERN)
                     }
                 }
             }

@@ -80,15 +80,21 @@ class DeepLinkWebDestinationTest {
     }
 
     @Test
-    fun `date night opens the web page, never Home`() {
-        // AND-AUDIT-045: it landed on Home, which has nothing of the link.
+    fun `date night opens the native date night filter, evenings by default`() {
+        // AND-AUDIT-046: it opened the web page (AND-AUDIT-045), Home before.
+        assertEquals(Destination.DateNight(DateNightFilter.Times.EVENING), web("/events/date-night"))
+        // The web's ?time=all toggle keeps every start time, as on iOS.
+        val all = "https://desmoinesinsider.com/events/date-night?time=all"
         assertEquals(
-            Destination.Web("https://desmoinesinsider.com/events/date-night"),
-            web("/events/date-night"),
+            Destination.DateNight(DateNightFilter.Times.ANY_TIME),
+            webDestination(listOf("events", "date-night"), null, all),
         )
-        // The ?time=all toggle survives, since the whole URL is opened.
-        val withQuery = "https://desmoinesinsider.com/events/date-night?time=all"
-        assertEquals(Destination.Web(withQuery), webDestination(listOf("events", "date-night"), null, withQuery))
+        // Any other value is the default, as the web's getStr(...) !== "all".
+        val evening = "https://desmoinesinsider.com/events/date-night?time=evening&utm_source=x"
+        assertEquals(
+            Destination.DateNight(DateNightFilter.Times.EVENING),
+            webDestination(listOf("events", "date-night"), null, evening),
+        )
     }
 
     @ParameterizedTest
