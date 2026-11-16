@@ -436,6 +436,8 @@ export function useMyPlans(options: UseMyPlansOptions = {}) {
         .from("content_favorites")
         .select("content_type, content_id, created_at")
         .eq("user_id", userId)
+        // Saved articles share the table (XPLAT-013) but are not places.
+        .neq("content_type", "article")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as PlaceFavorite[];

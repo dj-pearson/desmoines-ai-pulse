@@ -76,6 +76,50 @@ final class FavoritesContentRowTests: XCTestCase {
         )
         XCTAssertEqual(try json(row)["content_type"], "attraction")
     }
+
+    func testArticleRowKeys() throws {
+        let row = ContentFavoriteRow(
+            user_id: "u1",
+            content_type: FavoritesService.ContentKind.article.rawValue,
+            content_id: "g1"
+        )
+        XCTAssertEqual(try json(row), ["user_id": "u1", "content_type": "article", "content_id": "g1"])
+    }
+
+    /// XPLAT-013: every saved kind but events lives in content_favorites.
+    func testContentKindsMapOneToOneOntoFavoriteKinds() {
+        for kind in FavoritesService.ContentKind.allCases {
+            XCTAssertEqual(FavoritesService.ContentKind(kind.favoriteKind), kind)
+        }
+        XCTAssertNil(FavoritesService.ContentKind(.event))
+    }
+}
+
+/// XPLAT-013: when an article save stays on the device. content_type rejects
+/// 'article' (23514) until 20261116000010 is applied; for the other kinds a
+/// CHECK failure is a real error and must not be hidden as a local save.
+final class FavoritesStoreUnavailableTests: XCTestCase {
+
+    func testAMissingTableIsUnavailableForEveryKind() {
+        for kind in FavoritesService.ContentKind.allCases {
+            XCTAssertTrue(FavoritesService.isStoreUnavailable(StubPostgrestError(code: "42P01"), kind: kind))
+            XCTAssertTrue(FavoritesService.isStoreUnavailable(StubPostgrestError(code: "PGRST205"), kind: kind))
+        }
+    }
+
+    func testACheckViolationIsUnavailableOnlyForArticles() {
+        let check = StubPostgrestError(code: "23514")
+        XCTAssertTrue(FavoritesService.isStoreUnavailable(check, kind: .article))
+        XCTAssertFalse(FavoritesService.isStoreUnavailable(check, kind: .restaurant))
+        XCTAssertFalse(FavoritesService.isStoreUnavailable(check, kind: .attraction))
+    }
+
+    func testOtherFailuresAreThrownNotSavedLocally() {
+        for code in ["PT402", "42501", "23505"] {
+            XCTAssertFalse(FavoritesService.isStoreUnavailable(StubPostgrestError(code: code), kind: .article))
+        }
+        XCTAssertFalse(FavoritesService.isStoreUnavailable(URLError(.notConnectedToInternet), kind: .article))
+    }
 }
 
 /// IOS-DD-SAVED-05: in-flight adds count against the cap.
