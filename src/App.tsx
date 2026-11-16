@@ -3,6 +3,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ROUTER_FUTURE } from "@/lib/routerFuture";
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
 import { lazyOrNothing } from "@/lib/lazyOrNothing";
@@ -386,7 +387,7 @@ const App = () => (
         anyway, for delayDuration={0}) - so this one was redundant, and it
         was the only thing pulling the Radix tooltip and its floating-ui
         popper into the render-blocking entry chunk. WEB-PERF-020. */}
-    <BrowserRouter>
+    <BrowserRouter future={ROUTER_FUTURE}>
       <ScrollRestoration />
       <AuthProvider>
         <SessionManager />
