@@ -65,7 +65,7 @@ for (const file of WRITERS) {
 const CLOSED_FOR_GOOD = 'status.is.null,status.not.in.(closed,permanently_closed,closed_permanently)';
 const RESTAURANT_PREDICATES = [
   ['merged rows excluded', /\.neq\(["']is_merged["'], true\)/],
-  ['closed-for-good statuses excluded, NULL kept', new RegExp(`\\.or\\(["']${CLOSED_FOR_GOOD.replace(/[.()]/g, '\\$&')}["']\\)`)],
+  ['closed-for-good statuses excluded, NULL kept', new RegExp(`\\.or\\(["']${CLOSED_FOR_GOOD.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']\\)`)],
   ['Google CLOSED_PERMANENTLY excluded, NULL kept', /\.or\(["']business_status\.is\.null,business_status\.neq\.CLOSED_PERMANENTLY["']\)/],
 ];
 
