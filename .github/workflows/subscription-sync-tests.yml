@@ -240,6 +240,12 @@ jobs:
       # are null rather than an empty periods array, because `{periods: []}`
       # reads as "closed all week" and means "Google did not answer".
       - run: deno test --allow-read supabase/functions/_tests/place-hours.test.ts
+      # WEB-BE-070. Rating, review count, phone, website, price, reservability
+      # and the listing link were read once and shown undated, and the price
+      # was credited to Google when Google had not supplied it. Pins the
+      # refresh mask and its SKU, the rule that a missing answer never blanks
+      # a stored value, the lock companions, and the SQL price-source trigger.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/place-facts.test.ts
       - run: deno test --allow-read supabase/functions/_tests/place-lookup.test.ts
       - run: deno test --allow-read supabase/functions/_tests/restaurant-verification-health.test.ts
       # WEB-BE-066. auto-enrich-restaurants posted the ids it picked and

@@ -53,7 +53,9 @@ export function RestaurantHoursRefresh() {
           Opening hours
         </h3>
         <p className="text-sm text-muted-foreground">
-          Reads only hours and open/closed status from Google Places. Descriptions, photos and ratings are left alone.
+          Fill reads only hours and open/closed status from Google Places. Refresh also re-reads Google&apos;s rating, review
+          count, phone, website, price level, reservations and listing link; a field Google leaves out keeps its stored
+          value, and fields an owner or admin set are left alone. Descriptions and photos are never touched.
           The daily job refreshes hours older than {STALE_DAYS_DEFAULT} days; use these after a holiday-hours change.
         </p>
       </div>

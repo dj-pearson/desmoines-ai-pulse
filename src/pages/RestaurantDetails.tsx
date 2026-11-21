@@ -34,6 +34,14 @@ import {
   restaurantSeoKeywords,
 } from "@/lib/restaurantMeta";
 import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
+import {
+  checkedDateLabel,
+  googleRatingSummary,
+  priceFromGoogle,
+  restaurantReviewCount,
+  reviewCountLabel,
+  type GoogleRatingSummary,
+} from "@/lib/googleFacts";
 import { Phone, Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
 import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
@@ -172,10 +180,23 @@ function useRestaurantDetail(slug: string | undefined) {
 }
 
 interface ProvenanceProps {
-  rating: number | null | undefined;
+  rating: GoogleRatingSummary | null;
+  priceFromGoogle: boolean;
   menuCapturedAt: string | null;
   menuFromTheirSite: boolean;
   hoursLine: string | null;
+}
+
+/** "Rating from Google, 312 reviews, checked November 21, 2026". */
+function ratingProvenanceLine(rating: GoogleRatingSummary): string {
+  const checked = checkedDateLabel(rating.checkedAt);
+  return [
+    "Rating from Google",
+    rating.reviewCount ? reviewCountLabel(rating.reviewCount) : null,
+    checked ? `checked ${checked}` : "check date not recorded",
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 /**
@@ -183,9 +204,10 @@ interface ProvenanceProps {
  * (WP3.6, bet 4). It replaced a blanket freshness badge that measured when
  * any column last changed, not whether anyone checked anything.
  */
-function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hoursLine }: ProvenanceProps) {
+function RestaurantProvenance({ rating, priceFromGoogle, menuCapturedAt, menuFromTheirSite, hoursLine }: ProvenanceProps) {
   const lines = [
-    rating ? "Rating: Google rating" : null,
+    rating ? ratingProvenanceLine(rating) : null,
+    priceFromGoogle ? "Price level from Google" : null,
     menuCapturedAt ? `Menu captured ${menuCapturedAt}${menuFromTheirSite ? " from their site" : ""}` : null,
     hoursLine,
   ].filter((l): l is string => !!l);
@@ -436,6 +458,12 @@ export default function RestaurantDetails() {
     reservation_url?: string | null;
     neighborhood?: string | null;
   };
+  // WEB-BE-070: the rating with its count and check date, and whether Google
+  // (rather than page text, a model or an admin) supplied the price.
+  const googleRating = googleRatingSummary(restaurant);
+  const priceIsGoogle = priceFromGoogle(restaurant);
+  const googleListingHref = safeWebUrl(placeExtras.google_maps_uri);
+  const ratingCheckedOn = googleRating ? checkedDateLabel(googleRating.checkedAt) : null;
 
   const showImage = restaurant.image_url && !imageError;
   // The address's city, not the `city` column: the column says "Des Moines" for
@@ -457,6 +485,9 @@ export default function RestaurantDetails() {
     hasHours: lifecycle !== "closed" && (!!hoursSpec || hoursTextOf(restaurant.opening) !== null),
     hasPhone: !isShut && !!phoneHref,
     hasPhotos: !!restaurant.image_url,
+    // WEB-SEO-079 / WEB-BE-070: the Google count this page shows. The edge
+    // shell passes the same restaurantReviewCount, so both titles agree.
+    reviewCount: restaurantReviewCount(restaurant),
   };
   // WEB-BE-075: "Listing last updated" and dateModified follow a change a
   // visitor can see. updated_at moves on every hours re-check and popularity
@@ -467,8 +498,7 @@ export default function RestaurantDetails() {
   const seoDescription = restaurantMetaDescription(metaInput);
 
   // WEB-SEO-079: one keyword rule with the title. "{name} reviews" only with a
-  // review count, which is not passed yet, so the page and the edge shell
-  // (which has no count) agree. WEB-BE-070 will pass the Google count to both.
+  // review count, which metaInput carries from Google (WEB-BE-070).
   const seoKeywords = restaurantSeoKeywords(metaInput);
 
   // WEB-SEO-016: getEstimatedReviewCount() used to synthesise a review count
@@ -736,11 +766,14 @@ export default function RestaurantDetails() {
                     {restaurant.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 text-white">
-                    {restaurant.rating ? (
+                    {googleRating ? (
                       <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
                         <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                        <span className="font-semibold">{restaurant.rating.toFixed(1)}</span>
-                        <span className="text-sm">Google rating</span>
+                        <span className="font-semibold">{googleRating.rating.toFixed(1)}</span>
+                        <span className="text-sm">
+                          Google rating
+                          {googleRating.reviewCount ? ` (${reviewCountLabel(googleRating.reviewCount)})` : ""}
+                        </span>
                       </div>
                     ) : null}
                     {/* Price and address moved to the at-a-glance list
@@ -820,6 +853,7 @@ export default function RestaurantDetails() {
             <RestaurantAtAGlance
               hoursSentence={hoursSentence}
               priceTier={tier}
+              priceFromGoogle={priceIsGoogle}
               address={restaurant.location}
               locality={restaurantLocality(restaurant)}
               phone={!isShut ? restaurant.phone : null}
@@ -1041,17 +1075,34 @@ export default function RestaurantDetails() {
                         <span className="text-gray-700">Price level</span>
                         <div className="text-right">
                           <span className="text-gray-900 font-semibold">{tier}</span>
-                          <p className="text-xs text-gray-700">on Google</p>
+                          {/* WEB-BE-070: credited only when Google supplied it. */}
+                          {priceIsGoogle && <p className="text-xs text-gray-700">on Google</p>}
                         </div>
                       </div>
                     )}
-                    {restaurant.rating ? (
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    {googleRating ? (
+                      <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
                         <span className="text-gray-700">Google rating</span>
-                        <span className="flex items-center gap-1 font-semibold text-gray-900">
-                          <Star className="h-4 w-4 fill-amber-400 text-amber-500" aria-hidden="true" />
-                          {restaurant.rating.toFixed(1)} of 5
-                        </span>
+                        <div className="text-right">
+                          <span className="flex items-center justify-end gap-1 font-semibold text-gray-900">
+                            <Star className="h-4 w-4 fill-amber-400 text-amber-500" aria-hidden="true" />
+                            {googleRating.rating.toFixed(1)} of 5
+                          </span>
+                          <p className="text-xs text-gray-700">
+                            {googleRating.reviewCount ? `${reviewCountLabel(googleRating.reviewCount)}, ` : ""}
+                            {ratingCheckedOn ? `checked ${ratingCheckedOn}` : "check date not recorded"}
+                          </p>
+                          {googleListingHref && (
+                            <a
+                              href={googleListingHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-medium text-[#2D1B69] underline underline-offset-2"
+                            >
+                              See it on Google
+                            </a>
+                          )}
+                        </div>
                       </div>
                     ) : null}
                     {sponsored && (
@@ -1090,8 +1141,10 @@ export default function RestaurantDetails() {
                           located {restaurant.location ? `at ${restaurant.location} in` : "in"} {cityName}, Iowa.
                           {lifecycle === "closed" ? " It has closed permanently." : ""}
                           {lifecycle === "temporarily_closed" ? " It is temporarily closed." : ""}
-                          {restaurant.rating ? ` Google rating: ${restaurant.rating.toFixed(1)} out of 5.` : ""}
-                          {tier ? ` Google lists its price level as ${tier}.` : ""}
+                          {googleRating
+                            ? ` Google rating: ${googleRating.rating.toFixed(1)} out of 5${googleRating.reviewCount ? ` from ${reviewCountLabel(googleRating.reviewCount)}` : ""}${ratingCheckedOn ? `, checked ${ratingCheckedOn}` : ""}.`
+                            : ""}
+                          {tier ? (priceIsGoogle ? ` Google lists its price level as ${tier}.` : ` Its price level is ${tier}.`) : ""}
                           {!isShut && reservation.detail ? ` ${reservation.detail}.` : ""}
                         </p>
                       </div>
@@ -1282,7 +1335,8 @@ export default function RestaurantDetails() {
         </div>
 
         <RestaurantProvenance
-          rating={restaurant.rating}
+          rating={googleRating}
+          priceFromGoogle={!!tier && priceIsGoogle}
           menuCapturedAt={menuCapturedAt}
           menuFromTheirSite={menuFromTheirSite}
           hoursLine={lifecycle !== "closed" ? hoursSourceLine(hoursJson) : null}

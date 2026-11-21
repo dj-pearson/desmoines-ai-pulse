@@ -61,11 +61,12 @@ export interface RestaurantMetaInput {
    * How many reviews the page shows a count for (WEB-SEO-079): ours from
    * content_rating_aggregates.total_ratings, or Google's count once the page
    * shows it with attribution (WEB-BE-070). "Reviews" goes in the title and
-   * keywords only when this is above zero. Absent means none shown, which is
-   * what the edge shell passes: it has no count, and on 2026-10-01 there were
-   * no restaurant ratings at all.
+   * keywords only when this is above zero. Absent means none shown. The page
+   * and the edge shell both pass googleFacts.restaurantReviewCount(row).
    */
   reviewCount?: number | null;
+  /** WEB-BE-070: 'google' when Google's priceLevel supplied price_range; anything else credits nobody. */
+  price_range_source?: string | null;
 }
 
 export interface ParsedAddress {
@@ -406,8 +407,9 @@ const VENUE_CUISINE = /\b(cafe|coffee|tea|bar|pub|bakery|brewery|taproom|lounge|
  * The meta description. A stored seo_description wins when
  * restaurantSeoDescriptionProblems finds nothing wrong with it; otherwise it is
  * built from facts on the row, leading with what the searcher asked (where,
- * what kind, what it costs). The price is the tier as Google lists it, not a
- * dollar band we made up (WP3.5), and the closing list names only what the
+ * what kind, what it costs). The price is the stored tier, not a dollar band
+ * we made up (WP3.5), credited to Google only when price_range_source says
+ * Google supplied it (WEB-BE-070), and the closing list names only what the
  * page has.
  */
 export function restaurantMetaDescription(r: RestaurantMetaInput): string {
@@ -425,7 +427,8 @@ export function restaurantTemplateDescription(r: RestaurantMetaInput): string {
   const kind = `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
   const at = addr?.streetAddress ? ` at ${addr.streetAddress}` : "";
   const tier = priceTier(r.price_range);
-  const price = tier ? ` ${tier} on Google.` : "";
+  // WEB-BE-070: "on Google" only when Google's priceLevel supplied the tier.
+  const price = tier ? (r.price_range_source === "google" ? ` ${tier} on Google.` : ` Price level ${tier}.`) : "";
   const f = facetsOf(r);
   const has = [
     f.menu ? "menu" : null,

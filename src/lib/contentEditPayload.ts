@@ -63,9 +63,17 @@ function toDate(value: unknown): Date | null {
   return null;
 }
 
+/**
+ * A select option that writes null. Radix Select cannot hold an empty-string
+ * value, so a field that must be clearable (reservation_provider, whose CHECK
+ * rejects '') offers this and the payload writes null (WEB-BE-070).
+ */
+export const SELECT_NONE = "__none__";
+
 /** The value as it is written to the column. */
 function serialize(type: string, value: unknown): unknown {
   if (!value) return value;
+  if (type === "select" && value === SELECT_NONE) return null;
   if (type === "date" || type === "datetime") {
     const date = toDate(value);
     if (!date || Number.isNaN(date.getTime())) return value;

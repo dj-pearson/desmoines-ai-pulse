@@ -294,6 +294,15 @@ const PENDING_MIGRATIONS = [
   // reads in useDeals.ts and DealManager's list retry without the column on
   // 42703, so the pending window costs the 90-day rule, not the deals.
   { table: 'deals', column: 'last_confirmed_at', migration: '20261121000100' },
+  // WEB-BE-070: Google's review count, the rating's check date and who
+  // supplied price_range. The detail page reads them as optional columns
+  // (dropped and retried on 42703), the edge shell has a select tier without
+  // them, and the admin Places insert and bulk-update-restaurants retry
+  // without them, so the pending window costs the new facts and nothing else.
+  { table: 'restaurants', column: 'google_review_count', migration: '20261121000130' },
+  { table: 'restaurants', column: 'google_rating_checked_at', migration: '20261121000130' },
+  { table: 'restaurants', column: 'price_range_source', migration: '20261121000130' },
+  { table: 'restaurants', column: 'price_range_source_at', migration: '20261121000130' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

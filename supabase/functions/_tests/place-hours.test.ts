@@ -275,7 +275,9 @@ Deno.test("bulk-update-restaurants routes staleDays to the refresh and checks ev
   assert.ok(fn.includes(".not('google_place_id', 'is', null)"), "refresh reads rows with a place id");
   assert.ok(fn.includes(".or(staleHoursFilter(cutoff))"), "refresh must use the shared stale filter");
   assert.ok(fn.includes("buildStaleRefreshUpdate("), "refresh must write the check time");
-  assert.ok(fn.includes("HOURS_ONLY_FIELD_MASK"), "refresh must ask for the two fields only");
+  // WEB-BE-070: the refresh mask grew to the Google facts; place-facts.test.ts
+  // pins its contents and SKU.
+  assert.ok(fn.includes("staleRefreshFieldMask(row)"), "refresh must ask for the shared stale-refresh mask");
   // Routed only when staleDays parses; absent keeps the fill mode.
   assert.ok(/const staleDays = parseStaleDays\(rawStaleDays\)\s+if \(staleDays !== null\)/.test(src));
 });

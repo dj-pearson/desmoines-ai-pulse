@@ -28,6 +28,10 @@ export type RestaurantDetailRow = Omit<RestaurantRow, OmittedColumns> & {
   reservable?: boolean | null;
   reservation_url?: string | null;
   reservation_provider?: string | null;
+  /** WEB-BE-070 (20261121000130). */
+  google_review_count?: number | null;
+  google_rating_checked_at?: string | null;
+  price_range_source?: string | null;
 };
 
 type OptionalColumn = (typeof RESTAURANT_DETAIL_OPTIONAL_COLUMNS)[number];

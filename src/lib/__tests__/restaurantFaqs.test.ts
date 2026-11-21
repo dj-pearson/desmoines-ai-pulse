@@ -39,6 +39,31 @@ describe("buildRestaurantFaqs", () => {
     expect(faqs.find((f) => /rating/.test(f.question))?.answer).toBe("Google rating 4.7 of 5.");
   });
 
+  // WEB-BE-070
+  it("gives the rating with Google's count and the date it was checked", () => {
+    const { faqs } = buildRestaurantFaqs(
+      { ...ROW, google_review_count: 1234, google_rating_checked_at: "2026-11-21T15:00:00Z" },
+      CTX,
+    );
+    expect(faqs.find((f) => /rating/.test(f.question))?.answer).toBe(
+      "Google rating 4.7 of 5 from 1,234 reviews, checked November 21, 2026.",
+    );
+  });
+
+  it("credits Google with the price only when Google supplied it", () => {
+    const price = (row: Record<string, unknown>) =>
+      buildRestaurantFaqs({ ...ROW, ...row }, CTX).faqs.find((f) => /cost/.test(f.question))?.answer;
+    expect(price({ price_range_source: "google" })).toBe(
+      "Google lists Fixture Supper Club at $ on its one-to-four-dollar-sign scale.",
+    );
+    // Negative controls: a model, an admin, a scraper or no record at all.
+    for (const source of [null, undefined, "admin", "owner", "model"]) {
+      const answer = price({ price_range_source: source });
+      expect(answer).toBe("Fixture Supper Club is listed at $ on a one-to-four-dollar-sign scale.");
+      expect(answer).not.toMatch(/Google/);
+    }
+  });
+
   it("answers hours from the parsed week", () => {
     const { faqs } = buildRestaurantFaqs(ROW, CTX);
     const hours = faqs.find((f) => /hours/.test(f.question))?.answer ?? "";

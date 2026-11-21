@@ -36,8 +36,19 @@ export function lockedFieldNames(raw: unknown): Set<string> {
 }
 
 /**
- * The update with every locked field removed, and the names removed. The
- * input is not modified.
+ * WEB-BE-070: columns that describe a lockable field and go with it. A locked
+ * rating keeps the person's number, so Google's review count and check date
+ * must not be written beside it as if they described that number; a locked
+ * price_range must not be stamped as Google's.
+ */
+export const LOCK_COMPANIONS: Readonly<Record<string, readonly string[]>> = {
+  rating: ['google_review_count', 'google_rating_checked_at'],
+  price_range: ['price_range_source', 'price_range_source_at'],
+};
+
+/**
+ * The update with every locked field (and its companions) removed, and the
+ * names removed. The input is not modified.
  */
 export function withoutLockedFields<T extends object>(
   update: T,
@@ -45,6 +56,9 @@ export function withoutLockedFields<T extends object>(
 ): { update: T; skipped: string[] } {
   const names = lockedFieldNames(locked);
   if (names.size === 0) return { update, skipped: [] };
+  for (const name of [...names]) {
+    for (const companion of LOCK_COMPANIONS[name] ?? []) names.add(companion);
+  }
   const out: Record<string, unknown> = {};
   const skipped: string[] = [];
   for (const [key, value] of Object.entries(update)) {

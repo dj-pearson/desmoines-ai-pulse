@@ -141,7 +141,7 @@ describe('restaurantPageTitle', () => {
 
 describe('restaurantMetaDescription', () => {
   it('replaces stale pre-opening copy with facts', () => {
-    const d = restaurantMetaDescription(BONCHON);
+    const d = restaurantMetaDescription({ ...BONCHON, price_range_source: 'google' });
     expect(d).toBe(
       'Bonchon is a Korean restaurant at 6880 EP True Pkwy Unit 104 in West Des Moines, Iowa. $$ on Google. Menu, hours, phone and directions.',
     );
@@ -154,8 +154,19 @@ describe('restaurantMetaDescription', () => {
       location: '1 Main St, Des Moines, IA 50309',
       price_range: '$',
     });
-    expect(d).toBe('Atlas Cafe is a restaurant at 1 Main St in Des Moines, Iowa. $ on Google. Directions.');
+    expect(d).toBe('Atlas Cafe is a restaurant at 1 Main St in Des Moines, Iowa. Price level $. Directions.');
     expect(d).not.toMatch(/\$\d/);
+  });
+
+  // WEB-BE-070: price_range also comes from page text, a model or an admin.
+  it('credits Google for the price only when Google supplied it', () => {
+    const atlas = { name: 'Atlas Cafe', location: '1 Main St, Des Moines, IA 50309', price_range: '$$' };
+    expect(restaurantMetaDescription({ ...atlas, price_range_source: 'google' })).toContain('$$ on Google.');
+    for (const source of [null, undefined, 'admin', 'owner']) {
+      const d = restaurantMetaDescription({ ...atlas, price_range_source: source });
+      expect(d).not.toMatch(/Google/);
+      expect(d).toContain('Price level $$.');
+    }
   });
 
   it('keeps a current hand-written description', () => {

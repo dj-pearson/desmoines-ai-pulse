@@ -18,7 +18,8 @@ import type { TablesUpdate } from "@/integrations/supabase/types";
 import { toast } from "@/lib/toast";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
 import { createLogger } from '@/lib/logger';
-import { buildContentEditPayload } from "@/lib/contentEditPayload";
+import { buildContentEditPayload, SELECT_NONE } from "@/lib/contentEditPayload";
+import { RESERVATION_PROVIDERS } from "@/lib/reservations";
 import { handleError } from "@/lib/errorHandler";
 import { describeFieldLock, RESTAURANT_TABLE_CONTENT_TYPES } from "@/lib/restaurantFieldLocks";
 import { useRestaurantFieldLocks } from "@/hooks/useRestaurantFieldLocks";
@@ -30,6 +31,8 @@ const log = createLogger('ContentEditDialog');
 const EVENT_EXTRA_KEYS = ["latitude", "longitude"] as const;
 // Hotels edit their slug through a configured field.
 const HOTEL_ALLOWED_PROTECTED = ["slug"] as const;
+// Restaurant fields the admin list does not select; read when the dialog opens.
+const RESTAURANT_LOADED_KEYS = ["reservation_url", "reservation_provider"] as const;
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening" | "hotel";
 
@@ -69,6 +72,17 @@ const fieldConfigs = {
       { key: "description", label: "Description", type: "textarea" },
       { key: "rating", label: "Rating", type: "number", min: 0, max: 5, step: 0.1 },
       { key: "image_url", label: "Image URL", type: "url" },
+      // WEB-BE-070: the curated booking link (WEB-FEAT-024). Google publishes
+      // no booking URL, so nothing else writes these; the Reserve button
+      // prefers this over the Google listing. Provider values are the CHECK
+      // list in migration 20260909000001.
+      { key: "reservation_url", label: "Reservation URL", type: "url" },
+      {
+        key: "reservation_provider",
+        label: "Reservation Provider",
+        type: "select",
+        options: [SELECT_NONE, ...RESERVATION_PROVIDERS],
+      },
       { key: "opening_date", label: "Opening Date (Exact)", type: "date" },
       { key: "opening_timeframe", label: "Opening Timeframe (e.g., Summer 2025)", type: "text" },
       { key: "status", label: "Status", type: "select", options: ["open", "opening_soon", "newly_opened", "announced", "closed"] },
@@ -257,6 +271,43 @@ export default function ContentEditDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, open, config.fields, contentType]);
 
+  // WEB-BE-070: the admin restaurant list does not select the reservation
+  // columns, so the dialog reads them for the row it opened. They become part
+  // of the "original" the payload diffs against, so an untouched value is not
+  // re-sent, and a stored link shows in the form instead of an empty box.
+  const [loadedExtras, setLoadedExtras] = useState<Record<string, unknown>>({});
+  useEffect(() => {
+    setLoadedExtras({});
+    if (!open || contentType !== "restaurant" || item?.isNew || !item?.id) return;
+    const missing = RESTAURANT_LOADED_KEYS.filter((k) => !(k in item));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("restaurants")
+        .select(missing.join(", ") as "id")
+        .eq("id", item.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        handleError(error, { component: "ContentEditDialog", action: "loadReservationFields" });
+        return;
+      }
+      const extras = (data ?? {}) as Record<string, unknown>;
+      setLoadedExtras(extras);
+      setFormData((prev: Record<string, unknown>) => {
+        const next = { ...prev };
+        for (const key of missing) {
+          if (next[key] == null && extras[key] != null) next[key] = extras[key];
+        }
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [item, open, contentType]);
+
   const handleFieldChange = (fieldKey: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
@@ -309,7 +360,7 @@ export default function ContentEditDialog({
       // stale list row cannot overwrite them (WEB-BE-067).
       const saveData = buildContentEditPayload({
         fields: config.fields,
-        original: item,
+        original: { ...item, ...loadedExtras },
         current: formData,
         isNew: Boolean(item.isNew),
         extraKeys: contentType === "event" ? EVENT_EXTRA_KEYS : [],
@@ -469,7 +520,7 @@ export default function ContentEditDialog({
             <SelectContent>
               {field.options?.map((option: string) => (
                 <SelectItem key={option} value={option}>
-                  {option}
+                  {option === SELECT_NONE ? "None" : option}
                 </SelectItem>
               ))}
             </SelectContent>

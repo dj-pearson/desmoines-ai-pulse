@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildContentEditPayload, PROTECTED_COLUMNS } from "@/lib/contentEditPayload";
+import { buildContentEditPayload, PROTECTED_COLUMNS, SELECT_NONE } from "@/lib/contentEditPayload";
 
 const restaurantFields = [
   { key: "name", type: "text" },
@@ -158,5 +158,46 @@ describe("buildContentEditPayload (WEB-BE-067)", () => {
       price: "$15-30",
       is_featured: false,
     });
+  });
+});
+
+// WEB-BE-070: the admin form sets reservation_url and reservation_provider.
+describe("reservation fields", () => {
+  const fields = [
+    { key: "reservation_url", type: "url" },
+    { key: "reservation_provider", type: "select" },
+  ];
+  const original = { id: "r1", reservation_url: null, reservation_provider: null };
+
+  it("sends a new booking link and provider", () => {
+    expect(
+      buildContentEditPayload({
+        fields,
+        original,
+        current: { ...original, reservation_url: "https://resy.com/x", reservation_provider: "resy" },
+        isNew: false,
+      }),
+    ).toEqual({ reservation_url: "https://resy.com/x", reservation_provider: "resy" });
+  });
+
+  it("writes None as null, never the sentinel", () => {
+    const payload = buildContentEditPayload({
+      fields,
+      original: { ...original, reservation_provider: "resy" },
+      current: { ...original, reservation_provider: SELECT_NONE },
+      isNew: false,
+    });
+    expect(payload).toEqual({ reservation_provider: null });
+  });
+
+  it("treats None on an empty provider as no change", () => {
+    expect(
+      buildContentEditPayload({
+        fields,
+        original,
+        current: { ...original, reservation_provider: SELECT_NONE },
+        isNew: false,
+      }),
+    ).toEqual({});
   });
 });

@@ -31,6 +31,7 @@ import { Search, AlertTriangle, CheckCircle, XCircle, Loader2, Plus, RefreshCw, 
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { isUnknownColumnError } from "@/lib/postgrestErrors";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('GooglePlacesRestaurantTools');
@@ -387,7 +388,7 @@ export default function GooglePlacesRestaurantTools() {
       // Only what Google said. A missing cuisine or price stays null so the
       // site shows nothing rather than "American" and "$$" it made up, and
       // the description is left for a writer, not filled with provenance text.
-      const { error } = await supabase.from("restaurants").insert({
+      const row = {
         name: restaurant.name,
         location: restaurant.formatted_address,
         phone: restaurant.formatted_phone_number,
@@ -399,7 +400,24 @@ export default function GooglePlacesRestaurantTools() {
         status: "open",
         description: null,
         is_featured: false,
-      });
+      };
+      // WEB-BE-070: the review count search-new-restaurants returns, the
+      // date it was read, and that Google supplied the price. Migration
+      // 20261121000130 adds these; before it lands the insert is retried
+      // without them rather than failing the add.
+      const checkedAt = new Date().toISOString();
+      const priceRange = row.price_range;
+      const googleFacts = {
+        google_review_count: Number.isInteger(restaurant.user_ratings_total) ? restaurant.user_ratings_total : null,
+        google_rating_checked_at:
+          restaurant.rating != null || restaurant.user_ratings_total != null ? checkedAt : null,
+        price_range_source: priceRange ? "google" : null,
+        price_range_source_at: priceRange ? checkedAt : null,
+      };
+      let { error } = await supabase.from("restaurants").insert({ ...row, ...googleFacts } as never);
+      if (error && isUnknownColumnError(error)) {
+        ({ error } = await supabase.from("restaurants").insert(row));
+      }
 
       if (error) throw error;
 

@@ -19,6 +19,7 @@ import {
   resolveOpeningHoursSpecification,
 } from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
+import { restaurantReviewCount } from "../src/lib/googleFacts";
 import { isRestaurantPseoSlug } from "../src/pseo/restaurantAreaSlugs";
 import { markdownToPlainText } from "../src/lib/aiText";
 import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
@@ -146,6 +147,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // minimal one below instead of turning a real page into a 404.
 const RESTAURANT_SHELL_COLUMNS =
   "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,business_status,is_merged,merged_into,updated_at,google_maps_uri,reservable,reservation_url";
+// WEB-BE-070: rating and Google's review count, so the shell's title carries
+// "Reviews" exactly when the page does (restaurantReviewCount), and
+// price_range_source, so its description credits Google for the price exactly
+// when the page does. Its own tier: the last two arrive with migration
+// 20261121000130, and a 42703 on them must cost those facts, not the whole
+// rich row.
+const RESTAURANT_SHELL_REVIEW_COLUMNS = `${RESTAURANT_SHELL_COLUMNS},rating,google_review_count,price_range_source`;
 const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
 // time_tbd, source_url and event_start_local are what hasSpecificTime reads to
 // tell a real showtime from a placeholder (WEB-SEO-072). All three are
@@ -173,6 +181,8 @@ async function fetchRestaurantRow(
   anon: string,
   filter: string,
 ): Promise<{ row: Record<string, any> | undefined; rich: boolean } | null> {
+  const withReviews = await sbGet(base, anon, `${filter}&select=${RESTAURANT_SHELL_REVIEW_COLUMNS}&limit=1`);
+  if (withReviews) return { row: withReviews[0], rich: true };
   const rich = await sbGet(base, anon, `${filter}&select=${RESTAURANT_SHELL_COLUMNS}&limit=1`);
   if (rich) return { row: rich[0], rich: true };
   const minimal = await sbGet(base, anon, `${filter}&select=${RESTAURANT_MINIMAL_COLUMNS}&limit=1`);
@@ -858,7 +868,9 @@ export function entityShellRewrites(opts: {
   // description the React page renders (restaurantMeta.ts), not the bare name.
   let entity = opts.entity;
   if (row && type === "restaurant" && row.name) {
-    entity = { ...entity, title: `${restaurantPageTitle(row as RestaurantMetaInput)} | Des Moines Insider`, description: restaurantMetaDescription(row as RestaurantMetaInput) };
+    // WEB-BE-070: the same reviewCount the page passes, so both titles agree.
+    const titleInput = { ...row, reviewCount: restaurantReviewCount(row) } as RestaurantMetaInput;
+    entity = { ...entity, title: `${restaurantPageTitle(titleInput)} | Des Moines Insider`, description: restaurantMetaDescription(row as RestaurantMetaInput) };
   } else if (row && type === "event" && row.title) {
     // With neither seo_description nor geo_summary the homepage's description
     // would stay in place; say when and where instead.

@@ -14,6 +14,8 @@ export interface RestaurantAtAGlanceProps {
   hoursSentence: string | null;
   /** "$" to "$$$$", or null. */
   priceTier: string | null;
+  /** WEB-BE-070: true only when Google's priceLevel supplied the tier. Otherwise no source is named. */
+  priceFromGoogle?: boolean;
   /** restaurants.location as stored. */
   address: string | null;
   /** The suburb or city, appended when the stored address does not already name it. */
@@ -40,6 +42,7 @@ export interface RestaurantAtAGlanceProps {
 export function RestaurantAtAGlance({
   hoursSentence,
   priceTier,
+  priceFromGoogle = false,
   address,
   locality,
   phone,
@@ -102,7 +105,8 @@ export function RestaurantAtAGlance({
               <div>
                 <dt className="sr-only">Price</dt>
                 <dd className="text-foreground">
-                  {priceTier} <span className="text-muted-foreground">price level on Google</span>
+                  {priceTier}{" "}
+                  <span className="text-muted-foreground">{priceFromGoogle ? "price level on Google" : "price level"}</span>
                 </dd>
               </div>
             </div>

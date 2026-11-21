@@ -81,6 +81,11 @@ export const RESTAURANT_DETAIL_OPTIONAL_COLUMNS = [
   // WEB-BE-077 (20261121000160): copy provenance.
   "description_source",
   "geo_generated_at",
+  // WEB-BE-070 (20261121000130): Google's review count, when the rating was
+  // read, and who supplied price_range.
+  "google_review_count",
+  "google_rating_checked_at",
+  "price_range_source",
 ] as const;
 
 // NOTE: keep every name here in sync with `public.events` AS DEPLOYED, not as

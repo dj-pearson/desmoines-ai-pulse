@@ -90,6 +90,13 @@ const PROVIDER_LABELS: Record<string, string> = {
   direct: 'the restaurant',
 };
 
+/**
+ * The values restaurants.reservation_provider accepts: the CHECK in migration
+ * 20260909000001, which is also every key above. The admin edit form offers
+ * exactly these (WEB-BE-070).
+ */
+export const RESERVATION_PROVIDERS = Object.keys(PROVIDER_LABELS);
+
 export function providerLabel(provider?: string | null): string | undefined {
   if (!provider) return undefined;
   return PROVIDER_LABELS[provider.toLowerCase()];

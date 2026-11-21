@@ -19,7 +19,9 @@ import {
   parseStaleDays,
   staleHoursCutoff,
   staleHoursFilter,
+  staleRefreshFieldMask,
 } from '../_shared/placeHours.ts'
+import { buildGoogleFactsUpdate, type GoogleFactsUpdate, withoutNewFactColumns } from '../_shared/placeFacts.ts'
 import type { BusinessStatus, StaleRefreshUpdate, StoredHours } from '../_shared/placeHours.ts'
 import {
   buildClosureReview,
@@ -83,7 +85,8 @@ interface EnrichRow {
   locked_fields?: unknown;
 }
 
-interface RestaurantUpdate {
+/** WEB-BE-070: the Google facts (rating, count, price and source, ...) come from GoogleFactsUpdate. */
+interface RestaurantUpdate extends GoogleFactsUpdate {
   id: string;
   name: string;
   cuisine?: string;
@@ -265,6 +268,8 @@ async function refreshStaleHours(
 ): Promise<Response> {
   const cutoff = staleHoursCutoff(staleDays)
   // WEB-BE-069: with locked_fields, as in the fill mode above.
+  // WEB-BE-070: reservable is read so the mask asks for it only when the row
+  // has no answer (staleRefreshFieldMask); the column is from 20260909000001.
   const { data: rows, error: fetchError } = await selectWithLocks((cols) =>
     supabase
       .from('restaurants')
@@ -273,10 +278,16 @@ async function refreshStaleHours(
       .or(staleHoursFilter(cutoff))
       .order('hours_checked_at', { ascending: true, nullsFirst: true })
       .order('id', { ascending: true })
-      .limit(batchSize), 'id, name, google_place_id')
+      .limit(batchSize), 'id, name, google_place_id, reservable')
   if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
 
-  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string; locked_fields?: unknown }>
+  const targets = (rows ?? []) as Array<{
+    id: string
+    name: string
+    google_place_id: string
+    reservable?: boolean | null
+    locked_fields?: unknown
+  }>
   let lockedSkips = 0
   let updated = 0
   let noHours = 0
@@ -290,7 +301,9 @@ async function refreshStaleHours(
       try {
         const res = await fetchWithTimeout(
           `https://places.googleapis.com/v1/places/${encodeURIComponent(row.google_place_id)}`,
-          { method: 'GET', headers: { 'X-Goog-Api-Key': googleApiKey, 'X-Goog-FieldMask': HOURS_ONLY_FIELD_MASK } },
+          // WEB-BE-070: hours, status and the Google facts in one Enterprise
+          // call; reservable only for a row that does not know it yet.
+          { method: 'GET', headers: { 'X-Goog-Api-Key': googleApiKey, 'X-Goog-FieldMask': staleRefreshFieldMask(row) } },
         )
         let update: StaleRefreshUpdate & { promotion_hold_reason?: string }
         if (res.ok) {
@@ -321,7 +334,13 @@ async function refreshStaleHours(
         const kept = withoutLockedFields(update, row.locked_fields)
         lockedSkips += kept.skipped.length
         update = kept.update
-        const { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
+        let { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
+        // WEB-BE-070: deployed before 20261121000130, the new columns would
+        // fail the whole write. Retry without them so hours, status, rating,
+        // phone, website and price still land.
+        if (updateError && isUnknownColumnError(updateError)) {
+          ;({ error: updateError } = await supabase.from('restaurants').update(withoutNewFactColumns(update)).eq('id', row.id))
+        }
         if (updateError) errors.push({ id: row.id, name: row.name, error: updateError.message })
         else updated++
       } catch (error) {
@@ -810,7 +829,10 @@ serve(async (req) => {
               // regularOpeningHours is new (WEB-BE-045). businessStatus was already
               // here and its answer was thrown away - the mask asked for it and
               // nothing wrote it, which is why no restaurant was ever marked closed.
-              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,regularOpeningHours,reservable,googleMapsUri'
+              // WEB-BE-070: priceLevel and userRatingCount added. Both are
+              // Enterprise fields; editorialSummary and reservable already put
+              // this call in Enterprise + Atmosphere, so the SKU is unchanged.
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,priceLevel,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,regularOpeningHours,reservable,googleMapsUri'
             }
           })
 
@@ -912,39 +934,27 @@ serve(async (req) => {
             update.location = placeDetails.formattedAddress
           }
           
-          if (placeDetails.rating) {
-            update.rating = Math.round(placeDetails.rating * 10) / 10
-          }
-          
+          // WEB-BE-070: rating, review count, phone, website, Google's price
+          // level, reservable and the listing link, from the same builder the
+          // stale refresh uses. A field Google left out is absent, never null.
+          Object.assign(update, buildGoogleFactsUpdate(placeDetails))
+
           // WEB-BE-066: Google's editorial summary when it has one, and
           // otherwise the stored description stays. This used to write null
           // whenever there was no summary, and since description was not in
           // the select, it did so to every description it touched.
           Object.assign(update, descriptionUpdate(restaurant.description, placeDetails.editorialSummary?.text))
           
-          if (placeDetails.nationalPhoneNumber) {
-            update.phone = placeDetails.nationalPhoneNumber
-          }
-          
-          if (placeDetails.websiteUri) {
-            update.website = placeDetails.websiteUri
-          }
-          
           if (placeId) {
             update.google_place_id = placeId
           }
 
-          // WEB-FEAT-024. Both are real Place fields, checked against the
-          // Places API (New) reference. There is NO booking-provider URL in
-          // that API, so reservation_url stays curated; googleMapsUri is the
-          // automatic fallback, since a Google listing for a reservable place
-          // carries its own reserve button.
-          if (typeof placeDetails.reservable === 'boolean') {
-            update.reservable = placeDetails.reservable
-          }
-          if (placeDetails.googleMapsUri) {
-            update.google_maps_uri = placeDetails.googleMapsUri
-          }
+          // WEB-FEAT-024. reservable and googleMapsUri are written by
+          // buildGoogleFactsUpdate above. There is NO booking-provider URL in
+          // the Places API, so reservation_url stays curated (the admin edit
+          // form sets it); googleMapsUri is the automatic fallback, since a
+          // Google listing for a reservable place carries its own reserve
+          // button.
 
           // WEB-BE-044. THE COMMENT HERE USED TO SAY it stored "the photo
           // reference name instead of the full URL with API key", and what it
@@ -1060,9 +1070,11 @@ serve(async (req) => {
             enrich_checked_at,
             ...legacyUpdate
           } = update
+          // WEB-BE-070: and the 20261121000130 columns (review count, rating
+          // check date, price source).
           const retry = await supabase
             .from('restaurants')
-            .update(legacyUpdate)
+            .update(withoutNewFactColumns(legacyUpdate))
             .eq('id', update.id)
             .select()
           updateError = retry.error
