@@ -14,6 +14,7 @@ import { getAnthropicApiKey, buildClaudeRequest, getClaudeHeaders, extractClaude
 import { runJob } from "../_shared/jobRunner.ts";
 import { summarizeRun, type SourceOutcome } from "./summary.ts";
 import { sanitizeLikeInput } from '../_shared/validation.ts';
+import { isDoNotIngest, loadDoNotIngest } from '../_shared/restaurantDoNotIngest.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -181,6 +182,10 @@ serve(async (req) => {
     const perSource: SourceOutcome[] = [];
 
     const job = await runJob("restaurant-opening-scraper", async (ctx) => {
+    // WEB-FEAT-103: read once per run. A place on it (an admin hid it, or it
+    // is blocked in the Places tools) is never inserted; when the read fails,
+    // no new row is inserted this run and each refusal is a row error.
+    const doNotIngest = await loadDoNotIngest(supabase);
     for (const source of sources) {
       console.log(`🌐 Scraping source: ${source.name} (${source.url})`);
       const outcome: SourceOutcome = {
@@ -437,6 +442,10 @@ FORMAT AS JSON ARRAY ONLY - no other text:
               } else {
                 console.log(`⏭️ Skipped: ${restaurant.name} (no significant changes)`);
               }
+            } else if (!doNotIngest.list) {
+              rowErrors.push(`insert ${restaurant.name}: do-not-ingest list unavailable (${doNotIngest.error})`);
+            } else if (isDoNotIngest(doNotIngest.list, { name: restaurant.name })) {
+              console.log(`Skipped: ${restaurant.name} (on the do-not-ingest list)`);
             } else {
               // Insert new restaurant
               const { error: insertError } = await supabase

@@ -5,6 +5,7 @@ import { errorResponse } from "../_shared/errorResponse.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
+import { buildDoNotIngestList, isDoNotIngest, loadDoNotIngest } from "../_shared/restaurantDoNotIngest.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -242,37 +243,23 @@ serve(async (req) => {
       "existing restaurants in database"
     );
 
-    // Fetch blacklisted places
-    console.log("Fetching blacklisted places...");
-    const now = new Date().toISOString();
-    const { data: blacklistedPlaces, error: blacklistError } = await serviceClient
-      .from("restaurant_blacklist")
-      .select("google_place_id, restaurant_name")
-      .or(`expires_at.is.null,expires_at.gt.${now}`);
-
-    if (blacklistError) {
-      console.error("Error fetching blacklist:", blacklistError);
-      // Continue without filtering if blacklist fetch fails
+    // The do-not-ingest list (WEB-FEAT-103): places blocked in these tools
+    // and every listing an admin hid. This function only proposes candidates
+    // and an admin chooses which to add, so a failed read is logged and the
+    // search goes on unfiltered, as it always has.
+    console.log("Fetching the do-not-ingest list...");
+    const doNotIngest = await loadDoNotIngest(serviceClient);
+    if (doNotIngest.error) {
+      console.error("Error fetching blacklist:", doNotIngest.error);
     }
-
-    const blacklistedPlaceIds = new Set(
-      blacklistedPlaces?.filter((b) => b.google_place_id).map((b) => b.google_place_id) || []
-    );
-    const blacklistedNames = new Set(
-      blacklistedPlaces?.map((b) => b.restaurant_name.toLowerCase()) || []
-    );
+    const blacklist = doNotIngest.list ?? buildDoNotIngestList([]);
     console.log(
-      "Found",
-      blacklistedPlaces?.length || 0,
-      "blacklisted entries:",
-      blacklistedPlaceIds.size,
+      "Do-not-ingest entries:",
+      blacklist.placeIds.size,
       "by place_id,",
-      blacklistedNames.size,
+      blacklist.names.size,
       "by name"
     );
-    if (blacklistedPlaces?.length) {
-      console.log("Blacklisted names:", Array.from(blacklistedNames).slice(0, 10));
-    }
 
     // Filter out fast food chains and already existing restaurants
     const filteredRestaurants = placesData.places.filter((place: any) => {
@@ -320,8 +307,7 @@ serve(async (req) => {
         existingPlaceIds.has(place.id) || existingNames.has(nameLower);
 
       // Check if restaurant is blacklisted
-      const isBlacklisted =
-        blacklistedPlaceIds.has(place.id) || blacklistedNames.has(nameLower);
+      const isBlacklisted = isDoNotIngest(blacklist, { name: nameLower, google_place_id: place.id });
 
       console.log(
         `Filtering ${nameLower}: chain=${isChain}, restaurant=${isRestaurant}, existing=${isExisting}, blacklisted=${isBlacklisted}, operational=${

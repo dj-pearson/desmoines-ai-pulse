@@ -86,6 +86,9 @@ export const RESTAURANT_DETAIL_OPTIONAL_COLUMNS = [
   "google_review_count",
   "google_rating_checked_at",
   "price_range_source",
+  // WEB-FEAT-103 (20261121000140): set when an admin hid the listing. Only an
+  // admin can read such a row; the page shows the removed notice for it.
+  "hidden_at",
 ] as const;
 
 // NOTE: keep every name here in sync with `public.events` AS DEPLOYED, not as

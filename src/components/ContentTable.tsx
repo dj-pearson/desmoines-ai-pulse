@@ -26,7 +26,7 @@ import {
 } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import { Edit, Trash2, Search, Filter, Star, Plus, AlertTriangle, Brain, FileText, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Download, LayoutGrid, List, CheckCircle2, AlertCircle, XCircle, Globe, Image as ImageIcon } from "lucide-react";
+import { Edit, Trash2, Search, Filter, Star, Plus, AlertTriangle, Brain, FileText, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Download, LayoutGrid, List, CheckCircle2, AlertCircle, XCircle, Globe, Image as ImageIcon, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/lib/toast";
 import { useDomainHighlights } from "@/hooks/useDomainHighlights";
@@ -105,7 +105,15 @@ interface ContentTableProps {
   onFilter: (filter: any) => void;
   onCreate?: () => void;
   onRefresh?: () => void;
+  /**
+   * WEB-FEAT-103: "hide" for restaurants, whose row is kept and hidden rather
+   * than deleted. The button, its label and its confirmation follow.
+   */
+  removeAction?: "delete" | "hide";
 }
+
+const HIDE_CONFIRM =
+  "Hide this restaurant? The row is kept, its page will say the listing was removed, and its name and place id go on the do-not-ingest list so no scraper adds it back. You can unhide it later.";
 
 const tableConfigs = {
   event: {
@@ -409,7 +417,11 @@ export default function ContentTable({
   onFilter,
   onCreate,
   onRefresh,
+  removeAction = "delete",
 }: ContentTableProps) {
+  const hides = removeAction === "hide";
+  const confirmRemove = () => confirm(hides ? HIDE_CONFIRM : `Are you sure you want to delete this ${type}?`);
+  const RemoveIcon = hides ? EyeOff : Trash2;
   const [searchTerm, setSearchTerm] = useState(searchValue);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>(
     {}
@@ -1205,17 +1217,11 @@ export default function ContentTable({
                           size="sm"
                           variant="destructive"
                           onClick={() => {
-                            if (
-                              confirm(
-                                `Are you sure you want to delete this ${type}?`
-                              )
-                            ) {
-                              onDelete(item.id);
-                            }
+                            if (confirmRemove()) onDelete(item.id);
                           }}
-                          aria-label={`Delete ${itemTitle}`}
+                          aria-label={`${hides ? "Hide" : "Delete"} ${itemTitle}`}
                         >
-                          <Trash2 className="h-3 w-3" aria-hidden="true" />
+                          <RemoveIcon className="h-3 w-3" aria-hidden="true" />
                         </Button>
                       </div>
                     </CardContent>
@@ -1436,17 +1442,11 @@ export default function ContentTable({
                                   size="sm"
                                   variant="destructive"
                                   onClick={() => {
-                                    if (
-                                      confirm(
-                                        `Are you sure you want to delete this ${type}?`
-                                      )
-                                    ) {
-                                      onDelete(item.id);
-                                    }
+                                    if (confirmRemove()) onDelete(item.id);
                                   }}
-                                  aria-label={`Delete ${item.title || item.name || "Untitled"}`}
+                                  aria-label={`${hides ? "Hide" : "Delete"} ${item.title || item.name || "Untitled"}`}
                                 >
-                                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                  <RemoveIcon className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                               </div>
                             </TableCell>

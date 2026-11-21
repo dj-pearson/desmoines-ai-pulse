@@ -273,6 +273,12 @@ jobs:
       # queue, uploaded-only photos, full before/after history, and that no
       # rating or paid-placement column became owner-editable.
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/owner-listing-edits.test.ts
+      # WEB-FEAT-103. Admin Delete was a row DELETE: the URL 404'd and the next
+      # scrape could add the place back. Pins hide/unhide, the RLS policy that
+      # hides the row from visitors, the removed-listing lookup, and that every
+      # restaurant ingestion path reads the do-not-ingest list (PGlite, real
+      # migrations).
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-hide.test.ts
       # WEB-ADS-047. A business claim decision used to be an RPC and a toast:
       # the claimant was never told and a verified owner could not be removed.
       # Pins the decision emails, the 3-day pending alert, and revoke (edit

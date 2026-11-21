@@ -18,6 +18,7 @@ import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { findKnownVenue, ingestCoordinates, type KnownVenue } from "../_shared/knownVenues.ts";
+import { loadDoNotIngest, withoutDoNotIngest } from "../_shared/restaurantDoNotIngest.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
@@ -618,7 +619,7 @@ serve(async (req) => {
     // The slice the request actually asked for. Applied here rather than inside
     // the loop so that every count below - inserted, duplicates, errors - is
     // about the same set of items the response says it processed.
-    const itemsToWrite = filteredItems.slice(batchInfo.processedStart, batchInfo.processedEnd);
+    const sliceToWrite = filteredItems.slice(batchInfo.processedStart, batchInfo.processedEnd);
     console.log(
       `📦 Writing items ${batchInfo.processedStart}-${batchInfo.processedEnd} of ${batchInfo.totalEvents} ` +
       `(${batchInfo.remainingEvents} remaining)`,
@@ -638,6 +639,21 @@ serve(async (req) => {
     // zero-result rule reads `inserted`, the error-rate rule reads `errors`.
     let duplicateCount = 0;
     const errors: unknown[] = [];
+
+    // WEB-FEAT-103: a place on the do-not-ingest list (an admin hid it, or it
+    // is blocked in the Places tools) is never written. A failed read of the
+    // list refuses every restaurant row in this run instead of writing them
+    // unchecked.
+    const doNotIngest = tableName === 'restaurants' ? await loadDoNotIngest(supabase) : null;
+    if (doNotIngest?.error) errors.push({ message: `do-not-ingest list unavailable: ${doNotIngest.error}` });
+    const { kept: itemsToWrite, refused: doNotIngestRefused } = !doNotIngest
+      ? { kept: sliceToWrite, refused: [] as string[] }
+      : doNotIngest.list
+        ? withoutDoNotIngest(doNotIngest.list, sliceToWrite)
+        : { kept: [], refused: [] as string[] };
+    if (doNotIngestRefused.length > 0) {
+      console.log(`Skipped ${doNotIngestRefused.length} restaurant(s) on the do-not-ingest list: ${doNotIngestRefused.join(', ')}`);
+    }
 
     // WEB-BE-043. One ledger row per scrape, keyed by the host being scraped -
     // this function is invoked per URL, so the host IS the source. Without it a

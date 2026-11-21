@@ -128,6 +128,11 @@ interface Resolved {
    * the slug of a row that was asked for by its id.
    */
   redirectTo?: string;
+  /**
+   * WEB-FEAT-103: a restaurant an admin hid. The shell answers 200, noindex,
+   * saying the listing was removed, where it used to be a 404.
+   */
+  removed?: boolean;
 }
 
 /**
@@ -223,6 +228,36 @@ async function resolveMergeSurvivor(
   return null;
 }
 
+/**
+ * WEB-FEAT-103: an admin hid this restaurant, so the anon read above found
+ * nothing (an RLS policy hides it). get_removed_restaurant returns its name
+ * and nothing else. Any failure of that call is the not-found it was before.
+ */
+async function removedRestaurantOutcome(base: string, anon: string, slug: string): Promise<ResolveOutcome> {
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/get_removed_restaurant`, {
+      method: "POST",
+      headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_ref: slug }),
+    });
+    if (!res.ok) return { kind: "not-found" };
+    const rows = await res.json();
+    const r = Array.isArray(rows) ? rows[0] : null;
+    if (!r || !r.id || !r.name) return { kind: "not-found" };
+    return {
+      kind: "row",
+      entity: {
+        id: String(r.id),
+        title: `${r.name} - listing removed`,
+        description: `${r.name} is no longer listed on Des Moines Insider.`,
+        removed: true,
+      },
+    };
+  } catch {
+    return { kind: "not-found" };
+  }
+}
+
 async function resolveRestaurant(base: string, anon: string, slug: string): Promise<ResolveOutcome> {
   let found = await fetchRestaurantRow(base, anon, `restaurants?slug=eq.${encodeURIComponent(slug)}`);
   if (!found) return { kind: "error" };
@@ -233,7 +268,7 @@ async function resolveRestaurant(base: string, anon: string, slug: string): Prom
     if (!found) return { kind: "error" };
   }
   const r = found.row;
-  if (!r) return { kind: "not-found" };
+  if (!r) return removedRestaurantOutcome(base, anon, slug);
 
   const entity: Resolved = {
     id: r.id,
@@ -858,7 +893,7 @@ export function entityShellRewrites(opts: {
   pageUrl: string;
   sbBase: string;
   type: string;
-  entity: { id: string; title: string; description?: string; startDate?: string; row?: Record<string, any> };
+  entity: { id: string; title: string; description?: string; startDate?: string; row?: Record<string, any>; removed?: boolean };
   now?: Date;
 }): EntityShellRewrite[] {
   const { pageUrl, sbBase, type, now = new Date() } = opts;
@@ -898,7 +933,8 @@ export function entityShellRewrites(opts: {
 
   let node: Record<string, unknown> = {
     "@context": "https://schema.org",
-    "@type": SCHEMA_TYPE[type] || "Thing",
+    // A removed listing (WEB-FEAT-103) is not a Restaurant any more.
+    "@type": opts.entity.removed ? "WebPage" : SCHEMA_TYPE[type] || "Thing",
     // The same @id the React page gives its entity (WEB-SEO-073): a crawler
     // that runs JavaScript sees both blocks, since Helmet leaves this one.
     "@id": isEntityNodeKind(type) ? entityNodeId(type, pageUrl) : pageUrl,
@@ -952,7 +988,8 @@ export function entityShellRewrites(opts: {
   if (type === "event" && isLongPastEvent(entity.startDate, now)) {
     rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
   }
-  const restaurantRobots = type === "restaurant" ? restaurantShellRobots(row) : null;
+  const restaurantRobots =
+    type === "restaurant" ? (opts.entity.removed ? "noindex, follow" : restaurantShellRobots(row)) : null;
   if (restaurantRobots) {
     rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: restaurantRobots });
   }
@@ -1015,7 +1052,10 @@ function entityShell(
   // The header, not only the meta tag: the prerendered homepage carries a
   // robots meta, but a shell built without one would otherwise say nothing.
   if (opts.type === "event" && isLongPastEvent(opts.entity.startDate)) headers["X-Robots-Tag"] = "noindex";
-  const restaurantRobots = opts.type === "restaurant" ? restaurantShellRobots(opts.entity.row) : null;
+  const restaurantRobots =
+    opts.type === "restaurant"
+      ? opts.entity.removed ? "noindex, follow" : restaurantShellRobots(opts.entity.row)
+      : null;
   if (restaurantRobots) headers["X-Robots-Tag"] = restaurantRobots;
 
   return new Response(rewriter.transform(shell).body, { status: 200, headers });

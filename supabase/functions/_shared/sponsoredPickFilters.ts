@@ -111,6 +111,7 @@ const NOT_PROMOTABLE_STATUSES = [
 
 export type PromotionRefusal =
   | 'merged'
+  | 'hidden'
   | 'held'
   | 'not_operational'
   | 'status_not_open'
@@ -119,6 +120,8 @@ export type PromotionRefusal =
 
 export interface PromotableRestaurantRow {
   is_merged?: boolean | null;
+  /** WEB-FEAT-103: an admin hid the listing. The service role reads past the RLS policy that hides it. */
+  hidden_at?: string | null;
   promotion_hold_reason?: string | null;
   business_status?: string | null;
   status?: string | null;
@@ -147,6 +150,7 @@ export function restaurantPromotionRefusal(
   now: Date = new Date(),
 ): PromotionRefusal | null {
   if (row.is_merged === true) return 'merged';
+  if (row.hidden_at) return 'hidden';
   if (row.promotion_hold_reason) return 'held';
   if (row.business_status !== 'OPERATIONAL') return 'not_operational';
   if (!PROMOTABLE_STATUSES.has(row.status ?? '')) return 'status_not_open';
@@ -180,6 +184,7 @@ export function applyPromotableRestaurantFilters<Q extends PromotableFilterBuild
   const cutoff = promotionCheckCutoff(now);
   return q
     .not('is_merged', 'is', true)
+    .is('hidden_at', null)
     .is('promotion_hold_reason', null)
     .eq('business_status', 'OPERATIONAL')
     .not('status', 'in', `(${NOT_PROMOTABLE_STATUSES.join(',')})`)

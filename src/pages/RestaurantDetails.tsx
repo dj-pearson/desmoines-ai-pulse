@@ -80,6 +80,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { fetchRestaurantDetail } from "@/lib/restaurantDetail";
+import { fetchRemovedRestaurant } from "@/lib/removedRestaurant";
+import { RemovedRestaurantNotice } from "@/components/RemovedRestaurantNotice";
 import { isRestaurantPseoSlug } from "@/pseo/restaurantAreaSlugs";
 import { useSiteFooter } from "@/hooks/useSiteFooter";
 
@@ -322,7 +324,16 @@ export default function RestaurantDetails() {
   // Published, indexable cuisine x area pages that list this place (SEO-034).
   const { data: areaPages } = useRestaurantAreaPages(restaurant);
 
-  if (isLoading || (mergedInto && (survivorLoading || redirectTo))) {
+  // WEB-FEAT-103: a listing an admin hid reads as absent to everyone else;
+  // ask whether this slug was one, so an old link says so instead of 404ing.
+  const { data: removed, isLoading: removedLoading } = useQuery({
+    queryKey: ["removed-restaurant", slug],
+    queryFn: () => fetchRemovedRestaurant(slug ?? ""),
+    enabled: !isLoading && !error && !restaurant && !!slug,
+    staleTime: DETAIL_STALE_TIME,
+  });
+
+  if (isLoading || removedLoading || (mergedInto && (survivorLoading || redirectTo))) {
     return (
       <>
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
@@ -390,6 +401,11 @@ export default function RestaurantDetails() {
         </div>
       </>
     );
+  }
+
+  if (!restaurant && removed) return <RemovedRestaurantNotice name={removed.name} />;
+  if (restaurant && (restaurant as { hidden_at?: string | null }).hidden_at) {
+    return <RemovedRestaurantNotice name={restaurant.name} adminView />;
   }
 
   if (!restaurant) {

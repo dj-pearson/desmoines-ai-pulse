@@ -303,6 +303,17 @@ const PENDING_MIGRATIONS = [
   { table: 'restaurants', column: 'google_rating_checked_at', migration: '20261121000130' },
   { table: 'restaurants', column: 'price_range_source', migration: '20261121000130' },
   { table: 'restaurants', column: 'price_range_source_at', migration: '20261121000130' },
+  // WEB-FEAT-103: hide in place of delete. Apply the migration before
+  // deploying generate-sitemaps, regenerate-sitemaps and the three promotion
+  // readers (social-daily-poster, social-media-manager, assemble-weekly-digest,
+  // through applyPromotableRestaurantFilters), which filter on hidden_at and
+  // would 42703 without it. Until then the admin Hide button
+  // reports PGRST202 and changes nothing, and the detail page's removed-listing
+  // lookup answers null, so it shows its ordinary not-found.
+  { table: 'restaurants', column: 'hidden_at', migration: '20261121000140' },
+  { rpc: 'hide_restaurant', migration: '20261121000140' },
+  { rpc: 'unhide_restaurant', migration: '20261121000140' },
+  { rpc: 'get_removed_restaurant', migration: '20261121000140' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

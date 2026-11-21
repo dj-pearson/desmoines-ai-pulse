@@ -186,6 +186,9 @@ serve(async (req) => {
         // merged duplicates and no place that has closed for good, whose
         // page is noindex. status is nullable, hence the ORs.
         .neq("is_merged", true)
+        // WEB-FEAT-103: a listing an admin hid. The service role reads past
+        // the RLS policy that hides it from everyone else, so say it here.
+        .is("hidden_at", null)
         // All three spellings of closed-for-good (WEB-BE-045): no reader
         // filters this list after the query.
         .or("status.is.null,status.not.in.(closed,permanently_closed,closed_permanently)")

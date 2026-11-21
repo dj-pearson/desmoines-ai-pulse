@@ -59,6 +59,48 @@ const WHEN = new Intl.DateTimeFormat("en-US", {
 });
 
 /**
+ * The last 20 recorded changes to one restaurant, newest first. Shared by the
+ * search card below and the admin restaurant drawer (WEB-FEAT-103).
+ */
+export function RestaurantChangeList({ restaurantId }: { restaurantId: string }) {
+  const changes = useQuery({
+    queryKey: ["restaurant-changes", restaurantId],
+    queryFn: () => fetchRestaurantChanges(restaurantId),
+  });
+  if (changes.isLoading) return <Skeleton className="h-24 w-full" />;
+  if (changes.error) {
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        Could not read the history: {changes.error instanceof Error ? changes.error.message : String(changes.error)}
+      </p>
+    );
+  }
+  const rows = changes.data ?? [];
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">No changes recorded since history began (migration 20261121000110).</p>;
+  }
+  return (
+    <ol className="space-y-3">
+      {rows.map((c) => (
+        <li key={c.id} className="rounded-xl border p-3 text-sm">
+          <div className="flex flex-wrap gap-x-3">
+            <span className="font-medium">{WHEN.format(new Date(c.changed_at))}</span>
+            <span className="text-muted-foreground">by {c.actor}</span>
+          </div>
+          <ul className="mt-1 space-y-0.5">
+            {c.columns.map((col) => (
+              <li key={col} className="break-words">
+                <span className="font-mono text-xs">{col}</span>: {show(c.old_values[col])} -&gt; {show(c.new_values[col])}
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
  * WEB-BE-075. Which job or person last changed a restaurant row. Pick a
  * restaurant by name; the last 20 changes show with the actor, the columns,
  * and old -> new values (large fields show as changed).
@@ -72,12 +114,6 @@ export function RestaurantChangeHistory() {
     queryFn: () => searchRestaurants(term),
     enabled: term.trim().length >= 2 && !picked,
   });
-  const changes = useQuery({
-    queryKey: ["restaurant-changes", picked?.id],
-    queryFn: () => fetchRestaurantChanges(picked!.id),
-    enabled: !!picked,
-  });
-
   return (
     <Card>
       <CardHeader>
@@ -109,34 +145,7 @@ export function RestaurantChangeHistory() {
             ))}
           </ul>
         )}
-        {picked && changes.isLoading && <Skeleton className="h-24 w-full" />}
-        {picked && changes.error && (
-          <p role="alert" className="text-sm text-destructive">
-            Could not read the history: {changes.error instanceof Error ? changes.error.message : String(changes.error)}
-          </p>
-        )}
-        {picked && changes.data && changes.data.length === 0 && (
-          <p className="text-sm text-muted-foreground">No changes recorded since history began (migration 20261121000110).</p>
-        )}
-        {picked && (changes.data ?? []).length > 0 && (
-          <ol className="space-y-3">
-            {(changes.data ?? []).map((c) => (
-              <li key={c.id} className="rounded-xl border p-3 text-sm">
-                <div className="flex flex-wrap gap-x-3">
-                  <span className="font-medium">{WHEN.format(new Date(c.changed_at))}</span>
-                  <span className="text-muted-foreground">by {c.actor}</span>
-                </div>
-                <ul className="mt-1 space-y-0.5">
-                  {c.columns.map((col) => (
-                    <li key={col} className="break-words">
-                      <span className="font-mono text-xs">{col}</span>: {show(c.old_values[col])} -&gt; {show(c.new_values[col])}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ol>
-        )}
+        {picked && <RestaurantChangeList restaurantId={picked.id} />}
       </CardContent>
     </Card>
   );

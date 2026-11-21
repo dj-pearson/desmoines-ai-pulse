@@ -76,6 +76,14 @@ for (const file of WRITERS) {
   check(`${file}: restaurants no bare status.neq.closed`, !/status\.neq\.closed/.test(query));
 }
 
+// WEB-FEAT-103: the service-role writers read past the RLS policy that hides
+// an admin-hidden restaurant from the anon key (which the build-time script
+// uses, so the policy covers it), so they filter it themselves.
+for (const file of WRITERS.filter((f) => f.startsWith('supabase/functions/'))) {
+  const query = tableQuery(readFileSync(file, 'utf8'), 'restaurants');
+  check(`${file}: restaurants hidden rows excluded`, /\.is\(["']hidden_at["'], null\)/.test(query));
+}
+
 check('scripts/generate-sitemap.js is gone', !existsSync('scripts/generate-sitemap.js'));
 check('CLAUDE.md does not tell anyone to run it', !/generate-sitemap\.js/.test(readFileSync('CLAUDE.md', 'utf8')));
 
