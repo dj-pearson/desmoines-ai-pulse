@@ -37,8 +37,11 @@
  *
  * GDPR Art. 17 (right to erasure) — the delete set is kept aligned with every
  * table that stores user-identifiable data. Records with an independent legal
- * basis for retention (e.g. append-only consent_records kept as proof of
- * consent, invoices kept for tax) are intentionally NOT purged here.
+ * basis for retention (RETAINED_TABLES, e.g. append-only consent_records kept
+ * as proof of consent) are intentionally NOT purged here. Owner decision
+ * 2026-11-22, "delete should delete": everything else tied to the person goes,
+ * and the ON DELETE CASCADE foreign keys (20261122000060) delete the rows in
+ * tables this loop cannot see, such as invoices and crm_contacts.
  *
  * Required by Apple App Store Review for apps that support account creation.
  */

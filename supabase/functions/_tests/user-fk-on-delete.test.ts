@@ -13,6 +13,14 @@
 // column. The PGlite half builds every one of those tables as the migrations
 // before 20261122000030 leave them, gives one user a row in each, runs the
 // migration, and deletes the user.
+//
+// Follow-up, owner decision 2026-11-22 ("delete should delete"):
+// 20261122000060 turns the SET NULLs that left a deleted person's name, email
+// or message behind into CASCADE. The tests below also fail when a SET NULL
+// into a user row is neither a staff-attribution column nor named in
+// KEPT_UNLINKED with its reason, when RETAINED_TABLES claims a table is kept
+// that a CASCADE deletes, and when any row that carried the leaving user's
+// email survives the delete outside RETAINED_TABLES.
 
 import { strict as assert } from "node:assert";
 import * as pglite from "npm:@electric-sql/pglite@0.3.15";
@@ -24,8 +32,10 @@ import {
   fksIntoDeletedRows,
   type Model,
   readMigrations,
+  USER_TABLES,
   type UserFk,
 } from "./authUserForeignKeys.ts";
+import { PURGE_TABLES, RETAINED_TABLES } from "../_shared/userDataTables.ts";
 
 interface PGlite {
   exec(sql: string): Promise<unknown>;
@@ -34,15 +44,58 @@ interface PGlite {
 const PGlite = (pglite as unknown as { PGlite: new () => PGlite }).PGlite;
 
 const FIX = "20261122000030_user_fk_on_delete.sql";
+const FOLLOW_UP = "20261122000060_account_deletion_deletes_personal_data.sql";
 
 /**
  * SET NULL into a column a CHECK names is allowed only here, with the reason
  * the CHECK still passes. Anything else in that shape fails the suite.
  */
 const CHECKED_SET_NULL: Record<string, string> = {
-  "deal_redemptions.user_id":
-    "deal_redemptions_mark_erased stamps subject_erased_at when user_id goes NULL, and the CHECK accepts it",
+  // Empty since 20261122000060: deal_redemptions.user_id, the one entry, now
+  // cascades, so the claim goes with the account.
 };
+
+/**
+ * A column that says which staff member did something to a row that is not
+ * theirs. SET NULL is right for these: the row (a deal, an article, a ban, an
+ * alert) belongs to the site, and once the name is off it says nothing about
+ * the person who left.
+ */
+const ACTOR_COLUMN =
+  /^(created_by|updated_by|resolved_by|blocked_by|added_by|assigned_to|acknowledged_by|triggered_by|optimized_by|applied_by|submitted_by|reviewed_by|admin_reviewed_by|author_id|reviewer_id|decided_by|performed_by|sent_by|changed_by|completed_by|owner|assigned_closer|actor)$/;
+
+/**
+ * Every other SET NULL into a row an account deletion removes, with why the
+ * row that stays is not the deleted person's data. Anything not named here and
+ * not an actor column fails "every SET NULL that stays is decided".
+ */
+const KEPT_UNLINKED: Record<string, string> = {
+  "consent_records.user_id": "RETAINED_TABLES: proof of consent, holding a hash of the address, not the address",
+  "crm_accounts.advertiser_user_id": "the row is a business account (name, website, city), not the person",
+  "article_comments.parent_comment_id": "another user's reply to a deleted comment; it stays as their own comment",
+  "articles.author_profile_id": "the article is the site's; the deleted byline is unlinked",
+  "support_tickets.merged_into": "another person's ticket that had been merged into a deleted one",
+  "swipe_interactions.session_id": "another participant's swipes in a shared session",
+  "gsc_properties.oauth_credential_id": "site property configuration; the credential itself is deleted",
+  "apple_notification_log.user_subscription_id":
+    "Apple webhook processing log: notification type, status and Apple's transaction id; no name or address",
+  "play_rtdn_log.user_subscription_id":
+    "Google Play webhook processing log: notification type, status and the purchase token; no name or address",
+  "payments.subscription_id": "the user's own payments cascade through user_id; this only unlinks someone else's",
+  "usage_events.subscription_id": "the user's own usage cascades through user_id; this only unlinks someone else's",
+  "invoices.payment_id": "the user's own invoices cascade through user_id; this only unlinks someone else's",
+  "crm_activities.deal_id": "an activity on another contact's record that referenced the deleted contact's deal",
+  "crm_notes.deal_id": "a note on another contact's record that referenced the deleted contact's deal",
+  "crm_tasks.deal_id": "a task on another contact's record that referenced the deleted contact's deal",
+};
+
+/** SET NULLs into deleted rows that are neither attribution nor decided. */
+function undecidedSetNull(model: Model): string[] {
+  return fksIntoDeletedRows(model)
+    .filter((fk) => fk.onDelete === "SET NULL")
+    .map((fk) => `${fk.table}.${fk.column}`)
+    .filter((key) => !ACTOR_COLUMN.test(key.split(".")[1]) && !(key in KEPT_UNLINKED));
+}
 
 const migrations = await readMigrations();
 const before = buildModel(migrations.filter((m) => m.file < FIX));
@@ -97,12 +150,55 @@ Deno.test("after every migration, nothing stops an auth.users delete", () => {
 
 Deno.test("system_events and geofence_events are decided, not swept", () => {
   const fk = (t: string, c: string) => fksIntoDeletedRows(after).find((f) => f.table === t && f.column === c);
-  // system_events is retained (operational record): keep the row, drop the link.
-  assert.equal(fk("system_events", "user_id")?.onDelete, "SET NULL");
+  // Events the user's actions raised go with them (20261122000060); the staff
+  // member who resolved one is attribution and stays SET NULL.
+  assert.equal(fk("system_events", "user_id")?.onDelete, "CASCADE");
   assert.equal(fk("system_events", "resolved_by")?.onDelete, "SET NULL");
   // geofence_events is where the user's device was: it goes with the account.
   assert.equal(fk("geofence_events", "user_id")?.onDelete, "CASCADE");
-  assert.equal(fk("contact_submissions", "user_id")?.onDelete, "SET NULL");
+  // Delete should delete: the message and the claim go with the account.
+  assert.equal(fk("contact_submissions", "user_id")?.onDelete, "CASCADE");
+  assert.equal(fk("contact_submissions", "assigned_to")?.onDelete, "SET NULL");
+  assert.equal(fk("deal_redemptions", "user_id")?.onDelete, "CASCADE");
+});
+
+Deno.test("every SET NULL that stays is staff attribution or decided in KEPT_UNLINKED", () => {
+  assert.deepEqual(undecidedSetNull(after), []);
+  // Each KEPT_UNLINKED entry is still a real SET NULL, so the list cannot rot.
+  const live = new Set(
+    fksIntoDeletedRows(after).filter((f) => f.onDelete === "SET NULL").map((f) => `${f.table}.${f.column}`),
+  );
+  assert.deepEqual(Object.keys(KEPT_UNLINKED).filter((k) => !live.has(k)), []);
+});
+
+Deno.test("before the follow-up, the same check names the rows that kept personal data (counter-assertion)", () => {
+  const undecided = undecidedSetNull(buildModel(migrations.filter((m) => m.file < FOLLOW_UP)));
+  for (
+    const key of ["contact_submissions.user_id", "failed_login_attempts.user_id", "crm_contacts.user_id", "referrals.referred_user_id"]
+  ) {
+    assert.ok(undecided.includes(key), `${key} missing from: ${undecided.join(", ")}`);
+  }
+});
+
+Deno.test("RETAINED_TABLES names no table the database deletes, and PURGE_TABLES none it keeps linked", () => {
+  const deleted = deletedOnAccountDeletion(after);
+  assert.deepEqual(Object.keys(RETAINED_TABLES).filter((t) => deleted.has(t)), []);
+  // A purge table whose user FK is SET NULL would keep its rows if the purge
+  // loop failed for it.
+  const setNullPurge = fksIntoDeletedRows(after)
+    .filter((f) =>
+      PURGE_TABLES.includes(f.table) && f.onDelete === "SET NULL" && USER_TABLES.includes(f.target) &&
+      !ACTOR_COLUMN.test(f.column)
+    )
+    .map((f) => `${f.table}.${f.column}`);
+  assert.deepEqual(setNullPurge, []);
+  // The check fires: the list as it stood before 2026-11-22 named nine tables
+  // as kept that a CASCADE already deleted.
+  const oldRetained = [
+    "subscription_events", "business_profiles", "partnership_applications", "analytics_properties",
+    "analytics_sync_jobs", "traffic_metrics", "search_performance", "keyword_rankings", "site_health_metrics",
+  ];
+  assert.deepEqual(oldRetained.filter((t) => !deleted.has(t)), []);
 });
 
 Deno.test("a new FK to auth.users without ON DELETE fails the check", () => {
@@ -122,12 +218,6 @@ Deno.test("a new FK to auth.users without ON DELETE fails the check", () => {
     ["zz_probe.editor_id", "zz_probe.noted_by", "zz_probe.owner_id"],
     p.join("\n"),
   );
-});
-
-Deno.test("an allowed CHECKed SET NULL is still backed by the trigger it names", async () => {
-  const sql = await Deno.readTextFile(new URL(`../../migrations/${FIX}`, import.meta.url));
-  assert.match(sql, /CREATE TRIGGER deal_redemptions_mark_erased\s+BEFORE UPDATE OF user_id ON public\.deal_redemptions/);
-  assert.match(sql, /CHECK \(user_id IS NOT NULL OR session_hash IS NOT NULL OR subject_erased_at IS NOT NULL\)/);
 });
 
 // --------------------------------------------------------------------- PGlite
@@ -255,7 +345,10 @@ async function errCode(p: Promise<unknown>): Promise<string | null> {
   }
 }
 
-const fixSql = await Deno.readTextFile(new URL(`../../migrations/${FIX}`, import.meta.url));
+const fix030 = await Deno.readTextFile(new URL(`../../migrations/${FIX}`, import.meta.url));
+const followUpSql = await Deno.readTextFile(new URL(`../../migrations/${FOLLOW_UP}`, import.meta.url));
+/** Both migrations, in the order the migrator applies them. */
+const fixSql = `${fix030}\n${followUpSql}`;
 
 Deno.test("without the fix, deleting the auth user fails with 23503 (negative control)", async () => {
   const { pg } = await seeded(before);
@@ -319,15 +412,9 @@ Deno.test("with the fix, a user with a row in every such table deletes, and the 
   assert.deepEqual(wrong, []);
   assert.ok(gone.size > 20 && tables.length - gone.size > 40, `cascaded ${gone.size}, kept ${tables.length - gone.size}`);
 
-  // The two the story names, read directly.
-  const cs = (await pg.query<{ note: string; user_id: string | null }>(
-    `SELECT note, user_id FROM public.contact_submissions`,
-  )).rows;
-  assert.deepEqual(cs, [{ note: "kept:contact_submissions", user_id: null }]);
-  const dr = (await pg.query<{ user_id: string | null; erased: boolean }>(
-    `SELECT user_id, subject_erased_at IS NOT NULL AS erased FROM public.deal_redemptions`,
-  )).rows;
-  assert.deepEqual(dr, [{ user_id: null, erased: true }], "the claim stays and still counts");
+  // The two the story names, read directly. Delete should delete.
+  assert.deepEqual((await pg.query(`SELECT 1 FROM public.contact_submissions`)).rows, [], "the message goes");
+  assert.deepEqual((await pg.query(`SELECT 1 FROM public.deal_redemptions`)).rows, [], "the claim goes");
   const ge = (await pg.query(`SELECT 1 FROM public.geofence_events`)).rows;
   assert.equal(ge.length, 0, "location history goes with the account");
 });
@@ -371,4 +458,112 @@ Deno.test("the fix is safe to run twice", async () => {
   await pg.exec(fixSql);
   await pg.exec(fixSql);
   assert.equal(await errCode(pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER])), null);
+});
+
+// ------------------------------------------------- delete should delete
+
+const EMAIL = "leaving@example.com";
+
+/**
+ * Tables whose row is about the user: a direct FK to auth.users or profiles
+ * that is not a staff-attribution column. Those rows get the leaving user's
+ * name, email and message in `note`, standing in for contact_submissions.name,
+ * invoices.customer_email, referrals.referred_email and the like. A link
+ * KEPT_UNLINKED says is not about the person (crm_accounts is a business) is
+ * left out; consent_records, kept on purpose, is left in.
+ */
+function aboutTheUser(fks: UserFk[]): string[] {
+  return [...new Set(
+    fks.filter((f) =>
+      USER_TABLES.includes(f.target) && !ACTOR_COLUMN.test(f.column) &&
+      (!(`${f.table}.${f.column}` in KEPT_UNLINKED) || f.table in RETAINED_TABLES)
+    ).map((f) => f.table),
+  )].sort();
+}
+
+async function stampPersonalData(pg: PGlite, tables: string[]): Promise<void> {
+  for (const t of tables) {
+    await pg.query(`UPDATE public.${q(t)} SET note = $1`, [`Leaving User <${EMAIL}>: my message`]);
+  }
+}
+
+async function tablesStillHolding(pg: PGlite, tables: string[], needle: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const t of tables) {
+    const n = (await pg.query(`SELECT 1 FROM public.${q(t)} WHERE note LIKE $1`, [`%${needle}%`])).rows.length;
+    if (n > 0) out.push(t);
+  }
+  return out;
+}
+
+Deno.test("a deleted user leaves no row with their name, email or message outside RETAINED_TABLES", async () => {
+  const { pg, fks, tables } = await seeded(before);
+  const about = aboutTheUser(fks);
+  assert.ok(about.length > 40, `expected many tables about the user, found ${about.length}`);
+  assert.ok(about.includes("contact_submissions") && about.includes("referrals"), about.join(", "));
+  await stampPersonalData(pg, about);
+  // The counter-assertion's subject: someone else's message, which must stay.
+  await pg.query(
+    `INSERT INTO public.contact_submissions (id, note) VALUES ('00000000-0000-0000-0002-000000000001', $1)`,
+    ["Staying User <staying@example.com>: their message"],
+  );
+
+  await pg.exec(fixSql);
+  assert.equal(await errCode(pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER])), null);
+
+  const left = await tablesStillHolding(pg, tables, EMAIL);
+  assert.deepEqual(left.filter((t) => !(t in RETAINED_TABLES)), []);
+  // What is kept is exactly what RETAINED_TABLES says is kept, and it no
+  // longer names the account.
+  assert.deepEqual(left, ["consent_records"]);
+  assert.deepEqual((await pg.query(`SELECT user_id FROM public.consent_records`)).rows, [{ user_id: null }]);
+  // The scan is not vacuous: the other user's message is still found.
+  assert.deepEqual(await tablesStillHolding(pg, tables, "staying@example.com"), ["contact_submissions"]);
+});
+
+Deno.test("with only 20261122000030, the same scan finds the leftovers (negative control)", async () => {
+  const { pg, fks, tables } = await seeded(before);
+  await stampPersonalData(pg, aboutTheUser(fks));
+  await pg.exec(fix030);
+  assert.equal(await errCode(pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER])), null);
+  const left = (await tablesStillHolding(pg, tables, EMAIL)).filter((t) => !(t in RETAINED_TABLES));
+  // (referrals is not here: its seeded row also names the user as referrer,
+  // which already cascaded. The static counter-assertion above covers it.)
+  for (const t of ["contact_submissions", "failed_login_attempts", "invoices", "crm_contacts", "deal_redemptions"]) {
+    assert.ok(left.includes(t), `${t} missing from: ${left.join(", ")}`);
+  }
+});
+
+// ------------------------------------------------- what the user is told
+
+/**
+ * The label the account-deletion page gives each record kept after deletion.
+ * Every RETAINED_TABLES entry needs one, so a table added to that list fails
+ * here until the page says so too.
+ */
+const KEPT_LABEL: Record<string, string> = {
+  consent_records: "Consent records:",
+  security_audit_logs: "Security logs:",
+  ad_impressions: "Ad-impression records:",
+  campaigns: "Advertiser and Business Pro billing:",
+  business_subscriptions: "Advertiser and Business Pro billing:",
+  // _shared/addressKeyedData.ts, erasure "retain"
+  email_suppressions: "Email suppression:",
+  // KEPT_UNLINKED: the store webhook logs
+  "apple_notification_log/play_rtdn_log": "App Store and Google Play notices:",
+};
+
+function keptLabelsOnPage(src: string): string[] {
+  const section = src.slice(src.indexOf('aria-labelledby="what-is-kept"'), src.indexOf("</section>", src.indexOf('aria-labelledby="what-is-kept"')));
+  return [...section.matchAll(/<strong>([^<]+)<\/strong>/g)].map((m) => m[1]).sort();
+}
+
+Deno.test("the account-deletion page lists exactly what is kept", async () => {
+  const page = await Deno.readTextFile(new URL("../../../src/pages/AccountDeletion.tsx", import.meta.url));
+  assert.deepEqual(Object.keys(RETAINED_TABLES).filter((t) => !(t in KEPT_LABEL)), []);
+  assert.deepEqual(keptLabelsOnPage(page), [...new Set(Object.values(KEPT_LABEL))].sort());
+  // The counter-assertion: the copy before 2026-11-22 fails the same check.
+  const old = `<section aria-labelledby="what-is-kept"><li><strong>Transaction records:</strong></li>
+    <li><strong>Consent records:</strong></li><li><strong>Usage data:</strong></li></section>`;
+  assert.notDeepEqual(keptLabelsOnPage(old), [...new Set(Object.values(KEPT_LABEL))].sort());
 });

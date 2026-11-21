@@ -25,7 +25,7 @@ import { reopenConsentBanner } from "@/lib/cookieConsent";
 import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 export default function PrivacyPolicy() {
-  const lastUpdated = "October 23, 2026";
+  const lastUpdated = "November 22, 2026";
 
   return (
     <div className="min-h-screen bg-background">
@@ -307,11 +307,51 @@ export default function PrivacyPolicy() {
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li><strong>Account Data:</strong> Retained until you delete your account</li>
-              <li><strong>Usage Data:</strong> Retained for up to 24 months for analytics purposes</li>
-              <li><strong>Newsletter Subscriptions:</strong> Until you unsubscribe</li>
-              <li><strong>Consent Records:</strong> Retained as proof of your consent choices, as required by law</li>
-              <li><strong>Transaction Records:</strong> Retained for 7 years for legal and tax purposes</li>
+              <li>
+                <strong>Usage Data:</strong> Retained for up to 24 months for analytics purposes, and deleted sooner if you
+                delete your account
+              </li>
+              <li><strong>Newsletter Subscriptions:</strong> Until you unsubscribe or delete your account</li>
+              <li>
+                <strong>Subscription and Payment History:</strong> Deleted with your account. Stripe, Apple and Google keep
+                their own billing records under their own policies
+              </li>
+              <li>
+                <strong>Advertiser and Business Pro Billing:</strong> Campaign and Business Pro billing records are retained
+                for 7 years for legal and tax purposes
+              </li>
             </ul>
+            <p>
+              When you delete your account, your personal data is deleted, not kept with your name taken off. These
+              records are the only ones we keep afterwards:
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>
+                <strong>Consent Records:</strong> proof of your consent choices, as required by law. They hold a hash of
+                your email address rather than the address, and are no longer linked to your account
+              </li>
+              <li>
+                <strong>Security Logs:</strong> account ID, IP address and browser for security events, including the
+                deletion itself, so abuse can be investigated
+              </li>
+              <li>
+                <strong>Ad-Impression Records:</strong> which ad was shown, when and on which page, with account ID, IP
+                address and browser, because advertisers are billed on them
+              </li>
+              <li>
+                <strong>Email Suppression:</strong> a bounce, unsubscribe or spam report for your address, so we never email
+                it again
+              </li>
+              <li>
+                <strong>App Store and Google Play Notices:</strong> Apple's and Google's notifications about a store
+                subscription, no longer linked to your account
+              </li>
+              <li><strong>Advertiser and Business Pro Billing:</strong> as above</li>
+            </ul>
+            <p>
+              <Link to="/account/delete" className="text-primary underline">What account deletion removes</Link> is
+              listed in full on its own page.
+            </p>
           </section>
 
           <section className="mb-8">

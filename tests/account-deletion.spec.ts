@@ -42,6 +42,27 @@ test.describe('/account/delete', () => {
     );
   });
 
+  // WEB-LEGAL-015, owner decision 2026-11-22 ("delete should delete"). The page
+  // used to promise 7-year transaction records and 24-month usage data that
+  // the erasure does not keep, and say nothing about the contact form, whose
+  // messages it kept. These are the six things that really stay
+  // (RETAINED_TABLES plus email_suppressions and the store webhook logs).
+  test('lists what is deleted and exactly what is kept', async ({ page }) => {
+    await expect(
+      page.getByRole('listitem').filter({ hasText: /messages you sent through our contact form while signed in/ }),
+    ).toBeVisible();
+    const kept = page.locator('section[aria-labelledby="what-is-kept"]').getByRole('listitem');
+    await expect(kept.locator('strong')).toHaveText([
+      'Consent records:',
+      'Security logs:',
+      'Ad-impression records:',
+      'Email suppression:',
+      'App Store and Google Play notices:',
+      'Advertiser and Business Pro billing:',
+    ]);
+    await expect(page.getByText(/Usage data|in a minimized form/)).toHaveCount(0);
+  });
+
   test('passes the a11y lane axe tags', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     const results = await new AxeBuilder({ page })

@@ -100,42 +100,66 @@ export const PURGE_TABLES: readonly string[] = [
   "account_deletion_tokens",
   "user_roles",
 
+  // --- correspondence, business listings and records about this user ---
+  // These were on the retained list until 2026-11-22. Most already went with
+  // the account through ON DELETE CASCADE, so the stated retention was untrue;
+  // the rest (contact_submissions, failed_login_attempts, system_events) kept
+  // the person's name, email, message or IP under a NULL user_id. Owner
+  // decision 2026-11-22, "delete should delete": they are deleted.
+  // 20261122000060 makes the FKs agree. WEB-LEGAL-015.
+  "contact_submissions",     // name, email, phone, message; replies cascade
+  "partnership_applications",
+  "failed_login_attempts",   // the address typed and the IP, for this account
+  "system_events",           // events the user's actions raised
+  "error_events",
+  // Google Search Console data the user connected. It cascades from the user
+  // who connected it, so if that user deletes their account the site's GSC
+  // history goes too; reconnecting the property re-syncs it.
+  "keyword_rankings",
+  "search_performance",
+  "traffic_metrics",
+  "site_health_metrics",
+  "analytics_sync_jobs",
+  "analytics_properties",
+  // A business listing the user owns. Business Pro billing for it is in
+  // business_subscriptions, kept below.
+  "business_profiles",
+  // Subscription history. Deleting it means we hold no billing history for
+  // this user afterwards; Stripe, Apple and Google keep their own records.
+  "subscription_events",
+  "subscription_split_audit",
+
   // --- subscription and identity, last ---
   "user_subscriptions",
   "profiles",
 ];
 
 /**
- * Deliberately retained, with the basis for each. Erasure rights are not
- * absolute, and deleting these would destroy records the business is required
- * or entitled to keep. Reviewed with counsel before relying on any of them.
+ * Kept after erasure, with the basis for each. Only tables whose rows really
+ * stay belong here: user-fk-on-delete.test.ts fails if a table listed here is
+ * deleted by an ON DELETE CASCADE, which is how this list came to claim six
+ * analytics tables, business_profiles, partnership_applications and
+ * subscription_events were kept when the database deleted them.
+ *
+ * Owner decision 2026-11-22: "delete should delete". A row that is the user's
+ * personal data goes; what is left here is kept for a reason that outlives the
+ * account, and each entry says what it still holds. The account-deletion page
+ * (src/pages/AccountDeletion.tsx) and the privacy policy list the same five.
  */
 export const RETAINED_TABLES: Readonly<Record<string, string>> = {
   consent_records:
-    "Proof that consent was given and withdrawn (GDPR Art. 7(1)); append-only by design.",
+    "Proof that consent was given and withdrawn (GDPR Art. 7(1)); append-only by design. Holds a hash of the address, " +
+    "not the address, plus the IP and browser at the time; the link to the account is removed.",
   security_audit_logs:
-    "Security incident investigation; legitimate interest, and deleting on request would let an attacker erase their own trail.",
-  failed_login_attempts:
-    "Brute-force and lockout defence; same reasoning as security_audit_logs.",
-  system_events: "Operational incident record, not user-facing personal data.",
-  error_events: "Crash diagnostics; message_redacted is already scrubbed of personal data.",
-  subscription_events: "Billing history required for tax and chargeback defence.",
-  subscription_split_audit: "Billing reconciliation across platforms; same basis.",
-  ad_impressions: "Advertiser billing records; the counterparty is the advertiser, not this user.",
-  campaigns: "Advertising contracts with their own retention and dispute window.",
-  business_profiles: "Business listing under a commercial contract, not a personal profile.",
+    "Security incident investigation; legitimate interest, and deleting on request would let an attacker erase their own " +
+    "trail. Holds the account id, IP and browser for security events, including the deletion itself.",
+  ad_impressions:
+    "Advertiser billing records: which ad was shown, when, and on what page, counted toward what an advertiser pays. " +
+    "Holds the viewer's account id, IP and browser.",
+  campaigns:
+    "Advertising contracts with their own retention and dispute window: what ran, when, and what it cost. Holds the " +
+    "advertiser's account id.",
   business_subscriptions:
-    "Business Pro billing record under a commercial contract (Stripe ids, status, period); same basis as subscription_events.",
-  contact_submissions: "Inbound business correspondence; may be needed to answer the inquiry it records.",
-  partnership_applications: "Commercial application record with its own review trail.",
-
-  // Google Search Console integration. user_id here is the admin who connected
-  // the property; the rows are site metrics, not personal data. The admin's own
-  // credentials ARE purged (gsc_oauth_credentials, above).
-  analytics_properties: "Site analytics configuration keyed by property, not a personal record.",
-  analytics_sync_jobs: "Job history for the analytics integration.",
-  traffic_metrics: "Aggregate site traffic keyed by property.",
-  search_performance: "Aggregate search metrics keyed by property.",
-  keyword_rankings: "Aggregate keyword metrics keyed by property.",
-  site_health_metrics: "Site health checks keyed by property.",
+    "Business Pro billing record under a commercial contract (Stripe ids, status, period). Cancelled in Stripe before " +
+    "the account is deleted.",
 };

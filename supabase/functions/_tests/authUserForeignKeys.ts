@@ -16,7 +16,9 @@
  * [IF NOT EXISTS], ALTER TABLE ADD/DROP COLUMN, ADD/DROP CONSTRAINT, ALTER
  * COLUMN DROP/SET NOT NULL, RENAME TO, DROP TABLE) and the
  * pg_temp.set_user_fk_action(table, column, action) calls in
- * 20261122000030_user_fk_on_delete.sql. It is a model, not Postgres: a
+ * 20261122000030_user_fk_on_delete.sql (which only replace NO ACTION and
+ * RESTRICT) and the pg_temp.change_fk_action calls in 20261122000060 (which
+ * replace any action). It is a model, not Postgres: a
  * statement it cannot read is skipped, which is why the test that uses it also
  * asserts the model found the FKs it is known to contain.
  */
@@ -284,6 +286,8 @@ const ALTER_TABLE = new RegExp(
 );
 const DROP_TABLE = /\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([\w."\s,]+?)(?:\s+(?:CASCADE|RESTRICT))?\s*$/i;
 const SET_ACTION = /pg_temp\.set_user_fk_action\(\s*'(\w+)'\s*,\s*'(\w+)'\s*,\s*'(CASCADE|SET NULL)'\s*\)/gi;
+/** 20261122000060: the same call, but it replaces whatever action the FK had. */
+const CHANGE_ACTION = /pg_temp\.change_fk_action\(\s*'(\w+)'\s*,\s*'(\w+)'\s*,\s*'(CASCADE|SET NULL)'\s*\)/gi;
 
 function applyAlter(model: Model, table: string, rest: string, file: string) {
   const t = model.get(table);
@@ -369,6 +373,16 @@ export function buildModel(migrations: { file: string; sql: string }[]): Model {
         fk.onDelete = call[3].toUpperCase() as OnDelete;
         fk.file = file;
         if (fk.onDelete === "SET NULL") t.notNull.delete(col);
+      }
+    }
+    for (const call of sql.matchAll(CHANGE_ACTION)) {
+      const t = model.get(call[1].toLowerCase());
+      if (!t) continue;
+      const col = call[2].toLowerCase();
+      for (const fk of t.fks.values()) {
+        if (fk.column !== col) continue;
+        fk.onDelete = call[3].toUpperCase() as OnDelete;
+        fk.file = file;
       }
     }
   }
