@@ -50,3 +50,4 @@ None.
 | 2026-11-21 | WEB-OPS-026 | this commit | Closure sweep script written (dry run report, reviewed --apply, resumable, never deletes); offline suite 10/10. Production run is the owner's |
 | 2026-11-21 | WEB-BE-067 | this commit | Admin content edits send only changed configured fields; the ten automation/paid columns never ride along (11 new tests, old dialog fails with a 23-key update) |
 | 2026-11-21 | WEB-BE-072 | this commit | Dietary tags only from marks on the dish; no suitableForDiet; badges say 'as marked' with a confirm line. Recompute script written, production run pending |
+| 2026-11-21 | WEB-BE-068 | this commit | firecrawl-scraper and enhance-content stop storing guessed cuisine, location, price and rating; honesty suite 23/23, two negative controls red; review script pending owner run |
