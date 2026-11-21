@@ -12,7 +12,6 @@ import {
   reviewCountLabel,
 } from "@/lib/googleFacts";
 import { restaurantPageTitle, restaurantSeoKeywords } from "@/lib/restaurantMeta";
-import { entityShellRewrites } from "../../../functions/_middleware";
 
 describe("priceFromGoogle", () => {
   it("is true only for a price Google supplied", () => {
@@ -84,21 +83,7 @@ describe("page and edge shell agree on Reviews", () => {
     expect(restaurantPageTitle(input)).toMatch(/Reviews/);
     expect(restaurantSeoKeywords(input)).toContain("Lucca reviews");
   });
-
-  it("the shell's title follows the same count", () => {
-    const title = (r: Record<string, unknown>) =>
-      entityShellRewrites({
-        pageUrl: "https://example.test/restaurants/lucca",
-        sbBase: "https://sb.test",
-        type: "restaurant",
-        entity: { id: "1", title: "Lucca", row: r },
-      }).find((rule) => rule.selector === "title");
-    const withCount = JSON.stringify(title(row));
-    expect(withCount).toMatch(/Reviews/);
-    expect(withCount).toContain(restaurantPageTitle({ ...row, reviewCount: 312 }));
-    // Counter-assertion: no count, no Reviews, on either side.
-    const without = { ...row, google_review_count: null };
-    expect(JSON.stringify(title(without))).not.toMatch(/Reviews/);
-    expect(restaurantPageTitle({ ...without, reviewCount: restaurantReviewCount(without) })).not.toMatch(/Reviews/);
-  });
+  // The shell half lives in functions/__tests__/middleware-review-count.test.mjs:
+  // importing functions/_middleware.ts here pulls Cloudflare worker types into
+  // the app type-check.
 });

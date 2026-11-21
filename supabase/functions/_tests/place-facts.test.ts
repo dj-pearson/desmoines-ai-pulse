@@ -320,6 +320,6 @@ Deno.test("SQL: price_range is lockable, and the source column rejects unknown v
     [R],
   );
   assert.deepEqual(Object.keys(locks.rows[0].m), ["price_range"]);
-  await assert.rejects(pg.query("UPDATE public.restaurants SET price_range_source = 'model' WHERE id = $1", [R]));
-  await assert.rejects(pg.query("UPDATE public.restaurants SET google_review_count = -1 WHERE id = $1", [R]));
+  await assert.rejects(() => pg.query("UPDATE public.restaurants SET price_range_source = 'model' WHERE id = $1", [R]));
+  await assert.rejects(() => pg.query("UPDATE public.restaurants SET google_review_count = -1 WHERE id = $1", [R]));
 });
