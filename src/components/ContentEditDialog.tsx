@@ -14,12 +14,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { toast } from "@/lib/toast";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
 import { createLogger } from '@/lib/logger';
+import { buildContentEditPayload } from "@/lib/contentEditPayload";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ContentEditDialog');
+
+// The venue match fills these in without a visible field.
+const EVENT_EXTRA_KEYS = ["latitude", "longitude"] as const;
+// Hotels edit their slug through a configured field.
+const HOTEL_ALLOWED_PROTECTED = ["slug"] as const;
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening" | "hotel";
 
@@ -275,27 +282,24 @@ export default function ContentEditDialog({
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // Prepare data for save
-      const saveData = { ...formData };
-      
-      log.debug('save', 'Original form data', { formData, contentType, isNew: item.isNew });
-      
-      // Format dates properly
-      config.fields.forEach(field => {
-        if ((field.type === "date" || field.type === "datetime") && saveData[field.key]) {
-          if (field.type === "date") {
-            saveData[field.key] = format(saveData[field.key], 'yyyy-MM-dd');
-          } else {
-            saveData[field.key] = saveData[field.key].toISOString();
-          }
-        }
+      // An edit sends only the configured fields that changed and never the
+      // protected columns (sponsorship, hours, closure, merge state), so a
+      // stale list row cannot overwrite them (WEB-BE-067).
+      const saveData = buildContentEditPayload({
+        fields: config.fields,
+        original: item,
+        current: formData,
+        isNew: Boolean(item.isNew),
+        extraKeys: contentType === "event" ? EVENT_EXTRA_KEYS : [],
+        allowedProtected: contentType === "hotel" ? HOTEL_ALLOWED_PROTECTED : [],
       });
 
-      // Remove readonly fields
-      delete saveData.id;
-      delete saveData.created_at;
-      delete saveData.updated_at;
-      delete saveData.isNew; // Remove the isNew flag
+      log.debug('save', 'Original form data', { formData, contentType, isNew: item.isNew });
+
+      if (!item.isNew && Object.keys(saveData).length === 0) {
+        toast.info('Nothing has changed yet.');
+        return;
+      }
 
       log.debug('save', 'Save data after processing', { data: saveData });
 
@@ -309,7 +313,12 @@ export default function ContentEditDialog({
         log.debug('save', 'Creating new item');
         const createResult = await supabase
           .from(tableName)
-          .insert(saveData)
+          // The keys come from this content type's form at runtime, and the
+          // client types the insert as every candidate table's required
+          // columns at once, which no single row satisfies. Before WEB-BE-067
+          // this went through untyped (formData is any); the cast keeps that
+          // behaviour without spreading any further.
+          .insert(saveData as never)
           .select();
         
         result = createResult.data;
@@ -336,7 +345,7 @@ export default function ContentEditDialog({
 
         const updateResult = await supabase
           .from(tableName)
-          .update(saveData)
+          .update(saveData as TablesUpdate<typeof tableName>)
           .eq('id', item.id)
           .select();
         
