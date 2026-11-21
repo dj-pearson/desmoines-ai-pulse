@@ -683,7 +683,11 @@ export default function Restaurants() {
       <div className="min-h-screen bg-gray-50 dark:bg-background">
         {/* Hero. One flat brand surface (WP1 item 13): the gradient and three
             blurred orbs cost paint time and said nothing. Compact on a phone
-            so the first card is in the first viewport (item 6). */}
+            (item 6), so the first ranked restaurant is in the first viewport.
+            The first photo card is not: on an unfiltered page 1 the ranked
+            list sits between them, cut to five rows below md so the filter
+            bar and that card are about one screen of scroll down
+            (WEB-UX-085, measured in restaurants-hub.spec.ts). */}
         <section className="relative bg-[#2D1B69]">
           <div className="relative container mx-auto px-4 pt-5 pb-6 sm:pt-8 sm:pb-10 md:pt-12 md:pb-16">
             {/* Title */}
@@ -878,7 +882,7 @@ export default function Restaurants() {
 
             {/* ONE sticky bar (item 6): filter pills, sort, the count and the
                 removable chips, in list and map view alike. */}
-            <div className="sticky top-16 z-30 -mx-4 px-4 py-1.5 sm:py-2 space-y-1.5 bg-gray-50/95 dark:bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:supports-[backdrop-filter]:bg-background/80">
+            <div data-hub-controls="" className="sticky top-16 z-30 -mx-4 px-4 py-1.5 sm:py-2 space-y-1.5 bg-gray-50/95 dark:bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:supports-[backdrop-filter]:bg-background/80">
               {/* Pills and sort share one row at every width; the pills
                   scroll inside their own box, so the bar is two short lines
                   on a phone rather than three. */}

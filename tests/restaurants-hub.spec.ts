@@ -72,6 +72,15 @@ test.describe('Restaurants hub: pagination reaches every row', () => {
     await expect(page.locator('[data-results-count]')).toContainText(`Showing 31-60 of ${TOTAL}`);
   });
 
+  test('at desktop width the ranked list shows all twenty and no toggle', async ({ page }) => {
+    await gotoHub(page);
+    const block = page.locator('[data-top-rated]');
+    const rows = block.locator('ol > li');
+    await expect(rows).toHaveCount(20);
+    await expect(rows.nth(19)).toBeVisible();
+    await expect(block.getByRole('button', { name: /show all/i })).toBeHidden();
+  });
+
   test('page 1 renders no restaurant twice', async ({ page }) => {
     await gotoHub(page);
     const hrefs = await page
@@ -102,6 +111,51 @@ test.describe('Restaurants hub: mobile', () => {
     const navBox = (await bottomNav.count()) > 0 ? await bottomNav.first().boundingBox() : null;
     const limit = navBox ? navBox.y : 844;
     expect(box!.y + box!.height).toBeLessThanOrEqual(limit);
+  });
+
+  // WEB-UX-085: twenty single-column rows with the rule printed first put the
+  // filters and the first photo card about 2,050px down at 390px. Below md the
+  // list shows five; all twenty stay in the DOM for the prerender and the
+  // ItemList, and the rule sits in a details element under the list.
+  test('the ranked list shows five with a Show all 20, and the filters are one screen down', async ({ page }) => {
+    await gotoHub(page);
+    const block = page.locator('[data-top-rated]');
+    const rows = block.locator('ol > li');
+    await expect(rows).toHaveCount(20);
+    const visibleRows = () =>
+      rows.evaluateAll((els) => els.filter((el) => (el as HTMLElement).offsetParent !== null).length);
+    expect(await visibleRows()).toBe(5);
+
+    const rule = block.locator('[data-selection-rule]');
+    await expect(rule).toHaveCount(1);
+    await expect(rule).toBeHidden();
+    const ruleBelowList = await block.evaluate((el) => {
+      const list = el.querySelector('ol');
+      const details = el.querySelector('[data-selection-rule]')?.closest('details');
+      return !!list && !!details && !!(list.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(ruleBelowList, 'the rule sits in a details element after the list').toBe(true);
+
+    // "About one screen of scroll": scrolling down by one viewport brings the
+    // filter bar and the first photo card into view above the bottom nav.
+    const vh = page.viewportSize()!.height;
+    const bottomNav = page.getByRole('navigation', { name: 'Bottom navigation' });
+    const navBox = (await bottomNav.count()) > 0 ? await bottomNav.first().boundingBox() : null;
+    const visibleBottom = navBox ? navBox.y : vh;
+    const docTop = (selector: string) =>
+      page.locator(selector).first().evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+    expect(await docTop('[data-hub-controls]')).toBeLessThan(vh + visibleBottom - 44);
+    await expect(page.locator('article').first()).toBeAttached();
+    expect(await docTop('article')).toBeLessThan(vh + visibleBottom - 120);
+
+    const toggle = block.getByRole('button', { name: 'Show all 20' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    expect(await visibleRows()).toBe(20);
+    await expect(block.getByRole('button', { name: 'Show top 5' })).toHaveAttribute('aria-expanded', 'true');
+
+    await block.getByText('How this list is made').click();
+    await expect(rule).toBeVisible();
   });
 
   test('Load More appends to 60 and keeps the loaded cards mounted', async ({ page }) => {
