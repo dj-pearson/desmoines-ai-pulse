@@ -40,7 +40,7 @@ export function OwnerPhotoUpload({ listingType, listingId, listingName, currentU
     setError(null);
     if (!file) return;
     const check = checkOwnerPhoto(file);
-    if (!check.ok) {
+    if ("error" in check) {
       setError(check.error);
       return;
     }

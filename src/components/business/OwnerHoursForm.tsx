@@ -60,7 +60,7 @@ export function OwnerHoursForm({ listingId, listingName, hoursJson }: OwnerHours
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     const result = weekToPeriods(week);
-    if (!result.ok) {
+    if ("error" in result) {
       setError(result.error);
       return;
     }

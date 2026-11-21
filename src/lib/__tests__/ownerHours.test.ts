@@ -71,7 +71,7 @@ describe("weekFromStoredHours", () => {
     const week = closedWeek();
     week[5] = { closed: false, ranges: [{ open: "16:00", close: "01:30" }] };
     const result = weekToPeriods(week);
-    if (!result.ok) throw new Error(result.error);
+    if ("error" in result) throw new Error(result.error);
     expect(weekFromStoredHours({ periods: result.periods })[5]).toEqual(week[5]);
   });
 

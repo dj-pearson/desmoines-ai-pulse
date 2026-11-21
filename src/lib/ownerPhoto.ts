@@ -51,7 +51,7 @@ export function ownerPhotoPath(userId: string, listingId: string, type: OwnerPho
  */
 export async function uploadOwnerPhoto(file: File, userId: string, listingId: string): Promise<string> {
   const check = checkOwnerPhoto(file);
-  if (!check.ok) throw new OwnerPhotoRefused(check.error);
+  if ("error" in check) throw new OwnerPhotoRefused(check.error);
   const path = ownerPhotoPath(userId, listingId, check.type);
   const { error } = await supabase.storage
     .from(OWNER_PHOTO_BUCKET)
