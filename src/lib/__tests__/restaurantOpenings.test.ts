@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  automationResolvesUpcoming,
   groupOpenings,
   isNewlyOpened,
   isStaleUpcoming,
@@ -212,5 +213,28 @@ describe("orderOpeningsWatch", () => {
       "later",
       "undated",
     ]);
+  });
+});
+
+describe("automationResolvesUpcoming (WEB-BE-073)", () => {
+  const hours = { weekdayDescriptions: ["Mon: 11-9"], periods: [] };
+  const up = (o: Record<string, unknown>) => ({ status: "announced", opening_date: null, opening_timeframe: null, ...o });
+
+  it("OPERATIONAL with hours is settled by the trigger", () => {
+    expect(automationResolvesUpcoming(up({ business_status: "OPERATIONAL", hours_json: hours }), NOW)).toMatch(/newly_opened/);
+  });
+
+  it("OPERATIONAL without hours still needs a person", () => {
+    expect(automationResolvesUpcoming(up({ business_status: "OPERATIONAL", hours_json: null }), NOW)).toBeNull();
+  });
+
+  it("a date more than 7 days past is queued; 3 days past is not", () => {
+    expect(automationResolvesUpcoming(up({ opening_date: "2026-09-01" }), NOW)).toMatch(/queued/);
+    expect(automationResolvesUpcoming(up({ opening_date: "2026-09-20" }), NOW)).toBeNull();
+  });
+
+  it("a passed timeframe year with no date needs a person, and open rows are ignored", () => {
+    expect(automationResolvesUpcoming(up({ opening_timeframe: "Summer 2025" }), NOW)).toBeNull();
+    expect(automationResolvesUpcoming({ status: "open", opening_date: "2026-01-01", opening_timeframe: null }, NOW)).toBeNull();
   });
 });
