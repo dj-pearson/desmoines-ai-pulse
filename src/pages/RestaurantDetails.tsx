@@ -445,6 +445,11 @@ export default function RestaurantDetails() {
     hasPhone: !isShut && !!phoneHref,
     hasPhotos: !!restaurant.image_url,
   };
+  // WEB-BE-075: "Listing last updated" and dateModified follow a change a
+  // visitor can see. updated_at moves on every hours re-check and popularity
+  // write, which made a row look freshly reviewed after bookkeeping.
+  const listingChangedAt =
+    (restaurant as { content_changed_at?: string | null }).content_changed_at ?? restaurant.updated_at;
   const seoTitle = restaurantPageTitle(metaInput);
   const seoDescription = restaurantMetaDescription(metaInput);
 
@@ -560,7 +565,7 @@ export default function RestaurantDetails() {
         // No `location` prop: it emitted a second, unlinked Place node for the
         // same business alongside restaurantSchema, which already carries the
         // address and geo.
-        modifiedTime={restaurant.updated_at}
+        modifiedTime={listingChangedAt}
         // A place that has closed for good should leave search results.
         // noindex, follow: the related-restaurant links stay followable.
         robots={lifecycle === "closed" ? "noindex, follow" : undefined}
@@ -578,7 +583,7 @@ export default function RestaurantDetails() {
         name={seoTitle}
         description={seoDescription}
         url={getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`)}
-        dateModified={restaurant.updated_at}
+        dateModified={listingChangedAt}
       />
 
       <div className="min-h-screen bg-gray-50 dark:bg-background">
@@ -797,7 +802,7 @@ export default function RestaurantDetails() {
               phoneHref={!isShut ? phoneHref : null}
               menu={menuAction}
               areaLinks={areaLinks}
-              lastUpdated={lastUpdatedLabel(restaurant.updated_at)}
+              lastUpdated={lastUpdatedLabel(listingChangedAt)}
             />
 
             {/* Quick Actions Bar */}

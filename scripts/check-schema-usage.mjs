@@ -260,6 +260,10 @@ const PENDING_MIGRATIONS = [
   // failed; the hours refresh does not read it.
   { table: 'restaurants', column: 'place_lookup_checked_at', migration: '20261121000010' },
   { table: 'restaurants', column: 'promotion_hold_reason', migration: '20261121000010' },
+  // WEB-BE-075: history is admin-read; content_changed_at is an optional
+  // detail column (dropped and retried on 42703 until applied).
+  { table: 'restaurant_changes', migration: '20261121000110' },
+  { table: 'restaurants', column: 'content_changed_at', migration: '20261121000110' },
   { rpc: 'report_restaurant_closed', migration: '20261121000030' },
   { rpc: 'resolve_closure_review', migration: '20261121000030' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it

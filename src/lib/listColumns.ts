@@ -76,6 +76,8 @@ export const RESTAURANT_DETAIL_OPTIONAL_COLUMNS = [
   "reservable",
   "reservation_url",
   "reservation_provider",
+  // WEB-BE-075 (20261121000110): when a visitor-visible field last changed.
+  "content_changed_at",
 ] as const;
 
 // NOTE: keep every name here in sync with `public.events` AS DEPLOYED, not as

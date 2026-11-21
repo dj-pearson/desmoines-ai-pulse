@@ -568,7 +568,10 @@ serve(async (req) => {
       throw new Error('GOOGLE_SEARCH_API key not found in environment variables')
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    // WEB-BE-075: names this job in restaurant_changes.actor.
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { 'x-actor': 'bulk-update-restaurants' } },
+    })
 
     const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null, placeLookup = false, restaurantIds: rawRestaurantIds = null } = await req.json()
     // Each row is a paid Google Places lookup, and batchSize went straight into
