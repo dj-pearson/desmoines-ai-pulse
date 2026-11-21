@@ -11,6 +11,62 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// BEGIN pure: planEnhanceUpdate
+// Self-contained on purpose (no imports, no module state):
+// _tests/restaurant-ingest-honesty.test.ts lifts this block out of the file and
+// runs it, because importing index.ts would start the server.
+//
+// The columns this function may write, per content type. It is also the list
+// the prompt asks for, so the model is never invited to fill anything else.
+// A restaurant gets a description and nothing more: phone, website, address,
+// cuisine and price are facts the page shows as sourced, and the model here has
+// no source. No type gets a rating, which no column can attribute to anyone.
+export const ENHANCE_WRITABLE: Readonly<Record<string, readonly string[]>> = {
+  restaurant: ['description'],
+  event: ['title', 'location', 'venue', 'price', 'enhanced_description', 'image_url'],
+  attraction: ['name', 'location', 'website', 'description', 'type', 'image_url'],
+  playground: ['name', 'location', 'description', 'amenities', 'age_range', 'image_url'],
+};
+
+export interface EnhancePlan {
+  update: Record<string, string | string[]>;
+  refused: string[];
+}
+
+/**
+ * Splits a model response into the keys that may be written and the ones that
+ * are refused. A key is refused when it is not whitelisted for the type or its
+ * value is not a non-empty string (a string array for amenities). "status" is
+ * the function's own control field and is dropped without being reported.
+ */
+export function planEnhanceUpdate(contentType: string, aiData: Record<string, unknown>): EnhancePlan {
+  const allowed = ENHANCE_WRITABLE[contentType] ?? [];
+  const update: Record<string, string | string[]> = {};
+  const refused: string[] = [];
+  for (const [key, value] of Object.entries(aiData)) {
+    if (key === 'status') continue;
+    if (!allowed.includes(key)) {
+      refused.push(key);
+      continue;
+    }
+    if (key === 'amenities') {
+      if (Array.isArray(value) && value.length > 0 && value.every((v) => typeof v === 'string' && v.trim())) {
+        update[key] = value.map((v) => (v as string).trim());
+      } else {
+        refused.push(key);
+      }
+      continue;
+    }
+    if (typeof value === 'string' && value.trim()) {
+      update[key] = value.trim();
+    } else {
+      refused.push(key);
+    }
+  }
+  return { update, refused };
+}
+// END pure: planEnhanceUpdate
+
 const claudeApiKey = getAnthropicApiKey();
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -37,6 +93,9 @@ serve(async (req) => {
     console.log(`Enhancing ${contentType} with ID: ${contentId}`);
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Before the model call: an unknown type still fails with the same 500 it
+    // always did, and now without paying for a completion first.
+    const tableName = getTableName(contentType);
 
     // Create search query based on content type and current data
     const searchQuery = createSearchQuery(contentType, currentData);
@@ -69,22 +128,39 @@ serve(async (req) => {
       );
     }
     
-    // Remove status field if it exists before updating database
-    delete enhancedData.status;
+    // WEB-BE-068. Only whitelisted keys reach the row. This used to write
+    // whatever the model returned, so a restaurant got the phone, website,
+    // address, price and "rating": 4.5 the prompt's example suggested, from a
+    // model with no search tool and no source text.
+    const { update, refused } = planEnhanceUpdate(contentType, enhancedData);
+    if (refused.length > 0) {
+      console.warn(`[enhance-content] refused keys for ${contentType} ${contentId}: ${refused.join(', ')}`);
+    }
 
     // SEO-057: a description that comes back as "**Description:** ..." or with
     // a trailing "**Location:**" line keeps its text and loses the label.
     for (const field of ['enhanced_description', 'description']) {
-      if (typeof enhancedData[field] === 'string') {
-        enhancedData[field] = stripAiLabels(enhancedData[field]);
+      if (typeof update[field] === 'string') {
+        update[field] = stripAiLabels(update[field] as string);
       }
     }
-    
+
+    if (Object.keys(update).length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'No additional data found to enhance content',
+          data: currentData,
+          refused_keys: refused,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Update the database with enhanced information
-    const tableName = getTableName(contentType);
     const { data, error } = await supabase
       .from(tableName)
-      .update(enhancedData)
+      .update(update)
       .eq('id', contentId)
       .select()
       .single();
@@ -99,7 +175,8 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         data,
-        message: 'Content enhanced successfully' 
+        message: 'Content enhanced successfully',
+        refused_keys: refused,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -125,7 +202,7 @@ function createSearchQuery(contentType: string, currentData: any): string {
   
   switch (contentType) {
     case 'restaurant':
-      return `${name} restaurant ${location} phone website hours menu`;
+      return `${name} restaurant ${location}`;
     case 'event':
       return `${name} event ${location} venue date time website tickets`;
     case 'attraction':
@@ -138,41 +215,12 @@ function createSearchQuery(contentType: string, currentData: any): string {
 }
 
 async function enhanceContentWithAI(searchQuery: string, currentData: any, contentType: string) {
-  // Define the available fields for each content type based on actual database schema
-  const getAvailableFields = (type: string) => {
-    switch (type) {
-      case 'event':
-        return {
-          nameField: 'title',
-          descriptionField: 'enhanced_description',
-          availableFields: ['title', 'location', 'venue', 'price', 'enhanced_description', 'image_url']
-        };
-      case 'restaurant':
-        return {
-          nameField: 'name',
-          descriptionField: 'description',
-          availableFields: ['name', 'location', 'phone', 'website', 'description', 'cuisine', 'price_range', 'rating', 'image_url']
-        };
-      case 'attraction':
-        return {
-          nameField: 'name',
-          descriptionField: 'description',
-          availableFields: ['name', 'location', 'website', 'description', 'type', 'rating', 'image_url']
-        };
-      case 'playground':
-        return {
-          nameField: 'name',
-          descriptionField: 'description',
-          availableFields: ['name', 'location', 'description', 'amenities', 'age_range', 'rating', 'image_url']
-        };
-      default:
-        return {
-          nameField: 'name',
-          descriptionField: 'description',
-          availableFields: ['name', 'location', 'description']
-        };
-    }
-  };
+  // The fields asked for are the fields that may be written (ENHANCE_WRITABLE).
+  const getAvailableFields = (type: string) => ({
+    nameField: type === 'event' ? 'title' : 'name',
+    descriptionField: type === 'event' ? 'enhanced_description' : 'description',
+    availableFields: [...(ENHANCE_WRITABLE[type] ?? ['description'])],
+  });
 
   const fieldConfig = getAvailableFields(contentType);
   
@@ -196,14 +244,11 @@ Return in this JSON format (only include fields you can verify):
     if (field === 'phone') return `"phone": "Phone number in (xxx) xxx-xxxx format"`;
     if (field === 'website') return `"website": "Official website URL"`;
     if (field === fieldConfig.descriptionField) return `"${field}": "Brief, factual description (2-3 sentences max), plain text with no markdown and no label such as 'Description:'"`;
-    if (field === 'cuisine') return `"cuisine": "Type of cuisine"`;
-    if (field === 'price_range') return `"price_range": "$", "$$", "$$$", or "$$$$"`;
     if (field === 'venue') return `"venue": "Event venue name"`;
     if (field === 'price') return `"price": "Ticket price or 'Free'"`;
     if (field === 'type') return `"type": "Type of attraction"`;
     if (field === 'amenities') return `"amenities": ["list", "of", "amenities"]`;
     if (field === 'age_range') return `"age_range": "Age range like '2-12 years'"`;
-    if (field === 'rating') return `"rating": 4.5`;
     if (field === 'image_url') return `"image_url": "URL to image"`;
     return `"${field}": "appropriate value"`;
   }).join(',\n  ')}

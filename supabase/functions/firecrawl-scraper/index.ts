@@ -54,6 +54,49 @@ import {
   type PageFingerprint,
 } from "../_shared/pageFingerprint.ts";
 
+// BEGIN pure: restaurantFacts
+// Self-contained on purpose (no imports, no module state):
+// _tests/restaurant-ingest-honesty.test.ts lifts this block out of the file and
+// runs it, because importing index.ts would start the server.
+//
+// WEB-BE-068. A restaurant row holds what the page said, or null. This path
+// used to write "American", "Des Moines, IA" and "$$" when the page said
+// nothing, and the model's rating when it said something, and the detail page
+// shows cuisine, price and rating as facts (the rating as a Google rating).
+// ai-crawler was fixed for the same defect; this is the same rule here.
+
+/** The scraped item as the model returned it: any key may be missing or not a string. */
+export type ScrapedRestaurant = Record<string, unknown>;
+
+export interface RestaurantFacts {
+  cuisine: string | null;
+  location: string | null;
+  rating: null;
+  price_range: string | null;
+  description: string | null;
+  phone: string | null;
+  website: string | null;
+}
+
+export function restaurantFacts(item: ScrapedRestaurant): RestaurantFacts {
+  const sourcedText = (value: unknown, max: number): string | null => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed.substring(0, max) : null;
+  };
+  return {
+    cuisine: sourcedText(item.cuisine, 100),
+    location: sourcedText(item.location, 200),
+    // Never the model's number: no column records whose rating it was.
+    rating: null,
+    price_range: sourcedText(item.price_range, 20),
+    description: sourcedText(item.description, 500),
+    phone: sourcedText(item.phone, 20),
+    website: sourcedText(item.website, 200),
+  };
+}
+// END pure: restaurantFacts
+
 /** Rows per insert statement. One statement per event was a round trip each;
  *  one statement for everything lets a single bad row refuse the rest. */
 const INSERT_CHUNK = 50;
@@ -779,13 +822,7 @@ serve(async (req) => {
               case 'restaurants':
                 transformedData = {
                   name: rowName(category, item),
-                  cuisine: item.cuisine?.substring(0, 100) || "American",
-                  location: item.location?.substring(0, 200) || "Des Moines, IA",
-                  rating: item.rating || null,
-                  price_range: item.price_range?.substring(0, 20) || "$$",
-                  description: item.description?.substring(0, 500) || "",
-                  phone: item.phone?.substring(0, 20) || null,
-                  website: item.website?.substring(0, 200) || null,
+                  ...restaurantFacts(item),
                   is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
