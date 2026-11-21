@@ -25,6 +25,7 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
+import { buildDunningEmail, buildUpgradePromptEmail } from "../_shared/billingLinks.ts";
 import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 const AGENT_KEY = "subscription-nurture";
@@ -215,8 +216,9 @@ Deno.serve(async (req) => {
       const c = await consented(supabase, d.user_id);
       if (!c || !c.allowed) continue;
       if (await cappedRecently(supabase, d.user_id, "dunning", DUNNING_GAP_DAYS)) continue;
-      const html = `<h1>We couldn't process your payment</h1><p>No worries — we'll retry automatically. To avoid any interruption to your Insider access, you can update your payment method anytime.</p><p><a href="${SITE}/profile?tab=settings">Update payment method →</a></p>`;
-      if (await sendStep(supabase, d.user_id, c.email, "dunning", "Action needed: update your payment method", html, "We couldn't process your payment; we'll retry. Update your payment method to keep Insider access.")) dunning++;
+      // WEB-LEGAL-016: the link is /subscription, from _shared/billingLinks.ts.
+      const dun = buildDunningEmail(SITE);
+      if (await sendStep(supabase, d.user_id, c.email, "dunning", dun.subject, dun.html, dun.text)) dunning++;
     }
 
     // ── 3) Upgrade prompts (engaged free users) ──────────────────────────
@@ -243,8 +245,8 @@ Deno.serve(async (req) => {
       }
       if (sub) continue;
       if (await cappedRecently(supabase, p.user_id, "upgrade_prompt", UPGRADE_GAP_DAYS)) continue;
-      const html = `<h1>Get more from Des Moines Insider</h1><p>You're clearly enjoying the city — Insider unlocks premium picks and the AI Trip Planner to make every outing easier.</p><p><a href="${SITE}/profile?tab=settings">See Insider →</a></p>`;
-      if (await sendStep(supabase, p.user_id, p.email, "upgrade_prompt", "Unlock more of Des Moines with Insider", html, "Insider unlocks premium picks and the AI Trip Planner. See Insider.")) upgrade++;
+      const up = buildUpgradePromptEmail(SITE);
+      if (await sendStep(supabase, p.user_id, p.email, "upgrade_prompt", up.subject, up.html, up.text)) upgrade++;
     }
 
     ctx.processed(trial + dunning + upgrade);

@@ -21,10 +21,12 @@ import {
   Trophy,
   Plus,
   Megaphone,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { prefetchRoute } from "@/lib/prefetch";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SUBSCRIPTION_PATH } from "@/lib/billingLinks";
 import { navigationGroups, signInHref } from "./navigationConfig";
 import { MemberUpgradeGate } from "./UserMenu";
 
@@ -195,6 +197,7 @@ export function MobileNav({
                 <UserLink href="/profile" icon={User} label="Profile" onClick={handleLinkClick} />
                 <UserLink href="/my-events" icon={CalendarCheck} label="My Events" onClick={handleLinkClick} />
                 <UserLink href="/dashboard" icon={Settings} label="Dashboard" onClick={handleLinkClick} />
+                <UserLink href={SUBSCRIPTION_PATH} icon={CreditCard} label="Subscription" onClick={handleLinkClick} />
                 {isAdmin && (
                   <UserLink href="/admin" icon={Shield} label="Admin" onClick={handleLinkClick} />
                 )}

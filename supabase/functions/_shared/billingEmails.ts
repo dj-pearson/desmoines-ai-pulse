@@ -16,6 +16,7 @@
  */
 import { adminAlertEmail, type SendEmailInput, type SendEmailResult } from "./email.ts";
 import { renderEmail } from "./emailLayout.ts";
+import { pricingUrl, subscriptionUrl } from "./billingLinks.ts";
 import {
   adminNewCampaignAlert,
   type MessageBody,
@@ -40,10 +41,6 @@ export function formatDay(unixSeconds: number | null | undefined): string | null
     year: "numeric",
     timeZone: "America/Chicago",
   });
-}
-
-function base(siteUrl: string): string {
-  return siteUrl.replace(/\/+$/, "");
 }
 
 async function deliver(
@@ -95,7 +92,7 @@ export async function sendSubscriptionStarted(
   const planName = (await safe(deps.planName(args.planId), null, "plan lookup")) ?? "membership";
   const body = subscriptionStartedEmail({
     planName,
-    manageUrl: `${base(deps.siteUrl)}/subscription`,
+    manageUrl: subscriptionUrl(deps.siteUrl),
     trialEndsOn: formatDay(args.trialEnd),
   });
   return deliver(deps, to, body, "billing_subscription_started", { userId: args.userId });
@@ -114,7 +111,7 @@ export async function sendSubscriptionCancelled(
   const body = subscriptionCancelledEmail({
     planName,
     accessUntil: until,
-    resubscribeUrl: `${base(deps.siteUrl)}/pricing`,
+    resubscribeUrl: pricingUrl(deps.siteUrl),
   });
   return deliver(deps, to, body, "billing_subscription_cancelled", { userId: args.userId });
 }

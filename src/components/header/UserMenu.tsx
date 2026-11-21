@@ -20,8 +20,10 @@ import {
   Crown,
   Plus,
   Megaphone,
+  CreditCard,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SUBSCRIPTION_PATH } from "@/lib/billingLinks";
 import { useSubscription } from "@/hooks/useSubscription";
 import { signInHref } from "./navigationConfig";
 
@@ -114,6 +116,7 @@ export function UserMenu({
               <MenuLink href="/profile" icon={User} label="Profile" />
               <MenuLink href="/my-events" icon={CalendarCheck} label="My Events" />
               <MenuLink href="/dashboard" icon={Settings} label="Dashboard" />
+              <MenuLink href={SUBSCRIPTION_PATH} icon={CreditCard} label="Subscription" />
               <MenuLink href="/gamification" icon={Trophy} label="Level Up" />
               <MenuLink href="/social" icon={Users} label="Social" />
               <DropdownMenuSeparator />

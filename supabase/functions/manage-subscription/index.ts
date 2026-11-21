@@ -18,16 +18,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed, addCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { getSiteUrl, manageAtForPlatform, STORE_MANAGE_URLS, type ManageAt } from "../_shared/siteUrl.ts";
+import { subscriptionUrl } from "../_shared/billingLinks.ts";
 
 /**
  * Validate returnUrl against allowed domains to prevent open redirect attacks (SEC-028).
  */
 function validateReturnUrl(returnUrl: string | undefined, siteUrl: string): string {
-  if (!returnUrl) return `${siteUrl}/subscription`;
+  if (!returnUrl) return subscriptionUrl(siteUrl);
 
   const lower = returnUrl.toLowerCase().trim();
   if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('//')) {
-    return `${siteUrl}/subscription`;
+    return subscriptionUrl(siteUrl);
   }
 
   if (returnUrl.startsWith('/')) {
@@ -44,7 +45,7 @@ function validateReturnUrl(returnUrl: string | undefined, siteUrl: string): stri
     // Invalid URL
   }
 
-  return `${siteUrl}/subscription`;
+  return subscriptionUrl(siteUrl);
 }
 
 /** The Stripe invoice fields the invoices action returns. */
