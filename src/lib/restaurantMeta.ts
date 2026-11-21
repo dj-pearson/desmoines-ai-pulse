@@ -57,6 +57,15 @@ export interface RestaurantMetaInput {
   hasHours?: boolean;
   hasPhone?: boolean;
   hasPhotos?: boolean;
+  /**
+   * How many reviews the page shows a count for (WEB-SEO-079): ours from
+   * content_rating_aggregates.total_ratings, or Google's count once the page
+   * shows it with attribution (WEB-BE-070). "Reviews" goes in the title and
+   * keywords only when this is above zero. Absent means none shown, which is
+   * what the edge shell passes: it has no count, and on 2026-10-01 there were
+   * no restaurant ratings at all.
+   */
+  reviewCount?: number | null;
 }
 
 export interface ParsedAddress {
@@ -141,6 +150,13 @@ interface Facets {
   hours: boolean;
   phone: boolean;
   photos: boolean;
+  reviews: boolean;
+}
+
+/** True when the page shows a review count above zero (WEB-SEO-079). */
+export function hasReviewCount(r: Pick<RestaurantMetaInput, "reviewCount">): boolean {
+  const n = Number(r.reviewCount);
+  return Number.isFinite(n) && n > 0;
 }
 
 function facetsOf(r: RestaurantMetaInput): Facets {
@@ -151,6 +167,7 @@ function facetsOf(r: RestaurantMetaInput): Facets {
     hours: r.hasHours ?? (hoursTextOf(r.opening) !== null || hoursJson),
     phone: r.hasPhone ?? hasText(r.phone),
     photos: r.hasPhotos ?? usableLink(r.image_url),
+    reviews: hasReviewCount(r),
   };
 }
 
@@ -164,8 +181,11 @@ function joinWords(words: string[]): string {
  * "{Name} {Suburb}: Menu, Hours, Photos & Reviews", shortened until it fits 60
  * characters. "Menu", "Hours" and "Photos" appear only when the page has them
  * (WP3.5, eat-drink pass 2): a title that promises a menu the page doesn't
- * carry is the click that bounces. "Reviews" stays, because every detail page
- * carries the ratings block. The brand suffix is appended later by SEOHead and
+ * carry is the click that bounces. "Reviews" follows the same rule
+ * (WEB-SEO-079): it appears only when the page shows a review count above
+ * zero. It used to be unconditional on the grounds that every page carries
+ * the ratings block, but with no ratings that block is an empty prompt, not
+ * reviews. The brand suffix is appended later by SEOHead and
  * may be cut off in a result; the name, the suburb and "menu" are what must
  * survive, so "Photos" is the first word dropped for length.
  */
@@ -175,16 +195,18 @@ export function restaurantTemplateTitle(r: RestaurantMetaInput): string {
   const where = loc && !titleNamesCity(name, loc) ? `${name} ${loc}` : name;
   const f = facetsOf(r);
   const core = [f.menu ? "Menu" : null, f.hours ? "Hours" : null].filter((w): w is string => !!w);
-  const full = joinWords([...core, ...(f.photos ? ["Photos"] : []), "Reviews"]);
-  const withReviews = joinWords([...core, "Reviews"]);
-  const short = core.length > 0 ? joinWords(core) : null;
+  const reviews = f.reviews ? ["Reviews"] : [];
+  // Empty strings mean "nothing to list" and are dropped with their candidate.
+  const full = joinWords([...core, ...(f.photos ? ["Photos"] : []), ...reviews]);
+  const withReviews = joinWords([...core, ...reviews]);
+  const short = joinWords(core);
   const candidates = [
-    `${where}: ${full}`,
-    `${where}: ${withReviews}`,
+    full ? `${where}: ${full}` : null,
+    withReviews ? `${where}: ${withReviews}` : null,
     short ? `${where}: ${short}` : null,
     f.menu ? `${where} Menu` : null,
-    `${name}: ${full}`,
-    `${name}: ${withReviews}`,
+    full ? `${name}: ${full}` : null,
+    withReviews ? `${name}: ${withReviews}` : null,
     short ? `${name}: ${short}` : null,
     where,
   ].filter((c): c is string => !!c);
@@ -200,6 +222,7 @@ export type RestaurantSeoTitleProblem =
   | "claims-menu"
   | "claims-hours"
   | "claims-photos"
+  | "claims-reviews"
   | "stale";
 
 /**
@@ -231,8 +254,44 @@ export function restaurantSeoTitleProblems(
   if (/\bmenus?\b/i.test(t) && !f.menu) problems.push("claims-menu");
   if (/\bhours\b/i.test(t) && !f.hours) problems.push("claims-hours");
   if (/\bphotos\b/i.test(t) && !f.photos) problems.push("claims-photos");
+  // The backfilled seo_titles all end "& Reviews" (SEO-030); this sends them
+  // to the template until the page shows a count (WEB-SEO-079).
+  if (/\breviews?\b/i.test(t) && !f.reviews) problems.push("claims-reviews");
   if (isStaleOpeningCopy(t)) problems.push("stale");
   return problems;
+}
+
+/**
+ * The page's meta keywords: the row's own seo_keywords, then the name with
+ * each intent word. "{name} reviews" is added, and any stored keyword saying
+ * "review" kept, only when the page shows a review count (WEB-SEO-079), so
+ * the keywords promise what the title does.
+ */
+export function restaurantSeoKeywords(
+  r: RestaurantMetaInput & { seo_keywords?: string[] | null },
+): string[] {
+  const name = r.name.trim();
+  const city = restaurantLocality(r) || "Des Moines";
+  const cuisine = (r.cuisine ?? "").trim();
+  const reviews = hasReviewCount(r);
+  const own = (r.seo_keywords ?? []).filter((k) => reviews || !/\breviews?\b/i.test(k));
+  return [
+    ...own,
+    name,
+    `${name} Des Moines`,
+    `${name} menu`,
+    `${name} menu with prices`,
+    `${name} menu prices`,
+    `${name} food menu`,
+    `${name} hours`,
+    reviews ? `${name} reviews` : "",
+    cuisine ? `${cuisine} restaurant Des Moines` : "",
+    cuisine ? `${cuisine} menu Des Moines` : "",
+    `restaurants in ${city}`,
+    `${city} dining`,
+    "Des Moines restaurants",
+    "Iowa restaurants",
+  ].filter(Boolean);
 }
 
 /**

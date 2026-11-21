@@ -10,7 +10,8 @@
  *
  * seo_title becomes restaurantTemplateTitle: "{Name} {Suburb}: Menu, Hours,
  * Photos & Reviews", each facet only when the row backs it (menu URL or a
- * captured menu; hours_json; image_url), cut to 60 characters before
+ * captured menu; hours_json; image_url; Reviews needs a review count, which
+ * this script does not read, so it never writes one - WEB-SEO-079), cut to 60 characters before
  * SEOHead's " | Des Moines Insider". seo_description is kept when
  * restaurantSeoDescriptionProblems passes it (names the suburb and the
  * cuisine, under 155, not stale pre-opening copy) and otherwise becomes

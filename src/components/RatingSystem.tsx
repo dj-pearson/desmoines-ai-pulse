@@ -310,6 +310,32 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
     );
   }
 
+  // WEB-SEO-079: with nothing rated, the block was a full card ("User
+  // Ratings", "No ratings yet", "Be the first to rate!", then a sign-in panel)
+  // on almost every restaurant page. One line says the same. Opening the form
+  // switches back to the full card, where the PremiumGate applies.
+  const hasNoRatings =
+    !(aggregate && aggregate.total_ratings > 0) && ratings.length === 0 && !userRating && !showRatingForm;
+  if (hasNoRatings) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+        <span>No ratings yet.</span>
+        {user ? (
+          <Button variant="link" className="h-auto min-h-11 p-0" onClick={() => setShowRatingForm(true)}>
+            Rate this {contentType}
+          </Button>
+        ) : (
+          <Link
+            to={signInHref(pathname, search)}
+            className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Sign in to review
+          </Link>
+        )}
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Rating Summary */}

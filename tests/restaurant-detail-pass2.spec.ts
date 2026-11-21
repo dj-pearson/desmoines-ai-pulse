@@ -204,8 +204,22 @@ test.describe('restaurant detail, pass 2', () => {
   test('the title promises a menu only when there is one', async ({ page }) => {
     await setup(page, BASE);
     await page.goto(`/restaurants/${BASE.slug}`);
-    await expect(page).toHaveTitle(/Hours & Reviews/);
+    await expect(page).toHaveTitle(/: Hours \|/);
     await expect(page).not.toHaveTitle(/Menu/);
+    // WEB-SEO-079: no ratings in the fixtures, so no "Reviews" either.
+    await expect(page).not.toHaveTitle(/Reviews/);
+  });
+
+  test('with no ratings the review block is one line (WEB-SEO-079)', async ({ page }) => {
+    await setup(page, BASE);
+    await page.goto(`/restaurants/${BASE.slug}`);
+    const reviews = page.locator('#reviews');
+    await reviews.scrollIntoViewIfNeeded();
+    await expect(reviews.getByText('No ratings yet.')).toBeVisible();
+    await expect(reviews.getByRole('link', { name: 'Sign in to review' })).toBeVisible();
+    await expect(reviews.getByText(/Be the first to rate|User Ratings/)).toHaveCount(0);
+    const box = await reviews.getByText('No ratings yet.').locator('xpath=..').boundingBox();
+    expect(box?.height ?? 999).toBeLessThan(60);
   });
 
   test('Jump to opens a collapsed menu section, and the menu says when it was captured', async ({ page }) => {
