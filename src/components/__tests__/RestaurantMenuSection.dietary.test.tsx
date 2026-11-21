@@ -32,6 +32,9 @@ function makeItem(overrides: Partial<MenuItemRow>): MenuItemRow {
   };
 }
 
+// Relative, so the menu never crosses the 180-day line that collapses it (WEB-BE-071).
+const RECENT = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
 function menuWith(items: MenuItemRow[]): RestaurantMenuData {
   return {
     menu: {
@@ -41,9 +44,9 @@ function menuWith(items: MenuItemRow[]): RestaurantMenuData {
       is_current: true,
       source_type: "scraped",
       source_url: null,
-      captured_at: "2026-11-01T12:00:00Z",
+      captured_at: RECENT,
       notes: null,
-      created_at: "2026-11-01T12:00:00Z",
+      created_at: RECENT,
     },
     sections: [{ name: "Mains", items }],
     totalItems: items.length,

@@ -94,6 +94,16 @@ import {
   RUN_DEADLINE_MS,
   withDeadline,
 } from "../_shared/menu/menuBudget.ts";
+import {
+  countRefreshResults,
+  MENU_REFRESH_JOB_NAME,
+  type MenuPublishStore,
+  publishMenu,
+  remainingWeeklyBudget,
+  WEEKLY_MENU_REFRESH_CAP,
+  WEEKLY_MENU_REFRESH_WINDOW_DAYS,
+} from "../_shared/menu/menuRefresh.ts";
+import { runJob } from "../_shared/jobRunner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -143,6 +153,12 @@ interface ScrapeRequest {
   max_age_days?: number;
   /** Run discovery and extraction but do not write to the database. */
   dry_run?: boolean;
+  /**
+   * The weekly pg_cron refresh (WEB-BE-071). Ignores the selection fields
+   * above: picks the oldest-due menu_scrape_enabled rows within the weekly
+   * budget and records the run in automation_job_runs.
+   */
+  scheduled?: boolean;
 }
 
 interface RestaurantRow {
@@ -718,6 +734,17 @@ async function scrapeRestaurantMenu(
   }
 
   const saved = await saveMenuToDatabase(restaurant.id, best);
+  if (!saved.success) {
+    // The previous menu is still current; the log says why the new one is not.
+    ctx.attempts.push({
+      url: best.extraction.source_url,
+      method: "publish",
+      outcome: "error",
+      items: itemCount,
+      score: best.quality.score,
+      detail: saved.error,
+    });
+  }
   return { ...saved, attempts: ctx.attempts };
 }
 
@@ -901,11 +928,12 @@ async function saveMenuToDatabase(
   const { extraction, quality } = result;
   const totalItems = countItems(extraction);
 
-  const { data: newMenu, error: menuError } = await supabase
-    .from("restaurant_menus")
-    .insert({
+  // The new version stays a draft until every item is written; see
+  // _shared/menu/menuRefresh.ts for why the order matters (WEB-BE-071).
+  const published = await publishMenu(
+    menuStore,
+    {
       restaurant_id: restaurantId,
-      is_current: true,
       source_type: "scraped",
       source_url: extraction.source_url.slice(0, 2000),
       captured_at: new Date().toISOString(),
@@ -913,46 +941,28 @@ async function saveMenuToDatabase(
       extraction_method: extraction.method,
       confidence: quality.score,
       item_count: totalItems,
-    })
-    .select("id")
-    .single();
-
-  if (menuError || !newMenu) {
-    return {
-      success: false,
-      items_count: 0,
-      error: `DB insert error: ${menuError?.message}`,
-      attempts: [],
-    };
-  }
-
-  const rows = extraction.sections.flatMap((section) =>
-    section.items.map((item, index) => ({
-      menu_id: newMenu.id,
-      section_name: section.section_name,
-      section_sort_order: section.section_sort_order,
-      item_name: item.item_name,
-      item_description: item.item_description,
-      price: item.price,
-      price_numeric: item.price_numeric,
-      dietary_tags: item.dietary_tags,
-      is_popular: item.is_popular,
-      sort_order: index,
-    })),
+    },
+    (menuId) =>
+      extraction.sections.flatMap((section) =>
+        section.items.map((item, index) => ({
+          menu_id: menuId,
+          section_name: section.section_name,
+          section_sort_order: section.section_sort_order,
+          item_name: item.item_name,
+          item_description: item.item_description,
+          price: item.price,
+          price_numeric: item.price_numeric,
+          dietary_tags: item.dietary_tags,
+          is_popular: item.is_popular,
+          sort_order: index,
+        })),
+      ),
+    totalItems,
   );
 
-  for (let i = 0; i < rows.length; i += 100) {
-    const { error } = await supabase.from("restaurant_menu_items").insert(rows.slice(i, i + 100));
-    if (error) {
-      console.error(`Error inserting menu items batch ${i}:`, error);
-      await supabase.from("restaurant_menus").delete().eq("id", newMenu.id);
-      return {
-        success: false,
-        items_count: 0,
-        error: `Items insert error: ${error.message}`,
-        attempts: [],
-      };
-    }
+  if (!published.ok) {
+    console.error(`  Menu not published for ${restaurantId}: ${published.error}`);
+    return { success: false, items_count: 0, error: published.error, attempts: [] };
   }
 
   return {
@@ -964,6 +974,26 @@ async function saveMenuToDatabase(
     attempts: [],
   };
 }
+
+const menuStore: MenuPublishStore = {
+  async insertDraft(row) {
+    const { data, error } = await supabase.from("restaurant_menus").insert(row).select("id").single();
+    if (error || !data) return { error: error?.message ?? "no row returned" };
+    return { id: data.id as string };
+  },
+  async insertItems(rows) {
+    const { error } = await supabase.from("restaurant_menu_items").insert(rows);
+    return error ? error.message : null;
+  },
+  async makeCurrent(menuId) {
+    const { error } = await supabase.from("restaurant_menus").update({ is_current: true }).eq("id", menuId);
+    return error ? error.message : null;
+  },
+  async discard(menuId) {
+    const { error } = await supabase.from("restaurant_menus").delete().eq("id", menuId);
+    if (error) console.error(`  Could not remove draft menu ${menuId}: ${error.message}`);
+  },
+};
 
 /**
  * Persist the attempt log.
@@ -1006,18 +1036,20 @@ serve(async (req) => {
   // it defaults to true, and true only means "a valid Supabase JWT" - which
   // the publishable anon key is, in every client bundle.
   //
-  // Every caller is admin-gated already: RestaurantMenuManager / MenuScrapePanel, mounted at
-  // /admin/menus behind <ProtectedRoute requireAdmin>. No cron job posts here.
-  // So the route assumed admin and the server did not enforce it; the admin
-  // JWT that functions.invoke sends is what requireAdminOrApiKey checks.
+  // Callers: RestaurantMenuManager / MenuScrapePanel, mounted at /admin/menus
+  // behind <ProtectedRoute requireAdmin>, which send the admin JWT; and the
+  // menu-refresh-weekly pg_cron job (WEB-BE-071), which sends the service-role
+  // key from Vault. requireAdminOrApiKey accepts both and nothing else.
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
-  const runDeadline = startedAt + RUN_DEADLINE_MS;
-  const responseAt = startedAt + RESPONSE_DEADLINE_MS;
-
   try {
     const body: ScrapeRequest = await req.json().catch(() => ({}));
+
+    if (body.scheduled === true) {
+      return json(await runScheduledRefresh(startedAt));
+    }
+
     const {
       restaurant_id,
       restaurant_ids,
@@ -1039,32 +1071,11 @@ serve(async (req) => {
       return json({ success: true, message: "No restaurants to process", processed: 0 });
     }
 
-    console.log(`Starting menu scrape for ${restaurants.length} restaurant(s)`);
-
-    const batch = newBatch();
-    const work = runBatch(restaurants, batch, {
+    const batch = await executeBatch(restaurants, startedAt, {
       forceUpdate: force_update,
       maxAgeDays: max_age_days,
       dryRun: dry_run,
-      runDeadline,
     });
-
-    // Every fetch and Claude call is bounded by runDeadline, so `work` should
-    // finish first. This is the guarantee that does not depend on that being
-    // true everywhere: at responseAt the caller gets an answer regardless.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const cutoff = new Promise<"cutoff">((resolve) => {
-      timer = setTimeout(() => resolve("cutoff"), remainingMs(responseAt, Date.now()));
-    });
-    const winner = await Promise.race([work.then(() => "done" as const), cutoff]);
-    clearTimeout(timer);
-
-    if (winner === "cutoff") {
-      console.warn(`⏱️ Response deadline (${RESPONSE_DEADLINE_MS / 1000}s) reached — answering with partial results`);
-      await abandonBatch(batch, dry_run);
-    }
-
-    console.log(`\nComplete: ${batch.succeeded}/${batch.processed} restaurants, ${batch.totalItems} total items`);
 
     return json({
       success: true,
@@ -1084,6 +1095,122 @@ serve(async (req) => {
     return json({ error: "Internal server error", details: (error as Error).message }, 500);
   }
 });
+
+/**
+ * Run a batch inside the request's time limits and return what it did. At the
+ * response deadline the batch is abandoned and reported as it stands.
+ */
+async function executeBatch(
+  restaurants: RestaurantRow[],
+  startedAt: number,
+  options: { forceUpdate: boolean; maxAgeDays: number; dryRun: boolean },
+): Promise<BatchState> {
+  const runDeadline = startedAt + RUN_DEADLINE_MS;
+  const responseAt = startedAt + RESPONSE_DEADLINE_MS;
+
+  console.log(`Starting menu scrape for ${restaurants.length} restaurant(s)`);
+
+  const batch = newBatch();
+  const work = runBatch(restaurants, batch, { ...options, runDeadline });
+
+  // Every fetch and Claude call is bounded by runDeadline, so `work` should
+  // finish first. This is the guarantee that does not depend on that being
+  // true everywhere: at responseAt the caller gets an answer regardless.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cutoff = new Promise<"cutoff">((resolve) => {
+    timer = setTimeout(() => resolve("cutoff"), remainingMs(responseAt, Date.now()));
+  });
+  const winner = await Promise.race([work.then(() => "done" as const), cutoff]);
+  clearTimeout(timer);
+
+  if (winner === "cutoff") {
+    console.warn(`⏱️ Response deadline (${RESPONSE_DEADLINE_MS / 1000}s) reached — answering with partial results`);
+    await abandonBatch(batch, options.dryRun);
+  }
+
+  console.log(`\nComplete: ${batch.succeeded}/${batch.processed} restaurants, ${batch.totalItems} total items`);
+  return batch;
+}
+
+/**
+ * One hourly slice of the weekly refresh (WEB-BE-071). Re-scrapes current
+ * menus older than DEFAULT_MAX_AGE_DAYS on menu_scrape_enabled rows, never
+ * more than WEEKLY_MENU_REFRESH_CAP attempts across the week's slices, and
+ * never a restaurant already tried in the window, so a site that fails is
+ * not retried every hour. A failed or empty scrape publishes nothing, so the
+ * previous menu stays current; the failure is in menu_scrape_attempts and in
+ * this run's items_failed.
+ */
+async function runScheduledRefresh(startedAt: number): Promise<Record<string, unknown>> {
+  const job = await runJob(MENU_REFRESH_JOB_NAME, async (ctx) => {
+    const windowStart = new Date(Date.now() - WEEKLY_MENU_REFRESH_WINDOW_DAYS * 86_400_000).toISOString();
+
+    // The ledger is the budget. A failed read stops the slice: not knowing
+    // how much of the week's budget is spent is not a reason to spend more.
+    const { data: priorRuns, error: priorError } = await supabase
+      .from("automation_job_runs")
+      .select("items_processed")
+      .eq("job_name", MENU_REFRESH_JOB_NAME)
+      .gte("started_at", windowStart);
+    if (priorError) throw new Error(`Could not read this week's refresh runs: ${priorError.message}`);
+
+    const usedThisWeek = (priorRuns ?? []).reduce(
+      (sum, run) => sum + (typeof run.items_processed === "number" ? run.items_processed : 0),
+      0,
+    );
+    const budget = remainingWeeklyBudget(usedThisWeek);
+    ctx.meta({ weekly_cap: WEEKLY_MENU_REFRESH_CAP, used_before: usedThisWeek, budget });
+
+    if (budget === 0) {
+      ctx.meta({ stopped: "weekly budget spent" });
+      return { attempted: 0, succeeded: 0, failed: 0, budget_spent: true };
+    }
+
+    const restaurants = await selectRestaurants({
+      batch_size: budget,
+      force_update: false,
+      max_age_days: DEFAULT_MAX_AGE_DAYS,
+      exclude_attempted_since: windowStart,
+    });
+    ctx.meta({ selected: restaurants.length });
+
+    if (restaurants.length === 0) {
+      return { attempted: 0, succeeded: 0, failed: 0, nothing_due: true };
+    }
+
+    const batch = await executeBatch(restaurants, startedAt, {
+      forceUpdate: false,
+      maxAgeDays: DEFAULT_MAX_AGE_DAYS,
+      dryRun: false,
+    });
+
+    const counts = countRefreshResults(
+      batch.results.map((r) => ({ success: r.success === true, skipped: r.skipped === true })),
+    );
+    ctx.processed(counts.attempted);
+    ctx.failed(counts.failed);
+    ctx.meta({
+      ...counts,
+      total_items: batch.totalItems,
+      not_reached: restaurants.length - batch.processed,
+      deadline_reached: batch.deadlineHit,
+      errors: batch.errors.slice(0, 20),
+    });
+    return { ...counts, not_reached: restaurants.length - batch.processed };
+  });
+
+  return {
+    success: job.ok,
+    scheduled: true,
+    job_status: job.status,
+    run_id: job.runId,
+    attempted: job.itemsProcessed,
+    failed: job.itemsFailed,
+    error: job.error,
+    result: job.result,
+    elapsed_ms: Date.now() - startedAt,
+  };
+}
 
 /** What the batch has done so far; read by the handler even mid-run. */
 interface BatchState {
@@ -1182,8 +1309,31 @@ async function runBatch(
       batch.errors.push(message);
     }
 
-    if (!options.dryRun) await logAttempts(restaurant.id, outcome);
+    if (!options.dryRun) await logAttempts(restaurant.id, withFailureRecorded(restaurant, outcome));
   }
+}
+
+/**
+ * A failure that never reached an extractor ("No usable website or menu URL",
+ * an unhandled error before the first fetch) has no attempt rows, so it left
+ * no trace in menu_scrape_attempts. The weekly refresh reads that table to
+ * avoid retrying a failure every hour, so every failure writes at least one row.
+ */
+function withFailureRecorded(restaurant: RestaurantRow, outcome: RestaurantOutcome): RestaurantOutcome {
+  if (outcome.success || outcome.skipped || outcome.attempts.length > 0) return outcome;
+  return {
+    ...outcome,
+    attempts: [
+      {
+        url: restaurant.menu_url ?? restaurant.website ?? "",
+        method: "run",
+        outcome: "error",
+        items: 0,
+        score: 0,
+        detail: outcome.error ?? "Unknown error",
+      },
+    ],
+  };
 }
 
 /** How long the attempt-log write may hold the response after the cutoff. */
@@ -1240,6 +1390,8 @@ async function selectRestaurants(params: {
   batch_size: number;
   force_update: boolean;
   max_age_days: number;
+  /** ISO time: leave out restaurants with a menu_scrape_attempts row since then. */
+  exclude_attempted_since?: string;
 }): Promise<RestaurantRow[]> {
   const columns = "id, name, website, menu_url";
 
@@ -1286,6 +1438,20 @@ async function selectRestaurants(params: {
     }
 
     const excludeIds = (recent ?? []).map((m) => m.restaurant_id);
+
+    if (params.exclude_attempted_since) {
+      // Same reasoning as above: without this list every failing site would
+      // be fetched again in each hourly slice of the weekly refresh.
+      const { data: tried, error: triedError } = await supabase
+        .from("menu_scrape_attempts")
+        .select("restaurant_id")
+        .gte("created_at", params.exclude_attempted_since);
+      if (triedError) throw new Error(`Could not read recent scrape attempts: ${triedError.message}`);
+      for (const row of tried ?? []) {
+        if (!excludeIds.includes(row.restaurant_id)) excludeIds.push(row.restaurant_id);
+      }
+    }
+
     if (excludeIds.length > 0) {
       query = query.not("id", "in", `(${excludeIds.join(",")})`);
     }
