@@ -145,10 +145,20 @@ function centralDate(value: unknown): string | null {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
 }
 
-/** hours_json.fetchedAt, written by _shared/placeHours.ts when Google's hours were read. */
-function hoursCheckedAt(hoursJson: StoredOpeningHours | null | undefined): string | null {
-  const fetchedAt = (hoursJson as { fetchedAt?: unknown } | null | undefined)?.fetchedAt;
-  return hoursJson?.periods?.length ? centralDate(fetchedAt) : null;
+/**
+ * Where the hours came from. Google's carry fetchedAt (_shared/placeHours.ts);
+ * hours the owner set carry source "owner" and setAt instead (WEB-ADS-048,
+ * owner_hours_json), and are not described as a Google check.
+ */
+function hoursSourceLine(hoursJson: StoredOpeningHours | null | undefined): string | null {
+  if (!hoursJson?.periods?.length) return null;
+  const raw = hoursJson as { fetchedAt?: unknown; setAt?: unknown; source?: unknown };
+  if (raw.source === "owner") {
+    const setOn = centralDate(raw.setAt);
+    return setOn ? `Hours from the owner, updated ${setOn}` : "Hours from the owner";
+  }
+  const checkedOn = centralDate(raw.fetchedAt);
+  return checkedOn ? `Hours from Google, checked ${checkedOn}` : null;
 }
 
 /** The restaurant row by slug, falling back to the id only when the param is a uuid. */
@@ -165,7 +175,7 @@ interface ProvenanceProps {
   rating: number | null | undefined;
   menuCapturedAt: string | null;
   menuFromTheirSite: boolean;
-  hoursCheckedOn: string | null;
+  hoursLine: string | null;
 }
 
 /**
@@ -173,11 +183,11 @@ interface ProvenanceProps {
  * (WP3.6, bet 4). It replaced a blanket freshness badge that measured when
  * any column last changed, not whether anyone checked anything.
  */
-function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hoursCheckedOn }: ProvenanceProps) {
+function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hoursLine }: ProvenanceProps) {
   const lines = [
     rating ? "Rating: Google rating" : null,
     menuCapturedAt ? `Menu captured ${menuCapturedAt}${menuFromTheirSite ? " from their site" : ""}` : null,
-    hoursCheckedOn ? `Hours from Google, checked ${hoursCheckedOn}` : null,
+    hoursLine,
   ].filter((l): l is string => !!l);
   if (lines.length === 0) return null;
   return (
@@ -1275,7 +1285,7 @@ export default function RestaurantDetails() {
           rating={restaurant.rating}
           menuCapturedAt={menuCapturedAt}
           menuFromTheirSite={menuFromTheirSite}
-          hoursCheckedOn={lifecycle !== "closed" ? hoursCheckedAt(hoursJson) : null}
+          hoursLine={lifecycle !== "closed" ? hoursSourceLine(hoursJson) : null}
         />
       </div>
       <BackToTop />

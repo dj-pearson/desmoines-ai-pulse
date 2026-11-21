@@ -7,7 +7,12 @@ import { supabase } from "@/integrations/supabase/client";
  * resolve_closure_review. Migrations 20261121000010 and 20261121000030.
  */
 
-export type ClosureReviewReason = "place_not_found" | "no_place_match" | "visitor_report";
+export type ClosureReviewReason =
+  | "place_not_found"
+  | "no_place_match"
+  | "visitor_report"
+  | "opening_unconfirmed"
+  | "owner_report";
 
 export interface ClosureReview {
   id: string;
@@ -81,4 +86,7 @@ export const CLOSURE_REASON_LABEL: Record<ClosureReviewReason, string> = {
   place_not_found: "Google no longer has this place",
   no_place_match: "No confident Google match",
   visitor_report: "Visitor says it closed",
+  opening_unconfirmed: "Opening date passed, Google not confirmed",
+  // WEB-ADS-048: the verified owner said it closed for good.
+  owner_report: "Owner says it closed for good",
 };

@@ -261,6 +261,12 @@ jobs:
       # bulk-update-restaurants write; update_claimed_listing and
       # set_restaurant_field_locks write the lock (PGlite, real migration).
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-field-locks.test.ts
+      # WEB-ADS-048. Owners could not set hours or say they had closed, and a
+      # listing photo was any link. Pins owner hours (validated, source owner,
+      # locked against the refresh), the three status reports and the closure
+      # queue, uploaded-only photos, full before/after history, and that no
+      # rating or paid-placement column became owner-editable.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/owner-listing-edits.test.ts
       # WEB-ADS-047. A business claim decision used to be an RPC and a toast:
       # the claimant was never told and a verified owner could not be removed.
       # Pins the decision emails, the 3-day pending alert, and revoke (edit

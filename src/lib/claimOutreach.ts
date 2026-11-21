@@ -82,7 +82,7 @@ export function outreachDraft(name: string, views: number, url: string): { subje
       "",
       opener,
       "",
-      "If you claim the listing (free), you can fix your hours and details, see how many people view and share your page each week, and compare it with similar places in town.",
+      "If you claim the listing (free), you can fix your details yourself (and your opening hours, for a restaurant), see how many people view and share your page each week, and compare it with similar places in town.",
       "",
       `Claim it here: ${url}`,
       "",

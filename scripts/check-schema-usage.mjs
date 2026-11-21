@@ -287,6 +287,9 @@ const PENDING_MIGRATIONS = [
   // without the column.
   { table: 'restaurants', column: 'locked_fields', migration: '20261121000070' },
   { rpc: 'set_restaurant_field_locks', migration: '20261121000070' },
+  // WEB-ADS-048: the owner's closed / reopened report. Until applied, the
+  // control says it can't be sent yet and points to email (PGRST202).
+  { rpc: 'report_owner_listing_status', migration: '20261121000150' },
   // WEB-FEAT-104: when a deal was created or last re-confirmed. The public
   // reads in useDeals.ts and DealManager's list retry without the column on
   // 42703, so the pending window costs the 90-day rule, not the deals.
