@@ -330,6 +330,13 @@ jobs:
       # A retried subscription.updated arriving after .deleted wrote active over
       # canceled. Pins the live retrieve in handleSubscriptionUpdated.
       - run: deno test --allow-read supabase/functions/_tests/stripe-subscription-updated-live-state.test.ts
+      # WEB-BE-061. stripe-webhook used the sync constructEvent, which the
+      # Deno/worker Stripe build throws on for every input, so every delivery
+      # got 401. Signs a payload with WebCrypto and runs it through the real
+      # Stripe library (200 path yields the event; tampered, wrong-secret and
+      # stale signatures get 401), and fails if a sync constructEvent comes
+      # back in any function.
+      - run: deno test --allow-read supabase/functions/_tests/stripe-webhook-signature.test.ts
       # WEB-BE-043 AC6. The ingestion functions were the one class of automation
       # with no job ledger, so a source going dark was invisible: SeatGeek - 375
       # events, the largest single source - stopped ingesting on 2026-08-21 and

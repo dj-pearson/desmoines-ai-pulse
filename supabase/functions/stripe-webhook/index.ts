@@ -18,6 +18,7 @@ import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 import { getSiteUrl } from "../_shared/siteUrl.ts";
 import { sendEmail } from "../_shared/email.ts";
+import { verifyStripeWebhookRequest } from "../_shared/stripeWebhookSignature.ts";
 import {
   businessProTargetFromMetadata,
   businessSubscriptionPatch,
@@ -77,40 +78,16 @@ serve(async (req) => {
     );
 
     // SECURITY: Webhook signature verification is REQUIRED.
-    // STRIPE_WEBHOOK_SECRET must be configured in all environments.
-    const signature = req.headers.get("stripe-signature");
-    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-
-    if (!webhookSecret) {
-      console.error("STRIPE_WEBHOOK_SECRET is not configured — rejecting webhook");
-      return new Response(
-        JSON.stringify({ error: "Webhook secret not configured" }),
-        { status: 500, headers: responseHeaders }
-      );
-    }
-
-    if (!signature) {
-      console.error("No Stripe signature found");
-      return new Response(JSON.stringify({ error: "No signature" }), {
-        status: 400,
-        headers: responseHeaders,
-      });
-    }
-
-    // Get the raw body for signature verification
-    const body = await req.text();
-    let event: Stripe.Event;
-
-    // Always verify webhook signature — never skip
-    try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    } catch (err) {
-      console.error("Webhook signature verification failed:", err);
-      return new Response(
-        JSON.stringify({ error: "Invalid signature" }),
-        { status: 401, headers: responseHeaders }
-      );
-    }
+    // STRIPE_WEBHOOK_SECRET must be configured in all environments. The check
+    // is async (constructEventAsync): the sync constructEvent always throws on
+    // the Deno/worker Stripe build, which rejected every delivery (WEB-BE-061).
+    const verified = await verifyStripeWebhookRequest(
+      req,
+      Deno.env.get("STRIPE_WEBHOOK_SECRET"),
+      responseHeaders,
+    );
+    if (!verified.ok) return verified.response;
+    const event: Stripe.Event = verified.event;
 
     console.log(`Processing Stripe event: ${event.type} (${event.id})`);
 
