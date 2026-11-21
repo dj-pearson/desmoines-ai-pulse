@@ -36,6 +36,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
+import { applyPromotableRestaurantFilters } from '../_shared/sponsoredPickFilters.ts';
 import { renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
 import {
@@ -132,10 +133,11 @@ async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
 
   // Top-rated / featured restaurants (no live "trending" metric exists; rating
   // + featured is the best available signal).
-  const { data: restaurants, error: restaurantsError } = await supabase
-    .from('restaurants')
-    .select('id, name, slug, cuisine, location, rating')
-    .neq('is_merged', true)
+  // WEB-BE-063: promotable only (confirmed operational within 30 days, not
+  // merged, not closed or unopened). The merged check is part of the filter.
+  const { data: restaurants, error: restaurantsError } = await applyPromotableRestaurantFilters(
+    supabase.from('restaurants').select('id, name, slug, cuisine, location, rating'),
+  )
     .order('is_featured', { ascending: false, nullsFirst: false })
     .order('rating', { ascending: false, nullsFirst: false })
     .limit(MAX_RESTAURANTS);

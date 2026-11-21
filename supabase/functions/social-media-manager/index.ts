@@ -8,6 +8,10 @@ import {
   isPostableAt,
   socialEventDateLine,
 } from "../_shared/socialEventPick.ts";
+import {
+  applyPromotableRestaurantFilters,
+  restaurantPromotionRefusal,
+} from "../_shared/sponsoredPickFilters.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
@@ -710,6 +714,15 @@ async function generateAndPublishPost(
     if (targetError) {
       throw new Error(`Could not read ${table} ${targetContentId}: ${targetError.message}`);
     }
+    // WEB-BE-063: a named restaurant must pass the same promotion rule as the
+    // default pick. Refused, not swapped for a random row, so the caller is
+    // told the post it asked for did not happen and why.
+    const refusal = target && contentType === "restaurant"
+      ? restaurantPromotionRefusal(target)
+      : null;
+    if (refusal) {
+      throw new Error(`Restaurant ${targetContentId} is not promotable: ${refusal}`);
+    }
     if (target) {
       selectedContent = target;
       contentUrl = generateContentUrl(contentType, target);
@@ -756,9 +769,9 @@ async function generateAndPublishPost(
       }
     }
   } else if (!selectedContent && contentType === "restaurant") {
-    const { data: allRestaurants, error: allRestaurantsError } = await supabase
-      .from("restaurants")
-      .select("*")
+    const { data: allRestaurants, error: allRestaurantsError } = await applyPromotableRestaurantFilters(
+      supabase.from("restaurants").select("*"),
+    )
       .order("created_at", { ascending: false })
       .limit(50);
 

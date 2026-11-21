@@ -500,6 +500,7 @@ jobs:
       # IOS-DD-MONETIZATION-19. Sponsored picks used a UTC flight date and could
       # point at past events and closed restaurants, with invented social proof.
       - run: deno test supabase/functions/_shared/sponsoredPickFilters.test.ts
+      - run: deno test --allow-read supabase/functions/_shared/restaurantPromotion.test.ts
       # WEB-FEAT-013. The double-charge guards used .single() on a query that
       # matches one row PER PLATFORM, so they nulled out for exactly the users
       # already paying twice, and a cross-tier upgrade opened a SECOND Stripe

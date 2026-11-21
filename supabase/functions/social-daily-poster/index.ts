@@ -25,6 +25,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { applyPostableEventFilters } from "../_shared/socialEventPick.ts";
+import { applyPromotableRestaurantFilters } from "../_shared/sponsoredPickFilters.ts";
 
 const NO_REPEAT_DAYS = 30;
 
@@ -113,9 +114,11 @@ async function pickEvent(supabase: Supa): Promise<string | null> {
 }
 
 async function pickRestaurant(supabase: Supa): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("restaurants")
-    .select("id, name, is_featured, popularity_score")
+  // WEB-BE-063: only a place Google confirmed operational within 30 days.
+  // When none qualifies the run records skipped: no_eligible_restaurant.
+  const { data, error } = await applyPromotableRestaurantFilters(
+    supabase.from("restaurants").select("id, name, is_featured, popularity_score"),
+  )
     .order("is_featured", { ascending: false, nullsFirst: false })
     .order("popularity_score", { ascending: false, nullsFirst: false })
     .limit(50);
