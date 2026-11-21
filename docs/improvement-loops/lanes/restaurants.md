@@ -68,3 +68,4 @@ None.
 | 2026-11-21 | WEB-ADS-047 | this commit | Claimants emailed on approve/reject/revoke, pending count on admin home and digest, alert after 3 days, Verified tab with Revoke; self-verify by code open |
 | 2026-11-21 | WEB-FEAT-104 | this commit | Deals carry last_confirmed_at and show it; open-ended deals unconfirmed 90 days leave every public surface and JSON-LD and wait in DealManager for re-confirm |
 | 2026-11-21 | WEB-BE-077 | this commit | description_source and geo_generated_at kept by a trigger; About labelled by source, AI sections dated and hidden after a year, no AI writeup on shut places; PGlite 6/6. Scheduled regeneration and the 053 review run open |
+| 2026-11-21 | WEB-UX-087 | this commit | Restaurant card is a 146px row below sm (3 per phone screen) with 44px Call/Directions when data exists, closed places muted, city once, placeholder re-measured; 6-test smoke spec, negative control red |
