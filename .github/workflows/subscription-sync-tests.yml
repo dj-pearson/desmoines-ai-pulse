@@ -139,6 +139,13 @@ jobs:
       # deliberately retained, so erasure coverage cannot drift silently
       # the next time a feature adds a table (WEB-LEGAL-004).
       - run: deno test --allow-read supabase/functions/_tests/user-data-tables.test.ts
+      # WEB-LEGAL-015. auth.admin.deleteUser is a DELETE on auth.users, and a
+      # FK into it with no ON DELETE (contact_submissions.user_id) or a SET NULL
+      # its CHECK refuses (deal_redemptions) failed it AFTER the purge, leaving
+      # a live login with no profile. Replays every migration and fails on any
+      # FK that would block that delete; runs the fix in PGlite against a user
+      # with a row in every such table.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/user-fk-on-delete.test.ts
       # The marketing opt-out has to be read from the key the clients write.
       # The classifier read communication_preferences.marketing/.email; the clients
       # write email_notifications, so a stored opt-out was invisible to every sender
