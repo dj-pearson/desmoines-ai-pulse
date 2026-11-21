@@ -69,7 +69,7 @@ function problems(model: Model): string[] {
 
 Deno.test("the replay found the FKs this story is about, as they were", () => {
   const fks = fksIntoDeletedRows(before);
-  assert(fks.length > 100, `expected well over 100 FKs into user rows, parsed ${fks.length}`);
+  assert.ok(fks.length > 100, `expected well over 100 FKs into user rows, parsed ${fks.length}`);
   const cs = fks.find((f) => f.table === "contact_submissions" && f.column === "user_id");
   assert.equal(cs?.onDelete, "NO ACTION", "contact_submissions.user_id was declared with no ON DELETE");
   const dr = fks.find((f) => f.table === "deal_redemptions" && f.column === "user_id");
@@ -85,10 +85,10 @@ Deno.test("the replay found the FKs this story is about, as they were", () => {
 
 Deno.test("before the fix the checker names the blockers (the counter-assertion)", () => {
   const p = problems(before);
-  assert(p.some((l) => l.startsWith("contact_submissions.user_id ")), p.join("\n"));
-  assert(p.some((l) => l.startsWith("system_events.user_id ")), p.join("\n"));
-  assert(p.some((l) => l.startsWith("geofence_events.user_id ")), p.join("\n"));
-  assert(p.length >= 46, `expected at least 46 blocking FKs before the fix, found ${p.length}`);
+  assert.ok(p.some((l) => l.startsWith("contact_submissions.user_id ")), p.join("\n"));
+  assert.ok(p.some((l) => l.startsWith("system_events.user_id ")), p.join("\n"));
+  assert.ok(p.some((l) => l.startsWith("geofence_events.user_id ")), p.join("\n"));
+  assert.ok(p.length >= 46, `expected at least 46 blocking FKs before the fix, found ${p.length}`);
 });
 
 Deno.test("after every migration, nothing stops an auth.users delete", () => {
@@ -200,7 +200,7 @@ function insertOrder(fks: UserFk[], tables: string[]): string[] {
     const next = tables.find((t) =>
       !done.has(t) && fks.filter((f) => f.table === t && f.target !== t).every((f) => done.has(f.target))
     );
-    assert(next, `FK cycle among ${tables.filter((t) => !done.has(t)).join(", ")}`);
+    assert.ok(next, `FK cycle among ${tables.filter((t) => !done.has(t)).join(", ")}`);
     done.add(next);
     out.push(next);
   }
@@ -317,7 +317,7 @@ Deno.test("with the fix, a user with a row in every such table deletes, and the 
     }
   }
   assert.deepEqual(wrong, []);
-  assert(gone.size > 20 && tables.length - gone.size > 40, `cascaded ${gone.size}, kept ${tables.length - gone.size}`);
+  assert.ok(gone.size > 20 && tables.length - gone.size > 40, `cascaded ${gone.size}, kept ${tables.length - gone.size}`);
 
   // The two the story names, read directly.
   const cs = (await pg.query<{ note: string; user_id: string | null }>(
@@ -341,7 +341,7 @@ Deno.test("the fix keeps constraint names and leaves no NOT NULL under a SET NUL
   `)).rows;
   assert.equal(rows.filter((r) => r.confdeltype === "a" || r.confdeltype === "r").length, 0);
   assert.equal(rows.filter((r) => !r.convalidated).length, 0, "every swapped FK is validated");
-  assert(rows.some((r) => r.conname === "contact_submissions_user_id_fkey"));
+  assert.ok(rows.some((r) => r.conname === "contact_submissions_user_id_fkey"));
   const notNull = (await pg.query(`
     SELECT 1 FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
     WHERE c.contype = 'f' AND c.confdeltype = 'n' AND a.attnotnull
