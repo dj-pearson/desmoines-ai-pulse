@@ -126,6 +126,15 @@ test.describe('Restaurants hub: mobile', () => {
       rows.evaluateAll((els) => els.filter((el) => (el as HTMLElement).offsetParent !== null).length);
     expect(await visibleRows()).toBe(5);
 
+    // WEB-BE-076: the rule in one line, visible beside the heading.
+    const headingRule = block.getByText('By Google rating, 25+ reviews, ties to more reviews');
+    await expect(headingRule).toBeVisible();
+    const ruleUnderHeading = await block.evaluate((el) => {
+      const h2 = el.querySelector('h2');
+      return h2?.nextElementSibling?.textContent ?? '';
+    });
+    expect(ruleUnderHeading).toContain('25+ reviews');
+
     const rule = block.locator('[data-selection-rule]');
     await expect(rule).toHaveCount(1);
     await expect(rule).toBeHidden();

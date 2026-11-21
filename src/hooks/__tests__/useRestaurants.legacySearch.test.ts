@@ -27,6 +27,8 @@ const tableCalls: Call[][] = [];
 let listResponse: TableResponse = { data: [], error: null, count: 0 };
 let lookupResponse: TableResponse = { data: [], error: null };
 const rpc = vi.fn();
+// search_restaurants_by_relevance answers with a filterable builder, like a table.
+const relevanceRpc = vi.fn((..._args: unknown[]) => tableQuery());
 
 function tableQuery() {
   const calls: Call[] = [];
@@ -48,7 +50,8 @@ function tableQuery() {
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: () => tableQuery(),
-    rpc: (...args: unknown[]) => rpc(...args),
+    rpc: (...args: unknown[]) =>
+      args[0] === 'search_restaurants_by_relevance' ? relevanceRpc(...args) : rpc(...args),
   },
 }));
 
@@ -71,6 +74,7 @@ function callsOf(i: number, method: string): unknown[][] {
 beforeEach(() => {
   tableCalls.length = 0;
   rpc.mockReset();
+  relevanceRpc.mockClear();
   listResponse = { data: [], error: null, count: 0 };
   lookupResponse = { data: [], error: null };
 });
@@ -88,11 +92,61 @@ describe('prefix search (item 6)', () => {
     expect(result.restaurants.map((r) => r.name)).toEqual(['Harbinger']);
   });
 
-  it('takes the table path for a search on the default sort too', async () => {
+  it('orders a search on the default sort by relevance, not popularity (WEB-BE-076)', async () => {
     listResponse = { data: [row('1', 'Harbinger')], error: null, count: 1 };
     await fetchRestaurantList({ search: 'harb', limit: 30, offset: 0 });
     expect(rpc).not.toHaveBeenCalled();
-    expect(callsOf(0, 'textSearch')[0][1]).toBe('harb:*');
+    expect(relevanceRpc).toHaveBeenCalledWith(
+      'search_restaurants_by_relevance',
+      { search_query: 'harb:*', use_websearch: false },
+      { count: 'exact' },
+    );
+    // The RPC does the matching and the ordering: no textSearch on top, and no
+    // ORDER BY that would replace its ranking.
+    expect(callsOf(0, 'textSearch')).toEqual([]);
+    expect(callsOf(0, 'order')).toEqual([]);
+    expect(callsOf(0, 'neq')[0]).toEqual(['is_merged', true]);
+  });
+
+  it('sends quoted input to the relevance RPC as websearch', async () => {
+    await fetchRestaurantList({ search: '"taco town"', limit: 30, offset: 0 });
+    expect(relevanceRpc.mock.calls[0][1]).toEqual({ search_query: '"taco town"', use_websearch: true });
+  });
+
+  it('falls back to the table, ordered by name, when the relevance RPC is missing', async () => {
+    relevanceRpc.mockImplementationOnce(() => {
+      const chain = tableQuery();
+      chain.returns = () => Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'missing' } });
+      return chain;
+    });
+    listResponse = { data: [row('1', 'Harbinger')], error: null, count: 1 };
+    const result = await fetchRestaurantList({ search: 'harb', limit: 30, offset: 0 });
+    expect(callsOf(1, 'textSearch')[0][1]).toBe('harb:*');
+    expect(callsOf(1, 'order')).toEqual([['name', { ascending: true }]]);
+    expect(JSON.stringify(callsOf(1, 'order'))).not.toContain('popularity_score');
+    expect(result.restaurants.map((r) => r.name)).toEqual(['Harbinger']);
+  });
+
+  it('throws, without a second query, when the relevance RPC fails for another reason', async () => {
+    relevanceRpc.mockImplementationOnce(() => {
+      const chain = tableQuery();
+      chain.returns = () => Promise.resolve({ data: null, error: { code: '57014', message: 'timeout' } });
+      return chain;
+    });
+    await expect(fetchRestaurantList({ search: 'harb', limit: 30, offset: 0 })).rejects.toMatchObject({ code: '57014' });
+    expect(tableCalls).toHaveLength(1);
+  });
+
+  it('keeps an explicit sort: a search sorted by rating stays on the table', async () => {
+    await fetchRestaurantList({ search: 'harb', sortBy: 'rating', limit: 30, offset: 0 });
+    expect(relevanceRpc).not.toHaveBeenCalled();
+    expect(callsOf(0, 'order')[0]).toEqual(['rating', { ascending: false, nullsFirst: false }]);
+  });
+
+  it('a browse with no search still orders by popularity on the table path', async () => {
+    await fetchRestaurantList({ sponsoredOnly: true, limit: 10, offset: 0 });
+    expect(relevanceRpc).not.toHaveBeenCalled();
+    expect(callsOf(0, 'order')[0]).toEqual(['popularity_score', { ascending: false }]);
   });
 
   it('floats names that start with the term on page 1, keeping order otherwise', async () => {

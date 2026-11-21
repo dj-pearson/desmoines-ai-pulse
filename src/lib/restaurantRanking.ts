@@ -10,15 +10,18 @@
  * WHAT THE TABLE CAN BACK, measured against production 2026-10-01:
  *   rating            418 of 448 open rows, every one with a google_place_id;
  *                     bulk-update-restaurants copies it from Google Places
- *   review count      NOT STORED. No column on restaurants or anywhere else
- *                     holds Google's userRatingCount, so the rule cannot weigh
- *                     a 5.0 from four reviews against a 4.8 from four thousand.
- *                     The page says so in plain words.
- *   view_count        0 on every row
- *   popularity_score  seeded with RANDOM() by its migration; not a signal
+ *   review count      google_review_count since WEB-BE-070: Google's
+ *                     userRatingCount, read with the rating. Null until a
+ *                     Places refresh reads it for that row.
+ *   popularity_score  computed nightly from rating, count, views and hours
+ *                     freshness since WEB-BE-076 (20261121000170); a blend,
+ *                     so not something a reader can check against Google
  *
- * So the ranking is the Google rating, highest first, ties alphabetical, over
- * rows that are open, inside the metro, and a place you sit down to eat.
+ * So the ranking is the Google rating, highest first, over rows with at least
+ * TOP_RATED_MIN_REVIEWS Google reviews (WEB-BE-076, owner decision: 25), ties
+ * broken by the larger review count and then by name, among rows that are
+ * open, inside the metro, and a place you sit down to eat. A row whose count
+ * has not been read yet is left out: the floor cannot be checked for it.
  *
  * THE RATING IS GOOGLE'S, so it never becomes AggregateRating in our JSON-LD
  * (Google's review-snippet policy wants first-party ratings; WEB-SEO-025). The
@@ -42,6 +45,8 @@ export interface RankedRestaurantRow {
   status: string | null;
   business_status?: string | null;
   google_place_id: string | null;
+  /** Google's review count (WEB-BE-070). Null or absent: not read yet. */
+  google_review_count?: number | null;
   is_merged?: boolean | null;
   latitude: number | null;
   longitude: number | null;
@@ -51,15 +56,28 @@ export interface RankedRestaurantRow {
 export const TOP_RATED_LIMIT = 20;
 
 /**
- * The selection rule, printed on the page above the list. It has to say what
- * rankTopRated does, in that order, and nothing it does not.
+ * The fewest Google reviews a row needs to be ranked (WEB-BE-076). The owner
+ * set it at 25: below that a single visit's review moves the average by a
+ * tenth of a star or more.
+ */
+export const TOP_RATED_MIN_REVIEWS = 25;
+
+/**
+ * The selection rule, printed on the page beside the heading. It has to say
+ * what rankTopRated does, in that order, and nothing it does not.
  */
 export const TOP_RATED_RULE =
-  "Ranked by Google star rating, highest first and ties in alphabetical order, among open restaurants inside the Des Moines metro, counting each Google listing once and leaving out bakeries, coffee shops and dessert shops.";
+  `Ranked by Google star rating among places with at least ${TOP_RATED_MIN_REVIEWS} Google reviews, ties going to the one with more reviews, counting open restaurants inside the Des Moines metro once per Google listing and leaving out bakeries, coffee shops and dessert shops.`;
 
-/** The limit the rule cannot get past, said where the rule is. */
+/**
+ * The rule in one line, printed beside the heading so the list never appears
+ * without it. TOP_RATED_RULE is the full version under the list.
+ */
+export const TOP_RATED_HEADING_RULE = `By Google rating, ${TOP_RATED_MIN_REVIEWS}+ reviews, ties to more reviews`;
+
+/** Where the numbers come from, said under the rule. */
 export const TOP_RATED_CAVEAT =
-  "The ratings are Google's, copied into our listings. We don't store how many reviews sit behind each one, so a place with a handful of reviews can rank beside one with thousands.";
+  "The ratings and review counts are Google's, copied into our listings when we last checked each place.";
 
 /**
  * Cuisine words that mark a counter rather than a restaurant. A row is left
@@ -103,6 +121,12 @@ export function hasMetroCoordinates(row: Pick<RankedRestaurantRow, "latitude" | 
   );
 }
 
+/** Google's review count as a whole number, or null when it was never read. */
+export function reviewCountOf(row: Pick<RankedRestaurantRow, "google_review_count">): number | null {
+  const n = row.google_review_count;
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
+}
+
 export function ratingOf(row: Pick<RankedRestaurantRow, "rating">): number | null {
   if (row.rating == null || row.rating === "") return null;
   const n = typeof row.rating === "number" ? row.rating : Number(row.rating);
@@ -124,12 +148,16 @@ export function ineligibleReason(row: RankedRestaurantRow): string | null {
   if (!isOpenForRanking(row)) return "not open";
   if (!hasMetroCoordinates(row)) return "outside the metro or no coordinates";
   if (isCounterNotRestaurant(row.cuisine)) return "bakery, coffee or dessert";
+  const reviews = reviewCountOf(row);
+  if (reviews == null) return "review count not read";
+  if (reviews < TOP_RATED_MIN_REVIEWS) return `fewer than ${TOP_RATED_MIN_REVIEWS} Google reviews`;
   return null;
 }
 
 /**
- * TOP_RATED_RULE as code: eligible rows, rating descending, name ascending,
- * the first row per Google listing kept. Pure, so the page and the tests run
+ * TOP_RATED_RULE as code: eligible rows (which includes the review floor),
+ * rating descending, then review count descending, then name ascending, the
+ * first row per Google listing kept. Pure, so the page and the tests run
  * the same function.
  */
 export function rankTopRated<T extends RankedRestaurantRow>(rows: readonly T[], limit = TOP_RATED_LIMIT): T[] {
@@ -138,6 +166,7 @@ export function rankTopRated<T extends RankedRestaurantRow>(rows: readonly T[], 
     .sort(
       (a, b) =>
         (ratingOf(b) ?? 0) - (ratingOf(a) ?? 0) ||
+        (reviewCountOf(b) ?? 0) - (reviewCountOf(a) ?? 0) ||
         a.name.localeCompare(b.name, "en", { sensitivity: "base" }) ||
         a.id.localeCompare(b.id),
     );

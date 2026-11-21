@@ -14,7 +14,7 @@ import { DIETARY_KEYWORDS, dietaryIlikeClauses } from "@/lib/restaurantDiets";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
 import { createLogger } from "@/lib/logger";
-import { hubSearchQuery } from "@/components/events/eventsHubQuery";
+import { hubSearchQuery, type HubSearchQuery } from "@/components/events/eventsHubQuery";
 // One rule for "can you eat here" (eat-drink pass 2 WP2 item 4). It counts
 // `announced`, which the local set here left out.
 import {
@@ -279,6 +279,22 @@ type RotationRpc = (
   error: { message: string; code?: string } | null;
 }>;
 
+/** The table builder the hub's list query starts from. */
+const restaurantTableQuery = (columns: string) =>
+  supabase.from("restaurants").select(columns, { count: "estimated" });
+type RestaurantTableQuery = ReturnType<typeof restaurantTableQuery>;
+
+/**
+ * search_restaurants_by_relevance (20261121000170) is not in the generated
+ * types yet, and as a SETOF restaurants function its builder takes the same
+ * filters as the table's.
+ */
+type RelevanceRpc = (
+  fn: "search_restaurants_by_relevance",
+  args: { search_query: string; use_websearch: boolean },
+  options: { count: "exact" }
+) => { select: (columns: string) => RestaurantTableQuery };
+
 /**
  * One page of the restaurant list. The query the hub, the admin table and
  * site search all read, as a plain function so the infinite list (mobile) and
@@ -302,8 +318,9 @@ export async function fetchRestaurantList(
     // A SEARCH ALSO TAKES THE TABLE PATH (eat-drink pass 2 WP1 item 6). The
     // RPC runs websearch_to_tsquery, which needs whole words, so "harb" found
     // nothing while the autocomplete above the box offered Harbinger. The
-    // table path sends hubSearchQuery's prefix tsquery. A ranked RPC version
-    // is WP5's migration.
+    // table path sends hubSearchQuery's prefix tsquery. On the default sort it
+    // goes through search_restaurants_by_relevance, which takes the same
+    // tsquery and orders by ts_rank (WEB-BE-076).
     const sortBy = filters.sortBy || "popularity";
     const dietarySelections = resolveDietarySelections(filters);
     const search = filters.search?.trim() ?? "";
@@ -371,134 +388,169 @@ export async function fetchRestaurantList(
       });
     }
 
-    let query = supabase
-      .from("restaurants")
-      // Project only the card/list fields (WEB-PERF-009) — drops heavy
-      // SEO/GEO/tsvector/geometry columns the list never renders.
-      //
-      // Count is "estimated", not "planned" (WEB-QA-004). A "planned" count is
-      // purely the planner's row estimate and comes back NULL whenever the
-      // planner has no usable statistic for the filtered query — which is why
-      // the results header rendered a blank number before "found". "estimated"
-      // returns an exact count under PostgREST's threshold and falls back to
-      // the planner estimate only for large result sets, so it keeps the
-      // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
-      // while always yielding a number.
-      //
-      // RESTAURANT_HUB_LIST_COLUMNS carries hours_json and business_status, as
-      // the RPC row does, so a card's hours line and closure label do not
-      // depend on which sort the visitor picked.
-      .select(withAdminColumns(RESTAURANT_HUB_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
-      .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
-
-    // SEO-059: a browse never lists a place that has closed for good. In the
-    // query, not after it, so the count matches the pages.
-    // Google's CLOSED_PERMANENTLY too: the hours refresh writes it without
-    // touching status, and the RPC path already leaves those rows out.
-    if (hideClosed) {
-      query = query.or(NOT_CLOSED_RESTAURANT_FILTER).or(NOT_GOOGLE_CLOSED_RESTAURANT_FILTER);
-    }
-
-    // Prefix full-text search: every word must match and the last one is a
-    // prefix, so "harb" finds Harbinger. Quotes or OR go to websearch.
     const tsquery = hubSearchQuery(search);
-    if (tsquery) {
-      query = query.textSearch("search_vector", tsquery.query, {
-        ...(tsquery.type ? { type: tsquery.type } : {}),
-        config: "english",
+    // Project only the card/list fields (WEB-PERF-009) — drops heavy
+    // SEO/GEO/tsvector/geometry columns the list never renders.
+    //
+    // Count is "estimated", not "planned" (WEB-QA-004). A "planned" count is
+    // purely the planner's row estimate and comes back NULL whenever the
+    // planner has no usable statistic for the filtered query — which is why
+    // the results header rendered a blank number before "found". "estimated"
+    // returns an exact count under PostgREST's threshold and falls back to
+    // the planner estimate only for large result sets, so it keeps the
+    // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
+    // while always yielding a number.
+    //
+    // RESTAURANT_HUB_LIST_COLUMNS carries hours_json and business_status, as
+    // the RPC row does, so a card's hours line and closure label do not
+    // depend on which sort the visitor picked.
+    const projection = withAdminColumns(RESTAURANT_HUB_LIST_COLUMNS, filters.includeAdminFields);
+    const relevanceSearch = Boolean(tsquery) && sortBy === "popularity";
+
+    // The relevance RPC returns SETOF restaurants, so PostgREST applies the
+    // same projection, filters and page window to it as to the table. The
+    // cast gives it the table builder's type for that reason; the count is
+    // exact because a search's match set is small.
+    const relevanceQuery = (q: HubSearchQuery) =>
+      (supabase.rpc as unknown as RelevanceRpc)(
+        "search_restaurants_by_relevance",
+        { search_query: q.query, use_websearch: q.type === "websearch" },
+        { count: "exact" }
+      ).select(projection);
+
+    const runListQuery = async (byRelevance: boolean) => {
+      let query = (byRelevance && tsquery
+        ? relevanceQuery(tsquery)
+        : restaurantTableQuery(projection)
+      )
+        .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
+
+      // SEO-059: a browse never lists a place that has closed for good. In the
+      // query, not after it, so the count matches the pages.
+      // Google's CLOSED_PERMANENTLY too: the hours refresh writes it without
+      // touching status, and the RPC path already leaves those rows out.
+      if (hideClosed) {
+        query = query.or(NOT_CLOSED_RESTAURANT_FILTER).or(NOT_GOOGLE_CLOSED_RESTAURANT_FILTER);
+      }
+
+      // Prefix full-text search: every word must match and the last one is a
+      // prefix, so "harb" finds Harbinger. Quotes or OR go to websearch.
+      if (tsquery && !byRelevance) {
+        query = query.textSearch("search_vector", tsquery.query, {
+          ...(tsquery.type ? { type: tsquery.type } : {}),
+          config: "english",
+        });
+      }
+
+      // Apply cuisine filter (array)
+      if (filters.cuisine && filters.cuisine.length > 0) {
+        query = query.in("cuisine", filters.cuisine);
+      }
+
+      // Apply price range filter (array)
+      if (filters.priceRange && filters.priceRange.length > 0) {
+        query = query.in("price_range", filters.priceRange);
+      }
+
+      // Apply rating filter. Same guard as the RPC path above — the default
+      // [0, 5] must not be sent, or unrated restaurants get filtered out
+      // (WEB-QA-011).
+      if (hasRatingFilter(filters.rating)) {
+        query = query.gte("rating", filters.rating[0]).lte("rating", filters.rating[1]);
+      }
+
+      // Apply location filter (array) - using location column for matches
+      if (filters.location && filters.location.length > 0) {
+        query = query.in("location", filters.location);
+      }
+
+      // Apply featured filter
+      if (filters.featuredOnly) {
+        query = query.eq("is_featured", true);
+      }
+
+      // WEB-PERF-029. Active sponsorships only: is_sponsored with either no
+      // expiry or one in the future, which is the same rule isSponsoredActive
+      // applies in the browser. Expressing it here rather than filtering after
+      // the fetch is the whole point -- the page asks for ten rows instead of
+      // reading four hundred to find them.
+      if (filters.sponsoredOnly) {
+        query = query
+          .eq("is_sponsored", true)
+          .or(`sponsored_until.is.null,sponsored_until.gt.${new Date().toISOString()}`);
+      }
+
+      // Apply dietary keyword filter (searches description and cuisine fields)
+      if (dietarySelections.length > 0) {
+        query = query.or(dietaryIlikeClauses(dietarySelections).join(","));
+      }
+
+      switch (sortBy) {
+        case "popularity":
+          // WEB-BE-076: a search on the default sort is ordered by how well it
+          // matches. The relevance RPC returns rows best match first and takes
+          // no ORDER BY on top; without it (not yet applied) the order is by
+          // name, never by popularity_score.
+          if (byRelevance) break;
+          if (tsquery) {
+            query = query.order("name", { ascending: true });
+            break;
+          }
+          query = query
+            .order("popularity_score", { ascending: false })
+            .order("is_featured", { ascending: false })
+            .order("created_at", { ascending: false });
+          break;
+        case "rating":
+          query = query
+            .order("rating", { ascending: false, nullsFirst: false })
+            .order("popularity_score", { ascending: false });
+          break;
+        case "newest":
+          // Shown as "Recently added": created_at is when the row was scraped,
+          // not when the restaurant opened.
+          query = query.order("created_at", { ascending: false });
+          break;
+        case "alphabetical":
+          query = query.order("name", { ascending: true });
+          break;
+        case "price_low":
+          query = query
+            .order("price_range", { ascending: true, nullsFirst: false })
+            .order("popularity_score", { ascending: false });
+          break;
+        case "price_high":
+          query = query
+            .order("price_range", { ascending: false, nullsFirst: false })
+            .order("popularity_score", { ascending: false });
+          break;
+        default:
+          query = query.order("popularity_score", { ascending: false });
+      }
+
+      if (filters.limit) {
+        query = query.limit(filters.limit);
+      }
+
+      if (filters.offset) {
+        query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
+      }
+
+      // .returns<Restaurant[]> for the same reason as useEvents: the
+      // projection comes from withAdminColumns() at runtime, so supabase-js
+      // types the rows as GenericStringError[] and every later assignment
+      // fails against it.
+      return query.returns<Restaurant[]>();
+    };
+
+    let result = await runListQuery(relevanceSearch);
+    if (relevanceSearch && result.error && isMissingFunctionError(result.error)) {
+      logger.warn("fetchRestaurants", "relevance search RPC missing, ordering matches by name", {
+        error: result.error,
       });
+      result = await runListQuery(false);
     }
-
-    // Apply cuisine filter (array)
-    if (filters.cuisine && filters.cuisine.length > 0) {
-      query = query.in("cuisine", filters.cuisine);
-    }
-
-    // Apply price range filter (array)
-    if (filters.priceRange && filters.priceRange.length > 0) {
-      query = query.in("price_range", filters.priceRange);
-    }
-
-    // Apply rating filter. Same guard as the RPC path above — the default
-    // [0, 5] must not be sent, or unrated restaurants get filtered out
-    // (WEB-QA-011).
-    if (hasRatingFilter(filters.rating)) {
-      query = query.gte("rating", filters.rating[0]).lte("rating", filters.rating[1]);
-    }
-
-    // Apply location filter (array) - using location column for matches
-    if (filters.location && filters.location.length > 0) {
-      query = query.in("location", filters.location);
-    }
-
-    // Apply featured filter
-    if (filters.featuredOnly) {
-      query = query.eq("is_featured", true);
-    }
-
-    // WEB-PERF-029. Active sponsorships only: is_sponsored with either no
-    // expiry or one in the future, which is the same rule isSponsoredActive
-    // applies in the browser. Expressing it here rather than filtering after
-    // the fetch is the whole point -- the page asks for ten rows instead of
-    // reading four hundred to find them.
-    if (filters.sponsoredOnly) {
-      query = query
-        .eq("is_sponsored", true)
-        .or(`sponsored_until.is.null,sponsored_until.gt.${new Date().toISOString()}`);
-    }
-
-    // Apply dietary keyword filter (searches description and cuisine fields)
-    if (dietarySelections.length > 0) {
-      query = query.or(dietaryIlikeClauses(dietarySelections).join(","));
-    }
-
-    switch (sortBy) {
-      case "popularity":
-        query = query
-          .order("popularity_score", { ascending: false })
-          .order("is_featured", { ascending: false })
-          .order("created_at", { ascending: false });
-        break;
-      case "rating":
-        query = query
-          .order("rating", { ascending: false, nullsFirst: false })
-          .order("popularity_score", { ascending: false });
-        break;
-      case "newest":
-        // Shown as "Recently added": created_at is when the row was scraped,
-        // not when the restaurant opened.
-        query = query.order("created_at", { ascending: false });
-        break;
-      case "alphabetical":
-        query = query.order("name", { ascending: true });
-        break;
-      case "price_low":
-        query = query
-          .order("price_range", { ascending: true, nullsFirst: false })
-          .order("popularity_score", { ascending: false });
-        break;
-      case "price_high":
-        query = query
-          .order("price_range", { ascending: false, nullsFirst: false })
-          .order("popularity_score", { ascending: false });
-        break;
-      default:
-        query = query.order("popularity_score", { ascending: false });
-    }
-
-    if (filters.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    if (filters.offset) {
-      query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
-    }
-
-    // .returns<Restaurant[]> for the same reason as useEvents: the
-    // projection comes from withAdminColumns() at runtime, so supabase-js
-    // types the rows as GenericStringError[] and every later assignment
-    // fails against it.
-    const { data, error, count } = await query.returns<Restaurant[]>();
+    const { data, error, count } = result;
 
     if (error) {
       // PGRST103 is an offset past the last row: a stale ?page=40 link, not

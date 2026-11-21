@@ -314,6 +314,9 @@ const PENDING_MIGRATIONS = [
   { rpc: 'hide_restaurant', migration: '20261121000140' },
   { rpc: 'unhide_restaurant', migration: '20261121000140' },
   { rpc: 'get_removed_restaurant', migration: '20261121000140' },
+  // WEB-BE-076: the hub's default-sort search orders by text relevance through
+  // this RPC, and falls back to the table (ordered by name) on PGRST202.
+  { rpc: 'search_restaurants_by_relevance', migration: '20261121000170' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

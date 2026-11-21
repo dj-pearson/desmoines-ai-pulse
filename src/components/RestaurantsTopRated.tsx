@@ -2,7 +2,13 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Skeleton, SkeletonGroup } from "@/components/ui/skeleton";
 import type { TopRatedRestaurant } from "@/hooks/useTopRatedRestaurants";
-import { TOP_RATED_CAVEAT, TOP_RATED_LIMIT, TOP_RATED_RULE, rankedFacts } from "@/lib/restaurantRanking";
+import {
+  TOP_RATED_CAVEAT,
+  TOP_RATED_HEADING_RULE,
+  TOP_RATED_LIMIT,
+  TOP_RATED_RULE,
+  rankedFacts,
+} from "@/lib/restaurantRanking";
 import { cn } from "@/lib/utils";
 
 interface RestaurantsTopRatedProps {
@@ -30,6 +36,10 @@ export const TOP_RATED_PHONE_PREVIEW = 5;
  * unchanged. The rule moved under the list into a details element: it is
  * still in the page for anyone who asks how the list is made, without being
  * the first thing a phone reads.
+ *
+ * THE RULE IN ONE LINE sits under the heading at every width (WEB-BE-076), so
+ * "best-rated" is never printed without what it measured. The full rule stays
+ * in the details element.
  *
  * While the rows load it renders an aria-busy placeholder, which the
  * prerender waits on, so the captured HTML carries the list rather than a
@@ -71,7 +81,10 @@ export function RestaurantsTopRated({ restaurants, isLoading }: RestaurantsTopRa
       <h2 id="top-rated-heading" className="text-xl md:text-2xl font-bold text-foreground">
         {count === TOP_RATED_LIMIT ? "The 20 best-rated" : `The ${count} best-rated`} restaurants in Des Moines
       </h2>
-      <ol id={listId} className="mt-3 md:mt-4 md:columns-2 md:gap-x-10">
+      <p className="mt-1 text-sm text-muted-foreground" data-heading-rule="">
+        {TOP_RATED_HEADING_RULE}
+      </p>
+      <ol id={listId} className="mt-2 md:mt-3 md:columns-2 md:gap-x-10">
         {restaurants.map((r, i) => (
           <li
             key={r.id}

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  TOP_RATED_HEADING_RULE,
   TOP_RATED_LIMIT,
+  TOP_RATED_MIN_REVIEWS,
   TOP_RATED_RULE,
   hasMetroCoordinates,
   ineligibleReason,
@@ -26,6 +28,7 @@ function row(p: Partial<RankedRestaurantRow> & { name: string }): RankedRestaura
     status: "open",
     business_status: null,
     google_place_id: `place-${n}`,
+    google_review_count: 100,
     is_merged: false,
     latitude: 41.59,
     longitude: -93.62,
@@ -34,7 +37,7 @@ function row(p: Partial<RankedRestaurantRow> & { name: string }): RankedRestaura
 }
 
 describe("rankTopRated", () => {
-  it("orders by rating, highest first, then by name", () => {
+  it("orders by rating, highest first, then by name when the counts match", () => {
     const ranked = rankTopRated([
       row({ name: "Zed", rating: 4.9 }),
       row({ name: "Alpha", rating: 4.7 }),
@@ -42,6 +45,41 @@ describe("rankTopRated", () => {
       row({ name: "Charlie", rating: 5 }),
     ]);
     expect(ranked.map((r) => r.name)).toEqual(["Charlie", "Bravo", "Zed", "Alpha"]);
+  });
+
+  it("needs 25 Google reviews: a 5.0 from four reviews is not ranked above a 4.8 from thousands", () => {
+    const ranked = rankTopRated([
+      row({ name: "Four Reviews", rating: 5, google_review_count: 4 }),
+      row({ name: "Just Under", rating: 4.9, google_review_count: TOP_RATED_MIN_REVIEWS - 1 }),
+      row({ name: "At The Floor", rating: 4.7, google_review_count: TOP_RATED_MIN_REVIEWS }),
+      row({ name: "Thousands", rating: 4.8, google_review_count: 3200 }),
+    ]);
+    expect(ranked.map((r) => r.name)).toEqual(["Thousands", "At The Floor"]);
+    expect(TOP_RATED_MIN_REVIEWS).toBe(25);
+  });
+
+  it("leaves out a row whose review count was never read, rather than guessing", () => {
+    const ranked = rankTopRated([
+      row({ name: "Unread", rating: 5, google_review_count: null }),
+      row({ name: "Absent", rating: 5, google_review_count: undefined }),
+      row({ name: "Read", rating: 4.2, google_review_count: 40 }),
+    ]);
+    expect(ranked.map((r) => r.name)).toEqual(["Read"]);
+    expect(ineligibleReason(row({ name: "x", google_review_count: null }))).toBe("review count not read");
+    expect(ineligibleReason(row({ name: "x", google_review_count: 3 }))).toBe("fewer than 25 Google reviews");
+  });
+
+  it("breaks a rating tie by the larger review count, and only then by name", () => {
+    const ranked = rankTopRated([
+      row({ name: "Aardvark Diner", rating: 4.8, google_review_count: 30 }),
+      row({ name: "Zest", rating: 4.8, google_review_count: 2400 }),
+      row({ name: "Middle", rating: 4.8, google_review_count: 300 }),
+      row({ name: "Bravo", rating: 4.8, google_review_count: 300 }),
+      row({ name: "Top", rating: 4.9, google_review_count: 26 }),
+    ]);
+    // Rating still leads: the 4.9 with 26 reviews stays first. Then count,
+    // then name among equal counts.
+    expect(ranked.map((r) => r.name)).toEqual(["Top", "Zest", "Bravo", "Middle", "Aardvark Diner"]);
   });
 
   it("reads numeric ratings that PostgREST sends as strings", () => {
@@ -167,8 +205,25 @@ describe("rankedFacts", () => {
 describe("TOP_RATED_RULE", () => {
   it("is one sentence that names every condition the code applies", () => {
     expect(TOP_RATED_RULE.match(/\.\s/g)).toBeNull();
-    for (const word of ["Google star rating", "alphabetical", "open", "metro", "each Google listing once", "bakeries"]) {
+    for (const word of [
+      "Google star rating",
+      `at least ${TOP_RATED_MIN_REVIEWS} Google reviews`,
+      "more reviews",
+      "open",
+      "metro",
+      "once per Google listing",
+      "bakeries",
+    ]) {
       expect(TOP_RATED_RULE).toContain(word);
     }
+    // The tie-break is the count now; the rule must not still claim names.
+    expect(TOP_RATED_RULE).not.toContain("alphabetical");
+  });
+
+  it("has a one-line version for beside the heading that names the floor and the tie-break", () => {
+    expect(TOP_RATED_HEADING_RULE).not.toMatch(/[\n.]/);
+    expect(TOP_RATED_HEADING_RULE).toContain("Google rating");
+    expect(TOP_RATED_HEADING_RULE).toContain(`${TOP_RATED_MIN_REVIEWS}+ reviews`);
+    expect(TOP_RATED_HEADING_RULE).toContain("ties to more reviews");
   });
 });

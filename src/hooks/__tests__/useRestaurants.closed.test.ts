@@ -19,6 +19,8 @@ interface Call {
 const tableCalls: Call[][] = [];
 let listResponse: { data: unknown[] | null; error: null; count?: number } = { data: [], error: null, count: 0 };
 const rpc = vi.fn();
+// search_restaurants_by_relevance answers with a filterable builder, like a table.
+const relevanceRpc = vi.fn((..._args: unknown[]) => tableQuery());
 
 function tableQuery() {
   const calls: Call[] = [];
@@ -37,7 +39,8 @@ function tableQuery() {
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: () => tableQuery(),
-    rpc: (...args: unknown[]) => rpc(...args),
+    rpc: (...args: unknown[]) =>
+      args[0] === 'search_restaurants_by_relevance' ? relevanceRpc(...args) : rpc(...args),
   },
 }));
 
@@ -56,6 +59,7 @@ function orArgs(i = 0): unknown[] {
 beforeEach(() => {
   tableCalls.length = 0;
   rpc.mockReset();
+  relevanceRpc.mockClear();
   listResponse = { data: [], error: null, count: 0 };
 });
 
