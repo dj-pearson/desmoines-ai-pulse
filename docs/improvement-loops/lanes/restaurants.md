@@ -51,3 +51,4 @@ None.
 | 2026-11-21 | WEB-BE-067 | this commit | Admin content edits send only changed configured fields; the ten automation/paid columns never ride along (11 new tests, old dialog fails with a 23-key update) |
 | 2026-11-21 | WEB-BE-072 | this commit | Dietary tags only from marks on the dish; no suitableForDiet; badges say 'as marked' with a confirm line. Recompute script written, production run pending |
 | 2026-11-21 | WEB-BE-068 | this commit | firecrawl-scraper and enhance-content stop storing guessed cuisine, location, price and rating; honesty suite 23/23, two negative controls red; review script pending owner run |
+| 2026-11-21 | WEB-BE-066 | this commit | auto-enrich enriches the rows it picked, never nulls a description, accepts only name-matched search hits, stamps enrich_checked_at, Force Update walks by cursor; Deno 14/14, three negative controls red |
