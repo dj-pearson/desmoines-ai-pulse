@@ -74,3 +74,5 @@ None.
 | 2026-11-21 | WEB-FEAT-103 | this commit | Admin restaurant drawer with automation fields and locked edits, Hide replaces delete (RLS-hidden row, 200 removed notice, do-not-ingest list on every ingestion path); lockable-fields merge bug fixed with a never-shrink guard |
 | 2026-11-21 | WEB-UX-088 | this commit | Detail page shows each fact once, quick actions defer to the sticky bar on phones, one-row nav, Closed now badge; 6-test smoke spec |
 | 2026-11-21 | WEB-BE-076 | this commit | Top-rated needs 25 Google reviews and breaks ties by count; popularity_score recomputed nightly with no random term; default-sort search orders by relevance; sponsorship featuring expires via featured_source |
+| 2026-11-21 | WEB-BE-061 | this commit | (money) stripe-webhook signature check moved to constructEventAsync + SubtleCrypto; 8 Deno tests, negative control reproduces the refused valid delivery; Stripe replay pending owner |
+| 2026-11-21 | WEB-SEC-081 | this commit | (security) eight admin views run as their caller with anon revoked; check-view-security-invoker guards new and redefined views; PGlite 6/6 |
