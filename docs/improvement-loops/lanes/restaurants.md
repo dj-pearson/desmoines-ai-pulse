@@ -77,3 +77,4 @@ None.
 | 2026-11-21 | WEB-BE-061 | this commit | (money) stripe-webhook signature check moved to constructEventAsync + SubtleCrypto; 8 Deno tests, negative control reproduces the refused valid delivery; Stripe replay pending owner |
 | 2026-11-21 | WEB-SEC-081 | this commit | (security) eight admin views run as their caller with anon revoked; check-view-security-invoker guards new and redefined views; PGlite 6/6 |
 | 2026-11-21 | WEB-LEGAL-015 | this commit | (legal) every FK to auth.users gets ON DELETE CASCADE or SET NULL so account deletion completes; migration-replay + PGlite test 12/12, negative control red |
+| 2026-11-21 | WEB-LEGAL-016 | this commit | (billing) billing emails link /subscription and /pricing through one shared module; Settings tab gets a Subscription card for links already sent; account menus get Subscription; 12 Deno, 3 smoke specs |
