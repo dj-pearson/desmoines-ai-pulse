@@ -132,6 +132,14 @@ jobs:
       - name: Every migration parses
         run: npm run check-migrations-parse
 
+      # WEB-SEC-081. A view without security_invoker runs as its owner and skips
+      # the RLS on the tables under it, and Supabase grants every new view to
+      # anon. Eight views written after the 2026-05-11 fix had neither, so the
+      # anon key could read agent_tasks payloads through agent_tasks_overdue.
+      # CREATE OR REPLACE resets the option, so a redefinition regresses too.
+      - name: Every public view runs as its caller
+        run: npm run check-view-security-invoker
+
       # WEB-ADS-007. placementSpecs defined five placements and /advertise
       # renders every one as purchasable; the placement_type enum had four. So
       # Sidebar Skyscraper was on sale, and buying it created the campaigns row

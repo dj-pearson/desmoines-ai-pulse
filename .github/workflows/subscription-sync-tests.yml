@@ -255,6 +255,10 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/restaurant-enrich.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-closed-flags.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-closure-reports.test.ts
+      # WEB-SEC-081. Eight admin views ran as their owner and skipped RLS, so
+      # anon read agent_tasks payloads through agent_tasks_overdue. Reads each
+      # view as anon, a non-admin and an admin, before and after the fix.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/view-security-invoker.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-rankings.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-changes.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-opening-progress.test.ts

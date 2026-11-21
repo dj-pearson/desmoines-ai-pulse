@@ -76,12 +76,12 @@ SELECT
   updated_at
 FROM public.social_accounts;
 
--- Grant SELECT on the view to authenticated; the underlying table RLS
--- still enforces; but the view will be readable because views in
--- Postgres run with the invoker's permissions by default. To make sure
--- only admins can SELECT, gate at the application level: the admin
--- pages already require `requireAdmin` via ProtectedRoute and the
--- admin role check.
+-- CORRECTED by WEB-SEC-081 (20261122000050_views_security_invoker.sql).
+-- The note that stood here said views run with the invoker's permissions
+-- by default. They do not: without security_invoker a view runs as its
+-- owner and skips the table's RLS, so this GRANT let any signed-in user
+-- (and anon, through Supabase's default privileges) read every row. That
+-- migration turns security_invoker on; only the service role gets rows now.
 
 GRANT SELECT ON public.social_accounts_admin TO authenticated;
 
