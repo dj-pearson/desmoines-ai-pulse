@@ -453,6 +453,97 @@ export default function RestaurantDetails() {
   // (which has no count) agree. WEB-BE-070 will pass the Google count to both.
   const seoKeywords = restaurantSeoKeywords(metaInput);
 
+  // WEB-SEO-016: getEstimatedReviewCount() used to synthesise a review count
+  // from the rating and popularity score (rating >= 4.5 ? 150 : 100 : 50 : 25,
+  // scaled by popularity) and feed it to aggregateRating on all ~480 restaurant
+  // pages. Google requires ratingCount/reviewCount to reflect real reviews;
+  // inventing one is a review-snippet policy breach. There is no reviews table
+  // in the schema, so there is no real count to use and the block is gone.
+
+  // The Restaurant node, from one pure builder (WP3.14). The rules it keeps
+  // are written there: no invented hours, pin, price tier or menu claim.
+  const canonicalUrl = getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`);
+  // One evaluation for the Deals section, its chip and makesOffer (WEB-FEAT-036).
+  const pageDeals = venuePageDeals(venueDeals, { shut: isShut, now });
+  const restaurantSchema = buildRestaurantSchema(restaurant, {
+    url: canonicalUrl,
+    description: aboutText || seoDescription,
+    locality: cityName,
+    website: safeWebsite,
+    menuUrl: safeMenuUrl,
+    hasCapturedMenu,
+    openingHoursSpecification: hoursSpec,
+    // A closed or not-yet-open place publishes no hours.
+    openForBusiness: !lifecycle,
+    permanentlyClosed: closedForGood,
+    mapsUrl: safeWebUrl(placeExtras.google_maps_uri),
+    acceptsReservations: acceptsReservationsOf(placeExtras, safeWebUrl),
+    offers: restaurantDealOffers(pageDeals, canonicalUrl),
+  });
+
+  // WEB-SEO-027: the BreadcrumbList this used to build lived here AND in the
+  // <BreadcrumbListSchema> below, with DIFFERENT urls - relative here, absolute
+  // through getCanonicalUrl there - so the page shipped two competing trails
+  // and the prerenderer's dedupeJsonLd kept whichever came last. One emitter
+  // now, and it is the typed schema component, which is the one with the
+  // absolute URLs a crawler can resolve.
+
+  // Fact-only answers for the FAQPage schema; geo_faq comes back separately
+  // and is shown as AI-assisted, outside the schema (WP3.1).
+  const { faqs: restaurantFaqs, aiFaqs } = buildRestaurantFaqs(restaurant, {
+    lifecycle,
+    locality: cityName,
+    hoursJson,
+    website: safeWebsite,
+    menuUrl: safeMenuUrl,
+    hasCapturedMenu,
+  });
+
+  // WEB-FEAT-024. Resolved once and used by both the in-page action bar and the
+  // sticky mobile CTA, so the two can never disagree about whether this place
+  // takes reservations.
+  const reservation = resolveReservation(restaurant);
+  const showReserve =
+    !isShut && (reservation.kind === "booking" || reservation.kind === "call_to_reserve");
+  const directionsHref = getDirectionsUrl({
+    latitude: restaurant.latitude,
+    longitude: restaurant.longitude,
+    address: `${restaurant.name} ${restaurant.location}`,
+  });
+  // The Menu action goes to the captured menu when there is one, to their own
+  // menu page when there isn't, and is hidden when neither exists (WP8 item 3)
+  // or the place has closed for good (WEB-UX-089).
+  const menuAction = closedForGood
+    ? null
+    : hasCapturedMenu
+    ? { href: "#menu", label: "Menu", external: false }
+    : safeMenuUrl
+      ? { href: safeMenuUrl, label: "Menu (on their site)", external: true }
+      : null;
+  // Back to the filtered list the visitor came from (WP3.9). Only a
+  // /restaurants?... URL counts: anything else is not "results".
+  const backToResults =
+    typeof locationState?.from === "string" && locationState.from.startsWith("/restaurants?")
+      ? locationState.from
+      : null;
+
+  // Tonight nearby sits under the hours (WP3.7). Not for a place you can't eat at.
+  const showTonight = !lifecycle && tonight.events.length > 0;
+  const statusLine = liveStatus ? formatOpenStatusLine(liveStatus) : null;
+  const restaurantHoursLine =
+    statusLine && (liveStatus?.closesAt || liveStatus?.nextOpensAt) ? `${statusLine} CT` : statusLine;
+  const showLocalGuide =
+    !isShut && !!(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0));
+  const menuCapturedAt = hasCapturedMenu && !closedForGood ? centralDate(menuData?.menu?.captured_at) : null;
+  const menuFromTheirSite =
+    !!menuData?.menu && (menuData.menu.source_type === "scraped" || !!safeWebUrl(menuData.menu.source_url));
+
+  // SEO-034: the answers under the name. Hours by schedule, so the prerendered
+  // sentence stays true; none for a place you can't walk into.
+  const hoursSentence = lifecycle ? null : scheduleHoursSentence(hoursJson, restaurant.opening, now);
+  const hoodLink = neighborhoodLink(placeExtras, cityName);
+  const areaLinks = [...(hoodLink ? [hoodLink] : []), ...(areaPages ?? [])];
+
   const chipClass =
     "inline-flex min-h-11 items-center text-xs px-3 bg-gray-100 text-gray-800 dark:bg-muted dark:text-foreground hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium";
 
