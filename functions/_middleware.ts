@@ -680,6 +680,7 @@ export function restaurantShellNode(row: Record<string, any>, pageUrl: string): 
     hasCapturedMenu: false,
     openingHoursSpecification: hours,
     openForBusiness: open,
+    permanentlyClosed: isPermanentlyClosedRestaurant(row),
     mapsUrl: safeHttpUrl(row.google_maps_uri),
     acceptsReservations: acceptsReservationsOf(row, safeHttpUrl),
   });

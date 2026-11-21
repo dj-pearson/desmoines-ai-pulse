@@ -46,6 +46,7 @@ import {
   type StoredOpeningHours,
 } from "@/lib/restaurantHours";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { isPermanentlyClosedRestaurant, isShutRestaurant } from "@/lib/restaurantStatus";
 import { useRestaurantMenu } from "@/hooks/useRestaurantMenu";
 import { useRestaurantAreaPages } from "@/hooks/useRestaurantAreaPages";
 import { lastUpdatedLabel, neighborhoodLink, scheduleHoursSentence } from "@/lib/restaurantAtAGlance";
@@ -96,11 +97,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 type Lifecycle = RestaurantLifecycle;
 
-function lifecycleOf(status: string | null | undefined, businessStatus?: string | null): Lifecycle {
-  const google = (businessStatus ?? "").trim().toUpperCase();
-  const own = (status ?? "").trim().toLowerCase();
-  if (google === "CLOSED_PERMANENTLY" || own === "closed" || own === "permanently_closed") return "closed";
-  if (google === "CLOSED_TEMPORARILY" || own === "temporarily_closed") return "temporarily_closed";
+function lifecycleOf(row: { status?: string | null; business_status?: string | null }): Lifecycle {
+  // The shared rules (restaurantStatus.ts), so this page and every list agree
+  // on which places are closed for good and which for now (WEB-UX-089).
+  if (isPermanentlyClosedRestaurant(row)) return "closed";
+  if (isShutRestaurant(row)) return "temporarily_closed";
+  const own = (row.status ?? "").trim().toLowerCase();
   if (own === "opening_soon" || own === "announced") return "not_open_yet";
   return null;
 }
@@ -275,7 +277,7 @@ export default function RestaurantDetails() {
   // tonight showed neither list.
   const tonightApplies =
     !!restaurant &&
-    !lifecycleOf(restaurant.status, (restaurant as { business_status?: string | null }).business_status);
+    !lifecycleOf(restaurant as { status?: string | null; business_status?: string | null });
   const tonight = useTonightNearRestaurant(
     tonightApplies ? restaurant.latitude : null,
     tonightApplies ? restaurant.longitude : null,
@@ -399,11 +401,11 @@ export default function RestaurantDetails() {
   const safeWebsite = safeWebUrl(restaurant.website);
   const safeMenuUrl = safeWebUrl(restaurant.menu_url);
   const phoneHref = telHref(restaurant.phone);
-  const lifecycle = lifecycleOf(
-    restaurant.status,
-    (restaurant as { business_status?: string | null }).business_status,
-  );
+  const lifecycle = lifecycleOf(restaurant as { status?: string | null; business_status?: string | null });
   const isShut = lifecycle === "closed" || lifecycle === "temporarily_closed";
+  // WEB-UX-089: closed for good. No Website, Menu, Reserve, Call or Rate, no
+  // captured menu, and nothing in the schema a diner could act on.
+  const closedForGood = lifecycle === "closed";
   const liveStatus = lifecycle ? null : openStatus;
   const tier = priceTier(restaurant.price_range);
   const openingDateLabel = formatOpeningDate(restaurant.opening_date);
@@ -435,7 +437,7 @@ export default function RestaurantDetails() {
   // "Menu", "Hours" and "Photos" only when this page shows them (WP3.5).
   const metaInput = {
     ...restaurant,
-    hasMenu: hasCapturedMenu || !!safeMenuUrl,
+    hasMenu: !closedForGood && (hasCapturedMenu || !!safeMenuUrl),
     // SEO-054: `opening` is a date column; only hours text counts.
     hasHours: lifecycle !== "closed" && (!!hoursSpec || hoursTextOf(restaurant.opening) !== null),
     hasPhone: !isShut && !!phoneHref,
@@ -484,6 +486,7 @@ export default function RestaurantDetails() {
     openingHoursSpecification: hoursSpec,
     // A closed or not-yet-open place publishes no hours.
     openForBusiness: !lifecycle,
+    permanentlyClosed: closedForGood,
     mapsUrl: safeWebUrl(placeExtras.google_maps_uri),
     acceptsReservations: acceptsReservationsOf(placeExtras, safeWebUrl),
     offers: restaurantDealOffers(pageDeals, canonicalUrl),
@@ -519,8 +522,11 @@ export default function RestaurantDetails() {
     address: `${restaurant.name} ${restaurant.location}`,
   });
   // The Menu action goes to the captured menu when there is one, to their own
-  // menu page when there isn't, and is hidden when neither exists (WP8 item 3).
-  const menuAction = hasCapturedMenu
+  // menu page when there isn't, and is hidden when neither exists (WP8 item 3)
+  // or the place has closed for good (WEB-UX-089).
+  const menuAction = closedForGood
+    ? null
+    : hasCapturedMenu
     ? { href: "#menu", label: "Menu", external: false }
     : safeMenuUrl
       ? { href: safeMenuUrl, label: "Menu (on their site)", external: true }
@@ -539,7 +545,7 @@ export default function RestaurantDetails() {
     statusLine && (liveStatus?.closesAt || liveStatus?.nextOpensAt) ? `${statusLine} CT` : statusLine;
   const showLocalGuide =
     !isShut && !!(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0));
-  const menuCapturedAt = hasCapturedMenu ? centralDate(menuData?.menu?.captured_at) : null;
+  const menuCapturedAt = hasCapturedMenu && !closedForGood ? centralDate(menuData?.menu?.captured_at) : null;
   const menuFromTheirSite =
     !!menuData?.menu && (menuData.menu.source_type === "scraped" || !!safeWebUrl(menuData.menu.source_url));
 
@@ -639,14 +645,23 @@ export default function RestaurantDetails() {
           {/* Hero Card */}
           <Card className="shadow-xl rounded-3xl overflow-hidden border-0 mb-8">
             {/* Hero Image, or a flat brand surface */}
-            <div className="relative h-72 md:h-96 overflow-hidden bg-[#2D1B69]">
+            {/* A shut place gets a shorter, grey hero, so the notice and the
+                open alternatives under it sit above the fold at 390px (WEB-UX-089). */}
+            <div
+              className={`relative overflow-hidden ${
+                isShut ? "h-64 md:h-80 bg-gray-700" : "h-72 md:h-96 bg-[#2D1B69]"
+              }`}
+              // Not data-testid: the production build strips those, and the
+              // smoke lane runs against one.
+              data-hero-state={isShut ? "muted" : "live"}
+            >
               {showImage && (
                 <>
                   <OptimizedImage
                     src={restaurant.image_url}
                     alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa`}
                     className="object-cover"
-                    containerClassName="absolute inset-0"
+                    containerClassName={`absolute inset-0${isShut ? " grayscale opacity-70" : ""}`}
                     priority
                     sizes="(max-width: 768px) 100vw, 1024px"
                     onError={() => setImageError(true)}
@@ -742,7 +757,10 @@ export default function RestaurantDetails() {
                   {lifecycle === "temporarily_closed" && (
                     <p>
                       <strong>{restaurant.name} is temporarily closed.</strong> We don't have a reopening
-                      date. Check with the restaurant before you go.
+                      date. Check with the restaurant before you go.{" "}
+                      <Link to="/restaurants/open-now" className="font-medium text-[#2D1B69] underline">
+                        See what's open now
+                      </Link>
                     </p>
                   )}
                   {lifecycle === "not_open_yet" && (
@@ -759,6 +777,23 @@ export default function RestaurantDetails() {
                     </p>
                   )}
                 </div>
+                {/* Somewhere to eat instead, right under the notice rather than
+                    at the foot of the page (WEB-UX-089). The rail keeps only
+                    places open today by lifecycle and Google status. */}
+                {isShut && (
+                  <div onClick={trackClick}>
+                    <NearbyContent
+                      variant="restaurants-near-restaurant"
+                      title="Open within 2 miles"
+                      className="pt-6 pb-2"
+                      excludeId={restaurant.id}
+                      latitude={restaurant.latitude}
+                      longitude={restaurant.longitude}
+                      preferCuisine={restaurant.cuisine}
+                      limit={3}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -803,7 +838,8 @@ export default function RestaurantDetails() {
                   </a>
                 </Button>
               )}
-              {safeWebsite && (
+              {/* A closed place's site, if it still resolves, is not serving anyone (WEB-UX-089). */}
+              {safeWebsite && !closedForGood && (
                 <Button asChild variant="outline" className="min-h-11 rounded-xl">
                   <a href={safeWebsite} target="_blank" rel="noopener noreferrer">
                     <Globe className="h-4 w-4 mr-2" />
@@ -830,12 +866,14 @@ export default function RestaurantDetails() {
                   </a>
                 </Button>
               )}
-              <Button asChild variant="outline" className="min-h-11 rounded-xl">
-                <a href="#reviews">
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Rate this place
-                </a>
-              </Button>
+              {!closedForGood && (
+                <Button asChild variant="outline" className="min-h-11 rounded-xl">
+                  <a href="#reviews">
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Rate this place
+                  </a>
+                </Button>
+              )}
             </div>
 
             {/* On-page section navigation for quick jumping */}
@@ -1044,17 +1082,23 @@ export default function RestaurantDetails() {
                   chip and makesOffer (WEB-FEAT-036). */}
               <RestaurantDealsList deals={pageDeals} restaurantName={restaurant.name} now={now} />
 
-              {/* Menu: a section of its own, not a card inside this card (WP3.14) */}
-              <Separator className="my-8" />
-              <RestaurantMenuSection
-                restaurantId={restaurant.id}
-                restaurantName={restaurant.name}
-                restaurantSlug={restaurant.slug || restaurant.id}
-                restaurantDescription={aboutText ?? undefined}
-                city={cityName}
-                cuisine={restaurant.cuisine}
-                menuUrl={restaurant.menu_url}
-              />
+              {/* Menu: a section of its own, not a card inside this card (WP3.14).
+                  None for a place closed for good: old prices read as current,
+                  and its Menu JSON-LD would say the same (WEB-UX-089). */}
+              {!closedForGood && (
+                <>
+                  <Separator className="my-8" />
+                  <RestaurantMenuSection
+                    restaurantId={restaurant.id}
+                    restaurantName={restaurant.name}
+                    restaurantSlug={restaurant.slug || restaurant.id}
+                    restaurantDescription={aboutText ?? undefined}
+                    city={cityName}
+                    cuisine={restaurant.cuisine}
+                    menuUrl={restaurant.menu_url}
+                  />
+                </>
+              )}
 
               {/* Our take (AI-assisted) */}
               {restaurant.ai_writeup && (
@@ -1117,12 +1161,15 @@ export default function RestaurantDetails() {
             </div>
           )}
 
-          {/* Ratings & Reviews (WEB-FEAT-010) */}
-          <div id="reviews" className="mb-8 scroll-mt-20">
-            <DeferredWidget minHeight={240} label="Ratings and reviews">
-              <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
-            </DeferredWidget>
-          </div>
+          {/* Ratings & Reviews (WEB-FEAT-010). Not for a place closed for
+              good: there is no meal left to rate (WEB-UX-089). */}
+          {!closedForGood && (
+            <div id="reviews" className="mb-8 scroll-mt-20">
+              <DeferredWidget minHeight={240} label="Ratings and reviews">
+                <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+              </DeferredWidget>
+            </div>
+          )}
 
           {/* Restaurant-Specific FAQ. FAQSection draws its own card. */}
           <div id="faq" className="mb-8 scroll-mt-20">
@@ -1160,17 +1207,20 @@ export default function RestaurantDetails() {
           )}
 
           {/* One restaurant rail (WP3.8): within two miles, same cuisine
-              first, closed and merged places left out. */}
-          <div onClick={trackClick}>
-            <NearbyContent
-              variant="restaurants-near-restaurant"
-              excludeId={restaurant.id}
-              latitude={restaurant.latitude}
-              longitude={restaurant.longitude}
-              preferCuisine={restaurant.cuisine}
-              limit={4}
-            />
-          </div>
+              first, closed and merged places left out. A shut place shows it
+              under the closed notice instead (WEB-UX-089). */}
+          {!isShut && (
+            <div onClick={trackClick}>
+              <NearbyContent
+                variant="restaurants-near-restaurant"
+                excludeId={restaurant.id}
+                latitude={restaurant.latitude}
+                longitude={restaurant.longitude}
+                preferCuisine={restaurant.cuisine}
+                limit={4}
+              />
+            </div>
+          )}
 
           {/* Any-date events nearby, whenever the tonight rail is not showing
               (nothing on tonight, or a place that isn't open). It asks once

@@ -399,6 +399,13 @@ export interface RestaurantSchemaContext {
   openingHoursSpecification: unknown[] | null;
   /** False for closed, temporarily closed and not-open-yet rows: no hours for those. */
   openForBusiness: boolean;
+  /**
+   * Closed for good (isPermanentlyClosedRestaurant). Such a place has no menu
+   * to order from, no offer to take up, no hours and no table to book, so the
+   * node drops hasMenu, makesOffer, openingHoursSpecification and
+   * acceptsReservations whatever else the caller passes (WEB-UX-089).
+   */
+  permanentlyClosed?: boolean;
   /** The Google Maps listing (restaurants.google_maps_uri), already through safeWebUrl. Joins sameAs. */
   mapsUrl?: string | null;
   /**
@@ -479,6 +486,8 @@ export interface RestaurantSchemaRow {
  *  - sameAs is their site and the Google listing, when the row has them;
  *  - acceptsReservations only when the row says yes or no;
  *  - makesOffer only for the in-date deals the page lists;
+ *  - none of hasMenu, makesOffer, hours or acceptsReservations for a place
+ *    that has closed for good (WEB-UX-089);
  *  - no aggregateRating: the only rating on the row is Google's, which is not
  *    first-party, and content_rating_aggregates held 0 restaurant ratings on
  *    2026-10-01 (SEO-034);
@@ -490,6 +499,7 @@ export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantS
   const tier = priceTier(row.price_range);
   // Their own site, then the Google listing. No social columns exist on the row.
   const sameAs = [ctx.website, ctx.mapsUrl].filter((u): u is string => !!u);
+  const closed = ctx.permanentlyClosed === true;
   return {
     "@context": "https://schema.org",
     "@type": "Restaurant",
@@ -510,16 +520,16 @@ export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantS
     ...(sameAs.length > 0 ? { sameAs } : {}),
     // A captured menu is a Menu node on this page (MenuSchema, @id "<url>#menu");
     // point at it. Otherwise their own menu page.
-    ...(ctx.hasCapturedMenu ? { hasMenu: `${ctx.url}#menu` } : ctx.menuUrl ? { hasMenu: ctx.menuUrl } : {}),
-    ...(ctx.acceptsReservations !== undefined ? { acceptsReservations: ctx.acceptsReservations } : {}),
+    ...(closed ? {} : ctx.hasCapturedMenu ? { hasMenu: `${ctx.url}#menu` } : ctx.menuUrl ? { hasMenu: ctx.menuUrl } : {}),
+    ...(!closed && ctx.acceptsReservations !== undefined ? { acceptsReservations: ctx.acceptsReservations } : {}),
     // Only the in-date deals the page lists; none means no property at all.
-    ...(ctx.offers && ctx.offers.length > 0 ? { makesOffer: ctx.offers } : {}),
+    ...(!closed && ctx.offers && ctx.offers.length > 0 ? { makesOffer: ctx.offers } : {}),
     ...(tier ? { priceRange: tier } : {}),
     ...(row.image_url ? { image: [row.image_url] } : {}),
     ...(row.latitude != null && row.longitude != null
       ? { geo: { "@type": "GeoCoordinates", latitude: row.latitude, longitude: row.longitude } }
       : {}),
-    ...(ctx.openForBusiness && ctx.openingHoursSpecification && ctx.openingHoursSpecification.length > 0
+    ...(!closed && ctx.openForBusiness && ctx.openingHoursSpecification && ctx.openingHoursSpecification.length > 0
       ? { openingHoursSpecification: ctx.openingHoursSpecification }
       : {}),
     // Every restaurant in Des Moines takes dollars: a safe default, not an invented fact.

@@ -330,6 +330,30 @@ describe('buildRestaurantSchema', () => {
     expect(buildRestaurantSchema(row, { ...ctx, openForBusiness: false })).not.toHaveProperty('openingHoursSpecification');
   });
 
+  it('a place closed for good publishes no menu, offers, hours or reservations (WEB-UX-089)', () => {
+    const offers = restaurantDealOffers([{ title: 'Half-price wings', start_date: '2026-10-01' }], ctx.url);
+    const open = buildRestaurantSchema(row, { ...ctx, offers, acceptsReservations: true });
+    // Counter-assertion: the same inputs on an open place publish all four.
+    expect(open).toHaveProperty('hasMenu');
+    expect(open).toHaveProperty('makesOffer');
+    expect(open).toHaveProperty('openingHoursSpecification');
+    expect(open).toHaveProperty('acceptsReservations');
+    for (const hasCapturedMenu of [false, true]) {
+      const closed = buildRestaurantSchema(row, {
+        ...ctx,
+        hasCapturedMenu,
+        offers,
+        acceptsReservations: true,
+        permanentlyClosed: true,
+      });
+      expect(closed).not.toHaveProperty('hasMenu');
+      expect(closed).not.toHaveProperty('makesOffer');
+      expect(closed).not.toHaveProperty('openingHoursSpecification');
+      expect(closed).not.toHaveProperty('acceptsReservations');
+      expect(closed.name).toBe(row.name);
+    }
+  });
+
   it('points hasMenu at the on-page Menu node when a menu is captured', () => {
     // MenuSchema's @id is "<page url>#menu" (SEO-034).
     expect(buildRestaurantSchema(row, { ...ctx, hasCapturedMenu: true }).hasMenu).toBe(

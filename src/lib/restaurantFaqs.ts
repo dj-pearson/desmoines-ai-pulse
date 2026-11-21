@@ -222,18 +222,22 @@ export function buildRestaurantFaqs(row: RestaurantFaqRow, ctx: RestaurantFaqCon
     faqs.push({ question: `What is the phone number for ${name}?`, answer: `${row.phone}.` });
   }
 
-  faqs.push({
-    // This answered "Yes, the full menu with prices is on this page" for every
-    // restaurant, including the ones with no menu captured.
-    question: `Does ${name} have an online menu?`,
-    answer: ctx.hasCapturedMenu
-      ? `Yes. The Menu section on this page has the menu we captured from their site, with the date we captured it.${ctx.menuUrl ? ` Their own menu is at ${ctx.menuUrl}.` : ""}`
-      : ctx.menuUrl
-        ? `Yes. ${name}'s menu is online at ${ctx.menuUrl}.`
-        : ctx.website
-          ? `We don't have a menu for ${name}. Their website is ${ctx.website}.`
-          : `We don't have a menu or a menu link for ${name}.`,
-  });
+  // No menu question for a place that has closed for good: the page shows no
+  // menu and links to no site for one (WEB-UX-089).
+  if (ctx.lifecycle !== "closed") {
+    faqs.push({
+      // This answered "Yes, the full menu with prices is on this page" for every
+      // restaurant, including the ones with no menu captured.
+      question: `Does ${name} have an online menu?`,
+      answer: ctx.hasCapturedMenu
+        ? `Yes. The Menu section on this page has the menu we captured from their site, with the date we captured it.${ctx.menuUrl ? ` Their own menu is at ${ctx.menuUrl}.` : ""}`
+        : ctx.menuUrl
+          ? `Yes. ${name}'s menu is online at ${ctx.menuUrl}.`
+          : ctx.website
+            ? `We don't have a menu for ${name}. Their website is ${ctx.website}.`
+            : `We don't have a menu or a menu link for ${name}.`,
+    });
+  }
 
   if (typeof row.rating === "number" && Number.isFinite(row.rating) && row.rating > 0) {
     faqs.push({

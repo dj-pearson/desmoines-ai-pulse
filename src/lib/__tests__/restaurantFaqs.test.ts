@@ -57,6 +57,14 @@ describe("buildRestaurantFaqs", () => {
     expect(faqs.some((f) => /phone/.test(f.question))).toBe(false);
   });
 
+  it("asks no menu question for a place closed for good (WEB-UX-089)", () => {
+    const menuCtx = { ...CTX, hasCapturedMenu: true, menuUrl: "https://example.com/menu" };
+    // Counter-assertion: the same menu context on an open place does ask it.
+    expect(buildRestaurantFaqs(ROW, menuCtx).faqs.some((f) => /menu/.test(f.question))).toBe(true);
+    const { faqs } = buildRestaurantFaqs(ROW, { ...menuCtx, lifecycle: "closed" });
+    expect(faqs.some((f) => /menu/.test(f.question))).toBe(false);
+  });
+
   it("keeps geo_faq out of the schema list and drops repeats", () => {
     const { faqs, aiFaqs } = buildRestaurantFaqs(
       {

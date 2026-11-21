@@ -37,6 +37,10 @@ interface NearbyContentProps {
   preferCuisine?: string | null;
   /** Rows shown. Defaults to 3. */
   limit?: number;
+  /** Replaces the variant's heading, e.g. "Open within 2 miles" under a closed notice. */
+  title?: string;
+  /** Replaces the section's default spacing ("mt-12 pt-8 border-t pb-8"). */
+  className?: string;
 }
 
 function CardSkeleton() {
@@ -63,6 +67,8 @@ export function NearbyContent({
   longitude,
   preferCuisine,
   limit,
+  title,
+  className,
 }: NearbyContentProps) {
   const navigate = useNavigate();
   const showRestaurants = variant !== "events-near-restaurant";
@@ -125,14 +131,14 @@ export function NearbyContent({
   const headingId = `nearby-${variant}`;
 
   return (
-    <section className="mt-12 pt-8 border-t pb-8" aria-labelledby={headingId}>
+    <section className={className ?? "mt-12 pt-8 border-t pb-8"} aria-labelledby={headingId}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
             <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
           </div>
           <div>
-            <h2 id={headingId} className="text-2xl font-bold text-foreground">{config.title}</h2>
+            <h2 id={headingId} className="text-2xl font-bold text-foreground">{title ?? config.title}</h2>
             <p className="text-sm text-muted-foreground mt-1">{config.subtitle}</p>
           </div>
         </div>
