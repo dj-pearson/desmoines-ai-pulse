@@ -20,6 +20,15 @@ import {
   staleHoursFilter,
 } from '../_shared/placeHours.ts'
 import type { BusinessStatus, StaleRefreshUpdate, StoredHours } from '../_shared/placeHours.ts'
+import {
+  buildClosureReview,
+  type ClosureReviewRow,
+  PLACE_LOOKUP_DAILY_MAX,
+  PLACE_LOOKUP_FIELD_MASK,
+  type PlaceCandidate,
+  pickConfidentPlace,
+  placeLookupQuery,
+} from '../_shared/placeLookup.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -224,7 +233,6 @@ async function refreshStaleHours(
     .from('restaurants')
     .select('id, name, google_place_id')
     .not('google_place_id', 'is', null)
-    .not('hours_json', 'is', null)
     .or(staleHoursFilter(cutoff))
     .order('hours_checked_at', { ascending: true, nullsFirst: true })
     .order('id', { ascending: true })
@@ -235,6 +243,8 @@ async function refreshStaleHours(
   let updated = 0
   let noHours = 0
   let gone = 0
+  let checked = 0
+  let closed = 0
   const errors: Array<{ id: string; name: string; error: string }> = []
 
   const job = await runJob('bulk-update-restaurants-hours', async (ctx) => {
@@ -244,13 +254,26 @@ async function refreshStaleHours(
           `https://places.googleapis.com/v1/places/${encodeURIComponent(row.google_place_id)}`,
           { method: 'GET', headers: { 'X-Goog-Api-Key': googleApiKey, 'X-Goog-FieldMask': HOURS_ONLY_FIELD_MASK } },
         )
-        let update: StaleRefreshUpdate
+        let update: StaleRefreshUpdate & { promotion_hold_reason?: string }
         if (res.ok) {
           update = buildStaleRefreshUpdate(await res.json())
+          checked++
           if (!('hours_json' in update)) noHours++
+          if (update.business_status === 'CLOSED_PERMANENTLY') closed++
         } else if (failedLookupCountsAsCheck(res.status)) {
+          // WEB-BE-064: Google no longer knows this place id. That is a
+          // finding, not a pass: queue it for a person and hold the row out of
+          // promotion (isRestaurantPromotable) until it is resolved.
           gone++
-          update = { hours_checked_at: new Date().toISOString() }
+          update = { hours_checked_at: new Date().toISOString(), promotion_hold_reason: 'place_not_found' }
+          const queued = await queueClosureReview(
+            supabase,
+            buildClosureReview(row.id, 'place_not_found', 'bulk-update-restaurants-hours', { google_place_id: row.google_place_id }),
+          )
+          if (queued !== null) {
+            errors.push({ id: row.id, name: row.name, error: `closure review not queued: ${queued}` })
+            continue
+          }
         } else {
           errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
           continue
@@ -270,6 +293,9 @@ async function refreshStaleHours(
       staleDays,
       noHours,
       gone,
+      checked,
+      closed,
+      not_found: gone,
       sources: { 'google-places': { fetched: targets.length, inserted: updated, duplicates: 0, errors: errors.length } },
     })
   })
@@ -302,6 +328,194 @@ async function refreshStaleHours(
       updated,
       noHours,
       gone,
+      checked,
+      closed,
+      not_found: gone,
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined,
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+  )
+}
+
+/**
+ * WEB-BE-064. Insert one closure finding. An open finding for the same
+ * restaurant and reason already exists when the partial unique index answers
+ * 23505; that is success (it is queued). Returns an error message or null.
+ */
+async function queueClosureReview(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  review: ClosureReviewRow,
+): Promise<string | null> {
+  const { error } = await supabase.from('restaurant_closure_reviews').insert(review)
+  if (!error || error.code === '23505') return null
+  return error.message ?? String(error)
+}
+
+/** Restaurants whose last name-and-address lookup is older than this are tried again. */
+const PLACE_LOOKUP_RETRY_DAYS = 90
+
+/**
+ * WEB-BE-064. `placeLookup: true` gives rows with no google_place_id a path
+ * into the refresh: a Places Text Search by name and address, the id stored
+ * only on a confident match (pickConfidentPlace), everything else queued for
+ * a person as no_place_match. Every answered row gets place_lookup_checked_at,
+ * so the same rows do not head every batch; a Places error is not an answer
+ * and the row is retried next run. Capped at PLACE_LOOKUP_DAILY_MAX a call.
+ */
+async function lookupMissingPlaceIds(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  googleApiKey: string,
+  batchSize: number,
+  corsHeaders: Record<string, string>,
+  req: Request,
+): Promise<Response> {
+  const limit = Math.min(batchSize, PLACE_LOOKUP_DAILY_MAX)
+  const retryBefore = new Date(Date.now() - PLACE_LOOKUP_RETRY_DAYS * 86_400_000).toISOString()
+  const { data: rows, error: fetchError } = await supabase
+    .from('restaurants')
+    .select('id, name, location')
+    .is('google_place_id', null)
+    .not('is_merged', 'is', true)
+    .not('status', 'in', '(closed,permanently_closed,closed_permanently)')
+    .or(`place_lookup_checked_at.is.null,place_lookup_checked_at.lt.${retryBefore}`)
+    .order('place_lookup_checked_at', { ascending: true, nullsFirst: true })
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
+
+  const targets = (rows ?? []) as Array<{ id: string; name: string; location: string | null }>
+  let matched = 0
+  let queued = 0
+  const errors: Array<{ id: string; name: string; error: string }> = []
+
+  const job = await runJob('restaurant-place-lookup', async (ctx) => {
+    for (const row of targets) {
+      try {
+        const query = placeLookupQuery(row)
+        const res = await fetchWithTimeout('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': googleApiKey,
+            'X-Goog-FieldMask': PLACE_LOOKUP_FIELD_MASK,
+          },
+          body: JSON.stringify({
+            textQuery: query,
+            maxResultCount: 5,
+            locationBias: { circle: { center: { latitude: 41.5868, longitude: -93.625 }, radius: 40000 } },
+          }),
+        })
+        if (!res.ok) {
+          errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
+          continue
+        }
+        const body = await res.json()
+        const candidates: PlaceCandidate[] = Array.isArray(body?.places) ? body.places : []
+        const match = pickConfidentPlace(row, candidates)
+        const checkedAt = new Date().toISOString()
+
+        let reason: string | null = match.ok ? null : match.reason
+        let duplicateOf: string | null = null
+        if (match.ok) {
+          // Another listing already holds this place: a duplicate for the
+          // merge queue, not a second row pointing at one business.
+          const { data: holder, error: holderError } = await supabase
+            .from('restaurants')
+            .select('id')
+            .eq('google_place_id', match.placeId)
+            .neq('id', row.id)
+            .limit(1)
+          if (holderError) {
+            errors.push({ id: row.id, name: row.name, error: holderError.message })
+            continue
+          }
+          if (holder && holder.length > 0) {
+            reason = 'place_id_on_another_listing'
+            duplicateOf = holder[0].id
+          }
+        }
+
+        if (match.ok && reason === null) {
+          const { error: updateError } = await supabase
+            .from('restaurants')
+            .update({ google_place_id: match.placeId, place_lookup_checked_at: checkedAt })
+            .eq('id', row.id)
+          if (updateError) {
+            errors.push({ id: row.id, name: row.name, error: updateError.message })
+            continue
+          }
+          matched++
+          continue
+        }
+
+        const queueError = await queueClosureReview(
+          supabase,
+          buildClosureReview(row.id, 'no_place_match', 'restaurant-place-lookup', {
+            match: reason,
+            query,
+            candidates: candidates.slice(0, 5).map((c) => ({
+              id: c.id ?? null,
+              name: c.displayName?.text ?? null,
+              address: c.formattedAddress ?? null,
+            })),
+            ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
+          }),
+        )
+        if (queueError !== null) {
+          errors.push({ id: row.id, name: row.name, error: `closure review not queued: ${queueError}` })
+          continue
+        }
+        const { error: stampError } = await supabase
+          .from('restaurants')
+          .update({ place_lookup_checked_at: checkedAt })
+          .eq('id', row.id)
+        if (stampError) errors.push({ id: row.id, name: row.name, error: stampError.message })
+        else queued++
+      } catch (error) {
+        errors.push({ id: row.id, name: row.name, error: error instanceof Error ? error.message : String(error) })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    ctx.processed(matched + queued)
+    ctx.failed(errors.length)
+    ctx.meta({
+      mode: 'placeLookup',
+      checked: targets.length,
+      matched,
+      queued,
+      sources: { 'google-places': { fetched: targets.length, inserted: matched, duplicates: 0, errors: errors.length } },
+    })
+  })
+
+  if (!job.ok) {
+    return new Response(
+      JSON.stringify({ success: false, error: job.error ?? 'Place lookup failed', runId: job.runId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
+    )
+  }
+
+  await writeAuditLog(supabase, {
+    eventType: 'admin_action',
+    actorId: null,
+    action: 'restaurant_place_lookup',
+    resource: 'restaurants',
+    severity: 'low',
+    ipAddress: auditIp(req),
+    details: { processed: targets.length, matched, queued, errors: errors.length },
+  })
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      runId: job.runId,
+      message: 'Place lookup completed',
+      mode: 'placeLookup',
+      processed: targets.length,
+      matched,
+      queued,
       errors: errors.length,
       errorDetails: errors.length > 0 ? errors : undefined,
     }),
@@ -344,11 +558,16 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null } = await req.json()
+    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null, placeLookup = false } = await req.json()
     // Each row is a paid Google Places lookup, and batchSize went straight into
     // .limit(). 50 is the admin form's own max (RestaurantBulkUpdaterSimple.tsx,
     // and HOURS_BATCH_MAX in src/lib/restaurantHoursRefresh.ts).
     const batchSize = Math.min(Math.max(Math.floor(Number(rawBatchSize)) || 10, 1), 50)
+
+    // WEB-BE-064: optional field; absent keeps every existing mode.
+    if (placeLookup === true) {
+      return await lookupMissingPlaceIds(supabase, googleApiKey, batchSize, corsHeaders, req)
+    }
 
     // SEO-054: hours and status only, for rows with a place id and no hours.
     if (hoursOnly === true) {

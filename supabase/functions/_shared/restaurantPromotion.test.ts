@@ -66,6 +66,10 @@ class Stub implements PromotableFilterBuilder<Stub> {
     this.preds.push((r) => r[c] === v);
     return this;
   }
+  is(c: string, _v: null): Stub {
+    this.preds.push((r) => r[c] == null);
+    return this;
+  }
   not(c: string, op: string, v: unknown): Stub {
     if (op === "is" && v === true) {
       // IS NOT TRUE: NULL passes.
@@ -110,6 +114,7 @@ const ROWS: Row[] = [
   { id: "status-announced", ...ok, status: "announced" },
   { id: "status-null", ...ok, status: null },
   { id: "merged", ...ok, is_merged: true },
+  { id: "held-404", ...ok, promotion_hold_reason: "place_not_found" },
   { id: "check-31-days", ...ok, hours_checked_at: days(31) },
   { id: "never-checked", ...ok, hours_checked_at: null, hours_json: null },
   { id: "legacy-old", ...ok, hours_checked_at: null, hours_json: { fetchedAt: days(40) } },
@@ -139,6 +144,7 @@ Deno.test("each refusal names its reason", () => {
   assert.equal(reason("status-closed"), "status_not_open");
   assert.equal(reason("status-announced"), "status_not_open");
   assert.equal(reason("merged"), "merged");
+  assert.equal(reason("held-404"), "held");
   assert.equal(reason("never-checked"), "never_checked");
   assert.equal(reason("check-31-days"), "check_too_old");
   assert.equal(reason("legacy-old"), "check_too_old");

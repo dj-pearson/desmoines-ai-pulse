@@ -226,7 +226,10 @@ export function staleHoursCutoff(days: number, now: Date = new Date()): string {
  * hours_json->>fetchedAt orders the same way the instants do.
  */
 export function staleHoursFilter(cutoffIso: string): string {
-  return `hours_checked_at.lt.${cutoffIso},and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.${cutoffIso})`;
+  // WEB-BE-064: the third arm is a row never checked and never filled (no
+  // hours_checked_at, no hours_json). It used to fall through both arms, so a
+  // place with an id and no hours was re-read by nothing.
+  return `hours_checked_at.lt.${cutoffIso},and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.${cutoffIso}),and(hours_checked_at.is.null,hours_json->>fetchedAt.is.null)`;
 }
 
 export interface StaleRefreshUpdate extends HoursOnlyUpdate {

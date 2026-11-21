@@ -89,7 +89,9 @@ export function isRestaurantOpenForBusiness(
  *     or hours_json.fetchedAt for rows the fill mode wrote before that column;
  *   - our own status is open or newly_opened (closed spellings, opening_soon,
  *     announced and NULL are refused);
- *   - the row is not a merged-away duplicate.
+ *   - the row is not a merged-away duplicate;
+ *   - nothing holds it out of promotion (promotion_hold_reason, set when
+ *     Places 404s the stored place id, WEB-BE-064).
  *
  * isRestaurantPromotable and applyPromotableRestaurantFilters are the same
  * rule, one for rows in hand and one for a PostgREST read; the test holds
@@ -109,6 +111,7 @@ const NOT_PROMOTABLE_STATUSES = [
 
 export type PromotionRefusal =
   | 'merged'
+  | 'held'
   | 'not_operational'
   | 'status_not_open'
   | 'never_checked'
@@ -116,6 +119,7 @@ export type PromotionRefusal =
 
 export interface PromotableRestaurantRow {
   is_merged?: boolean | null;
+  promotion_hold_reason?: string | null;
   business_status?: string | null;
   status?: string | null;
   hours_checked_at?: string | null;
@@ -143,6 +147,7 @@ export function restaurantPromotionRefusal(
   now: Date = new Date(),
 ): PromotionRefusal | null {
   if (row.is_merged === true) return 'merged';
+  if (row.promotion_hold_reason) return 'held';
   if (row.business_status !== 'OPERATIONAL') return 'not_operational';
   if (!PROMOTABLE_STATUSES.has(row.status ?? '')) return 'status_not_open';
   const checked = lastPlacesCheck(row);
@@ -159,6 +164,7 @@ export function isRestaurantPromotable(row: PromotableRestaurantRow, now: Date =
 /** The slice of the postgrest-js filter builder the promotion reads use. */
 export interface PromotableFilterBuilder<Q> {
   eq(column: string, value: string): Q;
+  is(column: string, value: null): Q;
   not(column: string, operator: string, value: unknown): Q;
   or(filters: string): Q;
 }
@@ -174,6 +180,7 @@ export function applyPromotableRestaurantFilters<Q extends PromotableFilterBuild
   const cutoff = promotionCheckCutoff(now);
   return q
     .not('is_merged', 'is', true)
+    .is('promotion_hold_reason', null)
     .eq('business_status', 'OPERATIONAL')
     .not('status', 'in', `(${NOT_PROMOTABLE_STATUSES.join(',')})`)
     .or(`hours_checked_at.gte.${cutoff},and(hours_checked_at.is.null,hours_json->>fetchedAt.gte.${cutoff})`);
