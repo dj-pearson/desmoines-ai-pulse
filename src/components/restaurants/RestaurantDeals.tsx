@@ -10,6 +10,7 @@ import {
   orderDealsForVenue,
   type Deal,
 } from "@/hooks/useDeals";
+import { dealConfirmedLabel } from "@/lib/dealFreshness";
 
 interface RestaurantDealsListProps {
   deals: Deal[];
@@ -21,6 +22,7 @@ function DealRow({ deal, now }: { deal: Deal; now: Date }) {
   const schedule = formatDealSchedule(deal);
   const liveNow = hasDealSchedule(deal) && isDealLiveAt(deal, now);
   const today = dealTodayStatus(deal, now);
+  const confirmed = dealConfirmedLabel(deal.last_confirmed_at);
   return (
     <li className="py-4 first:pt-0 last:pb-0" data-restaurant-deal>
       <div className="flex flex-wrap items-center gap-2">
@@ -41,6 +43,7 @@ function DealRow({ deal, now }: { deal: Deal; now: Date }) {
       )}
       {deal.description && <p className="mt-1 text-sm text-muted-foreground">{deal.description}</p>}
       {deal.terms && <p className="mt-1 text-xs italic text-muted-foreground">{deal.terms}</p>}
+      {confirmed && <p className="mt-1 text-xs text-muted-foreground">{confirmed}</p>}
       {deal.code && (
         <p className="mt-1 text-sm">
           <Link to="/deals?category=restaurant" className="underline underline-offset-2 hover:text-primary">

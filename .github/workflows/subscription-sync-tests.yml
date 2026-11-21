@@ -267,6 +267,9 @@ jobs:
       # auto-verify again by domain).
       - run: deno test --allow-read supabase/functions/_tests/business-claims.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/business-claim-revoke.test.ts
+      # WEB-FEAT-104. deals.last_confirmed_at: the backfill counts a deal as
+      # confirmed when it was entered, and new rows are stamped by default.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/deals-last-confirmed.test.ts
       # SEO-059. articles_publishable_body_guard refuses a JSON/HTML/placeholder
       # body on publish; ai-article-pipeline used to drop that error and report
       # the article as published. Pins that it reads it and keeps a draft.

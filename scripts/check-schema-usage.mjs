@@ -284,6 +284,10 @@ const PENDING_MIGRATIONS = [
   // without the column.
   { table: 'restaurants', column: 'locked_fields', migration: '20261121000070' },
   { rpc: 'set_restaurant_field_locks', migration: '20261121000070' },
+  // WEB-FEAT-104: when a deal was created or last re-confirmed. The public
+  // reads in useDeals.ts and DealManager's list retry without the column on
+  // 42703, so the pending window costs the 90-day rule, not the deals.
+  { table: 'deals', column: 'last_confirmed_at', migration: '20261121000100' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

@@ -6,6 +6,7 @@ import {
   useHappyHourCandidates,
   type HappyHourCandidate,
 } from "@/hooks/useDeals";
+import { dealConfirmedLabel } from "@/lib/dealFreshness";
 import { isPrerender } from "@/lib/isPrerender";
 
 /**
@@ -60,6 +61,7 @@ export function HappyHourList({ rows, className = "" }: HappyHourListProps) {
       <ul className="divide-y divide-border rounded-xl border border-border bg-card">
         {rows.map(({ deal, restaurant }) => {
           const schedule = formatDealSchedule(deal);
+          const confirmed = dealConfirmedLabel(deal.last_confirmed_at);
           return (
             <li
               key={restaurant.id}
@@ -71,6 +73,7 @@ export function HappyHourList({ rows, className = "" }: HappyHourListProps) {
               </Link>
               <span className="text-foreground">{deal.title}</span>
               {schedule && <span className="text-muted-foreground">({schedule})</span>}
+              {confirmed && <span className="text-xs text-muted-foreground">&middot; {confirmed}</span>}
             </li>
           );
         })}
