@@ -8,6 +8,7 @@ import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
 import { runJob } from '../_shared/jobRunner.ts'
 import { isPlacesMediaUrl, GOOGLE_ATTRIBUTION_TEXT } from '../_shared/placesPhoto.ts'
+import { selectWithLocks, withoutLockedFields } from '../_shared/restaurantFieldLocks.ts'
 import {
   buildHoursOnlyUpdate,
   buildStaleRefreshUpdate,
@@ -68,6 +69,18 @@ interface GooglePlaceDetails {
    *  _shared/placeHours.ts rather than trusted, since this is a network
    *  response typed by hand. */
   regularOpeningHours?: unknown;
+}
+
+/** A row as the full enrichment reads it (ENRICH_SELECT plus locked_fields). */
+interface EnrichRow {
+  id: string;
+  name: string;
+  location: string | null;
+  google_place_id: string | null;
+  enhanced: string | null;
+  description: string | null;
+  /** WEB-BE-069. Absent when migration 20261121000070 is not applied yet. */
+  locked_fields?: unknown;
 }
 
 interface RestaurantUpdate {
@@ -132,22 +145,27 @@ async function refreshHoursOnly(
   corsHeaders: Record<string, string>,
   req: Request,
 ): Promise<Response> {
-  let query = supabase
-    .from('restaurants')
-    .select('id, name, google_place_id')
-    .not('google_place_id', 'is', null)
-    .is('hours_json', null)
-    .order('id', { ascending: true })
-    .limit(batchSize)
-  // A place Google has no hours for keeps hours_json null and would head every
-  // batch forever. The caller passes back `lastId` to move past it.
-  if (afterId) query = query.gt('id', afterId)
-  const { data: rows, error: fetchError } = await query
+  // WEB-BE-069: locked_fields comes with the row so a field a person set is
+  // never written here (selectWithLocks drops it when the column is not there).
+  const { data: rows, error: fetchError } = await selectWithLocks((cols) => {
+    let query = supabase
+      .from('restaurants')
+      .select(cols)
+      .not('google_place_id', 'is', null)
+      .is('hours_json', null)
+      .order('id', { ascending: true })
+      .limit(batchSize)
+    // A place Google has no hours for keeps hours_json null and would head every
+    // batch forever. The caller passes back `lastId` to move past it.
+    if (afterId) query = query.gt('id', afterId)
+    return query
+  }, 'id, name, google_place_id')
   if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
 
-  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string }>
+  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string; locked_fields?: unknown }>
   let updated = 0
   let noHours = 0
+  let lockedSkips = 0
   const errors: Array<{ id: string; name: string; error: string }> = []
 
   const job = await runJob('bulk-update-restaurants-hours', async (ctx) => {
@@ -161,13 +179,17 @@ async function refreshHoursOnly(
           errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
           continue
         }
-        const update = buildHoursOnlyUpdate(await res.json())
-        if (!update) {
+        const built = buildHoursOnlyUpdate(await res.json())
+        if (!built) {
           // Google has no hours and no status for this place. Leave the row
           // alone: null means unknown, and an empty object would read as data.
           noHours++
           continue
         }
+        // WEB-BE-069: a field a person set keeps their value.
+        const { update, skipped } = withoutLockedFields(built, row.locked_fields)
+        lockedSkips += skipped.length
+        if (Object.keys(update).length === 0) continue
         const { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
         if (updateError) errors.push({ id: row.id, name: row.name, error: updateError.message })
         else updated++
@@ -181,6 +203,7 @@ async function refreshHoursOnly(
     ctx.meta({
       mode: 'hoursOnly',
       noHours,
+      lockedSkips,
       sources: { 'google-places': { fetched: targets.length, inserted: updated, duplicates: 0, errors: errors.length } },
     })
   })
@@ -241,17 +264,20 @@ async function refreshStaleHours(
   req: Request,
 ): Promise<Response> {
   const cutoff = staleHoursCutoff(staleDays)
-  const { data: rows, error: fetchError } = await supabase
-    .from('restaurants')
-    .select('id, name, google_place_id')
-    .not('google_place_id', 'is', null)
-    .or(staleHoursFilter(cutoff))
-    .order('hours_checked_at', { ascending: true, nullsFirst: true })
-    .order('id', { ascending: true })
-    .limit(batchSize)
+  // WEB-BE-069: with locked_fields, as in the fill mode above.
+  const { data: rows, error: fetchError } = await selectWithLocks((cols) =>
+    supabase
+      .from('restaurants')
+      .select(cols)
+      .not('google_place_id', 'is', null)
+      .or(staleHoursFilter(cutoff))
+      .order('hours_checked_at', { ascending: true, nullsFirst: true })
+      .order('id', { ascending: true })
+      .limit(batchSize), 'id, name, google_place_id')
   if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
 
-  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string }>
+  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string; locked_fields?: unknown }>
+  let lockedSkips = 0
   let updated = 0
   let noHours = 0
   let gone = 0
@@ -290,6 +316,11 @@ async function refreshStaleHours(
           errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
           continue
         }
+        // WEB-BE-069: hours_checked_at is never locked, so the check is still
+        // recorded when every Google field on the row is locked.
+        const kept = withoutLockedFields(update, row.locked_fields)
+        lockedSkips += kept.skipped.length
+        update = kept.update
         const { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
         if (updateError) errors.push({ id: row.id, name: row.name, error: updateError.message })
         else updated++
@@ -308,6 +339,7 @@ async function refreshStaleHours(
       checked,
       closed,
       not_found: gone,
+      lockedSkips,
       sources: { 'google-places': { fetched: targets.length, inserted: updated, duplicates: 0, errors: errors.length } },
     })
   })
@@ -620,12 +652,15 @@ serve(async (req) => {
     // lastId is the next cursor, so repeated force runs reach different rows
     // instead of whichever ones an unordered select returned first.
     const restaurantIds = parseRestaurantIds(rawRestaurantIds)
-    const query = applyEnrichTargets(
-      supabase.from('restaurants').select(ENRICH_SELECT),
-      { restaurantIds, forceUpdate: !!forceUpdate, afterId: parseCursor(afterId), batchSize },
+    // WEB-BE-069: locked_fields is read with the row, and every write below
+    // drops the fields a person set (withoutLockedFields before updates.push).
+    const { data: restaurants, error: fetchError } = await selectWithLocks<EnrichRow>(
+      (cols) => applyEnrichTargets(
+        supabase.from('restaurants').select(cols),
+        { restaurantIds, forceUpdate: !!forceUpdate, afterId: parseCursor(afterId), batchSize },
+      ),
+      ENRICH_SELECT,
     )
-
-    const { data: restaurants, error: fetchError } = await query
 
     if (fetchError) {
       throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
@@ -661,6 +696,8 @@ serve(async (req) => {
     // WEB-BE-066: rows where every search answered and no hit carried the
     // restaurant's name. They are left alone apart from enrich_checked_at.
     let unmatched = 0
+    // WEB-BE-069: fields left out of a write because a person set them.
+    let lockedSkips = 0
 
     // WEB-BE-043. The Google Places call is what goes dark here - a quota
     // exhaustion or a retired key makes every lookup come back empty and the
@@ -961,7 +998,14 @@ serve(async (req) => {
           update.google_place_id = placeId
         }
 
-        updates.push(update)
+        // WEB-BE-069: a field an owner or admin set keeps their value. This is
+        // the one place the full enrichment's update leaves the loop.
+        const kept = withoutLockedFields(update, restaurant.locked_fields)
+        lockedSkips += kept.skipped.length
+        if (kept.skipped.length > 0) {
+          console.log(`Kept locked fields on ${restaurant.name}: ${kept.skipped.join(', ')}`)
+        }
+        updates.push(kept.update)
 
       } catch (error) {
         console.error(`Error processing restaurant ${restaurant.name}:`, error)
@@ -1044,6 +1088,7 @@ serve(async (req) => {
       ctx.failed(errors.length)
       ctx.meta({
         unmatched,
+        lockedSkips,
         sources: {
           'google-places': {
             fetched: restaurants.length,

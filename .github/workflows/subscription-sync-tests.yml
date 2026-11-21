@@ -256,6 +256,10 @@ jobs:
       # Google-linked one. Pins the column fill, the survivor rule, the claim
       # move and what Undo puts back.
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-merge.test.ts
+      # WEB-BE-069. A field an owner or admin set is dropped from every
+      # bulk-update-restaurants write; update_claimed_listing and
+      # set_restaurant_field_locks write the lock (PGlite, real migration).
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-field-locks.test.ts
       # SEO-059. articles_publishable_body_guard refuses a JSON/HTML/placeholder
       # body on publish; ai-article-pipeline used to drop that error and report
       # the article as published. Pins that it reads it and keeps a draft.

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from "./ui/switch";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import { CalendarIcon, Save, X, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { CalendarIcon, Save, X, Plus, Trash2, CheckCircle2, Lock } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { format } from "date-fns";
@@ -19,6 +19,9 @@ import { toast } from "@/lib/toast";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
 import { createLogger } from '@/lib/logger';
 import { buildContentEditPayload } from "@/lib/contentEditPayload";
+import { handleError } from "@/lib/errorHandler";
+import { describeFieldLock, RESTAURANT_TABLE_CONTENT_TYPES } from "@/lib/restaurantFieldLocks";
+import { useRestaurantFieldLocks } from "@/hooks/useRestaurantFieldLocks";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ContentEditDialog');
@@ -159,6 +162,25 @@ export default function ContentEditDialog({
   const fieldId = (key: string) => `${idPrefix}-${key}`;
 
   const config = fieldConfigs[contentType];
+
+  // WEB-BE-069: fields a person set on a restaurant are locked against the
+  // Google enrichment. Only existing rows stored in restaurants have locks.
+  const lockTargetId =
+    !item?.isNew && item?.id && (RESTAURANT_TABLE_CONTENT_TYPES as readonly string[]).includes(contentType)
+      ? String(item.id)
+      : null;
+  const fieldLocks = useRestaurantFieldLocks(open ? lockTargetId : null);
+  const locks = fieldLocks.result?.status === "ok" ? fieldLocks.result.locks : {};
+
+  const handleUnlock = async (fieldKey: string, label: string) => {
+    try {
+      await fieldLocks.unlockField(fieldKey);
+      toast.success(`${label} unlocked. The next Google enrichment can update it.`);
+    } catch (error) {
+      handleError(error, { component: "ContentEditDialog", action: "unlockField" });
+      toast.error(`Could not unlock ${label}: ${(error as Error).message}`);
+    }
+  };
   const { findVenue, getAutoFillData, isReady: venuesReady } = useVenueMatcher();
 
   // Check for venue match when venue field changes (for events)
@@ -366,6 +388,21 @@ export default function ContentEditDialog({
       }
 
       log.info('save', 'Save successful', { data: result });
+
+      // WEB-BE-069: lock what the admin just changed, so the next Google
+      // enrichment does not undo it. The database keeps only the lockable
+      // fields. The edit itself is already saved, so a failure here is
+      // reported and does not undo it.
+      if (lockTargetId) {
+        try {
+          await fieldLocks.lockFields(Object.keys(saveData));
+        } catch (lockError) {
+          handleError(lockError, { component: "ContentEditDialog", action: "lockFields" });
+          toast.warning(
+            `Saved, but the change is not protected from Google enrichment: ${(lockError as Error).message}`,
+          );
+        }
+      }
       const action = item.isNew ? 'created' : 'updated';
       toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} ${action} successfully!`);
       onSave();
@@ -594,6 +631,12 @@ export default function ContentEditDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {fieldLocks.result?.status === "unavailable" && (
+          <p className="text-xs text-muted-foreground">
+            Field locks unavailable - {fieldLocks.result.reason}. Saving still works.
+          </p>
+        )}
+
         <div className="grid gap-4 py-4">
           {config.fields.map((field) => (
             <div key={field.key} className="grid gap-2">
@@ -602,6 +645,25 @@ export default function ContentEditDialog({
                 {field.required && <span className="text-red-500 ml-1">*</span>}
               </Label>
               {renderField(field)}
+
+              {locks[field.key] && (
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Lock className="h-3 w-3" aria-hidden="true" />
+                    {describeFieldLock(locks[field.key])}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={fieldLocks.isUpdating}
+                    onClick={() => handleUnlock(field.key, field.label)}
+                    aria-label={`Unlock ${field.label} so Google can update it`}
+                  >
+                    Unlock
+                  </Button>
+                </div>
+              )}
 
               {/* Show venue match alert after venue field */}
               {field.key === "venue" && matchedVenue && !venueAutoFilled && (

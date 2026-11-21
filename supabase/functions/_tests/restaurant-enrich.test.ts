@@ -90,7 +90,9 @@ Deno.test("bulk-update-restaurants reads restaurantIds and selects through apply
   const src = await Deno.readTextFile(BULK);
   assert.match(src, /restaurantIds:\s*rawRestaurantIds/, "restaurantIds must be read from the body");
   assert.match(src, /parseRestaurantIds\(rawRestaurantIds\)/);
-  assert.match(src, /applyEnrichTargets\(\s*supabase\.from\('restaurants'\)\.select\(ENRICH_SELECT\)/);
+  // WEB-BE-069: the select list goes through selectWithLocks, which adds
+  // locked_fields to ENRICH_SELECT (and drops it when the column is missing).
+  assert.match(src, /applyEnrichTargets\(\s*supabase\.from\('restaurants'\)\.select\(cols\)[\s\S]{0,200}ENRICH_SELECT,/);
   assert.match(src, /lastId: restaurants\[restaurants\.length - 1\]\.id/, "the response returns the cursor");
   assert.ok(
     !src.includes(".select('id, name, location, google_place_id, enhanced')"),

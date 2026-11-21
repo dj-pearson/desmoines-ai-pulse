@@ -273,6 +273,14 @@ const PENDING_MIGRATIONS = [
   { table: 'restaurants', column: 'content_changed_at', migration: '20261121000110' },
   { rpc: 'report_restaurant_closed', migration: '20261121000030' },
   { rpc: 'resolve_closure_review', migration: '20261121000030' },
+  // WEB-BE-069: restaurant field locks. ContentEditDialog reads locked_fields
+  // in its own request (never in the admin list select) and calls the RPC after
+  // a save has succeeded, so until the migration is applied the dialog says
+  // "Field locks unavailable" and the save warns that the edit is unlocked;
+  // neither blocks an edit. bulk-update-restaurants retries its selects
+  // without the column.
+  { table: 'restaurants', column: 'locked_fields', migration: '20261121000070' },
+  { rpc: 'set_restaurant_field_locks', migration: '20261121000070' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];
