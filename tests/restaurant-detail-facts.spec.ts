@@ -179,7 +179,9 @@ test.describe('restaurant detail, each fact once (WEB-UX-088)', () => {
     expect(await placement(page.locator(`a[href="tel:${ROW.phone}"]`)), 'call links').toEqual({ body: 1, sticky: 0 });
     expect(await placement(page.getByRole('link', { name: /Directions/ })), 'directions').toEqual({ body: 0, sticky: 1 });
     expect(await placement(page.getByText('4.3', { exact: true })), 'rating').toEqual({ body: 1, sticky: 0 });
-    expect(await placement(page.getByText(/Basque/)), 'cuisine').toEqual({ body: 1, sticky: 0 });
+    // The cuisine fact, not the nearby rail's ranking caption ("Basque places
+    // first, then the rest"), which names the cuisine to explain an order.
+    expect(await placement(page.getByText(/^Basque( cuisine)?$/)), 'cuisine').toEqual({ body: 1, sticky: 0 });
     // Reserve is the sticky bar's primary action, so the row leaves it out.
     expect(await placement(page.getByRole('link', { name: /Reserve a table/i })), 'reserve').toEqual({
       body: 0,
