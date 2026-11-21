@@ -64,3 +64,6 @@ None.
 | 2026-11-21 | WEB-UX-086 | this commit | /restaurants phone controls: four filters on screen at 390px, chips one row in a 156px sticky bar, list/map toggle in the bar, 258px search input, Surprise Me labelled; 6-test smoke spec |
 | 2026-11-21 | WEB-BE-074 | this commit | Merges fill empty survivor columns from the loser, prefer the place-id / claimed row, move claims; admin Recent merges with Undo and on-demand merge; PGlite 6/6, negative control red |
 | 2026-11-21 | WEB-UX-090 | this commit | One clear action plus remove-the-narrowest-filter in the empty state, rating shows Any with one input, skeleton mirrors the page with dark colours, 16px hero with a clamped title; smoke spec + negative control |
+| 2026-11-21 | WEB-BE-069 | this commit | Owner and admin edits lock fields (restaurants.locked_fields); enrichment and both hours modes skip them; admin can unlock; Deno 10/10, negative controls red |
+| 2026-11-21 | WEB-ADS-047 | this commit | Claimants emailed on approve/reject/revoke, pending count on admin home and digest, alert after 3 days, Verified tab with Revoke; self-verify by code open |
+| 2026-11-21 | WEB-FEAT-104 | this commit | Deals carry last_confirmed_at and show it; open-ended deals unconfirmed 90 days leave every public surface and JSON-LD and wait in DealManager for re-confirm |
