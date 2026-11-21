@@ -67,25 +67,14 @@ CREATE INDEX IF NOT EXISTS idx_blacklist_restaurant_id
   ON public.restaurant_blacklist (restaurant_id)
   WHERE restaurant_id IS NOT NULL;
 
--- A restrictive policy does nothing on a table without RLS, and then hidden
--- rows would stay public while the admin is told they are hidden. Refuse
--- rather than ship that.
-DO $$
-BEGIN
-  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.restaurants'::regclass) THEN
-    RAISE EXCEPTION 'WEB-FEAT-103: row level security is off on public.restaurants, so hiding a restaurant would not hide it';
-  END IF;
-END
-$$;
+-- The RESTRICTIVE select policy that hides a hidden row from visitors is in
+-- 20261121000990_restaurants_hidden_rls.sql, sorted last on purpose: it
+-- refuses to apply when RLS is off on restaurants, and a refusal there must
+-- not block the rest of this release's migrations.
 
-DROP POLICY IF EXISTS "Hidden restaurants are admin-only" ON public.restaurants;
-CREATE POLICY "Hidden restaurants are admin-only"
-  ON public.restaurants
-  AS RESTRICTIVE
-  FOR SELECT
-  USING (hidden_at IS NULL OR (SELECT public.is_admin()));
-
--- Same list as 20261121000070 plus the fields the admin drawer edits.
+-- Same list as 20261121000130 (which added price_range) plus the fields the
+-- admin drawer edits. scripts/__tests__/lockable-fields-never-shrink.test.mjs
+-- fails if a later definition drops one.
 -- bulk-update-restaurants drops every locked key from its writes
 -- (_shared/restaurantFieldLocks.ts keeps no list of its own).
 CREATE OR REPLACE FUNCTION public.restaurant_lockable_fields()
@@ -96,6 +85,7 @@ SET search_path = public, pg_temp
 AS $$
   SELECT ARRAY[
     'description', 'website', 'phone', 'image_url', 'menu_url', 'cuisine', 'location', 'rating',
+    'price_range',
     'status', 'business_status', 'hours_json', 'opening', 'google_place_id', 'reservation_url'
   ]::text[];
 $$;

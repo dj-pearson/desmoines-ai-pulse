@@ -71,6 +71,9 @@ async function db(opts: { rls?: boolean } = {}): Promise<PGlite> {
   await pg.exec(await Deno.readTextFile(M("20260127000000_restaurant_blacklist.sql")));
   await pg.exec(await Deno.readTextFile(M("20261121000070_restaurant_locked_fields.sql")));
   await pg.exec(await Deno.readTextFile(M("20261121000140_restaurant_hide.sql")));
+  // The visitor-hiding policy and its RLS guard sort last, so a refusal there
+  // cannot block the rest of the release.
+  await pg.exec(await Deno.readTextFile(M("20261121000990_restaurants_hidden_rls.sql")));
   return pg;
 }
 
@@ -211,7 +214,7 @@ Deno.test("the drawer's fields are lockable, so an admin edit of them is a perso
   assert.deepEqual(Object.keys(m).sort(), ["business_status", "google_place_id", "hours_json", "reservation_url", "status"]);
 });
 
-Deno.test("the migration refuses a restaurants table without row level security", async () => {
+Deno.test("the hidden-row policy migration refuses a restaurants table without row level security", async () => {
   await assert.rejects(() => db({ rls: false }), /row level security is off/);
 });
 

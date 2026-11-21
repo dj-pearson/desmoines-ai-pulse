@@ -55,8 +55,11 @@ LANGUAGE sql
 IMMUTABLE
 SET search_path = public, pg_temp
 AS $$
-  SELECT ARRAY['description', 'website', 'phone', 'image_url', 'menu_url', 'cuisine', 'location', 'rating',
-               'hours_json', 'business_status']::text[];
+  SELECT ARRAY[
+    'description', 'website', 'phone', 'image_url', 'menu_url', 'cuisine', 'location', 'rating',
+    'price_range',
+    'status', 'business_status', 'hours_json', 'opening', 'google_place_id', 'reservation_url'
+  ]::text[];
 $$;
 
 -- ---------------------------------------------------------------------------
