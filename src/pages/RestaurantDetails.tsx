@@ -65,6 +65,7 @@ import { RestaurantDealsList } from "@/components/restaurants/RestaurantDeals";
 import { useRestaurantDeals, venuePageDeals } from "@/hooks/useDeals";
 import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
+import { ReportClosedControl } from "@/components/restaurants/ReportClosedControl";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
@@ -1158,6 +1159,14 @@ export default function RestaurantDetails() {
                 listingId={restaurant.id}
                 listingName={restaurant.name}
               />
+            </div>
+          )}
+
+          {/* WEB-FEAT-102: visitors can say a place has closed. Not shown once
+              it is closed for good; a temporary closure may still be final. */}
+          {!closedForGood && (
+            <div className="mb-8" data-testid="report-closed">
+              <ReportClosedControl restaurantId={restaurant.id} restaurantName={restaurant.name} />
             </div>
           )}
 
