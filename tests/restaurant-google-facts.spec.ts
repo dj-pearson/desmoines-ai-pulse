@@ -49,7 +49,9 @@ test('shows the Google rating with its count, the date it was checked and a link
   });
   await page.goto('/restaurants/lucca');
 
-  await expect(page.getByText('1,234 reviews, checked November 21, 2026').first()).toBeVisible();
+  // Visible matches only: the FAQ repeats the line inside a closed <details>,
+  // which now comes first in the DOM since the details tile went (WEB-UX-088).
+  await expect(page.getByText('1,234 reviews, checked November 21, 2026').filter({ visible: true }).first()).toBeVisible();
   const listing = page.getByRole('link', { name: 'See it on Google' });
   await expect(listing).toHaveAttribute('href', 'https://maps.google.com/?cid=4242');
   await expect(page.getByText('Rating from Google, 1,234 reviews, checked November 21, 2026')).toBeVisible();

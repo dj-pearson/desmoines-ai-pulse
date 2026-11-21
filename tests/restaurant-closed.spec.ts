@@ -127,7 +127,9 @@ test.describe('closed restaurant page', () => {
     await expect(page.getByRole('heading', { level: 1, name: BASE.name })).toBeVisible();
 
     await expect(page.getByRole('link', { name: /^Website$/ }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /^Call$/ })).toBeVisible();
+    // WEB-UX-088: the at-a-glance phone is the call link; there is no
+    // separate Call button to repeat it.
+    await expect(page.locator(`a[href="tel:${BASE.phone}"]`).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Reserve/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: 'Rate this place' })).toBeVisible();
     await expect(page.locator('a[href="#menu"]').first()).toBeVisible();
@@ -197,7 +199,7 @@ test.describe('closed restaurant page', () => {
       // at-a-glance facts and the Location heading both come after it.
       const noticeBox = await notice.boundingBox();
       const railBox = await rail.boundingBox();
-      const locationBox = await page.getByRole('heading', { name: /Location & Contact/ }).boundingBox();
+      const locationBox = await page.getByRole('heading', { name: 'Location', exact: true }).boundingBox();
       expect(noticeBox && railBox && locationBox).toBeTruthy();
       expect(railBox!.y).toBeGreaterThan(noticeBox!.y + noticeBox!.height - 1);
       expect(railBox!.y).toBeLessThan(locationBox!.y);
