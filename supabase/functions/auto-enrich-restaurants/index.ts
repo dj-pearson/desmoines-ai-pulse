@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
+import { isUnknownColumnError } from "../_shared/postgrestErrors.ts";
+import { enrichDueFilter, enrichRetryCutoff } from "../_shared/restaurantEnrich.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,12 +60,27 @@ serve(async (req) => {
 
     // Find restaurants with missing critical data
     // Priority order: phone, website, rating, image, description, coordinates
-    const { data: incompleteRestaurants, error: fetchError } = await supabase
-      .from('restaurants')
-      .select('id, name, phone, website, rating, image_url, description, latitude, longitude, created_at, data_quality_score')
-      .or('phone.is.null,website.is.null,rating.is.null,image_url.is.null,description.is.null,latitude.is.null,longitude.is.null')
-      .order(prioritizeNew ? 'created_at' : 'data_quality_score', { ascending: prioritizeNew ? false : true })
-      .limit(batchSize);
+    //
+    // WEB-BE-066: rows bulk-update-restaurants stamped enrich_checked_at in
+    // the last 30 days are skipped. Google answered for them and could not
+    // fill the gap, and without the stamp the same rows headed every batch.
+    // If the column is not there yet (function deployed before migration
+    // 20261121000030), the selection falls back to what it was.
+    const selectIncomplete = (withStamp: boolean) => {
+      let q = supabase
+        .from('restaurants')
+        .select('id, name, phone, website, rating, image_url, description, latitude, longitude, created_at, data_quality_score')
+        .or('phone.is.null,website.is.null,rating.is.null,image_url.is.null,description.is.null,latitude.is.null,longitude.is.null');
+      if (withStamp) q = q.or(enrichDueFilter(enrichRetryCutoff()));
+      return q
+        .order(prioritizeNew ? 'created_at' : 'data_quality_score', { ascending: prioritizeNew ? false : true })
+        .limit(batchSize);
+    };
+    let { data: incompleteRestaurants, error: fetchError } = await selectIncomplete(true);
+    if (fetchError && isUnknownColumnError(fetchError)) {
+      console.warn('enrich_checked_at not present yet; selecting without it');
+      ({ data: incompleteRestaurants, error: fetchError } = await selectIncomplete(false));
+    }
 
     if (fetchError) {
       throw new Error(`Failed to fetch incomplete restaurants: ${fetchError.message}`);

@@ -29,6 +29,14 @@ import {
   pickConfidentPlace,
   placeLookupQuery,
 } from '../_shared/placeLookup.ts'
+import {
+  applyEnrichTargets,
+  descriptionUpdate,
+  ENRICH_SELECT,
+  parseCursor,
+  parseRestaurantIds,
+  pickNamedSearchHit,
+} from '../_shared/restaurantEnrich.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -89,7 +97,11 @@ interface RestaurantUpdate {
    *  absent - never a raw pass-through of whatever Places returned. */
   business_status?: BusinessStatus;
   hours_json?: StoredHours;
-  enhanced: string;
+  /** WEB-BE-066. Added by migration 20261121000030; guarded like the rest.
+   *  Stamped whenever Google answered for the row, so a row Google cannot
+   *  complete stops heading the daily auto-enrich batch. */
+  enrich_checked_at?: string;
+  enhanced?: string;
   updated_at: string;
 }
 
@@ -558,7 +570,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null, placeLookup = false } = await req.json()
+    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null, placeLookup = false, restaurantIds: rawRestaurantIds = null } = await req.json()
     // Each row is a paid Google Places lookup, and batchSize went straight into
     // .limit(). 50 is the admin form's own max (RestaurantBulkUpdaterSimple.tsx,
     // and HOURS_BATCH_MAX in src/lib/restaurantHoursRefresh.ts).
@@ -598,16 +610,17 @@ serve(async (req) => {
       }
     }
 
-    // Get restaurants that need updating
-    let query = supabase
-      .from('restaurants')
-      .select('id, name, location, google_place_id, enhanced')
-      .limit(batchSize)
-
-    // Only get unenhanced restaurants unless force update is requested
-    if (!forceUpdate) {
-      query = query.or('enhanced.is.null,enhanced.neq.completed')
-    }
+    // WEB-BE-066. restaurantIds (optional; absent keeps the old selection)
+    // limits the run to the rows the caller picked: auto-enrich-restaurants
+    // sends the incomplete rows it chose, and they used to be ignored.
+    // Without ids the rows come in id order after afterId, and the response's
+    // lastId is the next cursor, so repeated force runs reach different rows
+    // instead of whichever ones an unordered select returned first.
+    const restaurantIds = parseRestaurantIds(rawRestaurantIds)
+    const query = applyEnrichTargets(
+      supabase.from('restaurants').select(ENRICH_SELECT),
+      { restaurantIds, forceUpdate: !!forceUpdate, afterId: parseCursor(afterId), batchSize },
+    )
 
     const { data: restaurants, error: fetchError } = await query
 
@@ -627,6 +640,8 @@ serve(async (req) => {
           success: true, 
           message: 'No restaurants found that need updating',
           updated: 0,
+          // WEB-BE-066: the cursor reached the end; start again without afterId.
+          lastId: null,
           runId: emptyRun.runId
         }),
         { 
@@ -640,6 +655,9 @@ serve(async (req) => {
 
     const updates: RestaurantUpdate[] = []
     const errors: Array<{ id: string; name: string; error: string }> = []
+    // WEB-BE-066: rows where every search answered and no hit carried the
+    // restaurant's name. They are left alone apart from enrich_checked_at.
+    let unmatched = 0
 
     // WEB-BE-043. The Google Places call is what goes dark here - a quota
     // exhaustion or a retired key makes every lookup come back empty and the
@@ -655,6 +673,11 @@ serve(async (req) => {
 
         let placeId = restaurant.google_place_id
         let placeDetails: GooglePlaceDetails | null = null
+
+        // Whether Google gave an answer for this row (a search that returned,
+        // or details that loaded). A Places error is not an answer, and the
+        // row is tried again next run.
+        let googleAnswered = false
 
         // If no Google Place ID, search for it first
         if (!placeId && restaurant.name && restaurant.location) {
@@ -693,19 +716,17 @@ serve(async (req) => {
             })
 
             if (searchResponse.ok) {
+              googleAnswered = true
               const searchData = await searchResponse.json()
               console.log(`Search results for "${searchQuery}":`, JSON.stringify(searchData, null, 2))
               
-              if (searchData.places && searchData.places.length > 0) {
-                // Look for the best match (prefer exact name matches)
-                let bestMatch = searchData.places[0]
-                for (const place of searchData.places) {
-                  if (place.displayName?.text?.toLowerCase().includes(restaurant.name.toLowerCase().split(' ')[0])) {
-                    bestMatch = place
-                    break
-                  }
-                }
-                
+              // WEB-BE-066: a hit counts only when its name is the
+              // restaurant's. This took places[0] (or the first hit sharing
+              // the first word), and the details of that place then
+              // overwrote location, phone and website.
+              const places: PlaceCandidate[] = Array.isArray(searchData.places) ? searchData.places : []
+              const bestMatch = pickNamedSearchHit(restaurant.name, places)
+              if (bestMatch?.id) {
                 placeId = bestMatch.id
                 console.log(`Found place ID: ${placeId} for restaurant: ${restaurant.name}`)
                 break // Exit the search loop once we find a match
@@ -722,6 +743,19 @@ serve(async (req) => {
             console.log(`Found place ID for ${restaurant.name}: ${placeId}`)
           } else {
             console.log(`No place ID found for ${restaurant.name}`)
+            if (googleAnswered) {
+              // Left alone: no enhanced flag, no content. Only the stamp, so
+              // the daily job stops picking this row first.
+              unmatched++
+              updates.push({
+                id: restaurant.id,
+                name: restaurant.name,
+                enrich_checked_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              await new Promise(resolve => setTimeout(resolve, 100))
+              continue
+            }
           }
         }
 
@@ -741,6 +775,7 @@ serve(async (req) => {
           })
 
           if (detailsResponse.ok) {
+            googleAnswered = true
             placeDetails = await detailsResponse.json()
             console.log(`Retrieved details for ${restaurant.name}`)
           } else {
@@ -749,12 +784,13 @@ serve(async (req) => {
         }
 
         // Build the update object
-        const update: any = {
+        const update: RestaurantUpdate = {
           id: restaurant.id,
           name: restaurant.name,
           enhanced: 'completed',
           updated_at: new Date().toISOString()
         }
+        if (googleAnswered) update.enrich_checked_at = new Date().toISOString()
 
         if (placeDetails) {
           console.log(`Processing place details for ${restaurant.name}:`, {
@@ -840,13 +876,11 @@ serve(async (req) => {
             update.rating = Math.round(placeDetails.rating * 10) / 10
           }
           
-          // Use editorial summary as description if available and replace "Discovered via Google Places API"
-          if (placeDetails.editorialSummary?.text) {
-            update.description = placeDetails.editorialSummary.text
-          } else if (restaurant.description === 'Discovered via Google Places API' || !restaurant.description) {
-            // If no editorial summary but current description is generic or null, set to null
-            update.description = null
-          }
+          // WEB-BE-066: Google's editorial summary when it has one, and
+          // otherwise the stored description stays. This used to write null
+          // whenever there was no summary, and since description was not in
+          // the select, it did so to every description it touched.
+          Object.assign(update, descriptionUpdate(restaurant.description, placeDetails.editorialSummary?.text))
           
           if (placeDetails.nationalPhoneNumber) {
             update.phone = placeDetails.nationalPhoneNumber
@@ -975,6 +1009,8 @@ serve(async (req) => {
             // the whole update.
             business_status,
             hours_json,
+            // WEB-BE-066: added by 20261121000030.
+            enrich_checked_at,
             ...legacyUpdate
           } = update
           const retry = await supabase
@@ -992,7 +1028,9 @@ serve(async (req) => {
             name: update.name,
             error: updateError.message
           })
-        } else {
+        } else if (update.enhanced) {
+          // A stamp-only write for an unmatched row is not an enrichment;
+          // auto-enrich-restaurants reads `updated` as its success count.
           updatedCount++
           console.log(`Successfully updated restaurant ${update.name}`)
         }
@@ -1002,6 +1040,7 @@ serve(async (req) => {
       ctx.processed(updatedCount)
       ctx.failed(errors.length)
       ctx.meta({
+        unmatched,
         sources: {
           'google-places': {
             fetched: restaurants.length,
@@ -1030,6 +1069,10 @@ serve(async (req) => {
       message: `Bulk update completed`,
       processed: restaurants.length,
       updated: updatedCount,
+      // WEB-BE-066, both new keys: rows whose search found no hit with the
+      // restaurant's name, and the cursor for the next run (pass as afterId).
+      unmatched,
+      lastId: restaurants[restaurants.length - 1].id,
       errors: errors.length,
       errorDetails: errors.length > 0 ? errors : undefined
     }
@@ -1043,7 +1086,7 @@ serve(async (req) => {
       resource: "restaurants",
       severity: "medium",
       ipAddress: auditIp(req),
-      details: { processed: restaurants.length, updated: updatedCount, errors: errors.length },
+      details: { processed: restaurants.length, updated: updatedCount, unmatched, errors: errors.length },
     });
 
     return new Response(
