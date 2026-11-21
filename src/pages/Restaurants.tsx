@@ -81,8 +81,11 @@ const sortOptions = [
 const SORT_SELECT_OPTIONS: DeferredSelectOption[] = sortOptions.map(({ value, label, icon: Icon }) => ({
   value,
   label: (
-    <div className="flex items-center gap-2">
-      <Icon className="h-4 w-4" />
+    // nowrap: in a w-36 trigger "Recommended" broke as "Recommend / ed".
+    // The icon is dropped below sm so the trigger, the count and the list/map
+    // toggle share one row of the phone sticky bar (WEB-UX-086).
+    <div className="flex items-center gap-2 whitespace-nowrap">
+      <Icon className="hidden sm:block h-4 w-4" />
       {label}
     </div>
   ),
@@ -732,19 +735,30 @@ export default function Restaurants() {
             {/* Search Bar - The Main Event */}
             <div className="max-w-3xl mx-auto">
               <div className="relative">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 z-10" />
+                <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 z-10" />
                 <Input
                   ref={searchInputRef}
                   type="text"
                   placeholder={isMobile ? "Search restaurants..." : "Search restaurants or cuisines..."}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
+                  enterKeyHint="search"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && searchInput.trim()) {
-                      addRecentSearch('restaurants', searchInput);
-                    }
+                    // SearchAutocomplete's own listener runs first and
+                    // prevents default when Enter picks a suggestion.
+                    if (e.key !== 'Enter' || e.nativeEvent.defaultPrevented) return;
+                    if (searchInput.trim()) addRecentSearch('restaurants', searchInput);
+                    // Below sm there is no Search button, so Enter is the
+                    // way to skip the debounce.
+                    setFilters((prev) => ({ ...prev, search: searchInput }));
                   }}
-                  className={`w-full h-12 sm:h-14 pl-14 ${searchInput ? "pr-48" : "pr-36"} text-base md:text-lg bg-white border-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-slate-500`}
+                  // WEB-UX-086: on a phone the padding reserved 192px for the
+                  // clear button and a Search button, leaving about 110px to
+                  // type in at 390px. Below sm the Search button is gone (the
+                  // 400ms debounce already searches as you type, and Enter
+                  // searches at once), so only the 44px clear button is
+                  // reserved: 258px to type in at 390px.
+                  className={`w-full h-12 sm:h-14 pl-11 sm:pl-14 ${searchInput ? "pr-14 sm:pr-48" : "pr-4 sm:pr-36"} text-base md:text-lg bg-white border-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-slate-500`}
                   aria-label="Search restaurants"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -766,7 +780,7 @@ export default function Restaurants() {
                     </Button>
                   )}
                   <Button
-                    className="h-10 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-5 font-semibold"
+                    className="hidden sm:inline-flex h-10 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-5 font-semibold"
                     onClick={() => {
                       if (searchInput.trim()) addRecentSearch('restaurants', searchInput);
                       setFilters((prev) => ({ ...prev, search: searchInput }));
@@ -800,10 +814,11 @@ export default function Restaurants() {
                   disabled={restaurants.length === 0}
                   className={`${heroPill} min-w-11`}
                 >
-                  <Shuffle className="h-3.5 w-3.5 sm:mr-1.5" aria-hidden="true" />
-                  {/* Icon-only on a phone, so the whole row fits on one line
-                      and the first card stays in the first viewport. */}
-                  <span className="sr-only sm:not-sr-only">Surprise Me</span>
+                  <Shuffle className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                  {/* Labelled at every width (WEB-UX-086). It was icon-only on
+                      a phone to keep this row on one line; with the list/map
+                      toggle moved to the sticky bar the label fits. */}
+                  Surprise Me
                 </Button>
                 {/* A link, not a toggle (item 2): the open-now page is the one
                     place that checks hours against the clock. */}
@@ -819,37 +834,6 @@ export default function Restaurants() {
                     an editorial name. An old ?featured=1 link still works and
                     shows a "Sponsored only" chip. */}
 
-                {/* View Mode Toggle - 44px at every breakpoint (item 11) */}
-                <div className="flex items-center rounded-full bg-white/15 p-0.5" role="group" aria-label="Results view">
-                  <Button
-                    onClick={() => setViewMode("list")}
-                    variant="ghost"
-                    size="icon"
-                    aria-pressed={viewMode === "list"}
-                    className={`h-11 w-11 rounded-full ${
-                      viewMode === "list"
-                        ? "bg-white/30 text-white"
-                        : "text-white/70 hover:text-white hover:bg-white/10"
-                    }`}
-                    aria-label="List view"
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    onClick={() => setViewMode("map")}
-                    variant="ghost"
-                    size="icon"
-                    aria-pressed={viewMode === "map"}
-                    className={`h-11 w-11 rounded-full ${
-                      viewMode === "map"
-                        ? "bg-white/30 text-white"
-                        : "text-white/70 hover:text-white hover:bg-white/10"
-                    }`}
-                    aria-label="Map view"
-                  >
-                    <Map className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
             </div>
           </div>
@@ -883,17 +867,41 @@ export default function Restaurants() {
             {/* ONE sticky bar (item 6): filter pills, sort, the count and the
                 removable chips, in list and map view alike. */}
             <div data-hub-controls="" className="sticky top-16 z-30 -mx-4 px-4 py-1.5 sm:py-2 space-y-1.5 bg-gray-50/95 dark:bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:supports-[backdrop-filter]:bg-background/80">
-              {/* Pills and sort share one row at every width; the pills
-                  scroll inside their own box, so the bar is two short lines
-                  on a phone rather than three. */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
+              {/* WEB-UX-086. One grid, two arrangements, so every control
+                  exists once in the DOM. Below lg the four filter pills take
+                  the whole first row (Rating and Dietary were off-screen
+                  beside the sort select), and the count, sort and list/map
+                  toggle share the second. From lg, pills, sort and toggle
+                  sit on one row with the count under them; at sm and md the
+                  pills were squeezed to about 300px beside the other two. The
+                  toggle lived only in the hero, so switching to the map meant
+                  scrolling back up for it.
+
+                  Height: two 44px rows plus one scrolling chip row is about
+                  156px at 390px with three filters on, where wrapped chips
+                  made the bar about 240px. restaurants-hub-phone-controls
+                  .spec.ts holds it at 160px or less. */}
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1.5 sm:gap-x-3">
+                <div className="col-span-3 lg:col-span-1 min-w-0">
                   <RestaurantInlineFilters
                     filters={filters}
                     onFiltersChange={setFilters}
                     availableCuisines={filterOptions.cuisines}
                   />
                 </div>
+                {/* Results count, visible at all viewports (WEB-UX-003).
+                    WEB-PERF-029: the "of N" is totalCount, not the length of
+                    the fetched array, which is one page. In map view the map
+                    carries its own count ("N of M mapped"), so there is one
+                    total on screen, not two (pass 2 WP1 item 11). */}
+                {viewMode === "list" && (
+                  <p
+                    className="row-start-2 col-start-1 lg:col-span-3 min-w-0 text-xs leading-4 sm:text-sm sm:leading-5 text-muted-foreground"
+                    data-results-count=""
+                  >
+                    {counterText}
+                  </p>
+                )}
                 <DeferredSelect
                   value={filters.sortBy}
                   onValueChange={(value) =>
@@ -902,22 +910,55 @@ export default function Restaurants() {
                   options={SORT_SELECT_OPTIONS}
                   placeholder="Sort by"
                   aria-label="Sort restaurants"
-                  triggerClassName="w-36 sm:w-40 min-h-11 shrink-0 bg-white dark:bg-card rounded-xl text-sm"
+                  triggerClassName="row-start-2 col-start-2 lg:row-start-1 w-auto sm:w-44 min-h-11 gap-2 bg-white dark:bg-card rounded-xl text-sm"
                 />
+                {/* View Mode Toggle - 44px at every breakpoint (item 11) */}
+                <div
+                  className="row-start-2 col-start-3 lg:row-start-1 flex items-center overflow-hidden rounded-xl bg-white dark:bg-card ring-1 ring-inset ring-border"
+                  role="group"
+                  aria-label="Results view"
+                >
+                  <Button
+                    onClick={() => setViewMode("list")}
+                    variant="ghost"
+                    size="icon"
+                    aria-pressed={viewMode === "list"}
+                    className={`h-11 w-11 rounded-none ${
+                      viewMode === "list"
+                        ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                    aria-label="List view"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => setViewMode("map")}
+                    variant="ghost"
+                    size="icon"
+                    aria-pressed={viewMode === "map"}
+                    className={`h-11 w-11 rounded-none ${
+                      viewMode === "map"
+                        ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                    aria-label="Map view"
+                  >
+                    <Map className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
-              {/* Results count — visible at all viewports (WEB-UX-003).
-                  WEB-PERF-029: the "of N" is totalCount, not the length of
-                  the fetched array, which is one page. */}
-              {/* In map view the map carries its own count ("N of M mapped"),
-                  so there is one total on screen, not two (pass 2 WP1 item 11). */}
-              {viewMode === "list" && (
-                <p className="text-sm text-muted-foreground" data-results-count="">
-                  {counterText}
-                </p>
-              )}
+              {/* One row that scrolls sideways, as on /events; wrapped chips
+                  pinned up to three extra rows on a phone (WEB-UX-086). */}
               {restaurantChips.length > 0 && (
-                <ActiveFilterChips onClearAll={handleClearFilters} chips={restaurantChips} />
+                <ActiveFilterChips
+                  onClearAll={handleClearFilters}
+                  chips={restaurantChips}
+                  layout="scroll"
+                  showLabel={isAboveSm}
+                  className="-mx-4 px-4"
+                />
               )}
             </div>
 
