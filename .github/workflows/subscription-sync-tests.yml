@@ -251,6 +251,7 @@ jobs:
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-closure-reports.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-changes.test.ts
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-opening-progress.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-copy-provenance.test.ts
       # WEB-BE-074. A restaurant merge copied nothing from the hidden row, left
       # its owner's claim on it, and preferred a long scraped row over the
       # Google-linked one. Pins the column fill, the survivor rule, the claim

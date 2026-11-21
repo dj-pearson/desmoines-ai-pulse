@@ -67,6 +67,7 @@ import { useRestaurantDeals, venuePageDeals } from "@/hooks/useDeals";
 import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { ReportClosedControl } from "@/components/restaurants/ReportClosedControl";
+import { aiCopyIsFresh, aiGeneratedLine, descriptionSourceLabel } from "@/lib/restaurantCopy";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
@@ -539,8 +540,15 @@ export default function RestaurantDetails() {
   const statusLine = liveStatus ? formatOpenStatusLine(liveStatus) : null;
   const restaurantHoursLine =
     statusLine && (liveStatus?.closesAt || liveStatus?.nextOpensAt) ? `${statusLine} CT` : statusLine;
+  // WEB-BE-077: AI copy carries its date, is hidden once over a year old, and
+  // is never shown for a shut place (it may describe the place as open).
+  const copyMeta = restaurant as { description_source?: string | null; geo_generated_at?: string | null };
+  const geoGeneratedAt = copyMeta.geo_generated_at ?? null;
+  const geoFresh = aiCopyIsFresh(geoGeneratedAt);
+  const aboutSourceLabel = descriptionSourceLabel(copyMeta.description_source);
+  const showWriteup = !isShut && !!restaurant.ai_writeup && aiCopyIsFresh(restaurant.writeup_generated_at);
   const showLocalGuide =
-    !isShut && !!(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0));
+    !isShut && geoFresh && !!(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0));
   const menuCapturedAt = hasCapturedMenu && !closedForGood ? centralDate(menuData?.menu?.captured_at) : null;
   const menuFromTheirSite =
     !!menuData?.menu && (menuData.menu.source_type === "scraped" || !!safeWebUrl(menuData.menu.source_url));
@@ -908,7 +916,7 @@ export default function RestaurantDetails() {
                   Deals
                 </a>
               )}
-              {restaurant.ai_writeup && (
+              {showWriteup && (
                 <a href="#writeup" className={chipClass}>
                   Our take
                 </a>
@@ -1057,6 +1065,11 @@ export default function RestaurantDetails() {
                     defaultOpen={true}
                   >
                     <div className="pt-2">
+                      {aboutSourceLabel && (
+                        <p className="mb-2 text-xs font-medium text-muted-foreground" data-description-source="">
+                          {aboutSourceLabel}
+                        </p>
+                      )}
                       <p className="text-gray-700 leading-relaxed text-lg">
                         {aboutText}
                       </p>
@@ -1100,8 +1113,9 @@ export default function RestaurantDetails() {
                 </>
               )}
 
-              {/* Our take (AI-assisted) */}
-              {restaurant.ai_writeup && (
+              {/* Our take (AI-assisted). Not for a shut place, and not once
+                  over a year old (WEB-BE-077). */}
+              {showWriteup && (
                 <>
                   <Separator className="my-8" />
                   <div id="writeup" className="scroll-mt-20">
@@ -1130,6 +1144,7 @@ export default function RestaurantDetails() {
                         label="AI-assisted"
                         tooltip="Drafted with AI from public information. It can be wrong or out of date, so check hours, prices and details with the restaurant."
                       />
+                      <p className="mt-2 text-xs text-muted-foreground">{aiGeneratedLine(geoGeneratedAt)}</p>
                       {restaurant.geo_summary && (
                         <p className="mt-3 text-gray-700 leading-relaxed">{restaurant.geo_summary}</p>
                       )}
@@ -1192,7 +1207,7 @@ export default function RestaurantDetails() {
 
           {/* geo_faq: AI-written, shown as such, and kept out of the FAQPage
               schema (WP3.1). Not for a place that has closed. */}
-          {!isShut && aiFaqs.length > 0 && (
+          {!isShut && geoFresh && aiFaqs.length > 0 && (
             <section aria-labelledby="ai-answers-heading" className="mb-8 rounded-2xl bg-card p-6 shadow-lg">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 id="ai-answers-heading" className="text-xl font-semibold text-foreground">
@@ -1203,6 +1218,7 @@ export default function RestaurantDetails() {
                   tooltip="Written with AI from public information. Check anything that matters with the restaurant."
                 />
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">{aiGeneratedLine(geoGeneratedAt)}</p>
               <dl className="mt-4 divide-y divide-border">
                 {aiFaqs.map((faq) => (
                   <div key={faq.question} className="py-3">

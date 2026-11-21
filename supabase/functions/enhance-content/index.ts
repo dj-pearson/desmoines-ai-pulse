@@ -92,7 +92,11 @@ serve(async (req) => {
     
     console.log(`Enhancing ${contentType} with ID: ${contentId}`);
     
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // WEB-BE-077: names this function to the copy-provenance trigger, which
+    // labels a description it writes as AI-assisted.
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { 'x-actor': 'enhance-content' } },
+    });
     // Before the model call: an unknown type still fails with the same 500 it
     // always did, and now without paying for a completion first.
     const tableName = getTableName(contentType);

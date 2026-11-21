@@ -274,6 +274,9 @@ const PENDING_MIGRATIONS = [
   // detail column (dropped and retried on 42703 until applied).
   { table: 'restaurant_changes', migration: '20261121000110' },
   { table: 'restaurants', column: 'content_changed_at', migration: '20261121000110' },
+  // WEB-BE-077: optional detail columns, dropped and retried until applied.
+  { table: 'restaurants', column: 'description_source', migration: '20261121000160' },
+  { table: 'restaurants', column: 'geo_generated_at', migration: '20261121000160' },
   { rpc: 'report_restaurant_closed', migration: '20261121000030' },
   { rpc: 'resolve_closure_review', migration: '20261121000030' },
   // WEB-BE-069: restaurant field locks. ContentEditDialog reads locked_fields
