@@ -44,6 +44,7 @@ const EXPECTED_MAX_AGE_HOURS: Record<string, number> = {
   'business-claims-health': 48,         // daily -> 2 days (WEB-ADS-047)
   'bulk-update-restaurants-hours': 48,  // restaurant-hours-refresh, daily -> 2 days
   'restaurant-place-lookup': 48,        // daily -> 2 days (WEB-BE-064)
+  'subscription-reconcile': 48,         // daily -> 2 days (WEB-BE-062)
   'dedupe-content': 24 * 14,           // weekly (Mon 03:15) -> 2 weeks (WEB-BE-075)
   // Hourly slices on Tuesdays (WEB-BE-071). A slice with a failed restaurant
   // is 'partial', not 'success', so the window is two full weeks of slices.

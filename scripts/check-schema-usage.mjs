@@ -94,6 +94,13 @@ const PENDING_MIGRATIONS = [
   // Per-status attendance counts without the attendee list, so the SELECT policy
   // on event_attendance can be restricted to a user's own rows (WEB-SEC-025).
   { rpc: 'event_attendance_tallies', migration: '20260827000002' },
+  // The nightly Stripe reconciliation (WEB-BE-062). Until the migration is
+  // applied each call is PGRST202 and subscription-reconcile records a FAILED
+  // run (the candidate read throws), which is what the window should look like.
+  { rpc: 'subscription_reconcile_candidates', migration: '20261122000020' },
+  { rpc: 'subscription_reconcile_backlog', migration: '20261122000020' },
+  { rpc: 'apply_subscription_reconciliation', migration: '20261122000020' },
+  { rpc: 'note_subscription_reconcile_check', migration: '20261122000020' },
   // The venue image that lets the crawler stop downloading a near-duplicate per
   // event (WEB-OPS-022). Until it exists, venueImage.ts's read 42703s on every
   // call and falls back to per-event images - the cost this module exists to

@@ -589,6 +589,12 @@ jobs:
       # BEFORE INSERT triggers, the -1-is-unlimited rule, the shared 14-day
       # grace window, and the entitlement filter on the nightly job.
       - run: deno test --allow-read supabase/functions/_tests/plan-limit-enforcement.test.ts
+      # WEB-BE-062. active/trialing were entitled forever and nothing compared a
+      # row with Stripe. Runs the SQL predicate against the TypeScript one in
+      # PGlite, the reconciliation RPCs, and the nightly reconciler with a
+      # stubbed Stripe client (an error writes nothing).
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/subscription-entitlement-expiry.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/subscription-reconcile.test.ts
       # WEB-FEAT-019. The signup promised a confirmation nothing sent, an
       # unsubscribed address could never come back, and the weekly digest read
       # this table only for a token while ignoring the status - so the

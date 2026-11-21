@@ -23,6 +23,7 @@ import {
   assertRejects,
 } from 'jsr:@std/assert@1';
 import {
+  ACTIVE_GRACE_DAYS,
   GRACE_PERIOD_DAYS,
   hasFeatureAccess,
   resolveEntitledTiers,
@@ -34,6 +35,9 @@ const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
 const MIGRATION = await read('supabase/migrations/20260918000001_enforce_plan_limits.sql');
 const ALERTS = await read('supabase/functions/saved-search-alerts/index.ts');
 const HARDENING = await read('supabase/migrations/20261009000001_favorites_cap_hardening.sql');
+// WEB-BE-062: the current definition of entitled_plan_limit and the predicate.
+const EXPIRY = await read('supabase/migrations/20261122000020_subscription_entitlement_expiry.sql');
+const HOOK = await read('src/hooks/useSubscription.ts');
 
 // --------------------------------------------------------------------------
 // The triggers
@@ -120,6 +124,30 @@ Deno.test('the grace window matches the one _shared/entitlements.ts applies', ()
   assert(/us\.status IN \('active', 'trialing'\)/.test(MIGRATION));
 });
 
+Deno.test('all three copies agree on both windows (WEB-BE-062)', () => {
+  // The SQL predicate is the server's rule; entitlements.ts and the web hook
+  // mirror it. The PGlite test runs SQL and TS over the same rows; this pins
+  // the constants, including the hook's, which no Deno test can import.
+  assertEquals(ACTIVE_GRACE_DAYS, 3);
+  assert(
+    new RegExp(`WHEN p_status IN \\('active', 'trialing'\\)\\s*THEN p_now <= p_current_period_end \\+ interval '${ACTIVE_GRACE_DAYS} days'`)
+      .test(EXPIRY),
+    'the SQL active window must equal ACTIVE_GRACE_DAYS',
+  );
+  assert(
+    new RegExp(`WHEN p_status = 'past_due'\\s*THEN p_now <= p_current_period_end \\+ interval '${GRACE_PERIOD_DAYS} days'`)
+      .test(EXPIRY),
+    'the SQL past_due window must equal GRACE_PERIOD_DAYS',
+  );
+  assert(new RegExp(`export const ACTIVE_GRACE_DAYS = ${ACTIVE_GRACE_DAYS};`).test(HOOK), 'useSubscription ACTIVE_GRACE_DAYS');
+  assert(new RegExp(`export const GRACE_PERIOD_DAYS = ${GRACE_PERIOD_DAYS};`).test(HOOK), 'useSubscription GRACE_PERIOD_DAYS');
+  // entitled_plan_limit calls the predicate rather than carrying a copy.
+  assert(/CREATE OR REPLACE FUNCTION public\.entitled_plan_limit\(p_user_id uuid, p_limit_key text\)/.test(EXPIRY));
+  assert(/AND public\.subscription_row_entitled\(us\.status, us\.current_period_end\)\n\s*\)/.test(EXPIRY));
+  assert(/CASE WHEN bool_or\(lim = -1\) THEN -1 ELSE max\(lim\) END/.test(EXPIRY), 'unlimited still wins');
+  assertFalse(/GRANT EXECUTE ON FUNCTION public\.entitled_plan_limit\(uuid, text\) TO PUBLIC/.test(EXPIRY));
+});
+
 Deno.test('the resolver can see subscriptions the caller cannot', () => {
   // Under RLS a user reads only their own user_subscriptions row, and a trigger
   // that cannot see it reads every paying user as free.
@@ -148,10 +176,12 @@ function fakeSupabase(rows: unknown[] | null, error: unknown = null) {
   };
 }
 
+// A paid period that has not ended. WEB-BE-062: an active row with no period
+// end no longer counts, so the fixture carries one.
 const ACTIVE = (userId: string, plan: string) => ({
   user_id: userId,
   status: 'active',
-  current_period_end: null,
+  current_period_end: new Date(Date.now() + 20 * 86400_000).toISOString(),
   plan: { name: plan },
 });
 
@@ -177,6 +207,16 @@ Deno.test('a past_due row beyond the grace window does not keep alerts alive', a
   const tiers = await resolveEntitledTiers(
     // deno-lint-ignore no-explicit-any
     fakeSupabase([{ user_id: 'u1', status: 'past_due', current_period_end: longAgo, plan: { name: 'insider' } }]) as any,
+    ['u1'],
+  );
+  assertFalse(hasFeatureAccess(tiers.get('u1') ?? 'free', 'create_alerts'));
+});
+
+Deno.test('an active row 10 days past its period end does not keep alerts alive (WEB-BE-062)', async () => {
+  const tenDaysAgo = new Date(Date.now() - 10 * 86400_000).toISOString();
+  const tiers = await resolveEntitledTiers(
+    // deno-lint-ignore no-explicit-any
+    fakeSupabase([{ user_id: 'u1', status: 'active', current_period_end: tenDaysAgo, plan: { name: 'insider' } }]) as any,
     ['u1'],
   );
   assertFalse(hasFeatureAccess(tiers.get('u1') ?? 'free', 'create_alerts'));

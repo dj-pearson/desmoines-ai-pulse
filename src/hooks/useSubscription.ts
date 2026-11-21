@@ -148,24 +148,36 @@ export function resolveHighestSubscription(
 export const GRACE_PERIOD_DAYS = 14;
 
 /**
- * The instant premium access lapses for a row. For past_due rows this is the
- * paid period end plus the grace window; for other statuses it is the period
- * end itself. A missing period end is treated as the epoch (i.e. lapsed).
+ * Days an active or trialing row keeps premium access after its
+ * current_period_end (WEB-BE-062). Without it, active meant "forever", and one
+ * missed cancellation webhook gave premium away for good. Mirrors
+ * ACTIVE_GRACE_DAYS in supabase/functions/_shared/entitlements.ts and
+ * public.subscription_row_entitled() in SQL.
+ */
+export const ACTIVE_GRACE_DAYS = 3;
+
+/**
+ * The instant premium access lapses for a row: the paid period end plus
+ * GRACE_PERIOD_DAYS for past_due, plus ACTIVE_GRACE_DAYS for active and
+ * trialing, and the period end itself for anything else. A missing period end
+ * is treated as the epoch (i.e. lapsed).
  */
 export function gracePeriodEnd(sub: UserSubscription): Date {
   const base = sub.current_period_end ? new Date(sub.current_period_end) : new Date(0);
   if (sub.status === "past_due") {
     base.setDate(base.getDate() + GRACE_PERIOD_DAYS);
+  } else if (sub.status === "active" || sub.status === "trialing") {
+    base.setDate(base.getDate() + ACTIVE_GRACE_DAYS);
   }
   return base;
 }
 
 /**
  * Whether a single subscription row currently grants premium entitlement:
- * `active` and `trialing` always do; `past_due` does only within the grace
- * window; `canceled`/`paused` never do. This is what gates premium features —
- * a failed renewal no longer instantly revokes access, and a row lapsed beyond
- * grace correctly stops granting a tier.
+ * `active`, `trialing` and `past_due` do until gracePeriodEnd(); `canceled`
+ * and `paused` never do. A row with no period end does not. The server applies
+ * the same rule (entitlements.ts and public.subscription_row_entitled), so
+ * this is the display of a decision made there, not a separate one.
  */
 export function isSubscriptionEntitled(
   sub: UserSubscription,
@@ -174,8 +186,8 @@ export function isSubscriptionEntitled(
   switch (sub.status) {
     case "active":
     case "trialing":
-      return true;
     case "past_due":
+      if (!sub.current_period_end) return false;
       return now.getTime() <= gracePeriodEnd(sub).getTime();
     default:
       return false;
