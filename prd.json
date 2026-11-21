@@ -15267,6 +15267,20 @@
       "priority": 3,
       "passes": true,
       "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. Related: WEB-UX-082 (open) covers dark-mode greys on this page generally. npx impeccable detect ran on 16 restaurant files and printed nothing, with its own caveat that tsx gets regex rules only. DONE 2026-11-21: the filtered empty state offers one 'Clear all filters' plus, when more than one filter is on, 'Remove \"<filter>\"' for the filter most likely narrowing the list (src/lib/narrowestFilterChip.ts: diet keyword, then rating, sponsored, price, cuisine, old-link area, search last; an ordered guess, stated as one, since the hub has no per-filter counts). The rating control reads 'Any' when unset and is one row of chips (slider removed; a labelled group). The detail skeleton mirrors the loaded blocks (breadcrumb, hero, at-a-glance lines, action row, body) in bg-muted with a dark pair. Hero card rounded-2xl (16px) with elevation once (shadow-md, border-0); the h1 is text-2xl on phones, breaks long words and clamps to three lines so it stays out of the badge row. Verified: vitest narrowestFilterChip 4/4; tests/restaurant-page-polish.spec.ts 2/2 (smoke lane; long name <= 3 lines and below the badge row, 16px radius; short-name control); negative control: old h1/hero classes -> long-name test fails (320px tall vs 122 max); restaurants-hub (rating group, no slider), hub-pass2, phone-controls, detail, detail-pass2, closed, report-closed 56/56 on a placeholder build; type ratchet clean (also fixed a type error in the WEB-BE-073 test)."
+    },
+    {
+      "id": "WEB-QA-064",
+      "title": "The required smoke lane's skip-link test fails about two runs in three on /events",
+      "description": "tests/page-headings.spec.ts:149 'the skip link moves keyboard focus past the header' failed 2 of 3 with --repeat-each=3 on a placeholder-env build of 4b52f6a (before the 2026-11-21 restaurant work) and failed on the 2026-11-22 full smoke run of c420f36 (passes sometimes on retry). It is in playwright.smoke.config.ts testMatch, the required lane, so it turns CI red at random. Find whether the test races hydration (focus taken before the skip link's handler mounts) or the page moves focus itself, and fix the cause rather than adding retries.",
+      "acceptanceCriteria": [
+        "The cause is named in the notes (test timing or a real focus bug), with the evidence",
+        "The test passes 20/20 with --repeat-each=20 on a production build",
+        "A negative control (skip link target removed) still turns it red",
+        "No retry or wait-for-timeout is added to make it pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-22 from the full smoke run after WEB-BE-062. Seen failing on the session base commit 4b52f6a, so it predates that day's work."
     }
   ]
 }
