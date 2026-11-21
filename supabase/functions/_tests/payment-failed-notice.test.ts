@@ -333,7 +333,7 @@ const codeOnly = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \
 function block(src: string, from: string, to: string): string {
   const a = src.indexOf(from);
   const b = src.indexOf(to, a + 1);
-  assert(a !== -1 && b > a, `block "${from}" not found; update this test`);
+  assert.ok(a !== -1 && b > a, `block "${from}" not found; update this test`);
   return src.slice(a, b);
 }
 
@@ -347,20 +347,20 @@ const NURTURE_COPIES = [
 for (const path of NURTURE_COPIES) {
   Deno.test(`dunning is sent as a transactional notice, deduped against lifecycle (${path})`, async () => {
     const dunning = codeOnly(block(await read(path), "// ── 2) Dunning", "// ── 3) Upgrade"));
-    assert(!/consented\(|hasMarketingConsent|messagingAllowed|lifecycle_signals/.test(dunning),
+    assert.ok(!/consented\(|hasMarketingConsent|messagingAllowed|lifecycle_signals/.test(dunning),
       "the dunning step reads marketing consent again");
-    assert(dunning.includes("sendNotice("), "dunning must use the transactional sender");
-    assert(!dunning.includes("sendStep("), "sendStep runs the marketing quality gate");
-    assert(dunning.includes("paymentFailedNoticeSentSince("), "dunning must check subscription-lifecycle's ledger");
-    assert(dunning.includes(".or(WEB_BILLED_FILTER)"), "the past_due query must list web-billed rows only");
-    assert(dunning.includes("if (!isWebBilled(d.platform)) continue;"), "store rows must be skipped per row too");
+    assert.ok(dunning.includes("sendNotice("), "dunning must use the transactional sender");
+    assert.ok(!dunning.includes("sendStep("), "sendStep runs the marketing quality gate");
+    assert.ok(dunning.includes("paymentFailedNoticeSentSince("), "dunning must check subscription-lifecycle's ledger");
+    assert.ok(dunning.includes(".or(WEB_BILLED_FILTER)"), "the past_due query must list web-billed rows only");
+    assert.ok(dunning.includes("if (!isWebBilled(d.platform)) continue;"), "store rows must be skipped per row too");
   });
 
   Deno.test(`the upgrade prompt is gated on recorded consent (${path})`, async () => {
     const src = await read(path);
     const upgrade = codeOnly(src.slice(src.indexOf("// ── 3) Upgrade")));
-    assert(/if \(!hasMarketingConsent\(p\.lifecycle_signals\)\) continue;/.test(upgrade));
-    assert(upgrade.includes("sendStep("), "the upgrade prompt is marketing and keeps the quality gate");
+    assert.ok(/if \(!hasMarketingConsent\(p\.lifecycle_signals\)\) continue;/.test(upgrade));
+    assert.ok(upgrade.includes("sendStep("), "the upgrade prompt is marketing and keeps the quality gate");
   });
 }
 
@@ -377,9 +377,9 @@ Deno.test("both nurture copies have the same dunning step", async () => {
 Deno.test("subscription-lifecycle's payment-failed case reads both ledgers", async () => {
   const src = codeOnly(await read("../subscription-lifecycle/index.ts"));
   const c = block(src, "case 'payment_failed':", "case 'cancel_in_stripe':");
-  assert(c.includes("paymentFailedNoticeSentSince("), "lifecycle would send after nurture already did");
-  assert(!c.includes("alreadyLogged("), "alreadyLogged reads only subscription_events");
-  assert(src.includes(".or(WEB_BILLED_FILTER)"), "lifecycle must list rows with the shared web-billed filter");
+  assert.ok(c.includes("paymentFailedNoticeSentSince("), "lifecycle would send after nurture already did");
+  assert.ok(!c.includes("alreadyLogged("), "alreadyLogged reads only subscription_events");
+  assert.ok(src.includes(".or(WEB_BILLED_FILTER)"), "lifecycle must list rows with the shared web-billed filter");
 });
 
 Deno.test("subscription-lifecycle sends payment_failed as transactional", async () => {
