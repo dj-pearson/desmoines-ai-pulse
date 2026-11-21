@@ -286,7 +286,7 @@ Deno.test("apply refuses a row that no longer holds that Stripe id, and writes n
 Deno.test("apply refuses a status the table does not hold", async () => {
   const pg = await db();
   const id = await sub(pg, { status: "active", end: at(-10 * DAY), stripeId: "sub_1" });
-  await assert.rejects(
+  await assert.rejects(() => 
     pg.query("SELECT public.apply_subscription_reconciliation($1, 'sub_1', $2::jsonb, '{}'::jsonb)", [
       id,
       JSON.stringify({ status: "mystery" }),
