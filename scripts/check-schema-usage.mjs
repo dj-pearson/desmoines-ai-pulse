@@ -255,6 +255,13 @@ const PENDING_MIGRATIONS = [
   // Until applied, the report control shows its retry error and the admin
   // queue shows "Could not load", never an empty queue.
   { table: 'restaurant_closure_reviews', migration: '20261121000010' },
+  // WEB-BE-074: the recent-merges list reads what each merge copied and which
+  // claims it moved, and the on-demand merge asks for the survivor rule. Until
+  // applied, the list shows "Could not load recent merges" (42703) and the form
+  // says the suggestion could not be loaded; merging itself still works.
+  { table: 'content_merges', column: 'filled_columns', migration: '20261121000080' },
+  { table: 'content_merges', column: 'moved_claims', migration: '20261121000080' },
+  { rpc: 'suggest_merge_survivor', migration: '20261121000080' },
   // WEB-BE-064: bulk-update-restaurants' placeLookup mode orders by and stamps
   // this column. Until applied, that mode 42703s and the run is recorded as
   // failed; the hours refresh does not read it.

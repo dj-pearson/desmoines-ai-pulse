@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw, GitMerge, X, ArrowLeftRight, Play } from "lucide-react";
+import { ManualMergeForm } from "@/components/admin/ManualMergeForm";
+import { RecentMergesList } from "@/components/admin/RecentMergesList";
+import { RECENT_MERGES_KEY, UNDO_SCOPE, errorText, mergeContent } from "@/hooks/useContentMerges";
 
 // content_merge_candidates / merge RPCs are not in the generated Supabase types
 // (WEB-AUTO-005), so reads/writes go through `as never` casts like JobHealthPanel.
@@ -39,6 +42,7 @@ function pct(n: number): string {
 
 export default function MergeReviewPanel() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   // Per-candidate orientation: when true the admin chose to keep the loser instead.
@@ -125,20 +129,14 @@ export default function MergeReviewPanel() {
     const loser = keepLoser ? c.survivor_id : c.loser_id;
     setBusy(c.id);
     try {
-      const { error: mErr } = await supabase.rpc("merge_duplicate_content" as never, {
-        p_content_type: c.content_type,
-        p_survivor: survivor,
-        p_loser: loser,
-        p_confidence: c.confidence,
-        p_decided_by: "admin",
-      } as never);
-      if (mErr) throw mErr;
-      toast({ title: "Merged", description: "The duplicate was merged. It can be reversed for 30 days." });
+      await mergeContent({ contentType: c.content_type, survivor, loser, confidence: c.confidence });
+      toast({ title: "Merged", description: `The duplicate was merged. ${UNDO_SCOPE}` });
       refetch();
+      queryClient.invalidateQueries({ queryKey: RECENT_MERGES_KEY });
     } catch (e) {
       toast({
         title: "Merge failed",
-        description: e instanceof Error ? e.message : "Unknown error",
+        description: errorText(e),
         variant: "destructive",
       });
     } finally {
@@ -266,6 +264,9 @@ export default function MergeReviewPanel() {
           );
         })}
       </div>
+
+      <ManualMergeForm />
+      <RecentMergesList />
     </Card>
   );
 }
