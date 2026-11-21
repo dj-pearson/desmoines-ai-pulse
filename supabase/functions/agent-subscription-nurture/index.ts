@@ -10,13 +10,15 @@
  * Daily, handles the highest-leverage revenue touchpoints:
  *   - trial_ending  — trialing subs within TRIAL_WINDOW_DAYS of period end.
  *   - dunning       — past_due subs (Stripe smart retries drive the actual
- *                     charge; we send an aligned reminder). A final-step
- *                     courtesy credit would be approval-gated (AOS-CORE-007),
- *                     never auto-applied.
+ *                     charge; we send an aligned reminder). Transactional:
+ *                     sent regardless of marketing consent, deduped against
+ *                     subscription-lifecycle (_shared/paymentFailedNotice.ts).
+ *                     A final-step courtesy credit would be approval-gated
+ *                     (AOS-CORE-007), never auto-applied.
  *   - upgrade_prompt — engaged free users, aligned to the paywall model.
  * Reads only subscription status + tier (no schema tightening). Frequency-
- * capped, consent-respecting, quality-gated. Conversion is measured by stamping
- * activated_at when the subscription converts after a send.
+ * capped; the upgrade prompt is consent-gated and quality-gated. Conversion is
+ * measured by stamping activated_at when the subscription converts after a send.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
@@ -26,6 +28,7 @@ import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 import { buildDunningEmail, buildUpgradePromptEmail } from "../_shared/billingLinks.ts";
+import { DUNNING_KIND, paymentFailedNoticeSentSince } from "../_shared/paymentFailedNotice.ts";
 import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 const AGENT_KEY = "subscription-nurture";
@@ -60,15 +63,6 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 function logErr(where: string, error: any, consequence: string): void {
   if (!error) return;
   console.error(`[${AGENT_KEY}] ${where} failed (${consequence}): ${error.message ?? error}`);
-}
-
-async function consented(supabase: Client, userId: string): Promise<{ email: string; allowed: boolean } | null> {
-  const { data, error } = await supabase.from("profiles").select("email, lifecycle_signals").eq("user_id", userId).maybeSingle();
-  // Fails closed already - a null result skips the user - but silently, so a
-  // broken profiles read looks exactly like nobody having consented.
-  logErr(`consented(${userId})`, error, "user skipped, no mail sent");
-  if (!data?.email) return null;
-  return { email: data.email, allowed: hasMarketingConsent(data.lifecycle_signals) };
 }
 
 async function cappedRecently(supabase: Client, userId: string, kind: string, gapDays: number): Promise<boolean> {
@@ -213,12 +207,24 @@ Deno.serve(async (req) => {
     // nobody being past due.
     if (pastDueError) throw new Error(`past_due subscriptions read failed: ${pastDueError.message}`);
     for (const d of (pastDue ?? []) as { user_id: string }[]) {
-      const c = await consented(supabase, d.user_id);
-      if (!c || !c.allowed) continue;
-      if (await cappedRecently(supabase, d.user_id, "dunning", DUNNING_GAP_DAYS)) continue;
+      // Transactional, like the trial notice above (owner decision 2026-11-22):
+      // no marketing-consent check and no quality gate. Email address only.
+      // Hard suppressions still apply inside sendEmail (bounce and complaint
+      // block transactional mail; unsubscribe does not).
+      const { data: profile, error: profileError } = await supabase.from("profiles").select("email").eq("user_id", d.user_id).maybeSingle();
+      if (profileError) {
+        console.error(`dunning notice: profile lookup failed for ${d.user_id}:`, profileError.message);
+        continue;
+      }
+      const email = (profile as { email?: string } | null)?.email;
+      if (!email) continue;
+      if (await cappedRecently(supabase, d.user_id, DUNNING_KIND, DUNNING_GAP_DAYS)) continue;
+      // subscription-lifecycle sends the same notice from its own ledger; this
+      // reads both so one failed invoice is not reported twice in a day.
+      if (await paymentFailedNoticeSentSince(supabase, d.user_id, new Date(now - DUNNING_GAP_DAYS * DAY).toISOString())) continue;
       // WEB-LEGAL-016: the link is /subscription, from _shared/billingLinks.ts.
       const dun = buildDunningEmail(SITE);
-      if (await sendStep(supabase, d.user_id, c.email, "dunning", dun.subject, dun.html, dun.text)) dunning++;
+      if (await sendNotice(supabase, d.user_id, email, DUNNING_KIND, dun.subject, dun.html, dun.text)) dunning++;
     }
 
     // ── 3) Upgrade prompts (engaged free users) ──────────────────────────
@@ -230,7 +236,9 @@ Deno.serve(async (req) => {
       .limit(300);
     if (freeEngagedError) throw new Error(`engaged free users read failed: ${freeEngagedError.message}`);
     for (const p of (freeEngaged ?? []) as { user_id: string; email: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[]) {
-      if (p.lifecycle_signals?.messagingAllowed === false) continue;
+      // Marketing: only an explicit messagingAllowed === true allows it
+      // (WEB-LEGAL-012). `=== false` read a never-classified user as consent.
+      if (!hasMarketingConsent(p.lifecycle_signals)) continue;
       // Only prompt users WITHOUT an active/trialing paid sub.
       //
       // FAILS CLOSED, and this is the second behaviour change. The comment here

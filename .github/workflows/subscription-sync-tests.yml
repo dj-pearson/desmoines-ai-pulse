@@ -183,6 +183,12 @@ jobs:
       # is a root deno.json with nodeModulesDir + an @types/node import and a
       # deno install step, which is a lot of machinery for one suite.
       - run: deno test --allow-read --allow-env --no-check supabase/functions/_tests/marketing-optout-agents.test.ts
+      # The payment-failed notice is transactional (owner decision 2026-11-22):
+      # an opted-out past_due customer gets it, an opted-out free member gets no
+      # upgrade prompt, bounces still block it, and subscription-nurture and
+      # subscription-lifecycle do not both mail one failed invoice. Same flags
+      # and same reason as the suite above: it runs an agent offline.
+      - run: deno test --allow-read --allow-env --no-check supabase/functions/_tests/payment-failed-notice.test.ts
       # XPLAT-007. The right of ACCESS must stay sourced from the same list as
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.
