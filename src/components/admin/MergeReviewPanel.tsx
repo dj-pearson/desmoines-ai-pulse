@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { RefreshCw, GitMerge, X, ArrowLeftRight, Play } from "lucide-react";
 import { ManualMergeForm } from "@/components/admin/ManualMergeForm";
 import { RecentMergesList } from "@/components/admin/RecentMergesList";
-import { RECENT_MERGES_KEY, UNDO_SCOPE, errorText, mergeContent } from "@/hooks/useContentMerges";
+import { RECENT_MERGES_KEY, UNDO_SCOPE, errorText, mergeContent } from "@/hooks/useAdminContentMerges";
 
 // content_merge_candidates / merge RPCs are not in the generated Supabase types
 // (WEB-AUTO-005), so reads/writes go through `as never` casts like JobHealthPanel.

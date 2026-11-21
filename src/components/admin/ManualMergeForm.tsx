@@ -11,7 +11,7 @@ import {
   errorText,
   mergeContent,
   suggestSurvivor,
-} from "@/hooks/useContentMerges";
+} from "@/hooks/useAdminContentMerges";
 import { handleError } from "@/lib/errorHandler";
 
 interface Pick {

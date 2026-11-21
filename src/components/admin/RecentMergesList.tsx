@@ -11,7 +11,7 @@ import {
   unmergeContent,
   useRecentMerges,
   type RecentMerge,
-} from "@/hooks/useContentMerges";
+} from "@/hooks/useAdminContentMerges";
 import { handleError } from "@/lib/errorHandler";
 
 function summary(m: RecentMerge): string {
