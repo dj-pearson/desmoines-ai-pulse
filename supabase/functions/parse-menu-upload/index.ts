@@ -10,6 +10,7 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, getAnthropicApiKey, defaultModel, shapeClaudeRequest, extractClaudeText } from "../_shared/aiConfig.ts";
 import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
+import { normalizeDietaryTags } from "../_shared/menu/menuNormalize.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,7 +56,7 @@ EXTRACTION INSTRUCTIONS:
 
 1. Extract EVERY menu item you can find, organized by section (e.g., Appetizers, Salads, Entrees, Sandwiches, Desserts, Drinks, Kids Menu, etc.)
 2. For each item extract:
-   - item_name: The dish name (REQUIRED)
+   - item_name: The dish name exactly as written, keeping any dietary marker such as "(GF)" or "(V)" (REQUIRED)
    - item_description: Description of the dish (null if not visible)
    - price: Price as displayed (e.g., "$12.99", "Market Price", "$10-15") or null
    - price_numeric: Numeric price for filtering (e.g., 12.99) or null if variable/unavailable
@@ -70,7 +71,7 @@ IMPORTANT:
 - Extract ALL items visible, not just highlights
 - Keep original pricing format in "price" field
 - Parse numeric value into "price_numeric" (use lower bound for ranges like "$10-15" → 10)
-- Detect dietary tags from symbols, abbreviations, or descriptions (e.g., "(GF)" = gluten-free, "(V)" or a leaf icon = vegan/vegetarian)
+- Add a dietary tag only when the menu marks that dish itself: "(GF)" = gluten-free, "(V)" = vegetarian, "(VG)" = vegan, "(DF)" = dairy-free. Never infer a tag from ingredients or from words like "veggie", and a marker for an option such as "(GFO)" or "GF available" is not a tag
 - Items marked with stars, flames, crowns, or labels like "popular"/"favorite"/"chef's choice" should have is_popular: true
 
 Return ONLY a JSON object with this exact structure:
@@ -85,7 +86,7 @@ Return ONLY a JSON object with this exact structure:
           "item_description": "Toasted bread with fresh tomatoes, basil, and garlic",
           "price": "$9.99",
           "price_numeric": 9.99,
-          "dietary_tags": ["vegetarian"],
+          "dietary_tags": [],
           "is_popular": false
         }
       ]
@@ -265,6 +266,16 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: 'No menu items could be extracted from the file', sections: [], items_count: 0 }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // WEB-BE-072: a badge is the restaurant's mark on the dish, not the model's
+    // reading of it. Same rule as the scraper (menuNormalize.ts), so a model tag
+    // with no marker in the dish's own text is dropped, in the preview and in
+    // what is saved.
+    for (const section of extracted.sections) {
+      for (const item of section.items) {
+        item.dietary_tags = normalizeDietaryTags(item.dietary_tags, item.item_name, item.item_description);
+      }
     }
 
     const totalItems = extracted.sections.reduce((sum, s) => sum + s.items.length, 0);

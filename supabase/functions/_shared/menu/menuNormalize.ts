@@ -71,60 +71,147 @@ export function normalizePriceText(price: string | null | undefined): string | n
 // ─── Dietary tags ───────────────────────────────────────────────────────────
 
 /**
- * Menu shorthand for dietary information. Menus mark these with parenthesised
- * abbreviations and symbols far more often than with the full word, and the
- * old prompt-only approach missed them whenever Claude was working from
- * flattened text where "(GF)" had been separated from its item.
+ * WEB-BE-072. A dietary badge is a claim the restaurant made about one dish,
+ * so a tag is kept only when the menu marks that dish. For someone with celiac
+ * disease or a nut allergy a wrong "GF" badge is a health risk, and a missing
+ * one only sends them to ask the server, so every rule here errs towards
+ * leaving a tag off.
  *
- * `(V)` is read as vegetarian and `(VG)`/`(VE)` as vegan, which is the
- * near-universal US restaurant convention.
+ * What used to happen: any mention anywhere in the name or description tagged
+ * the dish. "(GFO)" (gluten-free OPTION) became gluten-free, "veggie" became
+ * vegetarian so "Grilled chicken and veggie skewers" was a vegetarian dish, and
+ * "ask about our gluten free bun" made a burger gluten-free.
+ *
+ * What counts as a mark now:
+ *  1. A bracketed abbreviation group whose every token is a known marker:
+ *     "(V)", "(VG)", "(GF)", "[DF]", "(V, GF)", "(V/GF)". A group holding
+ *     anything else ("(GFO)", "(GF option)", "(GF on request)", "(VO)") is not
+ *     a mark at all. Counted anywhere in the name, but in the description only
+ *     when the groups close it ("Chickpeas, tahini. (V) (GF)"), because a group
+ *     mid-sentence usually describes a part ("served on a (GF) bun").
+ *  2. The word itself in the dish NAME ("Vegan Burger", "Gluten-Free Brownie",
+ *     "Halal Gyro"), and only when the name carries no option or negation word
+ *     ("Burger, gluten free bun available", "Non-vegan", "Vegan option").
+ *     Words in the description never count: they describe ingredients, sides
+ *     and options far more often than the dish.
+ *  3. Spicy, raw and organic follow the name rule without the qualifier check;
+ *     they are not health claims. A chili pepper or flame emoji in the name
+ *     still reads as spicy.
+ *
+ * `(V)` is vegetarian and `(VG)`/`(VE)`/`(VGN)` vegan, the near-universal US
+ * convention. "veggie" is not a marker of anything.
  */
-const DIETARY_PATTERNS: ReadonlyArray<{ tag: string; re: RegExp }> = [
-  { tag: "vegan", re: /\((?:vg|ve|vgn)\)|\bvegan\b|🌱/i },
-  { tag: "vegetarian", re: /\(v\)|\bvegetarian\b|\bveggie\b/i },
-  { tag: "gluten-free", re: /\((?:gf|gfo)\)|\bgluten[\s-]?free\b/i },
-  { tag: "dairy-free", re: /\(df\)|\bdairy[\s-]?free\b/i },
+const MARKER_ABBREVIATIONS: Readonly<Record<string, string>> = {
+  v: "vegetarian",
+  vg: "vegan",
+  ve: "vegan",
+  vgn: "vegan",
+  gf: "gluten-free",
+  df: "dairy-free",
+};
+
+/** A bracketed group: "(V)", "[GF]", "(V, GF)". */
+const MARKER_GROUP_RE = /[([]([^()[\]]{1,24})[)\]]/g;
+/** One or more bracketed groups that end the text. */
+const TRAILING_MARKER_GROUPS_RE = /(?:[([][^()[\]]{1,24}[)\]]\s*)+$/;
+
+/** Words that make a name's dietary word an option, a request or a negation. */
+const QUALIFIER_RE =
+  /\b(?:options?|optional|available|avail|request|requested|substitut\w*|sub|ask|add|can\s+be|made\s+to|non|not|no|without)\b|\bw\/o\b/i;
+
+/** Health claims: only from a name with no qualifier. */
+const NAME_WORD_PATTERNS: ReadonlyArray<{ tag: string; re: RegExp }> = [
+  { tag: "vegan", re: /\bvegan\b/i },
+  { tag: "vegetarian", re: /\bvegetarian\b/i },
+  { tag: "gluten-free", re: /\bgluten[\s-]?free\b/i },
+  { tag: "dairy-free", re: /\bdairy[\s-]?free\b/i },
   { tag: "nut-free", re: /\bnut[\s-]?free\b/i },
-  { tag: "spicy", re: /\bspicy\b|\bhot\s*&\s*spicy\b|🌶|🔥/i },
-  { tag: "raw", re: /\braw\b(?!\s*bar\s*hours)/i },
-  { tag: "organic", re: /\borganic\b/i },
   { tag: "halal", re: /\bhalal\b/i },
   { tag: "kosher", re: /\bkosher\b/i },
 ];
 
-const VALID_TAGS = new Set(DIETARY_PATTERNS.map((p) => p.tag));
+/** Not health claims: from the name, qualifier or not. */
+const NAME_DESCRIPTOR_PATTERNS: ReadonlyArray<{ tag: string; re: RegExp }> = [
+  // U+1F336 hot pepper, U+1F525 fire: menus use them as the spicy mark.
+  { tag: "spicy", re: /\bspicy\b|\u{1F336}|\u{1F525}/iu },
+  { tag: "raw", re: /\braw\b/i },
+  { tag: "organic", re: /\borganic\b/i },
+];
+
+const VALID_TAGS = new Set<string>([
+  ...Object.values(MARKER_ABBREVIATIONS),
+  ...NAME_WORD_PATTERNS.map((p) => p.tag),
+  ...NAME_DESCRIPTOR_PATTERNS.map((p) => p.tag),
+]);
+
+/** Tags from bracketed abbreviation groups; a group with any unknown token counts for nothing. */
+function markerGroupTags(text: string): string[] {
+  const tags: string[] = [];
+  for (const match of text.matchAll(MARKER_GROUP_RE)) {
+    const tokens = match[1].toLowerCase().split(/[\s,/|&+]+/).filter(Boolean);
+    if (tokens.length === 0) continue;
+    const mapped = tokens.map((t) => MARKER_ABBREVIATIONS[t]);
+    if (mapped.every((tag) => tag !== undefined)) tags.push(...mapped);
+  }
+  return tags;
+}
+
+export interface DietaryTagOptions {
+  /**
+   * Keep the tags the source reported. True only for structured sources (the
+   * restaurant's own schema.org suitableForDiet, a platform's diet flags),
+   * where the tag IS the restaurant's mark. A model's reported tags are not
+   * trusted: it reads "veggie" and ingredient lists as diets, so for model
+   * output only the marks in the item's own text count.
+   */
+  trustReported?: boolean;
+}
 
 /**
- * Union of the tags the model reported and the tags implied by the item's own
- * text. Model output is filtered to the known vocabulary so a hallucinated
- * "keto" tag never reaches the `dietary_tags` array the UI filters on.
+ * The dietary tags the menu itself marks on a dish. See the block comment
+ * above for what counts. Reported tags are filtered to the known vocabulary
+ * and kept only when `trustReported` is set.
  */
 export function normalizeDietaryTags(
   reported: unknown,
   name: string,
   description: string | null,
+  options: DietaryTagOptions = {},
 ): string[] {
   const tags = new Set<string>();
 
-  if (Array.isArray(reported)) {
+  if (options.trustReported && Array.isArray(reported)) {
     for (const raw of reported) {
       const tag = String(raw).toLowerCase().trim().replace(/\s+/g, "-");
       if (VALID_TAGS.has(tag)) tags.add(tag);
     }
   }
 
-  const haystack = `${name} ${description ?? ""}`;
-  for (const { tag, re } of DIETARY_PATTERNS) {
-    if (re.test(haystack)) tags.add(tag);
+  for (const tag of markerGroupTags(name)) tags.add(tag);
+
+  const trailing = (description ?? "").trim().match(TRAILING_MARKER_GROUPS_RE);
+  if (trailing) for (const tag of markerGroupTags(trailing[0])) tags.add(tag);
+
+  // Drop the bracketed groups before the qualifier check, so "(GF option)"
+  // cannot be read as a qualifier on a word elsewhere and "(V)" is not a word.
+  const qualified = QUALIFIER_RE.test(name.replace(MARKER_GROUP_RE, " "));
+  if (!qualified) {
+    for (const { tag, re } of NAME_WORD_PATTERNS) {
+      if (re.test(name)) tags.add(tag);
+    }
+  }
+  for (const { tag, re } of NAME_DESCRIPTOR_PATTERNS) {
+    if (re.test(name)) tags.add(tag);
   }
 
-  // "gluten-free" implied by an item that is also vegan is not a thing; but a
-  // vegan item is always vegetarian, and the UI's vegetarian filter should
-  // surface it.
+  // A vegan dish is vegetarian, and the vegetarian filter should surface it.
   if (tags.has("vegan")) tags.add("vegetarian");
 
   return [...tags].sort();
 }
+
+/** Extraction methods whose reported dietary tags are the restaurant's own marks. */
+const STRUCTURED_METHODS: ReadonlySet<string> = new Set(["jsonld", "platform"]);
 
 // ─── Junk detection ─────────────────────────────────────────────────────────
 
@@ -318,7 +405,9 @@ export function normalizeExtraction(extraction: MenuExtraction): MenuExtraction 
         item_description: description === name ? null : description,
         price,
         price_numeric: priceNumeric,
-        dietary_tags: normalizeDietaryTags(rawItem.dietary_tags, name, description),
+        dietary_tags: normalizeDietaryTags(rawItem.dietary_tags, name, description, {
+          trustReported: STRUCTURED_METHODS.has(extraction.method),
+        }),
         is_popular: rawItem.is_popular === true,
       };
 

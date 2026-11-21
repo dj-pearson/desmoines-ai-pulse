@@ -24,26 +24,36 @@ interface RestaurantMenuSectionProps {
 
 const LARGE_MENU_THRESHOLD = 30;
 
-const dietaryIcons: Record<string, { icon: typeof Leaf; color: string; label: string }> = {
-  vegan: { icon: Leaf, color: 'text-green-600', label: 'Vegan' },
-  vegetarian: { icon: Leaf, color: 'text-green-500', label: 'Vegetarian' },
-  'gluten-free': { icon: WheatOff, color: 'text-amber-600', label: 'GF' },
-  spicy: { icon: Flame, color: 'text-red-500', label: 'Spicy' },
+const dietaryIcons: Record<string, { icon: typeof Leaf; color: string; label: string; name: string }> = {
+  vegan: { icon: Leaf, color: 'text-green-600', label: 'Vegan', name: 'Vegan' },
+  vegetarian: { icon: Leaf, color: 'text-green-500', label: 'Vegetarian', name: 'Vegetarian' },
+  'gluten-free': { icon: WheatOff, color: 'text-amber-600', label: 'GF', name: 'Gluten-free' },
+  spicy: { icon: Flame, color: 'text-red-500', label: 'Spicy', name: 'Spicy' },
 };
+
+/**
+ * WEB-BE-072. A dietary badge repeats the restaurant's own mark on the dish; it
+ * is not this site's verification. Every badge says so in its title, and the
+ * section carries DIETARY_CAVEAT whenever any badge is shown.
+ */
+const DIETARY_MARK_SUFFIX = "as marked on the restaurant's menu";
+const DIETARY_CAVEAT =
+  "Dietary labels are shown as marked on the restaurant's menu. If you have an allergy or celiac disease, confirm with the restaurant before you order.";
 
 function DietaryBadge({ tag }: { tag: string }) {
   const config = dietaryIcons[tag];
+  const title = `${config ? config.name : tag}, ${DIETARY_MARK_SUFFIX}`;
   if (config) {
     const Icon = config.icon;
     return (
-      <Badge variant="outline" className={`text-xs px-1.5 py-0 ${config.color} border-current`}>
+      <Badge variant="outline" title={title} className={`text-xs px-1.5 py-0 ${config.color} border-current`}>
         <Icon className="w-3 h-3 mr-0.5" aria-hidden="true" />
         {config.label}
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-xs px-1.5 py-0">
+    <Badge variant="outline" title={title} className="text-xs px-1.5 py-0">
       {tag}
     </Badge>
   );
@@ -95,7 +105,11 @@ function MenuSectionBlock({ section, index, expanded, onToggle }: MenuSectionBlo
                   <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.item_description}</p>
                 )}
                 {item.dietary_tags.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
+                  <div
+                    className="mt-1 flex flex-wrap gap-1"
+                    role="group"
+                    aria-label={`Dietary labels, ${DIETARY_MARK_SUFFIX}`}
+                  >
                     {item.dietary_tags.map((tag) => (
                       <DietaryBadge key={tag} tag={tag} />
                     ))}
@@ -243,6 +257,7 @@ export function RestaurantMenuSection({
   const menuSource = safeWebUrl(menu.source_url);
   const fromTheirSite = menu.source_type === 'scraped' || !!menuSource;
   const isLargeMenu = data.totalItems >= LARGE_MENU_THRESHOLD;
+  const hasDietaryLabels = data.sections.some((s) => s.items.some((i) => i.dietary_tags.length > 0));
   const open = openSections ?? new Set(isLargeMenu ? [] : data.sections.map((_, i) => i));
 
   const toggle = (index: number) => {
@@ -315,6 +330,11 @@ export function RestaurantMenuSection({
           Dishes and prices may have changed since.
         </span>
       </p>
+      {hasDietaryLabels && (
+        <p className="mt-1 text-sm text-muted-foreground" data-dietary-caveat>
+          {DIETARY_CAVEAT}
+        </p>
+      )}
 
       <div className="mt-4">
         {showVersions && <MenuHistory restaurantId={restaurantId} />}

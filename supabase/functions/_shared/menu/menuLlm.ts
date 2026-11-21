@@ -61,7 +61,7 @@ export const MENU_EXTRACTION_RULES = `Extract EVERY item, not just highlights or
 - item_description: the description if one is shown, otherwise omit.
 - price: exactly as displayed — "$12.99", "$10/$15", "Market Price". Omit if no price is shown.
 - price_numeric: the numeric value; for a range or multiple sizes use the LOWEST. Omit when there is no number.
-- dietary_tags: only from the allowed list. Read menu shorthand: (GF) gluten-free, (V) vegetarian, (VG)/(VE) vegan, (DF) dairy-free.
+- dietary_tags: only from the allowed list, and only when the menu marks that dish itself: (GF) gluten-free, (V) vegetarian, (VG)/(VE) vegan, (DF) dairy-free. Never infer a tag from ingredients or from words like "veggie"; an option marker such as (GFO) or "GF available" is not a tag. Keep the marker in item_name as written.
 - is_popular: true only when the menu marks it — star, flame, "fan favorite", "chef's pick".
 
 Group items under the menu's OWN section headings ("Tacos", "On Tap", "From the Griddle"). Only fall back to "Main Menu" when the menu genuinely has no headings. Number sections from 0 in reading order.

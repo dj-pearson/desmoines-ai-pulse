@@ -73,3 +73,24 @@ describe("MenuSchema JSON-LD escaping", () => {
     expect(popular.itemListElement[0].description).toBe(HOSTILE);
   });
 });
+
+// WEB-BE-072: dietary_tags are scraped and partly inferred. The structured
+// data must not publish them as GlutenFreeDiet and the like.
+describe("MenuSchema dietary claims", () => {
+  it("emits no suitableForDiet, even for a tagged item", async () => {
+    const scripts = await renderScripts([
+      {
+        name: "Mains",
+        items: [makeItem({ item_name: "Fish Tacos (GFO)", dietary_tags: ["gluten-free", "vegan"] })],
+      },
+    ]);
+    const menu = scripts.map((s) => JSON.parse(s.textContent ?? "{}")).find((p) => p["@type"] === "Menu");
+    // Counter-assertion: the item is in the schema, so the absence below is
+    // not an empty menu.
+    expect(menu.hasMenuSection[0].hasMenuItem[0].name).toBe("Fish Tacos (GFO)");
+    for (const script of scripts) {
+      expect(script.textContent).not.toContain("suitableForDiet");
+      expect(script.textContent).not.toContain("GlutenFreeDiet");
+    }
+  });
+});

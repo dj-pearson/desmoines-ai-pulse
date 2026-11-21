@@ -41,7 +41,7 @@ export function MenuSchema({
     '@type': 'Menu',
     '@id': menuUrl,
     name: `${restaurantName} Menu`,
-    description: `Full menu for ${restaurantName}${cuisine ? `, a ${cuisine} restaurant` : ''} in ${city}, Iowa. Browse ${sections.reduce((sum, s) => sum + s.items.length, 0)} menu items with prices and dietary information.`,
+    description: `Full menu for ${restaurantName}${cuisine ? `, a ${cuisine} restaurant` : ''} in ${city}, Iowa. Browse ${sections.reduce((sum, s) => sum + s.items.length, 0)} menu items with prices.`,
     url: menuUrl,
     mainEntityOfPage: restaurantUrl,
     ...(capturedAt && { dateModified: capturedAt }),
@@ -66,18 +66,13 @@ export function MenuSchema({
             }}),
           },
         }),
-        ...(item.dietary_tags.length > 0 && {
-          suitableForDiet: item.dietary_tags.map((tag) => {
-            switch (tag) {
-              case 'vegan': return 'https://schema.org/VeganDiet';
-              case 'vegetarian': return 'https://schema.org/VegetarianDiet';
-              case 'gluten-free': return 'https://schema.org/GlutenFreeDiet';
-              case 'kosher': return 'https://schema.org/KosherDiet';
-              case 'halal': return 'https://schema.org/HalalDiet';
-              default: return tag;
-            }
-          }),
-        }),
+        // No suitableForDiet (WEB-BE-072). dietary_tags are what a scraper read
+        // off the restaurant's menu, and they were partly inferred from dish
+        // text. Publishing them as GlutenFreeDiet makes this site the one
+        // asserting a dish is safe for someone with celiac disease, to search
+        // engines that show it with no "confirm with the restaurant" beside it.
+        // The page shows the badges with that caveat; the structured data does
+        // not carry them at all.
       })),
     })),
   };
