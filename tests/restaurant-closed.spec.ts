@@ -161,7 +161,10 @@ test.describe('closed restaurant page', () => {
     await expect(page.locator('a[href="#menu"]')).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Reserve/i })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /^Call$/ })).toHaveCount(0);
-    await expect(page.locator('a[href^="tel:"]')).toHaveCount(0);
+    // Its own number. The open places listed nearby are restaurant cards, and
+    // since WEB-UX-087 a card has its own Call link; those must stay.
+    await expect(page.locator(`a[href="tel:${BASE.phone}"]`)).toHaveCount(0);
+    await expect(page.getByRole('link', { name: `Call ${NEIGHBOURS[0].name}` })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Rate this place' })).toHaveCount(0);
     await expect(page.locator('#reviews')).toHaveCount(0);
     await expect(page.getByRole('toolbar', { name: 'Quick actions' })).toHaveCount(0);

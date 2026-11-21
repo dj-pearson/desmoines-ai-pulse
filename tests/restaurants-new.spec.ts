@@ -166,7 +166,7 @@ async function openHub(page: Page, { prerender = false } = {}) {
     return url.includes('opening_soon') ? json(route, [STALE, FRESH]) : route.fallback();
   });
   await page.goto('/restaurants');
-  const card = page.locator('article', { has: page.getByRole('link', { name: 'Old Favorite Diner' }) }).first();
+  const card = page.locator('article', { has: page.getByRole('link', { name: 'Old Favorite Diner', exact: true }) }).first();
   await expect(card).toBeVisible({ timeout: 30_000 });
   return card;
 }
@@ -179,7 +179,7 @@ test.describe('/restaurants/new', () => {
     await expect(page.getByText(/^1 restaurant opened in the Des Moines area on [A-Z][a-z]+ \d{1,2}, \d{4}, going by/)).toBeVisible();
 
     const upcoming = page.locator('section[aria-labelledby="upcoming-heading"]');
-    await expect(upcoming.getByRole('link', { name: 'Next Month Tacos' })).toBeVisible();
+    await expect(upcoming.getByRole('link', { name: 'Next Month Tacos', exact: true })).toBeVisible();
     await expect(page.getByText('Stale Promise Cafe')).toHaveCount(0);
     await expect(page.getByText(/1 more place is marked new or announced without a confirmed, sourced date/)).toBeVisible();
 
