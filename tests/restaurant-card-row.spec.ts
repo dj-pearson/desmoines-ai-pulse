@@ -35,6 +35,9 @@ async function searchWith(page: Page, overrides: Partial<Row>[]) {
   const rows = fixtureRestaurants().map((row, i) => ({ ...row, ...(overrides[i] ?? {}) }));
   await installFixtureBackend(page);
   await page.route('**/rest/v1/restaurants?**', (route) => json(route, rows));
+  // A default-sort search reads search_restaurants_by_relevance (WEB-BE-076),
+  // which returns the same rows.
+  await page.route('**/rest/v1/rpc/search_restaurants_by_relevance**', (route) => json(route, rows));
   await page.goto('/restaurants?q=fixture');
   await expect(page.locator(CARD).first()).toBeVisible();
 }

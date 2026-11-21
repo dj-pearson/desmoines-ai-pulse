@@ -319,6 +319,9 @@ test.describe('Paywall (pricing plan WP4)', () => {
 
     // Ratings mount when scrolled near (LazySection), so bring them in first.
     await page.locator('#reviews').scrollIntoViewIfNeeded();
+    // With no ratings the block is one line (WEB-SEO-079); the plan gate mounts
+    // when the member opens the form.
+    await page.getByRole('button', { name: 'Rate this restaurant' }).click({ timeout: 45_000 });
 
     const retry = page.getByRole('button', { name: 'Retry' });
     await expect(retry).toBeVisible({ timeout: 45_000 });
