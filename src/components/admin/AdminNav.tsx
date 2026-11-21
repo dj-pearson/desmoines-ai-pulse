@@ -92,6 +92,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Playgrounds", href: "/admin/playgrounds", icon: TreeDeciduous },
       { label: "Event submissions", href: "/admin/event-submissions", icon: Inbox, description: "User-submitted events queue" },
       { label: "Business claims", href: "/admin/business-claims", icon: Building2, description: "Owners claiming their listing" },
+      { label: "Closure reviews", href: "/admin/closure-reviews", icon: Building2, description: "Restaurants that may have closed" },
       { label: "Menus", href: "/admin/menus", icon: UtensilsCrossed },
       { label: "Media", href: "/admin/media", icon: ImageIcon },
     ],

@@ -251,6 +251,17 @@ const PENDING_MIGRATIONS = [
   // pending window outreach is halted, not sent with a dead opt-out link.
   // Apply the migration before deploying agent-runner or agent-outreach.
   { rpc: 'ensure_outreach_unsubscribe_token', migration: '20261115000101' },
+  // WEB-FEAT-102 / WEB-BE-064: the closure queue and the visitor report.
+  // Until applied, the report control shows its retry error and the admin
+  // queue shows "Could not load", never an empty queue.
+  { table: 'restaurant_closure_reviews', migration: '20261121000010' },
+  // WEB-BE-064: bulk-update-restaurants' placeLookup mode orders by and stamps
+  // this column. Until applied, that mode 42703s and the run is recorded as
+  // failed; the hours refresh does not read it.
+  { table: 'restaurants', column: 'place_lookup_checked_at', migration: '20261121000010' },
+  { table: 'restaurants', column: 'promotion_hold_reason', migration: '20261121000010' },
+  { rpc: 'report_restaurant_closed', migration: '20261121000030' },
+  { rpc: 'resolve_closure_review', migration: '20261121000030' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];
