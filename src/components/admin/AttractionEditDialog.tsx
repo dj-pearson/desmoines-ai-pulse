@@ -102,6 +102,9 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+// zod 4 types the z.coerce.number() fields as taking unknown input and parsing
+// to number | "", so the form's input and output types are given separately.
+type FormInput = z.input<typeof formSchema>;
 
 function csvToArray(csv: string | undefined): string[] | null {
   if (!csv) return null;
@@ -232,7 +235,7 @@ export default function AttractionEditDialog({
     [attraction],
   );
 
-  const form = useForm<FormValues>({
+  const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues,
     mode: "onBlur",

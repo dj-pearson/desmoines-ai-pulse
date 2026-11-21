@@ -284,26 +284,25 @@ row came from the RPC with one, so the page said $70 and the row said $66.50.
 Two formulas for one price is a bug generator. Same rule for subscriptions -
 `create-subscription-checkout` owns the plan and the amount.
 
-### Branch first, code second
+### Work goes straight to develop
 
-Before writing or pushing code on any non-trivial task, **confirm the target branch with the user**. Map the request phrasing to a branch type:
+**All non-emergency work commits or merges to `develop` directly, with no PR.** This is the owner's standing decision (2026-11-08): the PR step on `develop` cost a day of red, mutually blocking PRs and gave no review in return, because there is one person to approve. It applies to every kind of change: features, fixes, docs, chores, dependency bumps. A short-lived work branch is fine for something large; merge it into `develop` yourself when it is done instead of opening a PR.
 
-| Phrase the user used | Target branch | Branched from |
-|---|---|---|
-| "production bug", "live site is broken", "users are seeing X right now", "hotfix" | `hotfix/<short-slug>` | `main` |
-| "new feature", "add", "build", "let's prototype", "experimental" | `claude/<slug>` or `feat/<slug>` | `develop` |
-| "release prep", "cut a release", "ship v1.4", "submit to App Store" | `release/x.y.z` | `develop` |
-| "fix on develop", "fix the staging bug", "in-flight feature is broken" | `fix/<slug>` (off `develop`) | `develop` |
-| "docs", "update README", "tweak CLAUDE.md" | `docs/<slug>` | `develop` (or `main` if it's a hotfix-style doc correction) |
-| "chore", "bump deps", "rename folder" | `chore/<slug>` | `develop` |
+Before you push to `develop`, run what the PR checks would have run on the change: `npm run validate`, the unit tests for what you touched, and the Deno suite for any edge function you touched. CI still runs on every push to `develop`, and a red `develop` is yours to fix next.
 
-If ambiguous (e.g. "fix the events page" — is it broken in prod, or only on develop?), **ask** before branching. Never assume.
+| Phrase the user used | Where it goes |
+|---|---|
+| "production bug", "live site is broken", "users are seeing X right now", "hotfix" | `hotfix/<short-slug>` from `main`, PR into `main`, then merge `main` into `develop` |
+| "release prep", "cut a release", "ship v1.4", "submit to App Store" | `release/x.y.z` from `develop` |
+| Anything else | Commit to `develop` |
+
+If it is unclear whether something is a production emergency or ordinary work, **ask**. Otherwise don't ask which branch: it is `develop`.
 
 ### Never do these (rulesets will block, but don't try)
 
 - Force-push to `main`, `develop`, `release/*`, or `hotfix/*`.
 - Delete `main`, `develop`, `release/*`, or `hotfix/*`.
-- Commit directly to `main` or `develop` — always via PR.
+- Commit directly to `main`; it changes only through a PR from `release/x.y.z` or `hotfix/*`. (`develop` is the opposite: commit to it directly, see above.)
 - Merge `develop` straight to `main` — releases go through `release/x.y.z` (or `hotfix/*` for emergencies).
 - Skip pre-commit / CI hooks with `--no-verify` (see top of this file).
 - Ship a destructive DB migration (DROP COLUMN, NOT NULL tightening, enum value removal, RPC arg removal) in the same release that introduces the new shape. See **Backward Compatibility** below.
@@ -317,19 +316,19 @@ This project has **three live client surfaces** (web, iOS app, Android app) and 
 | Branch / pattern | Deploys to | Purpose |
 |---|---|---|
 | `main` | **Web prod** (Cloudflare Pages auto-deploys on push). Tagged releases trigger mobile store submissions via `workflow_dispatch`. | Production. Merge-only, never commit directly. Every merge is a deployable state. |
-| `develop` | Web preview / staging (Cloudflare Pages preview deploys per commit). Internal-only mobile builds (TestFlight internal / Play internal track) cut from here on demand. | Long-lived integration branch. All non-emergency work lands here first. |
+| `develop` | Web preview / staging (Cloudflare Pages preview deploys per commit). Internal-only mobile builds (TestFlight internal / Play internal track) cut from here on demand. | Long-lived integration branch. All non-emergency work is committed or merged here directly, without a PR. |
 | `release/x.y.z` | Web prod **candidate** (preview URL); mobile store submission candidate (TestFlight external / Play closed testing). | Release stabilization: only bug fixes, version bumps, store metadata. No new features. Tag `vX.Y.Z` on merge to `main`. |
 | `hotfix/<slug>` | Direct fast-path to prod, skipping queued features on `develop`. Web deploys when merged to `main`; mobile may need an out-of-band store submission. | Emergency-only. Branch from `main`, PR into `main` AND `develop`. |
-| `claude/<slug>`, `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` | PR previews only. | Work branches. Branch from `develop`, PR back to `develop`. |
+| `claude/<slug>`, `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` | Nothing. | Optional, for large changes only. Branch from `develop` and merge back into `develop` yourself; no PR. |
 
 ### Rules of thumb
 
 - **Hotfixes branch from `main`, not `develop`.** `develop` may contain unreleased features you don't want to ship as part of a hotfix. After merging the hotfix to `main`, also merge `main` → `develop` (or cherry-pick the hotfix into `develop`) so the fix isn't lost on the next release.
-- **Web ships independently of mobile.** A web-only change goes through the normal `feat/* → develop → release/x.y.z → main` flow and deploys to Cloudflare Pages on merge to `main`. Mobile workflows are `workflow_dispatch`-only and don't trigger.
+- **Web ships independently of mobile.** A web-only change goes through the normal `develop → release/x.y.z → main` flow and deploys to Cloudflare Pages on merge to `main`. Mobile workflows are `workflow_dispatch`-only and don't trigger.
 - **Mobile review in flight ≠ frozen web.** While iOS/Android are in App Store/Play review, keep cutting `release/*` for web on the same cadence — just don't bump the mobile binary version until the previous one clears review.
 - **Tag releases on `main`.** Pattern: `vX.Y.Z` (web), `ios-vX.Y.Z+build`, `android-vX.Y.Z+code`. Mobile release workflows take version inputs explicitly; tags are documentation, not triggers.
 - **`develop` → `main` is only legal via a `release/x.y.z` branch.** Don't open a `develop` → `main` PR directly.
-- **`release/x.y.z` accepts merges only from `develop`** (cut point) and small fix-up PRs branched from `release/x.y.z` itself. No `feat/*` PRs into `release/*`.
+- **`release/x.y.z` accepts merges only from `develop`** (cut point) and small fix-up PRs branched from `release/x.y.z` itself. No feature work goes into `release/*`.
 - **`MIN_SUPPORTED_APP_VERSION`** (defined in `supabase/functions/_shared/`, see Backward Compatibility) is load-bearing — older iOS/Android binaries still in the wild rely on the backend keeping shapes they read.
 
 ### Conventional commits
@@ -499,21 +498,46 @@ patterns shift; prefer a command over a number.
 
 *Managed from the vault. Edit `14 - Resources/Shared CLAUDE Block.md` in the vault; direct edits between these markers are overwritten once a sync exists. Everything outside them is yours and is never touched.*
 
-**The memory vault.** Portfolio-wide memory lives in the **Hermes** vault at `<your-home>\Documents\Hermes` (`C:\Users\dpearson\Documents\Hermes` on this machine; remote: https://github.com/dj-pearson/Hermes). It holds the profile, the map of all ten projects, and cross-project knowledge. Read `VAULT-INDEX.md` there when a task needs context beyond this repo. This repo's own `CLAUDE.md`, `~/.claude` memory, and skills remain authoritative for work inside it — the vault supplements them, never replaces them.
+**The memory vault.** Portfolio-wide memory lives in the **Hermes** vault at `<your-home>\Documents\Hermes` (override with `HERMES_VAULT_PATH`; remote: https://github.com/dj-pearson/Hermes). It holds the profile, the map of every project, and cross-project knowledge. Read `VAULT-INDEX.md` there when a task needs context beyond this repo. This repo's own `CLAUDE.md`, `~/.claude` memory, and skills remain authoritative for work inside it — the vault supplements them, never replaces them.
 
-**Name the project.** Pearson Media runs ten projects on a shared stack. Never say "the app," "the repo," or "production" without naming which one. A right answer about the wrong project is a wrong answer.
+**Name the project.** Pearson Media runs a portfolio of projects on a shared stack. Never say "the app," "the repo," or "production" without naming which one. A right answer about the wrong project is a wrong answer.
 
 **The shared stack.** React + TypeScript + Vite, Tailwind, shadcn/ui, self-hosted Supabase, Cloudflare Pages, Coolify on Contabo, Stripe. A problem solved in one repo is usually already solved for this one — check the vault before solving it twice.
 
-**Secrets are references, never values.** Never write a password, key, or token value into a note, summary, commit, or setup doc; name where it's stored instead. Loose credential files exist under your `Documents` folder (`C:\Users\dpearson\Documents` on this machine) — never read one into a document.
+**Secrets are references, never values.** Never write a password, key, or token value into a note, summary, commit, or setup doc; name where it's stored instead. Loose credential files exist under your `Documents` folder — never read one into a document.
 
 **Never delete what Claude Code relies on.** Repo `CLAUDE.md` files, `~/.claude/projects/*/memory/`, `.claude/skills/`, settings. Copy from them freely; removing or stubbing them is Dj's call alone.
 
 **Evidence only.** Verify state from the actual file or command before claiming anything is done or in place. If unsure, say so and go find out.
 
+**Work that waits on Dj is a GitHub issue labelled `on-dj`, and nowhere else.** That one label, across both orgs (`dj-pearson`, `Pearson-Media`), is the operator's to-do list: github.com/issues/assigned, or "Assigned to me" in the GitHub app. No hub, board or doc table has to be running for it.
+- **File only what only Dj can do**: a secret or token to create, an account, a payment, a platform form, a decision, an approval. If an agent could do it, do it instead.
+- **Search before filing**: `gh search issues --label on-dj --state open --owner dj-pearson --owner Pearson-Media "<keywords>"`. If one already covers it, comment there; never open a second.
+- **File in the repo the work belongs to**: `gh issue create --assignee @me --label on-dj --title ... --body-file ...`. Portfolio-wide items go to `dj-pearson/Server`, vault items to `dj-pearson/Hermes`. Always add `--label project:<key>` with the project's registry key, e.g. `project:gradethread` or `project:eatpal` (`project:portfolio` when it spans projects; Server and Hermes carry every key, a project repo carries its own). Add `needs-hub` only if the payoff exists solely while the local ADE Hub is running.
+- **The bar for the body**: an assistant who is not a developer can finish it line by line without asking anyone. Use the sections `## Why` (what it unblocks: story ids, features), `## You need` (logins and tools), `## Steps` (numbered; exact URLs, menu paths, Infisical project/environment/secret NAME, file paths, commands and the folder to run them from; for a decision, the options, a recommendation and how to record the choice), `## Done when` (a check the assistant can run) and `## Notes`. Names of secrets, never values.
+- **Close the loop**: at the start of work, `gh issue list --label on-dj --state closed --search "closed:>=<last run date>"` in this repo, and pick up whatever those closures unblocked. When you can verify an item is done (the secret now exists, the setting is on), close it with a comment saying how you checked.
+
+**Sessions share GitHub, not memory.** On this PC, coord prints a "Shared state" brief when a session starts: open `on-dj` and `agent-work` issues for this project, `on-dj` issues Dj closed in the last 7 days, and open `agent/*` PRs. Read it before planning; where it is absent (another machine, a cloud session), run the same searches with `gh`.
+- **Work you find and will not do in this session is an issue labelled `agent-work`**, never a line in a summary: `gh issue create --label agent-work --label project:<key> --title ... --body-file ...`, in the repo it belongs to, after searching for an existing one. The body says what you found, where (`file:line`), why it matters and what you checked; the next session starts from it.
+- **Starting on one, say so**: comment on the issue before you begin and link the PR when you finish, so two sessions don't take the same one. Close it with the PR or commit that did it.
+
+**Operating principles.** Distilled from the ADE Hub's design rules (the Server repo's `hub/CLAUDE.md`, with the reasoning in its `docs/engineering-log.md`); they hold in every repo.
+
+1. **Unmeasured is not zero, and a real zero stays zero.** A gap reads `Unavailable - <reason>`. A floor is labelled a floor: it can prove a target was hit, never that it was missed. An empty result that could mean "nothing happened" or "the read failed" says which. A total inherits the honesty of its rows, and a cached figure states its age.
+2. **Read-only by default; gate on consequence, not on file location.** Anything that starts autonomous work, sends outward or touches a production box waits for approval; storing local config does not. Stopping something is never gated; starting it is.
+3. **Never a second, weaker path into production.** Use the repo's own migrator and deploy path.
+4. **Report, don't ration.** No cost cap, failure counter or WIP limit that stops work mid-run; report the number and let a person decide.
+5. **Report drift; never resolve it silently.**
+6. **A fix instruction names a remedy that can work**, and says when it is one example of several.
+7. **Declare once and import it, derive what can be derived, and check a table against reality in both directions.** A duplicated literal is how two truths come to disagree.
+8. **Measure; never assert a saving.** An estimate says it is one.
+9. **Refuse, never truncate.** If what was approved can't be done whole, refuse; doing part of it and reporting success does something nobody approved.
+10. **Assert on behaviour, not on wording, and give every negative check a counter-assertion** that proves it still fires. A green unit test on a pure function is not a working feature; look at the rendered page.
+11. **Record refusals with their reasoning** so they are not silently re-proposed. A recorded refusal is not a ban: re-propose it openly, with what has changed.
+
 **Write like a person.** Every model was trained on the same corpus, so the default register is recognisable within a sentence and it lands in commits, PR bodies, docs, UI copy and error strings alike. State the point first, then support it. Have an opinion; asked which of two, name one. Use real names and numbers, not categories. Never label your own significance ("important", "crucial", "worth noting", "notably"); if it matters the reader will see it. Banned outright: *delve, dive into, deep dive, unpack, shed light on, pave the way, usher in, tap into, supercharge, unlock, elevate, empower, streamline, curate, showcase, boast, groundbreaking, cutting-edge, transformative, game-changing, innovative, pivotal, invaluable, meticulous, bespoke, vibrant, multifaceted, holistic, testament, tapestry, synergy, cornerstone, treasure trove, plethora, myriad, moreover, furthermore, additionally.* Banned decoratively but fine literally: *navigate, harness, leverage, robust, comprehensive, landscape, realm, journey*; the test is whether a reader could check the claim. Banned phrases: *"In today's…", "It's important/worth noting", "When it comes to", "At its core", "At the end of the day", "This is where X comes in", "Let's break it down", "plays a crucial role", "cannot be overstated", "underscoring the importance of", "highlighting the need for"*, and the whole chat register (*"Great question!", "Absolutely!", "I'd be happy to", "Let me know if you need anything else", "I hope this helps"*). Banned structures, which imitate insight without carrying any: *"not just X, it's Y"*, *"not only X but Y"*, *"this isn't about X, it's about Y"*, *"No X. No Y. Just Z."*, the rule of three that goes abstract on the third item, the rhetorical question as a transition, and closing with a summary of what was just read. **At most one em dash** per piece of writing, never as the default connector; use commas, parentheses and semicolons. Vary sentence and paragraph length deliberately. Uniform 18-word sentences are the signature that survives every word-level edit. Use contractions. Don't restate the question, don't open with a sweeping scene-setter, don't over-format (no emoji as structure, no header on a three-paragraph answer, no table for two rows). The one allowed exception is a **bold lead-in used as a heading** in a reference document like this one; a *run* of "**Bold term:** one sentence" bullets standing in for prose is the tell.
 
-**Plain characters only.** Generated text carries Unicode that renders as ordinary punctuation, as ordinary whitespace, or as nothing at all, and it survives review precisely because it looks correct. **Anything a machine parses is ASCII unless the content requires otherwise**: code, config, JSON, YAML, CSV, SQL, regex, env values, filenames, URLs, commit subjects. Straight quotes `'` `"`, hyphen-minus `-`, three dots for an ellipsis, one ordinary space between words. Never emit curly quotes (U+2018/2019/201C/201D), en/em dashes (U+2013/2014), U+2026 ellipsis, U+2212 minus or U+2032 primes into code; a look-alike character in a PowerShell string or a SQL literal is a runtime failure, which is how `backup-databases.ps1` and `ssl-check.ps1` sat unparseable for months. Never emit a no-break space (U+00A0, and U+202F/2007/2009/2002/2003/3000), which breaks shell word-splitting, `grep` and column parsing while looking exactly like a space, or U+2028/U+2029, which are valid JSON and a syntax error inside a JS string literal. **Never emit an invisible or bidi character anywhere:** U+200B-U+200F, U+2060-U+2064, U+FEFF, U+00AD, U+034F, U+180E, the bidi controls U+202A-U+202E and U+2066-U+2069, and above all the Unicode tag block **U+E0000-U+E007F**, which encodes arbitrary ASCII invisibly and is the usual carrier for text a reviewer cannot see. Avoid homoglyphs (Cyrillic a/e/o/p/c/x, Greek omicron, fullwidth Latin, mathematical alphanumerics for bold): an identifier holding one compares unequal to the identifier it appears to be. Prose may use real typography and real accented names; prose may not carry characters that don't render. The one exception is a deliberate, load-bearing use, which carries a comment saying why. Scan with `rg -n '[\x{00AD}\x{034F}\x{061C}\x{180E}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{2069}\x{FEFF}\x{E0000}-\x{E007F}]'`.
+**Plain characters only.** Generated text carries Unicode that renders as ordinary punctuation, as ordinary whitespace, or as nothing at all, and it survives review precisely because it looks correct. **Anything a machine parses is ASCII unless the content requires otherwise**: code, config, JSON, YAML, CSV, SQL, regex, env values, filenames, URLs, commit subjects. Straight quotes `'` `"`, hyphen-minus `-`, three dots for an ellipsis, one ordinary space between words. Never emit curly quotes (U+2018/2019/201C/201D), en/em dashes (U+2013/2014), U+2026 ellipsis, U+2212 minus or U+2032 primes into code; a look-alike character in a PowerShell string or a SQL literal is a runtime failure, which is how `backup-databases.ps1` and `ssl-check.ps1` sat unparseable for months. Never emit a no-break space (U+00A0, and U+202F/2007/2009/2002/2003/3000), which breaks shell word-splitting, `grep` and column parsing while looking exactly like a space, or U+2028/U+2029, which are valid JSON and a syntax error inside a JS string literal. **Never emit an invisible or bidi character anywhere:** U+200B-U+200F, U+2060-U+2064, U+FEFF, U+00AD, U+034F, U+180E, the bidi controls U+202A-U+202E and U+2066-U+2069, and above all the Unicode tag block **U+E0000-U+E007F**, which encodes arbitrary ASCII invisibly and is the usual carrier for text a reviewer cannot see. Avoid homoglyphs (Cyrillic a/e/o/p/c/x, Greek omicron, fullwidth Latin, mathematical alphanumerics for bold): an identifier holding one compares unequal to the identifier it appears to be. Prose may use real typography and real accented names; prose may not carry characters that don't render. The one exception is a deliberate, load-bearing use, which carries a comment saying why. Scan with `rg -n '[\x{0000}-\x{0008}\x{000B}\x{000C}\x{000E}-\x{001F}\x{00A0}\x{00AD}\x{034F}\x{061C}\x{180E}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{2069}\x{FEFF}\x{E0000}-\x{E007F}]'`. The C0 control range and the no-break space are in it because the older scan missed a live instance: a stray U+0008 backspace inside a regex in the Server repo's `hub/test/ui-smoke.mjs` disabled a test guard for as long as the guard existed.
 
 **Terminal output is scrollback, not a report.** Answer first — no "I'll start by", no restating the request, no narrating tool calls the transcript already shows. Don't summarise a diff the reader can see or paste back code you just wrote; one line naming what changed and where, with `file:line` because it's clickable. Length matches the question: a yes/no gets a yes/no plus the clause that makes it trustworthy, and under about six lines there are no headers, bullets or tables. Report actual output, not a paraphrase: quote the failing assertion, say what was skipped, say plainly what's verified and what isn't. No emoji and no status theatre; "246 tests, 246 passing" beats "✅ All tests passing!" and is falsifiable. Don't close with an offer of more help or unrequested next steps: ask a real question, or name the real remaining work. Commits are imperative, what and why, no launch copy. PR bodies say what changed, why, how it was verified, and what's still open.
 
@@ -521,3 +545,7 @@ patterns shift; prefer a command over a number.
 
 **Check UI, don't just intend it.** `npx impeccable detect <path>` runs 60 deterministic anti-pattern rules with no install, no API key and no LLM — it works from any repo, so there is no excuse for asserting a UI is clean. Use the `/impeccable` skill (`audit`, `critique`, `polish`, `colorize`, `typeset`) for the judgement calls it cannot make. Source: [Impeccable](https://github.com/pbakaus/impeccable), Apache 2.0.
 <!-- SELVEDGE:END -->
+
+## Session title
+
+In a cloud session, once you know the task, call `set_session_title` with `DMI - <short description>` so the owner can tell Des Moines Insider sessions from other projects' at a glance; rename it if the task changes. Local CLI sessions get the prefix from `.claude/hooks/session-title.mjs`, generated by the Server repo's `coord title-hook` from `hub/coord/repos.json`.

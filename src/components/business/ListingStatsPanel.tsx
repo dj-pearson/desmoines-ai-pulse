@@ -1,11 +1,85 @@
 import { useId, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { useListingOwnerStats, type StatsListingType } from "@/hooks/useListingOwnerStats";
-import { changeLabel, peerSentence, type StatDay } from "@/lib/listingStats";
+import { useBusinessProCheckout, useBusinessProPlan } from "@/hooks/useBusinessPro";
+import {
+  changeLabel,
+  monthlyPriceLabel,
+  peerSentence,
+  rankSentence,
+  statsCsv,
+  type StatDay,
+} from "@/lib/listingStats";
 import { cn } from "@/lib/utils";
 
 const RANGES = [7, 30, 90] as const;
+/** get_listing_owner_stats allows 365 days only when Business Pro is live. */
+const PRO_RANGES = [7, 30, 90, 365] as const;
+
+function downloadCsv(series: StatDay[], filename: string) {
+  const blob = new Blob([statsCsv(series)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * The Business Pro line under the numbers. With Pro on: billing. Without it:
+ * the offer, priced from the business_plans row, or nothing when that row
+ * can't be read. Venues have no Pro, since there are no venue numbers to add to.
+ */
+function ProControls({
+  listingType,
+  listingId,
+  pro,
+}: {
+  listingType: "restaurant" | "attraction";
+  listingId: string;
+  pro: boolean;
+}) {
+  const plan = useBusinessProPlan(!pro);
+  const { pending, failure, startCheckout, openPortal } = useBusinessProCheckout(listingType, listingId);
+
+  if (pro) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-sm text-muted-foreground">Business Pro is on for this listing.</p>
+        <Button variant="outline" size="sm" className="min-h-9" disabled={pending !== null} onClick={() => void openPortal()}>
+          {pending === "portal" ? "Opening billing..." : "Manage billing"}
+        </Button>
+        {failure && (
+          <p role="alert" className="w-full text-sm text-destructive">
+            {failure.message}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (!plan.data) return null;
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <p className="max-w-prose text-sm">
+        <span className="font-medium">Business Pro, {monthlyPriceLabel(plan.data.priceMonthlyCents)}.</span> A year of
+        numbers instead of 90 days, your rank among similar places, a spreadsheet download and a Monday email with last
+        week's numbers. Cancel any time.
+      </p>
+      <Button size="sm" className="min-h-9" disabled={pending !== null} onClick={() => void startCheckout()}>
+        {pending === "checkout" ? "Starting checkout..." : "Get Business Pro"}
+      </Button>
+      {failure && (
+        <p role="alert" className="text-sm text-destructive">
+          {failure.message}
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface ListingStatsPanelProps {
   listingType: StatsListingType;
@@ -73,6 +147,8 @@ export function ListingStatsPanel({ listingType, listingId }: ListingStatsPanelP
   }
 
   const statType = listingType === "venue" ? "restaurant" : listingType;
+  const pro = data?.status === "ok" && data.pro;
+  const ranges = pro ? PRO_RANGES : RANGES;
 
   return (
     <section aria-labelledby={headingId} className="space-y-4 rounded-xl border p-4">
@@ -83,7 +159,7 @@ export function ListingStatsPanel({ listingType, listingId }: ListingStatsPanelP
           Visitor numbers
         </h4>
         <div role="group" aria-label="Date range" className="inline-flex rounded-lg border p-0.5">
-          {RANGES.map((r) => (
+          {ranges.map((r) => (
             <button
               key={r}
               type="button"
@@ -140,7 +216,10 @@ export function ListingStatsPanel({ listingType, listingId }: ListingStatsPanelP
           />
 
           {data.peers ? (
-            <p className="text-sm">{peerSentence(data.peers, statType)}</p>
+            <>
+              <p className="text-sm">{peerSentence(data.peers, statType)}</p>
+              {rankSentence(data.peers, statType) && <p className="text-sm">{rankSentence(data.peers, statType)}</p>}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">
               We don't list enough similar places yet to compare this one fairly.
@@ -151,6 +230,19 @@ export function ListingStatsPanel({ listingType, listingId }: ListingStatsPanelP
             Counts include only visitors who allowed analytics cookies, so your real traffic is higher. Days are in
             Central time.
           </p>
+
+          {data.pro && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-9"
+              onClick={() => downloadCsv(data.series, `listing-stats-${data.from}-to-${data.to}.csv`)}
+            >
+              Download as spreadsheet (CSV)
+            </Button>
+          )}
+
+          {listingType !== "venue" && <ProControls listingType={listingType} listingId={listingId} pro={data.pro} />}
         </>
       ) : null}
     </section>

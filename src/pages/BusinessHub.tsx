@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +40,33 @@ function HubBreadcrumbs() {
       ]}
     />
   );
+}
+
+/**
+ * Where Stripe sends an owner back after Business Pro checkout
+ * (create-business-pro-checkout: ?pro=success / ?pro=canceled). Success is
+ * worded as "on its way", because the panel turns Pro on only once
+ * stripe-webhook has written the subscription, which can lag the redirect.
+ */
+function ProReturnNotice() {
+  const [params] = useSearchParams();
+  const pro = params.get("pro");
+  if (pro === "success") {
+    return (
+      <p role="status" className="mb-6 rounded-xl border p-4 text-sm">
+        Thanks, your payment went through. Business Pro switches on for the listing within a minute or so; reload this
+        page if you don't see the year view yet.
+      </p>
+    );
+  }
+  if (pro === "canceled") {
+    return (
+      <p role="status" className="mb-6 rounded-xl border p-4 text-sm text-muted-foreground">
+        Checkout was canceled and nothing was charged.
+      </p>
+    );
+  }
+  return null;
 }
 
 export default function BusinessHub() {
@@ -99,6 +126,8 @@ export default function BusinessHub() {
             Your listings, your events and your campaigns, in one place.
           </p>
         </header>
+
+        <ProReturnNotice />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 sm:w-auto sm:inline-grid">

@@ -38,14 +38,16 @@ interface EmailCaptureModalProps {
 export function EmailCaptureModal({ isOpen, onClose, onSubmit, eventData }: EmailCaptureModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  // Three type parameters: sendReminders has a .default(), so zod 4 types the
+  // form's input (optional) and its parsed output (required) separately.
+  const form = useForm<z.input<typeof formSchema>, unknown, z.output<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       sendReminders: true,
     },
   });
 
-  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+  const handleSubmit = async (values: z.output<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
       const captureData: EmailCaptureData = {

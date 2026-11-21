@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { changeLabel, parseListingStats, peerGroupPhrase, peerSentence } from "../listingStats";
+import {
+  changeLabel,
+  monthlyPriceLabel,
+  parseListingStats,
+  peerGroupPhrase,
+  peerSentence,
+  rankSentence,
+  statsCsv,
+} from "../listingStats";
 
 const OK = {
   status: "ok",
@@ -23,7 +31,7 @@ describe("parseListingStats", () => {
   });
 
   it("keeps no_data distinct from an error", () => {
-    expect(parseListingStats({ status: "no_data", days: 30 })).toEqual({ status: "no_data", days: 30 });
+    expect(parseListingStats({ status: "no_data", days: 30 })).toEqual({ status: "no_data", days: 30, pro: false });
   });
 
   it("treats a missing comparison as none, not as malformed", () => {
@@ -73,5 +81,48 @@ describe("peer wording", () => {
     expect(peerGroupPhrase({ ...peers, group: "all", label: "attractions" }, "attraction")).toBe(
       "attractions on Des Moines Insider",
     );
+  });
+});
+
+describe("Business Pro fields", () => {
+  const PRO = {
+    ...OK,
+    pro: true,
+    peers: { ...OK.peers, rank: 3, of: 7, p25_views: 10, p75_views: 70 },
+  };
+
+  it("reads pro and the rank block", () => {
+    const s = parseListingStats(PRO);
+    expect(s?.status === "ok" && s.pro).toBe(true);
+    expect(s?.status === "ok" && s.peers?.pro).toEqual({ rank: 3, of: 7, p25_views: 10, p75_views: 70 });
+  });
+
+  it("treats a missing pro key as free, the shape before the migration", () => {
+    const s = parseListingStats(OK);
+    expect(s?.status === "ok" && s.pro).toBe(false);
+    expect(s?.status === "ok" && s.peers?.pro).toBeUndefined();
+  });
+
+  it("never shows half a rank block", () => {
+    const s = parseListingStats({ ...PRO, peers: { ...OK.peers, rank: 3, of: 7 } });
+    expect(s?.status === "ok" && s.peers?.pro).toBeUndefined();
+  });
+
+  it("words the rank with the same group phrase as the free sentence", () => {
+    const s = parseListingStats(PRO);
+    if (s?.status !== "ok" || !s.peers) throw new Error("parse");
+    expect(rankSentence(s.peers, "restaurant")).toBe(
+      "#3 of 7 Mexican restaurants by page views. The middle half of the group got 10 to 70.",
+    );
+    expect(rankSentence({ ...s.peers, pro: undefined }, "restaurant")).toBeNull();
+  });
+
+  it("exports the series as CSV", () => {
+    expect(statsCsv(OK.series)).toBe("date,views,shares,clicks\n2026-11-07,30,0,0\n");
+  });
+
+  it("prints the stored price without inventing cents", () => {
+    expect(monthlyPriceLabel(4900)).toBe("$49/month");
+    expect(monthlyPriceLabel(4950)).toBe("$49.50/month");
   });
 });

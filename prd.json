@@ -9700,6 +9700,326 @@
       "notes": "FILED AND FIXED 2026-09-19 (claude/admiring-cori-ukwzcp), in the iteration that found it. It surfaced while closing WEB-SEO-043: a rule measuring `const pageTitle` reported four over-length titles and two were false, and the reason they were false was this.\n\nTWENTY PAGES did both. useDocumentTitle removed from all of them, with its now-unused import; the Helmet title stays. AcceptableUsePolicy, AccessibilityStatement, AdvertisingPolicies, AffiliateDisclosure, Attractions, CookiePolicy, DMCAPolicy, DataProcessingAgreement, DateNightEvents, DietaryRestaurants, EventsThisWeekend, EventsToday, FreeEvents, GuidesPage, Hotels, KidsEvents, NewsletterConfirm, OpenNowRestaurants, Playgrounds, Unsubscribe.\n\nTHE RACE WAS HIDING A TOO-LONG TITLE, which is why AC3 exists. /restaurants/dietary rendered 72 characters the moment its short imperative title stopped winning, and its description was 214. Both fixed. That is the argument for re-measuring everything rather than the pages the story names: a duplicate setter does not just make the title ambiguous, it masks the length of the one that reaches a crawler.\n\nVERIFIED by rendering 36 routes against a production build, sampling each title at 1.2s and 3.7s: 0 titles that change after mount, 0 over 60, 0 descriptions over 160. Before the fix, sampling twice was the only way to see the race at all. npm run validate passes, vitest 680/680, the required axe lane 48/48, and route-smoke is 95 passed / 13 failed - the same 13 backend-dependent failures as before the change.\n\nAC5's check is NOT built. The pattern is visible in source and would be a short script, but the twenty instances are gone and a check with no baseline to hold is better written when somebody re-introduces one. Recorded rather than built, deliberately."
     },
     {
+      "id": "LEAP-001",
+      "title": "Sell a presenting-sponsor slot in the Des Moines Insider weekly digest",
+      "description": "As a local business, I want to buy the presenting-sponsor slot in Des Moines Insider's weekly digest so I reach people who opted in to hear about Des Moines. assemble-weekly-digest and send-weekly-digest contain zero references to a sponsor (grep, 2026-11-07), and ad_rate_card has no newsletter placement, so the one owned channel with a habit attached earns nothing. Axios Des Moines and 6AM City fund themselves on this unit. Des Moines Insider's digest is assembled from structured event data rather than written by hand, so a sponsor can be matched to the issue's content (a brewery against a brewery-heavy weekend).",
+      "acceptanceCriteria": [
+        "A 'newsletter_sponsor' row exists in ad_rate_card. Pricing today is per day (base_daily_rate x days_count through calculate_campaign_pricing, 20260902000008_campaign_pricing_authority.sql), so one issue is modelled explicitly (days_count = 1 per issue date, or an additive pricing-unit column), and enforce_campaign_placement_pricing still computes the price; create-campaign-checkout re-prices it and returns 409 PRICE_CHANGED on a mismatch like every other placement.",
+        "assemble-weekly-digest reads the paid, approved newsletter_sponsor campaign for the issue's send date and renders exactly one sponsor block (logo, two lines of copy, one link) above the first section; with no paid campaign it renders no block and no house filler that implies a sponsor.",
+        "Only one newsletter_sponsor campaign can hold a given issue date; a checkout for a sold date is refused before payment and the next open dates are returned.",
+        "Sponsor clicks go through a tracked redirect recording issue id, campaign id and an anonymous click into the source useCampaignAnalytics already reads; opens render as unmeasured unless an open pixel is actually wired.",
+        "/advertise (src/pages/Advertise.tsx, which today states no subscriber figure at all) shows the newsletter unit with the measured count of active, confirmed newsletter_subscribers; when the count is unreadable (activeSubscriberCount returns -1 since WEB-BE-032) the page says the figure is unavailable rather than printing 0 or a round number.",
+        "The sponsor block carries a visible 'Sponsored' label linking to /advertising-policies, and the creative passes campaign-creative-review before the issue sends; an unreviewed creative blocks the block, not the issue."
+      ],
+      "priority": 0.05,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Axios Des Moines runs a daily ad-backed newsletter (https://www.axios.com/local/des-moines/2026/02/09/1-fun-thing-we-re-5-years-old); 6AM City reports most of its revenue from local-business advertising across ~400 newsletters (https://www.amediaoperator.com/news/6am-citys-secret-weapon-400-newsletters-with-no-staff/). Neither is shown to target sponsors by issue content. CRITIC FIXES: the draft told the builder to remove a hardcoded '15K+ Newsletter Subscribers' claim from Advertise.tsx; no such string exists there, so that AC was replaced with adding the measured figure. The draft also said 'priced per issue' as if the pricing authority supported it; it is per day. DEPENDS ON: WEB-OPS-007 (the digest send is a pg_cron job, and 57 of 61 jobs had never succeeded), WEB-ADS-006 (creative auto-review never runs), WEB-ADS-010/011 and GM card a222e9bf (purchase path proven by one real purchase). SIZE: M. SUCCESS METRIC: first paid issue within 60 days of launch; then share of issues sold per month and revenue per issue, reported against the measured subscriber count."
+    },
+    {
+      "id": "LEAP-002",
+      "title": "Verified Business: turn a free listing claim into a paid monthly tier",
+      "description": "As an owner who has claimed my listing, I want to pay for a Verified Business tier that lets me add photos, upload a menu, post deals, boost my events and see what my listing did for me each month. WEB-ADS-009 built business_claims and an owner-scoped UPDATE policy limited to hours, photos, website and description, plus a 'Promote this listing' link into /advertise; BusinessHub.tsx has no price, premium or verified tier. Claim owners are Des Moines Insider's warmest advertiser leads, and owner-supplied hours and menus feed verified data back into listings, which is the accuracy edge over AI answer layers that repeat stale data.",
+      "acceptanceCriteria": [
+        "A 'verified_business' Stripe price plus subscription_plans row exists, purchasable only by a user holding an approved business_claims row; checkout reuses create-subscription-checkout and stripe-webhook, not a second payment path. Confirm subscription_plans exists in production before building (WEB-QA-018 found 29 queried tables missing).",
+        "BusinessHub.tsx shows Free vs Verified side by side with the real Stripe price; Verified features unlock only while the subscription is active per the webhook and revert on cancel without deleting the owner's content.",
+        "Verified owners can upload a menu through parse-menu-upload, add photos into the existing media pipeline, and post deals into the deals table (insert today is admin-only after WEB-SEC-033; widen it to verified claimants of that listing only); each change records the owner as source.",
+        "A 'Verified by owner' badge, defined once, shows on restaurant/attraction detail pages and list cards only for active Verified listings, never for unclaimed or lapsed ones.",
+        "A monthly report per Verified listing (page views, directions taps, website and phone clicks, saves) is generated and emailed; a metric with no recorded source renders as unavailable with the reason, never as 0.",
+        "An admin view reads Verified MRR, active count and churn from Stripe, not from a local counter."
+      ],
+      "priority": 0.1,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Yelp sells paid business-page upgrades and is moving listings into an action product (https://www.yelp-ir.com/news/press-releases/news-release-details/2026/Yelp-Launches-the-New-Yelp-Assistant-Transforming-Local-Discovery-from-Search-to-Answers-and-Actions/default.aspx), but has no Des Moines event graph; Catch Des Moines lists businesses with no owner tooling (https://www.catchdesmoines.com). NOT A DUPLICATE: WEB-ADS-009 is the free claim; this is the paid tier on top. DEPENDS ON WEB-QA-013/026 (page views now recorded) for the report, WEB-ADS-009 AC5 (admin claim queue screen) for claim throughput. SIZE: L. SUCCESS METRIC: claim-to-Verified conversion and Verified MRR; target 10 paying Verified businesses within one quarter of launch."
+    },
+    {
+      "id": "LEAP-003",
+      "title": "Organizer and venue accounts with direct publishing and an embeddable upcoming-events widget",
+      "description": "As a venue or event organizer, I want a free organizer account where my events publish without the anonymous queue, and an embed code that shows my upcoming events on my own site. The local music coalition dissolved and 80/35 was cancelled, so Des Moines organizers have fewer places to post. Every embed is a backlink and a referral source, and every organizer who posts directly makes the Des Moines Insider calendar more complete than Catch Des Moines' visitor-focused one. A repo grep found no embed widget and no PRD story proposing one.",
+      "acceptanceCriteria": [
+        "Organizer accounts link to a venue record (VenueDetail.tsx) or an organizer profile; submissions from a linked organizer through /submit-event (SubmitEvent.tsx) skip anonymous triage (triage-event-submission) and publish once the AI checks pass. WEB-ADS-008 (human-approved submissions never reach the site) is closed first.",
+        "A public, cacheable widget endpoint returns a venue's or organizer's upcoming events as an iframe/script embed in light and dark styles; every event links to its Des Moines Insider event page with a UTM tag.",
+        "The organizer dashboard shows the embed code, a copyable 'Listed on Des Moines Insider' badge, and measured widget impressions and click-throughs per week.",
+        "Embed loads are cached and rate limited so a busy venue site cannot load the database; an unknown venue id returns an empty widget, not an error page.",
+        "Each organizer gets a per-event share kit from the dashboard: OG image via og-image, short link, prewritten caption.",
+        "Admin sees the count of active embeds and referral sessions from them."
+      ],
+      "priority": 0.14,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: 80/35 cancelled (https://littlevillagemag.com/80-35-officially-canceled-after-nearly-20-years-in-des-moines/); Catch Des Moines offers 'Submit Your Event' with no embed (https://www.catchdesmoines.com/events/). Owning the organizer relationship completes the event graph, which Google Ask Maps lacks for small and suburban events. CRITIC FIX: dropped the draft's 'Do515 may have stopped resolving', which was unverified. This is the supply side LEAP-004 (ticketing) and LEAP-012 (white-label calendars) build on. SIZE: L. SUCCESS METRIC: active organizer accounts, active embeds, referral sessions per month, and share of weekend events that arrived by direct organizer submission."
+    },
+    {
+      "id": "LEAP-004",
+      "title": "Self-serve RSVP and ticketing for small Des Moines events, with a lower fee than Eventbrite",
+      "description": "As a church fundraiser, trivia night or small venue, I want to sell tickets or take free RSVPs on my Des Moines Insider event page and get paid out, instead of sending buyers to Eventbrite. Event pages today only link out to a ticket URL; event_attendance and event_attendees record interest, not a purchase. Ticketing is the transaction that makes an organizer come back every week, and the buyer list it creates (with consent) is the most valuable audience a city guide can own. No PRD story covers ticket sales, payouts or Stripe Connect (searched all nine PRD files).",
+      "acceptanceCriteria": [
+        "Organizers with a linked account (LEAP-003) can onboard to Stripe Connect Express from the organizer dashboard; ticket money never passes through a Des Moines Insider balance, and payouts are Stripe's.",
+        "An event can offer free RSVP or paid ticket types (name, price, quantity, sales window); checkout is a Stripe Checkout session on the connected account with an application fee, and capacity is enforced in the database so two buyers cannot take the last ticket.",
+        "Buyers receive an emailed ticket with a QR code; the organizer can scan or look up tickets at the door from a mobile web check-in page, and a ticket can be checked in once.",
+        "Refunds and event cancellation refund all buyers through Stripe and emit STATUS:CANCELLED on the event; the fee policy (who absorbs Stripe fees, whether the application fee is refunded) lives in one configuration row.",
+        "The fee shown to organizers is the real computed fee, with an example ticket breakdown, and the public event page shows the all-in buyer price before checkout.",
+        "Admin sees gross ticket volume, application-fee revenue and refund rate from Stripe data; the organizer sees sales per ticket type and an exportable attendee list of buyers who opted in to organizer contact."
+      ],
+      "priority": 0.19,
+      "passes": false,
+      "notes": "NEW STORY (replaces the draft's LEAP-003, which was already built: send-weekly-digest is a personalized per-user digest and agent-weekly-digest, AOS-NURTURE-004 passes=true, sends interest- and saved-search-matched issues on a Thursday cron). COMPETITIVE RATIONALE: Eventbrite charges organizers a percentage plus a per-ticket fixed fee on top of payment processing (check current US rates at https://www.eventbrite.com/organizer/pricing/ before setting ours); a metro-only platform with a lower fee and a built-in local audience is a real wedge for the long tail of small organizers. Eventbrite also sells sponsored listings in US markets (https://www.businesswire.com/news/home/20251118599275/en), so it competes for the same organizer dollar. OWNER DECISIONS: fee level; whether paid tickets are allowed for events not run by the organizer account. DEPENDS ON LEAP-003 and WEB-ADS-008. SIZE: L. SUCCESS METRIC: events selling tickets per month, gross ticket volume, application-fee revenue, and repeat organizers (sold tickets in 2+ months)."
+    },
+    {
+      "id": "LEAP-005",
+      "title": "Sell promotion at the moment of intent: featured events at submission and featured deals for claimed owners",
+      "description": "As an organizer submitting an event, or an owner posting a deal, I want to pay to feature it right there instead of being sent to a generic /advertise page. SubmitEvent.tsx offers no paid option, src/pages/EventPromotionPlanner.tsx:422 just navigates to /advertise, and Deals.tsx:312 tells readers that featured deals 'are picked by the Des Moines Insider team', so deals.is_featured is set by hand and the placement with the clearest commercial value is given away. The sponsored-listing machinery already exists (sponsored_listing in ad_rate_card, is_sponsored/sponsored_until on content rows, cap of 2, tracked impressions from WEB-FEAT-005) and deal redemptions are already counted (deal_redemptions, WEB-SEC-033); what is missing is the purchase at the point where intent is highest.",
+      "acceptanceCriteria": [
+        "SubmitEvent.tsx offers Free, Featured and Featured+Expedited with prices read from ad_rate_card ('event_feature' and 'event_expedite' rows); paid options go through create-campaign-checkout so the price is server-authoritative.",
+        "A paid feature sets is_sponsored and sponsored_until on the event only after payment succeeds and the event is approved; a rejected event is refunded automatically through process-stripe-refund, and a breached expedite SLA (timestamp set at submission, admin alert raised) refunds the expedite fee.",
+        "A claimed business owner can buy 'featured_deal' for one of their own deals; deals.is_featured is then set only by an active paid campaign and cleared when the campaign or deal ends, with unused days credited; the 'picked by the Des Moines Insider team' copy at Deals.tsx:312 is replaced by a sponsored disclosure.",
+        "EventPromotionPlanner.tsx links to the feature checkout for an event the organizer owns, not to /advertise.",
+        "Featured items respect the existing cap of 2 per list and carry a 'Featured' or 'Sponsored' label on every surface, including the weekly digest deals section.",
+        "The buyer's report shows impressions and clicks (sponsored inventory class) and, for deals, redemptions from deal_redemptions; any metric with no recorded source renders as unavailable."
+      ],
+      "priority": 0.24,
+      "passes": false,
+      "notes": "MERGED: the draft's LEAP-006 (featured events) and LEAP-019 (featured deals). On its own, LEAP-019 was mostly built: redemption counting shipped in WEB-SEC-033 and deals.is_featured already orders the list (src/hooks/useDeals.ts:79); what remained was one new placement row. Together they are one product: low-priced placement sold where intent is. COMPETITIVE RATIONALE: 6AM City widened its advertiser base with low-priced listing products (https://pressgazette.co.uk/news/6am-city-ryan-heafy-interview/); Eventbrite sells sponsored event listings (https://www.businesswire.com/news/home/20251118599275/en). DEPENDS ON WEB-ADS-008, WEB-ADS-010/011, and LEAP-002's deal-insert widening for claimed owners. SIZE: M. SUCCESS METRIC: share of submissions choosing a paid option, monthly event-feature plus featured-deal revenue, redemption rate per featured deal."
+    },
+    {
+      "id": "LEAP-006",
+      "title": "Put the Des Moines Insider event graph inside ChatGPT and Claude: an MCP server and a ChatGPT app with attribution",
+      "description": "As someone asking an AI assistant 'what is on in Des Moines this weekend with kids', I want an answer drawn from Des Moines Insider's deduplicated metro calendar, with links back. Discovery is moving into answer layers (Google Ask Maps, Yelp Assistant), and Des Moines Insider is currently only a page those layers might crawl; the site's own SEO stories show crawlers often get an SPA shell (SEO-001, SEO-027). Publishing a first-party tool that assistants call directly makes Des Moines Insider the source an assistant uses rather than one it may or may not have indexed. No PRD story proposes an MCP server or ChatGPT app (searched all nine PRD files).",
+      "acceptanceCriteria": [
+        "A public remote MCP server exposes read-only tools: search_events (date range, area from src/pseo/taxonomy.ts, category, price, kid-friendly), get_event, search_restaurants, open_now, and plan_weekend; every result carries the canonical Des Moines Insider URL and a last-verified timestamp.",
+        "The same tools are packaged as a ChatGPT app with OpenAI's Apps SDK, rendering event cards that link to Des Moines Insider pages with a UTM source per assistant.",
+        "Tools read through the same queries api-events and api-restaurants use (shared code, not a copy), are rate limited per client, and never return user data, unpublished or archived events, or past events presented as upcoming.",
+        "Tool calls, results returned and click-throughs are counted per assistant and per tool, visible in an admin view; a tool error is distinguishable from an empty result in those counts.",
+        "A contract test fails if a documented tool field disappears, so assistants depending on the schema do not silently break.",
+        "Signed-in Insider users can connect their account (OAuth) so the assistant can save events or create a standing alert (LEAP-008); without a connection the tools stay read-only."
+      ],
+      "priority": 0.29,
+      "passes": false,
+      "notes": "NEW STORY (fills a slot freed by merging the draft's featured events and featured deals). COMPETITIVE RATIONALE: Google Ask Maps answers itinerary questions from its places index (https://www.seroundtable.com/ask-maps-google-gemini-41068.html) and Yelp Assistant answers and books in chat (https://macrumors.com/2026/04/21/yelp-ai-assistant/); OpenAI's Apps SDK (announced October 2025, with travel launch partners such as Booking.com and Expedia) lets a source appear inside ChatGPT. Neither Catch Des Moines nor Axios Des Moines is known to ship one; verify before claiming it publicly. RELATION: LEAP-015 sells the same data to B2B buyers; this is the consumer distribution channel, free and attributed. SEO-049 (AI citation baseline) is the before measure. SIZE: M. SUCCESS METRIC: weekly tool calls, click-throughs to Des Moines Insider from assistants, and accounts connected through an assistant."
+    },
+    {
+      "id": "LEAP-007",
+      "title": "Public, prerendered trip-plan pages: every AI itinerary becomes a shareable link and a long-tail search page",
+      "description": "As someone who built a Des Moines plan in Trip Planner, I want to publish it as a link my friends can open without an account. TRIP_SHARE_AVAILABLE is false in src/lib/tripPlannerStatus.ts because /trips/shared/:code has no route and the D1 storage migration (20261014000001) deliberately has no public read path for trip_plans (TP-25). Android already builds ${SITE_URL}/trips/shared/<code> links (TripPlannerRemoteDataSource.kt, hidden by AND-OVH-011), so the web route is also the missing half of a shipped mobile feature. A prerendered '2-day Des Moines itinerary with kids' page competes for itinerary queries with plans built from events Google does not know about.",
+      "acceptanceCriteria": [
+        "A /trips/shared/:code route renders a published plan read-only for anonymous visitors through a SECURITY DEFINER RPC that returns only plans the owner published and strips user id, email, private notes and home addresses; direct anon SELECT on trip_plans stays closed.",
+        "Only the owner can publish or unpublish; an unpublished or unknown code returns a 'no longer shared' page with a 410-style status, codes are random, and the RPC is rate limited so codes cannot be enumerated.",
+        "Shared pages are prerendered with title, description, ItemList/TouristTrip JSON-LD for the stops, and an OG card from og-image.",
+        "The page offers 'Plan your own' into TripPlanner with one free anonymous generation before signup, and signups are attributed to the share code.",
+        "Stops whose date has passed are marked past; a past event is never presented as upcoming.",
+        "TRIP_SHARE_AVAILABLE is removed rather than left as a dead flag, and the URL format matches what Android already emits so ANDP-012 can re-enable Share without a client change."
+      ],
+      "priority": 0.33,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Google Ask Maps builds itineraries from its places index (https://www.droid-life.com/2026/03/12/google-gets-new-ai-powered-ask-maps-feature/) but cannot see small and suburban Des Moines events. CRITIC NOTES: WEB-FEAT-011 is marked passes=true and lists 'Share generates the public /trips/shared/<code> link', which the live flag contradicts; this story is the real build, not a duplicate. The planner itself only came back after the D1 migration recreated trip_plans, so confirm generate-itinerary is healthy in production first. SIZE: M. SUCCESS METRIC: plans published per week, visits per shared plan, signups attributed to share codes."
+    },
+    {
+      "id": "LEAP-008",
+      "title": "Standing alerts in plain English, delivered by email and as a live calendar feed",
+      "description": "As a local, I want to type 'jazz under $20 near East Village on Fridays' once and be told whenever a match is added, or have it appear in my Google or Apple calendar and update itself. nlp-search already parses queries and saved-search-alerts already sends matches, but they are not joined; src/lib/icsEvent.ts and AddToCalendarButton.tsx add one event at a time. Ask Maps and Yelp Assistant answer once; neither watches a complete local calendar for you, and a webcal feed puts Des Moines Insider in a user's calendar every week with no install.",
+      "acceptanceCriteria": [
+        "From SearchResults.tsx a signed-in user can save a natural-language query; nlp-search's structured output (categories, price, area, day of week, keywords) is stored as the saved search's filter with the original text kept, and the user sees and can correct the parsed interpretation before saving.",
+        "saved-search-alerts evaluates these with the same matching code as structured saved searches and sends at most one digest per user per day; each email links to that search's results and unsubscribes from that alert alone.",
+        "A public edge function serves RFC 5545 feeds for a neighborhood, a category, a venue, and a user's saved search (the last by an unguessable, revocable per-user token); feeds reuse icsEvent.ts formatting, give each VEVENT a stable UID, use America/Chicago, and emit STATUS:CANCELLED for removed events for a period.",
+        "NeighborhoodPage.tsx, category hubs, VenueDetail.tsx and the saved-search list show 'Subscribe in calendar' with webcal:// and Google Calendar links; feeds are cached with a short TTL and rate limited per token.",
+        "Insider (10 saved searches) and VIP limits apply unchanged; a free user can create one standing alert as a trial.",
+        "Alerts created, alert email clicks and distinct feed tokens fetched in the last 7 days are counted, so a delivery failure is distinguishable from no matches."
+      ],
+      "priority": 0.38,
+      "passes": false,
+      "notes": "MERGED: the draft's LEAP-011 (natural-language alerts) and LEAP-012 (calendar feeds, self-sized S, which failed the 'big move' test alone). Both are delivery surfaces for the same saved-search object. COMPETITIVE RATIONALE: Ask Maps (https://www.techspot.com/news/111670-google-maps-gets-conversational-gemini-powered-ask-maps.html) and Yelp Assistant (https://ppc.land/yelp-assistant-goes-full-service-book-order-and-schedule-in-one-chat/) are question-and-answer tools; Catch Des Moines' events page has no feed (https://www.catchdesmoines.com/events/). DEPENDS ON IOS-AUDIT-FEAT-012 (alert delivery unverified) and WEB-OPS-007: saved-search-alerts runs from pg_cron and the job fails until app.settings.service_role_key is set. SIZE: M. SUCCESS METRIC: standing alerts and active feeds per week, alert click rate, 30-day retention of users with an alert or feed vs without."
+    },
+    {
+      "id": "LEAP-009",
+      "title": "The structured family and playground database: verified attributes, age filters and parent confirmations",
+      "description": "As a parent, I want to find a fenced playground with shade, restrooms and a splash pad near Johnston that suits a 3-year-old, today. Playgrounds and kids content is the module that already ranks (6,706 GSC impressions at positions 6-7, src/pseo/measuredDemand.ts). The playgrounds table already has has_restrooms, has_shade, surface_type, accessibility_notes, age_range and amenities (20260520000005_add_playground_admin_fields.sql), but no per-attribute source or verification date, and no way for parents to keep it current. Competitors publish undated listicles.",
+      "acceptanceCriteria": [
+        "Each playground attribute (existing columns plus new fenced, splash_pad, parking, indoor) carries a source and last_verified_at; AdminPlaygrounds.tsx edits values and shows provenance.",
+        "Playgrounds.tsx filters on these attributes and distance; PlaygroundDetails.tsx shows each attribute with its verification date, and an unknown attribute displays as unknown, never as 'no'.",
+        "Signed-in parents can confirm or correct an attribute with an optional photo; three agreeing confirmations update the value, and every change is logged with contributor, previous value and time.",
+        "Kids events gain an age-range field filled by ingestion where the source states it, and /events/kids (KidsEvents.tsx) filters by age.",
+        "Playground structured data is built only from verified attributes; filtered combinations with measured demand (e.g. 'splash pads in Ankeny') are generated through the existing pSEO system and its inventory gate.",
+        "A coverage report shows the share of playgrounds with each attribute verified in the last 12 months."
+      ],
+      "priority": 0.43,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Des Moines Parent and desmoinesmom.com publish roundups, not filterable data (https://outdoorfun.desmoinesparent.com/?p=4430, https://desmoinesmom.com/des-moines-parks/). NOT A DUPLICATE of prd-seo-q4 SEO-042 (playground titles and hub conversion): this is the data model and contribution loop those pages need. CRITIC FIX: the draft said the table 'gains typed attributes'; six already exist, so the story now adds provenance and only the missing columns. SIZE: L. SUCCESS METRIC: playgrounds with 5+ verified attributes, parent confirmations per month, organic clicks to playground and kids pages."
+    },
+    {
+      "id": "LEAP-010",
+      "title": "Best of Des Moines as a dated annual awards season with category sponsors and winner kits",
+      "description": "As a local business, I want to sponsor a Best Of category or buy a winner's kit (decal, web badge, social graphics). BestOf.tsx and BestOfCategory.tsx have no sponsor or badge references. Reader-voted local awards are a proven revenue line for city media, voting requires an account so the ballot drives signups, and the Des Moines Insider ballot covers suburbs the Register's and CITYVIEW's editorial lists cover thinly.",
+      "acceptanceCriteria": [
+        "Best Of runs as a dated season (nomination, voting, results) configured in the database, with the ballot closed outside voting windows; WEB-SEC-025 (ballot privacy policy, written but not applied) and WEB-SEC-029 (bot protection on signup) ship first.",
+        "A category can carry one paid sponsor bought through campaign checkout ('bestof_category_sponsor' placement), shown as 'Presented by' on BestOfCategory.tsx; a test proves sponsorship cannot change vote counts or ordering.",
+        "Winners get a free embeddable badge linking to their category page; a paid winner kit is purchasable only by the winning business's approved claimant (business_claims).",
+        "Results pages are prerendered per category and per suburb with the counting method stated.",
+        "New accounts created from the ballot page are attributed to the season.",
+        "A sponsor or kit purchase for a business that did not win, or a category already sponsored, is refused before payment."
+      ],
+      "priority": 0.48,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: CITYVIEW publishes editorial guides (https://www.dmcityview.com/feature-1/2026/05/06/summer-arts-entertainment-guide-9/); the Register's print base keeps shrinking (Sunday print 19,571 reported to 2026-03-31, https://ground.news/article/register-woes-congressional-stock-trades-ai-legislation-iowas-most-common-criminal-offenses-and-ankeny-is-a-top-5-place-to-live, secondary source). CRITIC FIX: the draft cited 'SEC-029', which does not exist; the bot-protection story is WEB-SEC-029. SIZE: L. SUCCESS METRIC: ballot-driven signups per season, badges embedded, sponsor plus kit revenue per season."
+    },
+    {
+      "id": "LEAP-011",
+      "title": "Suburb editions: per-suburb digests and hubs for Ankeny, Waukee, Johnston, Urbandale and West Des Moines, each with its own sponsor",
+      "description": "As someone living in Waukee, I want a weekly email and a page about what's on in Waukee, not downtown Des Moines. Downtown DSM and Catch Des Moines lean central. 6AM City built its business on many small local newsletters with ads; suburb editions give Des Moines Insider several sellable inventories and suburb chambers as sales partners. No PRD story proposes per-suburb newsletters.",
+      "acceptanceCriteria": [
+        "Subscribers choose one or more suburb editions at signup and in preferences; the choice is stored additively on newsletter_subscribers.",
+        "assemble-weekly-digest produces a per-suburb issue from events, openings and deals located in that suburb using src/pseo/taxonomy.ts, and skips an edition whose week has fewer than a configured minimum of items rather than sending a thin issue; the skip is recorded.",
+        "Each edition has its own newsletter_sponsor inventory (LEAP-001), priced from that edition's measured subscriber count.",
+        "Suburb hub pages (NeighborhoodPage.tsx or a suburb route) show the edition signup and an issue archive, prerendered.",
+        "Per-edition subscribers, sends and clicks are reported separately.",
+        "A suburb chamber or city can be given a partner login that submits events into that edition's queue."
+      ],
+      "priority": 0.52,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: 6AM City runs about 400 local newsletters with most revenue from local-business ads (https://www.amediaoperator.com/news/6am-citys-secret-weapon-400-newsletters-with-no-staff/); Downtown DSM is downtown-centred (https://www.DSMpartnership.com/downtowndsmusa/news-blog/blog/five-downtown-dsm-events-nov-4--10). DEPENDS ON LEAP-001 and WEB-OPS-007. SIZE: M. SUCCESS METRIC: subscribers per edition, editions with a paying sponsor, suburb-edition ad revenue."
+    },
+    {
+      "id": "LEAP-012",
+      "title": "White-label community calendars licensed to Des Moines suburbs, chambers and districts",
+      "description": "As a suburb, chamber or business district, I want a branded community events calendar on my own site, kept current without staff, instead of maintaining one by hand. Des Moines Insider already crawls, deduplicates and geotags the metro calendar; licensing a filtered, branded view of it turns the event graph into recurring B2B revenue, puts Des Moines Insider attribution on civic sites, and brings each partner's own submissions into the shared graph. This goes beyond LEAP-003's free per-venue widget: it is a paid, configurable product for a whole jurisdiction.",
+      "acceptanceCriteria": [
+        "A partner record defines a filter (taxonomy areas from src/pseo/taxonomy.ts, categories, optional venue list), branding (logo, colours, fonts) and an allowed embed origin list; the calendar renders as an embed or a hosted page at a partner path.",
+        "Partners can submit and edit events through a partner login; those events enter the shared Des Moines Insider calendar under the same moderation as organizer submissions (LEAP-003).",
+        "Licences are annual Stripe subscriptions through create-subscription-checkout; a lapsed licence shows a 'Powered by Des Moines Insider' fallback calendar rather than breaking the partner's page.",
+        "Every event in a partner calendar carries a 'via Des Moines Insider' link to its canonical event page; the partner can hide Des Moines Insider ads but not the attribution.",
+        "The partner dashboard reports calendar views, event clicks and submissions per month, measured, with unavailable shown where a metric has no source.",
+        "Embed responses are cached and rate limited per partner; an origin not on the partner's list gets the unbranded calendar."
+      ],
+      "priority": 0.57,
+      "passes": false,
+      "notes": "NEW STORY (fills a slot freed by merging the draft's alerts and calendar-feed stories). COMPETITIVE RATIONALE: Catch Des Moines is the metro DMO with the hotel and chamber backlink profile (WEB-SEO-011 notes 'we will not out-authority them'); licensing the calendar to the suburbs and chambers turns that authority gap into distribution. UNVERIFIED: what calendar tools Ankeny, Waukee, Johnston, Urbandale and West Des Moines use today and what they pay; check each city and chamber site and validate with 3 prospects before pricing or building the billing half. SIZE: L. SUCCESS METRIC: signed partners, licence ARR, partner-submitted events per month, referral sessions from partner calendars."
+    },
+    {
+      "id": "LEAP-013",
+      "title": "Insider for Employers: bulk Insider seats sold to Des Moines employers as a relocation and retention perk",
+      "description": "As an HR lead at a Des Moines employer, I want to give new hires and relocating staff Insider accounts so they find their footing in the metro quickly. Insider is $4.99/month and VIP $12.99/month (src/lib/planBenefits.ts), priced for individuals; there is no team or seat product. Des Moines' large insurance and financial employers recruit from outside Iowa, and a city-guide perk that answers 'what is there to do here' is something Des Moines Insider can sell in bulk using its existing entitlement checks.",
+      "acceptanceCriteria": [
+        "An organization record holds a seat count and a Stripe subscription billed per seat through create-subscription-checkout; seats grant Insider entitlements through the existing entitlement checks, not a parallel flag.",
+        "An org admin invites employees by email or by an allowed email domain; a claimed seat attaches to the employee's own account, and removing the employee frees the seat without deleting their saves.",
+        "Employees who leave keep their account and can continue on an individual plan; their saves and saved searches are never visible to the employer.",
+        "A 'New to Des Moines' onboarding path (neighborhood picker, interests, first-week events, LEAP-008 standing alerts) is shown to seat holders on first sign-in.",
+        "The org admin sees seats used and aggregate activation (seat claimed, onboarding completed) only, never individual browsing.",
+        "Seat revenue is reported separately from consumer MRR in the admin view."
+      ],
+      "priority": 0.62,
+      "passes": false,
+      "notes": "NEW STORY (replaces the draft's LEAP-013 referral reward, self-sized S, a reward bolted onto existing profile_referral_codes and gated on an unmade owner decision; small polish, not a big move). COMPETITIVE RATIONALE: UNVERIFIED gap. The Greater Des Moines Partnership's talent-attraction work is the nearest analogue; no consumer city guide in the metro is known to sell employer seats. Validate with 3 HR buyers before building billing. SIZE: M. SUCCESS METRIC: organizations signed, paid seats, seat activation rate, seat-to-individual conversion after employment ends."
+    },
+    {
+      "id": "LEAP-014",
+      "title": "Route group-travel RFPs to Des Moines hotels and venues as a paid lead product",
+      "description": "As a wedding party, sports team or conference planner, I want to submit one RFP and hear back from several Des Moines hotels; as a hotel, I want to pay for qualified group leads. GroupTravel.tsx collects a hotel RFP (RfpFormValues) and sends it through the generic useContactForm (GroupTravel.tsx:201), so it lands in a contact inbox and earns nothing. Hotel booking CTAs pay nothing either, because affiliate_url is empty (WEB-FEAT-021).",
+      "acceptanceCriteria": [
+        "RFP submissions are stored in a dedicated table (dates, group size, room nights, budget band, preferred area), not the contact-form table, with RLS limiting reads to the planner, admins and matched subscribed hotels.",
+        "Hotels with an approved business_claims row can subscribe to group leads (Stripe subscription or per-lead price) and set filters (min rooms, dates, areas); matching RFPs are emailed within 15 minutes.",
+        "Each RFP goes to at most a configured number of hotels; planner contact details are visible only to subscribed recipients, and the planner is told how many hotels received it.",
+        "The planner gets a page listing responses; hotels mark a lead won or lost so conversion is measured.",
+        "HotelsNearVenue and EventHotelCallout link large-group visitors into the RFP form with the event and dates prefilled.",
+        "Spam and test submissions are filtered by bot protection before any lead is delivered or charged."
+      ],
+      "priority": 0.67,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Catch Des Moines serves meeting and sports planners as a bureau (https://www.catchdesmoines.com), not a self-serve lead marketplace. DEPENDS ON WEB-SEC-029 (bot protection) and LEAP-002's claim-holder billing. SIZE: M. SUCCESS METRIC: RFPs per month, subscribed hotels, lead revenue, won rate reported by hotels."
+    },
+    {
+      "id": "LEAP-015",
+      "title": "Licensed Des Moines events API with keys, tiers and required attribution",
+      "description": "As a hotel concierge screen, relocation firm or employer intranet, I want a documented Des Moines events feed with an API key and an SLA. api-events and api-restaurants run on the anon key with an IP rate limit and no per-caller keys. An api_keys table is defined in 20251204000000_security_features.sql and a useApiKeys hook and an orphan ApiKeyManager exist (WEB-AUTH-011), but WEB-QA-018 lists api_keys and api_key_usage among the tables missing in production. Licensing the metro calendar makes Des Moines Insider the upstream source others cite.",
+      "acceptanceCriteria": [
+        "WEB-QA-018's decision for api_keys/api_key_usage is taken as 'build': the existing migration is reconciled and applied (hashed keys, owner, tier, monthly quota, status), not a second table; ApiKeyManager is wired or deleted per WEB-AUTH-011.",
+        "api-events and api-restaurants accept a key, enforce quota per key, and keep a free tier with a low quota and mandatory attribution.",
+        "Paid tiers are Stripe subscriptions through create-subscription-checkout; a lapsed subscription drops the key to free tier rather than breaking the caller.",
+        "A developer page lets a signed-in user create, rotate and revoke keys and see daily usage; the raw key is shown once at creation.",
+        "Responses include a schema version, canonical event URL, last-verified timestamp and attribution string; a contract test fails if a documented field disappears.",
+        "Shipped iOS and Android clients that call these endpoints keep working per the repo's CLAUDE.md backward-compatibility rules: either a documented keyless legacy path stays open for them, or they migrate first."
+      ],
+      "priority": 0.71,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: discovery is moving into answer layers (Ask Maps, https://www.seroundtable.com/ask-maps-google-gemini-41068.html; Yelp Assistant, https://macrumors.com/2026/04/21/yelp-ai-assistant/). No external evidence of B2B demand was found, so validate with 3 prospects before building paid tiers. RELATION: LEAP-006 shares the query layer and is the free consumer channel. CRITIC FIX: the draft proposed a new api_keys table; one is already defined (and missing in production), so the story reconciles it. SIZE: M. SUCCESS METRIC: active keys, paid API subscriptions, attributed referral clicks."
+    },
+    {
+      "id": "LEAP-016",
+      "title": "Local contributor program: verified locals submit corrections and photos and earn reputation",
+      "description": "As someone who knows the Des Moines metro, I want to flag closures, correct hours and add photos, and be recognized for it. Nothing marks a restaurant closed and hours are not ingested (WEB-BE-045), and a crawler alone cannot keep up. A contribution loop focused on accuracy keeps Des Moines Insider's records fresher than the AI layers that summarize stale data.",
+      "acceptanceCriteria": [
+        "Signed-in users can submit a correction (closed, hours, price, attribute) or a photo on restaurant, attraction, playground and venue detail pages; submissions enter a moderation queue with AI pre-checks and apply on approval.",
+        "Contributors earn reputation per accepted contribution, shown on their profile and in Gamification.tsx; above a threshold their corrections apply immediately and stay reversible by admins.",
+        "Each applied change records contributor, previous value and timestamp, and detail pages show 'last verified' with the date.",
+        "Photo submissions pass existing media moderation and are deduplicated against existing images (WEB-OPS-022).",
+        "An owner-supplied value from a Verified Business (LEAP-002) is not overwritten by a contributor without admin review.",
+        "An admin report shows contributions per week, acceptance rate and share of listings verified in the last 90 days."
+      ],
+      "priority": 0.76,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Yelp's assistant now phones restaurants to keep data fresh (https://ppc.land/yelp-assistant-goes-full-service-book-order-and-schedule-in-one-chat/); Des Moines Insider can match freshness locally through people who live here. CRITIC FIX: dropped the draft's 'top contributors get a free Insider month' AC, an unpriced reward that needs an owner decision; reputation is the reward until the owner decides. DEPENDS ON WEB-BE-045 for the closed/hours fields. SIZE: L. SUCCESS METRIC: share of listings verified within 90 days, accepted contributions per week, active contributors per month."
+    },
+    {
+      "id": "LEAP-017",
+      "title": "Bookable plans: tickets, reservations and hotels as tracked actions inside every itinerary",
+      "description": "As someone with a Trip Planner plan, I want to book the table, buy the tickets and reserve the hotel from the plan. Yelp Assistant books tables and orders food in chat; a Des Moines Insider plan that only lists places loses the action. src/lib/reservations.ts, generate-hotel-affiliate-urls, event ticket links and the Reserve/Book CTAs from WEB-UX-021 already exist; joining them into the plan with attribution turns plans into a commerce basket.",
+      "acceptanceCriteria": [
+        "Each itinerary stop shows its booking action (reservation link from reservations.ts, ticket URL or LEAP-004 checkout, hotel affiliate URL) when one exists, and nothing when it does not.",
+        "All outbound booking clicks go through one tracked redirect recording plan id, stop, partner and whether an affiliate tag was applied; untagged fallbacks are counted separately so affiliate coverage is visible.",
+        "Affiliate links are disclosed on the plan page via the existing affiliate disclosure page.",
+        "The planner prefers stops open at the planned time (restaurantHours.ts, attractionHours.ts) and states when hours are unverified.",
+        "An admin report shows booking clicks and affiliate-tagged share by partner.",
+        "Shared plan pages (LEAP-007) carry the same booking actions."
+      ],
+      "priority": 0.81,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Yelp Assistant books via Guest Manager and orders via DoorDash (https://www.yelp-ir.com/news/press-releases/news-release-details/2026/Yelp-Launches-the-New-Yelp-Assistant-Transforming-Local-Discovery-from-Search-to-Answers-and-Actions/default.aspx); Ask Maps plans but did not book at launch (https://www.droid-life.com/2026/03/12/google-gets-new-ai-powered-ask-maps-feature/). DEPENDS ON WEB-FEAT-021 for any hotel revenue (affiliate_url is empty) and SEO-054/WEB-BE-045 for hours. SIZE: M. SUCCESS METRIC: booking clicks per plan, affiliate-tagged share, affiliate revenue per month."
+    },
+    {
+      "id": "LEAP-018",
+      "title": "Visitor Pass: a 7-day Insider pass sold to tourists through hotels and the Visitors Guide",
+      "description": "As a visitor in Des Moines for a weekend, I want a one-time 7-day pass that unlocks AI trip plans, ad-free browsing and partner perks, instead of a monthly subscription I will forget to cancel. Insider ($4.99/mo) and VIP ($12.99/mo) in src/lib/planBenefits.ts fit residents, not tourists. Catch Des Moines gives visitors a static printed guide; a digital pass with live events and perks, distributed by hotel front desks, is a channel nobody in the market uses.",
+      "acceptanceCriteria": [
+        "A one-time 'visitor_pass_7d' Stripe product grants Insider entitlements for 7 days from purchase through the existing entitlement checks, and expires with no cancellation step.",
+        "VisitorsGuide.tsx, hotel detail pages and /stay show the pass with its real Stripe price; purchase works with a magic-link account and no password.",
+        "Hotels get printable QR codes that open the pass page with the hotel recorded as referrer; sales are reported per hotel.",
+        "Pass holders see partner perks (deals flagged pass-eligible) with a single-use redemption code per perk, counted in deal_redemptions.",
+        "iOS and Android offer the pass only where store rules allow, as a non-renewing purchase; where unavailable, web purchase still works.",
+        "Pass revenue is reported separately from subscription MRR."
+      ],
+      "priority": 0.86,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Catch Des Moines' 2026 Visitors Guide is static print (https://issuu.com/catchdesmoines/docs/catch_des_moines_visitors_guide_2026); Brew Moines shows visitors use a passport mechanic (https://www.catchdesmoines.com/brewmoines/). CRITIC NOTE: the pass sells only benefits that exist; WEB-FEAT-016 stripped advertised benefits that had no implementation, so do not reintroduce any. DEPENDS ON GM card a222e9bf (subscription purchase path proven). SIZE: M. SUCCESS METRIC: passes sold per month, share via hotel QR codes, pass-to-subscription conversion."
+    },
+    {
+      "id": "LEAP-019",
+      "title": "Insider Passport: sponsored trails with verified check-ins and partner redemptions, beyond the brewery trail",
+      "description": "As a local, I want trails like 'Ankeny coffee crawl', 'Holiday lights' or 'Taco trail' that I complete by checking in, with a sponsor reward at the end. BreweryTrail.tsx with useBreweries and useBreweryCheckins (src/hooks/useBreweryTrail.ts) implements one passport whose stops are the breweries table, so the mechanic cannot be reused for any other category. Catch Des Moines' Brew Moines proves the mechanic works locally; making trails data lets businesses and districts sponsor them.",
+      "acceptanceCriteria": [
+        "Trails become data (trail table with stops pointing at any listing type, dates, sponsor, reward); BreweryTrail.tsx moves onto it with every existing brewery check-in preserved, proved by a before/after count.",
+        "Check-ins are verified by geofence (device within a radius of the stop) or a venue QR code, and a trail cannot complete faster than a plausible travel time.",
+        "A sponsor buys a trail through campaign checkout ('sponsored_trail' placement); rewards use single-use codes the venue validates.",
+        "Completing a trail produces a shareable OG card via og-image and a badge in Gamification.tsx.",
+        "Trail pages are public, indexable, and show how many people completed the trail.",
+        "Sponsors get a report of starts, check-ins per stop, completions and redemptions."
+      ],
+      "priority": 0.9,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: Catch Des Moines runs the Brew Moines GPS passport for one category (https://www.catchdesmoines.com/brewmoines/). CRITIC FIX: the draft called the brewery trail 'hardcoded'; it reads the breweries table, and the real limit is that it is brewery-specific. Hook path corrected to src/hooks/useBreweryTrail.ts. SIZE: L. SUCCESS METRIC: trails sold, completions per month, signups attributed to trail pages."
+    },
+    {
+      "id": "LEAP-020",
+      "title": "QR posters and the App Clip: every flyer and venue sign becomes a save-and-remind entry point",
+      "description": "As someone looking at a poster for a show, I want to scan it and save the event with a reminder in one tap, without installing an app. ios/DesMoinesInsiderClip exists and now honours its invocation URL (IOS-AUDIT-FEAT-033) with a corrected full-app link (IOS-AUDIT-FEAT-031), but no organizer is given a QR code. A QR per event that opens the Clip on iPhone and the event page elsewhere puts Des Moines Insider on physical posters across the metro.",
+      "acceptanceCriteria": [
+        "Every published event gets a short URL and a downloadable QR (PNG and SVG) in the organizer dashboard (LEAP-003) and on the SubmitEvent.tsx confirmation.",
+        "On iOS the URL invokes DesMoinesInsiderClip (AASA and App Clip experience configured; IOS-AUDIT-REL-007 and IOS-AUDIT-REL-006 signing closed first); on Android and desktop it opens the web event page.",
+        "The Clip and web page offer one-tap save and a reminder; reminders without an account use email only after explicit opt-in.",
+        "Scans are counted per event and per placement label so organizers see which poster worked.",
+        "The Clip offers the full app after the save, and installs attributed to a QR are recorded.",
+        "A printable poster template with the QR and event details is generated per event."
+      ],
+      "priority": 0.95,
+      "passes": false,
+      "notes": "COMPETITIVE RATIONALE: none of Catch Des Moines, Axios or DSM at Dawn is known to connect physical promotion to a save; the social-over-search claim in the draft (https://news.designrush.com/instagram-tiktok-beat-google-in-local-search-among-gen-z) has an unconfirmed study date and is context, not evidence. CRITIC NOTE: whether the Clip ships today is unverified; REL-006 (signing not configured) blocks any Clip release regardless of this story. SIZE: M. SUCCESS METRIC: QR scans per month, scan-to-save rate, installs attributed to QR."
+    },
+    {
       "id": "WEB-SEC-036",
       "title": "/media/*.svg ran script first-party",
       "description": "The /media/* Pages Function served bucket files under the site origin with upstream headers, and _headers (so the CSP) does not apply to Function responses. Any signed-in user can upload an SVG to media.",
@@ -14486,6 +14806,467 @@
       "priority": 2,
       "passes": false,
       "notes": "Found 2026-11-16 by the platform deep dive (reliability auditor); impact medium, effort M. Not a duplicate: WEB-CI-029 moved row-building into a testable module but left the handler unexecuted. WEB-BE-030 and WEB-BE-037 notes accept source-text assertions as the method. I searched prd.json for 'signed payload', generateTestHeaderString, 'stripe listen' and constructEventAsync and found no story to execute the webhook handlers."
+    },
+    {
+      "id": "WEB-BE-063",
+      "title": "The nightly social post and the weekly digest pick restaurants without checking that they are open, so a closed place gets promoted",
+      "description": "pickRestaurant in supabase/functions/social-daily-poster/index.ts takes the top 50 rows by is_featured and popularity_score. The fallback in supabase/functions/social-media-manager/index.ts takes a random one of the 50 newest rows, and when the poster passes targetContentId the manager features that row whatever its state. assemble-weekly-digest filters on is_merged only. None of them reads status or business_status. Add one shared server-side predicate (next to isRestaurantOpenForBusiness in _shared/sponsoredPickFilters.ts) and use it in all three. Promotion needs proof, not absence of a flag: a restaurant is promotable only when business_status is OPERATIONAL, the last Places check (hours_checked_at, or hours_json.fetchedAt for rows that predate the column) is within 30 days, status is not closed, opening_soon or announced, and the row is not merged. Unknown is not promotable.",
+      "acceptanceCriteria": [
+        "One exported predicate and one matching PostgREST filter decide whether a restaurant may be promoted; social-daily-poster, social-media-manager and assemble-weekly-digest all use them",
+        "A row with business_status NULL, CLOSED_TEMPORARILY or CLOSED_PERMANENTLY, with status closed, or with a last check older than 30 days is never picked",
+        "social-media-manager refuses a targetContentId that fails the predicate and returns an error naming the reason; it does not fall back to a random row",
+        "When no restaurant qualifies the poster records skipped: no_eligible_restaurant and the job run succeeds; nothing is posted",
+        "Deno tests cover the predicate, and removing the filter from any one of the three callers turns a test red (negative control recorded in the commit)",
+        "Request and response shapes of all three functions are unchanged"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Ship this first and on its own: it stops the public damage without waiting for better detection. Until WEB-BE-064 widens the refresh, the eligible pool is only the rows the daily refresh has reached, so some days may post no restaurant; that is the intended trade. The owner can pause restaurant posts meanwhile in Admin, Social, Automation (system_settings row social_daily_poster, pause_restaurants). Web readers already have the equivalent client filters in src/lib/restaurantStatus.ts; this story is the server side that the promotion paths never got."
+    },
+    {
+      "id": "WEB-BE-064",
+      "title": "The daily closure check only re-reads restaurants that have stored hours and a Google place id, and ignores a place Google has deleted",
+      "description": "restaurant-hours-refresh (migration 20261108000103) calls bulk-update-restaurants with hoursOnly, staleDays 30, batchSize 20. refreshStaleHours selects rows with google_place_id NOT NULL and hours_json NOT NULL, so a row with a place id and no hours is never re-read, and I found no schedule for the fill mode that would reach it. A row with no google_place_id is never checked by anything. When Places answers 404 the row is counted as gone, hours_checked_at is stamped, and the listing stays live with whatever business_status it had. Widen the refresh to every row with a place id, turn a 404 into a recorded finding, and give rows without a place id a path: look the place up by name and address, store the id on a confident match, and queue the rest for a person.",
+      "acceptanceCriteria": [
+        "The stale refresh selects every restaurant with a google_place_id whose last check is older than staleDays, whether or not it has hours_json",
+        "A 404 from Places writes a row to a new additive restaurant_closure_reviews table (restaurant id, reason place_not_found, source, created_at, resolved_at, resolution) and leaves the restaurant not promotable under WEB-BE-063",
+        "Restaurants with no google_place_id are looked up by name and address in a bounded daily batch; a confident match stores the place id, anything else is queued with reason no_place_match, and no row is retried at the head of every batch",
+        "A Places error other than 404 is still not a check and the row is retried on the next run",
+        "The job run meta reports checked, closed, not_found, matched and queued counts, and the batch size is set so the whole table is re-read within staleDays (state the row count used)",
+        "The migration is additive only and the function keeps its existing request and response keys",
+        "Deno tests cover the selection filter, the 404 path and the match threshold"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Depends on nothing; WEB-OPS-026 and WEB-FEAT-102 depend on the review table created here. Name matching can attach the wrong place to a listing, which would be worse than no id, so the threshold should refuse rather than guess, the same rule findKnownVenue follows. Places text search is billed per call, so bound the daily batch and reuse the auth and rate limit already on check-restaurant-status. Whether cron job restaurant-hours-refresh is actually running in production is unverified; check automation_job_runs for bulk-update-restaurants-hours before assuming the existing coverage is real."
+    },
+    {
+      "id": "WEB-BE-065",
+      "title": "Two columns say a restaurant is closed and their writers disagree, so every reader has to remember both",
+      "description": "The daily refresh writes business_status and never status. The admin Mark as Closed button in src/components/GooglePlacesRestaurantTools.tsx writes status = 'closed' and never business_status. NOT_CLOSED_RESTAURANT_FILTER and NOT_GOOGLE_CLOSED_RESTAURANT_FILTER in src/lib/restaurantStatus.ts exist because of that split, and a reader that applies only one of them shows closed places. Make status the one lifecycle answer: when Places reports CLOSED_PERMANENTLY the refresh also sets status = 'closed', and an admin closing or reopening a listing is recorded so the refresh does not undo a human decision.",
+      "acceptanceCriteria": [
+        "Every writer that stores business_status = CLOSED_PERMANENTLY also sets status = 'closed' in the same update",
+        "A listing a person reopened is not re-closed by the next refresh without a newer contradicting Places answer; the rule is written down next to the code",
+        "A one-off backfill sets status = 'closed' on existing CLOSED_PERMANENTLY rows and reports the count",
+        "Both columns stay and both keep being written; no column, filter or CHECK is removed or tightened in this release",
+        "A test fails if a writer sets one closed flag without the other"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. The SEO-059 data pass did this backfill once by hand, and rows that closed afterwards drifted again; this makes it the writer's job. Dropping either reader filter is a later release, after the dual write has been observed in production, per the deprecation flow in CLAUDE.md. iOS and Android read both columns today (ios/DesMoinesInsider/Models/Restaurant.swift), so nothing here may change their shape."
+    },
+    {
+      "id": "WEB-OPS-026",
+      "title": "One-time sweep of every restaurant listing against Google Places, reviewed by the owner before anything is hidden",
+      "description": "The table has never been checked end to end, so the backlog of closed listings is unknown. Add a dry-run script (scripts/, like backfill-restaurant-hours.ts) that reads every restaurant, asks Places for businessStatus, and writes a report grouped as operational, temporarily closed, permanently closed, place not found and no place id. The owner reads the report, then an --apply run closes the confirmed rows and queues the uncertain ones in restaurant_closure_reviews.",
+      "acceptanceCriteria": [
+        "Without --apply the script writes nothing to the database and outputs a CSV or JSON report with one line per restaurant: id, name, address, current status, Places answer, proposed action",
+        "With --apply it closes only rows Places reports CLOSED_PERMANENTLY and queues place_not_found and no_place_match rows for review; it never deletes a row",
+        "The run is resumable and rate limited, and the report states how many Places calls it made",
+        "The script reads its keys from the environment and never prints them",
+        "The report from the production run, with counts per group, is recorded in this story's notes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Run after WEB-BE-064, which creates the review table and the name-and-address lookup this reuses, and after WEB-BE-063 so nothing closed is posted while the sweep is pending. OWNER ACTION: run the dry run with production credentials, read the closed and not-found lists, then run --apply. A closed detail page should keep resolving (it says Permanently closed today) rather than 404, since external links and the sitemap history point at it."
+    },
+    {
+      "id": "WEB-FEAT-102",
+      "title": "A visitor cannot report that a restaurant has closed, and there is no admin queue for closure findings",
+      "description": "The only signal that a listing was dead came from a comment on a social post. Add a Report closed control on the restaurant detail page that writes to restaurant_closure_reviews with reason visitor_report, and an admin screen that lists open findings from all sources (visitor reports, place_not_found, no_place_match) with the evidence beside each: the listing, its last Places answer and check date, and a link to Google Maps. Approve closes the listing; Dismiss records why.",
+      "acceptanceCriteria": [
+        "The restaurant detail page has a Report closed control that works signed out, is rate limited per IP, and confirms the report was received without claiming the listing was changed",
+        "A report never changes a listing by itself; only an admin decision or a Places answer does",
+        "An admin route behind ProtectedRoute lists unresolved findings, newest first, and Approve or Dismiss resolves one with the admin's id and a timestamp",
+        "Three or more open visitor reports on one restaurant make it not promotable under WEB-BE-063 until resolved",
+        "A failed read of the queue is shown as an error, not as an empty queue",
+        "Inserts go through an edge function or RPC with validation; anon has no direct write policy on the table",
+        "A Playwright spec covers the report control and is added to the smoke lane testMatch"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Depends on WEB-BE-064 for the table. I searched src and supabase for report-closed, listing_reports, content_reports and suggest-an-edit flows and found none for restaurants. The same control would suit attractions and hotels later; keep the table restaurant-scoped for now rather than guessing at a generic shape."
+    },
+    {
+      "id": "WEB-AUTO-019",
+      "title": "Nothing alerts when restaurant listings go unverified, so closure detection can stop and nobody finds out",
+      "description": "If the refresh cron stops, the Places key expires or the quota runs out, listings age silently and the promotion gate in WEB-BE-063 slowly empties the eligible pool. Add a nightly check (in agent-data-quality or job-health-watchdog) that counts restaurants whose last Places check is older than 45 days or missing, counts unresolved closure reviews older than 14 days, and alerts the admin when either crosses a threshold. Show the same numbers on the admin data-quality screen.",
+      "acceptanceCriteria": [
+        "A nightly job records: restaurants total, verified within 30 days, unverified over 45 days, never checked, and open closure reviews older than 14 days",
+        "An alert goes to the admin when unverified-over-45-days exceeds a configurable share of the table, or when the social poster skipped restaurants for 3 days running with no_eligible_restaurant",
+        "The numbers are visible on an admin screen with the date they were computed",
+        "A failed count is reported as a failure, not as zero",
+        "The job is listed in docs/AUTOMATION_JOBS.md"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Last of the cluster: WEB-BE-063 (gate), WEB-BE-064 (detection), WEB-BE-065 (one flag), WEB-OPS-026 (sweep), WEB-FEAT-102 (reports and queue), then this. Wrap it in the WEB-AUTO-001 jobRunner so the run itself is recorded in automation_job_runs."
+    },
+    {
+      "id": "WEB-BE-066",
+      "title": "The daily auto-enrich job ignores the restaurants it selected, re-enriches an arbitrary batch, and can erase descriptions",
+      "description": "auto-enrich-restaurants picks the 20 newest incomplete rows and posts { restaurantIds, forceUpdate: true, batchSize } (auto-enrich-restaurants/index.ts:110-129). bulk-update-restaurants never reads restaurantIds (index.ts:346), and with forceUpdate its query is an unordered, unfiltered select with a limit (index.ts:383-391), so each run re-enriches whichever rows Postgres returns first and the incomplete rows stay incomplete. That select omits description, so restaurant.description is always undefined and index.ts:627-629 sets description to null whenever Google has no editorial summary. A name-only Places search also accepts places[0] with no name check and then overwrites location, phone and website from it.",
+      "acceptanceCriteria": [
+        "bulk-update-restaurants honours restaurantIds with an id filter; absent means the old behaviour, so the request shape stays compatible",
+        "The enrichment select includes description, and a non-empty description is never replaced with null",
+        "Force mode without ids walks the table by cursor in id order so repeated runs reach different rows",
+        "A Places text-search hit is accepted only when its name matches the restaurant's; otherwise the row is left alone and counted as unmatched",
+        "A row Google cannot complete gets an enrich_checked_at stamp (additive column) and stops heading every batch",
+        "Deno tests cover the id filter, the description rule and the name match; restoring any of the three old behaviours turns a test red"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S to M. Both the information audit and the management audit found this independently, and I re-read the three line ranges myself. Whether cron auto-enrich-restaurants-daily fires in production is unverified (WEB-OPS-007). OWNER ACTION once credentials are at hand: count restaurants with a null description and compare against a backup, since this may have been removing copy nightly. The admin Force Update checkbox in RestaurantBulkUpdaterSimple.tsx has the same no-cursor behaviour."
+    },
+    {
+      "id": "WEB-BE-067",
+      "title": "Saving any admin edit to a restaurant writes the whole stale list row back, including sponsorship, hours and closure columns",
+      "description": "ContentEditDialog copies the list row into the form (ContentEditDialog.tsx:200), builds saveData from the entire form state (:279), removes only id, created_at, updated_at and isNew (:295-298), and sends it to update (:339). The row comes from the admin list projection, which includes is_sponsored, sponsored_until, hours_json, business_status, popularity_score, is_merged, merged_into, enhanced and slug. So correcting a phone number rewrites those columns with whatever they were when the tab loaded, undoing a sponsorship that activated or expired, an hours refresh, or a closure recorded in between.",
+      "acceptanceCriteria": [
+        "An admin save sends only the configured form fields whose value changed",
+        "is_sponsored, sponsored_until, hours_json, business_status, hours_checked_at, popularity_score, is_merged, merged_into, enhanced and slug are never in an edit payload from this dialog",
+        "A unit test builds a row with those columns, changes one field, and asserts the payload has exactly that one key",
+        "The same rule applies to the events and attractions paths through the dialog, or the story states why not"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. The owner form already sends a diff (ClaimedListingEditForm.tsx:105-111); follow it. No trigger protects is_sponsored, and it is paid placement, so this touches the money rule in CLAUDE.md: a browser must not be able to rewrite what someone paid for."
+    },
+    {
+      "id": "WEB-BE-068",
+      "title": "Two admin ingestion paths write guesses that the page then shows as sourced facts",
+      "description": "firecrawl-scraper inserts restaurants with cuisine defaulting to American, location to Des Moines, IA and price_range to $$, plus a model-read rating (firecrawl-scraper/index.ts:779-791). enhance-content asks the model, with no search tool and no source text, for phone, website, address, price and a rating whose prompt example is 4.5 (enhance-content/index.ts:206), and writes whatever keys come back. The detail page labels the rating Google rating and the price as Google's. ai-crawler was fixed for the same defect; these two were not, and the honesty test does not cover them.",
+      "acceptanceCriteria": [
+        "firecrawl-scraper stores null, not a default, for cuisine, location and price_range when the source did not give one, and never stores a rating",
+        "enhance-content can write description only; its update goes through a fixed key whitelist and an unknown key is refused",
+        "supabase/functions/_tests/restaurant-ingest-honesty.test.ts covers both functions, and restoring a default turns it red",
+        "A one-off report lists existing rows whose cuisine is American, price_range is $$ and enhanced is not completed, for the owner to review; nothing is rewritten automatically"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. No existing story: I searched prd.json for enhance-content and firecrawl-scraper. WEB-BE-053 is about writeup prompts. How many rows carry a guessed value is unverified in production."
+    },
+    {
+      "id": "WEB-BE-069",
+      "title": "Owner and admin corrections to a listing are overwritten by the next Google enrichment",
+      "description": "Three writers own the same columns with no precedence. Owners edit description, website, phone, image_url and menu_url through update_claimed_listing (20260920000005_business_claims.sql:319). Admins edit those plus cuisine, location and rating. Enrichment overwrites cuisine, location, rating, description, phone and website unconditionally (bulk-update-restaurants/index.ts:613-637), and Clear Enhanced Status resets every row for re-enrichment. docs/page-plans/eat-drink-pass2.md item D-E7 proposed owner_edited_fields and nothing implements it.",
+      "acceptanceCriteria": [
+        "An additive jsonb column records which fields a person set, written by update_claimed_listing and by the admin edit dialog",
+        "bulk-update-restaurants skips every recorded field on that row, in full enrichment and in the refresh modes",
+        "An admin can clear a field's lock from the UI so Google's value returns",
+        "A Deno test enriches a row with a locked phone and asserts the phone is unchanged while an unlocked field updates",
+        "Additive only; old readers and the mobile apps are unaffected"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Prerequisite for owner-edited hours in WEB-ADS-048. The opening scraper already fills blanks only (restaurant-opening-scraper/index.ts:93,124-128) and needs no change."
+    },
+    {
+      "id": "WEB-BE-070",
+      "title": "Rating, phone, website, price and reservability are fetched once and shown undated, and the price is attributed to Google when Google did not supply it",
+      "description": "Full enrichment skips rows whose enhanced is completed, and the only recurring job asks Places for hours and status (placeHours.ts:158). So Google rating appears in four places on the detail page with no date, the review count is fetched by the admin tool and dropped (search-new-restaurants/index.ts:354), and reservable and google_maps_uri are missing on most rows because the columns arrived after those rows were completed, which hides the Reserve button. The enrichment field mask has no priceLevel (bulk-update-restaurants/index.ts:520); price_range comes from page text, a model, or a default, yet the page and the FAQPage JSON-LD say Google lists it.",
+      "acceptanceCriteria": [
+        "The stale refresh also reads rating, userRatingCount, nationalPhoneNumber, websiteUri, priceLevel, reservable and googleMapsUri, after confirming the Places billing tier that mask falls in and recording it in the notes",
+        "A null answer never blanks a stored value, and fields locked under WEB-BE-069 are skipped",
+        "New additive columns hold the Google review count and the source of price_range; the page names Google for price only when Google supplied it",
+        "The detail page shows the rating with its count and the date it was checked, linking to the Google listing",
+        "The admin edit form can set reservation_url and reservation_provider, which have no writer today",
+        "Tests cover the mask, the null rule and the price attribution"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-FEAT-079 refreshed hours only; WEB-BE-064 widens which rows are read; WEB-FEAT-024 built the Reserve logic. The count stored here is what WEB-BE-076 and WEB-SEO-079 need."
+    },
+    {
+      "id": "WEB-BE-071",
+      "title": "Menus are captured once on an admin click and keep publishing prices however old they get",
+      "description": "No migration schedules scrape-restaurant-menus, so its 30-day freshness rule (index.ts:135) only runs when someone presses the button in the admin menu panel. A menu of any age renders with prices and Offer JSON-LD (MenuSchema.tsx:57-66); the only guard is a caption giving the capture date.",
+      "acceptanceCriteria": [
+        "A weekly scheduled run re-scrapes menus older than the existing max age for rows with menu_scrape_enabled, wrapped in the job runner so it appears in automation_job_runs",
+        "A scrape that fails or returns nothing keeps the previous menu and records the failure",
+        "A menu older than 180 days is shown collapsed behind a link to the restaurant's own menu and emits no Offer prices in JSON-LD",
+        "The job is listed in docs/AUTOMATION_JOBS.md with its schedule",
+        "Tests cover the age threshold for both the page and the schema"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. No existing story (searched scrape-restaurant-menus and restaurant_menus). Menu pages cost a model call each; bound the weekly batch and report the count."
+    },
+    {
+      "id": "WEB-BE-072",
+      "title": "Dietary badges and suitableForDiet are inferred by regex from dish text, including option markers",
+      "description": "normalizeDietaryTags adds tags from item text: (GFO) becomes gluten-free, veggie becomes vegetarian so a chicken and veggie dish matches, and any mention of vegan or gluten free tags the dish (menuNormalize.ts:82-93,116-119). These render as GF, Vegan and Vegetarian badges and as GlutenFreeDiet and similar in JSON-LD (MenuSchema.tsx:69-78). For someone with coeliac disease or an allergy a wrong badge is a health risk, not a cosmetic one.",
+      "acceptanceCriteria": [
+        "The gfo and veggie rules are removed; a tag is kept only when the menu marks the dish itself",
+        "Badges are labelled as marked on the restaurant's menu, and the section carries a line telling visitors to confirm with the restaurant",
+        "suitableForDiet is no longer emitted in Menu JSON-LD",
+        "Stored tags are recomputed for existing menu items and the before and after counts are recorded",
+        "Unit tests include the chicken-and-veggie and (GFO) cases as must-not-tag"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. No existing story (searched dietary_tags, suitableForDiet, allergen). The /restaurants dietary pages read these tags, so check DietaryRestaurants.tsx after the recompute."
+    },
+    {
+      "id": "WEB-BE-073",
+      "title": "Nothing moves a restaurant from announced to open, and finding new restaurants depends on someone pressing a button",
+      "description": "scripts/check-stale-openings.ts changes nothing and exits 1 so a person acts, every night. The only forward transition in code is a later scrape reporting a higher status. restaurant-opening-scraper has no schedule (its only caller is the button in AdminAI.tsx:129-134) while the watchdog expects it every 14 days (_shared/ingestionHealth.ts:73). search-new-restaurants only returns candidates; each insert is a click in GooglePlacesRestaurantTools.tsx and arrives without coordinates or hours.",
+      "acceptanceCriteria": [
+        "During the Places refresh, a row in announced or opening_soon that Google reports OPERATIONAL with hours becomes newly_opened, and newly_opened becomes open after a stated number of days",
+        "A row past its opening date that Google does not know is queued for review instead of failing a workflow",
+        "restaurant-opening-scraper runs on a schedule, and a weekly Places discovery pass queues candidates for one-click approval with coordinates and hours filled at insert",
+        "The stale-openings workflow goes red only for rows the automation could not resolve",
+        "Status only ever moves forward automatically; closing stays with the closure stories",
+        "Tests cover each transition and the no-backward rule"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-BE-041 covers the scraper's model and sources, not scheduling; plan item D-E9 proposed only a flag. Reuse the review queue from WEB-BE-064. docs/restaurant-scraper-make-integration.md suggests an external Make scenario may already call the scraper; unverified."
+    },
+    {
+      "id": "WEB-BE-074",
+      "title": "Merging duplicate restaurants drops data from the losing row, can strand an owner's claim, and cannot be undone from the admin",
+      "description": "merge_duplicate_content repoints foreign-key children and flags the loser (20260612000010:161-213); no column is copied to the survivor. Survivor choice scores image, is_featured, rating and description length (:98-107), not google_place_id or hours, so a long scraped row can beat the Google-linked one and the survivor then falls out of the hours and closure refresh. business_claims.listing_id has no foreign key, so a claim on the loser is not repointed and the owner edits a hidden row. unmerge_content exists and nothing in src calls it, while the toast says the merge can be reversed for 30 days (MergeReviewPanel.tsx:136).",
+      "acceptanceCriteria": [
+        "On merge, null columns on the survivor are filled from the loser, including google_place_id, hours_json, coordinates, phone, website and menu_url",
+        "Survivor choice prefers the row with a place id, then a verified claim, before the existing score",
+        "Claims on the loser are repointed to the survivor",
+        "The admin has a recent-merges list with an Undo that calls unmerge_content, and the toast only promises what that list delivers",
+        "An admin can merge two chosen restaurants without waiting for the weekly queue",
+        "SQL tests cover the coalesce, the survivor rule and the claim repoint"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-AUTO-005 built the dedupe; WEB-FEAT-069, 071 and 075 fixed the same class of bug for deals only."
+    },
+    {
+      "id": "WEB-BE-075",
+      "title": "Nobody can tell which job or person last changed a restaurant row",
+      "description": "There is no history on restaurants. update_restaurant_popularity sets updated_at on every UPDATE (20250728200000:78), so updated_at moves on bookkeeping writes; the page prints it as Listing last updated and feeds it to dateModified, which makes a row look freshly reviewed after an hours re-check. writeAuditLog records counts with no row ids. scrape-restaurant-menus, backfill-images, generate-seo-content and the admin and owner edits are outside automation_job_runs, and the watchdog does not watch bulk-update-restaurants-hours or dedupe-content. docs/AUTOMATION_JOBS.md is dated 2026-07-09 and omits restaurant-hours-refresh.",
+      "acceptanceCriteria": [
+        "An additive restaurant_changes table records row id, changed columns, old and new values, the actor (job name, admin id or owner id) and a timestamp, written by one AFTER UPDATE trigger",
+        "The admin can see the last 20 changes for a restaurant",
+        "Listing last updated and dateModified come from a content change, not from updated_at",
+        "The watchdog watches bulk-update-restaurants-hours and dedupe-content",
+        "docs/AUTOMATION_JOBS.md matches the cron schedules in supabase/migrations for every restaurant job",
+        "The table has RLS with admin-only read"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-AUTO-019 reports aggregate counts; WEB-BE-043 built the job ledger. Keep old and new values small: skip hours_json bodies and store a changed flag for them."
+    },
+    {
+      "id": "WEB-BE-076",
+      "title": "Every best-of ordering rests on a rating with no review count and a popularity score that was seeded with random numbers",
+      "description": "The top 20 is rating descending then name ascending (restaurantRanking.ts:135-143), so among places tied at the top rating it is alphabetical, and a 5.0 from four reviews outranks a 4.8 from thousands. popularity_score was backfilled with RANDOM() for review count (20250729030647:49-55), is recomputed only when rating or is_featured changes, never decays, and is 0 for new rows. It breaks ties for Highest Rated, both price sorts and text search (useRestaurants.ts:456-484), and it orders the nightly social pick (social-daily-poster/index.ts:118-120). is_featured is set by an admin checkbox and stays on formerly sponsored rows.",
+      "acceptanceCriteria": [
+        "Top-rated lists rank by rating with a minimum review-count floor and use the count as the tie-break, using the count stored by WEB-BE-070",
+        "popularity_score is recomputed nightly from rating, review count, real views and verification freshness; the formula is written down next to the code and contains no random term",
+        "Text search with the default sort orders by text relevance, not by popularity_score",
+        "is_featured is cleared when sponsored_until passes unless an admin set it independently, and the two cases are stored distinguishably",
+        "The top-rated heading states its rule in one line beside it",
+        "Tests cover the floor, the tie-break and the featured expiry"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Depends on WEB-BE-070 for the count. Related: WEB-BE-040 removed random featuring at ingest; WEB-QA-004 renamed the default sort; plan item D-E15 covers the featured expiry and is not implemented. How many rows tie at 5.0 is unverified in production."
+    },
+    {
+      "id": "WEB-BE-077",
+      "title": "Restaurant copy is written once, partly unlabelled, and the AI sections carry no date",
+      "description": "About prints description with no source label (RestaurantDetails.tsx:1012-1024) though it may be Google's editorial summary, scraped text or model output. geo_summary, geo_key_facts and geo_faq are badged AI-assisted but undated and regenerate only when an admin runs generate-seo-content, whose cron covers events only. No function writes restaurants.ai_writeup, so existing writeups predate the grounding fix.",
+      "acceptanceCriteria": [
+        "An additive column records the source of description, and the page labels it (from Google, from the restaurant, or AI-assisted)",
+        "The Local Guide and AI answer sections show the date they were generated",
+        "Restaurant AI copy older than a stated age is regenerated on a schedule from the row's current facts, or hidden",
+        "WEB-BE-053's review script is run over restaurant rows and the result recorded",
+        "A closed restaurant's AI copy does not describe it as open"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-BE-053 (open, AC3) and WEB-SEO-061 (hotels only)."
+    },
+    {
+      "id": "WEB-FEAT-103",
+      "title": "The admin cannot see or edit the fields automation depends on, and removing a restaurant is a hard delete it can come back from",
+      "description": "The edit form has 13 fields (ContentEditDialog.tsx:51-66): no hours, business_status, google_place_id, reservation_url, coordinates or slug. The admin table shows no last-checked date and no merged or claimed state. Delete is a row delete (AdminContent.tsx:318): the URL starts returning 404 with no redirect, nothing records the removal, and the next Places search or scrape can add the place again. The Add button on the Restaurant Openings tab does nothing (AdminContent.tsx:517).",
+      "acceptanceCriteria": [
+        "One restaurant drawer shows place id, hours, status and business_status, the last Places check, claim state, merge state and open closure reviews",
+        "From it an admin can set status (including closed and reopened), reservation link, place id and hours, each recorded as a person's edit under WEB-BE-069",
+        "Delete is replaced by Hide: the row is kept, its page says the listing was removed or redirects, and its place id and name go on a do-not-ingest list that every ingestion path checks",
+        "The admin restaurant table can sort and filter by last checked, unverified, closed, claimed and merged",
+        "The dead Add button either works or is removed",
+        "A Playwright spec covers hide and is added to a CI lane"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-FEAT-086 added only the hours buttons; WEB-FEAT-102 adds the closure queue this drawer links to. Hard delete also breaks external links, which CLAUDE.md asks to keep redirected for a release cycle."
+    },
+    {
+      "id": "WEB-FEAT-104",
+      "title": "Deals show no confirmation date, and one entered without an end date is advertised forever",
+      "description": "Deals come only from the admin DealManager. The public filter is start_date in the past and end_date null or in the future (useDeals.ts:72), so a happy hour entered with no end date shows indefinitely and reaches makesOffer in JSON-LD. deals.is_verified exists and no public query reads it.",
+      "acceptanceCriteria": [
+        "An additive last_confirmed_at column is set when a deal is created or re-confirmed by an admin or the verified owner",
+        "Each deal shows when it was last confirmed",
+        "An open-ended deal unconfirmed for 90 days is hidden from pages and JSON-LD and listed for the admin to re-confirm",
+        "A deal at a closed restaurant is never shown",
+        "Tests cover the 90-day rule"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-FEAT-035, 036 and 067 cover display and closed venues. Once WEB-ADS-048 lands, the owner is the right person to re-confirm."
+    },
+    {
+      "id": "WEB-ADS-047",
+      "title": "A pending business claim is a dead end: the admin is not told, the claimant is not told, and a verified owner cannot be removed",
+      "description": "Claims that do not match the listing's email domain go pending, and the migration notes that is most of them. Nothing notifies the admin; the queue is visible only by opening /admin/business-claims. Approve and reject are an RPC and a toast with no email (BusinessClaimsManager.tsx:104-114), so the claimant learns the outcome only by revisiting /business. The admin screen lists pending claims only, so there is no list of verified owners and no way to revoke one after a restaurant changes hands.",
+      "acceptanceCriteria": [
+        "The claimant gets an email through _shared/email.ts when a claim is approved or rejected, with the next step",
+        "The pending-claim count appears on the admin home and in the admin digest, and a claim pending more than 3 days raises an alert",
+        "The admin screen has a verified tab with Revoke, which removes edit access and records who revoked and why",
+        "A claimant can verify without a person through a code sent to the listing's public phone or email, where one exists",
+        "Tests cover the emails and the revoke"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-ADS-009 built the flow, WEB-ADS-028 its error copy, WEB-ADS-040 (open) the domain-matching weakness. None covers notification or revocation."
+    },
+    {
+      "id": "WEB-ADS-048",
+      "title": "Verified owners cannot change hours or say they have closed, and the claim page tells them they can change hours",
+      "description": "The owner whitelist is description, website, phone, image_url and menu_url (20260920000005_business_claims.sql:319). Hours were deferred until hours_json existed, and it now does. src/pages/ClaimListing.tsx:28 promises Hours, phone, website and description, changed from your own account. The owner image is a hot-linked URL with only a client-side https check, and owner edits leave no before and after record.",
+      "acceptanceCriteria": [
+        "The claim page copy matches what an owner can edit on the day it ships",
+        "An owner can set weekly hours in a structured form; they are stored with an owner source marker and survive the Places refresh under WEB-BE-069",
+        "An owner can report temporarily closed, closed for good, or reopened; closed for good goes to the closure review queue and takes the listing out of promotion at once",
+        "Owner photos are uploaded to storage with type and size checks instead of hot-linked",
+        "Every owner edit is recorded with before and after values",
+        "An unknown field is still refused, and no paid-placement or rating column becomes owner-editable"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Depends on WEB-BE-069 and the queue from WEB-BE-064. The owner is the best source of truth about a closure, and the closure cluster had no input from them. Related: plan item D-E6 for the image."
+    },
+    {
+      "id": "WEB-SEO-079",
+      "title": "Every restaurant title promises Reviews and the page has none",
+      "description": "restaurantTemplateTitle always appends Reviews (restaurantMeta.ts:178) and the keywords add the name plus reviews, against the file's own rule that a title names only what the page shows. The same file records zero restaurant ratings in content_rating_aggregates on 2026-10-01, so the review block is an empty Be the first to rate prompt on most pages.",
+      "acceptanceCriteria": [
+        "Reviews appears in the title and keywords only when the page shows a review count above zero, ours or Google's with attribution",
+        "With WEB-BE-070 in place the page shows the Google rating, its count and a link to read the reviews on Google",
+        "The empty review block is reduced to one line when there are no ratings",
+        "Title tests cover both branches and the 60-character limit still holds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. Related: WEB-SEO-016 and WEB-SEO-025 removed fabricated counts; neither touched the title. Current rating count is unverified in production."
+    },
+    {
+      "id": "WEB-UX-084",
+      "title": "On a phone, /restaurants/open-now shows a full filter form and no restaurant on the first screen",
+      "description": "The form is always expanded (OpenNowRestaurants.tsx:513-626): three selects, two toggles, wrapping cuisine and city chip groups and a dish search, under a heading, clock, three-line summary and two notes (:456-509). By class arithmetic that is roughly 1,100px before the first card at 390px wide. This is the most time-pressed visit on the site.",
+      "acceptanceCriteria": [
+        "At 390px wide the first open restaurant is visible without scrolling",
+        "Phones show one control row: Open at, Near me and a Filters button with the active count; cuisine, city, diet and dish sit behind it",
+        "The intro is one sentence with the count",
+        "Active filters are visible and removable without opening the panel",
+        "A Playwright spec asserts the first card is in the viewport at 390x844, in the smoke lane"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. WEB-UX-059 did the same job for /events. Pixel figures are from Tailwind classes, not a browser measurement."
+    },
+    {
+      "id": "WEB-UX-085",
+      "title": "On a phone, /restaurants shows a 20-row text list and a methodology paragraph before any filter or photo",
+      "description": "RestaurantsTopRated renders above the presets and filter bar whenever no filter is set (Restaurants.tsx:870-877), with the ranking rule and caveat printed first (RestaurantsTopRated.tsx:52-54) and a single-column list of 20 rows below md. That is about 1,500px, so the filters and the first card start roughly three screens down.",
+      "acceptanceCriteria": [
+        "Below md the block shows the top 5 with a Show all 20 control; all 20 stay in the DOM for the prerender and the ItemList schema",
+        "The rule text sits under the list or in a details element",
+        "At 390px the filter bar and the first photo card are reachable within about one screen of scroll",
+        "tests/restaurants-hub.spec.ts still passes and gains an assertion for the collapsed state"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. The hero comment at Restaurants.tsx:684-686 still says the first card is in the first viewport; correct it."
+    },
+    {
+      "id": "WEB-UX-086",
+      "title": "The /restaurants controls fight a phone screen: hidden filters, a search box with 110px to type in, and a map toggle you have to scroll back up for",
+      "description": "The filter pill row scrolls sideways with no scrollbar or fade (RestaurantInlineFilters.tsx:202) beside a fixed-width sort select, so Rating and Dietary are off-screen at 390px. Active filter chips wrap inside the sticky container (Restaurants.tsx:916) and with the header and bottom nav can pin about 45 percent of a 375x667 screen. The search input reserves 192px for a clear button and a Search button that is redundant with the 400ms debounce (:743-773). The list and map toggle exists only in the hero (:819-848). Surprise Me is an unlabelled icon below sm.",
+      "acceptanceCriteria": [
+        "All four filters are discoverable at 390px without guessing that the row scrolls",
+        "Active chips use the scroll layout in the sticky bar, which stays under a stated height with three filters on",
+        "Below sm the search box has no text Search button and leaves at least 200px for typing at 390px",
+        "The list and map toggle is in the sticky bar",
+        "Surprise Me has a visible label or is removed from the phone hero",
+        "A Playwright spec covers the sticky bar height and the visible filters at 390px"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. Related: WEB-UX-059 and WEB-UX-003 (events), WEB-UX-082 (the input's dark-mode colour)."
+    },
+    {
+      "id": "WEB-UX-087",
+      "title": "A phone fits about one and a half restaurant cards per screen, and a card offers no way to call or get directions",
+      "description": "The default card has a 192px image and up to seven stacked lines (RestaurantCard.tsx:278-424); WEB-PERF-071 measured it at 396px tall at 390px wide. A compact variant exists and no caller uses it. The card accepts phone and website and renders neither, while DietaryRestaurants.tsx:331-335 tells allergy visitors to browse the list for phone numbers. The address line repeats the city already shown.",
+      "acceptanceCriteria": [
+        "Below sm, list pages use a horizontal row (thumbnail, name, status, price, city, cuisine, rating) so at least three fit on a 390x844 screen",
+        "The row has Call and Directions as 44px actions above the stretched link, shown only when the data exists",
+        "A closed restaurant in search results has a muted image, no stars and no Call action",
+        "The duplicated city is removed",
+        "The content-visibility placeholder height from WEB-PERF-071 is updated, and CLS on /restaurants does not regress"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. The dietary page copy should either become true through this change or be reworded."
+    },
+    {
+      "id": "WEB-UX-088",
+      "title": "The restaurant detail page repeats the same facts three or four times and puts three control strips above the hours on a phone",
+      "description": "Address appears three times, phone four, directions three, rating three and cuisine four (RestaurantDetails.tsx:596-1036). The Restaurant Details tile grid (:969-1008) repeats the hero, and a summary paragraph written for crawlers (:1025-1036) is shown to visitors. On a phone the order is hero, at a glance, a wrapping row of up to six buttons, a wrapping row of up to eight section chips, then hours, while Call and Directions are already pinned at the bottom.",
+      "acceptanceCriteria": [
+        "On phones the quick-action row omits what the sticky bar already offers",
+        "The section nav is a single scrolling row",
+        "The Restaurant Details tile grid and the visible summary paragraph are removed; JSON-LD is unchanged",
+        "Today's hours and the open or closed state are visible on the first screen at 390x844",
+        "Each fact appears once in the body plus the sticky bar",
+        "The existing detail-page specs pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. Related: WEB-UX-021 added the actions; WEB-UX-081 (open) is the floating-button overlap with the same sticky bar."
+    },
+    {
+      "id": "WEB-UX-089",
+      "title": "A permanently closed restaurant's page still looks and behaves like a live listing",
+      "description": "The Website button has no closed guard (RestaurantDetails.tsx:806-813), though the comment at :1209 says website links send people to a business that is not serving. The menu action, the captured menu with prices, the map and Rate this place all render for a closed place. The hero changes by one small badge. The closed notice offers one cuisine link while the nearby rail sits at the bottom of the page, and the temporarily-closed notice offers nothing.",
+      "acceptanceCriteria": [
+        "A closed listing has a clear closed state at the top: muted hero and a notice above the fold at 390px",
+        "Website, Menu, Reserve, Call and Rate actions are hidden for a permanently closed place, and the menu is removed or collapsed under a dated heading",
+        "Nearby open alternatives sit directly under the notice, for temporarily closed too",
+        "Restaurant JSON-LD for a closed place emits no menu, offers or opening hours",
+        "The page still resolves with a 200 so old links work",
+        "A Playwright spec with a closed fixture covers the hidden actions, in the smoke lane"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. Presentation only; detection and promotion are the WEB-BE-063 cluster. WEB-FEAT-102 adds the report control to the same page."
+    },
+    {
+      "id": "WEB-UX-090",
+      "title": "Small restaurant-page defects: duplicate empty-state buttons, a 0+ stars label, a skeleton that matches nothing, and an oversized hero radius",
+      "description": "The filtered empty state offers Clear All Filters and Browse All, which call the same handler (Restaurants.tsx:980-995). The rating popover reads 0+ stars when unset and offers chips and a slider for one value (RestaurantFilterPopover.tsx:208-238). The detail skeleton shows three labelled tiles that match nothing on the loaded page, in bg-gray-200 with no dark pair (RestaurantDetails.tsx:296-309). The hero is rounded-3xl with shadow-xl against the 12 to 16px card radius in CLAUDE.md, and a long name at text-4xl can run into the status badges inside the fixed 288px hero.",
+      "acceptanceCriteria": [
+        "The empty state offers one clear action plus removing the most restrictive single filter",
+        "The rating control shows Any when unset and has one input method",
+        "The skeleton mirrors the loaded layout and has dark-mode colours",
+        "Hero radius is within 12 to 16px with elevation declared once, and a five-line name does not overlap the badges at 390px"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. Related: WEB-UX-082 (open) covers dark-mode greys on this page generally. npx impeccable detect ran on 16 restaurant files and printed nothing, with its own caveat that tsx gets regex rules only."
     }
   ]
 }

@@ -646,6 +646,9 @@ serve(async (req) => {
       const open = await stripe.checkout.sessions.list({ customer: customerId, status: "open", limit: 20 });
       for (const other of open.data) {
         if (other.id === session.id || other.mode !== "subscription") continue;
+        // A Business Pro checkout is a different product for a listing, not a
+        // second reader plan; leave it open.
+        if (other.metadata?.kind === "business_pro") continue;
         try {
           await stripe.checkout.sessions.expire(other.id);
         } catch (expireError) {

@@ -13,6 +13,13 @@ vi.mock("@/hooks/useListingOwnerStats", () => ({
   useListingOwnerStats: (...args: unknown[]) => hook(...args),
 }));
 
+const plan = vi.fn();
+const checkout = vi.fn();
+vi.mock("@/hooks/useBusinessPro", () => ({
+  useBusinessProPlan: (...args: unknown[]) => plan(...args),
+  useBusinessProCheckout: (...args: unknown[]) => checkout(...args),
+}));
+
 import { ListingStatsPanel } from "@/components/business/ListingStatsPanel";
 
 const OK = {
@@ -27,12 +34,28 @@ const OK = {
   totals: { views: 50, shares: 3, clicks: 7 },
   previous: { views: 20, shares: 0, clicks: 0 },
   peers: { group: "cuisine", label: "Mexican", size: 6, median_views: 20, percentile: 67 },
+  pro: false,
+};
+
+const PRO = {
+  ...OK,
+  pro: true,
+  peers: { ...OK.peers, pro: { rank: 2, of: 7, p25_views: 10, p75_views: 70 } },
 };
 
 const renderPanel = () =>
   render(<ListingStatsPanel listingType="restaurant" listingId="r1" />);
 
-beforeEach(() => hook.mockReset());
+const startCheckout = vi.fn();
+const openPortal = vi.fn();
+
+beforeEach(() => {
+  hook.mockReset();
+  plan.mockReset().mockReturnValue({ data: { priceMonthlyCents: 4900 } });
+  startCheckout.mockReset();
+  openPortal.mockReset();
+  checkout.mockReset().mockReturnValue({ pending: null, failure: null, startCheckout, openPortal });
+});
 
 describe("ListingStatsPanel", () => {
   it("shows the totals, the change and the comparison", () => {
@@ -64,8 +87,54 @@ describe("ListingStatsPanel", () => {
   });
 
   it("explains venues instead of showing zeros", () => {
-    hook.mockReturnValue({ data: { status: "no_data", days: 30 }, isLoading: false, error: null, refetch: vi.fn() });
+    hook.mockReturnValue({ data: { status: "no_data", days: 30, pro: false }, isLoading: false, error: null, refetch: vi.fn() });
     renderPanel();
     expect(screen.getByText(/don't track page visits for venue listings/)).toBeInTheDocument();
+  });
+});
+
+describe("ListingStatsPanel with Business Pro", () => {
+  it("offers Pro at the price the plan row holds, and starts checkout", async () => {
+    hook.mockReturnValue({ data: OK, isLoading: false, error: null, refetch: vi.fn() });
+    renderPanel();
+    expect(screen.getByText(/Business Pro, \$49\/month\./)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "365 days" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^#2 of 7/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Get Business Pro" }));
+    expect(startCheckout).toHaveBeenCalledOnce();
+    expect(checkout).toHaveBeenLastCalledWith("restaurant", "r1");
+  });
+
+  it("shows no offer when the price can't be read", () => {
+    plan.mockReturnValue({ data: null });
+    hook.mockReturnValue({ data: OK, isLoading: false, error: null, refetch: vi.fn() });
+    renderPanel();
+    expect(screen.queryByRole("button", { name: "Get Business Pro" })).not.toBeInTheDocument();
+    // Counter-assertion: the rest of the panel still rendered.
+    expect(screen.getByText("50")).toBeInTheDocument();
+  });
+
+  it("says why checkout was refused, in the server's words", () => {
+    checkout.mockReturnValue({
+      pending: null,
+      failure: { code: "not_configured", message: "Business Pro isn't available to buy yet." },
+      startCheckout,
+      openPortal,
+    });
+    hook.mockReturnValue({ data: OK, isLoading: false, error: null, refetch: vi.fn() });
+    renderPanel();
+    expect(screen.getByRole("alert")).toHaveTextContent("Business Pro isn't available to buy yet.");
+  });
+
+  it("gives a Pro owner the year view, the rank, the download and billing", async () => {
+    hook.mockReturnValue({ data: PRO, isLoading: false, error: null, refetch: vi.fn() });
+    renderPanel();
+    expect(screen.getByText(/^#2 of 7 Mexican restaurants by page views/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Download as spreadsheet/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Get Business Pro" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "365 days" }));
+    expect(hook).toHaveBeenLastCalledWith("restaurant", "r1", 365, true);
+    await userEvent.click(screen.getByRole("button", { name: "Manage billing" }));
+    expect(openPortal).toHaveBeenCalledOnce();
   });
 });
