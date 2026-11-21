@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useUpgradeModal } from "@/components/UpgradeModal";
+import { openPaywall } from "@/lib/paywallStore";
 import { useToast } from "@/hooks/use-toast";
 import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { stashPendingAction, takePendingAction } from "@/lib/authReturn";
@@ -210,7 +210,6 @@ export function SaveSearchButton({
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { hasFeature, isLoading: subscriptionLoading } = useSubscription();
-  const { openUpgradeModal, UpgradeModalComponent } = useUpgradeModal();
 
   const [open, setOpen] = useState(false);
   // Mounted on first open and kept, so closing can animate and reopening is instant.
@@ -218,7 +217,7 @@ export function SaveSearchButton({
 
   const openDialog = () => {
     if (!hasFeature("save_searches")) {
-      openUpgradeModal("save_searches", "insider");
+      openPaywall("save_searches", "insider");
       return;
     }
     setDialogLoaded(true);
@@ -274,12 +273,10 @@ export function SaveSearchButton({
             open={open}
             onOpenChange={setOpen}
             searchParams={searchParams}
-            onLimitReached={() => openUpgradeModal("save_searches", "vip")}
+            onLimitReached={() => openPaywall("save_searches", "vip")}
           />
         </Suspense>
       )}
-
-      <UpgradeModalComponent />
     </>
   );
 }

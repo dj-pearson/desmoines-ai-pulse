@@ -14,6 +14,8 @@ import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import type { AgentRun } from "./types.ts";
 import { hasMarketingConsent } from "../marketingConsent.ts";
+import { weeklyDigestOptedOut } from "../weeklyDigestOptOut.ts";
+import { mailedOtherWeeklyDigest } from "../weeklyDigestOverlap.ts";
 
 const AGENT_KEY = "weekly-digest-personal";
 const BATCH = 300;
@@ -56,10 +58,19 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   if (profilesError) throw new Error(`weekly-digest: could not read digest recipients: ${profilesError.message}`);
   const rows = (profiles ?? []) as { user_id: string; email: string; interests: unknown; lifecycle_signals: { messagingAllowed?: boolean } | null }[];
 
-  let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0;
+  // The account page's weekly digest switch. Read once for the batch; throws
+  // on a failed read so nobody who switched it off is mailed.
+  const digestOff = await weeklyDigestOptedOut(supabase, rows.map((r) => r.user_id));
+  // WEB-ADS-037. Skip anyone send-weekly-digest mailed in the last 6 days, so
+  // nobody gets two weekly digests. Throws on a failed read, like the line above.
+  const otherDigest = await mailedOtherWeeklyDigest(supabase, "weekly-digest-personal", rows.map((r) => r.user_id));
+
+  let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0, skippedPref = 0, skippedOtherDigest = 0;
 
   for (const p of rows) {
     if (!hasMarketingConsent(p.lifecycle_signals)) { skippedConsent++; continue; }
+    if (digestOff.has(p.user_id)) { skippedPref++; continue; }
+    if (otherDigest.has(p.user_id)) { skippedOtherDigest++; continue; }
 
     // Frequency cap.
     const { data: recent, error: recentError } = await supabase
@@ -140,7 +151,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   ctx.processed(rows.length);
-  ctx.summary(`weekly digest: ${sent} sent, ${skippedEmpty} skipped-empty, ${skippedCap} frequency-capped, ${gated} quality-gated, ${skippedConsent} no-consent`);
-  ctx.meta({ sent, skippedEmpty, skippedCap, gated, skippedConsent });
-  return { sent, skippedEmpty, skippedCap, gated };
+  ctx.summary(`weekly digest: ${sent} sent, ${skippedEmpty} skipped-empty, ${skippedCap} frequency-capped, ${gated} quality-gated, ${skippedConsent} no-consent, ${skippedPref} digest-off, ${skippedOtherDigest} had the Sunday digest`);
+  ctx.meta({ sent, skippedEmpty, skippedCap, gated, skippedConsent, skippedPref, skippedOtherDigest });
+  return { sent, skippedEmpty, skippedCap, gated, skippedPref, skippedOtherDigest };
 };

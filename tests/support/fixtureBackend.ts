@@ -40,7 +40,17 @@ const ISO = '2026-01-01T00:00:00Z';
  */
 const MATCH = 'Jazz';
 
-/** Enough distinct titles that a changed list is observably changed. */
+/**
+ * Enough distinct titles that a changed list is observably changed.
+ *
+ * The 2026-10-01 date is in the past for any run that leaves the clock alone,
+ * and that is stable: it cannot rot further. A spec that needs these rows to
+ * be upcoming pins the clock before that day (event-detail, home-tonight and
+ * a dozen others do). Do not move it to a near-future literal; that is the
+ * shape that broke home-dashboard on 2026-11-02, and check-fixture-dates
+ * flags it (WEB-QA-041). For a spec-local row, use centralDay() from
+ * ./fixtureClock.
+ */
 function events(n = 12) {
   return Array.from({ length: n }, (_, i) => ({
     id: `20000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
@@ -114,6 +124,9 @@ function restaurantRow(i: number) {
     status: 'active',
     website: 'https://example.com/fixture',
     writeup_generated_at: null,
+    // RESTAURANT_HUB_LIST_COLUMNS: the hub's table path selects both.
+    business_status: null,
+    hours_json: null,
   };
 }
 
@@ -143,6 +156,16 @@ function attractions(n = 12) {
  */
 export function fixtureEvents(): ReturnType<typeof events> {
   return events();
+}
+
+/** The restaurants rows, for a spec that changes one row and answers the read itself. */
+export function fixtureRestaurants(): ReturnType<typeof restaurants> {
+  return restaurants();
+}
+
+/** The attractions rows, for a spec that changes one row and answers the read itself. */
+export function fixtureAttractions(): ReturnType<typeof attractions> {
+  return attractions();
 }
 
 const TABLES: Record<string, () => unknown[]> = {

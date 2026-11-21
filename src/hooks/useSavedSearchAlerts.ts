@@ -142,14 +142,39 @@ export function useSavedSearchAlerts() {
   });
 
   const setAlertsPref = useMutation({
+    // WEB-FEAT-076: this was one upsert of user_id + event_alerts_enabled. On
+    // an account with no prefs row (signed up before 20261004000001 seeded one)
+    // the INSERT took the column default weekly_digest_enabled = true, and
+    // get_weekly_digest_recipients mails every such row - so flipping this
+    // switch either way subscribed the reader to the weekly digest. Update the
+    // row if it exists; create it only when missing, with the digest off.
     mutationFn: async (enabled: boolean) => {
-      const { error } = await supabase
+      const changes = { event_alerts_enabled: enabled, updated_at: new Date().toISOString() };
+      const updateExisting = async () => {
+        const { data, error } = await supabase
+          .from("user_email_preferences")
+          .update(changes)
+          .eq("user_id", userId!)
+          .select("user_id");
+        if (error) throw error;
+        return (data?.length ?? 0) > 0;
+      };
+
+      if (await updateExisting()) return;
+
+      const { data: inserted, error: insertError } = await supabase
         .from("user_email_preferences")
         .upsert(
-          { user_id: userId!, event_alerts_enabled: enabled, updated_at: new Date().toISOString() },
-          { onConflict: "user_id" },
-        );
-      if (error) throw error;
+          { user_id: userId!, ...changes, weekly_digest_enabled: false },
+          { onConflict: "user_id", ignoreDuplicates: true },
+        )
+        .select("user_id");
+      if (insertError) throw insertError;
+      if ((inserted?.length ?? 0) > 0) return;
+
+      // Another tab created the row between the two calls; DO NOTHING left
+      // their row as it was, so apply this switch to it.
+      await updateExisting();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["event-alerts-pref", userId] }),
   });

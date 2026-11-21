@@ -15,6 +15,10 @@ import { ErrorSeverity, handleError } from "@/lib/errorHandler";
  * and anything else is dropped here. A failed search goes to handleError and
  * comes back empty: this is an extra on the page, and its failure must not
  * read as "nobody serves pho".
+ *
+ * This is the one caller of search_menu_items. useRestaurantMenu's
+ * useMenuSearch was a second wrapper over the same RPC that nothing rendered,
+ * and it passed every row through unfiltered; it was removed (WEB-FEAT-097).
  */
 
 export const DISH_SEARCH_MIN_LENGTH = 3;
@@ -44,6 +48,28 @@ export function keepAllowedDishes(rows: readonly DishMatch[], allowedIds: Readon
     seen.add(row.item_id);
     return true;
   });
+}
+
+/** Where a dish hit goes: the restaurant page's Menu section (RestaurantMenuSection, id="menu"). */
+export function dishMenuHref(restaurant: { slug?: string | null; id: string }): string {
+  return `/restaurants/${restaurant.slug || restaurant.id}#menu`;
+}
+
+/**
+ * One match per restaurant, in the RPC's order (name hits first, then
+ * popularity), at most `limit`. Used when no place serving the dish is open:
+ * the visitor still learns where it is and can read that menu.
+ */
+export function firstDishPerPlace(rows: readonly DishMatch[], limit: number): DishMatch[] {
+  const seen = new Set<string>();
+  const out: DishMatch[] = [];
+  for (const row of rows) {
+    if (seen.has(row.restaurant_id)) continue;
+    seen.add(row.restaurant_id);
+    out.push(row);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 function useDebounced<T>(value: T, ms: number): T {

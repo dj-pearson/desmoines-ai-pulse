@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAttractionFacts } from "@/hooks/useAttractionFacts";
 import { hubFactsSummary } from "@/lib/attractionAtAGlance";
-import { createSlug } from "@/lib/slug";
+import { attractionHref } from "@/lib/slugHref";
 
 interface AttractionsFactsIntroProps {
   /** Active attractions in the whole catalogue. */
@@ -41,7 +41,7 @@ export function AttractionsFactsIntro({ total }: AttractionsFactsIntroProps) {
             {free.map((row, i) => (
               <span key={row.name}>
                 {i > 0 ? (i === free.length - 1 ? " and " : ", ") : ""}
-                <Link to={`/attractions/${createSlug(row.name)}`} className={linkClass}>
+                <Link to={attractionHref(row)} className={linkClass}>
                   {row.name}
                 </Link>
               </span>

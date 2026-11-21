@@ -38,7 +38,12 @@ export function recordArticleView(slug: string): void {
   // made through a narrowed signature rather than the typed overload set.
   // scripts/check-schema-usage.mjs carries it in PENDING_MIGRATIONS, which is
   // what keeps this from becoming a permanent untyped call.
-  const rpc = supabase.rpc as unknown as (
+  //
+  // bind(), not a bare reference: SupabaseClient.rpc reads this.rest, so a
+  // detached rpc throws TypeError synchronously - inside the caller's
+  // useEffect, before the .then() below can catch anything - and no view was
+  // ever counted (WEB-SEO-062).
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
     fn: string,
     args: Record<string, unknown>,
   ) => PromiseLike<{ error: unknown }>;

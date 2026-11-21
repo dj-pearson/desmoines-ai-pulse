@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.data.model
 
 import androidx.compose.runtime.Immutable
+import com.desmoines.aipulse.util.EventSlug
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.OffsetDateTime
@@ -78,22 +79,39 @@ data class Deal(
             return if (startLabel != null && endLabel != null) "$daysLabel · $startLabel–$endLabel" else daysLabel
         }
 
-    /** Whether the deal is live right now (date window + recurring schedule). */
-    fun isActiveNow(now: OffsetDateTime = OffsetDateTime.now()): Boolean {
+    /**
+     * Whether the deal is live at [now] (date window + recurring schedule).
+     *
+     * days_of_week and start_time/end_time are Des Moines wall-clock values, so
+     * the instant is read in Central before the weekday and minute are taken.
+     * Reading it in the phone's zone put a UTC phone on tomorrow's schedule
+     * every evening after 7pm Central, and disagreed with the restaurant Open
+     * badge, which reads Central since AND-AUDIT-036. Mirrors iOS
+     * Deal.isActiveNow(_:calendar:) with DesMoinesTime.calendar.
+     */
+    fun isActiveNow(now: OffsetDateTime = OffsetDateTime.now(EventSlug.CENTRAL)): Boolean {
         startDate?.let { s -> parse(s)?.let { if (now.isBefore(it)) return false } }
         endDate?.let { e -> parse(e)?.let { if (now.isAfter(it)) return false } }
         if (!isRecurring) return true
 
-        val token = DAY_ORDER_SUN_FIRST[now.dayOfWeek.value % 7] // DayOfWeek: Mon=1..Sun=7
-        if ((daysOfWeek ?: emptyList()).map { it.lowercase() }.none { it == token }) return false
+        val local = now.atZoneSameInstant(EventSlug.CENTRAL)
+        val weekday = local.dayOfWeek.value % 7 // DayOfWeek: Mon=1..Sun=7 -> Sun=0
+        val today = DAY_ORDER_SUN_FIRST[weekday]
+        val yesterday = DAY_ORDER_SUN_FIRST[(weekday + 6) % 7]
+        val scheduled = (daysOfWeek ?: emptyList()).map { it.lowercase() }.toSet()
 
         val startMin = startTime?.let { minutesOfDay(it) }
         val endMin = endTime?.let { minutesOfDay(it) }
-        if (startMin != null && endMin != null) {
-            val nowMin = now.hour * 60 + now.minute
-            return nowMin in startMin..endMin
-        }
-        return true
+        if (startMin == null || endMin == null) return today in scheduled
+
+        val nowMin = local.hour * 60 + local.minute
+        // A late-night deal is stored as 21:00-02:00 on the day it starts, so its
+        // end minute is smaller than its start. Comparing both against one day
+        // made every such window unsatisfiable (iOS fixed the same thing).
+        if (endMin >= startMin) return today in scheduled && nowMin in startMin..endMin
+        if (today in scheduled && nowMin >= startMin) return true // before midnight
+        if (yesterday in scheduled && nowMin <= endMin) return true // after midnight
+        return false
     }
 
     private companion object {

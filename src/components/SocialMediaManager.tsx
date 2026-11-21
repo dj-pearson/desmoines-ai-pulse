@@ -43,7 +43,7 @@ import { Loader2, Plus, Send, Edit, Trash2, Globe, Bot, Repeat, Settings, Play, 
 import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { SafeExternalLink } from "@/components/SafeExternalLink";
@@ -300,7 +300,7 @@ const SocialMediaManager = () => {
                           )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
+                              <Button aria-label="Delete post" variant="outline" size="sm">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
@@ -693,7 +693,7 @@ const SocialMediaManager = () => {
                           setNewWebhook({ ...newWebhook, platform: value })
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id="webhook-platform">
                           <SelectValue placeholder="Select platform" />
                         </SelectTrigger>
                         <SelectContent>
@@ -792,7 +792,7 @@ const SocialMediaManager = () => {
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
+                              <Button aria-label={`Delete webhook ${webhook.name}`} variant="outline" size="sm">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>

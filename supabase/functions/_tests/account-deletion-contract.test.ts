@@ -21,7 +21,7 @@
  * Wired into .github/workflows/subscription-sync-tests.yml.
  */
 
-import { assert, assertStringIncludes } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertStringIncludes } from 'jsr:@std/assert@1';
 
 const read = (rel: string) => Deno.readTextFile(new URL(rel, import.meta.url));
 

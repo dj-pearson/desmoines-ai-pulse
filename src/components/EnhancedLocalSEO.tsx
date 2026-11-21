@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
+import { toOgType } from "@/lib/ogType";
 
 interface BreadcrumbItem {
   name: string;
@@ -298,6 +299,8 @@ export default function EnhancedLocalSEO({
   // every future validation run, and because AI search reads JSON-LD whether or
   // not Google draws a widget.
 
+  const placeName = suburb || "Des Moines";
+
   return (
     <Helmet>
       {/* Basic Meta Tags */}
@@ -306,17 +309,21 @@ export default function EnhancedLocalSEO({
       <meta name="keywords" content={generateLocalKeywords()} />
       <link rel="canonical" href={canonicalUrl} />
 
-      {/* Geographic Targeting */}
+      {/* Geographic Targeting. WEB-SEO-050: with a suburb, the place is the
+          suburb and the coordinate pair is left out. The pair below is
+          downtown Des Moines, and /events/ankeny used to publish it as its
+          own location. No checked suburb coordinate exists in the repo, and a
+          guessed one would be the same wrong claim with other numbers. */}
       <meta name="geo.region" content="US-IA" />
-      <meta name="geo.placename" content="Des Moines" />
-      <meta name="geo.position" content="41.5868;-93.6250" />
-      <meta name="ICBM" content="41.5868, -93.6250" />
-      <meta name="locality" content="Des Moines" />
+      <meta name="geo.placename" content={placeName} />
+      {!suburb && <meta name="geo.position" content="41.5868;-93.6250" />}
+      {!suburb && <meta name="ICBM" content="41.5868, -93.6250" />}
+      <meta name="locality" content={placeName} />
       <meta name="region" content="Iowa" />
       <meta name="country-name" content="United States" />
 
       {/* Open Graph */}
-      <meta property="og:type" content={pageType} />
+      <meta property="og:type" content={toOgType(pageType)} />
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={pageDescription} />
       <meta property="og:url" content={canonicalUrl} />

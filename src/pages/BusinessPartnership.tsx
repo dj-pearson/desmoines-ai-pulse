@@ -14,6 +14,7 @@ import { OWNER_EDITABLE_FIELDS } from "@/hooks/useMyBusinessClaims";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { formatUSD } from "@/lib/campaignDisplay";
 import { BUSINESS_CONTACT_EMAIL, BUSINESS_CONTACT_HREF, SUBMISSION_REVIEW_COPY } from "@/lib/businessCopy";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 const TABS = ["overview", "apply"] as const;
 
@@ -68,8 +69,8 @@ export default function BusinessPartnership() {
   return (
     <BusinessLayout>
       <SEOHead
-        title="For Des Moines Businesses"
-        description="Claim your Des Moines restaurant or attraction listing, correct its details, submit events and buy ad placements with impression and click reporting."
+        title={STATIC_PAGE_META["/business-partnership"].title}
+        description={STATIC_PAGE_META["/business-partnership"].description}
         canonicalUrl={getCanonicalUrl("/business-partnership")}
         url="/business-partnership"
         keywords={["Des Moines business listing", "claim listing", "advertise Des Moines", "submit event"]}

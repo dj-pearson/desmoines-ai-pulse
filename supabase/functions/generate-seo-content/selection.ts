@@ -20,7 +20,15 @@
  * without one is taken only when it starts within IMMINENT_HOURS, so a page is
  * not left bare for want of a writeup, and otherwise waits for
  * bulk-enhance-events (which runs 7 minutes earlier on the same cadence).
+ *
+ * "Upcoming" includes a run that is still going: `date >= now` alone never
+ * reached a festival that opened before the queue did (WEB-FEAT-096). The
+ * window and the needs-SEO test go out as ONE or= parameter,
+ * `and(or(needs seo),or(window))`, not two repeated `or` params. Hidden,
+ * archived and merged-away rows are skipped.
  */
+
+import { applyEventVisibility, upcomingOrRunningFilter } from '../_shared/eventWindow.ts';
 
 export const SEO_LOCK_STALE_MINUTES = 15;
 export const IMMINENT_HOURS = 24;
@@ -28,7 +36,8 @@ export const IMMINENT_HOURS = 24;
 /** seo_title is missing. 'PROCESSING...' is not here on purpose: see above. */
 export const NEEDS_SEO_FILTER = 'seo_title.is.null,seo_title.eq.""';
 
-export const EVENT_SEO_COLUMNS = 'id, title, venue, location, date, category, ai_writeup, seo_locked_at';
+export const EVENT_SEO_COLUMNS =
+  'id, title, venue, location, date, end_date, category, ai_writeup, seo_locked_at';
 export const RESTAURANT_SEO_COLUMNS =
   'id, name, description, cuisine, location, price_range, ai_writeup, opening_date, status, seo_locked_at';
 
@@ -93,11 +102,9 @@ export async function selectSeoCandidates(
   }
 
   const nowIso = now.toISOString();
-  const withWriteup = await db
-    .from('events')
-    .select(EVENT_SEO_COLUMNS)
-    .gte('date', nowIso)
-    .or(NEEDS_SEO_FILTER)
+  const needsSeoAndOn = `and(or(${NEEDS_SEO_FILTER}),or(${upcomingOrRunningFilter(nowIso)}))`;
+  const withWriteup = await applyEventVisibility(db.from('events').select(EVENT_SEO_COLUMNS))
+    .or(needsSeoAndOn)
     .not('ai_writeup', 'is', null)
     .order('date', { ascending: true })
     .limit(window);
@@ -106,12 +113,11 @@ export async function selectSeoCandidates(
   if (picked.length >= batchSize) return picked;
 
   const imminentBy = new Date(now.getTime() + IMMINENT_HOURS * 3_600_000).toISOString();
-  const imminent = await db
-    .from('events')
-    .select(EVENT_SEO_COLUMNS)
-    .gte('date', nowIso)
+  // A running event without a writeup is happening now, so it counts as
+  // imminent: date < imminentBy holds and the window group lets it in.
+  const imminent = await applyEventVisibility(db.from('events').select(EVENT_SEO_COLUMNS))
     .lt('date', imminentBy)
-    .or(NEEDS_SEO_FILTER)
+    .or(needsSeoAndOn)
     .is('ai_writeup', null)
     .order('date', { ascending: true })
     .limit(window);

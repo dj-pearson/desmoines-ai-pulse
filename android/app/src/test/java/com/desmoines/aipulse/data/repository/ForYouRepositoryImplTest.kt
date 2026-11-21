@@ -41,6 +41,29 @@ class ForYouRepositoryImplTest {
     }
 
     @Test
+    fun `empty personalized answer falls back to trending`() = runTest {
+        // What v2 answers for an account with "Personalized suggestions" off
+        // (XPLAT-016): no rows, so the rail must show trending, not a blank.
+        coEvery { remote.countRecentSwipes(any(), any()) } returns ForYouRepository.SWIPE_THRESHOLD
+        coEvery { remote.fetchPersonalized(any(), any(), any()) } returns emptyList()
+        coEvery { remote.fetchTrending(any()) } returns sample
+
+        val result = repository.fetchForYou(userId = "u1").getOrThrow()
+
+        assertEquals(ForYouSource.TRENDING, result.source)
+        assertEquals(sample, result.items)
+        coVerify(exactly = 1) { remote.fetchTrending(ForYouRepository.LIMIT) }
+    }
+
+    @Test
+    fun `only a missing-function code sends the personalized call to v1`() {
+        assertEquals(true, ForYouRemoteDataSource.isMissingFunction("PGRST202"))
+        assertEquals(true, ForYouRemoteDataSource.isMissingFunction("42883"))
+        assertEquals(false, ForYouRemoteDataSource.isMissingFunction("42501"))
+        assertEquals(false, ForYouRemoteDataSource.isMissingFunction(null))
+    }
+
+    @Test
     fun `user below the swipe threshold falls back to trending`() = runTest {
         coEvery { remote.countRecentSwipes(any(), any()) } returns ForYouRepository.SWIPE_THRESHOLD - 1
         coEvery { remote.fetchTrending(any()) } returns sample

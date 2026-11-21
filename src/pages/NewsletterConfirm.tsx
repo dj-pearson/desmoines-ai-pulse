@@ -13,6 +13,12 @@
  * The already-confirmed case is deliberately NOT an error. A link that has been
  * clicked twice — or prefetched by a mail client and then clicked — would
  * otherwise tell someone their subscription had failed when it had worked.
+ *
+ * WEB-ADS-031: the page used to end at "Back to home" in every
+ * state. A reader who just confirmed is the most engaged visitor the site gets
+ * all week, so success and already-confirmed point at something to read now
+ * and, when signed out, at a free account. An invalid link told the reader to
+ * "sign up again from any page" without a form on this one; it now has one.
  */
 
 import { useEffect, useState } from "react";
@@ -27,16 +33,57 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { useAuthFlags } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
 import { AlertCircle, CheckCircle2, Loader2, MailCheck } from "lucide-react";
 
 type Status = "loading" | "success" | "already" | "invalid" | "error";
 
+/** Where a confirmed reader can go next. Every target is a routed page. */
+const NEXT_STEPS: ReadonlyArray<{ to: string; label: string }> = [
+  { to: "/events/this-weekend", label: "What's on this weekend" },
+  { to: "/events/today", label: "Events today" },
+  { to: "/restaurants/open-now", label: "Restaurants open now" },
+];
+
+interface ConfirmedNextStepsProps {
+  isAuthenticated: boolean;
+}
+
+function ConfirmedNextSteps({ isAuthenticated }: ConfirmedNextStepsProps) {
+  return (
+    <nav aria-labelledby="confirm-next-heading" className="space-y-3">
+      <h2 id="confirm-next-heading" className="text-sm font-semibold">
+        Don&apos;t want to wait for the email?
+      </h2>
+      <ul className="flex flex-col gap-2">
+        {NEXT_STEPS.map((step) => (
+          <li key={step.to}>
+            <Button asChild variant="outline" className="min-h-11 w-full">
+              <Link to={step.to}>{step.label}</Link>
+            </Button>
+          </li>
+        ))}
+      </ul>
+      {!isAuthenticated && (
+        <p className="text-sm text-muted-foreground">
+          Save events, restaurants and places to your account.{" "}
+          <Link to="/auth?mode=signup" className="font-medium text-foreground underline underline-offset-4">
+            Create a free account
+          </Link>
+        </p>
+      )}
+    </nav>
+  );
+}
+
 export default function NewsletterConfirm() {
+  const { isAuthenticated } = useAuthFlags();
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [status, setStatus] = useState<Status>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,8 +100,10 @@ export default function NewsletterConfirm() {
 
         if (cancelled) return;
         if (error) {
+          // WEB-ADS-024: the reader gets fixed copy; the PostgREST text goes to
+          // ops through handleError, never onto the page.
+          handleError(error, { component: "NewsletterConfirm", action: "confirmByToken" });
           setStatus("error");
-          setErrorMessage(error.message);
           return;
         }
 
@@ -70,8 +119,8 @@ export default function NewsletterConfirm() {
         setStatus(row.already_confirmed ? "already" : "success");
       } catch (err) {
         if (cancelled) return;
+        handleError(err, { component: "NewsletterConfirm", action: "confirmByToken" });
         setStatus("error");
-        setErrorMessage(err instanceof Error ? err.message : "Unknown error");
       }
     }
 
@@ -132,18 +181,30 @@ export default function NewsletterConfirm() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
                   This confirmation link is no longer valid — it may already
-                  have been used, or replaced by a newer one. Sign up again from
-                  any page on the site and we&apos;ll send a fresh link.
+                  have been used, or replaced by a newer one. Enter your email
+                  below and we&apos;ll send a fresh link.
                 </AlertDescription>
               </Alert>
+            )}
+
+            {status === "invalid" && (
+              <section aria-labelledby="confirm-fresh-link-heading" className="space-y-2">
+                <h2 id="confirm-fresh-link-heading" className="text-sm font-semibold">
+                  Get a new confirmation link
+                </h2>
+                <NewsletterSignup variant="compact" source="confirm_page" />
+              </section>
+            )}
+
+            {(status === "success" || status === "already") && (
+              <ConfirmedNextSteps isAuthenticated={isAuthenticated} />
             )}
 
             {status === "error" && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Something went wrong while confirming your subscription
-                  {errorMessage ? ` (${errorMessage})` : ""}. Please try the
+                  Something went wrong while confirming your subscription. Please try the
                   link again in a moment, or email{" "}
                   <a href="mailto:hello@desmoinesinsider.com" className="underline">
                     hello@desmoinesinsider.com
@@ -154,7 +215,7 @@ export default function NewsletterConfirm() {
             )}
 
             <div className="flex justify-center">
-              <Button asChild variant="outline">
+              <Button asChild variant={status === "success" || status === "already" ? "ghost" : "outline"}>
                 <Link to="/">Back to home</Link>
               </Button>
             </div>

@@ -73,6 +73,65 @@ test.describe('with the backend unreachable', () => {
   }
 });
 
+// WEB-QA-060. WCAG 1.3.1: no route's outline may jump a level
+// (h1 -> h3). The check lived only in accessibility.spec.ts, in the broad lane
+// that does not gate a merge, and covered eight routes; on a vite build with
+// the placeholder backend seven routes skipped. Six were ErrorState, whose
+// title was an h3 rendered straight under the page's h1, so every hub that
+// failed to load broke the outline; the seventh was /contact's CardTitle
+// cards. The outline is sampled in the page every 200ms until it has held
+// still for 3s with nothing aria-busy (or 20s pass: the home page keeps one
+// region busy for good when the backend is down), and a skip seen at ANY
+// sample fails, so the loading, error and loaded states are all read, not only
+// the one that happens to be up when a fixed wait ends.
+const OUTLINE_ROUTES = [
+  ...ROUTES,
+  '/events/today', '/events/this-weekend', '/events/free', '/events/kids',
+  '/events/date-night', '/restaurants/open-now', '/restaurants/dietary',
+  '/this-does-not-exist',
+];
+
+for (const route of OUTLINE_ROUTES) {
+  test(`${route} never skips a heading level`, async ({ page }) => {
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('h1').first()).toBeAttached({ timeout: 30_000 });
+
+    const skips = await page.evaluate(
+      ({ quietMs, maxMs }) =>
+        new Promise<string[]>((resolve) => {
+          const seen = new Set<string>();
+          let last = '';
+          let quietSince = performance.now();
+          const start = quietSince;
+          const sample = () => {
+            const outline = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')]
+              .filter((h) => !h.closest('[hidden], [aria-hidden="true"]'))
+              .map((h) => ({ level: Number(h.tagName[1]), text: (h.textContent ?? '').trim().slice(0, 50) }));
+            let prev = 0;
+            for (const h of outline) {
+              if (h.level - prev > 1) seen.add(`h${prev} -> h${h.level} ("${h.text}")`);
+              prev = h.level;
+            }
+            const key = outline.map((h) => `${h.level}${h.text}`).join('|');
+            const busy = !!document.querySelector('[aria-busy="true"]');
+            const now = performance.now();
+            if (key !== last || busy) quietSince = now;
+            last = key;
+            if (now - quietSince >= quietMs || now - start >= maxMs) {
+              clearInterval(timer);
+              resolve([...seen]);
+            }
+          };
+          const timer = setInterval(sample, 200);
+          sample();
+        }),
+      { quietMs: 3_000, maxMs: 20_000 },
+    );
+
+    expect(skips, `${route} skipped a heading level`).toEqual([]);
+  });
+}
+
 // The catch-all 404 rendered a CardTitle (an h3) as its only heading, with no
 // header or footer, so a dead link stranded the reader with no nav or search.
 test('/this-does-not-exist has exactly one h1 and the site nav', async ({ page }) => {

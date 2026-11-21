@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,10 +36,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, MapPin, Phone, Globe, Search, Building2, Users, CheckCircle2, XCircle, Navigation, RefreshCw, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, Phone, Globe, Search, Building2, Users, CheckCircle2, XCircle, Navigation, RefreshCw, ArrowRight, Loader2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   useKnownVenues,
   useCreateVenue,
@@ -202,9 +202,10 @@ function VenueDialog({
             </div>
 
             <div className="col-span-2">
-              <Label>Aliases (for matching)</Label>
+              <Label htmlFor="venue_alias">Aliases (for matching)</Label>
               <div className="flex gap-2 mb-2">
                 <Input
+                  id="venue_alias"
                   value={aliasInput}
                   onChange={(e) => setAliasInput(e.target.value)}
                   placeholder="Add alias (e.g., VMH, Vibrant)"
@@ -219,18 +220,28 @@ function VenueDialog({
                   Add
                 </Button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {formData.aliases?.map((alias) => (
-                  <Badge
-                    key={alias}
-                    variant="secondary"
-                    className="cursor-pointer"
-                    onClick={() => handleRemoveAlias(alias)}
-                  >
-                    {alias} ×
-                  </Badge>
-                ))}
-              </div>
+              {/* WEB-UX-073: the Badge itself used to be the click target, a
+                  div with no tab stop. Each alias now carries its own named
+                  remove button, like the article editors' keyword badges. */}
+              {(formData.aliases?.length ?? 0) > 0 && (
+                <ul className="flex flex-wrap gap-2" aria-label="Aliases">
+                  {formData.aliases.map((alias) => (
+                    <li key={alias}>
+                      <Badge variant="secondary" className="gap-1 pr-1">
+                        {alias}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAlias(alias)}
+                          aria-label={`Remove alias ${alias}`}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-background/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <X className="h-3 w-3" aria-hidden="true" />
+                        </button>
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div>
@@ -241,7 +252,7 @@ function VenueDialog({
                   setFormData({ ...formData, venue_type: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="venue_type">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -925,6 +936,7 @@ export default function VenuesManager() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search venues"
               placeholder="Search venues..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1069,7 +1081,7 @@ export default function VenuesManager() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button
+                          <Button aria-label={`Edit ${venue.name}`}
                             size="sm"
                             variant="outline"
                             onClick={() => handleEdit(venue)}
@@ -1084,6 +1096,7 @@ export default function VenuesManager() {
                             >
                               <SafeExternalLink
                                 fallback={null}
+                                aria-label={`${venue.name} website (opens in new tab)`}
                                 href={venue.website}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -1092,7 +1105,7 @@ export default function VenuesManager() {
                               </SafeExternalLink>
                             </Button>
                           )}
-                          <Button
+                          <Button aria-label={`Delete ${venue.name}`}
                             size="sm"
                             variant="destructive"
                             onClick={() => handleDelete(venue)}

@@ -19,7 +19,7 @@
  *
  * Offline: reads sources, runs no code, needs no credentials.
  */
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 
 const read = (p: string) => Deno.readTextFileSync(new URL(p, import.meta.url));
 

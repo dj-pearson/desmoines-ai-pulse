@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Link, Save, RefreshCw, AlertTriangle, CheckCircle, Globe, DollarSign, Target } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 
 /**
@@ -462,6 +462,7 @@ export default function AffiliateManager() {
                       </TableCell>
                       <TableCell>
                         <Input
+                          aria-label={`UTM parameters for ${urlData.domain}`}
                           placeholder="?utm_source=desmoinesinsider&utm_medium=website&utm_campaign=events"
                           value={urlData.utmParameters}
                           onChange={(e) => updateUtmParameters(urlData.domain, e.target.value)}

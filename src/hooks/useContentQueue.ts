@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { validateContent, autoFixContent, ContentValidationReport } from '@/lib/contentValidation';
 
 const log = createLogger('useContentQueue');

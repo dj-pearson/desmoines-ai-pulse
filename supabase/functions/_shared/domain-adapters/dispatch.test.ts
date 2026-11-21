@@ -8,7 +8,7 @@
  * site-specific one made it unreachable.
  */
 import { runAdapters } from "./dispatch.ts";
-import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+import type { AdapterEvent, AdapterFetchOptions, AdapterResult, DomainAdapter } from "./types.ts";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`assertion failed: ${msg}`);
@@ -118,4 +118,43 @@ Deno.test("adapters that do not match or do not support the category are not cal
   );
   assert(result === null, "no candidates → null");
   assert(calls.length === 0, `nothing fetched, calls: ${calls}`);
+});
+
+// WEB-BE-060: an adapter told which listings are already stored can find
+// nothing new. That is a result, not a miss.
+function knownAwareAdapter(name: string, calls: string[], seen: AdapterFetchOptions[]): DomainAdapter {
+  return {
+    name,
+    matches: () => true,
+    supports: (c) => c === "events",
+    fetch: (_url, _category, options): Promise<AdapterResult> => {
+      calls.push(name);
+      seen.push(options ?? {});
+      return Promise.resolve({ success: true, items: [], adapter: name, skippedKnown: 3 });
+    },
+  };
+}
+
+Deno.test("zero items with skippedKnown > 0 stops the walk instead of falling through", async () => {
+  const calls: string[] = [];
+  const seen: AdapterFetchOptions[] = [];
+  const result = await runAdapters(
+    [knownAwareAdapter("catch", calls, seen), adapter("crawler", "items", calls)],
+    "https://example.com/events",
+    "events",
+    { knownSourceIds: new Set(["1", "2", "3"]) },
+  );
+  assert(result?.adapter === "catch", `nothing new is still catch's answer, got ${result?.adapter}`);
+  assert(result?.skippedKnown === 3, "skippedKnown is passed back to the caller");
+  assert(calls.join(",") === "catch", `the generic crawler must not run, calls: ${calls}`);
+});
+
+Deno.test("fetch options reach the adapter unchanged", async () => {
+  const calls: string[] = [];
+  const seen: AdapterFetchOptions[] = [];
+  const known = new Set(["42"]);
+  await runAdapters([knownAwareAdapter("catch", calls, seen)], "https://example.com/events", "events", {
+    knownSourceIds: known,
+  });
+  assert(seen[0]?.knownSourceIds === known, "the caller's known-id set is what the adapter sees");
 });

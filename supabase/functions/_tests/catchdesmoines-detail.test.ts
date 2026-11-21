@@ -14,12 +14,14 @@
 
 import { strict as assert } from 'node:assert';
 import {
+  catchDetailId,
   extractExternalUrlFallback,
   extractImage,
   extractOgImage,
   normalizeUrl,
   parseLdJsonEvent,
   placeCoordinates,
+  selectDetailUrls,
   toAdapterEvent,
 } from '../_shared/domain-adapters/catchdesmoinesParse.ts';
 
@@ -138,4 +140,38 @@ Deno.test('excluded domains match by host, not by substring', () => {
   assert.equal(normalizeUrl('https://www.dropbox.com/s/flyer', DETAIL), 'https://www.dropbox.com/s/flyer');
   assert.equal(normalizeUrl('https://cdn.simpleviewinc.com/x', DETAIL), null);
   assert.equal(normalizeUrl('javascript:void(0)', DETAIL), null);
+});
+
+// WEB-BE-060: skip listings the database already has, before the budget.
+Deno.test('the listing id comes from the detail URL, not the slug', () => {
+  assert.equal(catchDetailId(DETAIL), '12345');
+  assert.equal(catchDetailId('https://catchdesmoines.com/event/renamed-band/12345'), '12345',
+    'a retitled listing keeps its id');
+  assert.equal(catchDetailId('https://www.catchdesmoines.com/event/x/678/?utm_source=a'), '678');
+  assert.equal(catchDetailId('https://www.catchdesmoines.com/events/'), null);
+  assert.equal(catchDetailId('https://www.someband.com/event/x/12345/'), null,
+    'an organizer URL is not a Catch Des Moines listing');
+  assert.equal(catchDetailId(null), null);
+});
+
+const listing = (n: number) => `https://www.catchdesmoines.com/event/show-${n}/${n}/`;
+
+Deno.test('known listings are skipped and the budget goes to unknown ones', () => {
+  const urls = [1, 2, 3, 4, 5, 6].map(listing);
+  const { toFetch, skippedKnown } = selectDetailUrls(urls, new Set(['1', '2', '4']), 2);
+  assert.deepEqual(toFetch, [listing(3), listing(5)],
+    'the nearest two UNKNOWN listings, in list order');
+  assert.equal(skippedKnown, 3);
+});
+
+Deno.test('every listing known: nothing fetched, all counted as skipped', () => {
+  const urls = [1, 2].map(listing);
+  const { toFetch, skippedKnown } = selectDetailUrls(urls, new Set(['1', '2']), 100);
+  assert.deepEqual(toFetch, []);
+  assert.equal(skippedKnown, 2);
+});
+
+Deno.test('no known set behaves exactly as the old slice(0, max)', () => {
+  const urls = [1, 2, 3].map(listing);
+  assert.deepEqual(selectDetailUrls(urls, undefined, 2), { toFetch: urls.slice(0, 2), skippedKnown: 0 });
 });

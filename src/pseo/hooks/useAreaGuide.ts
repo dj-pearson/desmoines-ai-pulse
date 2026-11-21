@@ -5,9 +5,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { applyServingRestaurantFilters } from '@/lib/restaurantStatus';
 import type { NeighborhoodBoundary } from '@/lib/neighborhoodBoundaries';
 import {
-  AREA_LOOKAHEAD_DAYS,
+  areaEventsWindow,
   polygonBounds,
   splitAreaEvents,
   splitAreaPlaces,
@@ -24,11 +25,15 @@ export function useAreaPlaces(boundary: NeighborhoodBoundary | undefined) {
     staleTime: STALE_MS,
     queryFn: async () => {
       if (!boundary) throw new Error('useAreaPlaces: no boundary');
-      const { data, error } = await supabase
-        .from('restaurants')
-        .select('id, name, slug, cuisine, price_range, rating, status, latitude, longitude')
-        .eq('neighborhood', boundary.slug)
-        .neq('is_merged', true)
+      // WEB-BE-045: places not serving today (Google's business_status
+      // included) are left out in the query, so they cannot take the 100 rows.
+      const { data, error } = await applyServingRestaurantFilters(
+        supabase
+          .from('restaurants')
+          .select('id, name, slug, cuisine, price_range, rating, status, business_status, latitude, longitude')
+          .eq('neighborhood', boundary.slug)
+          .neq('is_merged', true),
+      )
         .order('rating', { ascending: false, nullsFirst: false })
         .order('name', { ascending: true })
         .limit(100);
@@ -46,13 +51,14 @@ export function useAreaEvents(boundary: NeighborhoodBoundary | undefined) {
     queryFn: async () => {
       if (!boundary) throw new Error('useAreaEvents: no boundary');
       const now = new Date();
-      const until = new Date(now.getTime() + AREA_LOOKAHEAD_DAYS * 86_400_000);
+      // Still on today or running, starting within the lookahead (WEB-SEO-063).
+      const dates = areaEventsWindow(now);
       const box = polygonBounds(boundary.polygon);
       const query = supabase
         .from('events')
-        .select('id, title, date, event_start_utc, time_tbd, venue, location, latitude, longitude')
-        .gte('date', now.toISOString())
-        .lt('date', until.toISOString())
+        .select('id, title, date, end_date, event_start_utc, time_tbd, venue, location, latitude, longitude')
+        .or(dates.or)
+        .lt('date', dates.before)
         .gte('latitude', box.minLat)
         .lte('latitude', box.maxLat)
         .gte('longitude', box.minLng)

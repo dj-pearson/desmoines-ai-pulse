@@ -50,6 +50,7 @@ const SURVIVORS = [
   "src/components/schema/NoIndexMeta.tsx",
   "src/components/schema/SpeakableSchema.tsx",
   "src/components/schema/TouristTripSchema.tsx",
+  "src/components/seo/DetailBreadcrumb.tsx",
 ];
 
 function walk(dir: string, out: string[] = []): string[] {

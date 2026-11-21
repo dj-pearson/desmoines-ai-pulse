@@ -1149,7 +1149,7 @@ async function handleTrialWillEnd(
 
 // ---------------------------------------------------------------------------
 // Business Pro (growth roadmap #3, part 2). Separate table, separate rows:
-// see supabase/migrations/20261102000006_business_pro.sql and
+// see supabase/migrations/20261116000030_business_pro.sql and
 // _shared/businessPro.ts for why these never touch user_subscriptions.
 // ---------------------------------------------------------------------------
 

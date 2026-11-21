@@ -7,7 +7,7 @@
  * transaction into an entitlement.
  */
 
-import { assert, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));

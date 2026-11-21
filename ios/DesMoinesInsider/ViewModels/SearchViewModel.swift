@@ -308,16 +308,26 @@ final class SearchViewModel {
     private func searchEvents(_ query: ParsedSearch) async -> Result<Leg<Event>, Error> {
         let f = query.filters
         let keywords = query.keywords
-        let window = f.datePreset?.range(now: Date())
+        // A day range (a month page, a ?from=&to= link) and a preset are never
+        // both set; SearchFilters.merged keeps whichever came last. Date night
+        // with neither uses the web page's two-week window.
+        let now = Date()
+        let window = f.dayRange?.window() ?? f.datePreset?.range(now: now)
+            ?? (f.dateNight != nil ? EventsService.dateNightWindow(now: now) : nil)
+        let eveningOnly = f.dateNight == .evening
         do {
             let response = try await events.fetchEvents(query: .init(
                 searchText: keywords.isEmpty ? nil : keywords,
                 category: f.category?.rawValue,
                 cities: f.areas.isEmpty ? nil : f.areas.map(\.rawValue),
                 freeOnly: f.freeOnly,
+                kidsOnly: f.kidsOnly,
+                dateNightOnly: f.dateNight != nil,
                 dateStart: window?.start,
                 dateEnd: window?.end,
-                limit: 20
+                // Evening starts filter on the device, as Open Now does for
+                // restaurants, so ask for more to filter.
+                limit: eveningOnly ? 60 : 20
             ))
             // The fuzzy fallback knows nothing of dates, areas or price, so it
             // runs only for a bare keyword search.
@@ -325,19 +335,31 @@ final class SearchViewModel {
                 let fuzzy = try await events.fuzzySearchEvents(query: keywords)
                 return .success(Leg(rows: fuzzy, fuzzy: !fuzzy.isEmpty))
             }
+            if eveningOnly {
+                let evenings = Self.eveningRows(response.events)
+                return .success(Leg(rows: Array(evenings.prefix(20)), hasMore: response.hasMore || evenings.count > 20))
+            }
             return .success(Leg(rows: response.events, hasMore: response.hasMore))
         } catch {
             return failure(error)
         }
     }
 
-    /// Restaurants have no dates or price-free rule, so a query that is only
-    /// "tonight" or "free" does not search them; a query with no words runs
-    /// only for an area or Open Now.
+    /// The date night list's default: evening starts only, in the order the
+    /// query returned them (IOS-AUDIT-008).
+    static func eveningRows(_ events: [Event]) -> [Event] {
+        events.filter(\.startsInTheEvening)
+    }
+
+    /// Restaurants have no dates, price-free, kids or date night rule, so a
+    /// query that is only "tonight", "free" or a /events/kids or
+    /// /events/date-night link does not search them; a query with no words
+    /// runs only for an area or Open Now.
     static func searchesRestaurants(_ query: ParsedSearch) -> Bool {
         let f = query.filters
         guard query.keywords.isEmpty else { return true }
-        if f.datePreset != nil || f.freeOnly || f.category != nil { return false }
+        if f.datePreset != nil || f.dayRange != nil || f.freeOnly || f.category != nil || f.kidsOnly
+            || f.dateNight != nil { return false }
         return !f.areas.isEmpty || f.openNow
     }
 

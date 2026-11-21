@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, CheckCircle, Upload } from "lucide-react";
@@ -10,6 +11,7 @@ import { handleError, ErrorSeverity } from "@/lib/errorHandler";
 import { formatCampaignDate, formatUSD } from "@/lib/campaignDisplay";
 import { BUSINESS_CONTACT_EMAIL, BUSINESS_CONTACT_HREF, CREATIVE_REVIEW_COPY } from "@/lib/businessCopy";
 import { PLACEMENT_SPECS, type PlacementType } from "@/lib/placementSpecs";
+import { logAdvertiserFunnelEventOnce } from "@/lib/advertiserFunnel";
 
 interface PaidCampaign {
   id: string;
@@ -93,6 +95,13 @@ export default function AdvertiseSuccess() {
     retry: false,
     staleTime: Infinity,
   });
+
+  // Counted only once verify-campaign-payment says Stripe took the money; the
+  // redirect to this page alone proves nothing.
+  const confirmedPaid = receipt.data?.state === "paid";
+  useEffect(() => {
+    if (campaignId && confirmedPaid) logAdvertiserFunnelEventOnce("ad_funnel_payment_confirmed", campaignId);
+  }, [campaignId, confirmedPaid]);
 
   if (!campaignId) {
     return (

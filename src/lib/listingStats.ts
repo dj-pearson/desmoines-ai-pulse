@@ -28,7 +28,7 @@ export interface PeerComparison {
   median_views: number;
   /** Share of peers with fewer views, 0-100. */
   percentile: number;
-  /** Business Pro only (20261102000006); absent for a free owner. */
+  /** Business Pro only (20261116000030); absent for a free owner. */
   pro?: PeerProDetail;
 }
 
@@ -99,7 +99,7 @@ export function parseListingStats(raw: unknown): ListingStats | null {
   const o = raw as Record<string, unknown>;
   const days = num(o.days);
   if (days === null) return null;
-  // `pro` arrived with 20261102000006; before it the key is absent, which is free.
+  // `pro` arrived with 20261116000030; before it the key is absent, which is free.
   const pro = o.pro === true;
   if (o.status === "no_data") return { status: "no_data", days, pro };
   if (o.status !== "ok") return null;

@@ -13,7 +13,7 @@
  * The "unset" test is FIRST on purpose: the warning is once per worker, and
  * any earlier defaultModel() call with the variable unset would spend it.
  */
-import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
 import {
   ClaudeRequestShapeError,
   defaultModel,

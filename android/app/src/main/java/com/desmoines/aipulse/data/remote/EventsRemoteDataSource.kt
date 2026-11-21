@@ -3,7 +3,13 @@ package com.desmoines.aipulse.data.remote
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.EventSeries
+import com.desmoines.aipulse.util.EventSeriesDef
 import com.desmoines.aipulse.util.EventSlug
+import com.desmoines.aipulse.util.SeriesEventRow
+import com.desmoines.aipulse.util.SeriesEventRows
+import com.desmoines.aipulse.util.KidsEventsFilter
+import com.desmoines.aipulse.util.DateNightFilter
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -14,7 +20,6 @@ import io.github.jan.supabase.postgrest.query.filter.TextSearchType
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,6 +33,13 @@ data class EventsQuery(
     val dateStart: String? = null,
     val dateEnd: String? = null,
     val isFeatured: Boolean? = null,
+    /** The web's /events/kids rule, [KidsEventsFilter] (AND-AUDIT-041). */
+    val kidsOnly: Boolean = false,
+    /**
+     * The web's /events/date-night rule, [DateNightFilter] (AND-AUDIT-046).
+     * Never set with [kidsOnly]: two or() params are not one condition.
+     */
+    val dateNightOnly: Boolean = false,
     val limit: Int = Config.DEFAULT_PAGE_SIZE,
     val offset: Int = 0,
 )
@@ -54,11 +66,12 @@ class EventsRemoteDataSource @Inject constructor(
     private fun db(): SupabaseClient =
         supabaseClient ?: throw IllegalStateException("Supabase client is not configured.")
 
-    private fun todayIso(): String {
-        val today = LocalDate.now()
-        return today.atStartOfDay().atOffset(ZoneOffset.UTC)
-            .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-    }
+    /**
+     * The "upcoming" floor: midnight starting today in Des Moines. It was the
+     * device's day at UTC midnight, which is 7pm the evening before in Central,
+     * so last night's late shows stayed in every list until 7pm (AND-AUDIT-031).
+     */
+    private fun todayIso(): String = centralDayStartIso(LocalDate.now(EventSlug.CENTRAL))
 
     // region Fetch Events
 
@@ -94,6 +107,21 @@ class EventsRemoteDataSource @Inject constructor(
                 if (query.isFeatured == true) {
                     eq("is_featured", true)
                 }
+
+                // Kids and family: the web's KIDS_EVENTS_FILTER or-group.
+                if (query.kidsOnly) {
+                    or {
+                        KidsEventsFilter.ARMS.forEach { imatch(it.column, it.pattern) }
+                    }
+                }
+
+                // Date night: the web's DATE_NIGHT_FILTER or-group.
+                if (query.dateNightOnly) {
+                    or {
+                        isIn("category", DateNightFilter.CATEGORIES)
+                        imatch("title", DateNightFilter.TITLE_PATTERN)
+                    }
+                }
             }
 
             order("date", Order.ASCENDING)
@@ -110,6 +138,37 @@ class EventsRemoteDataSource @Inject constructor(
             totalCount = total,
             hasMore = query.offset + query.limit < total,
         )
+    }
+
+    // endregion
+
+    // region Event Series
+
+    /**
+     * Every row of one annual series, for its native screen (AND-AUDIT-042).
+     * A port of the web's useEventSeriesPage query and iOS fetchSeriesRows.
+     *
+     * This read deliberately keeps hidden and archived rows: a past edition is
+     * exactly a row the stale sweep hid, and [EventSeriesSchedule.build]
+     * decides per row whether to list it, link it or drop it. Merged
+     * duplicates are excluded, since their survivor is the row that counts.
+     * The title filter is the web's loose ilike per alias; build applies the
+     * exact match. The rows are decoded leniently ([SeriesEventRows]).
+     */
+    suspend fun fetchSeriesRows(def: EventSeriesDef): List<SeriesEventRow> {
+        val patterns = EventSeries.titleLikePatterns(def)
+        if (patterns.isEmpty()) return emptyList()
+        val result = db().from("events").select {
+            filter {
+                neq("is_merged", true)
+                or {
+                    patterns.forEach { ilike("title", it) }
+                }
+            }
+            order("date", Order.ASCENDING)
+            limit(SERIES_ROW_LIMIT)
+        }
+        return SeriesEventRows.decode(result.data)
     }
 
     // endregion
@@ -341,6 +400,12 @@ class EventsRemoteDataSource @Inject constructor(
     // endregion
 
     companion object {
+        /**
+         * Rows a series read asks for: the web's SERIES_ROW_LIMIT and iOS
+         * seriesRowLimit (androidEventSeriesParity.test.ts holds all three equal).
+         */
+        const val SERIES_ROW_LIMIT = 200L
+
         /**
          * Haversine distance in meters between two coordinates.
          * Replaces iOS CLLocation.distance(from:).

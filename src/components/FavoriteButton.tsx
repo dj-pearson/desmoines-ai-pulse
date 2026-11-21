@@ -6,8 +6,7 @@ import {
   type FavoriteContentType,
 } from "@/hooks/useContentFavorites";
 import { cn } from "@/lib/utils";
-import { hapticTap } from "@/lib/capacitorUtils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useSyncExternalStore } from "react";
 import { useAuthFlags } from "@/contexts/AuthContext";
 import { openPaywall } from "@/lib/paywallStore";
@@ -89,7 +88,6 @@ function FavoriteButtonView({
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        hapticTap();
         onToggle();
       }}
       disabled={isToggling}
@@ -271,6 +269,24 @@ function GuestFavoriteButton({
   );
 }
 
+/** Signed-out Save on an article: nothing is stored, the tap asks for an account. */
+function GuestArticleSaveButton({ onResult: _onResult, ...rest }: DataProps) {
+  return (
+    <FavoriteButtonView
+      favorited={false}
+      isToggling={false}
+      onToggle={() => {
+        toast("Sign up free to save guides", {
+          id: "guest-article-save",
+          description: "Saved guides follow you to the Des Moines Insider app, on every plan.",
+          action: { label: "Sign up", onClick: () => goToSignup() },
+        });
+      }}
+      {...rest}
+    />
+  );
+}
+
 function currentSignUpHref(): string {
   if (typeof window === "undefined") return signUpHref("/");
   return signUpHref(window.location.pathname, window.location.search);
@@ -290,11 +306,17 @@ export function FavoriteButton({
 }: FavoriteButtonProps) {
   const { isAuthenticated } = useAuthFlags();
   const guestType: GuestFavoriteType =
-    contentType && contentType !== "event" ? contentType : "event";
+    contentType && contentType !== "event" && contentType !== "article"
+      ? contentType
+      : "event";
   const id = contentId ?? eventId;
 
   if (!isAuthenticated) {
     if (!id) return null;
+    // The guest store holds place and event saves only; a saved guide lives in
+    // content_favorites and needs an account (XPLAT-013). Ask for one rather
+    // than hiding the control, so the page shows the same Save as iOS.
+    if (contentType === "article") return <GuestArticleSaveButton {...rest} />;
     return <GuestFavoriteButton guestType={guestType} id={id} {...rest} />;
   }
 

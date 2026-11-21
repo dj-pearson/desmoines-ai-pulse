@@ -23,6 +23,8 @@
  * happens instead.
  */
 
+import { fetchPublicUrl } from './fetchGuard.ts';
+
 /** How long a fetched robots.txt stays cached, per origin. */
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
@@ -187,7 +189,11 @@ async function fetchRules(origin: string, agentToken: string): Promise<RobotsRul
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(`${origin}/robots.txt`, {
+      // WEB-SEC-060. This runs before any backend, on our own network, for
+      // whatever URL the caller passed, so it gets the same guard as the fetch
+      // backend: a private host or a redirect onto one throws, and the catch
+      // below treats that as no rules (the backend then refuses the page).
+      res = await fetchPublicUrl(`${origin}/robots.txt`, {
         signal: controller.signal,
         headers: { 'User-Agent': agentToken },
       });

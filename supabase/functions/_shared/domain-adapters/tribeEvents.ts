@@ -69,7 +69,7 @@ interface TribeEvent {
   description?: string;
   excerpt?: string;
   url?: string;
-  start_date?: string; // "2026-08-15 19:30:00" (site-local)
+  start_date?: string; // "2026-08-15 20:00:00" (site-local)
   end_date?: string;
   all_day?: boolean;
   timezone?: string;
@@ -275,16 +275,17 @@ function toAdapterEvent(
 /**
  * Tribe's `start_date` is already the site's local wall clock in
  * "YYYY-MM-DD HH:MM:SS" — the same contract AdapterEvent expects — so it is
- * passed through verbatim. All-day events get the pipeline's 19:00 default
- * rather than 00:00, which would otherwise read as "yesterday at midnight" to
- * readers scanning a day view.
+ * passed through verbatim. An all-day event, or a start with no time, returns
+ * the DATE ONLY so parseEventDateTime stamps NO_TIME_MARKER (WEB-BE-059).
+ * Tribe sends all-day starts as 00:00:00, which would read as "yesterday at
+ * midnight"; this used to substitute 7pm, which reads as a real showtime.
  */
-function normalizeStartDate(evt: TribeEvent): string | null {
+export function normalizeStartDate(evt: Pick<TribeEvent, "start_date" | "all_day">): string | null {
   const raw = (evt.start_date ?? "").trim();
   const m = raw.match(/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
   if (!m) return null;
   const day = m[1];
-  if (evt.all_day || m[2] === undefined) return `${day} 19:00:00`;
+  if (evt.all_day || m[2] === undefined) return day;
   return `${day} ${m[2]}:${m[3]}:${m[4] ?? "00"}`;
 }
 

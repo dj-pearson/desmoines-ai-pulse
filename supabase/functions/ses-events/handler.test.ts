@@ -4,7 +4,7 @@
  *
  *   deno test --allow-read supabase/functions/ses-events/handler.test.ts
  */
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { verifySnsMessage } from "../_shared/sesEvents.ts";
 import { handleSesEvent } from "./handler.ts";
 

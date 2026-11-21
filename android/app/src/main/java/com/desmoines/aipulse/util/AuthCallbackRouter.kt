@@ -27,6 +27,13 @@ sealed interface AuthCallback {
     /** Password-reset link (`flow=recovery`). [code] is the PKCE auth code, if any. */
     data class Recovery(val code: String?) : AuthCallback
 
+    /**
+     * Return from a browser OAuth sign-in (`flow=oauth`), today only Apple
+     * (XPLAT-012). Kept apart from [Confirmation] so the user is not told their
+     * email was confirmed when they never typed one.
+     */
+    data class OAuth(val code: String?) : AuthCallback
+
     /** GoTrue redirected with an error, most often an expired or reused link. */
     data class Error(val message: String) : AuthCallback
 
@@ -47,6 +54,17 @@ object AuthCallbackRouter {
     const val SCHEME = Config.APP_BUNDLE_ID
     const val HOST = "auth-callback"
 
+    /** The `flow` value [OAUTH_REDIRECT_URL] carries. */
+    const val OAUTH_FLOW = "oauth"
+
+    /**
+     * Where a browser OAuth sign-in returns. GoTrue appends `code` to this
+     * query, as it does for `flow=recovery`. It must be on the hosted project's
+     * redirect allowlist, or GoTrue falls back to the Site URL and the sign-in
+     * finishes on the website instead of here.
+     */
+    const val OAUTH_REDIRECT_URL = "$SCHEME://$HOST?flow=$OAUTH_FLOW"
+
     private const val MAX_DESCRIPTION_LENGTH = 200
 
     fun classify(uri: String?): AuthCallback {
@@ -57,16 +75,35 @@ object AuthCallbackRouter {
 
         val params = parseParams(parsed.rawQuery) + parseParams(parsed.rawFragment)
 
+        val isOAuth = params["flow"].equals(OAUTH_FLOW, ignoreCase = true)
+
         val description = params["error_description"]?.takeIf { it.isNotBlank() }
         if (description != null) {
-            return AuthCallback.Error(errorMessage(params["error_code"], description))
+            val message = if (isOAuth) {
+                oauthErrorMessage(description)
+            } else {
+                errorMessage(params["error_code"], description)
+            }
+            return AuthCallback.Error(message)
         }
 
         val code = params["code"]?.takeIf { it.isNotBlank() }
         val isRecovery = params["flow"].equals("recovery", ignoreCase = true) ||
             params["type"].equals("recovery", ignoreCase = true)
-        return if (isRecovery) AuthCallback.Recovery(code) else AuthCallback.Confirmation(code)
+        return when {
+            isRecovery -> AuthCallback.Recovery(code)
+            isOAuth -> AuthCallback.OAuth(code)
+            else -> AuthCallback.Confirmation(code)
+        }
     }
+
+    /**
+     * An OAuth return has no email link to have expired, so the expiry wording
+     * would send the user looking for a mail that does not exist.
+     */
+    private fun oauthErrorMessage(description: String): String =
+        "Sign-in didn't finish: ${description.take(MAX_DESCRIPTION_LENGTH)}. " +
+            "Try again, or sign in with your email and password."
 
     private fun errorMessage(code: String?, description: String): String {
         if (code.equals("otp_expired", ignoreCase = true) ||
@@ -162,6 +199,7 @@ class AuthCallbackNotices internal constructor(dispatcher: CoroutineDispatcher) 
 
     companion object {
         const val CONFIRMED_MESSAGE = "Email confirmed. You're signed in."
+        const val OAUTH_SIGNED_IN_MESSAGE = "You're signed in."
         const val PASSWORD_UPDATED_MESSAGE = "Password updated. You're signed in."
         const val EXCHANGE_FAILED_MESSAGE =
             "We couldn't finish signing you in from that link. It may have expired or been " +

@@ -14,5 +14,7 @@ export interface PostgrestFilterFinding extends PostgrestFilterProblem {
 }
 
 export declare const SANITIZER: string;
+/** A file can only hold a like/ilike pattern if it matches this; others are skipped (WEB-QA-056). */
+export declare const MAY_HOLD_PATTERN: RegExp;
 export declare function checkSource(source: string, fileName?: string): PostgrestFilterProblem[];
 export declare function run(root?: string): { files: number; findings: PostgrestFilterFinding[] };

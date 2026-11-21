@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { createLogger } from '@/lib/logger';
 import { handleError } from '@/lib/errorHandler';
 import { fromUnknownTable } from "@/integrations/supabase/unknownTable";

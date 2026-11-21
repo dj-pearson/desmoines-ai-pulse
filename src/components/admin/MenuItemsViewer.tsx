@@ -18,7 +18,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   ChevronDown,
   ChevronRight,
@@ -190,6 +190,7 @@ export function MenuItemsViewer({
           <div className="relative flex-1 min-w-[160px]">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
+              aria-label="Search menu items"
               placeholder="Search items…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -254,7 +255,7 @@ export function MenuItemsViewer({
                       Restore
                     </Button>
                   )}
-                  <Button
+                  <Button aria-label={`Delete version ${v.version}`}
                     variant="ghost"
                     size="sm"
                     className="h-6 text-xs text-destructive hover:text-destructive"

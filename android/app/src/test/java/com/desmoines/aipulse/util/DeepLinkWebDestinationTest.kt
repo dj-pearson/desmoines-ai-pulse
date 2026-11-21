@@ -6,6 +6,8 @@ import com.desmoines.aipulse.util.DeepLinkHandler.Destination
 import com.desmoines.aipulse.util.DeepLinkHandler.LinkId
 import com.desmoines.aipulse.util.DeepLinkHandler.ScreenDestination
 import com.desmoines.aipulse.util.DeepLinkHandler.TabDestination
+import com.desmoines.aipulse.data.model.Neighborhood
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -71,12 +73,41 @@ class DeepLinkWebDestinationTest {
         assertEquals(Destination.Search("today"), web("/events/today"))
         assertEquals(Destination.Search("tonight"), web("/events/tonight"))
         assertEquals(Destination.Search("free events"), web("/events/free"))
-        assertEquals(Destination.Search("kids events"), web("/events/kids"))
+        assertEquals(Destination.KidsEvents, web("/events/kids"))
         assertEquals(Destination.Search("events in west des moines"), web("/events/west-des-moines"))
         assertEquals(Destination.Search("events in ankeny"), web("/events/ankeny"))
-        assertEquals(Destination.Tab(TabDestination.HOME), web("/events/near-me"))
-        assertEquals(Destination.Tab(TabDestination.HOME), web("/events/date-night"))
-        assertEquals(Destination.Tab(TabDestination.HOME), web("/events/may-2026"))
+        assertEquals(Destination.Tab(TabDestination.MAP), web("/events/near-me"))
+    }
+
+    @Test
+    fun `date night opens the native date night filter, evenings by default`() {
+        // AND-AUDIT-046: it opened the web page (AND-AUDIT-045), Home before.
+        assertEquals(Destination.DateNight(DateNightFilter.Times.EVENING), web("/events/date-night"))
+        // The web's ?time=all toggle keeps every start time, as on iOS.
+        val all = "https://desmoinesinsider.com/events/date-night?time=all"
+        assertEquals(
+            Destination.DateNight(DateNightFilter.Times.ANY_TIME),
+            webDestination(listOf("events", "date-night"), null, all),
+        )
+        // Any other value is the default, as the web's getStr(...) !== "all".
+        val evening = "https://desmoinesinsider.com/events/date-night?time=evening&utm_source=x"
+        assertEquals(
+            Destination.DateNight(DateNightFilter.Times.EVENING),
+            webDestination(listOf("events", "date-night"), null, evening),
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["may-2026", "june-2026", "december-2025", "january-2027"])
+    fun `a month archive opens the web page, never Home`(segment: String) {
+        // AND-AUDIT-045: past months included, which no native list can show.
+        assertEquals(Destination.Web("https://desmoinesinsider.com/events/$segment"), web("/events/$segment"))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["june-26", "jun-2026", "June-2026", "june-2026-extra", "smarch-2026"])
+    fun `a month-like event slug is not a month archive`(segment: String) {
+        assertFalse(web("/events/$segment") is Destination.Web, segment)
     }
 
     @ParameterizedTest
@@ -92,11 +123,30 @@ class DeepLinkWebDestinationTest {
     }
 
     @Test
-    fun `an event series page opens on the web`() {
-        assertEquals(
-            Destination.Web("https://desmoinesinsider.com/events/series/jazz-in-july"),
-            web("/events/series/jazz-in-july"),
-        )
+    fun `a known event series opens the native series screen`() {
+        // AND-AUDIT-042: it opened in the web view until the native screen landed.
+        assertEquals(Destination.Series("jazz-in-july"), web("/events/series/jazz-in-july"))
+        assertEquals(Destination.Series("cloris-awards"), web("/events/series/cloris-awards"))
+    }
+
+    @Test
+    fun `every catalogued series slug opens natively`() {
+        for (def in EventSeries.ALL) {
+            assertEquals(Destination.Series(def.slug), web(EventSeries.path(def)), def.slug)
+        }
+    }
+
+    @Test
+    fun `an unknown or malformed series link stays on the web`() {
+        // A series the web added after this build must still open somewhere.
+        for (path in listOf(
+            "/events/series/some-new-festival",
+            "/events/series",
+            "/events/series/jazz-in-july/extra",
+            "/events/series/Jazz-In-July",
+        )) {
+            assertEquals(Destination.Web("https://desmoinesinsider.com$path"), web(path), path)
+        }
     }
 
     @Test
@@ -108,7 +158,7 @@ class DeepLinkWebDestinationTest {
 
     @Test
     fun `restaurant landing pages go to Dining, a slug to the detail`() {
-        assertEquals(Destination.Tab(TabDestination.DINING), web("/restaurants/open-now"))
+        assertEquals(Destination.RestaurantsOpenNow, web("/restaurants/open-now"))
         assertEquals(Destination.Tab(TabDestination.DINING), web("/restaurants/new"))
         assertEquals(Destination.Tab(TabDestination.DINING), web("/restaurants/dietary/vegan"))
         assertEquals(Destination.Restaurant(LinkId("zombie-burger")), web("/restaurants/zombie-burger"))
@@ -145,6 +195,39 @@ class DeepLinkWebDestinationTest {
         assertEquals(Destination.Tab(TabDestination.SEARCH), web("/search", q = "   "))
         assertEquals(Destination.Tab(TabDestination.SEARCH), web("/search"))
         assertEquals(Destination.Tab(TabDestination.SEARCH), web("/search/advanced"))
+    }
+
+    // MARK: - Neighborhoods (AND-AUDIT-025)
+
+    @Test
+    fun `a neighborhood link opens that guide, the section root opens the hub`() {
+        assertEquals(Destination.Neighborhood("ankeny"), web("/neighborhoods/ankeny"))
+        assertEquals(Destination.Neighborhood("east-village"), web("/neighborhoods/east-village"))
+        assertEquals(Destination.Screen(ScreenDestination.NEIGHBORHOODS), web("/neighborhoods"))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["not-a-place", "Ankeny", "ankeny%2F..", "downtown-ish"])
+    fun `a slug the app has no guide for lands on the hub`(segment: String) {
+        assertEquals(Destination.Screen(ScreenDestination.NEIGHBORHOODS), web("/neighborhoods/$segment"))
+    }
+
+    @Test
+    fun `every neighborhood the web links has a native guide`() {
+        // The web builds /neighborhoods/<slug> from src/lib/neighborhoods.ts. A
+        // slug added there and not to Neighborhood.all would open the hub, not
+        // the guide, and nothing else would notice.
+        val repoRoot = generateSequence(File("").absoluteFile) { it.parentFile }
+            .first { File(it, "src/lib/neighborhoods.ts").exists() }
+        val webSlugs = Regex("""^\s*slug:\s*'([a-z0-9-]+)'""", RegexOption.MULTILINE)
+            .findAll(File(repoRoot, "src/lib/neighborhoods.ts").readText())
+            .map { it.groupValues[1] }
+            .toSet()
+        assertTrue(webSlugs.size >= 8, "read only $webSlugs from src/lib/neighborhoods.ts")
+        assertEquals(webSlugs, Neighborhood.all.map { it.slug }.toSet())
+        for (slug in webSlugs) {
+            assertEquals(Destination.Neighborhood(slug), web("/neighborhoods/$slug"))
+        }
     }
 
     // MARK: - Fallbacks

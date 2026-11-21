@@ -24,7 +24,7 @@
  * way.
  */
 
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 
 const FUNCTIONS = new URL('../', import.meta.url);
 const REPO = new URL('../../../', import.meta.url);
@@ -128,7 +128,48 @@ const MULTI_CLIENT = [
       'android/app/src/main/java/com/desmoines/aipulse/util/VersionCheckService.kt',
     ],
   },
+  {
+    // XPLAT-007: right of access. Both mobile clients POST with no body; the
+    // handler takes the user from the JWT and reads nothing from the request,
+    // so there is no field list. The bodyless test below pins that it stays so.
+    fn: 'export-user-data/index.ts',
+    documentedActions: [],
+    requestFields: [],
+    clients: [
+      'ios/DesMoinesInsider/Services/DataExportService.swift',
+      'android/app/src/main/java/com/desmoines/aipulse/ui/screens/profile/ProfileViewModel.kt',
+    ],
+  },
 ];
+
+Deno.test('every listed client still calls its function', async () => {
+  // The action and field checks skip an entry with neither, so without this a
+  // bodyless entry like export-user-data would check nothing about its clients.
+  for (const { fn, clients } of MULTI_CLIENT) {
+    const name = fn.replace('/index.ts', '');
+    for (const client of clients) {
+      let src: string;
+      try {
+        src = stripComments(await read(new URL(client, REPO)));
+      } catch {
+        throw new Error(`${fn}: client ${client} is listed as a caller but the file is missing.`);
+      }
+      assert(
+        new RegExp(`["'/]${name}["'\\x60]`).test(src),
+        `${client} is listed as calling ${name} but no longer does. Update MULTI_CLIENT.`,
+      );
+    }
+  }
+});
+
+Deno.test('export-user-data reads nothing from the request body', async () => {
+  // Shipped iOS and Android binaries send an empty POST. If the handler starts
+  // parsing a body, an unguarded req.json() 500s for every one of them, and a
+  // body-supplied id would be a way to ask for someone else's data.
+  const src = stripComments(await read(new URL('export-user-data/index.ts', FUNCTIONS)));
+  assert(!/req\.(json|text|formData|arrayBuffer)\(/.test(src), 'export-user-data must not read the request body');
+  assert(/const userId = user\.id;/.test(src), 'the exported id must come from the authenticated user');
+});
 
 Deno.test('documented actions each have an implemented branch', async () => {
   for (const { fn, documentedActions, optionalActions } of MULTI_CLIENT) {

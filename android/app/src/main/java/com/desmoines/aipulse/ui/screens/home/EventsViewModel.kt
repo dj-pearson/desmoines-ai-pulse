@@ -16,6 +16,7 @@ import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.LocationService
 import com.desmoines.aipulse.util.PaginationGuard
@@ -34,7 +35,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 /**
  * ViewModel for the Home screen / events feed.
@@ -337,13 +337,14 @@ class EventsViewModel @Inject constructor(
         }
         _errorMessage.value = null
 
-        val dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+        // Central midnights with an offset: a bare local timestamp is read as UTC (AND-AUDIT-031).
+        val bounds = _selectedDatePreset.value?.let { EventTimeText.presetBounds(it) }
 
         val query = EventsQuery(
             searchText = _searchText.value.ifEmpty { null },
             category = _selectedCategory.value?.displayName,
-            dateStart = _selectedDatePreset.value?.dateRange?.first?.format(dateTimeFormatter),
-            dateEnd = _selectedDatePreset.value?.dateRange?.second?.format(dateTimeFormatter),
+            dateStart = bounds?.first,
+            dateEnd = bounds?.second,
             isFeatured = if (_showFeaturedOnly.value) true else null,
             limit = pageSize,
             offset = currentOffset,

@@ -91,4 +91,28 @@ class CommunicationPreferencesTest {
         // it here alone makes every Android opt-out invisible to every sender.
         assertEquals("email_notifications", CommunicationPreferences.EMAIL_NOTIFICATIONS)
     }
+
+    @Test
+    fun `personalization is on only for an explicit JSON true (XPLAT-016)`() {
+        // get_personalized_recommendations_v2 compares against 'true'::jsonb, so
+        // anything else gets no personalized rows. A switch that showed "on" for
+        // a missing key would claim a ranking the server will not give.
+        val key = CommunicationPreferences.EVENT_RECOMMENDATIONS
+        fun bag(json: String) = Json.parseToJsonElement(json) as JsonObject
+
+        assertTrue(CommunicationPreferences.isExplicitlyOn(bag("""{"event_recommendations":true}"""), key))
+        assertFalse(CommunicationPreferences.isExplicitlyOn(bag("""{"event_recommendations":false}"""), key))
+        assertFalse(CommunicationPreferences.isExplicitlyOn(bag("""{}"""), key))
+        assertFalse(CommunicationPreferences.isExplicitlyOn(bag("""{"event_recommendations":null}"""), key))
+        assertFalse(CommunicationPreferences.isExplicitlyOn(bag("""{"event_recommendations":"true"}"""), key))
+        assertFalse(CommunicationPreferences.isExplicitlyOn(null, key))
+    }
+
+    @Test
+    fun `the personalization key and consent type match the web and the RPC`() {
+        // PreferencesManager writes event_recommendations and logs personalization_ai;
+        // migration 20261108000105 reads the same key.
+        assertEquals("event_recommendations", CommunicationPreferences.EVENT_RECOMMENDATIONS)
+        assertEquals("personalization_ai", CommunicationPreferences.PERSONALIZATION_CONSENT_TYPE)
+    }
 }

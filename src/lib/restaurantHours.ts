@@ -28,22 +28,33 @@
  */
 import { toZonedTime } from 'date-fns-tz';
 import { hoursTextOf } from './hoursText';
+import {
+  DES_MOINES_TIME_ZONE,
+  type RestaurantOpenResult,
+  type StoredOpeningHours,
+} from './restaurantStatus';
 
 export { hoursTextOf };
 
-export type OpenStatus = 'open' | 'closed' | 'closing-soon' | 'unknown';
-
-export interface RestaurantOpenResult {
-  status: OpenStatus;
-  isOpen: boolean;
-  closingSoon: boolean;
-  /** When open: the Central closing time, "10 PM" / "10:30 PM" / "midnight". Null when open around the clock or not open. */
-  closesAt: string | null;
-  /** When closed: the next Central opening, "11 AM", "tomorrow 11 AM" or "Tue 11 AM". Null when unknown or never. */
-  nextOpensAt: string | null;
-  /** Minutes until `nextOpensAt`, for ordering "opening next" lists. Null alongside it. */
-  nextOpensInMinutes: number | null;
-}
+// The status helpers and the result/stored types moved to restaurantStatus.ts
+// (WEB-PERF-080), which has no imports. Re-exported so every old import of
+// them from here keeps working. A re-export makes no local binding, hence the
+// plain import above for the names this file still uses.
+export {
+  DES_MOINES_TIME_ZONE,
+  NOT_CLOSED_RESTAURANT_FILTER,
+  NOT_GOOGLE_CLOSED_RESTAURANT_FILTER,
+  SERVING_BUSINESS_STATUS_RESTAURANT_FILTER,
+  VISITABLE_STATUS_RESTAURANT_FILTER,
+  applyServingRestaurantFilters,
+  businessStatusLabel,
+  formatOpenStatusLine,
+  isPermanentlyClosedRestaurant,
+  isServingToday,
+  isShutRestaurant,
+  isVisitableStatus,
+} from './restaurantStatus';
+export type { OpenStatus, RestaurantOpenResult, StoredOpeningHours } from './restaurantStatus';
 
 export interface OpenStatusOptions {
   /**
@@ -52,8 +63,6 @@ export interface OpenStatusOptions {
    */
   wallClock?: boolean;
 }
-
-export const DES_MOINES_TIME_ZONE = 'America/Chicago';
 
 /** Within this many minutes of closing, an open place is "closing soon". */
 export const CLOSING_SOON_MINUTES = 60;
@@ -754,102 +763,6 @@ export function getOpeningCoverage(rawOpening: string | null | undefined): Openi
     closedDays: days.filter((d) => d.state === 'closed').map((d) => d.day),
     hasUnreadSegment: parsed?.dropped ?? false,
   };
-}
-
-/**
- * The CHECK on restaurants.status (20250728165446) allows open, newly_opened,
- * opening_soon, announced and closed. The last three mean you cannot eat
- * there today. The legacy spellings are for rows written before the CHECK,
- * and for code that still says them.
- */
-const NOT_VISITABLE_STATUSES: ReadonlySet<string> = new Set([
-  'closed',
-  'opening_soon',
-  'announced',
-  'permanently_closed',
-  'temporarily_closed',
-  'closed_permanently',
-  'closed_temporarily',
-  'coming_soon',
-]);
-
-/**
- * Can someone eat here today, going by the lifecycle status alone? True for
- * open, newly_opened and a missing status (the column defaults to open).
- * The one rule for Surprise Me, open-now, the map and search ordering (WP2.4).
- */
-export function isVisitableStatus(status: string | null | undefined): boolean {
-  if (!status) return true;
-  return !NOT_VISITABLE_STATUSES.has(status.trim().toLowerCase());
-}
-
-const PERMANENTLY_CLOSED_STATUSES: ReadonlySet<string> = new Set([
-  'closed',
-  'permanently_closed',
-  'closed_permanently',
-]);
-
-/**
- * Has this place closed for good (SEO-059)? Our own `status` or Google's
- * `business_status`, whichever says so. Temporarily closed and not-yet-open
- * places are NOT permanently closed: they keep their page and their spot in
- * lists, labelled.
- */
-export function isPermanentlyClosedRestaurant(
-  row: { status?: string | null; business_status?: string | null } | null | undefined,
-): boolean {
-  if (!row) return false;
-  const own = row.status?.trim().toLowerCase();
-  if (own && PERMANENTLY_CLOSED_STATUSES.has(own)) return true;
-  return row.business_status?.trim().toUpperCase() === 'CLOSED_PERMANENTLY';
-}
-
-/**
- * PostgREST `or` filter that keeps every restaurant that has not closed for
- * good. status is nullable and `.neq('status','closed')` would also drop the
- * NULL rows, hence the OR. Repeated `or` params are ANDed by PostgREST
- * (checked against production 2026-10-01), so this can sit beside another
- * `.or(...)` on the same query. Google's business_status is not in it: the
- * SEO-059 data pass set status = 'closed' on every CLOSED_PERMANENTLY row, and
- * isPermanentlyClosedRestaurant catches any that arrive later on the client.
- */
-export const NOT_CLOSED_RESTAURANT_FILTER = 'status.is.null,status.neq.closed';
-
-/**
- * One short line for a card or list row, or null when there is nothing honest
- * to say: "Open until 10 PM", "Closes at 10 PM", "Open 24 hours",
- * "Closed, opens 11 AM", "Closed".
- */
-export function formatOpenStatusLine(result: RestaurantOpenResult): string | null {
-  switch (result.status) {
-    case 'open':
-      return result.closesAt ? `Open until ${result.closesAt}` : 'Open 24 hours';
-    case 'closing-soon':
-      return result.closesAt ? `Closes at ${result.closesAt}` : 'Closing soon';
-    case 'closed':
-      return result.nextOpensAt ? `Closed, opens ${result.nextOpensAt}` : 'Closed';
-    default:
-      return null;
-  }
-}
-
-/**
- * The stored shape of restaurants.hours_json (WEB-BE-045).
- *
- * Written by supabase/functions/_shared/placeHours.ts. Declared again here
- * rather than imported: that module is Deno source for the edge functions, and
- * this one is in the browser bundle. The Deno test place-hours.test.ts pins the
- * writer's shape; this reader treats every field as untrusted anyway, because
- * the row could predate any version of it.
- */
-export interface StoredOpeningHours {
-  version?: number;
-  timeZone?: string;
-  periods?: Array<{
-    open?: { day?: number; hour?: number; minute?: number };
-    close?: { day?: number; hour?: number; minute?: number };
-  }>;
-  weekdayDescriptions?: string[];
 }
 
 /**

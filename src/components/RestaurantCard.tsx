@@ -17,6 +17,7 @@ import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
 import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
+  businessStatusLabel,
   formatOpenStatusLine,
   resolveOpenStatus,
   type StoredOpeningHours,
@@ -88,6 +89,12 @@ export interface RestaurantCardProps {
     location?: string | null;
     city?: string | null;
     status?: string | null;
+    /**
+     * Google's business_status, when the caller's select carries it. The only
+     * place a temporary closure is recorded (restaurants.status has no value
+     * for it), so without it a temporarily closed place shows its hours.
+     */
+    business_status?: string | null;
     opening?: string | null;
     opening_date?: string | null;
     opening_timeframe?: string | null;
@@ -178,7 +185,9 @@ function RestaurantCardComponent({
   // "Open until 10 PM" frozen into static HTML is wrong within the hour.
   const now = useMinuteClock();
   const prerendering = isPrerender();
-  const lifecycleLabel = restaurant.status ? LIFECYCLE_LABEL[restaurant.status] : undefined;
+  const lifecycleLabel =
+    (restaurant.status ? LIFECYCLE_LABEL[restaurant.status] : undefined) ??
+    businessStatusLabel(restaurant.business_status);
   const openStatus = useMemo(
     () =>
       lifecycleLabel || prerendering ? null : resolveOpenStatus(restaurant.hours_json as StoredOpeningHours | null, restaurant.opening, now),

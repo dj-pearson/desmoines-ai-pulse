@@ -137,29 +137,3 @@ export function useRestaurantMenuVersions(restaurantId: string | undefined, enab
     queryFn: () => fetchMenuVersions(restaurantId as string),
   });
 }
-
-/**
- * Search menu items across all restaurants
- */
-export function useMenuSearch(query: string, maxPrice?: number, dietaryFilter?: string[]) {
-  return useQuery({
-    queryKey: ['menu-search', query, maxPrice, dietaryFilter],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('search_menu_items', {
-        search_query: query || null,
-        max_price: maxPrice || null,
-        dietary_filter: dietaryFilter?.length ? dietaryFilter : null,
-        result_limit: 50,
-      });
-
-      if (error) {
-        handleError(error, { component: 'useMenuSearch', action: 'searchMenuItems', metadata: { query } });
-        return [];
-      }
-
-      return data || [];
-    },
-    enabled: !!query && query.length >= 2,
-    staleTime: 5 * 60 * 1000,
-  });
-}

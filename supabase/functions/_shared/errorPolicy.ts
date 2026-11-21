@@ -40,3 +40,42 @@ export function pickClustersToCreate(
     .slice(0, Math.max(0, cap))
     .map(({ c }) => c.key);
 }
+
+/** Same shape log-error has always accepted for userId. */
+const USER_ID_RE = /^[0-9a-f-]{36}$/i;
+
+/**
+ * The stored `user_id` for an error row (WEB-SEC-063).
+ *
+ * log-error is a public sink, so body.userId is the caller's word. It used to
+ * be stored as given: anyone holding the anon key could pin an error row on
+ * any user id they knew.
+ *
+ * - `verifiedUserId` is what auth.getUser returned for the caller's bearer.
+ *   When there is one it wins and body.userId is ignored, even if it differs.
+ * - A machine caller (service role or the edge API key) already holds the
+ *   whole database, so it may report on behalf of a user it names.
+ * - Anyone else gets null. The row is still stored; only the attribution goes.
+ */
+export function resolveErrorUserId(
+  bodyUserId: unknown,
+  caller: { internal: boolean; verifiedUserId: string | null },
+): string | null {
+  if (caller.verifiedUserId && USER_ID_RE.test(caller.verifiedUserId)) return caller.verifiedUserId;
+  if (caller.internal && typeof bodyUserId === "string" && USER_ID_RE.test(bodyUserId)) return bodyUserId;
+  return null;
+}
+
+/**
+ * Whether a bearer is worth asking auth.getUser about. An absent token and the
+ * anon key (iOS sends it as the bearer) cannot name a user, so log-error skips
+ * the auth round trip for them.
+ */
+export function shouldVerifyBearer(
+  bearer: string | null | undefined,
+  anonKey: string | null | undefined,
+): boolean {
+  if (!bearer) return false;
+  if (anonKey && bearer === anonKey) return false;
+  return true;
+}

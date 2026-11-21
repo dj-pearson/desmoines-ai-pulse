@@ -1,5 +1,5 @@
 import { InteractiveMap, MapLocation } from './InteractiveMap';
-import { createSlug } from '@/lib/slug';
+import { contentSlug } from '@/lib/slugHref';
 
 /** Mirrors the nullable shape of public.playgrounds. These were declared
  *  optional (`number | undefined`) but the columns are nullable
@@ -9,6 +9,8 @@ import { createSlug } from '@/lib/slug';
 interface Playground {
   id: string;
   name: string;
+  /** Stored slug (WEB-PERF-031); the marker links by it, not by the name. */
+  slug?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   description?: string | null;
@@ -35,7 +37,7 @@ const PlaygroundsMap = ({ playgrounds, userLocation }: PlaygroundsMapProps) => {
       name: playground.name,
       latitude: playground.latitude!,
       longitude: playground.longitude!,
-      slug: createSlug(playground.name),
+      slug: contentSlug(playground),
       // MapLocation.description is `string | undefined`; the column is nullable,
       // so convert at the boundary rather than loosening MapLocation.
       description: playground.description ?? undefined,

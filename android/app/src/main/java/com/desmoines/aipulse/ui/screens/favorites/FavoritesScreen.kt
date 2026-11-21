@@ -1,6 +1,5 @@
 package com.desmoines.aipulse.ui.screens.favorites
 
-import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -23,24 +22,33 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -52,6 +60,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -59,7 +70,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -75,9 +88,12 @@ import com.desmoines.aipulse.ui.components.FavoritesLimitBanner
 import com.desmoines.aipulse.ui.components.SubscriptionBanner
 import com.desmoines.aipulse.ui.components.BannerStyle
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.util.EventCalendarEntry
+import com.desmoines.aipulse.util.EventReminderTiming
+import com.desmoines.aipulse.util.EventTimeText
+import com.desmoines.aipulse.util.minHitTarget
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -94,11 +110,25 @@ fun FavoritesScreen(
     onNavigateToSubscription: () -> Unit = {},
     onRemoveEventFavorite: (String) -> Unit = {},
     onRemoveRestaurantFavorite: (String) -> Unit = {},
+    onAddEventToCalendar: (Event) -> Unit = {},
+    onShareEvent: (Event) -> Unit = {},
+    onToggleEventReminder: (Event) -> Unit = {},
+    onReminderMessageShown: () -> Unit = {},
     onRefresh: () -> Unit = {},
     scrollToTopTrigger: Int = 0,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // A reminder that did not take says why (too soon, 9am passed, permission
+    // denied), as event detail does, instead of the tap looking ignored.
+    LaunchedEffect(state.reminderMessage) {
+        state.reminderMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            onReminderMessageShown()
+        }
+    }
 
     // Scroll to top when the user re-taps the active bottom nav tab (ANDP-071).
     LaunchedEffect(scrollToTopTrigger) {
@@ -106,6 +136,7 @@ fun FavoritesScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             LargeTopAppBar(
                 title = { Text("Saved") },
@@ -143,6 +174,9 @@ fun FavoritesScreen(
                         onNavigateToSubscription = onNavigateToSubscription,
                         onRemoveEventFavorite = onRemoveEventFavorite,
                         onRemoveRestaurantFavorite = onRemoveRestaurantFavorite,
+                        onAddEventToCalendar = onAddEventToCalendar,
+                        onShareEvent = onShareEvent,
+                        onToggleEventReminder = onToggleEventReminder,
                     )
                 }
             }
@@ -159,6 +193,9 @@ private fun SavedContent(
     onNavigateToSubscription: () -> Unit,
     onRemoveEventFavorite: (String) -> Unit,
     onRemoveRestaurantFavorite: (String) -> Unit,
+    onAddEventToCalendar: (Event) -> Unit,
+    onShareEvent: (Event) -> Unit,
+    onToggleEventReminder: (Event) -> Unit,
 ) {
     LazyColumn(
         state = listState,
@@ -206,6 +243,10 @@ private fun SavedContent(
                         isPast = false,
                         onClick = { onNavigateToEventDetail(event.id) },
                         onRemove = { onRemoveEventFavorite(event.id) },
+                        onAddToCalendar = { onAddEventToCalendar(event) },
+                        onShare = { onShareEvent(event) },
+                        isReminderSet = state.isReminderSet(event.id),
+                        onToggleReminder = { onToggleEventReminder(event) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -259,6 +300,7 @@ private fun SavedContent(
                         isPast = true,
                         onClick = { onNavigateToEventDetail(event.id) },
                         onRemove = { onRemoveEventFavorite(event.id) },
+                        onShare = { onShareEvent(event) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -388,9 +430,22 @@ private fun FavoriteEventRow(
     onClick: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
+    onAddToCalendar: () -> Unit = {},
+    onShare: () -> Unit = {},
+    isReminderSet: Boolean = false,
+    onToggleReminder: () -> Unit = {},
 ) {
     val haptic = rememberHapticPerformer()
     val opacity = if (isPast) 0.6f else 1f
+    // Past rows and rows with no parseable date offer no calendar action
+    // (AND-AUDIT-028), the same rule as iOS showsAddToCalendar.
+    val offersCalendar = EventCalendarEntry.forSavedRow(event, isPast) != null
+    // The same rule as event detail's Remind Me (AND-AUDIT-033): upcoming rows
+    // only, kept while set so it can be cancelled.
+    val offersReminder = EventReminderTiming.offersReminder(
+        event, isPast = isPast, isSet = isReminderSet, nowMillis = System.currentTimeMillis(),
+    )
+    val reminderLabel = if (isReminderSet) "Remove reminder" else "Remind me"
 
     Card(
         modifier = modifier
@@ -399,6 +454,19 @@ private fun FavoriteEventRow(
             .animateContentSize()
             .semantics {
                 contentDescription = "${event.title}${if (isPast) ", past event" else ""}"
+                // TalkBack reaches the row's actions from its actions menu
+                // instead of hunting for the small buttons beside the card.
+                customActions = buildList {
+                    if (offersCalendar) {
+                        add(CustomAccessibilityAction("Add to Calendar") { onAddToCalendar(); true })
+                    }
+                    if (offersReminder) {
+                        add(CustomAccessibilityAction(reminderLabel) { onToggleReminder(); true })
+                    }
+                    // Every row, past ones too, as iOS's Saved context menu does (AND-AUDIT-033).
+                    add(CustomAccessibilityAction("Share") { onShare(); true })
+                    add(CustomAccessibilityAction("Remove from saved") { onRemove(); true })
+                }
             },
         shape = RoundedCornerShape(14.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -433,7 +501,7 @@ private fun FavoriteEventRow(
                     color = if (isPast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 )
 
-                event.parsedDate?.let { date ->
+                EventTimeText.dateTimeText(event, "MMM d", "h:mm a", ", ")?.let { dateTime ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -445,7 +513,7 @@ private fun FavoriteEventRow(
                             tint = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("MMM d, h:mm a", UiFormatLocale)),
+                            text = dateTime,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -481,20 +549,96 @@ private fun FavoriteEventRow(
                 }
             }
 
-            // Remove button
-            IconButton(
-                onClick = {
-                    haptic.medium()
-                    onRemove()
-                },
-                modifier = Modifier.semantics { contentDescription = "Remove from saved" },
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Favorite,
-                    contentDescription = null,
-                    tint = Color.Red,
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Remove button
+                IconButton(
+                    onClick = {
+                        haptic.medium()
+                        onRemove()
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Remove from saved" },
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = null,
+                        tint = Color.Red,
+                    )
+                }
+                SavedEventRowMenu(
+                    title = event.title,
+                    offersCalendar = offersCalendar,
+                    onAddToCalendar = onAddToCalendar,
+                    onShare = onShare,
+                    offersReminder = offersReminder,
+                    isReminderSet = isReminderSet,
+                    onToggleReminder = onToggleReminder,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Overflow menu on a Saved event row. iOS puts these in the row's context
+ * menu; a visible overflow button is the Android equivalent, found without
+ * knowing to long-press. Share is on every row (AND-AUDIT-033); Add to
+ * Calendar only where [offersCalendar] (AND-AUDIT-028: upcoming rows with a
+ * parseable date); Remind me / Remove reminder only where [offersReminder]
+ * (AND-AUDIT-033, EventReminderTiming.offersReminder).
+ */
+@Composable
+private fun SavedEventRowMenu(
+    title: String,
+    offersCalendar: Boolean,
+    onAddToCalendar: () -> Unit,
+    onShare: () -> Unit,
+    offersReminder: Boolean = false,
+    isReminderSet: Boolean = false,
+    onToggleReminder: () -> Unit = {},
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.minHitTarget()) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = "More options for $title",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (offersCalendar) {
+                DropdownMenuItem(
+                    text = { Text("Add to Calendar") },
+                    leadingIcon = { Icon(Icons.Filled.Event, contentDescription = null) },
+                    onClick = {
+                        expanded = false
+                        onAddToCalendar()
+                    },
+                )
+            }
+            if (offersReminder) {
+                DropdownMenuItem(
+                    text = { Text(if (isReminderSet) "Remove reminder" else "Remind me") },
+                    leadingIcon = {
+                        Icon(
+                            if (isReminderSet) Icons.Filled.Notifications else Icons.Filled.NotificationsNone,
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onToggleReminder()
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Share") },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onShare()
+                },
+            )
         }
     }
 }

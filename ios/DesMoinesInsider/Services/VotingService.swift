@@ -65,6 +65,15 @@ actor VotingService {
         }
     }
 
+    /// The active category a /best-of/<slug> link names, or nil when there is
+    /// none (IOS-AUDIT-FEAT-040). Goes through fetchCategories so the vote
+    /// count matches the hub's row; the list is a handful of categories. A
+    /// failed read throws rather than answering nil, so an outage offers a
+    /// retry instead of claiming the category does not exist.
+    func fetchCategory(slug: String) async throws -> VotingCategory? {
+        VotingCategory.matching(slug: slug, in: try await fetchCategories())
+    }
+
     // MARK: - Results (leaderboard)
 
     /// Aggregated, enriched, descending-by-count results for a category.

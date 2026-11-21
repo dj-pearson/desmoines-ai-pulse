@@ -228,14 +228,21 @@ actor RestaurantsService {
         return groups
     }
 
-    /// DIETARY_KEYWORDS in src/hooks/useRestaurants.ts. There is no dietary
-    /// column, so a diet is a text match on name, description and cuisine.
+    /// DIETS in src/hooks/useDietaryRestaurants.ts, the table behind the
+    /// web's /restaurants/dietary/<diet> pages, which Dining links open
+    /// (IOS-AUDIT-FEAT-044). It used to copy DIETARY_KEYWORDS in
+    /// useRestaurants.ts, which has no kosher and no "ketogenic", so a shared
+    /// kosher page opened unfiltered and keto found fewer rows than the page
+    /// it came from. src/hooks/__tests__/iosDietaryParity.test.ts fails if
+    /// this table and DIETS drift. There is no dietary column, so a diet is
+    /// a text match on name, description and cuisine.
     static let dietaryKeywords: [String: [String]] = [
         "vegan": ["vegan"],
         "vegetarian": ["vegetarian", "veggie"],
         "gluten-free": ["gluten free", "gluten-free", "celiac"],
-        "keto": ["keto", "low carb"],
+        "keto": ["keto", "low carb", "ketogenic"],
         "halal": ["halal"],
+        "kosher": ["kosher"],
     ]
 
     /// One or-group for the selected diets, or nil. Unknown keys are dropped,

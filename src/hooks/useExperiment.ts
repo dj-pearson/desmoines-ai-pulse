@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
+import { analyticsGranted } from '@/lib/analyticsConsent';
 
 const log = createLogger('useExperiment');
 
@@ -115,25 +116,29 @@ export function useExperiment(flagKey: string): {
 
     const variant = hashToVariant(flagKey, identifier, flag.variants);
 
-    // Fire-and-forget: track assignment in user_analytics
-    supabase
-      .from('user_analytics')
-      // `page_path` AND `metadata` ARE NOT COLUMNS ON user_analytics, and
-      // PostgREST rejects the whole insert on either - so no experiment
-      // assignment has ever been recorded, event_type and session_id included
-      // (WEB-QUAL-015, WEB-QA-017). The column is `page_url`; the assignment
-      // detail goes into `filters_used`, which is the table's only jsonb.
-      // That is a placement of convenience, not a design: a real `metadata`
-      // column is the better home and wants a migration.
-      .insert({
-        event_type: 'experiment_assigned',
-        page_url: window.location.pathname,
-        filters_used: { flag_key: flagKey, variant, identifier_type: user?.id ? 'user' : 'session' },
-        session_id: getSessionId(),
-      })
-      .then(() => {
-        log.debug('useExperiment', 'Assignment tracked', { flagKey, variant });
-      });
+    // Fire-and-forget: track assignment in user_analytics, only with analytics
+    // consent (WEB-LEGAL-014). The variant is assigned either way; only the
+    // record of the assignment is skipped.
+    if (analyticsGranted()) {
+      supabase
+        .from('user_analytics')
+        // `page_path` AND `metadata` ARE NOT COLUMNS ON user_analytics, and
+        // PostgREST rejects the whole insert on either - so no experiment
+        // assignment has ever been recorded, event_type and session_id included
+        // (WEB-QUAL-015, WEB-QA-017). The column is `page_url`; the assignment
+        // detail goes into `filters_used`, which is the table's only jsonb.
+        // That is a placement of convenience, not a design: a real `metadata`
+        // column is the better home and wants a migration.
+        .insert({
+          event_type: 'experiment_assigned',
+          page_url: window.location.pathname,
+          filters_used: { flag_key: flagKey, variant, identifier_type: user?.id ? 'user' : 'session' },
+          session_id: getSessionId(),
+        })
+        .then(() => {
+          log.debug('useExperiment', 'Assignment tracked', { flagKey, variant });
+        });
+    }
 
     return { variant, isInExperiment: true };
   }, [flag, flagKey, identifier, user?.id]);

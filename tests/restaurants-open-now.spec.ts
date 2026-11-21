@@ -102,6 +102,31 @@ test.describe('/restaurants/open-now', () => {
     await expect(page.locator('[data-open-now-clock]')).toHaveText('8:00 PM CT');
   });
 
+  test('says how many places have no listed hours (WEB-BE-045 AC5)', async ({ page }) => {
+    await setup(page, new Date('2026-09-25T01:00:00Z'), ROWS); // Thu 20:00 CDT
+    // The count is a HEAD request on the same table; registered last, so it wins.
+    await page.route('**/rest/v1/restaurants?**', (route) => {
+      if (route.request().method() !== 'HEAD') return route.fallback();
+      return route.fulfill({
+        status: 200,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'content-range',
+          'content-range': '*/7',
+        },
+        body: '',
+      });
+    });
+    await page.goto('/restaurants/open-now');
+
+    const note = page.locator('[data-open-now-no-hours]');
+    await expect(note).toContainText("7 more places have no listed hours, so they aren't counted here.");
+    await expect(note.getByRole('link', { name: 'Browse all restaurants' })).toHaveAttribute('href', '/restaurants');
+    await expect(page.locator('[data-open-now-summary]')).toContainText(
+      '2 of 2 places whose hours we can read are open right now',
+    );
+  });
+
   test.describe('in a Los Angeles browser', () => {
     test.use({ timezoneId: 'America/Los_Angeles' });
 

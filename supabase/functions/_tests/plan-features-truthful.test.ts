@@ -20,7 +20,7 @@
  * list the surfaces render) to map to the code that enforces it.
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));

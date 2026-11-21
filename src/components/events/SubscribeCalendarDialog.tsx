@@ -9,14 +9,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import { CALENDAR_FEEDS, feedForSlug, feedLinks } from "@/lib/calendarFeeds";
+
+const FEED_OPTIONS: DeferredSelectOption[] = CALENDAR_FEEDS.map((f) => ({
+  value: f.slug,
+  label: f.slug === "all" ? "All events" : f.slug === "free" ? "Free events" : f.category,
+}));
 
 interface SubscribeCalendarDialogProps {
   /** The feed preselected when the dialog opens, e.g. the page's category. */
@@ -60,18 +59,13 @@ export function SubscribeCalendarDialog({ defaultSlug = "all", children }: Subsc
 
         <div className="space-y-2">
           <Label htmlFor="calendar-feed">Which events</Label>
-          <Select value={slug} onValueChange={setSlug}>
-            <SelectTrigger id="calendar-feed" className="h-11">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CALENDAR_FEEDS.map((f) => (
-                <SelectItem key={f.slug} value={f.slug}>
-                  {f.slug === "all" ? "All events" : f.slug === "free" ? "Free events" : f.category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DeferredSelect
+            id="calendar-feed"
+            value={slug}
+            onValueChange={setSlug}
+            options={FEED_OPTIONS}
+            triggerClassName="h-11"
+          />
           <p className="text-sm text-muted-foreground">{feed.description}, for the next 60 days.</p>
         </div>
 

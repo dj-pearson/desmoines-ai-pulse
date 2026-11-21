@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useId } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import {
   Select,
   SelectContent,
@@ -27,7 +28,7 @@ import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Edit, Trash2, Search, Filter, Star, Plus, AlertTriangle, Brain, FileText, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Download, LayoutGrid, List, CheckCircle2, AlertCircle, XCircle, Globe, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useDomainHighlights } from "@/hooks/useDomainHighlights";
 import EventDataEnhancer from "./EventDataEnhancer";
 import { useWriteupGenerator } from "@/hooks/useWriteupGenerator";
@@ -416,6 +417,7 @@ export default function ContentTable({
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const [showDataEnhancer, setShowDataEnhancer] = useState(false);
   const [compactView, setCompactView] = useState(false);
+  const sortTriggerId = useId();
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<string>("date");
@@ -854,16 +856,20 @@ export default function ContentTable({
               size="sm"
               onClick={() => setViewMode("table")}
               className="rounded-r-none"
+              aria-label="Table view"
+              aria-pressed={viewMode === "table"}
             >
-              <List className="h-4 w-4" />
+              <List className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant={viewMode === "card" ? "default" : "ghost"}
               size="sm"
               onClick={() => setViewMode("card")}
               className="rounded-l-none"
+              aria-label="Card view"
+              aria-pressed={viewMode === "card"}
             >
-              <LayoutGrid className="h-4 w-4" />
+              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
           {type === "event" && viewMode === "table" && (
@@ -914,6 +920,7 @@ export default function ContentTable({
               <div className="relative">
                 <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
                 <Input
+                  aria-label={`Search ${config.title.toLowerCase()}`}
                   placeholder={config.searchPlaceholder}
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
@@ -924,11 +931,14 @@ export default function ContentTable({
 
             {/* Sort Controls */}
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+              <Label
+                htmlFor={sortTriggerId}
+                className="text-gray-700 whitespace-nowrap"
+              >
                 Sort by:
-              </label>
+              </Label>
               <Select value={sortField} onValueChange={setSortField}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger id={sortTriggerId} className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -974,7 +984,7 @@ export default function ContentTable({
                 value={activeFilters[filter.key] || "All"}
                 onValueChange={(value) => handleFilterChange(filter.key, value)}
               >
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-[150px]" aria-label={`Filter by ${filter.label.toLowerCase()}`}>
                   <SelectValue placeholder={filter.label} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1158,8 +1168,9 @@ export default function ContentTable({
                           variant="outline"
                           onClick={() => handleEnhanceContent(item)}
                           disabled={enhancingId === item.id}
+                          aria-label={`Enhance ${itemTitle} with AI`}
                         >
-                          <SpriteIcon name="sparkles" className="h-3 w-3" />
+                          <SpriteIcon name="sparkles" className="h-3 w-3" aria-hidden="true" />
                         </Button>
                         {(type === "event" || type === "restaurant") && (
                           <Button
@@ -1202,8 +1213,9 @@ export default function ContentTable({
                               onDelete(item.id);
                             }
                           }}
+                          aria-label={`Delete ${itemTitle}`}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-3 w-3" aria-hidden="true" />
                         </Button>
                       </div>
                     </CardContent>
@@ -1352,11 +1364,13 @@ export default function ContentTable({
                                   size="sm"
                                   onClick={() => toggleRowExpansion(item.id)}
                                   className="h-6 w-6 p-0"
+                                  aria-expanded={isExpanded}
+                                  aria-label={`${isExpanded ? "Hide" : "Show"} details for ${item.title || item.name || "this row"}`}
                                 >
                                   {isExpanded ? (
-                                    <ChevronDown className="h-3 w-3" />
+                                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
                                   ) : (
-                                    <ChevronRight className="h-3 w-3" />
+                                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
                                   )}
                                 </Button>
                               </TableCell>
@@ -1376,16 +1390,18 @@ export default function ContentTable({
                                   size="sm"
                                   variant="outline"
                                   onClick={() => onEdit(item)}
+                                  aria-label={`Edit ${item.title || item.name || "Untitled"}`}
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Edit className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleEnhanceContent(item)}
                                   disabled={enhancingId === item.id}
+                                  aria-label={`Enhance ${item.title || item.name || "Untitled"} with AI`}
                                 >
-                                  <SpriteIcon name="sparkles" className="h-4 w-4" />
+                                  <SpriteIcon name="sparkles" className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                                 {(type === "event" || type === "restaurant") && (
                                   <Button
@@ -1428,8 +1444,9 @@ export default function ContentTable({
                                       onDelete(item.id);
                                     }
                                   }}
+                                  aria-label={`Delete ${item.title || item.name || "Untitled"}`}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                               </div>
                             </TableCell>

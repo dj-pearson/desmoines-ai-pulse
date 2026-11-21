@@ -203,7 +203,7 @@ export default function UserRoleManager() {
                   onValueChange={(value: UserRole) => handleRoleChange(user.user_id, value)}
                   disabled={isUpdating === user.user_id || getAvailableRoles(user.role).length === 1}
                 >
-                  <SelectTrigger className="w-32">
+                  <SelectTrigger className="w-32" aria-label={`Role for ${user.email}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

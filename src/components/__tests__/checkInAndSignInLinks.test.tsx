@@ -19,7 +19,6 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuthFlags: () => ({ isAuthenticated: authState.isAuthenticated, isAdmin: false }),
 }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => userState }));
-vi.mock("@/lib/capacitorUtils", () => ({ hapticTap: vi.fn(), isCapacitor: () => false }));
 vi.mock("@/hooks/useCommunityFeatures", () => ({
   useCommunityFeatures: () => ({
     updateEventCheckIn: vi.fn().mockResolvedValue(true),
@@ -38,7 +37,6 @@ vi.mock("@/hooks/useEventReminders", () => ({
     isTogglingReminder: false,
   }),
 }));
-vi.mock("@/hooks/usePushNotifications", () => ({ scheduleEventReminder: vi.fn() }));
 
 import BottomNav from "@/components/BottomNav";
 import { EventCheckIn } from "@/components/EventCheckIn";

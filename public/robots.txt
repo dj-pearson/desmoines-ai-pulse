@@ -1,6 +1,10 @@
 # Des Moines Insider - Robots.txt
 # Optimized for search engine indexing and AI search crawlers
-# Last updated: 2026-09-30 (dropped Allow: /weekend, which 301s to /events/this-weekend)
+# Last updated: 2026-11-08 (every named group now repeats the full * Disallow list)
+#
+# A crawler reads only the most specific group naming it, never * as well, so
+# each allowing group below must carry the same Disallow lines as *.
+# scripts/__tests__/robots-groups.test.mjs fails when they drift.
 
 # Default rules for all crawlers
 User-agent: *
@@ -47,9 +51,11 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
-Disallow: /subscription
-Disallow: /sw.js
 Disallow: /campaigns
+Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
+Disallow: /sw.js
 
 User-agent: ChatGPT-User
 Allow: /
@@ -60,7 +66,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # OpenAI Search Bot (dedicated search crawler)
@@ -73,7 +82,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # Anthropic - Claude Search
@@ -86,7 +98,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 User-agent: Claude-Web
@@ -98,7 +113,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # Google AI (Gemini, AI Overviews)
@@ -111,7 +129,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 User-agent: Googlebot
@@ -123,7 +144,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # Perplexity AI Search
@@ -136,7 +160,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # Apple Siri/Spotlight
@@ -149,7 +176,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 User-agent: Applebot-Extended
@@ -161,7 +191,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # Microsoft Copilot / Bing
@@ -174,7 +207,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # Meta AI
@@ -187,7 +223,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 User-agent: meta-externalagent
@@ -199,7 +238,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # Cohere AI Search
@@ -212,7 +254,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # You.com AI Search
@@ -225,7 +270,10 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
 Disallow: /subscription
+Disallow: /_redirects
+Disallow: /_headers
 Disallow: /sw.js
 
 # ============================================

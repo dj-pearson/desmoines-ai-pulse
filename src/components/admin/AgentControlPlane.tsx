@@ -44,7 +44,7 @@ import {
 } from "@/hooks/useAgentControlPlane";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import UptimeStatusTile from "@/components/admin/UptimeStatusTile";
 import ProviderCostTile from "@/components/admin/ProviderCostTile";
 import AiSpendTile from "@/components/admin/AiSpendTile";

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { FileText, Plus, Edit, Trash2, Eye, User, Search, Send, LayoutDashboard } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Link } from "react-router-dom";
 import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
 import { supabase } from "@/integrations/supabase/client";
@@ -181,6 +181,7 @@ export default function ArticlesManager() {
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search articles"
             placeholder="Search articles by title, category, or status..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -293,14 +294,19 @@ export default function ArticlesManager() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button asChild variant="ghost" size="sm">
-                          <a href={`/admin/articles/edit/${article.id}`} target="_blank" rel="noopener noreferrer">
-                            <Edit className="h-3 w-3" />
+                          <a
+                            href={`/admin/articles/edit/${article.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Edit ${article.title} (opens in a new tab)`}
+                          >
+                            <Edit className="h-3 w-3" aria-hidden="true" />
                           </a>
                         </Button>
                         
                         <Button asChild variant="ghost" size="sm">
-                          <Link to={`/articles/${article.slug}`}>
-                            <Eye className="h-3 w-3" />
+                          <Link to={`/articles/${article.slug}`} aria-label={`View ${article.title}`}>
+                            <Eye className="h-3 w-3" aria-hidden="true" />
                           </Link>
                         </Button>
                         
@@ -341,7 +347,7 @@ export default function ArticlesManager() {
                         
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button aria-label={`Delete ${article.title}`} variant="ghost" size="sm">
                               <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </AlertDialogTrigger>

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,9 +21,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
@@ -47,6 +51,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -59,6 +65,9 @@ import com.desmoines.aipulse.BuildConfig
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.SafeLinkLauncher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Settings screen matching iOS SettingsView.swift.
@@ -76,6 +85,14 @@ fun SettingsScreen(
     errorMessage: String? = null,
     storeSubscriptionNotice: StoreSubscriptionNotice? = null,
     onAcknowledgeStoreSubscriptionNotice: () -> Unit = {},
+    // Data export (XPLAT-007)
+    isExporting: Boolean = false,
+    pendingExport: PendingDataExport? = null,
+    exportNotice: String? = null,
+    onExportData: () -> Unit = {},
+    onExportPickerShown: () -> Unit = {},
+    onExportFinished: (DataExportSaveResult) -> Unit = {},
+    onDismissExportNotice: () -> Unit = {},
     // Biometric auth
     isBiometricAvailable: Boolean = false,
     isBiometricEnabled: Boolean = false,
@@ -85,8 +102,11 @@ fun SettingsScreen(
     emailConsent: Boolean = true,
     emailConsentError: String? = null,
     analyticsConsent: Boolean = false,
+    personalization: Boolean = false,
+    personalizationError: String? = null,
     onToggleLocationConsent: (Boolean) -> Unit = {},
     onToggleEmailConsent: (Boolean) -> Unit = {},
+    onTogglePersonalization: (Boolean) -> Unit = {},
     onToggleAnalyticsConsent: (Boolean) -> Unit = {},
     // Navigation
     onNavigateBack: () -> Unit = {},
@@ -101,6 +121,31 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+    val scope = rememberCoroutineScope()
+
+    // The system file picker (Storage Access Framework): the user chooses where
+    // their data goes, and the app needs no storage permission to write it.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(DataExportResponse.MIME_TYPE)
+    ) { uri ->
+        val export = pendingExport
+        if (uri == null || export == null) {
+            onExportFinished(DataExportSaveResult.CANCELLED)
+        } else {
+            scope.launch {
+                val saved = withContext(Dispatchers.IO) { writeDataExport(context, uri, export.json) }
+                onExportFinished(if (saved) DataExportSaveResult.SAVED else DataExportSaveResult.FAILED)
+            }
+        }
+    }
+
+    LaunchedEffect(pendingExport) {
+        val export = pendingExport
+        if (export != null && !export.pickerShown) {
+            onExportPickerShown()
+            exportLauncher.launch(export.fileName)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -226,6 +271,28 @@ fun SettingsScreen(
                 )
             }
 
+            // XPLAT-016. The account's "Personalized suggestions" switch, the
+            // same one as on the web. It lives on the profile, so signed out
+            // there is nothing to change and the row is not shown.
+            if (isAuthenticated) {
+                SettingsToggleRow(
+                    icon = Icons.Default.AutoAwesome,
+                    title = "Personalized Suggestions",
+                    subtitle = "Rank For You from the events you swipe and save",
+                    checked = personalization,
+                    onCheckedChange = onTogglePersonalization,
+                )
+
+                if (personalizationError != null) {
+                    Text(
+                        text = personalizationError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp),
+                    )
+                }
+            }
+
             SettingsToggleRow(
                 icon = Icons.Default.Info,
                 title = "Analytics",
@@ -291,6 +358,40 @@ fun SettingsScreen(
             // Danger Zone (authenticated only)
             if (isAuthenticated) {
                 SectionHeader("Account Data")
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isExporting && pendingExport == null) { onExportData() }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isExporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            if (isExporting) "Preparing Your Data..." else "Export My Data",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            "Download a copy of everything we store about your account",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
                 Row(
                     modifier = Modifier
@@ -379,6 +480,20 @@ fun SettingsScreen(
             notice = notice,
             onOpenManage = { SafeLinkLauncher.openUrl(context, it) },
             onAcknowledge = onAcknowledgeStoreSubscriptionNotice,
+        )
+    }
+
+    // Export saved
+    if (exportNotice != null) {
+        AlertDialog(
+            onDismissRequest = onDismissExportNotice,
+            title = { Text("Export Saved") },
+            text = { Text(exportNotice) },
+            confirmButton = {
+                TextButton(onClick = onDismissExportNotice) {
+                    Text("OK")
+                }
+            },
         )
     }
 
@@ -489,6 +604,13 @@ private fun SettingsToggleRow(
         )
     }
 }
+
+/** Writes the export to the file the user picked. False on any I/O failure. */
+private fun writeDataExport(context: Context, uri: Uri, json: String): Boolean = runCatching {
+    val stream = context.contentResolver.openOutputStream(uri, "wt") ?: return@runCatching false
+    stream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+    true
+}.getOrDefault(false)
 
 private fun openNotificationSettings(context: Context) {
     val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {

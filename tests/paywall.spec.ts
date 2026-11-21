@@ -5,7 +5,7 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * The paywall (pricing plan WP4): UpgradeModal and PremiumGate.
  *
  * Mounted the way real visitors reach it: "Watch this search" on /search?q=jazz
- * opens the modal through useUpgradeModal, and the review prompt on a
+ * opens the app-root modal through openPaywall, and the review prompt on a
  * restaurant page is a PremiumGate. Rows come from tests/support/fixtureBackend,
  * with the plan rows, subscription rows and analytics inserts answered here.
  *

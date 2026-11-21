@@ -352,6 +352,8 @@ final class AuthService {
         // them (IOS-DD-SEARCH-12).
         SavedSearchesViewModel.shared.reset()
         EmailPreferencesService.shared.reset()
+        PersonalizationPreferenceService.shared.reset()
+        AccountEmailPreferenceService.shared.reset()
         // Swipe history and the unsent swipe queue. reset() was documented as
         // the sign-out hook and nothing called it, so the next account on the
         // device inherited the deck history and uploaded the previous user's

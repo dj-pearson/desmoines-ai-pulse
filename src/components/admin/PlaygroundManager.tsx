@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -56,7 +56,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 type PlaygroundUpdate = Database["public"]["Tables"]["playgrounds"]["Update"];
@@ -82,6 +82,11 @@ const AGE_RANGE_OPTIONS = [
   "teen",
 ] as const;
 
+// The "Unknown" / "Clear" options below use <SelectItem value="">. Radix
+// Select 2.0-2.1 threw on that; 2.3.x (pinned ^2.3.7) accepts it and treats
+// "" as "show the placeholder", so each placeholder names the cleared state
+// rather than a bare dash. playgroundManagerClearSelects.test.tsx renders
+// these and checks "" saves as null (WEB-UX-070).
 type EditableField =
   | "name"
   | "has_restrooms"
@@ -122,6 +127,8 @@ interface InlineEditProps {
 }
 
 function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
+  // One id for whichever control the field renders, so the Label names it.
+  const fieldId = useId();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<string>(() => {
     const v = playground[field];
@@ -201,13 +208,16 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-3">
         <div className="space-y-2">
-          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            htmlFor={fieldId}
+            className="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             {field.replace(/_/g, " ")}
           </Label>
           {field === "has_restrooms" || field === "has_shade" ? (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger>
-                <SelectValue placeholder="—" />
+              <SelectTrigger id={fieldId}>
+                <SelectValue placeholder="Unknown" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Unknown</SelectItem>
@@ -217,11 +227,11 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             </Select>
           ) : field === "surface_type" ? (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger>
-                <SelectValue placeholder="—" />
+              <SelectTrigger id={fieldId}>
+                <SelectValue placeholder="Not set" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— clear —</SelectItem>
+                <SelectItem value="">Clear</SelectItem>
                 {SURFACE_OPTIONS.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
@@ -231,11 +241,11 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             </Select>
           ) : field === "age_range" ? (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger>
-                <SelectValue placeholder="—" />
+              <SelectTrigger id={fieldId}>
+                <SelectValue placeholder="Not set" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— clear —</SelectItem>
+                <SelectItem value="">Clear</SelectItem>
                 {AGE_RANGE_OPTIONS.map((a) => (
                   <SelectItem key={a} value={a}>
                     {a}
@@ -245,6 +255,7 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             </Select>
           ) : field === "accessibility_notes" ? (
             <Textarea
+              id={fieldId}
               rows={4}
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -252,6 +263,7 @@ function InlineEdit({ playground, field, onSaved }: InlineEditProps) {
             />
           ) : (
             <Input
+              id={fieldId}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               autoFocus
@@ -301,6 +313,9 @@ export default function PlaygroundManager() {
     field: null,
     value: "",
   });
+  // The bulk dialog has no visible label over its one control; the title
+  // says the field, so the control's name says it too.
+  const bulkValueLabel = `New ${bulkEdit.field?.replace(/_/g, " ") ?? "value"}`;
   const [busy, setBusy] = useState(false);
 
   const state = usePlaygrounds({
@@ -419,6 +434,7 @@ export default function PlaygroundManager() {
                 setPage(0);
               }}
               placeholder="Search name, location, age…"
+              aria-label="Search playgrounds"
               className="pl-8"
             />
           </div>
@@ -429,7 +445,7 @@ export default function PlaygroundManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by source">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>
@@ -444,7 +460,7 @@ export default function PlaygroundManager() {
               setSortBy(v)
             }
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Sort playgrounds">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
@@ -704,8 +720,8 @@ export default function PlaygroundManager() {
                   setBulkEdit((prev) => ({ ...prev, value: v }))
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="—" />
+                <SelectTrigger aria-label={bulkValueLabel}>
+                  <SelectValue placeholder="Unknown" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Unknown</SelectItem>
@@ -720,11 +736,11 @@ export default function PlaygroundManager() {
                   setBulkEdit((prev) => ({ ...prev, value: v }))
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="—" />
+                <SelectTrigger aria-label={bulkValueLabel}>
+                  <SelectValue placeholder="Not set" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— clear —</SelectItem>
+                  <SelectItem value="">Clear</SelectItem>
                   {SURFACE_OPTIONS.map((s) => (
                     <SelectItem key={s} value={s}>
                       {s}
@@ -739,11 +755,11 @@ export default function PlaygroundManager() {
                   setBulkEdit((prev) => ({ ...prev, value: v }))
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="—" />
+                <SelectTrigger aria-label={bulkValueLabel}>
+                  <SelectValue placeholder="Not set" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— clear —</SelectItem>
+                  <SelectItem value="">Clear</SelectItem>
                   {AGE_RANGE_OPTIONS.map((a) => (
                     <SelectItem key={a} value={a}>
                       {a}
@@ -753,6 +769,7 @@ export default function PlaygroundManager() {
               </Select>
             ) : bulkEdit.field === "accessibility_notes" ? (
               <Textarea
+                aria-label={bulkValueLabel}
                 rows={4}
                 value={bulkEdit.value}
                 onChange={(e) =>

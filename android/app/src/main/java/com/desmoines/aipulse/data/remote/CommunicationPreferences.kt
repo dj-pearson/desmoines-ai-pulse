@@ -39,6 +39,20 @@ object CommunicationPreferences {
     const val EMAIL_NOTIFICATIONS = "email_notifications"
 
     /**
+     * The "Personalized suggestions" key (XPLAT-016). The web writes it from
+     * PreferencesManager and get_personalized_recommendations_v2 reads it. It
+     * is the opposite of the email key on absence: only an explicit `true`
+     * opts in, so read it with [isExplicitlyOn], never [isOptedIn].
+     */
+    const val EVENT_RECOMMENDATIONS = "event_recommendations"
+
+    /**
+     * The consent_records.consent_type a change to [EVENT_RECOMMENDATIONS] is
+     * logged under, the same one the web's PreferencesManager uses.
+     */
+    const val PERSONALIZATION_CONSENT_TYPE = "personalization_ai"
+
+    /**
      * The bag with one key set, every other key preserved.
      */
     fun merge(existing: JsonObject, key: String, value: Boolean): JsonObject =
@@ -61,5 +75,21 @@ object CommunicationPreferences {
         // this said they had opted out. Only a real JSON boolean counts.
         if (value.isString) return true
         return value.booleanOrNull != false
+    }
+
+    /**
+     * Whether [key] is switched on, for an opt-in key like
+     * [EVENT_RECOMMENDATIONS].
+     *
+     * Only the JSON boolean `true` counts, matching the server's
+     * `(communication_preferences -> 'event_recommendations') = 'true'::jsonb`
+     * and the web's readOptIn. A missing key, a null and the string "true" all
+     * read as off, so the switch never shows "on" for an account the server
+     * will not personalize.
+     */
+    fun isExplicitlyOn(bag: JsonObject?, key: String): Boolean {
+        val value = bag?.get(key) as? JsonPrimitive ?: return false
+        if (value.isString) return false
+        return value.booleanOrNull == true
     }
 }

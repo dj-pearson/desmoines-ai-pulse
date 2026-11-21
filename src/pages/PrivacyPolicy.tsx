@@ -21,7 +21,8 @@ import SEOHead from "@/components/SEOHead";
 import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
-import { reopenConsentBanner } from "@/components/CookieConsentBanner";
+import { reopenConsentBanner } from "@/lib/cookieConsent";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 export default function PrivacyPolicy() {
   const lastUpdated = "October 23, 2026";
@@ -29,8 +30,8 @@ export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title="Privacy Policy | Des Moines Insider"
-        description="How Des Moines Insider collects, uses and protects your personal information, and your rights under GDPR, CCPA/CPRA and US state privacy laws."
+        title={STATIC_PAGE_META["/privacy-policy"].title}
+        description={STATIC_PAGE_META["/privacy-policy"].description}
         url="https://desmoinesinsider.com/privacy-policy"
         type="website"
       />

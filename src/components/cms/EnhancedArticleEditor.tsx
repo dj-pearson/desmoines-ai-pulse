@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag, User, Calendar as CalendarIcon, Send, Star } from "lucide-react";
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
@@ -384,8 +384,8 @@ export default function EnhancedArticleEditor() {
           {!isNewArticle && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4" />
+                <Button variant="destructive" size="sm" aria-label="Delete article">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -532,24 +532,29 @@ export default function EnhancedArticleEditor() {
               </div>
 
               <div>
-                <Label>SEO Keywords</Label>
+                <Label htmlFor="seo-keyword-new">SEO Keywords</Label>
                 <div className="flex gap-2 mb-2">
                   <Input
+                    id="seo-keyword-new"
                     value={newKeyword}
                     onChange={(e) => setNewKeyword(e.target.value)}
                     placeholder="Add SEO keyword..."
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
                   />
-                  <Button onClick={handleAddKeyword} size="sm">
-                    <Plus className="h-4 w-4" />
+                  <Button onClick={handleAddKeyword} size="sm" aria-label="Add keyword">
+                    <Plus className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {articleData.seo_keywords.map((keyword) => (
                     <Badge key={keyword} variant="secondary" className="gap-1">
                       {keyword}
-                      <button onClick={() => handleRemoveKeyword(keyword)}>
-                        <X className="h-3 w-3" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveKeyword(keyword)}
+                        aria-label={`Remove keyword ${keyword}`}
+                      >
+                        <X className="h-3 w-3" aria-hidden="true" />
                       </button>
                     </Badge>
                   ))}
@@ -570,7 +575,7 @@ export default function EnhancedArticleEditor() {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select value={articleData.status} onValueChange={(value) => handleInputChange('status', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -613,14 +618,14 @@ export default function EnhancedArticleEditor() {
               )}
 
               <div>
-                <Label>Author</Label>
+                <Label htmlFor="author">Author</Label>
                 <Select
                   value={articleData.author_profile_id || 'none'}
                   onValueChange={(value) =>
                     handleInputChange('author_profile_id', value === 'none' ? null : value)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="author">
                     <SelectValue placeholder="Select author" />
                   </SelectTrigger>
                   <SelectContent>
@@ -644,7 +649,7 @@ export default function EnhancedArticleEditor() {
                     handleInputChange('category_id', cat?.id || null);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -664,12 +669,12 @@ export default function EnhancedArticleEditor() {
               </div>
 
               <div>
-                <Label>Priority</Label>
+                <Label htmlFor="priority">Priority</Label>
                 <Select
                   value={articleData.priority.toString()}
                   onValueChange={(value) => handleInputChange('priority', parseInt(value))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="priority">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -718,13 +723,14 @@ export default function EnhancedArticleEditor() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
+                  aria-label="New tag"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add tag..."
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                 />
-                <Button onClick={handleAddTag} size="sm">
-                  <Plus className="h-4 w-4" />
+                <Button onClick={handleAddTag} size="sm" aria-label="Add tag">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
 
@@ -757,8 +763,12 @@ export default function EnhancedArticleEditor() {
                 {articleData.tags.map((tag) => (
                   <Badge key={tag} variant="outline" className="gap-1">
                     {tag}
-                    <button onClick={() => handleRemoveTag(tag)}>
-                      <X className="h-3 w-3" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      aria-label={`Remove tag ${tag}`}
+                    >
+                      <X className="h-3 w-3" aria-hidden="true" />
                     </button>
                   </Badge>
                 ))}

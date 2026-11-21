@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { chooseDecisionRecipient } from "./recipient.ts";
 
 const OWNER_ID = "11111111-1111-1111-1111-111111111111";

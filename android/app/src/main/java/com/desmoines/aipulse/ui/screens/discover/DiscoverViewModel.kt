@@ -15,6 +15,7 @@ import com.desmoines.aipulse.data.repository.GroupSessionManager
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.SoftPaywallService
 import com.desmoines.aipulse.util.SwipeInteractionService
@@ -28,7 +29,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 @Immutable
@@ -246,11 +246,12 @@ class DiscoverViewModel @Inject constructor(
         // deck isn't empty, without pulling events weeks out.
         val preset = filter.datePreset
             ?: if (_uiState.value.mode == DiscoverMode.MIXED) com.desmoines.aipulse.data.model.DateFilterPreset.THIS_WEEK else null
-        val range = preset?.dateRange
+        // Central midnights with an offset: a bare local timestamp is read as UTC (AND-AUDIT-031).
+        val bounds = preset?.let { EventTimeText.presetBounds(it) }
         val query = EventsQuery(
             category = filter.eventCategory,
-            dateStart = range?.first?.format(ISO),
-            dateEnd = range?.second?.format(ISO),
+            dateStart = bounds?.first,
+            dateEnd = bounds?.second,
             limit = PAGE_SIZE,
             offset = eventOffset,
         )
@@ -318,6 +319,5 @@ class DiscoverViewModel @Inject constructor(
     companion object {
         private const val PAGE_SIZE = 20
         private const val PREFETCH_THRESHOLD = 4
-        private val ISO: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
     }
 }

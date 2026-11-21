@@ -5,7 +5,7 @@ import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DeferredSelect, type DeferredSelectOption } from '@/components/ui/deferred-select';
 import { Eye, Search, Filter, Tag, BookOpen, Grid, List } from "lucide-react";
 import { CardsGridSkeleton } from '@/components/ui/loading-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -26,12 +26,20 @@ import {
 } from '@/hooks/useArticles';
 import { aiBadgeLabel, isAiArticle } from '@/lib/articleHubs';
 import { handleError } from '@/lib/errorHandler';
-import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
+import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantStatus';
 
 /** Cards that get the entrance animation; the rest appear without a delay. */
 const STAGGERED_CARDS = 6;
 
 const FILTERS_PANEL_ID = 'articles-filters';
+
+// "Most Popular" only once views are counted (pass 2 WP4 item 3, D13).
+const SORT_OPTIONS: readonly DeferredSelectOption[] = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'oldest', label: 'Oldest First' },
+  ...(VIEW_COUNTS_LIVE ? [{ value: 'popular', label: 'Most Popular' }] : []),
+  { value: 'title', label: 'Alphabetical' },
+];
 
 /** Publish dates in Central time, not the reader's zone (pass 2 WP4 item 11). */
 function formatDate(dateString: string | null | undefined): string {
@@ -99,6 +107,10 @@ const Articles: React.FC = () => {
     if (selectedCategory !== 'all') set.add(selectedCategory);
     return Array.from(set).sort((x, y) => x.localeCompare(y));
   }, [allCategories, articles, selectedCategory]);
+  const categoryOptions = useMemo<DeferredSelectOption[]>(
+    () => [{ value: 'all', label: 'All Categories' }, ...categories.map((c) => ({ value: c, label: c }))],
+    [categories]
+  );
 
   // No separate loading return. It was an early return above the page's own
   // <h1>, so a slow response left the document with an sr-only stand-in and no
@@ -194,7 +206,7 @@ const Articles: React.FC = () => {
                     variant={viewMode === 'grid' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('grid')}
-                    className="rounded-r-none"
+                    className="rounded-r-none coarse:min-w-[44px]"
                     aria-label="Grid view"
                     aria-pressed={viewMode === 'grid'}
                     title="Grid view"
@@ -205,7 +217,7 @@ const Articles: React.FC = () => {
                     variant={viewMode === 'list' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('list')}
-                    className="rounded-l-none"
+                    className="rounded-l-none coarse:min-w-[44px]"
                     aria-label="List view"
                     aria-pressed={viewMode === 'list'}
                     title="List view"
@@ -222,35 +234,23 @@ const Articles: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="articles-category" className="text-sm font-medium mb-2 block">Category</label>
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger id="articles-category">
-                        <SelectValue placeholder="All Categories" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DeferredSelect
+                      value={selectedCategory}
+                      onValueChange={setSelectedCategory}
+                      options={categoryOptions}
+                      placeholder="All Categories"
+                      id="articles-category"
+                    />
                   </div>
 
                   <div>
                     <label htmlFor="articles-sort" className="text-sm font-medium mb-2 block">Sort By</label>
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger id="articles-sort">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="newest">Newest First</SelectItem>
-                        <SelectItem value="oldest">Oldest First</SelectItem>
-                        {/* Only once views are counted (pass 2 WP4 item 3, D13). */}
-                        {VIEW_COUNTS_LIVE && <SelectItem value="popular">Most Popular</SelectItem>}
-                        <SelectItem value="title">Alphabetical</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <DeferredSelect
+                      value={sortBy}
+                      onValueChange={setSortBy}
+                      options={SORT_OPTIONS}
+                      id="articles-sort"
+                    />
                   </div>
 
                   <div className="flex items-end">

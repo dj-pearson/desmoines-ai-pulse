@@ -29,7 +29,7 @@ import {
 } from "@/hooks/useEventLanding";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
-import { EVENING_START_HOUR } from "@/lib/tonightPairings";
+import { EVENING_START_HOUR } from "@/lib/tonightTime";
 import { addCentralDays, centralDateOf } from "@/lib/timezone";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { formatCount } from "@/lib/pluralize";

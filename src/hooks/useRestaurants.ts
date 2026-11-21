@@ -9,7 +9,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
-import { RESTAURANT_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
+import { RESTAURANT_HUB_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
+import { DIETARY_KEYWORDS, dietaryIlikeClauses } from "@/lib/restaurantDiets";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
 import { createLogger } from "@/lib/logger";
@@ -18,9 +19,10 @@ import { hubSearchQuery } from "@/components/events/eventsHubQuery";
 // `announced`, which the local set here left out.
 import {
   isPermanentlyClosedRestaurant,
-  isVisitableStatus,
+  isServingToday,
   NOT_CLOSED_RESTAURANT_FILTER,
-} from "@/lib/restaurantHours";
+  NOT_GOOGLE_CLOSED_RESTAURANT_FILTER,
+} from "@/lib/restaurantStatus";
 
 const logger = createLogger("useRestaurants");
 
@@ -53,7 +55,6 @@ export interface RestaurantFilters {
    * a performance decision, so the page now fetches those rows on their own.
    */
   sponsoredOnly?: boolean;
-  openNow?: boolean;
   tags?: string[];
   dietary?: string[];
   limit?: number;
@@ -133,12 +134,17 @@ export function withoutPermanentlyClosed(list: Restaurant[]): Restaurant[] {
   );
 }
 
-function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
+/**
+ * isServingToday, not the lifecycle status alone: a CLOSED_TEMPORARILY place
+ * keeps its weekly hours on Google and its `status` says open, so it sat among
+ * the places a visitor can go to tonight (WEB-FEAT-094).
+ */
+export function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
   const visitable: Restaurant[] = [];
   const unvisitable: Restaurant[] = [];
   for (const r of list) {
-    const status = (r as { status?: string | null }).status;
-    (isVisitableStatus(status) ? visitable : unvisitable).push(r);
+    const row = r as { status?: string | null; business_status?: string | null };
+    (isServingToday(row) ? visitable : unvisitable).push(r);
   }
   return [...visitable, ...unvisitable];
 }
@@ -378,13 +384,19 @@ export async function fetchRestaurantList(
       // the planner estimate only for large result sets, so it keeps the
       // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
       // while always yielding a number.
-      .select(withAdminColumns(RESTAURANT_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
+      //
+      // RESTAURANT_HUB_LIST_COLUMNS carries hours_json and business_status, as
+      // the RPC row does, so a card's hours line and closure label do not
+      // depend on which sort the visitor picked.
+      .select(withAdminColumns(RESTAURANT_HUB_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
       .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
     // SEO-059: a browse never lists a place that has closed for good. In the
     // query, not after it, so the count matches the pages.
+    // Google's CLOSED_PERMANENTLY too: the hours refresh writes it without
+    // touching status, and the RPC path already leaves those rows out.
     if (hideClosed) {
-      query = query.or(NOT_CLOSED_RESTAURANT_FILTER);
+      query = query.or(NOT_CLOSED_RESTAURANT_FILTER).or(NOT_GOOGLE_CLOSED_RESTAURANT_FILTER);
     }
 
     // Prefix full-text search: every word must match and the last one is a
@@ -437,16 +449,7 @@ export async function fetchRestaurantList(
 
     // Apply dietary keyword filter (searches description and cuisine fields)
     if (dietarySelections.length > 0) {
-      const orClauses = dietarySelections.flatMap((diet) => {
-        const keywords = DIETARY_KEYWORDS[diet] || [diet];
-        // postgrest-safe: resolveDietarySelections keeps only DIETARY_KEYWORDS keys, so kw is a fixed keyword
-        return keywords.flatMap((kw) => [
-          `description.ilike.%${kw}%`,
-          `cuisine.ilike.%${kw}%`,
-          `name.ilike.%${kw}%`,
-        ]);
-      });
-      query = query.or(orClauses.join(","));
+      query = query.or(dietaryIlikeClauses(dietarySelections).join(","));
     }
 
     switch (sortBy) {
@@ -783,15 +786,11 @@ export function useInfiniteRestaurants(
 /**
  * Dietary selections map to keywords searched across name, description and
  * cuisine. There is no dietary column, so this is a text fan-out - which is
- * also why a dietary filter forces the non-RPC query path.
+ * also why a dietary filter forces the non-RPC query path. The table is the
+ * one /restaurants/dietary uses (WEB-FEAT-054); re-exported for existing
+ * importers.
  */
-export const DIETARY_KEYWORDS: Record<string, string[]> = {
-  vegan: ["vegan"],
-  vegetarian: ["vegetarian", "veggie"],
-  "gluten-free": ["gluten free", "gluten-free", "celiac"],
-  keto: ["keto", "low carb"],
-  halal: ["halal"],
-};
+export { DIETARY_KEYWORDS };
 
 /**
  * WEB-FEAT-032: the dietary filter was wired to a key nothing set.
@@ -815,14 +814,28 @@ export function resolveDietarySelections(filters: {
   return [...new Set(candidates.filter((value) => value in DIETARY_KEYWORDS))];
 }
 
-const RESTAURANT_TAGS = [
-  "Takeout",
-  "Delivery",
-  "Outdoor Seating",
-  "Family Friendly",
-  "Date Night",
-  "Happy Hour",
-];
+/**
+ * The tag values a restaurant filter UI may offer (WEB-FEAT-060).
+ *
+ * This list used to be Takeout, Delivery, Outdoor Seating, Family Friendly,
+ * Date Night and Happy Hour. resolveDietarySelections drops every one of them,
+ * and no restaurant column stores any of them, so a "#Happy Hour" badge (or a
+ * ?tags=Happy%20Hour link) showed an active filter over the unfiltered list.
+ * The only `tags` values any query applies are the diet ids, so those are the
+ * only ones offered. Happy hour lives in the deals table and has its own strip
+ * on /restaurants (RestaurantsHappyHourStrip), not a tag.
+ */
+export const RESTAURANT_FILTER_TAGS: readonly string[] = Object.keys(DIETARY_KEYWORDS);
+
+/**
+ * `tags` as read from a URL: only the values a query applies, in order. A
+ * shared link carrying a retired tag ("Happy Hour") keeps working as a page
+ * and simply loses the tag, instead of rendering a chip and an active-filter
+ * count for a filter that filters nothing.
+ */
+export function appliedRestaurantTags(tags: readonly string[]): string[] {
+  return resolveDietarySelections({ tags: [...tags] });
+}
 
 interface FilterOptionsResult {
   cuisines: { cuisine: string; count: number }[];
@@ -905,7 +918,7 @@ export function useRestaurantFilterOptions() {
     /** Cuisines with their row counts, most common first (plan WP2 item 5). */
     cuisineCounts: data?.cuisines ?? [],
     locations: data?.locations ?? [],
-    tags: RESTAURANT_TAGS,
+    tags: RESTAURANT_FILTER_TAGS,
     isLoading,
   };
 }

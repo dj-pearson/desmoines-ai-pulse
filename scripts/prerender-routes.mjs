@@ -58,7 +58,7 @@ export const PRERENDER_ROUTES = [
   '/restaurants/new',
   '/restaurants/dietary',
   // Eat & Drink pass 2 WP4.13: one self-canonical page per diet. Keep equal to
-  // DIETS in src/hooks/useDietaryRestaurants.ts.
+  // DIETS in src/lib/restaurantDiets.ts.
   '/restaurants/dietary/vegan',
   '/restaurants/dietary/vegetarian',
   '/restaurants/dietary/gluten-free',

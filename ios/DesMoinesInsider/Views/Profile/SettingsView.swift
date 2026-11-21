@@ -1,6 +1,7 @@
 import SwiftUI
 import StoreKit
 import UserNotifications
+import UniformTypeIdentifiers
 
 /// App settings view with account management, subscription, and about sections.
 struct SettingsView: View {
@@ -19,6 +20,8 @@ struct SettingsView: View {
     /// (IOS-DD-ACCOUNT-11).
     @State private var consent = ConsentService.shared
     @State private var emailPreferences = EmailPreferencesService.shared
+    @State private var personalization = PersonalizationPreferenceService.shared
+    @State private var accountEmails = AccountEmailPreferenceService.shared
     @State private var toast: ToastMessage?
     /// Set after a deletion that left a store subscription billing; the sheet
     /// dismisses once it is acknowledged (IOS-DD-ACCOUNT-08).
@@ -33,6 +36,11 @@ struct SettingsView: View {
     @State private var restoreResultMessage: String?
     @State private var errorMessage: String?
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    // XPLAT-007 (iOS half): right of access.
+    @State private var isExportingData = false
+    @State private var pendingExport: PendingDataExport?
+    @State private var showDataExporter = false
+    @State private var dataExportMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -71,12 +79,20 @@ struct SettingsView: View {
                         .disabled(isRestoring)
                         .accessibilityLabel("Restore previous purchases")
 
-                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014)
-                        Button {
-                            AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
-                            showOfferCodeRedeem = true
-                        } label: {
-                            Label("Redeem Offer Code", systemImage: "tag")
+                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014).
+                        // Hidden for a web or Google Play subscriber, for whom
+                        // a code would start a second, App Store-billed plan
+                        // (IOS-AUDIT-012).
+                        if PlansLinkScreen.screen(
+                            tier: storeKit.currentTier,
+                            hasAppStoreSubscription: storeKit.hasAppStoreSubscription
+                        ).offersCodeRedemption {
+                            Button {
+                                AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
+                                showOfferCodeRedeem = true
+                            } label: {
+                                Label("Redeem Offer Code", systemImage: "tag")
+                            }
                         }
                     }
 
@@ -240,7 +256,10 @@ struct SettingsView: View {
                 }
             }
             .sheet(isPresented: $showSubscription) {
-                SubscriptionView()
+                // The StoreKit store for a free or App Store plan; where the
+                // plan is billed for a web or Google Play subscriber, who
+                // could otherwise buy a second plan here (IOS-AUDIT-011).
+                PlansLinkView()
             }
             .offerCodeRedemption(isPresented: $showOfferCodeRedeem) { result in
                 switch result {
@@ -252,6 +271,15 @@ struct SettingsView: View {
                 }
             }
             .toastOverlay(message: $toast)
+            // A modifier of its own: added inline, these two pushed body past
+            // what Xcode 26.3 can type-check ("unable to type-check this
+            // expression in reasonable time" at the NavigationStack).
+            .modifier(DataExportPresentation(
+                showExporter: $showDataExporter,
+                pendingExport: $pendingExport,
+                message: $dataExportMessage,
+                onFinish: finishDataExport
+            ))
             .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     Task { await deleteAccount() }
@@ -355,6 +383,76 @@ struct SettingsView: View {
         }
         .task { await emailPreferences.load() }
 
+        // communication_preferences.email_notifications, the key the
+        // lifecycle classifier turns into messagingAllowed. The digest switch
+        // above never stopped these (WEB-LEGAL-012).
+        Section {
+            Toggle(isOn: Binding(
+                get: { accountEmails.enabled ?? false },
+                set: { newValue in
+                    Task {
+                        do {
+                            try await accountEmails.setEnabled(newValue)
+                        } catch {
+                            toast = .error("Couldn't update your email preference. Try again.")
+                        }
+                    }
+                }
+            )) {
+                Label("Account and activity emails", systemImage: "envelope.badge")
+            }
+            .disabled(accountEmails.enabled == nil)
+        } footer: {
+            Text("Getting-started tips after you join, notes when you hit a milestone, and a nudge if you haven't visited in a while. Security and password emails always send. Also controllable on the website.")
+        }
+        .task { await accountEmails.load() }
+
+        // The account's "Personalized suggestions" switch, the same one as
+        // the web's /profile?tab=settings. get_personalized_recommendations_v2
+        // ranks For You only when it is on (XPLAT-016).
+        Section {
+            Toggle(isOn: Binding(
+                get: { personalization.enabled ?? false },
+                set: { newValue in
+                    Task {
+                        do {
+                            try await personalization.setEnabled(newValue)
+                        } catch {
+                            toast = .error("Couldn't update your suggestions preference. Try again.")
+                        }
+                    }
+                }
+            )) {
+                Label("Personalized Suggestions", systemImage: "sparkles")
+            }
+            .disabled(personalization.enabled == nil)
+        } footer: {
+            Text("Rank For You from the events you swipe and save. When off, you see what's trending. Also controllable on the website.")
+        }
+        .task { await personalization.load() }
+
+        Section {
+            Button {
+                Task { await exportData() }
+            } label: {
+                Label {
+                    Text(isExportingData ? "Preparing Your Data..." : "Export My Data")
+                } icon: {
+                    if isExportingData {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                }
+            }
+            .disabled(isExportingData)
+            .accessibilityLabel("Export a copy of your data")
+        } header: {
+            Text("Your Data")
+        } footer: {
+            Text("Download a copy of the data we hold about your account as a JSON file.")
+        }
+
         Section {
             Button(role: .destructive) {
                 showDeleteConfirmation = true
@@ -449,6 +547,48 @@ struct SettingsView: View {
         }
     }
 
+    /// XPLAT-007 (iOS half). Fetches the server-assembled export, then opens
+    /// the system file exporter; nothing is written until the user picks where.
+    private func exportData() async {
+        isExportingData = true
+        let outcome = await DataExportService.shared.requestExport()
+        isExportingData = false
+
+        switch outcome {
+        case let .ready(json, tablesWithData, tablesConsidered, unavailableCount):
+            pendingExport = PendingDataExport(
+                document: DataExportDocument(data: json),
+                fileName: DataExportService.fileName(),
+                tablesWithData: tablesWithData,
+                tablesConsidered: tablesConsidered,
+                unavailableCount: unavailableCount
+            )
+            showDataExporter = true
+        case .notAvailable:
+            dataExportMessage = DataExportService.notAvailableMessage
+        case .notSignedIn:
+            dataExportMessage = DataExportService.notSignedInMessage
+        case let .failed(status):
+            dataExportMessage = DataExportService.failedMessage(status: status)
+        }
+    }
+
+    private func finishDataExport(_ result: Result<URL, Error>) {
+        defer { pendingExport = nil }
+        guard let export = pendingExport else { return }
+        switch result {
+        case .success:
+            dataExportMessage = DataExportService.savedMessage(
+                fileName: export.fileName,
+                tablesWithData: export.tablesWithData,
+                tablesConsidered: export.tablesConsidered,
+                unavailableCount: export.unavailableCount
+            )
+        case .failure:
+            dataExportMessage = DataExportService.saveFailedMessage
+        }
+    }
+
     private func deleteAccount() async {
         // Re-authenticate first; a cancel just returns (IOS-DD-ACCOUNT-08).
         guard await AccountDeletionService.confirmIdentity() else { return }
@@ -476,6 +616,52 @@ struct SettingsView: View {
         }
 
         isDeleting = false
+    }
+}
+
+/// A decoded export waiting for the user to pick where it goes.
+private struct PendingDataExport {
+    let document: DataExportDocument
+    let fileName: String
+    let tablesWithData: Int?
+    let tablesConsidered: Int?
+    let unavailableCount: Int
+}
+
+/// The Export My Data file picker and its result alert (XPLAT-007).
+private struct DataExportPresentation: ViewModifier {
+    @Binding var showExporter: Bool
+    @Binding var pendingExport: PendingDataExport?
+    @Binding var message: String?
+    let onFinish: (Result<URL, Error>) -> Void
+
+    private var showsMessage: Binding<Bool> {
+        Binding(
+            get: { message != nil },
+            set: { if !$0 { message = nil } }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .fileExporter(
+                isPresented: $showExporter,
+                document: pendingExport?.document,
+                // contentTypes (a list): the iOS 17 overload that takes
+                // onCancellation. The single contentType form with
+                // onCancellation is newer than the Xcode 26 SDK.
+                contentTypes: [.json],
+                defaultFilename: pendingExport?.fileName
+            ) { result in
+                onFinish(result)
+            } onCancellation: {
+                pendingExport = nil
+            }
+            .alert("Export My Data", isPresented: showsMessage) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(message ?? "")
+            }
     }
 }
 

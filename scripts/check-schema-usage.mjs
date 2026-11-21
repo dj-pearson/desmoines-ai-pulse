@@ -46,7 +46,8 @@
  *   node scripts/check-schema-usage.mjs --all      # report everything, ignore baseline
  *   node scripts/check-schema-usage.mjs --update   # re-freeze the baseline
  *   node scripts/check-schema-usage.mjs --json     # machine-readable
- * Exits 1 if any un-baselined reference is found.
+ * Exits 1 if any un-baselined reference is found, or if the baseline holds an
+ * entry the scan no longer produces (WEB-QA-047).
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -138,7 +139,31 @@ const PENDING_MIGRATIONS = [
   { rpc: 'cancel_campaign', migration: '20260920000003' },
   { rpc: 'set_campaign_paused', migration: '20260920000003' },
   { rpc: 'request_campaign_refund', migration: '20260920000003' },
+  // Site visits and page views for /advertise (WEB-ADS-012 AC2). PlatformMetrics
+  // calls it alongside the GSC RPC and treats PGRST202 as "no sample", so the
+  // pending window shows exactly what the page showed before.
+  { rpc: 'get_site_audience_metrics', migration: '20261107000071' },
   { rpc: 'renew_campaign', migration: '20260920000004' },
+  // The reminder email's one-click opt-out (WEB-FEAT-059), called by
+  // src/lib/reminderOptOut.ts from /unsubscribe?reminder=. Until it is applied
+  // the page shows its fixed "something went wrong" copy and the edge function
+  // answers 503, so mailbox providers retry the one-click POST.
+  { rpc: 'cancel_event_reminders_by_token', migration: '20261108000047' },
+  // Whether the signed-in reader's own address is newsletter-unsubscribed, so
+  // their event reminders won't be emailed (WEB-FEAT-065). Called by
+  // src/lib/reminderEmailSuppression.ts, which answers false on PGRST202, so
+  // the reminder card reads as it did before until this is applied.
+  { rpc: 'my_reminder_emails_unsubscribed', migration: '20261108000081' },
+  // The one-click "turn off saved-search alerts" link (WEB-FEAT-073),
+  // called by src/lib/alertsOptOut.ts from /unsubscribe?alerts= and by
+  // email-unsubscribe. Until it is applied the page shows its fixed "something
+  // went wrong" copy and the edge function answers 503, so mailbox providers
+  // retry the one-click POST.
+  { rpc: 'disable_event_alerts_by_token', migration: '20261108000098' },
+  // When stale restaurant hours were last re-read from Places (WEB-FEAT-079).
+  // Only the stale-refresh query in bulk-update-restaurants reads it; apply the
+  // migration before deploying that function or the refresh 42703s.
+  { table: 'restaurants', column: 'hours_checked_at', migration: '20261108000099' },
   // Business listing claims (WEB-ADS-009). The table read is cast, so only the
   // RPC is visible to this scanner; both are listed so the "landed" check asks
   // for them back once the types carry them. useBusinessClaim treats a 42P01 on
@@ -204,6 +229,28 @@ const PENDING_MIGRATIONS = [
   // pending window is safe: useForYouRail falls back to v1 plus the follow-up
   // events read on PGRST202 and stops asking for v2 for the session.
   { rpc: 'get_personalized_recommendations_v2', migration: '20261102000002' },
+  // One-click marketing unsubscribe for members with no newsletter row
+  // (WEB-ADS-035). email-unsubscribe's ?account= branch and /unsubscribe
+  // (src/lib/tokenOptOut.ts) call it, and no email carries an ?account= link
+  // until the sender slice, so the pending window answers 503 or the page's
+  // fixed error copy to a request nobody sends.
+  { rpc: 'marketing_unsubscribe_by_token', migration: '20261108000104' },
+  // The sender half of WEB-ADS-035: sendNurtureEmail mints a member's token
+  // through it. The pending window is safe because the call is non-fatal: it
+  // errors, the email keeps the sign-in-or-mailto footer, and no ?account=
+  // link is written until the function answers.
+  { rpc: 'ensure_marketing_unsubscribe_token', migration: '20261108000104' },
+  // One-click outreach opt-out for crm_leads prospects (AOS-PROSPECT-009).
+  // email-unsubscribe's ?outreach= branch and /unsubscribe call it. No email
+  // carries an ?outreach= link until ensure_outreach_unsubscribe_token below has
+  // answered, and that needs the same migration, so the pending window answers
+  // 503 or the page's fixed error copy to a request nobody sends.
+  { rpc: 'outreach_unsubscribe_by_token', migration: '20261115000101' },
+  // The sender half of AOS-PROSPECT-009: both outreach senders mint the lead's
+  // token through it before each step and DO NOT SEND without one, so in the
+  // pending window outreach is halted, not sent with a dead opt-out link.
+  // Apply the migration before deploying agent-runner or agent-outreach.
+  { rpc: 'ensure_outreach_unsubscribe_token', migration: '20261115000101' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];
@@ -774,6 +821,21 @@ function scanFile(file, schema, findings) {
  */
 const fingerprint = (f) => `${f.kind}|${f.file}|${f.name}`;
 
+/**
+ * WEB-QA-047: baseline entries the scan no longer produces. A stale entry is
+ * not harmless bookkeeping. Its fingerprint is kind|file|name, so when a file
+ * is deleted, or a hook stops calling an RPC, the entry keeps a pre-approved
+ * slot for that exact reference: put `user_sessions` back into
+ * useSessionTimeout.ts and the ratchet stays green. 21 such slots had built up
+ * by 2026-11-08, for five deleted files and two hooks that had dropped calls.
+ * Failing on them is what makes "this list must only ever SHRINK" hold without
+ * anyone remembering to run --update after a deletion.
+ */
+export function staleBaselineEntries(baseline, findings) {
+  const live = new Set(findings.map(fingerprint));
+  return [...baseline].filter((entry) => !live.has(entry)).sort();
+}
+
 function loadBaseline() {
   try {
     return new Set(JSON.parse(readFileSync(BASELINE, 'utf8')).findings);
@@ -1024,10 +1086,25 @@ function main() {
 
   const baseline = showAll ? new Set() : loadBaseline();
   const findings = all.filter((f) => !baseline.has(fingerprint(f)));
+  const stale = showAll ? [] : staleBaselineEntries(baseline, all);
 
   if (asJson) {
-    console.log(JSON.stringify({ findings, total: all.length, baselined: all.length - findings.length }, null, 2));
-    process.exit(findings.length ? 1 : 0);
+    console.log(
+      JSON.stringify({ findings, stale, total: all.length, baselined: all.length - findings.length }, null, 2)
+    );
+    process.exit(findings.length || stale.length ? 1 : 0);
+  }
+
+  if (stale.length) {
+    console.error(
+      `check-schema-usage: schema-baseline.json holds ${stale.length} entr${stale.length === 1 ? 'y' : 'ies'} ` +
+      'the scan no longer finds (the file was deleted or the reference removed):'
+    );
+    for (const entry of stale) console.error(`  ${entry}`);
+    console.error(
+      'Each one would let that exact reference come back without failing this check. ' +
+      'Run `npm run check-schema:update` and commit the smaller baseline.\n'
+    );
   }
 
   console.log(
@@ -1043,7 +1120,7 @@ function main() {
     if (!showAll && baseline.size) {
       console.log(`Baseline still holds ${baseline.size} finding(s) — run with --all to see them.`);
     }
-    process.exit(0);
+    process.exit(stale.length ? 1 : 0);
   }
 
   const drift = loadDriftAttribution();

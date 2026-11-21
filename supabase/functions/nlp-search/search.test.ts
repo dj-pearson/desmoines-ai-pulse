@@ -17,6 +17,7 @@ import {
   queryTokens,
   type SearchClient,
 } from "./search.ts";
+import { upcomingOrRunningFilter } from "./dateWindow.ts";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -263,6 +264,141 @@ Deno.test("free and kid-friendly reach attractions as columns", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Running events (WEB-FEAT-068)
+// ---------------------------------------------------------------------------
+
+interface EventRow {
+  id: string;
+  date: string;
+  end_date: string | null;
+}
+
+const DATE_COLUMNS = new Set(["date", "end_date"]);
+
+/** One `col.op.value` comparison on date or end_date. A NULL never matches. */
+function dateTerm(row: EventRow, col: string, op: string, value: string): boolean {
+  const cell = row[col as "date" | "end_date"];
+  if (cell == null) return false;
+  const a = Date.parse(cell);
+  const b = Date.parse(value);
+  if (op === "gte") return a >= b;
+  if (op === "lte") return a <= b;
+  throw new Error(`unhandled op ${op}`);
+}
+
+/**
+ * Apply every date/end_date predicate a recorded chain sent to a fixture row,
+ * the way PostgREST would: top-level filters and or= groups are ANDed. An or=
+ * group that names any other column (keywords, area, price) is left out, so
+ * this judges only the date window.
+ */
+function keptByDatePredicates(chain: Chain, row: EventRow): boolean {
+  for (const c of chain.calls) {
+    if ((c.method === "gte" || c.method === "lte") && DATE_COLUMNS.has(c.args[0] as string)) {
+      if (!dateTerm(row, c.args[0] as string, c.method, c.args[1] as string)) return false;
+    }
+    if (c.method === "or" && typeof c.args[0] === "string") {
+      const terms = c.args[0].split(",").map((t) => {
+        const [col, op, ...rest] = t.split(".");
+        return { col, op, value: rest.join(".") };
+      });
+      if (!terms.every((t) => DATE_COLUMNS.has(t.col))) continue;
+      if (!terms.some((t) => dateTerm(row, t.col, t.op, t.value))) return false;
+    }
+  }
+  return true;
+}
+
+// NOW is Thursday Sep 24 2026, 9:00 PM CDT.
+const RUN_ROWS: EventRow[] = [
+  // Opened Sunday, runs through Saturday night: day five of the fair.
+  { id: "fair-running", date: "2026-09-20T15:00:00Z", end_date: "2026-09-27T04:00:00Z" },
+  // Opened Thursday afternoon, runs through Sunday.
+  { id: "festival-opened-thursday", date: "2026-09-24T17:00:00Z", end_date: "2026-09-28T03:00:00Z" },
+  // A run that ended on Tuesday.
+  { id: "run-ended", date: "2026-09-18T15:00:00Z", end_date: "2026-09-23T03:00:00Z" },
+  // Last night's one-night show.
+  { id: "past-one-night", date: "2026-09-24T00:00:00Z", end_date: null },
+  // Tonight at 6 PM CDT.
+  { id: "tonight", date: "2026-09-24T23:00:00Z", end_date: null },
+  // Saturday at 8 PM CDT.
+  { id: "saturday", date: "2026-09-27T01:00:00Z", end_date: null },
+  // Next month's edition, also a run.
+  { id: "next-month-run", date: "2026-10-20T15:00:00Z", end_date: "2026-10-25T04:00:00Z" },
+];
+
+async function keptIds(canned: Record<string, unknown>): Promise<string[]> {
+  const intent = coerceIntent({ contentTypes: ["events"], confidence: 0.9, ...canned }, ALL, "x");
+  const { client, chains } = recordingClient();
+  await executePlan(client, planSearch(intent, ALL, NOW));
+  const events = chains.filter((c) => c.table === "events");
+  assert(events.length > 0, "events was never queried");
+  return RUN_ROWS.filter((r) => events.every((c) => keptByDatePredicates(c, r))).map((r) => r.id);
+}
+
+// WEB-SEO-063 moved the client's copy out of useEvents into
+// src/lib/eventRunningFilter.ts (useEvents imports and re-exports it), and this
+// guard kept reading useEvents, so it failed on every run from then on.
+Deno.test("upcomingOrRunningFilter is the same string as the client's (src/lib/eventRunningFilter.ts)", async () => {
+  const lib = await Deno.readTextFile(new URL("../../../src/lib/eventRunningFilter.ts", import.meta.url));
+  assert(
+    lib.includes("return `date.gte.${lowerBoundIso},end_date.gte.${lowerBoundIso}`;"),
+    "client upcomingOrRunningFilter changed; change dateWindow.ts to match",
+  );
+  const hook = await Deno.readTextFile(new URL("../../../src/hooks/useEvents.ts", import.meta.url));
+  assert(
+    hook.includes('import { upcomingOrRunningFilter } from "@/lib/eventRunningFilter";'),
+    "useEvents no longer takes upcomingOrRunningFilter from src/lib/eventRunningFilter.ts; point this guard at its copy",
+  );
+  assertEquals(upcomingOrRunningFilter("X"), "date.gte.X,end_date.gte.X");
+});
+
+Deno.test("no 'when': a run that started earlier and has not ended is kept", async () => {
+  assertEquals(await keptIds({ keywords: ["state fair"] }), [
+    "fair-running",
+    "festival-opened-thursday",
+    "tonight",
+    "saturday",
+    "next-month-run",
+  ]);
+});
+
+Deno.test("'today' is an overlap: day five of the fair is on today, next month is not", async () => {
+  assertEquals(await keptIds({ keywords: ["fair"], dateFilter: "today" }), [
+    "fair-running",
+    "festival-opened-thursday",
+    "tonight",
+  ]);
+});
+
+Deno.test("'this weekend' keeps a festival that opened Thursday", async () => {
+  // This weekend starts Friday 00:00 CDT, after the festival opened.
+  assertEquals(await keptIds({ keywords: ["festival"], dateFilter: "this_weekend" }), [
+    "fair-running",
+    "festival-opened-thursday",
+    "saturday",
+  ]);
+});
+
+Deno.test("the window and the keyword match are separate or= groups, never one", async () => {
+  const intent = coerceIntent(
+    { contentTypes: ["events"], keywords: ["fair"], dateFilter: "today", confidence: 0.9 },
+    ALL,
+    "fair today",
+  );
+  const { client, chains } = recordingClient((c) =>
+    has(c, "textSearch") ? { data: [], error: null } : { data: [{ id: "e1" }], error: null }
+  );
+  await executePlan(client, planSearch(intent, ALL, NOW));
+  const fallback = chains[chains.length - 1];
+  const ors = fallback.calls.filter((c) => c.method === "or").map((c) => c.args[0] as string);
+  assert(ors.includes("date.gte.2026-09-24T05:00:00.000Z,end_date.gte.2026-09-24T05:00:00.000Z"), "window group");
+  assert(ors.includes("title.ilike.%fair%,venue.ilike.%fair%"), "keyword group");
+  assert(has(fallback, "lte", (a) => a[0] === "date" && a[1] === "2026-09-25T04:59:59.999Z"), "window end");
+  assert(!has(fallback, "gte", (a) => a[0] === "date"), "a bare date floor drops running events");
+});
+
+// ---------------------------------------------------------------------------
 // appliedFilters never names a filter without a predicate
 // ---------------------------------------------------------------------------
 
@@ -343,7 +479,9 @@ const TABLE: Record<ContentType, string> = {
 /** Does this chain carry a predicate that implements this chip? */
 const PREDICATE: Record<AppliedFilterKey, (chain: Chain, f: AppliedFilter, tokens: string[]) => boolean> = {
   type: (chain) => has(chain, "select"),
-  when: (chain) => has(chain, "gte", (a) => a[0] === "date") && has(chain, "lte", (a) => a[0] === "date"),
+  when: (chain) =>
+    has(chain, "or", (a) => typeof a[0] === "string" && /^date\.gte\.[^,]+,end_date\.gte\.[^,]+$/.test(a[0])) &&
+    has(chain, "lte", (a) => a[0] === "date"),
   price: (chain) =>
     has(chain, "or", (a) => a[0] === FREE_PRICE_FILTER) ||
     has(chain, "in", (a) => a[0] === "price_range") ||

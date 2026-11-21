@@ -4,6 +4,8 @@
  * is_sponsored (+ optional sponsored_until expiry) — distinct from paid
  * campaign ads (ad_impressions/ad_clicks). They are clearly labeled, shown to
  * all tiers, and tracked under their own inventory class in user_analytics.
+ * The tracking needs analytics consent (WEB-LEGAL-014): without it nothing is
+ * written and no session id is stored. Labeling and ordering do not.
  *
  * NOTE: exports both the `isSponsoredActive`/`arrangeSponsored` names and the
  * `isActivelySponsored`/`arrangeSponsoredFirst` aliases so all call sites
@@ -12,6 +14,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { storage } from "@/lib/safeStorage";
 import { createLogger } from "@/lib/logger";
+import { analyticsGranted } from "@/lib/analyticsConsent";
 
 const log = createLogger("sponsored");
 const SESSION_KEY = "dmi-session-id";
@@ -76,6 +79,7 @@ export function logSponsoredImpression(
   contentType: string,
   contentId: string
 ): void {
+  if (!analyticsGranted()) return;
   const key = `${getSessionId()}:${contentType}:${contentId}`;
   if (seenImpressions.has(key)) return;
   seenImpressions.add(key);
@@ -83,6 +87,7 @@ export function logSponsoredImpression(
 }
 
 export function logSponsoredClick(contentType: string, contentId: string): void {
+  if (!analyticsGranted()) return;
   writeSponsoredEvent("sponsored_listing_click", contentType, contentId);
 }
 

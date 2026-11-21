@@ -1,5 +1,4 @@
 import Foundation
-import EventKit
 
 /// ViewModel for the event detail screen.
 @MainActor
@@ -21,6 +20,13 @@ final class EventDetailViewModel {
     /// prefetched content but says so, rather than presenting a dead listing
     /// as live.
     private(set) var isUnavailable = false
+
+    /// The archive sweep retired this row: the event happened, so the screen
+    /// shows it as a past event rather than as gone, the way the web's
+    /// EventDetails renders `archived` (IOS-AUDIT-001). A series screen opens
+    /// archived past editions directly, and the visible re-read refuses them,
+    /// which is what put "no longer available" over a real past event.
+    private(set) var isArchived = false
 
     private let service: EventDetailProviding
     private let favorites = FavoritesService.shared
@@ -45,11 +51,24 @@ final class EventDetailViewModel {
                 relatedEvents = try await service.fetchRelatedEvents(eventId: id, category: category)
             }
         } catch {
-            errorMessage = error.localizedDescription
-            if Self.isNotFound(error) { isUnavailable = true }
+            if Self.isNotFound(error), let archived = await archivedRow(id: id) {
+                event = archived
+                isArchived = true
+                await loadRelated(id: id, category: archived.category)
+            } else {
+                errorMessage = error.localizedDescription
+                if Self.isNotFound(error) { isUnavailable = true }
+            }
         }
 
         isLoading = false
+    }
+
+    /// The web's second look (classifyUnlisted): is the id an archived row?
+    /// A failed look counts as "no", which is what the screen said before
+    /// there was a second look at all.
+    private func archivedRow(id: String) async -> Event? {
+        try? await service.fetchArchivedEvent(id: id)
     }
 
     /// Show a pre-fetched event immediately, then refresh it behind the scenes.
@@ -103,11 +122,21 @@ final class EventDetailViewModel {
             fresh = try await service.fetchEvent(id: id)
         } catch {
             // Only "no such row" is news. Anything else (offline, a timeout)
-            // stays silent, for the reason above.
-            if Self.isNotFound(error) { isUnavailable = true }
+            // stays silent, for the reason above. "No such row" is then either
+            // a past event the archive sweep retired or genuinely gone.
+            guard Self.isNotFound(error) else { return }
+            if let archived = await archivedRow(id: id) {
+                isArchived = true
+                isUnavailable = false
+                if Self.contentDiffers(archived, from: event) { event = archived }
+            } else {
+                isArchived = false
+                isUnavailable = true
+            }
             return
         }
         isUnavailable = false
+        isArchived = false
         guard Self.contentDiffers(fresh, from: event) else { return }
         event = fresh
     }
@@ -178,54 +207,27 @@ final class EventDetailViewModel {
 
     private(set) var calendarAdded = false
     private(set) var calendarError: String?
+    /// The last failure was a permission denial, which only Settings fixes.
+    private(set) var calendarOffersSettings = false
 
-    /// Add the event to the user's native iOS Calendar using EventKit.
+    /// Add the event to the user's native iOS Calendar using EventKit. The
+    /// entry is built by EventCalendarEntry, shared with the Saved tab
+    /// (IOS-AUDIT-FEAT-039).
     func addToCalendar() async {
-        guard let event, let date = event.parsedDate else {
-            calendarError = "Event date is not available."
+        guard let event else {
+            calendarError = CalendarAddResult.noDate.errorMessage
             return
         }
-
-        let store = EKEventStore()
-
-        do {
-            let granted = try await store.requestWriteOnlyAccessToEvents()
-            guard granted else {
-                calendarError = "Calendar access was denied. You can enable it in Settings."
-                return
-            }
-
-            let calEvent = EKEvent(eventStore: store)
-            calEvent.title = event.title
-            // Pinned to Des Moines time, and an all-day entry when there is no
-            // real start time: a TBA row used to become a 7:31pm two-hour block
-            // (IOS-DD-EVENTS-05). Three hours when no end is known, as the web
-            // assumes.
-            calEvent.timeZone = DesMoinesTime.timeZone
-            if event.hasSpecificTime {
-                calEvent.startDate = date
-                calEvent.endDate = event.parsedEndDate.flatMap { $0 > date ? $0 : nil }
-                    ?? date.addingTimeInterval(3 * 3600)
-            } else {
-                let dayStart = DesMoinesTime.calendar.startOfDay(for: date)
-                calEvent.isAllDay = true
-                calEvent.startDate = dayStart
-                calEvent.endDate = event.parsedEndDate.flatMap { $0 > dayStart ? $0 : nil } ?? dayStart
-            }
-            calEvent.location = event.displayLocation
-            calEvent.notes = event.displayDescription
-            calEvent.calendar = store.defaultCalendarForNewEvents
-
-            try store.save(calEvent, span: .thisEvent)
-            calendarAdded = true
-        } catch {
-            calendarError = error.localizedDescription
-        }
+        let result = await EventCalendarWriter.add(event)
+        calendarAdded = result == .added
+        calendarError = result.errorMessage
+        calendarOffersSettings = result.offersSettings
     }
 
     func resetCalendarState() {
         calendarAdded = false
         calendarError = nil
+        calendarOffersSettings = false
     }
 
     // MARK: - Share

@@ -253,7 +253,7 @@ struct BestOfCategoryView: View {
 
     private func nomineeRow(_ nominee: VoteNominee) -> some View {
         HStack(spacing: 12) {
-            CachedAsyncImage(url: nominee.imageUrl) {
+            CachedAsyncImage(url: nominee.imageUrl, blurUp: false) {
                 ZStack {
                     Rectangle().fill(Color.secondary.opacity(0.15))
                     Image(systemName: nominee.type == "restaurant" ? "fork.knife" : "mountain.2.fill")
@@ -396,7 +396,7 @@ struct BestOfCategoryView: View {
         return HStack(spacing: 12) {
             rankBadge(rank)
 
-            CachedAsyncImage(url: result.imageUrl) {
+            CachedAsyncImage(url: result.imageUrl, blurUp: false) {
                 ZStack {
                     Rectangle().fill(Color.secondary.opacity(0.15))
                     Text(result.placeholderEmoji).font(.title3)

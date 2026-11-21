@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { SecurityUtils } from "@/lib/securityUtils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const FLAG_KEY = "weekly_digest_enabled";
 

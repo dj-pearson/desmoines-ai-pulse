@@ -483,6 +483,27 @@ final class RestaurantsViewModel {
         resetAndFetch()
     }
 
+    /// A /restaurants/<landing> link (IOS-AUDIT-FEAT-043): exactly the filters
+    /// the page names, replacing whatever the list had, so "open now" from a
+    /// friend is not ANDed with a cuisine picked last week. Unlike tapping a
+    /// preset it never toggles off: the same link twice shows the same list.
+    func applyLink(_ link: RestaurantLinkFilter) {
+        isBulkUpdating = true
+        selectedCuisines = []
+        selectedPriceRanges = []
+        selectedLocations = []
+        selectedDietary = link.diet.map { [$0] } ?? []
+        minRating = 0
+        featuredOnly = false
+        newOpeningsOnly = link.newOpenings
+        searchText = ""
+        sortBy = .popularity
+        showOpenNowOnly = link.openNow
+        activePreset = link.preset
+        isBulkUpdating = false
+        resetAndFetch()
+    }
+
     private func resetAndFetch() {
         // Bulk updates (clearFilters / applyPreset) mutate many properties in
         // one go; suppress their per-property fetches and fire one at the end.

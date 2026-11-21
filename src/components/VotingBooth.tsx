@@ -19,7 +19,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { handleError, ErrorSeverity } from '@/lib/errorHandler';
 import { storage } from '@/lib/safeStorage';
-import { isVisitableStatus } from '@/lib/restaurantHours';
+import { isVisitableStatus } from '@/lib/restaurantStatus';
 import {
   VOTE_CHANGE_AVAILABLE,
   VOTES_FINAL_COPY,

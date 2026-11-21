@@ -35,6 +35,13 @@ const WEB_PERIOD_END = '2026-11-25T12:00:00Z';
 const IOS_PERIOD_END = '2027-01-14T12:00:00Z';
 const TRIAL_END = '2026-10-02T12:00:00Z';
 
+// The browser's today, inside the web row's billing period. Without it the
+// dates above are measured against the real calendar: the web period ends
+// 2026-11-25 and the past_due test's grace window closes 14 days later, so
+// "Renews November 25" would describe a lapsed plan with no code change
+// (WEB-QA-044).
+const NOW = new Date('2026-11-01T17:00:00Z');
+
 interface WebRowOptions {
   status?: 'active' | 'trialing' | 'past_due';
   cancelAtPeriodEnd?: boolean;
@@ -211,6 +218,10 @@ async function routePortalBackend(page: Page, state: { rows: Row[]; upcoming: nu
 const portal = (page: Page) => page.locator('#subscription-portal');
 
 test.describe('/subscription (pricing plan WP3)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+  });
+
   test('web Insider plus iOS VIP: Stripe controls and dates come from the web row', async ({ page }) => {
     await seedSession(page);
     const backend = await routePortalBackend(page, { rows: [webRow(), iosVipRow()], upcoming: 4.99 });

@@ -9,10 +9,20 @@
  * These assert the migration source and that no client started calling them.
  */
 
-import { assert } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
+/**
+ * Strip comments before matching. Client code documents what these RPCs do
+ * (reminderAvailability.ts mirrors get_pending_reminders' windows), and a
+ * comment naming the function is not a call. Matching raw text made this test
+ * fail on seven files with no call in them, and because a failing step stops
+ * its CI job, every Deno step after it went unrun (WEB-QA-053).
+ */
+const codeOnly = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n');
+
 const MIGRATION = 'supabase/migrations/20261015000006_revoke_public_reminder_rpcs.sql';
 
 const SIGNATURES = [
@@ -48,11 +58,13 @@ Deno.test('the only caller is the service-role edge function', async () => {
   const hits: string[] = [];
   const walk = async (dir: URL) => {
     for await (const e of Deno.readDir(dir)) {
-      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      // __tests__ and *.test.ts read the migration SQL to pin the RPC's body;
+      // they run in vitest, never in a client, so they are not callers.
+      if (e.name === 'node_modules' || e.name === '__tests__' || e.name.startsWith('.')) continue;
       const child = new URL(e.name + (e.isDirectory ? '/' : ''), dir);
       if (e.isDirectory) await walk(child);
-      else if (/\.(tsx?|swift|kt)$/.test(e.name) && !e.name.endsWith('types.ts')) {
-        const text = await Deno.readTextFile(child);
+      else if (/\.(tsx?|swift|kt)$/.test(e.name) && !e.name.endsWith('types.ts') && !/\.test\.tsx?$/.test(e.name)) {
+        const text = codeOnly(await Deno.readTextFile(child));
         if (/get_pending_reminders|mark_reminder_sent/.test(text)) hits.push(child.pathname);
       }
     }

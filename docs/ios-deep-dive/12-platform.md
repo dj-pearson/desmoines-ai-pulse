@@ -60,7 +60,8 @@ pages, every claimed path routes, `/search?q=`, `.web`, exact host, auth-callbac
 
 - P12-D1: the `aps-environment` entitlement, an APNs sender and a contextual push pre-prompt. Push stays
   behind `Config.enablePushNotifications = false`; this change only makes the backend ready.
-- P12-D5: `/neighborhoods/<slug>` opens the Neighborhoods hub, not the named neighborhood.
+- P12-D5: done 2026-11-07 (IOS-AUDIT-FEAT-038). `/neighborhoods/<slug>` opens that guide; a slug with
+  no native guide still opens the hub.
 - P12-D8: a body-size cap and a corner retry button for `CachedAsyncImage`.
 - P12-D9: `log-error` still trusts `userId`. The web sends it with only the anon key, and a forged id
   only inflates `affectedUsers`.

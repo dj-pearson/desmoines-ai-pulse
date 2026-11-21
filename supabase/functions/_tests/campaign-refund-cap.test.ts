@@ -11,7 +11,7 @@
  * refunds page read the payments table (not in production) and sent a body
  * the function rejects, so it could not refund anything.
  */
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
 import { refundDecision, refundNoticeText } from '../_shared/campaignPayment.ts';
 
 const REPO = new URL('../../../', import.meta.url);

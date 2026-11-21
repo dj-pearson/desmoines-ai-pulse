@@ -136,6 +136,21 @@ describe("selectNearbyEvents", () => {
     }
   });
 
+  it("keeps a run that started earlier and is still going, not one that is over (WEB-FEAT-062)", () => {
+    const running = ev("fair", 0.001, "2026-09-28T14:00:00Z", { end_date: "2026-10-05T03:00:00Z" });
+    const over = ev("over", 0.001, "2026-09-20T14:00:00Z", { end_date: "2026-09-30T03:00:00Z" });
+    const startedTonight = ev("started", 0.001, "2026-10-01T16:30:00Z");
+    expect(isLinkableUpcomingEvent(running, now)).toBe(true);
+    expect(isLinkableUpcomingEvent(over, now)).toBe(false);
+    expect(isLinkableUpcomingEvent(startedTonight, now)).toBe(false);
+    expect(isLinkableUpcomingEvent({ ...running, is_hidden: true }, now)).toBe(false);
+    expect(selectNearbyEvents(ORIGIN, [over, running, ...rows], { now }).map((e) => e.id)).toEqual([
+      "fair",
+      "tonight",
+      "a",
+    ]);
+  });
+
   it("returns nothing without coordinates", () => {
     expect(selectNearbyEvents({ latitude: undefined, longitude: undefined }, rows, { now })).toEqual([]);
   });
@@ -157,7 +172,7 @@ describe("scan projections", () => {
       expect(r.has(c)).toBe(true);
     }
     const e = cols(NEARBY_EVENT_SCAN_COLUMNS);
-    for (const c of ["id", "latitude", "longitude", "date", "is_merged", "is_hidden", "archived_at"]) {
+    for (const c of ["id", "latitude", "longitude", "date", "end_date", "is_merged", "is_hidden", "archived_at"]) {
       expect(e.has(c)).toBe(true);
     }
     for (const heavy of ["description", "original_description", "enhanced_description", "name", "title"]) {

@@ -7,6 +7,7 @@ import { Database } from "@/integrations/supabase/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { countOption, type CountMode } from "@/lib/listCount";
 import { centralDayStartUtcISO } from "@/lib/timezone";
+import { upcomingOrRunningFilter } from "@/lib/eventRunningFilter";
 
 const logger = createLogger("useEvents");
 
@@ -70,6 +71,10 @@ export function eventsLowerBoundISO(): string {
   return centralDayStartUtcISO();
 }
 
+// Moved to src/lib/eventRunningFilter.ts so pure modules can share it;
+// re-exported for the callers that import it from here.
+export { upcomingOrRunningFilter };
+
 /**
  * Standalone fetcher so TanStack Query owns caching, dedup and retries
  * (WEB-PERF-013).
@@ -79,7 +84,7 @@ export function eventsLowerBoundISO(): string {
  * cached across navigations, and a filter change could leave an in-flight
  * response from the previous filters to land last and win.
  */
-async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
+export async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
   const today = eventsLowerBoundISO();
   logger.info('fetchEvents', 'Fetching events', { from: today });
 
@@ -94,7 +99,9 @@ async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
       withAdminColumns(EVENT_LIST_COLUMNS, filters.includeAdminFields),
       countOption(filters.countMode ?? "exact")
     )
-    .gte("date", today) // Today (Central) and later
+    // Starts today (Central) or later, or is still running. The only or= on
+    // this query; a second .or() would be a second param.
+    .or(upcomingOrRunningFilter(today))
     .neq("is_merged", true) // Hide rows merged into a duplicate (WEB-AUTO-005)
     .neq("is_hidden", true) // Hide soft-hidden stale events (WEB-AUTO-006)
     // WEB-BE-034. THERE ARE TWO UNPUBLISH SWITCHES ON `events` AND THIS SURFACE

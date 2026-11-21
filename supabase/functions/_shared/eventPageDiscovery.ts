@@ -31,6 +31,7 @@
 import type { AdapterEvent } from "./domain-adapters/types.ts";
 import { extractEventsFromJsonLd, normalizeJsonLdDate } from "./jsonLdEvents.ts";
 import type { EventSourceProfile } from "./eventSourceProfiles.ts";
+import { fetchPublicUrl } from "./fetchGuard.ts";
 import { hostMatches, isDetailPath } from "./eventSourceProfiles.ts";
 
 export const BROWSER_HEADERS: Record<string, string> = {
@@ -480,7 +481,10 @@ async function fetchText(url: string): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DETAIL_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
+    // WEB-SEC-060. Detail links are read off the venue's own listing page, so
+    // they are somebody else's choice; fetch() also followed their redirects
+    // onto internal hosts. A refused host or hop throws into the catch below.
+    const res = await fetchPublicUrl(url, {
       headers: BROWSER_HEADERS,
       signal: controller.signal,
     });

@@ -52,18 +52,8 @@ import { InteractiveMap } from '@/components/InteractiveMap';
 ```
 
 ### Address Autocomplete
-```typescript
-import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 
-<LocationAutocomplete
-  value={address}
-  onChange={(value) => setAddress(value)}
-  onSelect={(result) => {
-    setCoords({ lat: result.lat, lng: result.lon });
-  }}
-  showCurrentLocation={true}
-/>
-```
+`LocationAutocomplete` was deleted in WEB-UX-072: no page rendered it. Its `useGeocoding()` and `validateAddress()` went with it; git history has them if an address field needs them.
 
 ### Geofencing
 ```typescript
@@ -149,24 +139,6 @@ interface InteractiveMapProps {
 }
 ```
 
-### LocationAutocomplete
-```typescript
-interface LocationAutocompleteProps {
-  value?: string;                  // Current input value
-  onChange?: (value: string, result?: AddressResult) => void;
-  onSelect?: (result: AddressResult) => void;
-  placeholder?: string;            // Input placeholder
-  className?: string;              // Additional CSS classes
-  disabled?: boolean;              // Disable input
-  showCurrentLocation?: boolean;   // Show "Use Current Location" button
-  onCurrentLocationClick?: (coords: { latitude: number; longitude: number }) => void;
-  debounceMs?: number;             // Debounce delay (default 500)
-  minCharacters?: number;          // Min chars to trigger search (default 3)
-  maxResults?: number;             // Max autocomplete results (default 5)
-  filterToRegion?: string;         // Filter results to region (e.g., 'Iowa')
-}
-```
-
 ## Utility Functions
 
 ### Distance Calculations
@@ -183,18 +155,6 @@ const text = getDistanceDisplay(miles);                   // "5.2 mi away"
 import { formatSpeed } from '@/hooks/useLocationTracking';
 
 const speedText = formatSpeed(metersPerSecond); // "25.3 mph"
-```
-
-### Address Validation
-```typescript
-import { validateAddress } from '@/components/LocationAutocomplete';
-
-const result = validateAddress(address);
-if (result.isValid) {
-  console.log('Standardized:', result.standardized);
-} else {
-  console.log('Errors:', result.errors);
-}
 ```
 
 ## Environment Variables

@@ -16,7 +16,7 @@
  * review, because each file looks self-consistent.
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const DIR = 'supabase/functions/_shared/domain-adapters/';

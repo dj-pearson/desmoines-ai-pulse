@@ -99,15 +99,22 @@ function placeLabel(event: CardEvent): string | null {
 }
 
 /**
- * The card's one time line. A run under way ("Runs through Sun, Sep 27") and a
- * time range ("7:00 - 10:00 PM CT") replace the start time; a multi-day run
- * that hasn't started keeps it and adds the dates ("10:00 AM CT, Sep 22 -
- * Sep 27").
+ * The card's time line, and the dates of a run that hasn't started. A run
+ * under way ("Runs through Sun, Sep 27") and a time range ("7:00 - 10:00 PM
+ * CT") replace the start time on the one line. A multi-day run that hasn't
+ * started keeps its start time there and puts the dates ("Sep 22 - Sep 27")
+ * on a line of their own: on the meta line the two together were about 185px
+ * that never shrink, which left the venue under 20px at 320px (WEB-UX-080).
  */
-function leadTimeWords(timeLabel: string, runLabel: string | null): string {
-  if (!runLabel) return timeLabel;
-  if (runLabel.startsWith('Runs through') || runLabel.endsWith(' CT')) return runLabel;
-  return `${timeLabel}, ${runLabel}`;
+function leadTimeWords(
+  timeLabel: string,
+  runLabel: string | null,
+): { lead: string; runDates: string | null } {
+  if (!runLabel) return { lead: timeLabel, runDates: null };
+  if (runLabel.startsWith('Runs through') || runLabel.endsWith(' CT')) {
+    return { lead: runLabel, runDates: null };
+  }
+  return { lead: timeLabel, runDates: runLabel };
 }
 
 function SocialEventCardComponent({
@@ -172,7 +179,7 @@ function SocialEventCardComponent({
   // is only for a row whose end_date runs past its start day.
   const timeLabel = eventTimeLabel(event);
   const runLabel = eventRunLabel(event, now);
-  const leadTime = leadTimeWords(timeLabel, runLabel);
+  const { lead: leadTime, runDates } = leadTimeWords(timeLabel, runLabel);
 
   const dateParts = getDateParts();
   const Heading = headingLevel === 4 ? 'h4' : 'h3';
@@ -214,6 +221,9 @@ function SocialEventCardComponent({
   return (
     <Card
       ref={cardRef}
+      // The card root for layout specs (events-hub-list). Not data-testid:
+      // vite.config.ts strips that from every build.
+      data-event-card=""
       className={`group relative isolate overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
         featured ? 'md:col-span-2 md:row-span-2' : ''
       } ${sponsoredActive ? 'ring-2 ring-amber-400' : ''}`}
@@ -329,22 +339,33 @@ function SocialEventCardComponent({
 
           {/* Time and place first, the way a local reads a listing:
               "7:30 PM CT - Wooly's - East Village" (WP3 item 3). */}
-          <p className="flex min-w-0 items-center text-sm text-muted-foreground">
-            <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
-            <span className="flex-shrink-0 font-medium text-foreground">{leadTime}</span>
-            {venueName && (
-              <>
-                <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
-                <span className="truncate">{venueName}</span>
-              </>
+          <div>
+            <p className="flex min-w-0 items-center text-sm text-muted-foreground">
+              <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
+              <span className="flex-shrink-0 font-medium text-foreground">{leadTime}</span>
+              {venueName && (
+                <>
+                  <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
+                  <span className="min-w-0 truncate">{venueName}</span>
+                </>
+              )}
+              {/* The venue is the half a reader acts on, so the district gives
+                  way first: it shrinks three times as fast and may clip to
+                  nothing, and its dot sits inside it so none is left dangling.
+                  It used to be flex-shrink-0, which cut a long venue to "Fi..."
+                  at 375px and to zero width at 320px (WEB-UX-079). */}
+              {place && (
+                <span className="min-w-0 shrink-[3] truncate">
+                  <span aria-hidden="true" className="mx-1.5">&middot;</span>
+                  {place}
+                </span>
+              )}
+            </p>
+            {runDates && (
+              // Lined up under the time, past the clock icon (14px + 8px).
+              <p className="pl-[1.375rem] text-sm text-muted-foreground">{runDates}</p>
             )}
-            {place && (
-              <>
-                <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
-                <span className="flex-shrink-0">{place}</span>
-              </>
-            )}
-          </p>
+          </div>
 
           <Heading className="text-lg font-bold leading-tight text-foreground line-clamp-2">
             <Link

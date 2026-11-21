@@ -114,23 +114,50 @@ const counts = {};
  * URLs and external logos have nothing to transform. This one is a gate
  * because the set is empty and must stay empty - a ratchet on zero is a gate
  * with extra steps and a baseline file nobody reads.
+ *
+ * WEB-PERF-041 widened it from src/pages to every file this script scans. The
+ * pages-only scope let three slip through in src/components: the map popup
+ * (every restaurant and playground pin), the submitted-event review dialog and
+ * the article editor's featured-image preview. All three are converted, so the
+ * wider set is empty too, and a component is where the next one would land.
  */
 const DB_IMAGE_SRC = /\bsrc=\{[^}]*\b(image_url|featured_image_url|cover_image|photo_url|thumbnail_url)\b/;
-const dbImageInPages = [];
+const dbImageSites = [];
 let clsRisk = 0;
 const clsSites = [];
 
+/**
+ * WEB-PERF-058: a HARD rule on an image URL that no route serves.
+ *
+ * GuidesPage pointed eight cards at /api/placeholder/400/250. There is no
+ * /api route on this site: _routes.json sends the request to
+ * the Pages middleware and the SPA fallback answers 200 with the homepage HTML,
+ * so each card downloaded a whole document and rendered a broken image. Every
+ * other check stayed green because the <img> tags existed. Scanned in every
+ * .tsx under src/, admin included and comments stripped, because the URL lived
+ * in a data constant, not in the tag.
+ */
+const DEAD_IMAGE_URL = /["'`]\/api\/placeholder\b/;
+const deadUrlSites = [];
+
 for (const file of walk(SRC)) {
   const rel = relative(ROOT, file).replace(/\\/g, '/');
+  const raw = readFileSync(file, 'utf8');
+  if (DEAD_IMAGE_URL.test(raw)) {
+    const stripped = stripComments(raw);
+    stripped.split('\n').forEach((text, i) => {
+      if (DEAD_IMAGE_URL.test(text)) deadUrlSites.push(`${rel}:${i + 1}`);
+    });
+  }
   if (EXCLUDE.test(relative(ROOT, file))) continue;
-  const source = stripComments(readFileSync(file, 'utf8'));
+  const source = stripComments(raw);
   const tags = imgTags(source);
   if (tags.length === 0) continue;
   counts[rel] = tags.length;
 
   for (const tag of tags) {
-    if (rel.startsWith('src/pages/') && DB_IMAGE_SRC.test(tag.text)) {
-      dbImageInPages.push(`${rel}:${source.slice(0, tag.index).split('\n').length}`);
+    if (DB_IMAGE_SRC.test(tag.text)) {
+      dbImageSites.push(`${rel}:${source.slice(0, tag.index).split('\n').length}`);
     }
 
     const sized = /\bwidth=/.test(tag.text) && /\bheight=/.test(tag.text);
@@ -200,15 +227,27 @@ console.log(
     `(baseline ${baseline.total}); ${clsRisk} reserve no height (baseline ${baseline.clsRisk ?? 0}).`,
 );
 
-if (dbImageInPages.length > 0) {
+if (dbImageSites.length > 0) {
   console.error(
-    `\nX ${dbImageInPages.length} raw <img> in src/pages reads a database image column:\n`,
+    `\nX ${dbImageSites.length} raw <img> reads a database image column:\n`,
   );
-  for (const site of dbImageInPages) console.error(`  ${site}`);
+  for (const site of dbImageSites) console.error(`  ${site}`);
   console.error(
     '\nThese are the ones a transform srcset pays for - the column holds a Supabase\n' +
       'Storage or /media/ URL and the original is served at full size. Use\n' +
-      '<OptimizedImage>; there is no ratchet entry for this case (WEB-PERF-037 AC3).\n',
+      '<OptimizedImage>; there is no ratchet entry for this case (WEB-PERF-037 AC3,\n' +
+      'widened from src/pages to every scanned file by WEB-PERF-041).\n',
+  );
+  process.exit(1);
+}
+
+if (deadUrlSites.length > 0) {
+  console.error(`\nX ${deadUrlSites.length} image URL(s) point at /api/placeholder, which no route serves:\n`);
+  for (const site of deadUrlSites) console.error(`  ${site}`);
+  console.error(
+    '\nThe SPA fallback answers that path 200 with the homepage HTML, so the\n' +
+      'browser downloads a whole document and draws a broken image (WEB-PERF-058).\n' +
+      'Use a real image through <OptimizedImage>, or draw the panel without one.\n',
   );
   process.exit(1);
 }

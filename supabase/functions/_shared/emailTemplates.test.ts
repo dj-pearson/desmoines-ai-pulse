@@ -1,7 +1,7 @@
 /**
  *   deno test --allow-env supabase/functions/_shared/emailTemplates.test.ts
  */
-import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   adminNewCampaignAlert,
   htmlToText,

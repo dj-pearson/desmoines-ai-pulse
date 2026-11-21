@@ -8,7 +8,7 @@
  * in that state. requireAdminOrApiKey accepts the key AND an admin JWT.
  */
 
-import { assert } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 

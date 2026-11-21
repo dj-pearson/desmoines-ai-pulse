@@ -5,6 +5,7 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.RestaurantsResponse
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import io.mockk.coEvery
 import io.mockk.every
@@ -21,6 +22,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -55,7 +58,33 @@ class RestaurantsViewModelStaleFetchTest {
     private fun response(vararg ids: String) =
         Result.success(RestaurantsResponse(ids.map(::restaurant), ids.size, false))
 
-    private fun vm() = RestaurantsViewModel(repository, networkMonitor, billingService)
+    private val deepLinkHandler = DeepLinkHandler()
+
+    private fun vm() = RestaurantsViewModel(repository, networkMonitor, billingService, deepLinkHandler)
+
+    @Test
+    fun `an open-now link turns Open now on once and is consumed`() = runTest(testDispatcher) {
+        coEvery { repository.fetchRestaurants(any()) } returns response("A")
+        deepLinkHandler.publish(DeepLinkHandler.Destination.RestaurantsOpenNow)
+
+        val viewModel = vm()
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.showOpenNowOnly)
+        assertFalse(deepLinkHandler.pendingRestaurantsOpenNow.value)
+    }
+
+    @Test
+    fun `without a link the Dining tab opens unfiltered`() = runTest(testDispatcher) {
+        coEvery { repository.fetchRestaurants(any()) } returns response("A")
+
+        val viewModel = vm()
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.showOpenNowOnly)
+    }
 
     @Test
     fun `a slow superseded refresh does not overwrite the latest result`() = runTest(testDispatcher) {

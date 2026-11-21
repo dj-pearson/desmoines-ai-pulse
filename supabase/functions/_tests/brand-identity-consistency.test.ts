@@ -13,7 +13,7 @@
  * same driving directions.
  */
 
-import { assert, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
@@ -62,7 +62,15 @@ Deno.test('entity ids are on the canonical origin', async () => {
   );
   assert(/buildRestaurantSchema\(restaurant, \{\s*url: canonicalUrl,/.test(rd));
   const meta = codeOnly(await read('src/lib/restaurantMeta.ts'));
-  assert(/"@id": ctx\.url,/.test(meta), 'the node id is the canonical url it was given');
+  // WEB-SEO-073 routed the id through entityNodeId so the edge shell emits the
+  // same one; for a restaurant that helper must still return the url unchanged.
+  assert(/"@id": entityNodeId\("restaurant", ctx\.url\),/.test(meta), 'the node id is built from the canonical url it was given');
+  const ids = codeOnly(await read('src/lib/schemaNodeIds.ts'));
+  assert(/\brestaurant: "",/.test(ids), 'the restaurant node id is the bare canonical url, no fragment');
+  assert(
+    /return `\$\{pageUrl\}\$\{ENTITY_NODE_FRAGMENT\[kind\]\}`;/.test(ids),
+    'entityNodeId appends only the fragment to the url it was given',
+  );
 
   const menu = codeOnly(await read('src/components/schema/MenuSchema.tsx'));
   assert(/getCanonicalUrl\(`\/restaurants\/\$\{restaurantSlug\}`\)/.test(menu));
@@ -116,16 +124,15 @@ Deno.test('event pages emit no head-only FAQPage', async () => {
   assertFalse(/FAQPage/.test(seo), 'no FAQPage may be built here');
   assertFalse(/faqSchema/.test(seo));
 
-  // EventDetails now renders the event's own FAQ visibly, and only when it has
-  // one: shown AND marked up, which is the condition the removed FAQPage never
-  // met. What must not come back is markup without a visible section.
+  // EventDetails renders the event's geo_faq visibly through EventAiAnswers.
+  // That text is model-written (generate-seo-content), so it is labelled
+  // AI-assisted and carries no FAQPage, the restaurant page's rule (WEB-SEO-059).
   const details = codeOnly(await read('src/pages/EventDetails.tsx'));
-  if (/<FAQSection/.test(details)) {
-    assert(
-      /\{readGeoFaq\(event\.geo_faq\)\.length > 0 && \(/.test(details),
-      'the FAQ section must render only when the event has questions',
-    );
-  }
+  assertFalse(/<FAQSection/.test(details), 'geo_faq must not go through FAQSection');
+  assert(/<EventAiAnswers/.test(details), 'geo_faq is rendered by EventAiAnswers');
+  const answers = codeOnly(await read('src/components/events/EventAiAnswers.tsx'));
+  assertFalse(/FAQPage|ld\+json|FAQSection/.test(answers), 'EventAiAnswers emits no schema');
+  assert(/AIDisclosureBadge/.test(answers), 'and it is labelled');
 
   // The drift guard has to agree, or it fails on a component that no longer emits.
   const guard = codeOnly(await read('scripts/check-duplicate-schema.mjs'));

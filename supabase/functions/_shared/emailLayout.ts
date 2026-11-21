@@ -41,6 +41,45 @@ export interface EmailRecipient {
   /** Token from newsletter_subscribers.unsubscribe_token, if known. */
   unsubscribeToken?: string | null;
   /**
+   * WEB-FEAT-059: the user_event_reminders.id this email was sent for. When
+   * set, the footer link and the one-click header stop the remaining
+   * reminders for that event (cancel_event_reminders_by_token) instead of
+   * unsubscribing the newsletter, and unsubscribeToken is ignored. A reminder
+   * is something the reader asked for one event at a time; the inbox
+   * "Unsubscribe" button on one should not end every marketing email.
+   */
+  reminderToken?: string | null;
+  /**
+   * WEB-FEAT-073: a saved_searches.id belonging to the recipient, on a
+   * saved-search alert email. When set (and reminderToken is not), the footer
+   * link and the one-click header turn off that user's event alerts
+   * (disable_event_alerts_by_token) instead of unsubscribing the newsletter,
+   * and unsubscribeToken is ignored. Same reasoning as reminderToken: the
+   * inbox button on an alert should stop alerts, not every marketing email.
+   */
+  alertsToken?: string | null;
+  /**
+   * WEB-ADS-035: marketing_unsubscribe_tokens.token for a member with no
+   * newsletter row. Used only when there is no reminder, alerts or newsletter
+   * token: the footer links to /unsubscribe?account= and the one-click header
+   * to email-unsubscribe?account=, both running marketing_unsubscribe_by_token,
+   * which writes the same 'unsubscribe' suppression the newsletter token does.
+   * Without it a member's marketing mail had only a sign-in link and mailto.
+   */
+  accountToken?: string | null;
+  /**
+   * AOS-PROSPECT-009: outreach_unsubscribe_tokens.token for a crm_leads
+   * prospect on a partnership (outreach) email. Checked right after the
+   * reminder and alerts tokens and before the newsletter and account tokens:
+   * the footer links to /unsubscribe?outreach= and the one-click header to
+   * email-unsubscribe?outreach=, both running outreach_unsubscribe_by_token,
+   * which suppresses outreach to that address and leaves the newsletter alone.
+   * A prospect never signed up for anything, so the footer must not say they
+   * did; before this the outreach footer linked to /unsubscribe with no token,
+   * which shows "invalid link".
+   */
+  outreachToken?: string | null;
+  /**
    * Optional per-email unsubscribe path. If the link should cancel a specific
    * kind of email (e.g. event reminders only) rather than all marketing,
    * pass `?tab=settings` or `/profile?tab=settings`.
@@ -78,10 +117,22 @@ export interface RenderedEmail {
  * page when we don't have a token yet.
  */
 export function buildUnsubscribeUrl(recipient: EmailRecipient): string {
+  if (recipient.reminderToken) {
+    return `${SITE_URL}/unsubscribe?reminder=${encodeURIComponent(recipient.reminderToken)}`;
+  }
+  if (recipient.alertsToken) {
+    return `${SITE_URL}/unsubscribe?alerts=${encodeURIComponent(recipient.alertsToken)}`;
+  }
+  if (recipient.outreachToken) {
+    return `${SITE_URL}/unsubscribe?outreach=${encodeURIComponent(recipient.outreachToken)}`;
+  }
   if (recipient.unsubscribeToken) {
     return `${SITE_URL}/unsubscribe?token=${encodeURIComponent(
       recipient.unsubscribeToken
     )}`;
+  }
+  if (recipient.accountToken) {
+    return `${SITE_URL}/unsubscribe?account=${encodeURIComponent(recipient.accountToken)}`;
   }
   return `${SITE_URL}${recipient.preferencesPath ?? "/profile?tab=settings"}`;
 }
@@ -103,6 +154,45 @@ export function buildOneClickUnsubscribeUrl(
   if (!unsubscribeToken || !supabaseUrl) return null;
   return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
 }
+
+/** The one-click target for a reminder email: email-unsubscribe?reminder=. */
+export function buildOneClickReminderUrl(
+  reminderToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!reminderToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?reminder=${encodeURIComponent(reminderToken)}`;
+}
+
+/** The one-click target for a saved-search alert email: email-unsubscribe?alerts=. */
+export function buildOneClickAlertsUrl(
+  alertsToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!alertsToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?alerts=${encodeURIComponent(alertsToken)}`;
+}
+
+/** The one-click target for a member's account token: email-unsubscribe?account=. */
+export function buildOneClickAccountUrl(
+  accountToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!accountToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?account=${encodeURIComponent(accountToken)}`;
+}
+
+/** The one-click target for a prospect's outreach token: email-unsubscribe?outreach=. */
+export function buildOneClickOutreachUrl(
+  outreachToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!outreachToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?outreach=${encodeURIComponent(outreachToken)}`;
+}
+
+/** Where a saved-search alert's footer sends the reader to manage alerts. */
+const SAVED_SEARCHES_PATH = "/dashboard?tab=saved-searches";
 
 function readSupabaseUrl(): string | undefined {
   try {
@@ -126,10 +216,52 @@ export function listUnsubscribeHeaders(rendered: RenderedEmail): Record<string, 
   return h;
 }
 
+/*
+ * Without a token (no reminder, alerts, outreach, newsletter or account token) the footer link
+ * goes to a page behind a sign-in, so it must not promise "one click"
+ * (WEB-ADS-035). It names the mailto opt-out instead, which works signed out
+ * and is the same address the List-Unsubscribe header carries.
+ */
 function renderMarketingFooterHtml(recipient: EmailRecipient): string {
   const unsubscribeUrl = buildUnsubscribeUrl(recipient);
-  return `
-    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#666;line-height:1.5;">
+  const why = recipient.reminderToken
+    ? `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because you set a reminder for this event on
+        ${escapeHtml(POSTAL_ADDRESS.name)}. You can
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          stop reminders for this event in one click
+        </a>
+        or see all your
+        <a href="${SITE_URL}/my-events?tab=reminders" style="color:#666;text-decoration:underline;">
+          reminders</a>.
+      </p>`
+    : recipient.alertsToken
+    ? `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because you turned on alerts for a saved
+        search on ${escapeHtml(POSTAL_ADDRESS.name)}. You can
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          turn off saved-search alerts in one click
+        </a>
+        or manage your
+        <a href="${SITE_URL}${SAVED_SEARCHES_PATH}" style="color:#666;text-decoration:underline;">
+          saved searches</a>.
+      </p>`
+    : recipient.outreachToken
+    ? `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because ${escapeHtml(POSTAL_ADDRESS.name)}
+        found your business contact and is reaching out about a partnership.
+        You can
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          stop these partnership emails in one click
+        </a>
+        or email
+        <a href="mailto:${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}?subject=unsubscribe" style="color:#666;text-decoration:underline;">${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}</a>.
+      </p>`
+    : recipient.unsubscribeToken
+    ? `
       <p style="margin:0 0 8px;">
         You're receiving this email because you signed up for updates from
         ${escapeHtml(POSTAL_ADDRESS.name)}. You can
@@ -139,7 +271,31 @@ function renderMarketingFooterHtml(recipient: EmailRecipient): string {
         or update your
         <a href="${SITE_URL}/profile?tab=settings" style="color:#666;text-decoration:underline;">
           email preferences</a>.
-      </p>
+      </p>`
+    : recipient.accountToken
+    ? `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because you have an account on
+        ${escapeHtml(POSTAL_ADDRESS.name)}. You can
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          unsubscribe from marketing emails in one click
+        </a>
+        or update your
+        <a href="${SITE_URL}/profile?tab=settings" style="color:#666;text-decoration:underline;">
+          email preferences</a>.
+      </p>`
+    : `
+      <p style="margin:0 0 8px;">
+        You're receiving this email because you signed up for updates from
+        ${escapeHtml(POSTAL_ADDRESS.name)}. To stop these emails, sign in and
+        change your
+        <a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">
+          email preferences</a>,
+        or email
+        <a href="mailto:${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}?subject=unsubscribe" style="color:#666;text-decoration:underline;">${escapeHtml(POSTAL_ADDRESS.unsubscribeEmail)}</a>.
+      </p>`;
+  return `
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#666;line-height:1.5;">${why}
       <p style="margin:0 0 8px;">
         <strong>${escapeHtml(POSTAL_ADDRESS.name)}</strong><br>
         ${escapeHtml(POSTAL_ADDRESS.line1)}<br>
@@ -159,11 +315,32 @@ function renderMarketingFooterHtml(recipient: EmailRecipient): string {
 
 function renderMarketingFooterText(recipient: EmailRecipient): string {
   const unsubscribeUrl = buildUnsubscribeUrl(recipient);
+  const why = recipient.reminderToken
+    ? `You're receiving this email because you set a reminder for this event on ${POSTAL_ADDRESS.name}.
+Stop reminders for this event (one click): ${unsubscribeUrl}
+Your reminders: ${SITE_URL}/my-events?tab=reminders`
+    : recipient.alertsToken
+    ? `You're receiving this email because you turned on alerts for a saved search on ${POSTAL_ADDRESS.name}.
+Turn off saved-search alerts (one click): ${unsubscribeUrl}
+Your saved searches: ${SITE_URL}${SAVED_SEARCHES_PATH}`
+    : recipient.outreachToken
+    ? `You're receiving this email because ${POSTAL_ADDRESS.name} found your business contact and is reaching out about a partnership.
+Stop these partnership emails (one click): ${unsubscribeUrl}
+Or email ${POSTAL_ADDRESS.unsubscribeEmail} with the subject "unsubscribe".`
+    : recipient.unsubscribeToken
+    ? `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
+Unsubscribe (one click): ${unsubscribeUrl}
+Email preferences: ${SITE_URL}/profile?tab=settings`
+    : recipient.accountToken
+    ? `You're receiving this email because you have an account on ${POSTAL_ADDRESS.name}.
+Unsubscribe from marketing emails (one click): ${unsubscribeUrl}
+Email preferences: ${SITE_URL}/profile?tab=settings`
+    : `You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
+To stop these emails, sign in and change your email preferences: ${unsubscribeUrl}
+Or email ${POSTAL_ADDRESS.unsubscribeEmail} with the subject "unsubscribe".`;
   return `
 --
-You're receiving this email because you signed up for updates from ${POSTAL_ADDRESS.name}.
-Unsubscribe (one click): ${unsubscribeUrl}
-Email preferences: ${SITE_URL}/profile?tab=settings
+${why}
 
 ${POSTAL_ADDRESS.name}
 ${POSTAL_ADDRESS.line1}
@@ -245,7 +422,15 @@ export function renderEmail(opts: RenderEmailOptions): RenderedEmail {
     // one-click "Unsubscribe" button in Gmail / Apple Mail / Outlook. The
     // https target must accept a POST, so it is the edge function, and
     // List-Unsubscribe-Post is only claimed when there is one.
-    const oneClick = buildOneClickUnsubscribeUrl(opts.recipient.unsubscribeToken);
+    const oneClick = opts.recipient.reminderToken
+      ? buildOneClickReminderUrl(opts.recipient.reminderToken)
+      : opts.recipient.alertsToken
+      ? buildOneClickAlertsUrl(opts.recipient.alertsToken)
+      : opts.recipient.outreachToken
+      ? buildOneClickOutreachUrl(opts.recipient.outreachToken)
+      : opts.recipient.unsubscribeToken
+      ? buildOneClickUnsubscribeUrl(opts.recipient.unsubscribeToken)
+      : buildOneClickAccountUrl(opts.recipient.accountToken);
     if (!oneClick) return { html, text, listUnsubscribe: MAILTO_UNSUBSCRIBE };
     return {
       html,

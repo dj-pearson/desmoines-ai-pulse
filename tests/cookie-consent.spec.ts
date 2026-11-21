@@ -15,7 +15,7 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
  */
 
 const CONSENT_KEY = 'cookie-consent';
-const CONSENT_VERSION = '2026-04-13'; // keep in step with CookieConsentBanner.tsx
+const CONSENT_VERSION = '2026-04-13'; // keep in step with src/lib/cookieConsent.ts
 
 const isGoogleAnalytics = (url: string) =>
   url.includes('googletagmanager.com') || url.includes('google-analytics.com');

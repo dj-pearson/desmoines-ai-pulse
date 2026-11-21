@@ -15,7 +15,7 @@ interface DeferredWidgetProps {
  * until the reader scrolls near it, and the fixed-height box stands in for
  * both waits so mounting adds no layout shift.
  *
- * Used by the event, restaurant and attraction detail pages.
+ * Used by the event, restaurant, attraction and playground detail pages.
  */
 export function DeferredWidget({ minHeight, label, children }: DeferredWidgetProps) {
   const reserve = <div style={{ minHeight }} aria-hidden="true" />;

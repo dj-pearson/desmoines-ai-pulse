@@ -18,7 +18,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { storage } from "@/lib/safeStorage";
 import { createLogger } from "@/lib/logger";
-import { hasConsent } from "@/components/CookieConsentBanner";
+import { hasConsent } from "@/lib/cookieConsent";
 
 const log = createLogger("paywallAnalytics");
 const SESSION_KEY = "dmi-session-id";

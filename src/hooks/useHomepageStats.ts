@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { handleError } from '@/lib/errorHandler';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { upcomingOrRunningFilter } from '@/lib/eventRunningFilter';
 import { centralDateOf, centralHour, centralWindow } from '@/lib/timezone';
 
 /**
@@ -26,7 +27,7 @@ import { centralDateOf, centralHour, centralWindow } from '@/lib/timezone';
 export const STILL_TO_START_HOUR = 15;
 
 /**
- * `today`: every visible event on today's Central date.
+ * `today`: every visible event on today's Central date, plus runs still on today.
  * `still-to-start`: the ones from now to the end of today.
  */
 export type TodayCountMode = 'today' | 'still-to-start';
@@ -53,11 +54,16 @@ export async function fetchHomepageCounts(now: Date = new Date()): Promise<Today
   const mode = todayCountMode(now);
   const floor = mode === 'still-to-start' ? now.toISOString() : today.start;
 
-  const { count, error } = await applyEventVisibility(
+  const base = applyEventVisibility(
     supabase.from('events').select('id', { count: 'exact', head: true }),
-  )
-    .gte('date', floor)
-    .lte('date', today.end);
+  );
+  // Before 15:00 the line says "N events today" and links /events/today, which
+  // lists a run that opened on an earlier day (includeOngoing). A bare
+  // `date >= start of today` left the State Fair out of the count on every day
+  // but its first. "Still to start" keeps the bare floor on purpose: a run
+  // that is already on has started.
+  const windowed = mode === 'today' ? base.or(upcomingOrRunningFilter(floor)) : base.gte('date', floor);
+  const { count, error } = await windowed.lte('date', today.end);
 
   if (error) throw error;
   if (typeof count !== 'number') {

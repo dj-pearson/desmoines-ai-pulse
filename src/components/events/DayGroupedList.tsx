@@ -124,7 +124,9 @@ export function DayGroupedList({
             <h3
               id={headingId}
               className={cn(
-                "sticky z-20 -mx-4 mb-3 bg-background/95 px-4 py-2 text-base font-semibold md:text-lg text-foreground backdrop-blur supports-[backdrop-filter]:bg-background/85",
+                // transition-[top] follows the events bar sliding away and
+                // back on phones, where its published height goes to 0.
+                "sticky z-20 -mx-4 mb-3 bg-background/95 px-4 py-2 text-base font-semibold md:text-lg text-foreground backdrop-blur supports-[backdrop-filter]:bg-background/85 transition-[top] duration-200 ease-out motion-reduce:transition-none",
                 stickyTopClass
               )}
             >

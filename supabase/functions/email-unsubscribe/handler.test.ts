@@ -1,7 +1,7 @@
 /**
  *   deno test supabase/functions/email-unsubscribe/handler.test.ts
  */
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { handleUnsubscribe, type UnsubscribeRpc } from "./handler.ts";
 
 const TOKEN = "0123456789abcdef".repeat(3);
@@ -52,4 +52,238 @@ Deno.test("GET hands the reader to the /unsubscribe page and does not unsubscrib
   assertEquals(res.status, 303);
   assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?token=${TOKEN}`);
   assertEquals(calls.length, 0);
+});
+
+// WEB-FEAT-059: a reminder email's ?reminder= link stops that event's
+// reminders and never touches the newsletter RPC.
+const REMINDER = "3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b";
+
+function reminderDeps() {
+  const newsletter = rpcReturning([{ success: true }]);
+  const reminders = rpcReturning([{ success: true, cancelled: 2, event_title: "Jazz in July" }]);
+  return {
+    newsletter,
+    reminders,
+    deps: { rpc: newsletter.rpc, cancelReminders: reminders.rpc, siteUrl: "https://desmoinesinsider.com" },
+  };
+}
+
+Deno.test("POST ?reminder= cancels that event's reminders, not the newsletter", async () => {
+  const { newsletter, reminders, deps: d } = reminderDeps();
+  const res = await handleUnsubscribe(
+    new Request(`${FN}?reminder=${REMINDER.toUpperCase()}`, { method: "POST", body: "List-Unsubscribe=One-Click" }),
+    d,
+  );
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { ok: true, cancelled: 2 });
+  assertEquals(reminders.calls, [REMINDER]);
+  assertEquals(newsletter.calls.length, 0);
+});
+
+Deno.test("POST ?reminder= with a malformed id never reaches the database", async () => {
+  const { newsletter, reminders, deps: d } = reminderDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?reminder=nope`, { method: "POST" }), d);
+  assertEquals(res.status, 400);
+  assertEquals(reminders.calls.length + newsletter.calls.length, 0);
+  await res.body?.cancel();
+});
+
+Deno.test("POST ?reminder= unknown is 404, a database error is 503", async () => {
+  const base = { rpc: rpcReturning(null).rpc, siteUrl: "https://desmoinesinsider.com" };
+  const unknown = await handleUnsubscribe(
+    new Request(`${FN}?reminder=${REMINDER}`, { method: "POST" }),
+    { ...base, cancelReminders: rpcReturning([{ success: false, cancelled: 0 }]).rpc },
+  );
+  assertEquals(unknown.status, 404);
+  await unknown.body?.cancel();
+  const down = await handleUnsubscribe(
+    new Request(`${FN}?reminder=${REMINDER}`, { method: "POST" }),
+    { ...base, cancelReminders: rpcReturning(null, { message: "PGRST202" }).rpc },
+  );
+  assertEquals(down.status, 503);
+  await down.body?.cancel();
+});
+
+Deno.test("GET ?reminder= hands the reader to the page with the reminder id", async () => {
+  const { reminders, deps: d } = reminderDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?reminder=${REMINDER}`), d);
+  assertEquals(res.status, 303);
+  assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?reminder=${REMINDER}`);
+  assertEquals(reminders.calls.length, 0);
+});
+
+// WEB-FEAT-073: a saved-search alert's ?alerts= link turns off event
+// alerts and never touches the newsletter RPC.
+const ALERTS = "7a1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e";
+
+function alertsDeps() {
+  const newsletter = rpcReturning([{ success: true, already_unsubscribed: false }]);
+  const alerts = rpcReturning([{ success: true, already_disabled: false }]);
+  return {
+    newsletter,
+    alerts,
+    deps: { rpc: newsletter.rpc, disableAlerts: alerts.rpc, siteUrl: "https://desmoinesinsider.com" },
+  };
+}
+
+Deno.test("POST ?alerts= turns off event alerts, not the newsletter", async () => {
+  const { newsletter, alerts, deps: d } = alertsDeps();
+  const res = await handleUnsubscribe(
+    new Request(`${FN}?alerts=${ALERTS.toUpperCase()}`, { method: "POST", body: "List-Unsubscribe=One-Click" }),
+    d,
+  );
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { ok: true, already_disabled: false });
+  assertEquals(alerts.calls, [ALERTS]);
+  assertEquals(newsletter.calls.length, 0);
+});
+
+Deno.test("POST ?alerts= with a malformed id never reaches the database", async () => {
+  const { newsletter, alerts, deps: d } = alertsDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?alerts=nope`, { method: "POST" }), d);
+  assertEquals(res.status, 400);
+  await res.body?.cancel();
+  assertEquals(alerts.calls.length + newsletter.calls.length, 0);
+});
+
+Deno.test("POST ?alerts= unknown is 404, a database error is 503", async () => {
+  const base = { rpc: rpcReturning(null).rpc, siteUrl: "https://desmoinesinsider.com" };
+  const unknown = await handleUnsubscribe(
+    new Request(`${FN}?alerts=${ALERTS}`, { method: "POST" }),
+    { ...base, disableAlerts: rpcReturning([{ success: false, already_disabled: false }]).rpc },
+  );
+  assertEquals(unknown.status, 404);
+  await unknown.body?.cancel();
+  const down = await handleUnsubscribe(
+    new Request(`${FN}?alerts=${ALERTS}`, { method: "POST" }),
+    { ...base, disableAlerts: rpcReturning(null, { message: "PGRST202" }).rpc },
+  );
+  assertEquals(down.status, 503);
+  await down.body?.cancel();
+});
+
+Deno.test("GET ?alerts= hands the reader to the page with the search id", async () => {
+  const { alerts, deps: d } = alertsDeps();
+  const res = await handleUnsubscribe(new Request(`${FN}?alerts=${ALERTS}`), d);
+  assertEquals(res.status, 303);
+  assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?alerts=${ALERTS}`);
+  assertEquals(alerts.calls.length, 0);
+});
+
+// WEB-ADS-035: a member with no newsletter row gets ?account=<token>, which
+// runs marketing_unsubscribe_by_token and never the newsletter RPC.
+const accountDeps = (account: UnsubscribeRpc | undefined, rpc: UnsubscribeRpc) => ({
+  rpc,
+  accountUnsubscribe: account,
+  siteUrl: "https://desmoinesinsider.com",
+});
+
+Deno.test("POST ?account= unsubscribes the member, not through the newsletter RPC", async () => {
+  const account = rpcReturning([{ success: true, already_unsubscribed: false }]);
+  const newsletter = rpcReturning([{ success: true }]);
+  const res = await handleUnsubscribe(
+    new Request(`${FN}?account=${TOKEN.toUpperCase()}`, { method: "POST", body: "List-Unsubscribe=One-Click" }),
+    accountDeps(account.rpc, newsletter.rpc),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(account.calls, [TOKEN]);
+  assertEquals(newsletter.calls.length, 0);
+  assertEquals(await res.json(), { ok: true, already_unsubscribed: false });
+});
+
+Deno.test("POST ?account= malformed is 400, unknown 404, database error or missing RPC 503", async () => {
+  const bad = rpcReturning(null);
+  const malformed = await handleUnsubscribe(new Request(`${FN}?account=nope`, { method: "POST" }), accountDeps(bad.rpc, bad.rpc));
+  assertEquals(malformed.status, 400);
+  assertEquals(bad.calls.length, 0);
+  await malformed.body?.cancel();
+
+  const unknown = await handleUnsubscribe(
+    new Request(`${FN}?account=${TOKEN}`, { method: "POST" }),
+    accountDeps(rpcReturning([{ success: false }]).rpc, bad.rpc),
+  );
+  assertEquals(unknown.status, 404);
+  await unknown.body?.cancel();
+
+  const down = await handleUnsubscribe(
+    new Request(`${FN}?account=${TOKEN}`, { method: "POST" }),
+    accountDeps(rpcReturning(null, { message: "timeout" }).rpc, bad.rpc),
+  );
+  assertEquals(down.status, 503);
+  await down.body?.cancel();
+
+  // No account RPC wired: retry later, never the newsletter RPC, which would
+  // answer "unknown token" and end the provider's retries.
+  const newsletter = rpcReturning([{ success: true }]);
+  const missing = await handleUnsubscribe(new Request(`${FN}?account=${TOKEN}`, { method: "POST" }), accountDeps(undefined, newsletter.rpc));
+  assertEquals(missing.status, 503);
+  assertEquals(newsletter.calls.length, 0);
+  await missing.body?.cancel();
+});
+
+Deno.test("GET ?account= hands the reader to the page with the account token", async () => {
+  const account = rpcReturning([{ success: true }]);
+  const res = await handleUnsubscribe(new Request(`${FN}?account=${TOKEN}`), accountDeps(account.rpc, account.rpc));
+  assertEquals(res.status, 303);
+  assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?account=${TOKEN}`);
+  assertEquals(account.calls.length, 0);
+});
+
+// AOS-PROSPECT-009: an outreach prospect gets ?outreach=<token>, which runs
+// outreach_unsubscribe_by_token and never the newsletter or account RPC.
+const outreachDeps = (outreach: UnsubscribeRpc | undefined, rpc: UnsubscribeRpc) => ({
+  rpc,
+  accountUnsubscribe: rpc,
+  outreachUnsubscribe: outreach,
+  siteUrl: "https://desmoinesinsider.com",
+});
+
+Deno.test("POST ?outreach= stops the prospect's outreach, not through the newsletter or account RPC", async () => {
+  const outreach = rpcReturning([{ success: true, already_unsubscribed: false }]);
+  const other = rpcReturning([{ success: true }]);
+  const res = await handleUnsubscribe(
+    new Request(`${FN}?outreach=${TOKEN.toUpperCase()}`, { method: "POST", body: "List-Unsubscribe=One-Click" }),
+    outreachDeps(outreach.rpc, other.rpc),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(outreach.calls, [TOKEN]);
+  assertEquals(other.calls.length, 0);
+  assertEquals(await res.json(), { ok: true, already_unsubscribed: false });
+});
+
+Deno.test("POST ?outreach= malformed is 400, unknown 404, database error or missing RPC 503", async () => {
+  const bad = rpcReturning(null);
+  const malformed = await handleUnsubscribe(new Request(`${FN}?outreach=nope`, { method: "POST" }), outreachDeps(bad.rpc, bad.rpc));
+  assertEquals(malformed.status, 400);
+  assertEquals(bad.calls.length, 0);
+  await malformed.body?.cancel();
+
+  const unknown = await handleUnsubscribe(
+    new Request(`${FN}?outreach=${TOKEN}`, { method: "POST" }),
+    outreachDeps(rpcReturning([{ success: false }]).rpc, bad.rpc),
+  );
+  assertEquals(unknown.status, 404);
+  await unknown.body?.cancel();
+
+  const down = await handleUnsubscribe(
+    new Request(`${FN}?outreach=${TOKEN}`, { method: "POST" }),
+    outreachDeps(rpcReturning(null, { message: "timeout" }).rpc, bad.rpc),
+  );
+  assertEquals(down.status, 503);
+  await down.body?.cancel();
+
+  // No outreach RPC wired: retry later, never another RPC.
+  const other = rpcReturning([{ success: true }]);
+  const missing = await handleUnsubscribe(new Request(`${FN}?outreach=${TOKEN}`, { method: "POST" }), outreachDeps(undefined, other.rpc));
+  assertEquals(missing.status, 503);
+  assertEquals(other.calls.length, 0);
+  await missing.body?.cancel();
+});
+
+Deno.test("GET ?outreach= hands the prospect to the page with the outreach token", async () => {
+  const outreach = rpcReturning([{ success: true }]);
+  const res = await handleUnsubscribe(new Request(`${FN}?outreach=${TOKEN}`), outreachDeps(outreach.rpc, outreach.rpc));
+  assertEquals(res.status, 303);
+  assertEquals(res.headers.get("location"), `https://desmoinesinsider.com/unsubscribe?outreach=${TOKEN}`);
+  assertEquals(outreach.calls.length, 0);
 });

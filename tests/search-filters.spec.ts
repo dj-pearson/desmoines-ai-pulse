@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { installFixtureBackend } from './support/fixtureBackend';
+import { fixtureEvents, installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Search and Filter Functionality Testing Suite
@@ -90,6 +90,41 @@ test.beforeEach(async ({ page }) => {
   await installFixtureBackend(page);
 });
 
+/**
+ * States the backend's answer for one events search term, on top of the
+ * fixture backend (which returns every row whatever the query says).
+ *
+ * /events searches server-side (textSearch on search_vector), so "the list
+ * shows what the search found" can only be checked if the spec decides what
+ * the search found. Returns the matching request URLs, so a test can also
+ * assert that the term reached the query. A count-only query is a HEAD
+ * request and gets no body (fixtureBackend.ts explains why that matters).
+ */
+async function answerEventSearch(page: Page, term: string, rows: unknown[]): Promise<string[]> {
+  const seen: string[] = [];
+  const pattern = new RegExp(`search_vector=[^&]*${term}`, 'i');
+  await page.route('**/rest/v1/events?**', (route) => {
+    const url = decodeURIComponent(route.request().url());
+    if (!pattern.test(url)) return route.fallback();
+    seen.push(url);
+    const isHead = route.request().method() === 'HEAD';
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-expose-headers': 'content-range',
+        'content-range': rows.length > 0 ? `0-${rows.length - 1}/${rows.length}` : '*/0',
+      },
+      body: isHead ? '' : JSON.stringify(rows),
+    });
+  });
+  return seen;
+}
+
+/** Event card TITLE links (see 'events page filters should work correctly'). */
+const eventCards = (page: Page) => page.locator('h3 > a[href^="/events/"], h4 > a[href^="/events/"]');
+
 test.describe('Search Bar Discovery', () => {
   for (const page of pagesWithSearch) {
     test(`${page.name} should have a search input`, async ({ page: pw }) => {
@@ -122,10 +157,8 @@ test.describe('Search Behavior - Proper Debouncing', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      console.log('No search input found on events page');
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     // Track only actual DATA queries during search.
     //
@@ -177,112 +210,79 @@ test.describe('Search Behavior - Proper Debouncing', () => {
   });
 
   test('search should trigger only after user stops typing', async ({ page }) => {
+    // This read three result counts, logged them, and ended. With no
+    // assertion, the required lane counted it as coverage on a page with no
+    // search box at all (WEB-QA-050). It now asserts the events test's
+    // contract on the restaurants list: typing one key at a time fires fewer
+    // data queries than keystrokes, and the finished term lands in the URL.
     await page.goto('/restaurants', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput, '/restaurants has no search input').toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      const url = request.url();
+      if (/\/rest\/v1\//.test(url) && !/\/storage\//.test(url)) requests.push(url);
+    });
 
-    // Get initial results count
+    const term = 'pizza';
+    await searchInput.pressSequentially(term, { delay: 60 });
+    await expect(page).toHaveURL(/[?&]q=pizza/, { timeout: 5000 });
     await page.waitForTimeout(500);
-    const initialResults = await page.locator('[data-testid*="result"], article, .card, [class*="item"]').count();
 
-    // Type search query
-    await searchInput.fill('pizza');
-
-    // Immediately check if results changed (they shouldn't yet)
-    await page.waitForTimeout(100);
-    const resultsAfter100ms = await page.locator('[data-testid*="result"], article, .card, [class*="item"]').count();
-
-    // Wait for debounce to complete
-    await page.waitForTimeout(600);
-    const resultsAfterDebounce = await page.locator('[data-testid*="result"], article, .card, [class*="item"]').count();
-
-    console.log(`Initial: ${initialResults}, After 100ms: ${resultsAfter100ms}, After debounce: ${resultsAfterDebounce}`);
-
-    // Results should change after debounce completes, not immediately
-    // This ensures good UX - not filtering on every keystroke
+    expect(requests.length, `${requests.length} data queries for ${term.length} keystrokes`).toBeLessThan(term.length);
   });
 
-  test('search should show loading indicator during search', async ({ page }) => {
-    await page.goto('/events', { waitUntil: 'networkidle' });
-
-    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() === 0) {
-      return;
-    }
-
-    // Start typing
-    await searchInput.fill('music');
-
-    // Check for loading indicator within a reasonable time
-    const hasLoadingIndicator = await page.locator(
-      '[role="progressbar"], .loading, .spinner, [aria-busy="true"]'
-    ).count();
-
-    if (hasLoadingIndicator > 0) {
-      console.log('Search shows loading indicator');
-    }
-  });
+  // 'search should show loading indicator during search' was deleted
+  // (WEB-QA-050). It logged a line when a spinner appeared and did nothing
+  // when none did, so it passed either way, and against fixtures the answer
+  // arrives before a spinner could paint.
 });
 
 test.describe('Search Results', () => {
   test('events search should return relevant results', async ({ page }) => {
+    // It counted '[data-testid*="result"], article, .card', which this app
+    // never renders, logged "Found 0 results" on the build, and asserted only
+    // inside `if (resultsCount > 0)` - so it passed with search broken
+    // (WEB-QA-050). Now the backend's answer for "music" is two rows, and the
+    // list must show exactly those two and none of the unsearched list.
+    const musicRows = fixtureEvents()
+      .slice(0, 2)
+      .map((row, i) => ({ ...row, title: i === 0 ? 'Music on the Riverfront' : 'Chamber Music Evening' }));
+    const searched = await answerEventSearch(page, 'music', musicRows);
+
     await page.goto('/events', { waitUntil: 'networkidle' });
-
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Fixture Event 3', exact: true })).toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
-
-    // Search for something specific
     await searchInput.fill('music');
-    await page.waitForTimeout(800); // Wait for debounce
 
-    // Check if results are displayed
-    const resultsCount = await page.locator('[data-testid*="result"], article, .card').count();
-
-    console.log(`Found ${resultsCount} results for "music"`);
-
-    if (resultsCount > 0) {
-      // Check if results contain the search term
-      const firstResult = page.locator('[data-testid*="result"], article, .card').first();
-      const resultText = await firstResult.textContent();
-
-      console.log('First result snippet:', resultText?.substring(0, 100));
-
-      // Result should be relevant (contain search term or related content)
-      // This is a soft check - just ensuring results are displayed
-      expect(resultsCount).toBeGreaterThan(0);
-    }
+    await expect(eventCards(page)).toHaveCount(2, { timeout: 5000 });
+    await expect(eventCards(page).nth(0)).toHaveText(/music/i);
+    await expect(eventCards(page).nth(1)).toHaveText(/music/i);
+    await expect(page.getByRole('link', { name: 'Fixture Event 3', exact: true })).toHaveCount(0);
+    expect(searched.length, 'the search term never reached the events query').toBeGreaterThan(0);
   });
 
   test('search should show "no results" message when appropriate', async ({ page }) => {
+    // Asserted the message only `if (noResultsMessage > 0)`, so a search that
+    // rendered nothing at all - no cards, no message - passed (WEB-QA-050).
+    // The backend now answers this term with no rows, and the empty state
+    // must name it.
+    const term = 'xyzabc123nonexistent';
+    const searched = await answerEventSearch(page, term, []);
+
     await page.goto('/events', { waitUntil: 'networkidle' });
-
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    await searchInput.fill(term);
 
-    // Search for something that definitely won't exist
-    await searchInput.fill('xyzabc123nonexistent');
-    await page.waitForTimeout(800);
-
-    // Should show no results message
-    const noResultsMessage = await page.locator(
-      'text=/no results|no events|not found|no matches/i'
-    ).count();
-
-    if (noResultsMessage > 0) {
-      console.log('Properly displays "no results" message');
-      expect(noResultsMessage).toBeGreaterThan(0);
-    }
+    await expect(page.getByText(`No results for "${term}"`)).toBeVisible({ timeout: 5000 });
+    await expect(eventCards(page)).toHaveCount(0);
+    expect(searched.length, 'the search term never reached the events query').toBeGreaterThan(0);
   });
 
   test('clearing search should restore all results', async ({ page }) => {
@@ -290,9 +290,8 @@ test.describe('Search Results', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     // Get initial count
     const initialCount = await page.locator('[data-testid*="result"], article, .card').count();
@@ -381,10 +380,8 @@ test.describe('Filter Functionality', () => {
       .locator('input[type="search"], input[placeholder*="search" i], input[aria-label*="search" i]')
       .first();
 
-    if ((await searchInput.count()) === 0) {
-      console.log('No search input on events page');
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     const initialCount = await cards().count();
     expect(initialCount, 'events page should render event cards before filtering').toBeGreaterThan(0);
@@ -405,99 +402,111 @@ test.describe('Filter Functionality', () => {
   });
 
   test('multiple filters should work together', async ({ page }) => {
+    // Looked for 'select, input[type="checkbox"]', which this app never
+    // renders, so it returned early on every run; and its one assertion was
+    // `toBeDefined()` on a number (WEB-QA-050). Now: pick a cuisine, then a
+    // price, and assert the second did not drop the first - both stay in the
+    // URL, and the list query asks for both at once. Whether the server then
+    // narrows correctly is get_rotated_restaurants' job, not this page's; the
+    // fixture backend does not filter on purpose.
+    // The Cuisine popover lists the get_restaurant_filter_options facet, which
+    // the fixture backend does not answer (it lists no cuisines), so the
+    // facet is stated here with the fixture rows' two cuisines.
+    await page.route('**/rest/v1/rpc/get_restaurant_filter_options*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify({
+          cuisines: [
+            { cuisine: 'American', count: 6 },
+            { cuisine: 'Italian', count: 6 },
+          ],
+          locations: [],
+        }),
+      })
+    );
+
+    const rpcBodies: Record<string, unknown>[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && req.url().includes('/rest/v1/rpc/get_rotated_restaurants')) {
+        rpcBodies.push(JSON.parse(req.postData() || '{}'));
+      }
+    });
+
     await page.goto('/restaurants', { waitUntil: 'networkidle' });
+    // The first-visit cookie banner sits over the popover's lower options and
+    // takes the click, so answer it the way a visitor would.
+    await page.getByRole('button', { name: 'Reject non-essential', exact: true }).click();
 
-    const filters = await page.locator('select, input[type="checkbox"]').all();
+    await page.getByRole('button', { name: /^Cuisine/ }).click();
+    await page.getByRole('button', { name: /^Italian/ }).click();
+    await expect(page.getByRole('button', { name: /^Italian/ })).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/[?&]cuisine=Italian/, { timeout: 5000 });
 
-    if (filters.length < 2) {
-      console.log('Not enough filters to test combination');
-      return;
-    }
+    await page.getByRole('button', { name: /^Price/ }).click();
+    await page.getByRole('button', { name: /^\$\$\s*moderate/ }).click();
+    await page.keyboard.press('Escape');
 
-    console.log(`Found ${filters.length} filters`);
+    await expect(async () => {
+      const params = new URL(page.url()).searchParams;
+      expect(params.get('cuisine')).toBe('Italian');
+      expect(params.get('price')).toBe('$$');
+    }).toPass({ timeout: 5000 });
 
-    const initialCount = await page.locator('[data-testid*="result"], article, .card').count();
-
-    // Apply first filter
-    await filters[0].click();
-    await page.waitForTimeout(500);
-
-    const afterFirstFilter = await page.locator('[data-testid*="result"], article, .card').count();
-
-    // Apply second filter
-    if (filters[1]) {
-      await filters[1].click();
-      await page.waitForTimeout(500);
-
-      const afterSecondFilter = await page.locator('[data-testid*="result"], article, .card').count();
-
-      console.log(`Initial: ${initialCount}, After 1st filter: ${afterFirstFilter}, After 2nd: ${afterSecondFilter}`);
-
-      // Multiple filters should be able to narrow results
-      expect(afterSecondFilter).toBeDefined();
-    }
+    await expect(async () => {
+      const both = rpcBodies.filter(
+        (b) =>
+          JSON.stringify(b.cuisine_filter) === '["Italian"]' && JSON.stringify(b.price_filter) === '["$$"]'
+      );
+      expect(both.length, `no list query carried both filters: ${JSON.stringify(rpcBodies.slice(-3))}`).toBeGreaterThan(0);
+    }).toPass({ timeout: 5000 });
   });
 
   test('filters should have clear/reset functionality', async ({ page }) => {
-    await page.goto('/events', { waitUntil: 'networkidle' });
+    // It looked for 'select, input[type="checkbox"]', which this app never
+    // renders (findFilters above records 0 native controls on every hub), so
+    // the body never ran and the test passed with no assertion (WEB-QA-050).
+    // Now: arrive with a search filter active, press the visible Clear all,
+    // and assert the filter is gone from both the URL and the input.
+    await page.goto('/events?q=jazz', { waitUntil: 'networkidle' });
 
-    const clearButton = page.locator('button:has-text("Clear"), button:has-text("Reset"), button[aria-label*="clear" i]').first();
+    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toHaveValue('jazz');
 
-    // Apply some filters first
-    const filters = await page.locator('select, input[type="checkbox"]').all();
+    const clearAll = page.getByRole('button', { name: /^clear all/i }).first();
+    await expect(clearAll, 'an active filter shows a Clear all control').toBeVisible();
+    await clearAll.click();
 
-    if (filters.length > 0) {
-      await filters[0].click();
-      await page.waitForTimeout(500);
-
-      if (await clearButton.count() > 0) {
-        await clearButton.click();
-        await page.waitForTimeout(500);
-
-        console.log('Filter clear/reset button works');
-      }
-    }
+    await expect(page).not.toHaveURL(/[?&]q=/, { timeout: 5000 });
+    await expect(searchInput).toHaveValue('');
   });
 });
 
 test.describe('Search URL Parameters', () => {
   test('search query should be reflected in URL', async ({ page }) => {
+    // Computed hasQueryInUrl and only logged it, so a search that never
+    // reached the URL passed (WEB-QA-050).
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('concert');
-    await page.waitForTimeout(800);
-
-    const url = page.url();
-    console.log('URL after search:', url);
-
-    // URL should contain the search query (good for sharing/bookmarking)
-    const hasQueryInUrl = url.includes('concert') || url.includes('search=') || url.includes('q=');
-
-    if (hasQueryInUrl) {
-      console.log('Search query is reflected in URL (good for bookmarking)');
-    }
+    await expect(page).toHaveURL(/[?&]q=concert/, { timeout: 5000 });
   });
 
   test('should respect search parameters from URL', async ({ page }) => {
-    // Try to navigate with search parameter
+    // Asserted only when the input existed AND already held the term, so a
+    // page that ignored ?q= passed (WEB-QA-050). Now the input must show it
+    // and the first list query must already search for it.
+    const searched = await answerEventSearch(page, 'music', fixtureEvents().slice(0, 1));
     await page.goto('/events?q=music', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() > 0) {
-      const searchValue = await searchInput.inputValue();
-
-      if (searchValue.includes('music')) {
-        console.log('Search input correctly populated from URL parameter');
-        expect(searchValue).toContain('music');
-      }
-    }
+    await expect(searchInput).toHaveValue('music');
+    expect(searched.length, '?q=music never reached the events query').toBeGreaterThan(0);
   });
 });
 
@@ -507,9 +516,8 @@ test.describe('Search Accessibility', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     const ariaAttributes = await searchInput.evaluate(el => ({
       role: el.getAttribute('role'),
@@ -541,23 +549,20 @@ test.describe('Search Accessibility', () => {
   });
 
   test('search results should be announced to screen readers', async ({ page }) => {
+    // Counted live regions and logged the answer, so it passed with none
+    // (WEB-QA-050). /events announces the result count through useAnnounce's
+    // role=status region once the debounced term is answered; the assertion
+    // is that the announcement names the term, which is what is heard.
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('music');
-    await page.waitForTimeout(800);
-
-    // Look for ARIA live region for results
-    const hasLiveRegion = await page.locator('[aria-live], [role="status"], [role="alert"]').count() > 0;
-
-    if (hasLiveRegion) {
-      console.log('Search uses ARIA live regions for result announcements');
-    }
+    await expect(
+      page.locator('[role="status"][aria-live]').filter({ hasText: 'matching "music"' }),
+      'no live region announced the search result',
+    ).toHaveCount(1, { timeout: 5000 });
   });
 });
 
@@ -568,9 +573,8 @@ test.describe('Mobile Search Experience', () => {
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    // A missing search box used to return early and pass (WEB-QA-050).
+    await expect(searchInput).toBeVisible();
 
     // Check search input size
     const inputSize = await searchInput.boundingBox();
@@ -626,31 +630,57 @@ test.describe('Advanced Search Page', () => {
 
 test.describe('Search Performance', () => {
   test('search should not cause layout shift', async ({ page }) => {
+    // It compared document heights and logged when the difference was small,
+    // so any shift passed (WEB-QA-050). Page height is the wrong measure
+    // anyway: a search is meant to change how many cards there are. The shift
+    // a person feels is the box they are typing in moving, so that is what is
+    // measured, with the browser's layout-shift score for anything else.
+    //
+    // The typeahead is taken out of that score (WEB-QA-057). It is an
+    // absolute overlay, so it cannot move the page, but its groups (venues,
+    // titles, "Search everything") answer separately and reflow inside its
+    // max-h-80 scroll box, and Chrome scores that. Measured on a vite build
+    // over 60 runs: 0.057 or 0.074 when the groups land in one frame, 0.19 or
+    // 0.21 when they land in two, so the test passed or failed on which frame
+    // the fixture answers fell in. With the overlay hidden the page scored
+    // 0.0031 in all 60 runs. The overlay's own reflow is a product question,
+    // filed separately; this test is about the page.
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    await expect(searchInput).toBeVisible();
 
-    if (await searchInput.count() === 0) {
-      return;
-    }
+    const suggestions = page.locator('[role="listbox"][aria-label="Search suggestions"]');
+    await page.addStyleTag({
+      content: 'div:has(> [role="listbox"][aria-label="Search suggestions"]) { display: none !important; }',
+    });
 
-    // Get initial layout
-    const initialHeight = await page.evaluate(() => document.body.scrollHeight);
+    await page.evaluate(() => {
+      const w = window as unknown as { __searchCls: number };
+      w.__searchCls = 0;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as Array<PerformanceEntry & { value: number; hadRecentInput: boolean }>) {
+          if (!entry.hadRecentInput) w.__searchCls += entry.value;
+        }
+      }).observe({ type: 'layout-shift', buffered: false });
+    });
 
-    // Perform search
+    const before = await searchInput.boundingBox();
     await searchInput.fill('test');
+    await expect(page).toHaveURL(/[?&]q=test/, { timeout: 5000 });
     await page.waitForTimeout(800);
+    const after = await searchInput.boundingBox();
 
-    const afterSearchHeight = await page.evaluate(() => document.body.scrollHeight);
+    // The overlay opened and the rule above is what hid it. If the markup
+    // changes so the selector no longer matches, this fails rather than the
+    // overlay quietly coming back into the score.
+    await expect(suggestions, 'the typeahead never opened').toHaveCount(1);
+    await expect(suggestions, 'the typeahead is not the element the style rule hides').toBeHidden();
 
-    // Major layout shift would be problematic
-    const heightDiff = Math.abs(afterSearchHeight - initialHeight);
-    console.log(`Height difference after search: ${heightDiff}px`);
-
-    // Some height change is expected, but massive shifts are bad for UX
-    if (heightDiff < 100) {
-      console.log('Search causes minimal layout shift');
-    }
+    expect(before && after, 'the search input has no layout box').toBeTruthy();
+    expect(Math.abs(after!.y - before!.y), 'the search input moved after typing').toBeLessThanOrEqual(1);
+    const cls = await page.evaluate(() => (window as unknown as { __searchCls: number }).__searchCls);
+    expect(cls, 'layout shift score after a search').toBeLessThan(0.1);
   });
 });
 
@@ -666,7 +696,7 @@ test.describe('URL-synced filter state', () => {
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('jazz');
     // Wait past the 300ms debounce, then assert the URL carries the query.
@@ -679,7 +709,7 @@ test.describe('URL-synced filter state', () => {
     await page.goto('/events?q=music', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+    await expect(searchInput).toBeVisible();
 
     await expect(searchInput).toHaveValue('music');
   });
@@ -688,7 +718,7 @@ test.describe('URL-synced filter state', () => {
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+    await expect(searchInput).toBeVisible();
 
     await searchInput.fill('coffee');
     await expect(async () => {
@@ -704,13 +734,18 @@ test.describe('URL-synced filter state', () => {
   });
 
   test('a shared filtered URL is reproducible (deep link)', async ({ page }) => {
+    await answerEventSearch(page, 'festival', fixtureEvents().slice(0, 1));
     // Open a pre-filtered link the way a shared URL would arrive.
     await page.goto('/events?q=festival', { waitUntil: 'networkidle' });
     expect(new URL(page.url()).searchParams.get('q')).toBe('festival');
 
+    // The value check sat behind `if (count() > 0)`, so a page with no
+    // search box passed (WEB-QA-050). The link must also reproduce the
+    // RESULTS: the list shows the backend's answer for the term, not the
+    // unfiltered calendar.
     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
-    if (await searchInput.count() > 0) {
-      await expect(searchInput).toHaveValue('festival');
-    }
+    await expect(searchInput).toHaveValue('festival');
+    await expect(eventCards(page)).toHaveCount(1);
+    await expect(eventCards(page).first()).toHaveText('Jazz Night at the Fixture');
   });
 });

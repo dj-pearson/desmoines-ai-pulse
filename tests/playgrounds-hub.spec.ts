@@ -240,6 +240,10 @@ test.describe('/playgrounds hub (explore WP4)', () => {
 
     await options.filter({ hasText: 'Ankeny (1)' }).click();
     await expect(page).toHaveURL(/location=Ankeny/);
+    // The URL changes before the list re-queries: navigation renders in a
+    // transition (router v7_startTransition, WEB-QUAL-017), so wait for the
+    // request as the amenity test below does rather than reading it at once.
+    await expect.poll(() => listRequests(seen).at(-1) ?? '').toContain('location.ilike."%, Ankeny,%"');
     const last = listRequests(seen).at(-1) ?? '';
     // A comma segment, not location=ilike.%Ankeny%.
     expect(last).not.toContain('location=ilike.%Ankeny%');
@@ -337,12 +341,18 @@ test.describe('/playgrounds hub (explore pass 2 WP4)', () => {
     await expect(page.locator('section:has([data-amenity-chips]) [aria-live]')).toHaveCount(0);
   });
 
-  test('rating 0 renders as 0.0, not a stray "0"', async ({ page }) => {
+  // WEB-SEO-056. playgrounds.rating is a number a model read off a crawled
+  // page. The fixtures carry 4.5, 3.9 and 0; no card may print any of them.
+  test('no card shows the unsourced playgrounds.rating', async ({ page }) => {
     await installFixtureBackend(page);
     await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    const card = page.locator('[data-playground-grid] a', { hasText: 'Fixture Valley Junction Playground' });
-    await expect(card).toContainText('0.0/5');
+    const grid = page.locator('[data-playground-grid]');
+    await expect(grid.locator('a', { hasText: 'Fixture Valley Junction Playground' })).toBeVisible();
+    const text = await grid.innerText();
+    expect(text).not.toMatch(/\d\.\d\/5/);
+    expect(text).not.toContain('4.5');
+    expect(text).not.toContain('3.9');
   });
 
   test('a failed list offers Try again, which refetches', async ({ page }) => {

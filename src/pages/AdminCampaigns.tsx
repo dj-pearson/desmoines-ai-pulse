@@ -320,6 +320,7 @@ export default function AdminCampaigns() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                aria-label="Search campaigns"
                 placeholder="Search campaigns..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -328,7 +329,7 @@ export default function AdminCampaigns() {
             </div>
 
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as CampaignStatus | "all")}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Filter by status">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -347,6 +348,7 @@ export default function AdminCampaigns() {
 
             <Input
               type="date"
+              aria-label="From date"
               placeholder="From date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
@@ -354,6 +356,7 @@ export default function AdminCampaigns() {
 
             <Input
               type="date"
+              aria-label="To date"
               placeholder="To date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}

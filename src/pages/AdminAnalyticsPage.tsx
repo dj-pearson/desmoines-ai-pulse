@@ -101,7 +101,12 @@ export default function AdminAnalyticsPage() {
 
         {activeTab === "search-traffic" && <SearchTrafficDashboard />}
 
-        {activeTab === "funnel" && <ConversionFunnelChart />}
+        {activeTab === "funnel" && (
+          <div className="space-y-6">
+            <ConversionFunnelChart funnel="subscription" />
+            <ConversionFunnelChart funnel="advertiser" />
+          </div>
+        )}
 
         {activeTab === "activity-logs" && <ActivityLogViewer />}
 

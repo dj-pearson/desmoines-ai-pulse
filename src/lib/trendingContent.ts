@@ -1,17 +1,18 @@
 import { supabase } from '@/integrations/supabase/client';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { upcomingOrRunningFilter } from '@/lib/eventRunningFilter';
 import {
   ATTRACTION_LIST_COLUMNS,
   EVENT_LIST_COLUMNS,
   PLAYGROUND_LIST_COLUMNS,
   RESTAURANT_LIST_COLUMNS,
 } from '@/lib/listColumns';
-import { createSlug } from '@/lib/slug';
+import { attractionHref, playgroundHref } from '@/lib/slugHref';
 import { centralDayStartUtcISO, createEventSlugWithCentralTime } from '@/lib/timezone';
 
 /**
  * Shared reads for the Social "Trending" tab (TrendingContent, fed by
- * useTrending in useTrendingContent.ts and by useSimplePersonalization).
+ * useTrending in useTrendingContent.ts and by useRecentContent).
  *
  * Both hooks fetched content rows with select('*') and no visibility filter,
  * so a past, hidden, merged or archived event could appear under "Trending
@@ -65,7 +66,10 @@ function startOfTodayIso(): string {
 export function applyPublicVisibility(type: TrendingContentType, query: any): any {
   switch (type) {
     case 'event':
-      return applyEventVisibility(query).gte('date', startOfTodayIso());
+      // Not over yet, the rule useEvents and the hubs use. A bare
+      // `date >= today` dropped a multi-day run on its second morning, so the
+      // State Fair left "Trending Events" on the days it trended most.
+      return applyEventVisibility(query).or(upcomingOrRunningFilter(startOfTodayIso()));
     case 'restaurant':
       return query.neq('is_merged', true);
     case 'attraction':
@@ -109,8 +113,8 @@ export function contentHref(type: TrendingContentType, row: Record<string, unkno
     case 'restaurant':
       return `/restaurants/${str(row?.slug) ?? id}`;
     case 'attraction':
-      return row && str(row.name) ? `/attractions/${createSlug(row.name as string)}` : '/attractions';
+      return row && (str(row.slug) || str(row.name)) ? attractionHref({ slug: str(row.slug), name: str(row.name) }) : '/attractions';
     case 'playground':
-      return row && str(row.name) ? `/playgrounds/${createSlug(row.name as string)}` : '/playgrounds';
+      return row && (str(row.slug) || str(row.name)) ? playgroundHref({ slug: str(row.slug), name: str(row.name) }) : '/playgrounds';
   }
 }

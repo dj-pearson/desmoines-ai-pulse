@@ -349,7 +349,7 @@ export default function VisitorsGuide() {
             <p className="text-muted-foreground mb-4">
               One email a week with what&apos;s worth doing. You confirm your address before anything is sent.
             </p>
-            <NewsletterSignup variant="compact" source="website" />
+            <NewsletterSignup variant="compact" source="visitors_guide" />
           </section>
         </div>
       </div>

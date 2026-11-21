@@ -373,8 +373,8 @@ function getTableName(resourceType: OwnableResource): TableName | null {
     discussion: 'event_discussions',
     discussion_reply: 'discussion_replies',
     // Photos ARE discussions (WEB-QA-022). Every live path writes and reads
-    // event_discussions with message_type='photo' - EventPhotoUpload:90,
-    // EventPhotoGallery:17, EventSocialHub:188 - and migration 20260718000003
+    // event_discussions with message_type='photo' - EventPhotoUpload:90 (its
+    // unmounted readers were deleted under WEB-QA-042) - and migration 20260718000003
     // committed the schema to that shape. event_photos exists with a nicer
     // column set and has never held a row, so pointing ownership at it meant
     // looking for the owner in a table that will never contain the photo.

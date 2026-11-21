@@ -1,17 +1,17 @@
-import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import SEOHead from "@/components/SEOHead";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 export default function DMCAPolicy() {
 
   return (
     <>
-      <Helmet>
-        <title>DMCA / Copyright Policy | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="How to submit a DMCA takedown notice or counter-notice to Des Moines Insider, and how we handle copyright infringement claims."
-        />
-      </Helmet>
+      <SEOHead
+        title={STATIC_PAGE_META["/dmca"].title}
+        description={STATIC_PAGE_META["/dmca"].description}
+        url="https://desmoinesinsider.com/dmca"
+        type="website"
+      />
 
       <div className="min-h-screen bg-background pb-24">
         <div className="container mx-auto px-4 py-12 max-w-3xl">

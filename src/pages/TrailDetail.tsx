@@ -1,7 +1,9 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ShareMeta } from "@/components/seo/ShareMeta";
 import { ErrorState } from "@/components/ui/error-state";
 import { Helmet } from 'react-helmet-async';
+import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { useTrail, getDifficultyLabel, getSurfaceLabel } from '@/hooks/useTrails';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -140,6 +142,9 @@ export default function TrailDetail() {
   // Item 11: admin-written, so only http(s) becomes a link.
   const websiteUrl = safeHttpUrl(trail.website);
 
+  const pageTitle = `${trail.name} - Trail Guide | Des Moines Insider`;
+  const pageDescription = trail.description || destination?.headline || `${trail.name}, a trail in the Des Moines, Iowa metro area.`;
+
   return (
     <>
       {/* WEB-SEO-033. RouteCanonical was only in the LOADING branch, so the
@@ -150,19 +155,21 @@ export default function TrailDetail() {
           because it should stop existing once data arrives. It belongs in
           both. */}
       <RouteCanonical path={`/outdoors/${slug}`} />
+      <ShareMeta title={pageTitle} description={pageDescription} path={`/outdoors/${slug}`} />
       <Helmet>
-        <title>{`${trail.name} - Trail Guide | Des Moines Insider`}</title>
-        <meta name="description" content={trail.description || destination?.headline || `${trail.name}, a trail in the Des Moines, Iowa metro area.`} />
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
         <script type="application/ld+json">{toJsonLd(buildTrailJsonLd(trail, destination))}</script>
       </Helmet>
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
-          {/* Breadcrumb */}
-          <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground mb-6">
-            <Link to="/outdoors" className="hover:text-primary">Trails &amp; Outdoors</Link>
-            <span className="mx-2">/</span>
-            <span>{trail.name}</span>
-          </nav>
+          <DetailBreadcrumb
+            className="mb-6"
+            crumbs={[
+              { name: 'Trails & Outdoors', path: '/outdoors' },
+              { name: trail.name, path: `/outdoors/${trail.slug}` },
+            ]}
+          />
 
           {/* Trail Header */}
           <div className="mb-8">

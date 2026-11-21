@@ -18,17 +18,19 @@ struct ContentFavoriteRow: Encodable, Equatable {
 /// Manages user favorites for events, restaurants, attractions and articles.
 ///
 /// - Events: `user_event_interactions` (interaction_type = 'favorite').
-/// - Restaurants and attractions: `content_favorites`, the table the web reads
-///   and writes (IOS-DD-SAVED-03). Restaurant loads also read the legacy
-///   `user_restaurant_interactions` favorites for one release, so saves made by
-///   older binaries stay visible; nothing writes that table or
-///   `user_attraction_interactions` any more (the latter never existed in
-///   production, so attraction saves used to live on the device only).
-/// - Articles: `user_article_interactions` when it exists, else on-device.
+/// - Restaurants, attractions and articles: `content_favorites`, the table the
+///   web reads and writes (IOS-DD-SAVED-03, XPLAT-013). Restaurant loads also
+///   read the legacy `user_restaurant_interactions` favorites for one release,
+///   so saves made by older binaries stay visible; nothing writes that table.
+///   `user_attraction_interactions` and `user_article_interactions` never
+///   existed in production, so those saves used to live on the device only;
+///   whatever is still there is uploaded on the next signed-in load.
 ///
-/// A save only falls back to the device when the table is missing (42P01 /
-/// PGRST205). Any other failure, offline included, is thrown so the caller can
-/// say so; faking success lost or resurrected saves (IOS-DD-SAVED-02).
+/// A save only falls back to the device when the store is unavailable: the
+/// table is missing (42P01 / PGRST205), or, for articles, content_type does
+/// not accept 'article' yet (23514, before 20261116000010 is applied). Any
+/// other failure, offline included, is thrown so the caller can say so; faking
+/// success lost or resurrected saves (IOS-DD-SAVED-02).
 @MainActor
 @Observable
 final class FavoritesService {
@@ -84,10 +86,27 @@ final class FavoritesService {
         AuthService.shared.currentUser?.id.uuidString
     }
 
-    /// Restaurants and attractions in `content_favorites`. Internal only so
-    /// the row test can name the content types.
-    enum ContentKind: String {
-        case restaurant, attraction
+    /// The kinds kept in `content_favorites`. Internal only so the row test
+    /// can name the content types.
+    enum ContentKind: String, CaseIterable {
+        case restaurant, attraction, article
+
+        var favoriteKind: FavoriteKind {
+            switch self {
+            case .restaurant: return .restaurant
+            case .attraction: return .attraction
+            case .article: return .article
+            }
+        }
+
+        init?(_ kind: FavoriteKind) {
+            switch kind {
+            case .restaurant: self = .restaurant
+            case .attraction: self = .attraction
+            case .article: self = .article
+            case .event: return nil
+            }
+        }
     }
 
     nonisolated static func key(_ kind: FavoriteKind, _ id: String) -> String {
@@ -130,6 +149,14 @@ final class FavoritesService {
     /// rewrites the status, so either one counts (IOS-DD-SAVED-04).
     nonisolated static func isServerCapError(_ error: Error) -> Bool {
         errorCode(error) == "PT402" || errorHint(error) == "upgrade_required"
+    }
+
+    /// The server cannot hold this kind yet, so the device is the store. For
+    /// articles that includes 23514: content_type's CHECK rejects 'article'
+    /// until 20261116000010 is applied, and a build may ship before it is.
+    nonisolated static func isStoreUnavailable(_ error: Error, kind: ContentKind) -> Bool {
+        if isMissingTableError(error) { return true }
+        return kind == .article && errorCode(error) == "23514"
     }
 
     nonisolated private static func isDuplicate(_ error: Error) -> Bool {
@@ -265,7 +292,7 @@ final class FavoritesService {
         async let events: () = loadEventFavorites()
         async let restaurants: () = loadContentFavorites(.restaurant)
         async let attractions: () = loadContentFavorites(.attraction)
-        async let articles: () = loadArticleFavorites()
+        async let articles: () = loadContentFavorites(.article)
         _ = await (events, restaurants, attractions, articles)
         isLoading = false
     }
@@ -297,13 +324,15 @@ final class FavoritesService {
         }
     }
 
-    /// Restaurants or attractions from `content_favorites`, plus (restaurants
-    /// only) the legacy table, plus anything saved on the device while the
-    /// table was missing. Device-only ids are uploaded once the table answers.
+    /// One kind from `content_favorites`, plus (restaurants only) the legacy
+    /// table, plus anything saved on the device while the store was
+    /// unavailable. Device-only ids are uploaded once the server takes them.
     private func loadContentFavorites(_ kind: ContentKind) async {
-        let favoriteKind: FavoriteKind = kind == .restaurant ? .restaurant : .attraction
+        let favoriteKind = kind.favoriteKind
         guard let userId = currentUserId else {
-            setIds(favoriteKind, [])
+            // Signed-out article saves live in the guest store and merge into
+            // the account on sign-in. The other kinds need an account.
+            setIds(favoriteKind, kind == .article ? localIds(Self.localBase(.article), userId: nil) : [])
             return
         }
         let base = Self.localBase(favoriteKind)
@@ -324,7 +353,7 @@ final class FavoritesService {
             ids = Set(rows.map(\.content_id))
         } catch {
             if Self.isCancellation(error) { return }
-            if Self.isMissingTableError(error) {
+            if Self.isStoreUnavailable(error, kind: kind) {
                 setIds(favoriteKind, local)
             } else {
                 lastLoadFailed = true
@@ -364,7 +393,9 @@ final class FavoritesService {
             } catch {
                 if Self.isDuplicate(error) {
                     remaining.remove(id)
-                } else if Self.isServerCapError(error) || Self.isCancellation(error) {
+                } else if Self.isServerCapError(error) || Self.isCancellation(error)
+                            || Self.isStoreUnavailable(error, kind: kind) {
+                    // The rest would fail the same way; keep them for the next load.
                     break
                 }
                 // Anything else: keep it on the device and try next load.
@@ -395,7 +426,25 @@ final class FavoritesService {
 
         switch kind {
         case .article:
-            try await addArticleFavorite(articleId: id)
+            let base = Self.localBase(.article)
+            guard let userId = currentUserId else {
+                // Signed-out reading still allows saving locally (the guest
+                // key, merged into the account on sign-in).
+                updateLocal(base, userId: nil, id: id, add: true)
+                break
+            }
+            // Not cap-enforced on either side: saved guides are free, and
+            // the server leaves article rows out of the cap (20261116000010).
+            do {
+                try await db()
+                    .from("content_favorites")
+                    .insert(ContentFavoriteRow(user_id: userId, content_type: ContentKind.article.rawValue, content_id: id))
+                    .execute()
+            } catch let error where Self.isDuplicate(error) {
+                // Already saved from another device.
+            } catch let error where Self.isStoreUnavailable(error, kind: .article) {
+                updateLocal(base, userId: userId, id: id, add: true)
+            }
         case .event, .restaurant, .attraction:
             guard let userId = currentUserId else { throw FavoritesError.notAuthenticated }
             try enforceFavoritesCap()
@@ -449,8 +498,6 @@ final class FavoritesService {
         defer { inFlightIds.remove(key) }
 
         switch kind {
-        case .article:
-            try await removeArticleFavorite(articleId: id)
         case .event:
             guard let userId = currentUserId else { throw FavoritesError.notAuthenticated }
             let client = try db()
@@ -461,10 +508,14 @@ final class FavoritesService {
                 .eq("event_id", value: id)
                 .eq("interaction_type", value: "favorite")
                 .execute()
-        case .restaurant, .attraction:
-            guard let userId = currentUserId else { throw FavoritesError.notAuthenticated }
+        case .restaurant, .attraction, .article:
+            guard let contentKind = ContentKind(kind) else { break }
+            guard let userId = currentUserId else {
+                guard kind == .article else { throw FavoritesError.notAuthenticated }
+                updateLocal(Self.localBase(.article), userId: nil, id: id, add: false)
+                break
+            }
             let client = try db()
-            let contentKind: ContentKind = kind == .restaurant ? .restaurant : .attraction
             do {
                 try await client
                     .from("content_favorites")
@@ -473,7 +524,7 @@ final class FavoritesService {
                     .eq("content_type", value: contentKind.rawValue)
                     .eq("content_id", value: id)
                     .execute()
-            } catch let error where Self.isMissingTableError(error) {
+            } catch let error where Self.isStoreUnavailable(error, kind: contentKind) {
                 // Device-only store; handled below.
             }
             if kind == .restaurant {
@@ -657,97 +708,17 @@ final class FavoritesService {
     }
 
     // ================================================================
-    // MARK: - Article Favorites (IOS-PARITY-002)
+    // MARK: - Article Favorites (IOS-PARITY-002, XPLAT-013)
     // ================================================================
     //
-    // Saved guides/blog posts. Uses `user_article_interactions` when present,
-    // falling back to on-device UserDefaults only while that table is missing
-    // (it is not in production yet). These are NOT cap-enforced: editorial
-    // saves are always free.
-
-    private func loadArticleFavorites() async {
-        let base = Self.localBase(.article)
-        guard let userId = currentUserId else {
-            favoriteArticleIds = localIds(base, userId: nil)
-            return
-        }
-        let local = localIds(base, userId: userId)
-
-        do {
-            let client = try db()
-            struct FavoriteRow: Decodable {
-                let article_id: String
-            }
-            let rows: [FavoriteRow] = try await client
-                .from("user_article_interactions")
-                .select("article_id")
-                .eq("user_id", value: userId)
-                .eq("interaction_type", value: "favorite")
-                .execute()
-                .value
-
-            favoriteArticleIds = Set(rows.map(\.article_id)).union(local)
-        } catch {
-            if Self.isCancellation(error) { return }
-            if Self.isMissingTableError(error) {
-                favoriteArticleIds = local
-            } else {
-                lastLoadFailed = true
-            }
-        }
-    }
+    // Saved guides/blog posts, in `content_favorites` with content_type
+    // 'article'. NOT cap-enforced: editorial saves are always free, and the
+    // server leaves article rows out of the cap too (20261116000010).
 
     /// Toggle an article favorite. Returns `true` if now saved, `false` if removed.
     @discardableResult
     func toggleFavoriteArticle(articleId: String) async throws -> Bool {
         try await toggle(.article, id: articleId)
-    }
-
-    private func addArticleFavorite(articleId: String) async throws {
-        let base = Self.localBase(.article)
-        guard let userId = currentUserId else {
-            // Signed-out reading still allows saving locally (the guest key,
-            // merged into the account on sign-in).
-            updateLocal(base, userId: nil, id: articleId, add: true)
-            return
-        }
-        struct InsertRow: Encodable {
-            let user_id: String
-            let article_id: String
-            let interaction_type: String
-        }
-        do {
-            let client = try db()
-            try await client
-                .from("user_article_interactions")
-                .insert(InsertRow(user_id: userId, article_id: articleId, interaction_type: "favorite"))
-                .execute()
-        } catch let error where Self.isMissingTableError(error) {
-            updateLocal(base, userId: userId, id: articleId, add: true)
-        } catch let error where Self.isDuplicate(error) {
-            // Already saved.
-        }
-    }
-
-    private func removeArticleFavorite(articleId: String) async throws {
-        let base = Self.localBase(.article)
-        guard let userId = currentUserId else {
-            updateLocal(base, userId: nil, id: articleId, add: false)
-            return
-        }
-        do {
-            let client = try db()
-            try await client
-                .from("user_article_interactions")
-                .delete()
-                .eq("user_id", value: userId)
-                .eq("article_id", value: articleId)
-                .eq("interaction_type", value: "favorite")
-                .execute()
-        } catch let error where Self.isMissingTableError(error) {
-            // Device-only store; handled below.
-        }
-        updateLocal(base, userId: userId, id: articleId, add: false)
     }
 
     func isArticleFavorited(_ articleId: String) -> Bool {
@@ -780,9 +751,9 @@ final class FavoritesService {
     // ================================================================
 
     /// Clear the in-memory favorites and the guest (unscoped) device store.
-    /// Per-user device stores are kept: for articles they are the only copy
-    /// while `user_article_interactions` is missing, and they are keyed by
-    /// user id, so the next account cannot see them (IOS-DD-SAVED-20).
+    /// Per-user device stores are kept: they hold saves the server has not
+    /// taken yet (articles before 20261116000010 is applied), and they are
+    /// keyed by user id, so the next account cannot see them (IOS-DD-SAVED-20).
     func reset() {
         favoriteEventIds = []
         favoriteRestaurantIds = []

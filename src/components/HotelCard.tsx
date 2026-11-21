@@ -7,6 +7,7 @@ import { STATUS_BADGE } from "@/lib/categoryStyles";
 import { hotelClassStars, hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -19,6 +20,12 @@ interface HotelCardProps {
    * distance to a place (plan-stay WP2 item 7). Omitted otherwise.
    */
   distanceLabel?: string;
+  /**
+   * Load the image eagerly with fetchpriority="high". Pass it for the first
+   * row of the /stay grid only: that row holds the LCP image, and anything
+   * further down competing with it slows the LCP (WEB-PERF-041).
+   */
+  priority?: boolean;
 }
 
 function renderStars(rating: number | null) {
@@ -45,6 +52,7 @@ export default function HotelCard({
   variant = "default",
   showBookButton = true,
   distanceLabel,
+  priority = false,
 }: HotelCardProps) {
   const imageHeight = variant === "compact" ? "h-36" : variant === "featured" ? "h-56" : "h-48";
   // One booking truth (plan-stay WP2 item 4): only an http(s) URL renders, an
@@ -54,20 +62,24 @@ export default function HotelCard({
 
   return (
     <Card className="group overflow-hidden transition-shadow duration-200 hover:shadow-md">
-      {/* Named on the link itself: with no image_url the only content is a
-          role="img" placeholder, which check-prerender-content (and some
-          crawlers) do not read as a link name. Eight hotels hit this. */}
+      {/* Named on the link itself: a hotel with no photo renders a role="img"
+          placeholder, whose label does not name the link around it, so the
+          link had no accessible name (check-prerender-content on /stay). */}
       <Link to={`/stay/${hotel.slug}`} className="block" aria-label={hotel.name}>
         <div className={`relative ${imageHeight} overflow-hidden bg-muted`}>
           {hotel.image_url ? (
-            <img
+            <OptimizedImage
               src={hotel.image_url}
               alt={hotel.name}
-              width={640}
-              height={192}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              decoding="async"
+              containerClassName="w-full h-full"
+              priority={priority}
+              // Same three-column grid as every other hub; the compact variant
+              // sits in rails that are never wider than a card.
+              sizes={
+                variant === "compact"
+                  ? "(max-width: 640px) 100vw, 320px"
+                  : "(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+              }
             />
           ) : (
             <div

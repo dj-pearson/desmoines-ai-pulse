@@ -7,12 +7,21 @@
  * group always has one honest heading ("This weekend" or "Later this week")
  * instead of a mix a reorder could not fill.
  *
+ * Each band is two reads (WEB-FEAT-074): rows that START in the window, and
+ * rows that started earlier and are still running when it opens, so a
+ * festival that opened Thursday is under "This weekend". The running read is
+ * capped at HOME_WEEK_RUNNING_LIMIT and ordered by end, the same shape as
+ * useEventsInRange's ongoing request: a Thu-Sun festival sorts ahead of a
+ * three-month exhibit, and neither can push a weekend start off the page,
+ * because runs always come after the starts.
+ *
  * No exact count (the block renders no totals), the list projection, and the
  * standard visibility predicate (applyEventVisibility).
  *
  * The key carries the Central date, so it rolls over at midnight rather than
  * on every render.
  */
+import { useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { applyEventVisibility } from "@/lib/eventQuery";
@@ -48,8 +57,22 @@ export interface HomeWeekEvent {
   updated_at?: string | null;
 }
 
+/**
+ * Runs carried into a band from before it opens. Small on purpose: the
+ * group is a handful of cards, and season-long exhibits would otherwise
+ * fill it.
+ */
+export const HOME_WEEK_RUNNING_LIMIT = 3;
+
 export interface HomeWeekEventsResult {
+  /** The band's starts in start order, then the runs carried into it. */
   events: HomeWeekEvent[];
+  /**
+   * How many of `events` came from the limit-sized starts read. Compare this,
+   * not events.length, with the limit to decide whether the server may have
+   * more: the runs are a fixed extra and never page.
+   */
+  startCount: number;
   /** Which window the rows came from; null before the first answer. */
   band: HomeWeekBand | null;
   /** Heading for the group, matching `band`. */
@@ -59,18 +82,42 @@ export interface HomeWeekEventsResult {
   refetch: () => void;
 }
 
-async function readWindow(window: CentralWindow, limit: number): Promise<HomeWeekEvent[]> {
-  const { data, error } = await applyEventVisibility(
-    supabase
-      .from("events")
-      .select(EVENT_LIST_COLUMNS)
-      .gte("date", window.start)
-      .lte("date", window.end),
-  )
-    .order("date", { ascending: true })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []) as unknown as HomeWeekEvent[];
+interface BandRows {
+  starts: HomeWeekEvent[];
+  running: HomeWeekEvent[];
+}
+
+async function readBand(window: CentralWindow, limit: number): Promise<BandRows> {
+  const [starts, running] = await Promise.all([
+    applyEventVisibility(
+      supabase
+        .from("events")
+        .select(EVENT_LIST_COLUMNS)
+        .gte("date", window.start)
+        .lte("date", window.end),
+    )
+      .order("date", { ascending: true })
+      .limit(limit),
+    applyEventVisibility(
+      supabase
+        .from("events")
+        .select(EVENT_LIST_COLUMNS)
+        .lt("date", window.start)
+        .gte("end_date", window.start),
+    )
+      .order("end_date", { ascending: true })
+      .limit(HOME_WEEK_RUNNING_LIMIT),
+  ]);
+  if (starts.error) throw starts.error;
+  if (running.error) throw running.error;
+  return {
+    starts: (starts.data ?? []) as unknown as HomeWeekEvent[],
+    running: (running.data ?? []) as unknown as HomeWeekEvent[],
+  };
+}
+
+function isEmpty(band: BandRows): boolean {
+  return band.starts.length === 0 && band.running.length === 0;
 }
 
 export function useHomeWeekEvents(limit = 9): HomeWeekEventsResult {
@@ -79,10 +126,10 @@ export function useHomeWeekEvents(limit = 9): HomeWeekEventsResult {
 
   const query = useQuery({
     queryKey: ["home-week-events", day, limit],
-    queryFn: async (): Promise<{ rows: HomeWeekEvent[]; band: HomeWeekBand }> => {
-      const weekend = await readWindow(windows.weekend, limit);
-      if (weekend.length > 0 || !windows.weekdays) return { rows: weekend, band: "weekend" };
-      return { rows: await readWindow(windows.weekdays, limit), band: "weekdays" };
+    queryFn: async (): Promise<{ rows: BandRows; band: HomeWeekBand }> => {
+      const weekend = await readBand(windows.weekend, limit);
+      if (!isEmpty(weekend) || !windows.weekdays) return { rows: weekend, band: "weekend" };
+      return { rows: await readBand(windows.weekdays, limit), band: "weekdays" };
     },
     // "Show more" raises the limit; keep the cards while the longer page loads.
     placeholderData: keepPreviousData,
@@ -92,8 +139,11 @@ export function useHomeWeekEvents(limit = 9): HomeWeekEventsResult {
 
   const band = query.data?.band ?? null;
   const refetch = query.refetch;
+  const rows = query.data?.rows;
+  const events = useMemo(() => (rows ? [...rows.starts, ...rows.running] : []), [rows]);
   return {
-    events: query.data?.rows ?? [],
+    events,
+    startCount: rows?.starts.length ?? 0,
     band,
     label: windows.labels[band ?? "weekend"],
     isLoading: query.isLoading,

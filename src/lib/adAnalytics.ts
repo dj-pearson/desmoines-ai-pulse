@@ -5,10 +5,16 @@
  * logged to user_analytics tagged with an inventory_class — making fill rate
  * (paid vs affiliate vs house) measurable from one place. Impressions deduped
  * per session+class+placement.
+ *
+ * Nothing is written, and no session id is stored, without analytics consent
+ * (WEB-LEGAL-014). These rows count affiliate and house fill for our own
+ * reporting and nobody is billed on them, so there is no basis for recording
+ * a visitor who declined. Paid campaign impressions are a separate path.
  */
 import { supabase } from "@/integrations/supabase/client";
 import { storage } from "@/lib/safeStorage";
 import { createLogger } from "@/lib/logger";
+import { analyticsGranted } from "@/lib/analyticsConsent";
 
 const log = createLogger("adAnalytics");
 const SESSION_KEY = "dmi-session-id";
@@ -31,6 +37,7 @@ export function logAdImpression(
   placement: string,
   meta?: Record<string, unknown>
 ): void {
+  if (!analyticsGranted()) return;
   const key = `${getSessionId()}:${inventoryClass}:${placement}`;
   if (seenImpressions.has(key)) return;
   seenImpressions.add(key);
@@ -42,6 +49,7 @@ export function logAdClick(
   placement: string,
   meta?: Record<string, unknown>
 ): void {
+  if (!analyticsGranted()) return;
   write("ad_click", inventoryClass, placement, meta);
 }
 

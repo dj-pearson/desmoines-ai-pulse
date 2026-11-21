@@ -94,12 +94,16 @@ enum EventSlug {
 
     // MARK: - Link segments
 
-    /// /events/<segment> landing pages on the web (src/App.tsx), which are
-    /// not events.
+    /// /events/<segment> pages on the web (src/App.tsx) that are not events.
+    /// `series` is the parent of /events/series/<slug>, the annual-event
+    /// pages (IOS-AUDIT-FEAT-045): without it "series" read as an event slug
+    /// and every series link opened a detail screen that found nothing.
+    /// src/lib/__tests__/iosEventLinkParity.test.ts fails when a literal
+    /// /events/<segment> route is missing here.
     static let landingSegments: Set<String> = [
         "today", "this-weekend", "near-me", "free", "kids", "date-night",
         "west-des-moines", "ankeny", "urbandale", "johnston", "altoona",
-        "clive", "windsor-heights", "waukee",
+        "clive", "windsor-heights", "waukee", "series",
     ]
 
     /// /events/<month>-<year>, the web's monthly archive pages.

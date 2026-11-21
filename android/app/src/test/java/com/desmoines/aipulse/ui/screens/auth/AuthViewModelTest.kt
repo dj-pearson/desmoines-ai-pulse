@@ -73,6 +73,32 @@ class AuthViewModelTest {
         verify(exactly = 0) { biometricAuthService.disable() }
     }
 
+    // --- Apple Sign-In (XPLAT-012) ---
+
+    @Test
+    fun `Apple sign-in hands off to the repository and shows nothing when the browser opens`() = runTest {
+        coEvery { authRepository.signInWithApple() } returns Result.success(Unit)
+
+        viewModel.signInWithApple()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { authRepository.signInWithApple() }
+        assertNull(viewModel.errorMessage.value)
+        // No spinner left behind: the session arrives later, via the callback.
+        assertFalse(viewModel.isSigningIn.value)
+    }
+
+    @Test
+    fun `Apple sign-in that cannot open the browser says so instead of failing silently`() = runTest {
+        coEvery { authRepository.signInWithApple() } returns
+            Result.failure(IllegalStateException("No activity found to handle Intent"))
+
+        viewModel.signInWithApple()
+        advanceUntilIdle()
+
+        assertEquals(AuthViewModel.APPLE_SIGN_IN_FAILED_MESSAGE, viewModel.errorMessage.value)
+    }
+
     @Nested
     inner class EmailValidation {
 

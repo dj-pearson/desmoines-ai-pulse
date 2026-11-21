@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useTonightPairings } from "@/hooks/useTonightPairings";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
-import { formatCentralTime, formatMiles, type TonightPairing } from "@/lib/tonightPairings";
+import { formatCentralTime, formatMiles } from "@/lib/tonightTime";
+import type { TonightPairing } from "@/lib/tonightPairings";
 import { isPrerender } from "@/lib/isPrerender";
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { downloadCSV, generateCsvFilename } from '@/lib/csvUtils';
 
 interface ExportOptions {

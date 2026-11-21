@@ -49,7 +49,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { SecurityUtils } from "@/lib/securityUtils";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
 interface Submission {
@@ -372,6 +372,7 @@ export default function FeedbackInbox() {
                 setPage(0);
               }}
               placeholder="Search name, email, message…"
+              aria-label="Search feedback"
               className="pl-8"
             />
           </div>
@@ -382,7 +383,7 @@ export default function FeedbackInbox() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -401,7 +402,7 @@ export default function FeedbackInbox() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by priority">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
@@ -420,7 +421,7 @@ export default function FeedbackInbox() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by inquiry type">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -562,14 +563,17 @@ export default function FeedbackInbox() {
               <div className="space-y-4 mt-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="min-w-[160px]">
-                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <Label
+                      htmlFor="feedback-detail-status"
+                      className="text-xs uppercase tracking-wide text-muted-foreground"
+                    >
                       Status
                     </Label>
                     <Select
                       value={detail.status}
                       onValueChange={(v) => updateDetail({ status: v })}
                     >
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger id="feedback-detail-status" className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -582,14 +586,17 @@ export default function FeedbackInbox() {
                     </Select>
                   </div>
                   <div className="min-w-[160px]">
-                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <Label
+                      htmlFor="feedback-detail-priority"
+                      className="text-xs uppercase tracking-wide text-muted-foreground"
+                    >
                       Priority
                     </Label>
                     <Select
                       value={detail.priority}
                       onValueChange={(v) => updateDetail({ priority: v })}
                     >
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger id="feedback-detail-priority" className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

@@ -81,6 +81,30 @@ export function criticalPathChunks(distDir) {
   return out;
 }
 
+/**
+ * WEB-PERF-066. The entry's __vite__mapDeps file list names every chunk a
+ * dynamic import from the entry preloads. Chunks index.html already loads are
+ * evaluated before the entry runs, so listing them is dead weight, and
+ * vite.config.ts's preloadAlreadyLoaded() removes them. That only works while
+ * its plugin's generateBundle runs before Vite's; if that ever stops holding,
+ * the trim becomes a silent no-op. This is the check that notices.
+ *
+ * Returns the critical-path refs ("/assets/vendor-react-x.js") that appear in
+ * the entry's mapDeps list. Empty means the trim held.
+ */
+export function criticalChunksInEntryPreloads(distDir) {
+  const html = readFileSync(join(distDir, 'index.html'), 'utf8');
+  const entry = html.match(/<script[^>]*type="module"[^>]*src="(\/assets\/[^"]+\.js)"/)?.[1];
+  if (!entry) return [];
+  const code = readFileSync(join(distDir, entry.replace(/^\//, '')), 'utf8');
+  const list = code.match(/m\.f=(\[[^\]]*\])/)?.[1];
+  if (!list) return [];
+  const preloaded = new Set(JSON.parse(list).map((f) => `/${f}`));
+  return criticalPathChunks(distDir)
+    .map((c) => c.ref)
+    .filter((ref) => ref !== entry && preloaded.has(ref));
+}
+
 function main() {
   if (!existsSync(join(DIST, 'index.html'))) {
     console.error('[bundle-budget] dist/index.html not found - run npm run build first. Skipping.');
@@ -92,6 +116,17 @@ function main() {
     // index.html referencing no JS means the parse broke, not that the bundle
     // is free. Failing loudly beats reporting 0 KB as a pass.
     console.error('[bundle-budget] index.html references no JS chunks - refusing to report a pass.');
+    process.exit(1);
+  }
+
+  const redundant = criticalChunksInEntryPreloads(DIST);
+  if (redundant.length) {
+    console.error(
+      "[bundle-budget] the entry's preload lists name chunks index.html already loads:\n" +
+        redundant.map((r) => `     ${r}`).join('\n') +
+        "\n   vite.config.ts's preloadAlreadyLoaded() should drop these (WEB-PERF-066).\n" +
+        '   Its plugin must run generateBundle before vite:build-import-analysis.',
+    );
     process.exit(1);
   }
 

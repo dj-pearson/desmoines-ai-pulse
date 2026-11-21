@@ -306,13 +306,12 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="alternate" type="application/rss+xml" title="Des Moines Insider" href="/rss.xml" />
 
-    <!-- CRITICAL: Early error handler for Capacitor/mobile and extension-induced failures.
-         Module-level errors in ES modules are silent in WKWebView.
-         Also catches "Unexpected token '<'" from Lockdown/SES extensions intercepting scripts.
+    <!-- CRITICAL: Early error handler for extension-induced failures.
+         Catches "Unexpected token '<'" from Lockdown/SES extensions intercepting scripts,
+         and shows the raw stack when the page is opened from file://.
          This handler runs BEFORE the app's module script loads. -->
     <script>
       (function() {
-        var isCapacitor = typeof window.Capacitor !== 'undefined';
         window.__earlyErrors = [];
         function showOverlay(html) {
           var overlay = document.getElementById('__early_error__');
@@ -334,7 +333,7 @@
         }
         window.onerror = function(msg, src, line, col, err) {
           window.__earlyErrors.push({ msg: msg, src: src, line: line, err: err });
-          if (isCapacitor || location.protocol === 'file:') {
+          if (location.protocol === 'file:') {
             showOverlay('<div style="margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px"><strong style="color:#ff4444">Startup Error</strong><pre style="white-space:pre-wrap;word-break:break-word;margin:4px 0 0;color:#ffa0a0">' + String(err && err.stack || msg).replace(/</g, '&lt;') + '</pre></div>');
           } else if (isExtensionError(msg, src)) {
             showOverlay('<div style="max-width:480px;margin:40px auto;padding:24px;text-align:left"><strong style="color:#ff4444;font-size:16px">Having trouble loading?</strong><p style="margin:16px 0;color:#ccc;line-height:1.6">This often fixes itself with a hard refresh. Try:</p><ul style="margin:16px 0;padding-left:20px;color:#ccc;line-height:1.8"><li><strong>Hard refresh</strong>: Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac)</li><li>Open in an Incognito/Private window</li><li>Disable extensions and refresh</li></ul><p style="margin:20px 0"><button onclick="location.reload(true)" style="background:#2563eb;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px">Retry (hard refresh)</button></p><p style="margin:16px 0;font-size:12px;color:#888">Technical: ' + String(msg).replace(/</g, '&lt;').substring(0, 120) + '</p></div>');

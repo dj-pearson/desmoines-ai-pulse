@@ -7,7 +7,7 @@
  * /advertise enforced MIN_LEAD_TIME_DAYS in the browser and
  * create-campaign-checkout took any date, including one in the past.
  */
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 import {
   addDays,
   campaignStartProblem,

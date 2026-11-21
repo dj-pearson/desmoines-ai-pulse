@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv, Plugin } from "vite";
+import type { OutputBundle } from "rollup";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import fs from "node:fs";
@@ -70,6 +71,46 @@ function injectBuildTimestamp(): Plugin {
   };
 }
 
+/**
+ * The manual chunks every page loads before it can render (React, the router
+ * and query client, Supabase). manualChunks below returns exactly these names,
+ * and src/__tests__/manualChunks.test.ts pins that the two agree.
+ */
+export const CRITICAL_PATH_CHUNKS: readonly string[] = [
+  "vendor-react",
+  "vendor-react-ecosystem",
+  "vendor-supabase",
+];
+
+export const HEAVY_PRELOAD_BYTES = 150 * 1024;
+
+/**
+ * Chunks over the threshold that an HTML page preloads (WEB-PERF-068).
+ *
+ * vendor-supabase is ~216 KB raw and is preloaded from index.html on purpose,
+ * so without the exemption this reported it on every good build and the one
+ * warning meant to catch a lazy chunk on first paint read as noise. The
+ * critical-path vendors are not unbudgeted: check-bundle-budget totals every
+ * JS file index.html references and fails when that grows. Matched on the
+ * chunk's name (the manual-chunk name), not a filename prefix, so
+ * "vendor-react" cannot also exempt a future "vendor-react-whatever".
+ */
+export function findHeavyPreloads(
+  html: string,
+  bundle: OutputBundle,
+  thresholdBytes: number = HEAVY_PRELOAD_BYTES,
+  exempt: readonly string[] = CRITICAL_PATH_CHUNKS
+): { fileName: string; bytes: number }[] {
+  const out: { fileName: string; bytes: number }[] = [];
+  for (const m of html.matchAll(/<link rel="modulepreload"[^>]*href="\/(assets\/[^"]+)"/g)) {
+    const chunk = bundle[m[1]];
+    if (!chunk || chunk.type !== "chunk" || exempt.includes(chunk.name)) continue;
+    const bytes = Buffer.byteLength(chunk.code);
+    if (bytes > thresholdBytes) out.push({ fileName: m[1].slice("assets/".length), bytes });
+  }
+  return out;
+}
+
 // Custom plugin to remove heavy lazy-loaded chunks from preload list
 function removeLazyPreloads(): Plugin {
   return {
@@ -131,28 +172,103 @@ function removeLazyPreloads(): Plugin {
       // usually nothing left to strip, so that condition now fires on success -
       // a warning on every good build, which is how people learn to ignore
       // warnings. It asserts the actual budget instead: nothing heavy may be
-      // preloaded from the entry HTML, whatever it happens to be called.
-      const HEAVY_PRELOAD_BYTES = 150 * 1024;
+      // preloaded from the entry HTML, whatever it happens to be called,
+      // except the critical-path vendors (WEB-PERF-068, see findHeavyPreloads).
       for (const asset of Object.values(bundle)) {
         if (asset.type !== "asset" || !asset.fileName.endsWith(".html")) continue;
-        const preloaded = String(asset.source).match(
-          /<link rel="modulepreload"[^>]*href="\/assets\/([^"]+)"/g
-        ) ?? [];
-        for (const link of preloaded) {
-          const name = link.match(/assets\/([^"]+)/)?.[1];
-          const chunk = name ? bundle[`assets/${name}`] : undefined;
-          if (!chunk || chunk.type !== "chunk") continue;
-          const bytes = Buffer.byteLength(chunk.code);
-          if (bytes > HEAVY_PRELOAD_BYTES) {
-            this.warn(
-              `remove-lazy-preloads: ${name} is ${(bytes / 1024).toFixed(0)} KB ` +
-                `and is preloaded from ${asset.fileName}. That is first-paint ` +
-                `weight - add a pattern above or stop forcing it into a chunk.`
-            );
-          }
+        for (const { fileName, bytes } of findHeavyPreloads(String(asset.source), bundle)) {
+          this.warn(
+            `remove-lazy-preloads: ${fileName} is ${(bytes / 1024).toFixed(0)} KB ` +
+              `and is preloaded from ${asset.fileName}. That is first-paint ` +
+              `weight - add a pattern above or stop forcing it into a chunk.`
+          );
         }
       }
       void stripped;
+    },
+  };
+}
+
+/**
+ * Drop preload deps the importing chunk has already loaded (WEB-PERF-066).
+ *
+ * For every dynamic import Vite lists the target chunk plus its whole static
+ * import closure, and only excludes the importing chunk itself. Everything the
+ * importer statically imports is already evaluated by the time its code can
+ * reach the import() call, so naming it again preloads nothing; it is bytes
+ * in the importer. In the entry that meant vendor-react, vendor-react-ecosystem
+ * and vendor-supabase in almost every one of its 160 __vite__mapDeps arrays,
+ * though index.html loads all three before the entry runs. Lazy chunks that
+ * import further lazy chunks carry the same repeats for their own imports.
+ *
+ * Only deps in the HOST's static closure go. Trimming deps that the target
+ * would discover itself (for example keeping only direct deps) is a different
+ * trade: it turns one parallel preload batch into a waterfall per level.
+ */
+export function staticImportClosure(
+  importsOf: (fileName: string) => readonly string[] | undefined,
+  start: string
+): Set<string> {
+  const seen = new Set<string>();
+  const stack = [start];
+  while (stack.length) {
+    const file = stack.pop() as string;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    stack.push(...(importsOf(file) ?? []));
+  }
+  return seen;
+}
+
+export function dropAlreadyLoadedDeps(
+  deps: readonly string[],
+  loaded: ReadonlySet<string>
+): string[] {
+  return deps.filter((dep) => !loaded.has(dep));
+}
+
+/**
+ * resolveDependencies is called from inside vite:build-import-analysis's
+ * generateBundle with only (url, deps, { hostId }), not the chunk graph, so a
+ * plugin captures the bundle first. order "pre" puts its generateBundle ahead
+ * of Vite's. If that ever stops holding, resolveDependencies returns deps
+ * unchanged (a no-op, never a broken preload), and check-bundle-budget's
+ * "already loaded" assertion fails the build check.
+ */
+export function preloadAlreadyLoaded(): {
+  plugin: Plugin;
+  resolveDependencies: (
+    url: string,
+    deps: string[],
+    context: { hostId: string; hostType: "html" | "js" }
+  ) => string[];
+} {
+  let bundle: OutputBundle | undefined;
+  const closures = new Map<string, Set<string>>();
+  const importsOf = (fileName: string) => {
+    const out = bundle?.[fileName];
+    return out && out.type === "chunk" ? out.imports : undefined;
+  };
+  return {
+    plugin: {
+      name: "preload-already-loaded",
+      apply: "build",
+      generateBundle: {
+        order: "pre",
+        handler(_options, outputBundle) {
+          bundle = outputBundle;
+          closures.clear();
+        },
+      },
+    },
+    resolveDependencies(_url, deps, { hostId, hostType }) {
+      if (!bundle || hostType !== "js" || !importsOf(hostId)) return deps;
+      let loaded = closures.get(hostId);
+      if (!loaded) {
+        loaded = staticImportClosure(importsOf, hostId);
+        closures.set(hostId, loaded);
+      }
+      return dropAlreadyLoadedDeps(deps, loaded);
     },
   };
 }
@@ -163,6 +279,7 @@ export default defineConfig(({ command, mode }) => {
   // Vite only exposes .env values on `import.meta.env` inside app code, so the
   // config has to load them itself to validate index.html placeholders.
   const loadedEnv = loadEnv(mode, process.cwd(), "");
+  const preloadTrim = preloadAlreadyLoaded();
   return {
   base: "/",
   server: {
@@ -173,6 +290,7 @@ export default defineConfig(({ command, mode }) => {
     assertHtmlEnvPlaceholders(loadedEnv), // Fail clearly on missing %VAR% (WEB-CI-022)
     injectBuildTimestamp(), // Add timestamp to prevent HTML caching
     removeLazyPreloads(), // Remove vendor-maps/vendor-three from preload list
+    preloadTrim.plugin, // Captures the bundle for modulePreload below (WEB-PERF-066)
     react({
       babel: {
         plugins: [
@@ -224,6 +342,8 @@ export default defineConfig(({ command, mode }) => {
     cssCodeSplit: true,
     minify: "esbuild", // Use esbuild - faster and more reliable than terser
     target: "es2020",
+    // WEB-PERF-066: drop preload deps the importing chunk already loaded.
+    modulePreload: { resolveDependencies: preloadTrim.resolveDependencies },
     // No esbuild options here: `build.esbuild` isn't a Vite option, so the
     // drop list that sat here was ignored and every console.* shipped. It
     // lives at the top level now (see `esbuild` below this block).
@@ -330,19 +450,52 @@ export default defineConfig(({ command, mode }) => {
           // at runtime ("Cannot access 'X' before initialization").
           // Let Vite handle them automatically via its own code-splitting.
 
-          // Rich text editing
-          if (
-            id.includes("tiptap") ||
-            id.includes("@tiptap/") ||
-            id.includes("prosemirror")
-          ) {
-            return "vendor-editor";
-          }
+          // No vendor-editor chunk (WEB-PERF-067). Tiptap and prosemirror were
+          // forced together "to isolate the editor", and the only thing that
+          // imports them, cms/RichTextEditor.tsx, is already lazy, so the chunk
+          // isolated nothing. What it did instead: Rollup moves an unassigned
+          // dependency of a forced chunk's modules INTO that chunk, and
+          // fast-equals is a dependency of both @tiptap/react and recharts
+          // (via react-smooth). So every recharts page - AdminAgents,
+          // AdminAnalyticsPage, AdminRefunds, CampaignAnalytics - imported the
+          // whole editor (~122 KB gz) for one 1 KB equality helper. The
+          // includes("tiptap") test also caught src/components/cms/
+          // tiptap-styles.css, which put AdminArticleEditor's own stylesheet
+          // in the chunk and dragged it there too.
+          // Measured with scripts/measure-route-preload.mjs, gz summed over
+          // the 137 lazy imports in App.tsx: unused passengers 614.8 -> 0,
+          // routes 9,743 -> 9,121, critical path unchanged at 176.0. Only
+          // those five routes moved, each 123-125 KB lighter:
+          //     AdminArticleEditor 230.6 -> 105.3   AdminAnalytics 392.6 -> 269.2
+          //     AdminAgents 309.2 -> 185.9   AdminRefunds 291.9 -> 168.6
+          //     CampaignAnalytics 288.7 -> 165.4
+          // Tiptap now travels with RichTextEditor's own lazy chunk.
+          // Pinned by src/__tests__/manualChunks.test.ts.
 
-          // Date utilities
-          if (id.includes("date-fns")) {
-            return "vendor-dates";
-          }
+          // No date-fns chunk (WEB-PERF-064). `if (id.includes("date-fns"))
+          // return "vendor-dates"` was the last library forced together that is
+          // not on every page's critical path, and it failed the same way the
+          // Radix and three.js chunks above did: 36 KB minified / 10.3 KB gz of
+          // date-fns and date-fns-tz, every function any page uses, fetched by
+          // 114 of the 159 lazy imports. Worse than its own size, the forced
+          // chunk skewed how Rollup grouped and merged the app's shared modules,
+          // so routes that format no date at all still preloaded
+          // eventsHubQuery, restaurantHours, tonightPairings and useCampaigns.
+          //
+          // Per-route JS beyond the critical path, gzipped, summed over every
+          // lazy route in App.tsx, one build each way:
+          //     all 131 routes      11,779 -> 10,840 KB  (-938; 78 better, 36 worse)
+          //     the 89 public ones   6,033 ->  5,727 KB  (-306)
+          //     /pricing 73.3 -> 52.4   /contact 90.2 -> 66.7   /auth 106.5 -> 83.0
+          //     /articles 107.4 -> 96.8   /restaurants/:id 160.9 -> 155.8
+          //     /events/:id 174.8 -> 170.4   / 78.8 -> 77.9
+          // The worse 36 are 0.5-5.5 KB each (/hotels 102.8 -> 108.3 is the
+          // largest): Rollup's experimentalMinChunkSize merge, below, now folds
+          // a different set of small shared modules into chunks those routes
+          // import. That over-fetch exists either way; this change moves less of
+          // it onto fewer routes (WEB-PERF-065 then turned the merge off).
+          // Critical path unchanged (174.9 -> 175.0 KB).
+          // Pinned by src/__tests__/manualChunks.test.ts.
 
           // No lucide-react chunk. Forcing every icon into one vendor-icons
           // chunk put icons only /admin uses on the critical path of every
@@ -357,32 +510,39 @@ export default defineConfig(({ command, mode }) => {
         assetFileNames: "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",
-        // Rollup merges any chunk smaller than this into its importer. At the
-        // 20000 it used to carry, every small lazy module landed in the ENTRY:
-        // src/pages/AdminGscCallback.tsx - an admin OAuth callback - was in the
-        // first paint of every visitor, along with useMediaUpload, useMFA,
-        // useArticles, useCampaigns, useCampaignNotifications, useSocialFeatures,
-        // useProximitySearch and usePushNotifications. All of them are lazy at
-        // the source; the bundler put them back.
+        // No chunk merging (WEB-PERF-065). 1 is Rollup's default: it folds
+        // away only chunks with no code at all. Any larger value merges small
+        // chunks into a chunk their importers share, and every route that
+        // imports the merged chunk then downloads all of it - modules it never
+        // reaches included. With 1000 here, /hotels fetched eventsHubQuery,
+        // useEventLanding and useProximitySearch; /trip-planner carried 28.8 KB
+        // gz it never ran.
         //
-        // The comment that used to sit here read "prevents tiny preloaded
-        // chunks", and that reason no longer holds: scripts/prerender.mjs strips
-        // the runtime-injected modulepreload links - 1,110 of them in the last
-        // build - so the prerendered HTML carries 4 preloads per route either
-        // way. The setting was paying for a problem something else already
-        // solves.
-        //
-        // MEASURED, and it is NOT a smooth curve, so do not "tune" this - test
-        // the values you would actually ship:
-        //     20000 -> 227.5 KB gz critical path, 149 chunks   (was here)
-        //     10000 -> 230.0 KB                 , 186
-        //      5000 -> 237.0 KB across SIX chunks, 222
-        //      1000 -> 219.3 KB                 , 281          (here now)
-        // The trade is explicit: 8.2 KB off every first paint for 132 more
-        // chunk files, which a visitor pays for only when they navigate to a
-        // route that needs one. Six routes verified in a browser against the
-        // built output - no chunk failures, no page errors.
-        experimentalMinChunkSize: 1000,
+        // History, so nobody re-tunes this blind. 20000 put every small lazy
+        // module in the ENTRY (AdminGscCallback, useMFA, useCampaigns... on
+        // every first paint). 1000 got the critical path from 227.5 to 219.3 KB
+        // and was the right call against 20000. Measured against no merging,
+        // with `node scripts/measure-route-preload.mjs --min-chunk N`, which
+        // reads Rollup's module graph so it can tell needed bytes from
+        // passengers (gz, sums over the 137 lazy imports in App.tsx):
+        //     N       routes sum   of which unused   files   critical path
+        //     2000    12,325       3,405             6,232   175.8
+        //     1000    10,853       1,892             6,480   174.9  (was here)
+        //      500    10,367       1,362             6,600   175.4
+        //        1     9,734         615             6,921   176.0  (here now)
+        // At 1, 131 routes get lighter and none heavier by more than 0.2 KB:
+        //     /restaurants 173.7 -> 152.0   /events 220.3 -> 204.0
+        //     /events/:id 168.0 -> 154.6    /restaurants/:id 152.2 -> 139.1
+        //     /trip-planner 157.7 -> 131.3  / 76.2 -> 70.5   /hotels 105.9 -> 87.7
+        // The 615 left was the forced vendor-editor chunk on admin pages, not
+        // merging; WEB-PERF-067 removed it and the unused column is now 0. The cost is 441 more files summed over routes (/ 47 -> 62,
+        // /events 130 -> 150), fetched in parallel as one modulepreload batch
+        // over HTTP/2, and +1.1 KB on the critical path: the entry's
+        // __vite__mapDeps arrays name 79 more chunk files (WEB-PERF-066).
+        // scripts/prerender.mjs strips the runtime preload links, so the
+        // prerendered HTML does not grow.
+        // Pinned by src/__tests__/manualChunks.test.ts.
+        experimentalMinChunkSize: 1,
       },
     },
     chunkSizeWarningLimit: 500, // Stricter limit due to better splitting

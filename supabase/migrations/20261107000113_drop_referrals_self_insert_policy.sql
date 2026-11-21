@@ -1,0 +1,37 @@
+-- WEB-ADS-019: members can no longer write their own referrals rows.
+--
+-- THE HOLE. 20251126000000 created
+--   CREATE POLICY "Users can create referrals" ON public.referrals
+--     FOR INSERT WITH CHECK (auth.uid() = referrer_id);
+-- which checks one column. Any signed-in user could POST /rest/v1/referrals
+-- naming themselves as referrer and set everything else:
+--   - status 'subscribed' or 'rewarded' (both allowed by the CHECK), which
+--     get_my_referral_stats() counts and, since WEB-ADS-018, the invite card
+--     prints as paid conversions. The number that says whether invites bring
+--     in paying members could be set by the member it describes.
+--   - referred_user_id = somebody else's new account. attribute_referral()
+--     returns 'already_attributed' once any row names that user (and
+--     idx_referrals_referred_user_once makes it unique), so a squatted row
+--     takes the credit from whoever actually invited them.
+-- No reward is attached today. This has to be closed before one is.
+--
+-- WHY DROPPING IT BREAKS NOTHING. Both writers are SECURITY DEFINER functions
+-- owned by the migration role, which RLS does not apply to:
+--   attribute_referral(text)      20261006000002, the only INSERT
+--   mark_referral_subscribed()    20261107000105, the only UPDATE (trigger)
+-- Edge functions use the service role, which bypasses RLS. No code in src,
+-- supabase/functions, ios or android writes to referrals directly; the web
+-- reads it only through get_my_referral_stats(). A vitest
+-- (src/lib/__tests__/referralsWriteSurface.test.ts) keeps it that way.
+--
+-- WHY THIS RELEASE. Removing a policy that grants a write is a tightening, so
+-- CLAUDE.md puts it a release after the replacement writer shipped.
+-- 20261006000002's header deferred it for exactly that reason; that migration
+-- is on main and deployed. No shipped web build or binary ever used the
+-- direct insert, so there is no older client to break.
+--
+-- What stays: RLS enabled, and "Users can view own referrals" (SELECT,
+-- auth.uid() = referrer_id). With no INSERT policy left, an authenticated
+-- INSERT is refused with 42501.
+
+DROP POLICY IF EXISTS "Users can create referrals" ON public.referrals;

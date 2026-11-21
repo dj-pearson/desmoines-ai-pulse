@@ -8,8 +8,8 @@ import { STALE_TIME } from "@/lib/queryConfig";
  * caps it (account plan WP3 item 5).
  *
  * The plan-limit trigger counts event favorites in `user_event_interactions`
- * PLUS every row in `content_favorites` (20260918000001_enforce_plan_limits.sql,
- * lines 96-98). The dashboard used `useFavorites`, which counts events only, so
+ * PLUS every non-article row in `content_favorites` (20260918000001, with
+ * articles left out by 20261116000010: saved guides are free, XPLAT-013). The dashboard used `useFavorites`, which counts events only, so
  * someone with two saved restaurants and one event read "1 saved" while the
  * server refused their fourth save on the Free plan. It also pulled in
  * useGamification's six-way fetch for one number.
@@ -37,7 +37,8 @@ export function useSavedCount() {
         supabase
           .from("content_favorites")
           .select("id", { count: "exact", head: true })
-          .eq("user_id", userId),
+          .eq("user_id", userId)
+          .neq("content_type", "article"),
       ]);
       if (events.error) throw events.error;
       if (places.error) throw places.error;

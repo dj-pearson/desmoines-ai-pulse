@@ -10,16 +10,16 @@ import {
   type PlaygroundPick,
 } from "@/lib/playgroundHub";
 import { suburbFromLocation } from "@/lib/playgroundMeta";
-import { createSlug } from "@/lib/slug";
+import { playgroundHref } from "@/lib/slugHref";
 
 interface PlaygroundHubGuideProps {
   sections: PlaygroundHubSections<PlaygroundHubRow>;
 }
 
 function hrefOf(row: PlaygroundHubRow): string {
-  // createSlug(name), the same function the cards and the main ItemList use,
-  // so the three cannot point at different URLs for one playground.
-  return `/playgrounds/${createSlug(row.name)}`;
+  // The stored slug, the same helper the cards and the main ItemList use, so
+  // the three cannot point at different URLs for one playground (WEB-PERF-031).
+  return playgroundHref(row);
 }
 
 function schemaItems(picks: PlaygroundPick[]) {

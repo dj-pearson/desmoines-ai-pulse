@@ -178,13 +178,41 @@ final class SwipeSessionService {
 
     // MARK: - Join
 
+    /// Resolves a join code. Asks lookup_swipe_session first (WEB-SEC-070):
+    /// it answers one code at a time, returns host_user_id only to the host and
+    /// never filter_context, and keeps working once the swipe_sessions read
+    /// stops being world-readable. The direct table read is the fallback only
+    /// while the function does not exist (PGRST202 / 42883), so this binary
+    /// works whether or not migration 20261108000096 is applied yet.
     func lookupSession(byCode code: String) async throws -> Session {
         guard let client = supabase else { throw SessionError.notConfigured }
-        let normalized = code.uppercased()
-        let rows: [Session] = try await client
+        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let rows: [Session]
+        do {
+            struct Params: Encodable { let p_code: String }
+            rows = try await client
+                .rpc("lookup_swipe_session", params: Params(p_code: normalized))
+                .execute()
+                .value
+        } catch let error where Self.isMissingFunctionError(error) {
+            rows = try await legacyLookup(client: client, code: normalized)
+        }
+        // The RPC returns every status, so the active/unexpired rule the
+        // direct read applied as filters is applied here instead.
+        guard let session = rows.first(where: { Self.isJoinable($0, now: Date()) }) else {
+            throw SessionError.notFound
+        }
+        return session
+    }
+
+    /// The pre-RPC read. Remove once every environment has
+    /// lookup_swipe_session (slice 3 of WEB-SEC-070 retires the policy it
+    /// depends on).
+    private func legacyLookup(client: SupabaseClient, code: String) async throws -> [Session] {
+        try await client
             .from("swipe_sessions")
             .select()
-            .eq("code", value: normalized)
+            .eq("code", value: code)
             .eq("status", value: "active")
             // Nothing ends a session at expires_at, so an expired code still
             // matched here and the join then failed the RLS check
@@ -193,8 +221,33 @@ final class SwipeSessionService {
             .limit(1)
             .execute()
             .value
-        guard let session = rows.first else { throw SessionError.notFound }
-        return session
+    }
+
+    /// Active and not past expires_at. A missing expires_at counts as open
+    /// (the column defaults server-side, so it is only absent from a select
+    /// that leaves it out); an unparseable one counts as expired, since
+    /// joining it would fail the participants insert anyway.
+    nonisolated static func isJoinable(_ session: Session, now: Date) -> Bool {
+        guard session.status == "active" else { return false }
+        guard let raw = session.expiresAt else { return true }
+        guard let expires = parseTimestamp(raw) else { return false }
+        return expires > now
+    }
+
+    /// Postgres timestamptz as PostgREST sends it: ISO 8601, with or without
+    /// fractional seconds.
+    nonisolated static func parseTimestamp(_ raw: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: raw) { return date }
+        return ISO8601DateFormatter().date(from: raw)
+    }
+
+    /// PostgREST's "no such function" (PGRST202) or Postgres's (42883), read
+    /// structurally like isAlreadyJoined so a test can throw a stub.
+    nonisolated static func isMissingFunctionError(_ error: Error) -> Bool {
+        let code = FavoritesService.errorCode(error)
+        return code == "PGRST202" || code == "42883"
     }
 
     func join(session: Session, displayName: String?) async throws {

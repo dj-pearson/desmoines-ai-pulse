@@ -1,10 +1,10 @@
 package com.desmoines.aipulse.data.model
 
-import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.runtime.Immutable
+import com.desmoines.aipulse.util.EventSlug
+import com.desmoines.aipulse.util.UiFormatLocale
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -61,11 +61,13 @@ data class Review(
         return name.ifEmpty { "Guest" }
     }
 
-    /** "Mar 4, 2026" formatted from the ISO timestamp, or null. */
+    /**
+     * "Mar 4, 2026": the Des Moines day of created_at, or null. Formatting the
+     * parsed OffsetDateTime directly used the +00:00 offset Postgres sends, so a
+     * review written after 6pm/7pm Central was dated the next day.
+     */
     val formattedDate: String?
-        get() = createdAt?.let { iso ->
-            runCatching { OffsetDateTime.parse(iso).format(DATE_FORMAT) }.getOrNull()
-        }
+        get() = createdAt?.let(EventSlug::centralDate)?.format(DATE_FORMAT)
 
     companion object {
         private val HIDDEN_STATUSES = setOf("pending", "flagged", "rejected")

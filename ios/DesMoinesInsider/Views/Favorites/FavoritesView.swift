@@ -14,6 +14,10 @@ struct FavoritesView: View {
     @State private var toast: ToastMessage?
     @State private var showPast = false
     @State private var showClearPastConfirm = false
+    /// A failed Add to Calendar from a row, shown as the event detail screen
+    /// shows it (IOS-AUDIT-FEAT-039).
+    @State private var calendarFailure: CalendarAddResult?
+    @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     // body is split into three parts because as one expression it exceeded
@@ -149,6 +153,19 @@ struct FavoritesView: View {
                 Button("Clear past events", role: .destructive) {
                     Task { await viewModel.clearPastEvents() }
                 }
+            }
+            .alert("Calendar", isPresented: .init(
+                get: { calendarFailure != nil },
+                set: { if !$0 { calendarFailure = nil } }
+            )) {
+                if calendarFailure?.offersSettings == true {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    }
+                }
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(calendarFailure?.errorMessage ?? "")
             }
             .toastOverlay(message: $toast)
             .overlay(alignment: .bottom) {
@@ -419,8 +436,19 @@ struct FavoritesView: View {
             now: now,
             onOpen: { navigationPath.append(event) },
             onRemove: { startRemoval(.event(event)) },
-            onToast: { toast = $0 }
+            onToast: { toast = $0 },
+            onCalendarResult: { showCalendarResult($0) }
         )
+    }
+
+    /// Success is a toast, like a reminder; a failure is the event detail
+    /// screen's alert, so a denial offers the same way into Settings.
+    private func showCalendarResult(_ result: CalendarAddResult) {
+        if result == .added {
+            toast = .success("Added to your calendar", icon: "calendar.badge.plus")
+        } else {
+            calendarFailure = result
+        }
     }
 
     /// "Remind me for all" and share, on the This weekend header
@@ -642,6 +670,8 @@ private struct SavedRowShell<Content: View, Accessory: View>: View {
     let name: String
     let onOpen: () -> Void
     let onRemove: () -> Void
+    /// Offered as a VoiceOver action beside Remove when set.
+    var onAddToCalendar: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
     @ViewBuilder let accessory: () -> Accessory
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -655,6 +685,11 @@ private struct SavedRowShell<Content: View, Accessory: View>: View {
             }
             .buttonStyle(.plain)
             .accessibilityAction(named: "Remove from saved") { remove() }
+            .accessibilityActions {
+                if let onAddToCalendar {
+                    Button("Add to Calendar", action: onAddToCalendar)
+                }
+            }
 
             VStack(spacing: 0) {
                 Button(action: remove) {
@@ -699,7 +734,7 @@ private struct SavedRowLayout<Thumbnail: View, Details: View>: View {
 }
 
 private func savedThumbnail(url: String?, icon: String, tint: Color, dimmed: Bool = false) -> some View {
-    CachedAsyncImage(url: url) {
+    CachedAsyncImage(url: url, blurUp: false) {
         ZStack {
             Rectangle().fill(tint.opacity(0.15))
             Image(systemName: icon)
@@ -722,14 +757,34 @@ private struct FavoriteEventRow: View {
     let onOpen: () -> Void
     let onRemove: () -> Void
     let onToast: (ToastMessage) -> Void
+    let onCalendarResult: (CalendarAddResult) -> Void
     @State private var notifications = LocalNotificationService.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var reminderSet: Bool { notifications.isReminderSet(for: event.id) }
     private var showsReminder: Bool { !isPast && !event.isOver(at: now) }
+    /// An event that is over, or has no date, has nothing to put on a calendar.
+    private var showsAddToCalendar: Bool { showsReminder && event.parsedDate != nil }
+
+    private func addToCalendar() {
+        Task { onCalendarResult(await EventCalendarWriter.add(event)) }
+    }
+
+    /// Typed on its own: written inline as `showsAddToCalendar ? addToCalendar : nil`
+    /// inside the row's builder, Swift 6.2 (Xcode 26.3) gives up with "failed to
+    /// produce diagnostic for expression".
+    private var addToCalendarAction: (() -> Void)? {
+        guard showsAddToCalendar else { return nil }
+        return { addToCalendar() }
+    }
 
     var body: some View {
-        SavedRowShell(name: event.title, onOpen: onOpen, onRemove: onRemove) {
+        SavedRowShell(
+            name: event.title,
+            onOpen: onOpen,
+            onRemove: onRemove,
+            onAddToCalendar: addToCalendarAction
+        ) {
             SavedRowLayout {
                 savedThumbnail(url: event.imageUrl, icon: event.eventCategory.icon, tint: event.eventCategory.color, dimmed: isPast)
             } details: {
@@ -785,6 +840,11 @@ private struct FavoriteEventRow: View {
                     Task { onToast(reminderToast(await notifications.toggleReminder(for: event))) }
                 } label: {
                     Label(reminderSet ? "Remove reminder" : "Remind me", systemImage: reminderSet ? "bell.slash" : "bell")
+                }
+            }
+            if showsAddToCalendar {
+                Button(action: addToCalendar) {
+                    Label("Add to Calendar", systemImage: "calendar.badge.plus")
                 }
             }
             ShareLink(item: Config.siteURL.appendingPathComponent("events").appendingPathComponent(event.id)) {

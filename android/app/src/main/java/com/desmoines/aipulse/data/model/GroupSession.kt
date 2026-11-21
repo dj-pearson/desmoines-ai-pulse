@@ -11,7 +11,12 @@ import java.time.OffsetDateTime
 data class SwipeSession(
     val id: String,
     val code: String,
-    @SerialName("host_user_id") val hostUserId: String,
+    /**
+     * Null unless the caller is the host: lookup_swipe_session hides the host's
+     * account id from joiners (WEB-SEC-070), and a null compares unequal to the
+     * viewer's uid, which is the truth for a joiner.
+     */
+    @SerialName("host_user_id") val hostUserId: String? = null,
     val mode: String = "mixed",
     val status: String = "active",
     @SerialName("expires_at") val expiresAt: String? = null,

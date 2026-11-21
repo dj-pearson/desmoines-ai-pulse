@@ -147,6 +147,13 @@ describe("isOpenForDinner", () => {
     expect(isOpenForDinner(restaurant("d", { status: "opening_soon" }), dinner, NOW)).toBeNull();
     expect(isOpenForDinner(restaurant("e", { opening_date: "2026-12-01" }), dinner, NOW)).toBeNull();
   });
+
+  it("refuses a place Google marks closed whatever its hours say (WEB-FEAT-037)", () => {
+    const hours = { opening: "Daily 5pm-10pm" };
+    expect(isOpenForDinner(restaurant("a", { ...hours, business_status: "OPERATIONAL" }), dinner, NOW)).not.toBeNull();
+    expect(isOpenForDinner(restaurant("b", { ...hours, business_status: "CLOSED_TEMPORARILY" }), dinner, NOW)).toBeNull();
+    expect(isOpenForDinner(restaurant("c", { ...hours, business_status: "CLOSED_PERMANENTLY" }), dinner, NOW)).toBeNull();
+  });
 });
 
 describe("buildTonightPairings", () => {

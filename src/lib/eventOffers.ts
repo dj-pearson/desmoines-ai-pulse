@@ -50,7 +50,7 @@ export type ParsedEventPrice =
   | { kind: "fixed"; price: string }
   /** A span, or several tiers. Emit an AggregateOffer. */
   | { kind: "range"; low: string; high?: string; free: boolean }
-  /** "Varies", "TBD", "See website", empty. Emit nothing. */
+  /** "Varies", "TBD", "See website", null, empty. Emit nothing. */
   | { kind: "unknown" };
 
 /** Format a parsed amount the way schema.org wants it: plain, no symbols. */
@@ -99,9 +99,14 @@ function extractAmounts(raw: string): number[] {
  * `unknown` so the caller can omit the offers node entirely.
  */
 export function parseEventPrice(raw: string | null | undefined): ParsedEventPrice {
-  if (raw == null) return { kind: "free" };
+  // No price is not a free price (WEB-SEO-049). This used to return `free`,
+  // which put a $0 Offer and isAccessibleForFree: true into the JSON-LD of any
+  // row whose price was never filled in, while isFreePrice in eventPrice.ts
+  // called the same row unknown. The two readers must agree, and the one that
+  // writes structured data is the one that cannot guess.
+  if (raw == null) return { kind: "unknown" };
   const text = raw.trim();
-  if (!text) return { kind: "free" };
+  if (!text) return { kind: "unknown" };
 
   const amounts = extractAmounts(text);
   const saysFree = FREE_WORD.test(text);

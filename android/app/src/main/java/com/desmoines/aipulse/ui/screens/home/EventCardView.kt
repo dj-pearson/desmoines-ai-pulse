@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.home
 
+import com.desmoines.aipulse.util.EventTimeText
 import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -60,7 +61,7 @@ import com.desmoines.aipulse.ui.theme.GlassIntensity
 import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
 import com.desmoines.aipulse.ui.theme.glassSurface
-import java.time.OffsetDateTime
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -80,9 +81,9 @@ fun EventCardView(
     // Accessibility label
     val accessibilityLabel = buildString {
         append(event.title)
-        event.parsedDate?.let {
+        EventTimeText.spokenDateTime(event, "EEEE, MMMM d")?.let {
             append(". ")
-            append(it.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, h:mm a", UiFormatLocale)))
+            append(it)
         }
         append(". ${event.displayLocation}")
         if (event.isFree) append(". Free event")
@@ -188,9 +189,9 @@ fun EventCardView(
                 }
 
                 // Date badge at bottom right
-                event.parsedDate?.let { date ->
+                EventTimeText.desMoinesDay(event)?.let { day ->
                     DateBadge(
-                        date = date,
+                        day = day,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(10.dp)
@@ -215,7 +216,7 @@ fun EventCardView(
                 Spacer(modifier = Modifier.height(Dimens.SpacingSm))
 
                 // Date/time row
-                event.parsedDate?.let { date ->
+                EventTimeText.dateTimeText(event, "EEE, MMM d", "h:mm a", " · ")?.let { dateTime ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clearAndSetSemantics { }
@@ -228,7 +229,7 @@ fun EventCardView(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", UiFormatLocale)),
+                            text = dateTime,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -374,7 +375,8 @@ fun EventCardView(
  */
 @Composable
 fun DateBadge(
-    date: OffsetDateTime,
+    /** The Des Moines day (EventTimeText.desMoinesDay), not the UTC day the row arrives in. */
+    day: LocalDate,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -389,19 +391,19 @@ fun DateBadge(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("EEE", UiFormatLocale)).uppercase(),
+            text = day.format(DateTimeFormatter.ofPattern("EEE", UiFormatLocale)).uppercase(),
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("d")),
+            text = day.format(DateTimeFormatter.ofPattern("d")),
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("MMM", UiFormatLocale)).uppercase(),
+            text = day.format(DateTimeFormatter.ofPattern("MMM", UiFormatLocale)).uppercase(),
             fontSize = 9.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant

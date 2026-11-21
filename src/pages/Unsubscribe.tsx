@@ -7,6 +7,26 @@
  * `newsletter_unsubscribe_by_token` SECURITY DEFINER RPC which validates the
  * token format, updates the newsletter subscriber row, and returns a simple
  * success / already-unsubscribed boolean.
+ *
+ * An event-reminder email links here with ?reminder=<id> instead (WEB-FEAT-059).
+ * That stops the remaining reminders for that one event and leaves the
+ * newsletter alone; see src/lib/reminderOptOut.ts.
+ *
+ * A saved-search alert email links here with ?alerts=<saved search id>
+ * (WEB-FEAT-073). That turns off the reader's event alerts and leaves
+ * the newsletter alone; see src/lib/alertsOptOut.ts.
+ *
+ * A member with no newsletter row gets ?account=<token> (WEB-ADS-035), which
+ * stops all marketing email like the newsletter link does. A B2B outreach
+ * prospect gets ?outreach=<token> (AOS-PROSPECT-009), which stops partnership
+ * emails only. See src/lib/tokenOptOut.ts.
+ *
+ * A newsletter link that worked (or had already worked) offers a way back
+ * (WEB-ADS-023): a mis-click, or a colleague clicking a forwarded digest,
+ * otherwise ended at "Back to home". The form goes through newsletter-subscribe,
+ * so the address gets a fresh double opt-in rather than being reactivated here.
+ * Reminder, alerts, account and outreach links do not show it: none of them
+ * took the reader off the newsletter.
  */
 
 import { useEffect, useState } from "react";
@@ -21,8 +41,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
 import { logConsent } from "@/lib/consentLog";
+import { cancelRemindersByToken } from "@/lib/reminderOptOut";
+import { disableAlertsByToken } from "@/lib/alertsOptOut";
+import {
+  unsubscribeAccountByToken,
+  unsubscribeOutreachByToken,
+} from "@/lib/tokenOptOut";
 import {
   CheckCircle2,
   AlertCircle,
@@ -30,18 +58,119 @@ import {
   MailX,
 } from "lucide-react";
 
-type Status = "loading" | "success" | "already" | "invalid" | "error";
+type Status =
+  | "loading"
+  | "success"
+  | "already"
+  | "reminders"
+  | "alerts"
+  | "outreach"
+  | "outreach-already"
+  | "invalid"
+  | "error";
 
 export default function Unsubscribe() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
+  const reminderToken = params.get("reminder");
+  const alertsToken = params.get("alerts");
+  const accountToken = params.get("account");
+  const outreachToken = params.get("outreach");
   const [status, setStatus] = useState<Status>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reminderEvent, setReminderEvent] = useState<string | null>(null);
+  const isNewsletterLink =
+    reminderToken === null &&
+    alertsToken === null &&
+    accountToken === null &&
+    outreachToken === null;
 
   useEffect(() => {
     let cancelled = false;
 
+    async function runReminder(id: string) {
+      const result = await cancelRemindersByToken(id);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "cancelRemindersByToken" });
+        setStatus("error");
+        return;
+      }
+      if (result.kind === "invalid") {
+        setStatus("invalid");
+        return;
+      }
+      setReminderEvent(result.eventTitle);
+      setStatus("reminders");
+    }
+
+    async function runAlerts(id: string) {
+      const result = await disableAlertsByToken(id);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "disableAlertsByToken" });
+        setStatus("error");
+        return;
+      }
+      setStatus(result.kind === "invalid" ? "invalid" : "alerts");
+    }
+
+    async function runAccount(value: string) {
+      const result = await unsubscribeAccountByToken(value);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "unsubscribeAccountByToken" });
+        setStatus("error");
+        return;
+      }
+      if (result.kind === "invalid") {
+        setStatus("invalid");
+        return;
+      }
+      if (result.alreadyUnsubscribed) {
+        setStatus("already");
+        return;
+      }
+      setStatus("success");
+      void logConsent({
+        type: "marketing_email",
+        granted: false,
+        source: "unsubscribe_page",
+        metadata: { via: "account_link" },
+      });
+    }
+
+    async function runOutreach(value: string) {
+      const result = await unsubscribeOutreachByToken(value);
+      if (cancelled) return;
+      if (result.kind === "error") {
+        handleError(result.error, { component: "Unsubscribe", action: "unsubscribeOutreachByToken" });
+        setStatus("error");
+        return;
+      }
+      if (result.kind === "invalid") {
+        setStatus("invalid");
+        return;
+      }
+      setStatus(result.alreadyUnsubscribed ? "outreach-already" : "outreach");
+    }
+
     async function run() {
+      if (reminderToken !== null) {
+        await runReminder(reminderToken);
+        return;
+      }
+      if (alertsToken !== null) {
+        await runAlerts(alertsToken);
+        return;
+      }
+      if (accountToken !== null) {
+        await runAccount(accountToken);
+        return;
+      }
+      if (outreachToken !== null) {
+        await runOutreach(outreachToken);
+        return;
+      }
       if (!token) {
         setStatus("invalid");
         return;
@@ -54,8 +183,10 @@ export default function Unsubscribe() {
 
         if (cancelled) return;
         if (error) {
+          // WEB-ADS-024: the reader gets fixed copy; the PostgREST text goes to
+          // ops through handleError, never onto the page.
+          handleError(error, { component: "Unsubscribe", action: "unsubscribeByToken" });
           setStatus("error");
-          setErrorMessage(error.message);
           return;
         }
 
@@ -82,10 +213,8 @@ export default function Unsubscribe() {
         }
       } catch (err) {
         if (cancelled) return;
+        handleError(err, { component: "Unsubscribe", action: "unsubscribeByToken" });
         setStatus("error");
-        setErrorMessage(
-          err instanceof Error ? err.message : "Unknown error"
-        );
       }
     }
 
@@ -93,7 +222,7 @@ export default function Unsubscribe() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, reminderToken, alertsToken, accountToken, outreachToken]);
 
   return (
     <>
@@ -135,6 +264,49 @@ export default function Unsubscribe() {
               </Alert>
             )}
 
+            {status === "reminders" && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  {reminderEvent
+                    ? `Reminders for ${reminderEvent} are off.`
+                    : "Reminders for this event are off."}{" "}
+                  Your other reminders and any newsletter you get are unchanged.{" "}
+                  <Link to="/my-events?tab=reminders" className="underline">
+                    See your reminders
+                  </Link>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {status === "alerts" && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  Saved-search alerts are off. Your saved searches, any
+                  newsletter you get and your other emails are unchanged.{" "}
+                  <Link to="/dashboard?tab=saved-searches" className="underline">
+                    Manage saved searches
+                  </Link>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {(status === "outreach" || status === "outreach-already") && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  {status === "outreach"
+                    ? "You won't get any more partnership emails from Des Moines Insider."
+                    : "You had already stopped our partnership emails. No further action is needed."}{" "}
+                  A newsletter or account email you signed up for yourself is
+                  unchanged.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {status === "already" && (
               <Alert>
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -142,6 +314,19 @@ export default function Unsubscribe() {
                   You were already unsubscribed. No further action is needed.
                 </AlertDescription>
               </Alert>
+            )}
+
+            {isNewsletterLink && (status === "success" || status === "already") && (
+              <section aria-labelledby="unsubscribe-undo-heading" className="space-y-2">
+                <h2 id="unsubscribe-undo-heading" className="text-sm font-semibold">
+                  Unsubscribed by mistake?
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Enter your email and we&apos;ll send a confirmation link. The
+                  weekly email starts again once you click it.
+                </p>
+                <NewsletterSignup variant="compact" source="unsubscribe_page" />
+              </section>
             )}
 
             {status === "invalid" && (
@@ -165,8 +350,7 @@ export default function Unsubscribe() {
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Something went wrong while processing your request
-                  {errorMessage ? ` (${errorMessage})` : ""}. Please try again
+                  Something went wrong while processing your request. Please try again
                   in a moment, or email{" "}
                   <a
                     href="mailto:unsubscribe@desmoinesinsider.com"

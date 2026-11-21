@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -18,6 +18,10 @@ import { Switch } from "@/components/ui/switch";
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('AIConfigurationManager');
+
+/** "default_model" -> "Default Model": the row heading, and the name of its field. */
+const formatSettingKey = (key: string) =>
+  key.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 
 export function AIConfigurationManager() {
   const { settings, isLoading, updateSetting, isUpdating, getSetting } = useAIConfiguration();
@@ -210,7 +214,7 @@ export function AIConfigurationManager() {
                       <div className="grid gap-2">
                         <Label htmlFor="provider">Provider</Label>
                         <Select value={newModel.provider} onValueChange={(value) => setNewModel({ ...newModel, provider: value })}>
-                          <SelectTrigger>
+                          <SelectTrigger id="provider">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -274,7 +278,7 @@ export function AIConfigurationManager() {
                       <TableCell className="text-xs">{model.context_window?.toLocaleString()}</TableCell>
                       <TableCell className="text-xs">{model.max_output_tokens?.toLocaleString()}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button
+                        <Button aria-label={`Test ${model.model_name}`}
                           size="sm"
                           variant="outline"
                           onClick={() => testAIModel(model.model_id)}
@@ -282,7 +286,7 @@ export function AIConfigurationManager() {
                         >
                           <TestTube className="h-3 w-3" />
                         </Button>
-                        <Button
+                        <Button aria-label={`Delete ${model.model_name}`}
                           size="sm"
                           variant="ghost"
                           onClick={() => deleteModel(model.id)}
@@ -351,9 +355,7 @@ export function AIConfigurationManager() {
                             {setting.setting_key.includes("tokens") && <Cpu className="h-4 w-4 text-muted-foreground" />}
                             {!setting.setting_key.includes("model") && !setting.setting_key.includes("temperature") && !setting.setting_key.includes("tokens") && <Settings className="h-4 w-4 text-muted-foreground" />}
                             <span className="text-sm">
-                              {setting.setting_key.split("_").map(word => 
-                                word.charAt(0).toUpperCase() + word.slice(1)
-                              ).join(" ")}
+                              {formatSettingKey(setting.setting_key)}
                             </span>
                           </div>
                           {setting.description && (
@@ -372,7 +374,7 @@ export function AIConfigurationManager() {
                               }))
                             }
                           >
-                            <SelectTrigger className="w-full">
+                            <SelectTrigger className="w-full" aria-label={formatSettingKey(setting.setting_key)}>
                               <SelectValue placeholder="Select model" />
                             </SelectTrigger>
                             <SelectContent>
@@ -388,6 +390,7 @@ export function AIConfigurationManager() {
                           </Select>
                         ) : (
                           <Input
+                            aria-label={formatSettingKey(setting.setting_key)}
                             value={getDisplayValue(setting.setting_key, setting.setting_value)}
                             onChange={(e) =>
                               setEditedValues((prev) => ({
@@ -427,11 +430,12 @@ export function AIConfigurationManager() {
                           disabled={!hasChanges(setting.setting_key) || isUpdating}
                           size="sm"
                           variant={hasChanges(setting.setting_key) ? "default" : "ghost"}
+                          aria-label={`Save ${setting.setting_key}`}
                         >
                           {isUpdating ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                           ) : (
-                            <Save className="h-4 w-4" />
+                            <Save className="h-4 w-4" aria-hidden="true" />
                           )}
                         </Button>
                       </TableCell>

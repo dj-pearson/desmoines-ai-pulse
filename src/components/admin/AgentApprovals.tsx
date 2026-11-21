@@ -23,7 +23,7 @@ import {
 } from "@/hooks/useAgentApprovals";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 function expiresLabel(a: AgentActionApproval): string {
   if (!a.expires_at) return "No expiry";

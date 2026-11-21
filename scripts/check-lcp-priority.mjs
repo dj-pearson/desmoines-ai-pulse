@@ -120,9 +120,16 @@ const LISTING_PAGES = {
   '/attractions': 'src/pages/Attractions.tsx',
   '/playgrounds': 'src/pages/Playgrounds.tsx',
   '/articles': 'src/pages/Articles.tsx',
-  '/guides': 'src/pages/GuidesPage.tsx',
+  // '/guides' left 2026-11-07 (WEB-PERF-058): its grid has no image to
+  // prioritise. The eight cards fetched /api/placeholder/400/250, which no
+  // route serves, three of them at fetchpriority=high; the header panel is now
+  // drawn instead of fetched. check-raw-img fails on that URL coming back. If
+  // the guides get real photos, list the route here again.
   '/breweries': 'src/pages/BreweryTrail.tsx',
   '/itineraries': 'src/pages/Itineraries.tsx',
+  // Added 2026-11-07 (WEB-PERF-041). HotelCard was a raw lazy <img>, so the
+  // first hotel on /stay waited for layout before it started loading.
+  '/stay': 'src/pages/Hotels.tsx',
 };
 
 /**

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { formatInCentralTime, createEventSlugWithCentralTime } from "@/lib/timezone";
 import { createSlug } from "@/lib/slug";
+import { attractionHref } from "@/lib/slugHref";
 import { NEIGHBORHOOD_MIN_ITEMS, type Neighborhood } from "@/lib/neighborhoods";
 import type {
   NeighborhoodAttraction,
@@ -238,9 +239,9 @@ export default function NeighborhoodGuide({
           {attractions.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
               {attractions.map((attraction) => {
-                // attractions has no slug column; AttractionDetails matches on
-                // createSlug(name), so the link has to be built the same way.
-                const href = `/attractions/${createSlug(attraction.name)}`;
+                // The stored slug (ATTRACTION_LIST_COLUMNS selects it), which
+                // AttractionDetails resolves on (WEB-PERF-031).
+                const href = attractionHref(attraction);
                 return (
                   <Card key={attraction.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader className="pb-2">

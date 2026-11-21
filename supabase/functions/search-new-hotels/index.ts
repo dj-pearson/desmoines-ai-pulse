@@ -251,6 +251,15 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    // The blacklist is admin-only (WEB-SEC-074): its rows name the
+    // admin who blocked each place (blocked_by), so it has no public read.
+    // requireAdminOrApiKey above has already vetted the caller, and an API-key
+    // caller carries no user JWT to read it with, so this one read uses the
+    // service role.
+    const serviceClient = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    );
 
     console.log(`Searching for hotels near: ${location}, radius: ${radius}m, offset: ${offset}`);
 
@@ -326,7 +335,7 @@ serve(async (req) => {
 
     // 4. Get blacklisted places
     const now = new Date().toISOString();
-    const { data: blacklistedPlaces, error: blacklistError } = await supabase
+    const { data: blacklistedPlaces, error: blacklistError } = await serviceClient
       .from("hotel_blacklist")
       .select("google_place_id, hotel_name")
       .or(`expires_at.is.null,expires_at.gt.${now}`);

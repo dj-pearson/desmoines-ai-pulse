@@ -3,6 +3,11 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
+import {
+  applyPostableEventFilters,
+  isPostableAt,
+  socialEventDateLine,
+} from "../_shared/socialEventPick.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
@@ -456,14 +461,14 @@ serve(async (req) => {
 
     if (action === "debug") {
       // Debug endpoint to check available content
-      const { data: events, error: eventsError } = await supabase
-        .from("events")
-        // `name` is a restaurants column; events have `title`. Asking for it
-        // 42703d, so this debug endpoint returned an error instead of events.
-        // The consumers already read `title || name` because they handle both
-        // entity types, so dropping it here changes nothing downstream.
-        .select("id, title, date")
-        .gte("date", new Date().toISOString())
+      // `name` is a restaurants column; events have `title`. Asking for it
+      // 42703d, so this debug endpoint returned an error instead of events.
+      // The consumers already read `title || name` because they handle both
+      // entity types, so dropping it here changes nothing downstream.
+      // Same pick as the posting path (WEB-FEAT-096).
+      const { data: events, error: eventsError } = await applyPostableEventFilters(
+        supabase.from("events").select("id, title, date, end_date"),
+      )
         .order("date", { ascending: true })
         .limit(5);
 
@@ -715,10 +720,12 @@ async function generateAndPublishPost(
   }
 
   if (!selectedContent && contentType === "event") {
-    const { data: allEvents, error: allEventsError } = await supabase
-      .from("events")
-      .select("*")
-      .gte("date", new Date().toISOString())
+    // WEB-FEAT-096: visible and upcoming-or-running. This read had no
+    // unpublish switch, so a hidden, archived or merged-away event could be
+    // posted, and its `date >= now` floor dropped a festival on day two.
+    const { data: allEvents, error: allEventsError } = await applyPostableEventFilters(
+      supabase.from("events").select("*"),
+    )
       .order("date", { ascending: true })
       .limit(50);
 
@@ -736,17 +743,11 @@ async function generateAndPublishPost(
         availableEvents = allEvents;
       }
 
-      // Filter for future events in Central Time
-      const futureEvents = availableEvents.filter((event) => {
-        const eventDate = new Date(event.date);
-        const nowCentral = new Date(
-          new Date().toLocaleString("en-US", { timeZone: "America/Chicago" })
-        );
-        const eventCentral = new Date(
-          eventDate.toLocaleString("en-US", { timeZone: "America/Chicago" })
-        );
-        return eventCentral > nowCentral;
-      });
+      // Still on: starts later, or is running (a festival on its third day).
+      // The old check compared start times only, so it threw away every run
+      // the read above now returns.
+      const now = new Date();
+      const futureEvents = availableEvents.filter((event) => isPostableAt(event, now));
 
       if (futureEvents.length > 0) {
         selectedContent = futureEvents[Math.floor(Math.random() * futureEvents.length)];
@@ -789,17 +790,13 @@ async function generateAndPublishPost(
 
   // Event date formatted in America/Chicago so the generated copy reads in local
   // time (WEB-AUTO-012). Intl with the Central tz is equivalent to date-fns-tz here.
+  // A running event gets "On now, running through <end day>" instead of the
+  // start it already passed (WEB-FEAT-096).
   const centralDate =
-    contentType === "event" && selectedContent.date
-      ? new Intl.DateTimeFormat("en-US", {
-          timeZone: "America/Chicago",
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        }).format(new Date(selectedContent.date as string))
+    contentType === "event"
+      ? socialEventDateLine(
+          selectedContent as { date?: string | null; end_date?: string | null },
+        )
       : "";
 
   // Generate AI content
@@ -816,7 +813,7 @@ Description: ${
     ""
   }
 Location: ${selectedContent.location || ""}
-${contentType === "event" ? `Date: ${centralDate} (Central Time)` : ""}
+${contentType === "event" ? `Date: ${centralDate}` : ""}
 ${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
 ${contentType === "restaurant" ? `Cuisine: ${selectedContent.cuisine || ""}` : ""}
 Link: ${contentUrl}
@@ -836,7 +833,7 @@ Description: ${
     ""
   }
 Location: ${selectedContent.location || ""}
-${contentType === "event" ? `Date: ${centralDate} (Central Time)` : ""}
+${contentType === "event" ? `Date: ${centralDate}` : ""}
 ${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
 ${contentType === "restaurant" ? `Cuisine: ${selectedContent.cuisine || ""}` : ""}
 Link: ${contentUrl}

@@ -35,7 +35,7 @@ if (process.env.TZ !== 'UTC') {
   process.exit(r.status ?? 1);
 }
 
-const { createEventSlug, createSlug, CENTRAL_TIMEZONE } = await import('../lib/sitemapSlugs.ts');
+const { createEventSlug, createSlug, storedSlug, CENTRAL_TIMEZONE } = await import('../lib/sitemapSlugs.ts');
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -78,6 +78,11 @@ check('null date', createEventSlug('Bare Title', { date: null }) === 'bare-title
   // is wrong but recoverable, and the freshness check will report it missing.
   check('unparseable date degrades to the title slug', slug === 'bad-date', slug);
 }
+
+console.log('\nstoredSlug: the stored column wins over the name (WEB-PERF-031)');
+check('a suffixed duplicate keeps its suffix', storedSlug({ slug: 'riverview-park-2', name: 'Riverview Park' }) === 'riverview-park-2');
+check('a null slug falls back to the name', storedSlug({ slug: null, name: 'Union Park' }) === 'union-park');
+check('a missing slug falls back to the name', storedSlug({ name: 'Gray\'s Lake' }) === 'gray-s-lake');
 
 console.log('\nconstants');
 check('Central timezone is America/Chicago', CENTRAL_TIMEZONE === 'America/Chicago', CENTRAL_TIMEZONE);

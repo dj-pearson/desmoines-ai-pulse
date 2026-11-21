@@ -6,9 +6,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { Toggle } from '@/components/ui/toggle';
@@ -58,6 +59,8 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const linkUrlId = useId();
+  const imageUrlId = useId();
 
   const editor = useEditor({
     extensions: [
@@ -141,17 +144,19 @@ export function RichTextEditor({
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().undo().run()}
+          aria-label="Undo"
           disabled={!editor.can().undo()}
         >
-          <Undo className="h-4 w-4" />
+          <Undo className="h-4 w-4" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().redo().run()}
+          aria-label="Redo"
           disabled={!editor.can().redo()}
         >
-          <Redo className="h-4 w-4" />
+          <Redo className="h-4 w-4" aria-hidden="true" />
         </Button>
 
         <Separator orientation="vertical" className="h-6 mx-1" />
@@ -160,44 +165,50 @@ export function RichTextEditor({
         <Toggle
           size="sm"
           pressed={editor.isActive('bold')}
+          aria-label="Bold"
           onPressedChange={() => editor.chain().focus().toggleBold().run()}
         >
-          <Bold className="h-4 w-4" />
+          <Bold className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('italic')}
+          aria-label="Italic"
           onPressedChange={() => editor.chain().focus().toggleItalic().run()}
         >
-          <Italic className="h-4 w-4" />
+          <Italic className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('underline')}
+          aria-label="Underline"
           onPressedChange={() => editor.chain().focus().toggleUnderline().run()}
         >
-          <UnderlineIcon className="h-4 w-4" />
+          <UnderlineIcon className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('strike')}
+          aria-label="Strikethrough"
           onPressedChange={() => editor.chain().focus().toggleStrike().run()}
         >
-          <Strikethrough className="h-4 w-4" />
+          <Strikethrough className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('code')}
+          aria-label="Inline code"
           onPressedChange={() => editor.chain().focus().toggleCode().run()}
         >
-          <Code className="h-4 w-4" />
+          <Code className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('highlight')}
+          aria-label="Highlight"
           onPressedChange={() => editor.chain().focus().toggleHighlight().run()}
         >
-          <Highlighter className="h-4 w-4" />
+          <Highlighter className="h-4 w-4" aria-hidden="true" />
         </Toggle>
 
         <Separator orientation="vertical" className="h-6 mx-1" />
@@ -206,30 +217,34 @@ export function RichTextEditor({
         <Toggle
           size="sm"
           pressed={editor.isActive('heading', { level: 1 })}
+          aria-label="Heading 1"
           onPressedChange={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
         >
-          <Heading1 className="h-4 w-4" />
+          <Heading1 className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('heading', { level: 2 })}
+          aria-label="Heading 2"
           onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         >
-          <Heading2 className="h-4 w-4" />
+          <Heading2 className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('heading', { level: 3 })}
+          aria-label="Heading 3"
           onPressedChange={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         >
-          <Heading3 className="h-4 w-4" />
+          <Heading3 className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('paragraph')}
+          aria-label="Paragraph"
           onPressedChange={() => editor.chain().focus().setParagraph().run()}
         >
-          <Pilcrow className="h-4 w-4" />
+          <Pilcrow className="h-4 w-4" aria-hidden="true" />
         </Toggle>
 
         <Separator orientation="vertical" className="h-6 mx-1" />
@@ -238,37 +253,42 @@ export function RichTextEditor({
         <Toggle
           size="sm"
           pressed={editor.isActive('bulletList')}
+          aria-label="Bulleted list"
           onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
         >
-          <List className="h-4 w-4" />
+          <List className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('orderedList')}
+          aria-label="Numbered list"
           onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
         >
-          <ListOrdered className="h-4 w-4" />
+          <ListOrdered className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('blockquote')}
+          aria-label="Quote"
           onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
         >
-          <Quote className="h-4 w-4" />
+          <Quote className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive('codeBlock')}
+          aria-label="Code block"
           onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()}
         >
-          <Code className="h-4 w-4" />
+          <Code className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          aria-label="Horizontal rule"
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-4 w-4" aria-hidden="true" />
         </Button>
 
         <Separator orientation="vertical" className="h-6 mx-1" />
@@ -277,30 +297,34 @@ export function RichTextEditor({
         <Toggle
           size="sm"
           pressed={editor.isActive({ textAlign: 'left' })}
+          aria-label="Align left"
           onPressedChange={() => editor.chain().focus().setTextAlign('left').run()}
         >
-          <AlignLeft className="h-4 w-4" />
+          <AlignLeft className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive({ textAlign: 'center' })}
+          aria-label="Align center"
           onPressedChange={() => editor.chain().focus().setTextAlign('center').run()}
         >
-          <AlignCenter className="h-4 w-4" />
+          <AlignCenter className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive({ textAlign: 'right' })}
+          aria-label="Align right"
           onPressedChange={() => editor.chain().focus().setTextAlign('right').run()}
         >
-          <AlignRight className="h-4 w-4" />
+          <AlignRight className="h-4 w-4" aria-hidden="true" />
         </Toggle>
         <Toggle
           size="sm"
           pressed={editor.isActive({ textAlign: 'justify' })}
+          aria-label="Justify"
           onPressedChange={() => editor.chain().focus().setTextAlign('justify').run()}
         >
-          <AlignJustify className="h-4 w-4" />
+          <AlignJustify className="h-4 w-4" aria-hidden="true" />
         </Toggle>
 
         <Separator orientation="vertical" className="h-6 mx-1" />
@@ -311,14 +335,17 @@ export function RichTextEditor({
             <Toggle
               size="sm"
               pressed={editor.isActive('link')}
+              aria-label="Link"
             >
-              <LinkIcon className="h-4 w-4" />
+              <LinkIcon className="h-4 w-4" aria-hidden="true" />
             </Toggle>
           </PopoverTrigger>
           <PopoverContent className="w-80">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Link URL</label>
+              <Label htmlFor={linkUrlId}>Link URL</Label>
               <Input
+                id={linkUrlId}
+                type="url"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 placeholder="https://example.com"
@@ -344,14 +371,16 @@ export function RichTextEditor({
         {/* Image */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <ImageIcon className="h-4 w-4" />
+            <Button variant="ghost" size="sm" aria-label="Insert image">
+              <ImageIcon className="h-4 w-4" aria-hidden="true" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Image URL</label>
+              <Label htmlFor={imageUrlId}>Image URL</Label>
               <Input
+                id={imageUrlId}
+                type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 placeholder="https://example.com/image.jpg"
@@ -370,8 +399,9 @@ export function RichTextEditor({
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
+          aria-label="Clear formatting"
         >
-          <RemoveFormatting className="h-4 w-4" />
+          <RemoveFormatting className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 

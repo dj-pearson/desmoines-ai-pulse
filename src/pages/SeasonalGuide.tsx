@@ -2,12 +2,22 @@ import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { ErrorState } from "@/components/ui/error-state";
 import { Helmet } from 'react-helmet-async';
+import { DetailBreadcrumb } from '@/components/seo/DetailBreadcrumb';
 import { useSeasonalGuide, getSeasonLabel, getSeasonColor } from '@/hooks/useSeasonalGuides';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle2 } from 'lucide-react';
 import { BRAND } from '@/lib/brandConfig';
+import SEOHead from '@/components/SEOHead';
+import {
+  buildSeasonalGuideJsonLd,
+  guideImageUrl,
+  guideMetaDescription,
+  guideMetaTitle,
+  guidePublishedAt,
+  seasonalGuidePath,
+} from '@/lib/seasonalGuideSchema';
 
 export default function SeasonalGuide() {
   const { slug } = useParams<{ slug: string }>();
@@ -67,37 +77,34 @@ export default function SeasonalGuide() {
 
   return (
     <>
-      <Helmet>
-        <title>{guide.seo_title || guide.title} | Des Moines Insider</title>
-        {/*
-          Without this the prerender gate refuses the page: a route that does not
-          declare itself cannot be published as static HTML, because there is no
-          way to tell a rendered guide from the SPA shell. All four published
-          guides were rejected on every build for exactly this, so /guides/:slug
-          was the only sitemapped route a crawler could not read (WEB-PERF-020
-          build output; the pages themselves render fine).
-        */}
-        <link rel="canonical" href={`${BRAND.baseUrl}/guides/${slug}`} />
-        <meta name="description" content={guide.seo_description || guide.description || ''} />
-        <script type="application/ld+json">
-          {JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'Article',
-            headline: guide.title,
-            description: guide.description,
-            datePublished: guide.publish_date,
-            author: { '@type': 'Organization', name: 'Des Moines Insider' },
-          })}
-        </script>
-      </Helmet>
+      {/*
+        WEB-SEO-067. SEOHead, not a hand-written Helmet: the old block had no
+        og:* or twitter:* tags, so a shared guide previewed as the home page,
+        and its Article node went through a bare JSON.stringify. The canonical
+        still matters to the prerender gate (WEB-PERF-020): a route that does
+        not declare one cannot be published as static HTML. No breadcrumbs
+        prop: DetailBreadcrumb below emits the one BreadcrumbList.
+      */}
+      <SEOHead
+        title={guideMetaTitle(guide)}
+        description={guideMetaDescription(guide)}
+        type="article"
+        imageUrl={guideImageUrl(guide) ?? undefined}
+        url={seasonalGuidePath(guide.slug)}
+        canonicalUrl={`${BRAND.baseUrl}${seasonalGuidePath(guide.slug)}`}
+        publishedTime={guidePublishedAt(guide) ?? undefined}
+        modifiedTime={guide.updated_at || guidePublishedAt(guide) || undefined}
+        structuredData={buildSeasonalGuideJsonLd(guide)}
+      />
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8 max-w-3xl">
-          {/* Breadcrumb */}
-          <nav className="text-sm text-muted-foreground mb-6">
-            <Link to="/guides" className="hover:text-primary">Guides</Link>
-            <span className="mx-2">/</span>
-            <span>{guide.title}</span>
-          </nav>
+          <DetailBreadcrumb
+            className="mb-6"
+            crumbs={[
+              { name: 'Guides', path: '/guides' },
+              { name: guide.title, path: `/guides/${slug}` },
+            ]}
+          />
 
           {/* Header */}
           <div className="mb-8">

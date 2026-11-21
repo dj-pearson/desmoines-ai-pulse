@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { sessionStore } from '@/lib/safeStorage';
 import { handleError } from '@/lib/errorHandler';
-import { hasConsent } from '@/components/CookieConsentBanner';
+import { hasConsent } from '@/lib/cookieConsent';
 
 /**
  * Generates or retrieves a persistent session ID for analytics tracking.

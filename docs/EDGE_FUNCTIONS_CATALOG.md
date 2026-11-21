@@ -111,7 +111,7 @@ Functions for SEO auditing, monitoring, and analytics.
 | `gsc-fetch-properties` | Fetches verified site properties from Google Search Console |
 | `gsc-oauth` | Handles Google Search Console OAuth authentication flow |
 | `gsc-sync-data` | Synchronizes search performance data from GSC to database |
-| `oauth-callback` | Generic OAuth callback handler for third-party integrations |
+| `oauth-callback` | Deprecated, inert: answers 410 (WEB-SEC-078). It had no caller; Google Search Console OAuth runs through `gsc-oauth` |
 
 ---
 

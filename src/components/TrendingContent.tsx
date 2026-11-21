@@ -1,11 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useTrending } from '@/hooks/useTrendingContent';
-import { useSimplePersonalization } from '@/hooks/useSimplePersonalization';
+import { useRecentContent } from '@/hooks/useRecentContent';
 import { contentHref, isTrendingContentType } from '@/lib/trendingContent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ErrorState } from '@/components/ui/error-state';
-import { Star } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 
@@ -36,13 +35,15 @@ export default function TrendingContent({
     refreshTrending,
   } = useTrending({ contentType, timeWindow, limit: Math.ceil(limit / 2) });
   
-  const { 
-    recommendations, 
-    isLoading: personalizedLoading,
-    trackRecommendationClick 
-  } = useSimplePersonalization({ contentType, limit: Math.ceil(limit / 2) });
+  // Fills the grid when trending data is thin. showPersonalized is the
+  // historical prop name; nothing here is personal (see useRecentContent).
+  const {
+    items: recentItems,
+    isLoading: recentLoading,
+    trackClick,
+  } = useRecentContent({ contentType, limit, enabled: showPersonalized });
 
-  const isLoading = trendingLoading || (showPersonalized && personalizedLoading);
+  const isLoading = trendingLoading || (showPersonalized && recentLoading);
   
   if (isLoading) {
     return (
@@ -66,7 +67,7 @@ export default function TrendingContent({
     );
   }
 
-  if (trendingError && (!showPersonalized || recommendations.length === 0)) {
+  if (trendingError && (!showPersonalized || recentItems.length === 0)) {
     return (
       <ErrorState
         error={trendingError}
@@ -78,19 +79,27 @@ export default function TrendingContent({
     );
   }
 
-  // Combine trending and personalized content
+  // Trending first, then recently added rows that are not already shown. The
+  // two lists overlap (a new restaurant is often the trending one), and the
+  // grid showed such a row twice.
+  const trendingKeys = new Set(trendingItems.map(item => `${item.contentType}:${item.contentId}`));
   const allContent = [
     ...trendingItems.map(item => ({ ...item, source: 'trending' as const })),
-    ...(showPersonalized ? recommendations.map(rec => ({
-      id: rec.id,
-      contentType: rec.contentType,
-      contentId: rec.content.id as string,
-      content: rec.content,
-      trendingScore: rec.score,
-      timeWindow,
-      reason: rec.reason,
-      source: 'personalized' as const
-    })) : [])
+    ...(showPersonalized
+      ? recentItems
+          .filter(item => !trendingKeys.has(`${item.contentType}:${item.content.id as string}`))
+          .map(item => ({
+            id: item.id,
+            contentType: item.contentType,
+            contentId: item.content.id as string,
+            content: item.content,
+            trendingScore: null,
+            timeWindow,
+            reason: 'Recently added',
+            source: 'recent' as const,
+            recent: item,
+          }))
+      : []),
   ].slice(0, limit);
 
   if (allContent.length === 0) {
@@ -131,15 +140,7 @@ export default function TrendingContent({
       : '/';
 
   const handleContentClick = (item: ContentItem) => {
-    if (item.source === 'personalized') {
-      trackRecommendationClick({
-        id: item.id,
-        contentType: item.contentType,
-        content: item.content,
-        score: item.trendingScore,
-        reason: item.reason
-      });
-    }
+    if (item.source === 'recent') void trackClick(item.recent);
   };
 
   return (
@@ -176,21 +177,11 @@ export default function TrendingContent({
                   sizes="(max-width: 768px) 100vw, 33vw"
                 />
                 <div className="absolute top-2 right-2">
-                  <Badge 
-                    variant={item.source === 'personalized' ? 'default' : 'secondary'}
-                    className="flex items-center gap-1"
-                  >
-                    {item.source === 'personalized' ? (
-                      <>
-                        <Star className="h-3 w-3" />
-                        For You
-                      </>
-                    ) : (
-                      <>
-                        <SpriteIcon name="trending-up" className="h-3 w-3" />
-                        {item.reason}
-                      </>
-                    )}
+                  {/* This said "For You" on every recently added row, for
+                      every visitor; no personal signal ever reached it. */}
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <SpriteIcon name={item.source === 'recent' ? 'clock' : 'trending-up'} className="h-3 w-3" />
+                    {item.reason}
                   </Badge>
                 </div>
               </div>
@@ -224,10 +215,13 @@ export default function TrendingContent({
                 <Badge variant="outline" className="text-xs">
                   {getContentTypeLabel(item.contentType)}
                 </Badge>
-                <div className="flex items-center gap-1 text-xs text-gray-500">
-                  <SpriteIcon name="trending-up" className="h-3 w-3" />
-                  Score: {Math.round(item.trendingScore)}
-                </div>
+                {/* A recently added row has no score; it showed a made-up 10. */}
+                {item.trendingScore !== null && (
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <SpriteIcon name="trending-up" className="h-3 w-3" />
+                    Score: {Math.round(item.trendingScore)}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

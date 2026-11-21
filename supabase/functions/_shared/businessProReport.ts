@@ -3,7 +3,7 @@
  * network, so _tests/business-pro-report.test.ts can check every line.
  *
  * One email per owner per listing. The numbers are whatever
- * business_pro_weekly_report_rows() (20261102000007) returned; nothing here
+ * business_pro_weekly_report_rows() (20261116000040) returned; nothing here
  * estimates or rounds a count.
  */
 import { escapeHtml } from "./escapeHtml.ts";

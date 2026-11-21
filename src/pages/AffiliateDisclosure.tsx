@@ -1,5 +1,6 @@
-import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import SEOHead from "@/components/SEOHead";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 /**
  * The hotel programmes generate-hotel-affiliate-urls actually wraps
@@ -18,13 +19,12 @@ export default function AffiliateDisclosure() {
 
   return (
     <>
-      <Helmet>
-        <title>Affiliate Disclosure | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="Des Moines Insider affiliate disclosure. How we earn commissions through hotel booking links, Ticketmaster ticket links and banner ads."
-        />
-      </Helmet>
+      <SEOHead
+        title={STATIC_PAGE_META["/affiliate-disclosure"].title}
+        description={STATIC_PAGE_META["/affiliate-disclosure"].description}
+        url="https://desmoinesinsider.com/affiliate-disclosure"
+        type="website"
+      />
 
       <div className="min-h-screen bg-background pb-24">
         <div className="container mx-auto px-4 py-12 max-w-3xl">

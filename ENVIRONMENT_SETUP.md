@@ -49,6 +49,22 @@ VITE_SUPABASE_ANON_KEY=eyJhbGci...your_anon_key_here
 
 ⚠️ **Important:** The anon key is safe to expose publicly. It has Row Level Security (RLS) protection.
 
+#### Auth rules live in `supabase/config.toml`
+
+The `[auth]` and `[auth.email]` tables there hold the site URL, the redirect
+allow-list (web, www, localhost and the `com.desmoines.aipulse://auth-callback`
+deep link both apps use), email confirmation, and the password policy: 8
+characters with a lowercase letter, an uppercase letter, a number and a symbol,
+which is what `src/lib/passwordStrength.ts` enforces on the form.
+`src/lib/__tests__/authConfigReconciled.test.ts` fails if the two drift.
+
+`supabase start` uses these values. The hosted project uses them only after
+`supabase config push`, which replaces the hosted redirect list. The file was
+written from the code on 2026-11-16 and has **not yet been reconciled with the
+dashboard**. Before the first push, compare the CLI's diff with Auth > URL
+Configuration and Auth > Providers > Email, add anything the dashboard has that
+the file lacks, then record the date of that check here.
+
 ### PageSpeed Insights (FREE - Required)
 
 ```bash

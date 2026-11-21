@@ -28,7 +28,7 @@ import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
 import { EventLinkList, HubTopPicks } from "@/components/events/HubEventLinks";
 import { useLatestWeekendArticle } from "@/hooks/useLatestWeekendArticle";
 import { hubTopPicks, todayHeadline } from "@/lib/eventHubSummary";
-import { EVENING_START_HOUR } from "@/lib/tonightPairings";
+import { EVENING_START_HOUR } from "@/lib/tonightTime";
 import { WeatherNotice } from "@/components/WeatherNotice";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
@@ -328,7 +328,10 @@ export default function EventsToday() {
                   </span>
                 </h2>
                 <EventLinkList events={moreEvents} />
-                <Button asChild variant="outline" className="mt-4 min-h-11">
+                {/* WEB-UX-075: Button is whitespace-nowrap, and this label is
+                    about 380px on one line; on a busy day it pushed the page
+                    sideways on every phone. It wraps now. */}
+                <Button asChild variant="outline" className="mt-4 h-auto min-h-11 whitespace-normal text-center">
                   <Link to="/events?preset=today">See the day on the events page, with filters and a map</Link>
                 </Button>
               </section>
@@ -356,7 +359,7 @@ export default function EventsToday() {
 
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>More Event Ideas</CardTitle>
+            <CardTitle as="h2">More Event Ideas</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

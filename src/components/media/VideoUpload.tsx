@@ -432,7 +432,7 @@ export function VideoUpload({
                   onEnded={() => setIsPlaying(false)}
                   playsInline
                 />
-                <button
+                <button aria-label={isPlaying ? "Pause video" : "Play video"}
                   onClick={togglePlayback}
                   className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
                 >
@@ -442,7 +442,7 @@ export function VideoUpload({
                     <Play className="h-12 w-12 text-white" />
                   )}
                 </button>
-                <Button
+                <Button aria-label="Remove video"
                   variant="destructive"
                   size="sm"
                   onClick={clearSelection}

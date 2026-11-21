@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { AFFILIATE_BASE, ticketmasterPatch, toAffiliateLink } from "./links.ts";
 
 const TM = "https://www.ticketmaster.com/some-show-waukee-iowa-10-12-2026/event/0600632DE1A4";

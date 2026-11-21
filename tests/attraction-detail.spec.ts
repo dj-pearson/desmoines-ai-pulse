@@ -223,6 +223,39 @@ test.describe('attraction detail (explore pass 2 WP3)', () => {
     );
   });
 
+  test('breadcrumb nav and BreadcrumbList match, with no query-string item (WEB-SEO-054)', async ({ page }) => {
+    await install(page, row());
+
+    await page.goto('/attractions/detail-fixture-museum');
+    await expect(page.getByRole('heading', { level: 1, name: 'Detail Fixture Museum' })).toBeVisible();
+
+    const expected: Array<[string, string]> = [
+      ['Home', '/'],
+      ['Attractions', '/attractions'],
+      ['Detail Fixture Museum', '/attractions/detail-fixture-museum'],
+    ];
+    const nav = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(nav).toBeVisible();
+    const visible = (await nav.locator('li:not([aria-hidden="true"])').allInnerTexts()).map((t) => t.trim());
+    expect(visible).toEqual(expected.map(([name]) => name));
+    await expect(nav.locator('[aria-current="page"]')).toHaveText('Detail Fixture Museum');
+    await expect(nav.locator('a[href*="?"]')).toHaveCount(0);
+
+    const handle = page.locator('script[type="application/ld+json"]');
+    await expect
+      .poll(async () => (await handle.allTextContents()).some((t) => t.includes('"BreadcrumbList"')))
+      .toBe(true);
+    const lists = (await handle.allTextContents())
+      .map((t) => JSON.parse(t) as Record<string, unknown>)
+      .filter((node) => node['@type'] === 'BreadcrumbList');
+    expect(lists, 'exactly one BreadcrumbList').toHaveLength(1);
+    const items = lists[0].itemListElement as Array<{ position: number; name: string; item: string }>;
+    expect(items.map((i) => i.name)).toEqual(expected.map(([name]) => name));
+    expect(items.map((i) => i.position)).toEqual([1, 2, 3]);
+    for (const i of items) expect(new URL(i.item).search, `${i.name} item has a query string`).toBe('');
+    expect(items.map((i) => new URL(i.item).pathname)).toEqual(expected.map(([, path]) => path));
+  });
+
   test('a failed fetch offers Retry and sets no noindex (WEB-SEO-040)', async ({ page }) => {
     // A 500 with no PostgREST code is retried twice by shouldRetry, so the
     // error state arrives after about three seconds of backoff.

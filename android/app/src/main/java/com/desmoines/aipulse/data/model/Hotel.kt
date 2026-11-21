@@ -13,6 +13,8 @@ import kotlinx.serialization.Serializable
 data class Hotel(
     val id: String,
     val name: String,
+    /** The /stay/<slug> key; NOT NULL in the table, optional here so a row without it still decodes. */
+    val slug: String? = null,
     val description: String? = null,
     @SerialName("short_description") val shortDescription: String? = null,
     val address: String = "",

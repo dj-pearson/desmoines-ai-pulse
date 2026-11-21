@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Search, Brain, AlertTriangle, CheckCircle, XCircle, Loader2, Globe, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Event } from "@/lib/types";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -469,7 +469,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                         setSelectedDomain(value);
                         setCustomDomain(""); // Clear custom domain when selecting from dropdown
                       }}>
-                        <SelectTrigger>
+                        <SelectTrigger id="domain">
                           <SelectValue placeholder="Choose a domain..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -506,7 +506,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                   <div className="space-y-2">
                     <Label htmlFor="batchSize">Batch Size</Label>
                     <Select value={batchSize.toString()} onValueChange={(value) => setBatchSize(parseInt(value))}>
-                      <SelectTrigger>
+                      <SelectTrigger id="batchSize">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

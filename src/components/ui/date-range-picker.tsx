@@ -16,19 +16,27 @@ interface DatePickerWithRangeProps {
   date: DateRange;
   onDateChange: (range: DateRange | undefined) => void;
   className?: string;
+  /** id for the trigger button, so a <Label htmlFor> can point at it. */
+  id?: string;
+  "aria-labelledby"?: string;
 }
 
 export function DatePickerWithRange({
   date,
   onDateChange,
   className,
+  id,
+  "aria-labelledby": ariaLabelledBy,
 }: DatePickerWithRangeProps) {
+  // Was a hardcoded id="date": two pickers on one page shared an id.
+  const fallbackId = React.useId();
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover>
         <PopoverTrigger asChild>
           <Button
-            id="date"
+            id={id ?? fallbackId}
+            aria-labelledby={ariaLabelledBy}
             variant={"outline"}
             className={cn(
               "w-[300px] justify-start text-left font-normal",

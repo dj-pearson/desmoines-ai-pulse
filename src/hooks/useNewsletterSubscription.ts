@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from "@/lib/logger";
 import { NEWSLETTER_RETRY_MESSAGE } from "@/content/newsletterCopy";
+import { resolveCampaignAttribution } from "@/lib/campaignAttribution";
+import type { NewsletterSource } from "@/lib/newsletterSources";
 
 const log = createLogger("useNewsletterSubscription");
 
@@ -16,7 +18,7 @@ export interface NewsletterPreferences {
 export interface NewsletterSubscribeData {
   email: string;
   firstName?: string;
-  source?: 'website' | 'popup' | 'footer' | 'checkout' | 'hero';
+  source?: NewsletterSource;
   preferences?: Partial<NewsletterPreferences>;
 }
 
@@ -63,7 +65,10 @@ export function useNewsletterSubscription() {
     try {
       setLoading(true);
 
-      const urlParams = new URLSearchParams(window.location.search);
+      // The campaign the visitor arrived on, not just this page's query
+      // string: most signups are the footer form on a later page, after an
+      // SPA navigation has dropped the utm_* params (WEB-ADS-016).
+      const utm = resolveCampaignAttribution(window.location.search);
 
       const { data: result, error } = await supabase.functions.invoke(
         "newsletter-subscribe",
@@ -73,11 +78,7 @@ export function useNewsletterSubscription() {
             firstName: data.firstName || null,
             source: data.source || "website",
             preferences: { ...defaultPreferences, ...data.preferences },
-            utm: {
-              utm_source: urlParams.get("utm_source"),
-              utm_medium: urlParams.get("utm_medium"),
-              utm_campaign: urlParams.get("utm_campaign"),
-            },
+            utm,
           },
         },
       );

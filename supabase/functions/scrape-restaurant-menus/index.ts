@@ -46,6 +46,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { fetchPdfAsBase64, fetchImageAsBase64, scrapeUrl } from "../_shared/scraper.ts";
+import { fetchPublicUrl } from "../_shared/fetchGuard.ts";
 import { getAnthropicApiKey } from "../_shared/aiConfig.ts";
 
 import type { MenuCandidate, MenuExtraction, MenuQuality } from "../_shared/menu/types.ts";
@@ -268,8 +269,11 @@ async function fetchMenuPage(ctx: RunContext, url: string): Promise<PageContent 
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), fetchTimeout(ctx, PAGE_TIMEOUT_MS));
-    const response = await fetch(url, { headers: BROWSER_HEADERS, signal: controller.signal });
-    clearTimeout(timer);
+    // isPublicHttpUrl reads the URL as typed. fetchPublicUrl also resolves the
+    // host and re-checks every redirect hop, so neither a name pointing at
+    // 10.x nor a public site's 302 to 169.254.169.254 gets fetched.
+    const response = await fetchPublicUrl(url, { headers: BROWSER_HEADERS, signal: controller.signal })
+      .finally(() => clearTimeout(timer));
 
     if (response.ok) {
       html = await response.text();
@@ -781,11 +785,10 @@ async function sitemapCandidates(ctx: RunContext, siteUrl: string): Promise<stri
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), fetchTimeout(ctx, 10_000));
-      const response = await fetch(`${siteUrl}${path}`, {
+      const response = await fetchPublicUrl(`${siteUrl}${path}`, {
         headers: BROWSER_HEADERS,
         signal: controller.signal,
-      });
-      clearTimeout(timer);
+      }).finally(() => clearTimeout(timer));
       if (!response.ok) continue;
       const xml = await response.text();
       found.push(...menuUrlsFromSitemap(xml));

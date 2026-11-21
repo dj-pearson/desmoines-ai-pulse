@@ -4,6 +4,8 @@ import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { queryKeys } from '@/lib/queryKeys';
 import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { upcomingFloorUtc } from '@/lib/timezone';
+import { upcomingOrRunningFilter } from '@/hooks/useEvents';
 
 export interface Team {
   id: string;
@@ -104,8 +106,13 @@ export function useTeamGames(team: string | { name: string; slug?: string | null
       const { data, error } = await applyEventVisibility(
         supabase.from('events').select(EVENT_LIST_COLUMNS)
       )
-        .or(`and(or(${names}),or(${TEAM_GAME_CATEGORY_OR}))`)
-        .gte('date', new Date().toISOString())
+        // WEB-FEAT-062: the time window joins the same and() rather than a
+        // second .or(), and is today (Central) or a run still going, not
+        // `date >= now`, which dropped a game the moment it started and a
+        // tournament weekend after its first session.
+        .or(
+          `and(or(${names}),or(${TEAM_GAME_CATEGORY_OR}),or(${upcomingOrRunningFilter(upcomingFloorUtc())}))`,
+        )
         .order('date', { ascending: true })
         .limit(20);
 

@@ -119,6 +119,20 @@ final class RestaurantsQueryBuilderTests: XCTestCase {
         XCTAssertFalse(group.contains("%%"))
     }
 
+    // IOS-AUDIT-FEAT-044: the keto and kosher keywords the web's DIETS uses.
+    func testKetoMatchesKetogenic() {
+        let group = Service.dietaryOrGroup(["keto"]) ?? ""
+        XCTAssertTrue(group.contains(#"description.ilike."%ketogenic%""#))
+        XCTAssertTrue(group.contains(#"name.ilike."%low carb%""#))
+    }
+
+    func testKosherOrGroup() {
+        XCTAssertEqual(
+            Service.dietaryOrGroup(["kosher"]),
+            #"description.ilike."%kosher%",cuisine.ilike."%kosher%",name.ilike."%kosher%""#
+        )
+    }
+
     func testUnknownDietIsDropped() {
         XCTAssertNil(Service.dietaryOrGroup(["paleo"]))
     }

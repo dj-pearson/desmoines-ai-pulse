@@ -10,6 +10,7 @@ import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.LocationService
+import com.desmoines.aipulse.util.PlaceShareLinks
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -147,6 +148,7 @@ class RestaurantDetailViewModel @Inject constructor(
 
     // MARK: - Share
 
+    /** Ends with the restaurant's page, by slug or id as iOS shareURL (AND-AUDIT-034). */
     val shareText: String
         get() {
             val r = _restaurant.value ?: return ""
@@ -154,7 +156,7 @@ class RestaurantDetailViewModel @Inject constructor(
             r.cuisine?.let { parts.add("($it)") }
             parts.add("- ${r.displayLocation}")
             r.rating?.let { parts.add("\u2B50 ${String.format(Locale.US, "%.1f", it)}") }
-            return parts.joinToString(" ") + "\n\nFound on Des Moines Insider"
+            return parts.joinToString(" ") + "\n\n" + PlaceShareLinks.footer(PlaceShareLinks.restaurantUrl(r.slug, r.id))
         }
 
     // MARK: - Dining Tips

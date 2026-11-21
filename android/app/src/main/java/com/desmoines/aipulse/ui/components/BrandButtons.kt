@@ -41,7 +41,7 @@ import com.desmoines.aipulse.ui.theme.glassSurface
  *
  * Wraps Material 3 button primitives so every CTA in the app reads with the
  * same visual language — brand gradient primaries, glass secondaries, ghost
- * tertiaries, destructive reds — all plugged into the shared glass surface
+ * tertiaries — all plugged into the shared glass surface
  * vocabulary defined in [com.desmoines.aipulse.ui.theme.glassSurface].
  *
  * Each button supports [isLoading] (spinner + disabled state) and a press
@@ -171,55 +171,6 @@ fun BrandGhostButton(
         ),
     ) {
         ButtonContent(isLoading = false, leadingIcon = leadingIcon, text = text)
-    }
-}
-
-@Composable
-fun BrandDestructiveButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isLoading: Boolean = false,
-    enabled: Boolean = true,
-    size: BrandButtonSize = BrandButtonSize.Regular,
-    text: String,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.98f else 1f,
-        animationSpec = spring(),
-        label = "pressScale",
-    )
-
-    val destructiveGradient = androidx.compose.ui.graphics.Brush.linearGradient(
-        colors = listOf(Color(0xFFF24444), Color(0xFFCC2E2E)),
-    )
-
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .glassSurface(
-                shape = RoundedCornerShape(PremiumTokens.CornerLg),
-                intensity = GlassIntensity.Bar,
-                elevation = PremiumTokens.Elevation4,
-            )
-            .background(destructiveGradient)
-            .heightIn(min = size.minHeight.dp),
-        enabled = enabled && !isLoading,
-        shape = RoundedCornerShape(PremiumTokens.CornerLg),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            contentColor = Color.White,
-        ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = size.horizontalPadding.dp,
-            vertical = size.verticalPadding.dp,
-        ),
-        interactionSource = interaction,
-    ) {
-        ButtonContent(isLoading = isLoading, leadingIcon = null, text = text)
     }
 }
 

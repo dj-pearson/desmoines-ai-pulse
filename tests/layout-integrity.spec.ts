@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Layout integrity (WEB-CI-028 AC3).
@@ -18,6 +19,33 @@ import { test, expect, Page } from '@playwright/test';
  * - tab order follows visual order
  */
 
+/**
+ * Every test runs against a page a visitor would see, which on the smoke
+ * lane's placeholder-Supabase build takes three things (WEB-CI-028):
+ * - fixtureBackend, or every hub measures its loading skeleton instead of
+ *   cards, chips and counts;
+ * - consent already given, or the fixed cookie banner is counted as text
+ *   overlapping whatever it sits over. Overlap with the banner is what a
+ *   banner is for; a test that wants to catch it covering a control should
+ *   say so, not fail every page on it;
+ * - a pinned clock, so the fixture's Oct 1 2026 events stay upcoming and
+ *   /events has a list to lay out after that date.
+ */
+const NOW = new Date('2026-09-25T17:00:00Z');
+const CONSENT = { version: '2026-04-13', essential: true, preferences: true, analytics: false, advertising: false };
+
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await page.addInitScript((consent) => {
+    try {
+      localStorage.setItem('cookie-consent', JSON.stringify({ ...consent, timestamp: new Date().toISOString() }));
+    } catch {
+      /* private mode: the assertions fail, not this */
+    }
+  }, CONSENT);
+  await installFixtureBackend(page);
+});
+
 const pages = [
   { path: '/', name: 'homepage' },
   { path: '/events', name: 'events' },
@@ -34,18 +62,71 @@ async function detectOverlappingText(page: Page): Promise<any[]> {
     ).filter(el => {
       const text = el.textContent?.trim();
       const rect = el.getBoundingClientRect();
-      return text && text.length > 0 && rect.width > 0 && rect.height > 0;
+      // A box is not the same as being painted. FAQSection's answers sit in
+      // closed <details>, which Chromium lays out under content-visibility:
+      // hidden, so every collapsed answer on a page has a rect stacked on its
+      // neighbours and the overlap count hit its cap of 10 on all fifteen
+      // cases (WEB-CI-028). checkVisibility() skips those, plus opacity-0 and
+      // visibility:hidden text nobody can see.
+      //
+      // Text inside a position:fixed layer (the mobile bottom nav, the
+      // accessibility button) is skipped too: in-flow content passes under a
+      // fixed layer at some scroll offset by design, so "overlap" between the
+      // two is a function of where the page is scrolled, not of the layout.
+      // Whether fixed chrome covers too much is the sticky test's question.
+      let fixedLayer = false;
+      for (let a: Element | null = el; a; a = a.parentElement) {
+        if (window.getComputedStyle(a).position === 'fixed') {
+          fixedLayer = true;
+          break;
+        }
+      }
+      return (
+        !fixedLayer &&
+        text &&
+        text.length > 0 &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true })
+      );
     });
+
+    // The part of an element that can actually be seen: its box cut down by
+    // every ancestor that clips (overflow other than visible). A chip scrolled
+    // past the edge of an overflow-x-auto row keeps a full-size rect that runs
+    // under whatever sits beside the row; on /restaurants at 375px that put
+    // the off-screen Price and Rating chips "under" the sort select
+    // (WEB-CI-028). Only the visible part can collide with anything.
+    const visibleRect = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      let { left, top, right, bottom } = r;
+      for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+        const cs = window.getComputedStyle(a);
+        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+        const c = a.getBoundingClientRect();
+        if (cs.overflowX !== 'visible') {
+          left = Math.max(left, c.left);
+          right = Math.min(right, c.right);
+        }
+        if (cs.overflowY !== 'visible') {
+          top = Math.max(top, c.top);
+          bottom = Math.min(bottom, c.bottom);
+        }
+      }
+      return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+    };
 
     const overlapping: any[] = [];
 
     for (let i = 0; i < textElements.length; i++) {
       const el1 = textElements[i];
-      const rect1 = el1.getBoundingClientRect();
+      const rect1 = visibleRect(el1);
+      if (rect1.width === 0 || rect1.height === 0) continue;
 
       for (let j = i + 1; j < textElements.length; j++) {
         const el2 = textElements[j];
-        const rect2 = el2.getBoundingClientRect();
+        const rect2 = visibleRect(el2);
+        if (rect2.width === 0 || rect2.height === 0) continue;
 
         // Check if rectangles overlap
         const hasOverlap = !(
@@ -356,23 +437,49 @@ test.describe('Fixed and Sticky Elements', () => {
     if (stickyElements.length > 0) {
       console.log(`Found ${stickyElements.length} sticky/fixed elements:`, stickyElements);
 
-      // Scroll to test sticky behavior
-      await page.evaluate(() => window.scrollBy(0, 300));
+      // Far enough down that every sticky element has pinned. At 300px the
+      // filter bar and the day header on /events are still in the flow, and
+      // summing their heights anyway reported 53% for what was 23% on screen.
+      await page.evaluate(() => window.scrollBy(0, 1500));
       await page.waitForTimeout(500);
 
-      // Check viewport is not obstructed
+      // The share of the viewport's HEIGHT that pinned, full-width chrome
+      // covers, as the union of their vertical bands (WEB-CI-028). Not a sum:
+      // the filter bar slides 5px under the header, and the empty toast
+      // viewport sits inside the header's band. Only layers at least half the
+      // viewport wide count - a 48px floating button covers a corner, not a
+      // band. A sticky element counts only while it is stuck at its offset.
       const viewportObstruction = await page.evaluate(() => {
         const vh = window.innerHeight;
-        const stickyEls = Array.from(document.querySelectorAll('*')).filter(el => {
+        const vw = window.innerWidth;
+        const bands: Array<[number, number]> = [];
+        for (const el of Array.from(document.querySelectorAll('*'))) {
           const styles = window.getComputedStyle(el);
-          return styles.position === 'sticky' || styles.position === 'fixed';
-        });
-
-        const totalStickyHeight = stickyEls.reduce((sum, el) => {
-          return sum + el.getBoundingClientRect().height;
-        }, 0);
-
-        return (totalStickyHeight / vh) * 100; // Percentage of viewport
+          if (styles.position !== 'sticky' && styles.position !== 'fixed') continue;
+          if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+          if (el.childElementCount === 0 && !el.textContent?.trim()) continue;
+          const rect = el.getBoundingClientRect();
+          if (rect.width < vw / 2) continue;
+          if (styles.position === 'sticky') {
+            const top = parseFloat(styles.top);
+            const bottom = parseFloat(styles.bottom);
+            const stuckTop = Number.isFinite(top) && Math.abs(rect.top - top) < 1;
+            const stuckBottom = Number.isFinite(bottom) && Math.abs(vh - rect.bottom - bottom) < 1;
+            if (!stuckTop && !stuckBottom) continue;
+          }
+          const from = Math.max(0, rect.top);
+          const to = Math.min(vh, rect.bottom);
+          if (to > from) bands.push([from, to]);
+        }
+        bands.sort((a, b) => a[0] - b[0]);
+        let covered = 0;
+        let end = -Infinity;
+        for (const [from, to] of bands) {
+          if (to <= end) continue;
+          covered += to - Math.max(from, end);
+          end = to;
+        }
+        return (covered / vh) * 100;
       });
 
       // Sticky elements shouldn't take up more than 30% of viewport
@@ -430,7 +537,18 @@ test.describe('Content Layout Issues', () => {
           const isVisible = rect.width > 0 && rect.height > 0;
           const isBeyondRight = rect.right > window.innerWidth + 20; // 20px tolerance
           const isBeyondLeft = rect.left < -20;
-          return isVisible && (isBeyondRight || isBeyondLeft);
+          if (!isVisible || !(isBeyondRight || isBeyondLeft)) return false;
+          // A chip past the edge of an overflow-x-auto row is the row's
+          // scrollable content, not page overflow: the row clips it and the
+          // page does not scroll sideways (WEB-CI-028 - the home hero's
+          // "Near me"/"Free" links and the /events neighbourhood chips were
+          // all reported this way). <html> and <body> are deliberately not
+          // treated as clippers, so overflow-x:hidden on the page itself
+          // cannot hide a real break.
+          for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+            if (window.getComputedStyle(a).overflowX !== 'visible') return false;
+          }
+          return true;
         })
         .map(el => ({
           tag: el.tagName,

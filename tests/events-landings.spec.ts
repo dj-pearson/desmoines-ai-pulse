@@ -173,3 +173,47 @@ test.describe('/events/march-1998', () => {
     await expect(page.locator('a[rel="prev"], a[rel="next"], link[rel="prev"], link[rel="next"]')).toHaveCount(0);
   });
 });
+
+/**
+ * WEB-UX-075. A busy day pushed /events/today sideways on every phone: past
+ * the 36-card cap the page shows "See the day on the events page, with filters
+ * and a map" in a whitespace-nowrap Button (about 380px), and the link list
+ * under it would not break a scraped title with no spaces. The fixture
+ * backend's twelve short rows never reached either, so the broad lane only saw
+ * it against a real backend. Forty rows, one with a 60-character token.
+ */
+const LONG_TOKEN_TITLE = 'WinterlightsFestivalAtTheDesMoinesBotanicalGardenFamilyNight';
+const BUSY_DAY: Row[] = Array.from({ length: 40 }, (_, i) => {
+  // 2 PM to 9 PM CDT, all still ahead at 1 PM.
+  const hour = 19 + (i % 8);
+  const utc =
+    hour < 24
+      ? `2026-09-25T${String(hour).padStart(2, '0')}:00:00Z`
+      : `2026-09-26T${String(hour - 24).padStart(2, '0')}:00:00Z`;
+  const local = `2026-09-25T${String(hour - 5).padStart(2, '0')}:00:00`;
+  return event(100 + i, i % 5 === 0 ? `${LONG_TOKEN_TITLE} ${i}` : `Landing Busy Day Show ${i}`, utc, local, {
+    venue: i % 5 === 0 ? 'HyVeeHallAtTheIowaEventsCenterDowntownDesMoines' : `Landing Venue ${i}`,
+  });
+});
+
+test.describe('event landings on a busy day at phone width', () => {
+  for (const path of ['/events/today', '/events/this-weekend']) {
+    test(`${path} does not scroll sideways at 320-375px`, async ({ page }) => {
+      await installEvents(page, FRI_1PM, BUSY_DAY);
+      for (const width of [320, 360, 375]) {
+        await page.setViewportSize({ width, height: 700 });
+        await page.goto(path);
+        // The link list only renders past the card cap, so its presence is
+        // the proof the page reached the busy-day branch.
+        await expect(page.getByRole('link', { name: new RegExp(LONG_TOKEN_TITLE) }).first()).toBeVisible({
+          timeout: 30_000,
+        });
+        const box = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(box.scrollWidth, `${path} page width at ${width}px`).toBeLessThanOrEqual(box.clientWidth);
+      }
+    });
+  }
+});

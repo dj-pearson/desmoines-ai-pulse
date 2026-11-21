@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { DetailBreadcrumb } from "@/components/seo/DetailBreadcrumb";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
@@ -32,7 +32,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { createSlug } from "@/lib/slug";
+import { attractionHref, contentSlug } from "@/lib/slugHref";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import { activeHoursSeason, attractionOpenStatus, weeklyHoursRows } from "@/lib/attractionHours";
 import {
@@ -43,14 +43,15 @@ import {
   seasonLabel,
 } from "@/lib/attractionAtAGlance";
 import { AttractionAtAGlance } from "@/components/AttractionAtAGlance";
+import { attractionMetaDescription, attractionPageTitle } from "@/lib/attractionMeta";
 import { isPrerender } from "@/lib/isPrerender";
 import { useNow } from "@/hooks/useNow";
-import { handleError } from "@/lib/errorHandler";
 import { formatMiles, nearby } from "@/lib/venuePages";
 import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { safeWebUrl } from "@/lib/reservations";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { useReviewAggregate } from "@/hooks/useReviewAggregate";
 
 // Ratings sit below the fold and fire their own requests on mount. React.lazy
 // defers the chunk; DeferredWidget defers the mount until the reader scrolls
@@ -101,40 +102,7 @@ const NEAR_LAT_PAD = 0.15;
 const NEAR_LNG_PAD = 0.2;
 const NEAR_MAX_MILES = 10;
 
-type AttractionCardRow = Pick<Attraction, "id" | "name" | "type" | "image_url" | "latitude" | "longitude">;
-
-interface ReviewAggregate {
-  average_rating: number;
-  total_ratings: number;
-}
-
-/**
- * The review average and count for one attraction, from
- * content_rating_aggregates (explore pass 2 WP3 item 2). Only these two
- * columns: RatingSystem further down fetches the reviews themselves, and the
- * hero needs nothing else. Null when nobody has reviewed it, or when the read
- * fails, in which case the hero shows no rating rather than a wrong one.
- */
-function useReviewAggregate(contentId: string | undefined) {
-  return useQuery({
-    queryKey: ["content-rating-aggregate", "attraction", contentId],
-    queryFn: async (): Promise<ReviewAggregate | null> => {
-      const { data, error } = await supabase
-        .from("content_rating_aggregates")
-        .select("average_rating, total_ratings")
-        .eq("content_type", "attraction")
-        .eq("content_id", contentId ?? "")
-        .maybeSingle();
-      if (error) {
-        handleError(error, { component: "AttractionDetails", action: "loadReviewAggregate" });
-        return null;
-      }
-      return data && data.total_ratings > 0 ? data : null;
-    },
-    enabled: Boolean(contentId) && !isPrerender(),
-    staleTime: 5 * 60 * 1000,
-  });
-}
+type AttractionCardRow = Pick<Attraction, "id" | "name" | "slug" | "type" | "image_url" | "latitude" | "longitude">;
 
 export default function AttractionDetails() {
   const { slug } = useParams();
@@ -152,10 +120,8 @@ export default function AttractionDetails() {
     refetch,
   } = useQuery({
     queryKey: detailQueryKey("attraction", slug ?? ""),
-    // attractions now has a slug column (migration 20260919000008), so this is
-    // one row by unique key. The (id, name) scan this replaces is still in
-    // fetchBySlug as the fallback for the window before that migration is
-    // applied (WEB-PERF-031).
+    // One row by the unique slug column (migration 20260919000008,
+    // WEB-PERF-031).
     queryFn: () => fetchBySlug<Attraction>("attractions", slug ?? ""),
     enabled: Boolean(slug),
     // Shared with usePrefetchAttraction through detailQueryKeys, or the
@@ -166,7 +132,7 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
-  const { data: reviewAggregate } = useReviewAggregate(attraction?.id);
+  const { data: reviewAggregate } = useReviewAggregate("attraction", attraction?.id, "AttractionDetails");
   // Record into the unified recently-viewed feed (WEB-FEAT-007). Only
   // EventDetails used to, so the home rail could never resume an attraction.
   // The href is the param that just resolved this row, so it resolves again.
@@ -321,7 +287,8 @@ export default function AttractionDetails() {
   }
 
   const showImage = attraction.image_url && !imageError;
-  const attractionSlug = createSlug(attraction.name);
+  // The stored slug; a suffixed duplicate's name form is another row's URL.
+  const attractionSlug = contentSlug(attraction);
   const directionsUrl = getDirectionsUrl({
     latitude: attraction.latitude,
     longitude: attraction.longitude,
@@ -464,12 +431,10 @@ export default function AttractionDetails() {
       {/* No `location` prop: EnhancedAttractionSEO's TouristAttraction is the
           one place entity this page publishes (Explore plan WP3 item 4). */}
       <SEOHead
-        title={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
-        description={
-          attraction.description
-            ? attraction.description.slice(0, 160)
-            : `${attraction.name}, a ${typeLabel} in the ${BRAND.city} area: hours, directions and what's on nearby.`
-        }
+        // WEB-SEO-053: the city the address names, not Des Moines for every row,
+        // and a description that is more than the two-word column.
+        title={attractionPageTitle(attraction)}
+        description={attractionMetaDescription(attraction)}
         type="website"
         imageUrl={attraction.image_url || undefined}
         url={`/attractions/${attractionSlug}`}
@@ -481,25 +446,19 @@ export default function AttractionDetails() {
           `${attraction.type} ${BRAND.city}`,
         ].filter(Boolean) as string[]}
         modifiedTime={attraction.updated_at}
-        breadcrumbs={[
-          { name: "Home", url: "/" },
-          { name: "Attractions", url: "/attractions" },
-          { name: attraction.type, url: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-          { name: attraction.name, url: `/attractions/${attractionSlug}` },
-        ]}
       />
 
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-6 max-w-6xl">
-          {/* Breadcrumb Navigation */}
-          <Breadcrumbs
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Attractions", href: "/attractions" },
-              { label: attraction.type, href: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-              { label: attraction.name },
-            ]}
+          {/* WEB-SEO-054: nav and BreadcrumbList from one list. The old trail
+              had a {type} crumb at /attractions?type=..., which canonicalizes
+              to /attractions, so the schema named two items for one page. */}
+          <DetailBreadcrumb
             className="mb-4"
+            crumbs={[
+              { name: "Attractions", path: "/attractions" },
+              { name: attraction.name, path: `/attractions/${attractionSlug}` },
+            ]}
           />
 
           {/* Top Actions Bar: the page's one Share control. */}
@@ -887,7 +846,7 @@ interface AttractionMiniCardProps {
 
 function AttractionMiniCard({ row, miles }: AttractionMiniCardProps) {
   return (
-    <Link to={`/attractions/${createSlug(row.name)}`} className="block">
+    <Link to={attractionHref(row)} className="block">
       <Card className="h-full hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
         {row.image_url ? (
           <div className="aspect-video overflow-hidden">

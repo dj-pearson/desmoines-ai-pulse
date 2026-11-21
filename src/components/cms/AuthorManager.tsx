@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Users, Plus, Edit, Trash2, FileText, Globe, Twitter, Linkedin, Search, UserPlus } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
@@ -345,6 +345,7 @@ export function AuthorManager() {
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search authors"
             placeholder="Search authors by name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -461,7 +462,7 @@ export function AuthorManager() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button
+                        <Button aria-label={`Edit ${author.display_name}`}
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenDialog(author)}
@@ -470,7 +471,7 @@ export function AuthorManager() {
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button aria-label={`Delete ${author.display_name}`} variant="ghost" size="sm">
                               <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </AlertDialogTrigger>

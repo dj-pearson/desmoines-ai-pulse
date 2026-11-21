@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
 import { playgroundAgeText, playgroundTitle, suburbFromLocation } from "@/lib/playgroundMeta";
+import { entityNodeId } from "@/lib/schemaNodeIds";
 
 interface PlaygroundData {
   name: string;
@@ -85,7 +86,7 @@ export default function EnhancedPlaygroundSEO({
   const playgroundSchema = {
     "@context": "https://schema.org",
     "@type": "Playground",
-    "@id": `${playgroundUrl}#place`,
+    "@id": entityNodeId("playground", playgroundUrl),
     name: playground.name,
     description: getGEODescription(),
     url: playgroundUrl,
@@ -172,9 +173,8 @@ export default function EnhancedPlaygroundSEO({
       {playground.image_url && (
         <meta name="place:image" content={playground.image_url} />
       )}
-      {playground.rating != null && (
-        <meta name="place:rating" content={playground.rating.toFixed(1)} />
-      )}
+      {/* No place:rating (WEB-SEO-055): playgrounds.rating is a number a
+          model read off a crawled page, with no record of whose it was. */}
       {playground.age_range && (
         <meta name="place:age_range" content={playground.age_range} />
       )}
@@ -186,7 +186,7 @@ export default function EnhancedPlaygroundSEO({
       <meta name="googlebot" content="index, follow" />
       <meta name="bingbot" content="index, follow" />
 
-      <meta property="og:type" content="place" />
+      <meta property="og:type" content="website" />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       {locality && <meta property="og:locality" content={locality} />}

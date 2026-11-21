@@ -184,7 +184,9 @@ test.describe('/business workspace (business WP3)', () => {
     await page.goto('/business');
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-    await expect(page.getByRole('heading', { name: 'Fixture Corner Bistro' })).toBeVisible();
+    // exact: the claim panel also renders "How Fixture Corner Bistro is doing"
+    // as an h4, and a substring match resolves to both (strict-mode failure).
+    await expect(page.getByRole('heading', { name: 'Fixture Corner Bistro', exact: true })).toBeVisible();
     await expect(page.getByText('Verified from your email domain')).toBeVisible();
 
     const promote = page.getByRole('link', { name: 'Promote this listing' });

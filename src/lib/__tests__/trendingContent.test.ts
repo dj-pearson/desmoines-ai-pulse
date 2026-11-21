@@ -14,7 +14,7 @@ import { applyPublicVisibility, contentHref } from '@/lib/trendingContent';
 function recorder() {
   const calls: Array<[string, ...unknown[]]> = [];
   const q: Record<string, (...args: unknown[]) => unknown> = {};
-  for (const m of ['neq', 'is', 'eq', 'gte']) {
+  for (const m of ['neq', 'is', 'eq', 'gte', 'or']) {
     q[m] = (...args: unknown[]) => {
       calls.push([m, ...args]);
       return q;
@@ -30,9 +30,38 @@ describe('applyPublicVisibility', () => {
     expect(calls).toContainEqual(['neq', 'is_merged', true]);
     expect(calls).toContainEqual(['neq', 'is_hidden', true]);
     expect(calls).toContainEqual(['is', 'archived_at', null]);
-    const gte = calls.find((c) => c[0] === 'gte');
-    expect(gte?.[1]).toBe('date');
-    expect(new Date(gte?.[2] as string).getTime()).toBeLessThanOrEqual(Date.now());
+    expect(calls.find((c) => c[0] === 'gte')).toBeUndefined();
+    const or = calls.find((c) => c[0] === 'or');
+    const [startArm, endArm] = String(or?.[1]).split(',');
+    expect(startArm.startsWith('date.gte.')).toBe(true);
+    expect(endArm.startsWith('end_date.gte.')).toBe(true);
+    const floor = startArm.slice('date.gte.'.length);
+    expect(endArm.slice('end_date.gte.'.length)).toBe(floor);
+    expect(new Date(floor).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  /**
+   * WEB-FEAT-072. A bare `date >= start of today` dropped a multi-day run on
+   * its second morning, so the State Fair left "Trending Events" on the days
+   * it trended most. Evaluates the sent filter against fixture rows.
+   */
+  it('events: a run that opened days ago and is still on stays; one that ended does not', () => {
+    const { q, calls } = recorder();
+    applyPublicVisibility('event', q);
+    const or = calls.find((c) => c[0] === 'or');
+    expect(or).toBeDefined();
+    const arms = String(or?.[1]).split(',').map((t) => {
+      const [col, op, ...rest] = t.split('.');
+      return { col, op, at: Date.parse(rest.join('.')) };
+    });
+    const keeps = (row: Record<string, string | null>) =>
+      arms.some(({ col, op, at }) => op === 'gte' && row[col] != null && Date.parse(row[col] as string) >= at);
+    const DAY = 24 * 60 * 60 * 1000;
+    const iso = (offset: number) => new Date(Date.now() + offset).toISOString();
+    expect(keeps({ date: iso(-3 * DAY), end_date: iso(2 * DAY) })).toBe(true);
+    expect(keeps({ date: iso(DAY), end_date: null })).toBe(true);
+    expect(keeps({ date: iso(-3 * DAY), end_date: iso(-2 * DAY) })).toBe(false);
+    expect(keeps({ date: iso(-2 * DAY), end_date: null })).toBe(false);
   });
 
   it('restaurants drop merged rows; attractions drop inactive ones', () => {

@@ -62,7 +62,8 @@ vi.mock("@/lib/consentLog", () => ({ logConsent: (...args: unknown[]) => logCons
 
 vi.mock("@/lib/errorHandler", () => ({ handleError: vi.fn() }));
 
-const { default: PreferencesManager, ConsentSwitch, readOptIn } = await import("../PreferencesManager");
+const { default: PreferencesManager, ConsentSwitch } = await import("../PreferencesManager");
+const { readOptIn } = await import("@/lib/communicationPreferences");
 const { EmailPreferencesCard } = await import("../EmailPreferencesCard");
 
 function withQueryClient(node: ReactNode) {

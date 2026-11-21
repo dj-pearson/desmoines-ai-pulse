@@ -3,16 +3,21 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
+import { ROUTER_FUTURE } from "@/lib/routerFuture";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
-import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { usePageTransition } from "@/hooks/usePageTransition";
-import { isCapacitor } from "@/lib/capacitorUtils";
+import { lazyOrNothing } from "@/lib/lazyOrNothing";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation, useNavigationType } from "react-router-dom";
 const KeyboardShortcutsModal = lazyWithRetry(() =>
   import("@/components/KeyboardShortcutsModal").then((m) => ({ default: m.KeyboardShortcutsModal })),
+);
+// Headless and lazy (WEB-PERF-066): the shortcut table stays out of the entry
+// chunk. lazyOrNothing, not lazyWithRetry: a failed fetch should cost the
+// shortcuts for one page view, not reload the page.
+const KeyboardShortcutListener = lazy(
+  lazyOrNothing(() => import("@/components/KeyboardShortcutListener")),
 );
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
@@ -63,11 +68,6 @@ const Toaster = lazyWithRetry(() =>
 const Sonner = lazyWithRetry(() =>
   import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
 );
-
-// Capacitor-only effects. Mounted behind isCapacitor(), so a web visitor never
-// requests the chunk. See the component for why the condition lives here and
-// not inside each hook.
-const CapacitorRuntime = lazyWithRetry(() => import("@/components/CapacitorRuntime"));
 
 const Index = lazyWithRetry(() => import("./pages/Index"));
 const Auth = lazyWithRetry(() => import("./pages/Auth"));
@@ -207,7 +207,7 @@ const AdvertisingPolicies = lazyWithRetry(() => import("./pages/AdvertisingPolic
 const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
-import { CookieConsentBanner } from "@/components/CookieConsentBanner";
+import { CookieConsentGate } from "@/components/CookieConsentGate";
 
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
@@ -252,6 +252,9 @@ const AdminPlaygrounds = lazyWithRetry(() => import("./pages/AdminPlaygrounds"))
 const AdminSocial = lazyWithRetry(() => import("./pages/AdminSocial"));
 const AdminEmail = lazyWithRetry(() => import("./pages/AdminEmail"));
 const AdminDeals = lazyWithRetry(() => import("./pages/AdminDeals"));
+const AdminGuides = lazyWithRetry(() => import("./pages/AdminGuides"));
+const AdminVenuePages = lazyWithRetry(() => import("./pages/AdminVenuePages"));
+const AdminTrails = lazyWithRetry(() => import("./pages/AdminTrails"));
 const AdminPartnerships = lazyWithRetry(() => import("./pages/AdminPartnerships"));
 const AdminFeedback = lazyWithRetry(() => import("./pages/AdminFeedback"));
 const AdminTrending = lazyWithRetry(() => import("./pages/AdminTrending"));
@@ -269,8 +272,8 @@ const WhatsNew = lazyWithRetry(() => import("./pages/WhatsNew"));
 // session; anything older than the last 50 pages isn't worth restoring).
 const MAX_REMEMBERED_SCROLL_POSITIONS = 50;
 
-// Scroll management on route changes – essential for Capacitor where
-// the browser's default scroll restoration doesn't kick in.
+// Scroll management on route changes. An SPA route change is not a page load,
+// so the browser's own scroll restoration never kicks in.
 //
 // Forward navigation starts at the top of the new page. Going *back* restores
 // where you were, so returning to a long list doesn't dump you at the top of it
@@ -354,27 +357,14 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   // Track page views for analytics dashboard
   usePageTracking();
 
-  useKeyboardShortcuts({
-    enabled: true,
-    onShowHelp: () => setShowShortcutsModal(true),
-  });
-
-  // Subtle page transition animation for Capacitor (no-op on web). Stays here
-  // rather than moving into CapacitorRuntime because it returns the ref the
-  // wrapper below needs.
-  const pageTransitionRef = usePageTransition<HTMLDivElement>();
+  const showHelp = useCallback(() => setShowShortcutsModal(true), []);
 
   return (
-    <div ref={pageTransitionRef}>
-      {/* Push registration, deep links, swipe-back, status bar and keyboard
-          avoidance. Every one of them opens with `if (!isCapacitor()) return`,
-          so on the web this chunk is never requested. WEB-PERF-020 AC4. */}
-      {isCapacitor() && (
-        <Suspense fallback={null}>
-          <CapacitorRuntime />
-        </Suspense>
-      )}
+    <div>
       {children}
+      <Suspense fallback={null}>
+        <KeyboardShortcutListener onShowHelp={showHelp} />
+      </Suspense>
       {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
           first time someone presses "?" rather than by every visitor. */}
       {showShortcutsModal && (
@@ -397,7 +387,7 @@ const App = () => (
         anyway, for delayDuration={0}) - so this one was redundant, and it
         was the only thing pulling the Radix tooltip and its floating-ui
         popper into the render-blocking entry chunk. WEB-PERF-020. */}
-    <BrowserRouter>
+    <BrowserRouter future={ROUTER_FUTURE}>
       <ScrollRestoration />
       <AuthProvider>
         <SessionManager />
@@ -481,6 +471,9 @@ const App = () => (
               <Route path="/admin/social" element={<ProtectedRoute requireAdmin><AdminSocial /></ProtectedRoute>} />
               <Route path="/admin/email" element={<ProtectedRoute requireAdmin><AdminEmail /></ProtectedRoute>} />
               <Route path="/admin/deals" element={<ProtectedRoute requireAdmin><AdminDeals /></ProtectedRoute>} />
+              <Route path="/admin/guides" element={<ProtectedRoute requireAdmin><AdminGuides /></ProtectedRoute>} />
+              <Route path="/admin/venue-pages" element={<ProtectedRoute requireAdmin><AdminVenuePages /></ProtectedRoute>} />
+              <Route path="/admin/trails" element={<ProtectedRoute requireAdmin><AdminTrails /></ProtectedRoute>} />
               <Route path="/admin/partnerships" element={<ProtectedRoute requireAdmin><AdminPartnerships /></ProtectedRoute>} />
               <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
               <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />
@@ -664,7 +657,7 @@ const App = () => (
             </Route>
           </Routes>
           </RouteErrorBoundary>
-          <CookieConsentBanner />
+          <CookieConsentGate />
           <BottomNav />
         </KeyboardShortcutsProvider>
       </ErrorBoundary>

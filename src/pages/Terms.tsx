@@ -4,6 +4,7 @@ import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useSubscription } from "@/hooks/useSubscription";
 import { benefitsFor, displayPrice, type PlanName } from "@/lib/planBenefits";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 /**
  * One plan's line in "Subscription Features", from planBenefits.ts like every
@@ -29,8 +30,8 @@ export default function Terms() {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title="Terms of Service | Des Moines Insider"
-        description="Read the Terms of Service for Des Moines Insider. Understand your rights and responsibilities when using our AI-powered city guide platform."
+        title={STATIC_PAGE_META["/terms"].title}
+        description={STATIC_PAGE_META["/terms"].description}
         url="https://desmoinesinsider.com/terms"
         type="website"
       />

@@ -12,7 +12,7 @@
  *     rounded, halving 'A' and '9').
  */
 
-import { assert } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert } from 'jsr:@std/assert@1';
 
 // Local rather than std's assertMatch: the repo's edge type-check resolves
 // std/assert through a stub that exports assert but not assertMatch.

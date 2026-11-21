@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageCircle, CheckCircle, XCircle, PlusCircle, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { formatEventPart } from "@/lib/timezone";
@@ -151,6 +151,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                   <h3 className="font-semibold mb-3">Find Events</h3>
                   <div className="flex gap-2">
                     <Input
+                      aria-label="Search events"
                       placeholder="Search events..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -188,8 +189,9 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                             variant="outline"
                             onClick={() => addEventToPlanning(event)}
                             className="ml-2"
+                            aria-label={`Add ${event.title} to the plan`}
                           >
-                            <PlusCircle className="w-3 h-3" />
+                            <PlusCircle className="w-3 h-3" aria-hidden="true" />
                           </Button>
                         </div>
                       </Card>
@@ -270,6 +272,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
               </div>
               
               <Textarea
+                aria-label="Group notes"
                 placeholder="Add notes, ideas, or plans here..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

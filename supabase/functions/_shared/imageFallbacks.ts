@@ -3,11 +3,14 @@
  * fails to yield an image. Tried in order:
  *   1) Existing venue/restaurant/attraction in our DB with the same name
  *   2) Their website (re-scraped for og:image / JSON-LD)
- *   3) Google Places photo via venue name + coordinates
- *   4) Category default (admin-supplied generic image)
+ *   3) Category default (admin-supplied generic image)
+ * Google Places is not in the chain (WEB-BE-044): getGooglePlacesPhotos below
+ * serves the admin picker only, and hotels copy their Places photo through
+ * the 30-day refresh path in backfill-images/hotels.ts.
  */
 
 import { extractImageFromHtml } from "./imageStorage.ts";
+import { fetchPublicUrl } from "./fetchGuard.ts";
 import { placesMediaUrl } from "./placesPhoto.ts";
 
 /**
@@ -82,7 +85,10 @@ export async function findExistingVenueRecord(
  */
 export async function scrapeImageFromWebsite(website: string): Promise<string | null> {
   try {
-    const response = await fetch(website, {
+    // The venue website is a stored or scraped value, not ours: resolve the
+    // host and re-check every redirect, so a 302 cannot reach an internal
+    // address. A refusal throws and lands in the catch below as "no image".
+    const response = await fetchPublicUrl(website, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -112,75 +118,12 @@ export async function scrapeImageFromWebsite(website: string): Promise<string | 
 }
 
 /**
- * Find a Google Places photo URL for a venue. Uses Text Search (New) biased
- * toward the supplied coordinates so we don't pick a same-named venue in
- * another city. Returns a media URL that fetchAndStoreImage can download.
- */
-export async function getGooglePlacesPhoto(
-  venueName: string,
-  lat: number | null,
-  lng: number | null,
-): Promise<string | null> {
-  const apiKey = Deno.env.get("GOOGLE_SEARCH_API");
-  if (!apiKey) return null;
-  if (!venueName || venueName.trim().length < 3) return null;
-
-  try {
-    const body: Record<string, unknown> = {
-      textQuery: venueName,
-      maxResultCount: 1,
-    };
-    if (lat != null && lng != null) {
-      body.locationBias = {
-        circle: {
-          center: { latitude: lat, longitude: lng },
-          radius: 25_000, // 25 km — Greater Des Moines area
-        },
-      };
-    } else {
-      // Default to a Des Moines-centred bias so we don't pick a same-named place elsewhere
-      body.locationBias = {
-        circle: {
-          center: { latitude: 41.5868, longitude: -93.625 },
-          radius: 50_000,
-        },
-      };
-    }
-
-    const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!res.ok) {
-      console.warn(`Places searchText failed (${res.status}) for "${venueName}"`);
-      return null;
-    }
-    const data = await res.json();
-    const photoName: string | undefined = data?.places?.[0]?.photos?.[0]?.name;
-    if (!photoName) return null;
-
-    // Place photo media endpoint redirects to the actual image. Passing the API
-    // key in the URL is fine for a SERVER-SIDE fetch and matches the Places
-    // docs; it is not fine for anything that reaches a browser or a database
-    // column, which is why the URL is built here per call and never stored
-    // (WEB-BE-044).
-    return placesMediaUrl(photoName, { apiKey });
-  } catch (err) {
-    console.warn(`getGooglePlacesPhoto error for "${venueName}":`, (err as Error).message);
-    return null;
-  }
-}
-
-/**
- * Like getGooglePlacesPhoto, but returns up to `maxPhotos` photo URLs from the
- * top matching Place. Used by the manual image picker so admins can choose.
+ * Up to `maxPhotos` photo URLs from the top matching Place, for the manual
+ * image picker so admins can choose. Text Search (New), biased to Des Moines.
+ *
+ * There is no single-photo variant any more: backfill-images was its only
+ * caller, and fetchAndStoreImage refuses the media URL it returned, so every
+ * call was a billed search whose answer was thrown away (WEB-BE-044 AC2).
  */
 export async function getGooglePlacesPhotos(
   venueName: string,

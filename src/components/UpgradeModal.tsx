@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -425,60 +425,9 @@ export function UpgradeModal({
   );
 }
 
-interface UpgradeModalRequest {
-  feature?: string;
-  requiredTier?: PaidPlan;
-  limit?: number;
-  used?: number;
-}
-
-/**
- * Local modal state for a component that opens the paywall itself.
- *
- * `UpgradeModalComponent` keeps its identity until the modal opens, closes or
- * gets new props. It used to be a fresh arrow function each render, which React
- * treats as a new component type: any parent re-render (a toast, a query
- * resolving) unmounted and remounted the open dialog, reset its selection and
- * logged paywall_present again.
- */
-export function useUpgradeModal() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [modalProps, setModalProps] = useState<UpgradeModalRequest>({});
-
-  const openUpgradeModal = useCallback(
-    (feature?: string, requiredTier?: PaidPlan, usage?: { limit?: number; used?: number }) => {
-      setModalProps({ feature, requiredTier, limit: usage?.limit, used: usage?.used });
-      setIsOpen(true);
-    },
-    [],
-  );
-
-  const closeUpgradeModal = useCallback(() => {
-    setIsOpen(false);
-  }, []);
-
-  const UpgradeModalComponent = useMemo(() => {
-    function BoundUpgradeModal() {
-      return (
-        <UpgradeModal
-          open={isOpen}
-          onOpenChange={setIsOpen}
-          feature={modalProps.feature}
-          requiredTier={modalProps.requiredTier}
-          limit={modalProps.limit}
-          used={modalProps.used}
-        />
-      );
-    }
-    return BoundUpgradeModal;
-  }, [isOpen, modalProps]);
-
-  return {
-    isOpen,
-    openUpgradeModal,
-    closeUpgradeModal,
-    UpgradeModalComponent,
-  };
-}
+// There is deliberately no per-component modal hook here. Open the paywall
+// with openPaywall() from @/lib/paywallStore: the app-root GlobalUpgradeModal
+// renders this lazily, and a static import of this module from a page puts
+// it and its imports on that route (WEB-PERF-072).
 
 export default UpgradeModal;

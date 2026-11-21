@@ -77,4 +77,65 @@ final class MapQuickFilterTests: XCTestCase {
         XCTAssertTrue(EventAnnotation.isTonight(soon, now: now))
         XCTAssertFalse(EventAnnotation.isTonight(afterMidnight, now: now))
     }
+
+    // MARK: - /map links (IOS-AUDIT-007)
+
+    func testAMapLinkShowsOnlyTheKindsItNames() {
+        let vm = viewModel()
+        vm.restaurants = [MapFixtures.restaurant("r", hours: MapFixtures.dailyHours)]
+        vm.attractions = [MapFixtures.attraction("a")]
+        vm.apply(MapLinkLayers(events: false, restaurants: false, attractions: true))
+        XCTAssertFalse(vm.showEvents)
+        XCTAssertFalse(vm.showRestaurants)
+        XCTAssertTrue(vm.showAttractions)
+        XCTAssertTrue(vm.restaurantAnnotations.isEmpty)
+        XCTAssertEqual(vm.attractionAnnotations.map(\.id), ["a"])
+    }
+
+    func testAMapLinkReplacesEarlierChoicesAndQuickFilters() {
+        let vm = viewModel()
+        vm.showRestaurants = false
+        vm.openNowOnly = true
+        vm.walkableOnly = true
+        vm.apply(MapLinkLayers())
+        XCTAssertTrue(vm.showEvents)
+        XCTAssertTrue(vm.showRestaurants)
+        XCTAssertTrue(vm.showAttractions)
+        XCTAssertFalse(vm.openNowOnly)
+        XCTAssertFalse(vm.walkableOnly)
+    }
+
+    // MARK: - /map?when= (IOS-AUDIT-009)
+
+    func testAMapLinkWhenSetsTheChipAndNoWhenKeepsIt() {
+        let vm = viewModel()
+        vm.timeChip = .at8pm
+        vm.apply(MapLinkLayers())
+        XCTAssertEqual(vm.timeChip, .at8pm)
+        vm.apply(MapLinkLayers(when: .weekend))
+        XCTAssertEqual(vm.timeChip, .weekend)
+        vm.apply(MapLinkLayers(when: .anytime))
+        XCTAssertEqual(vm.timeChip, .anytime)
+    }
+
+    func testTheWeekendChipFiltersEventsButNotRestaurants() {
+        let vm = viewModel() // Tuesday noon
+        vm.events = [
+            MapFixtures.event("tue", start: MapFixtures.central(2026, 9, 29, 19)),
+            MapFixtures.event("sat", start: MapFixtures.central(2026, 10, 3, 20)),
+        ]
+        vm.restaurants = [
+            MapFixtures.restaurant("open", hours: MapFixtures.dailyHours),
+            MapFixtures.restaurant("unknown"),
+        ]
+        vm.apply(MapLinkLayers(when: .weekend))
+        XCTAssertEqual(vm.eventAnnotations.map(\.id), ["sat"])
+        XCTAssertEqual(Set(vm.restaurantAnnotations.map(\.id)), ["open", "unknown"])
+        XCTAssertEqual(vm.restaurantsHiddenUnknownHours, 0)
+        // Restaurants are not filtered, so the pill does not call them open.
+        XCTAssertEqual(
+            MapTimeSlider.pillText(chip: .weekend, now: tuesdayNoon, eventCount: 1, openCount: 2, unknownCount: 0),
+            "This weekend: 1 event"
+        )
+    }
 }

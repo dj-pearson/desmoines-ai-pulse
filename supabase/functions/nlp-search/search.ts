@@ -9,7 +9,7 @@
 // docs/page-plans/search.md WP1.
 
 import { sanitizePostgrestPattern } from "../_shared/validation.ts";
-import { centralTodayStartUtc, type NlpDateFilter, nlpDateWindow } from "./dateWindow.ts";
+import { centralTodayStartUtc, type NlpDateFilter, nlpDateWindow, upcomingOrRunningFilter } from "./dateWindow.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -528,7 +528,15 @@ export function planSearch(intent: ParsedSearchIntent, requestedTypes: ContentTy
     const facets: Facet[] = [];
     if (type === "events") {
       if (window) {
-        facets.push({ key: "when", label: whenLabel(intent), apply: (q) => q.gte("date", window.start).lte("date", window.end) });
+        // An overlap test, not "starts inside the window": a festival that
+        // opened Thursday is still on "this weekend", and day three of the
+        // State Fair is still "today". date <= end keeps later editions out.
+        // WEB-FEAT-068.
+        facets.push({
+          key: "when",
+          label: whenLabel(intent),
+          apply: (q) => q.lte("date", window.end).or(upcomingOrRunningFilter(window.start)),
+        });
       }
       if (category) {
         facets.push({ key: "category", label: intent.category as string, apply: (q) => q.ilike("category", `%${category}%`) });
@@ -545,10 +553,12 @@ export function planSearch(intent: ParsedSearchIntent, requestedTypes: ContentTy
         columns: "*",
         // Same visibility predicate as the web app's applyEventVisibility():
         // the service-role key bypasses RLS, so this is the only thing hiding
-        // merged, hidden and archived rows. Without a date window, today onward.
+        // merged, hidden and archived rows. Without a date window, today
+        // onward, plus a run that started earlier and has not ended (the same
+        // group useEvents sends, so /search and this agree). WEB-FEAT-068.
         base: (q) => {
           let b = q.neq("is_merged", true).neq("is_hidden", true).is("archived_at", null);
-          if (!window) b = b.gte("date", centralTodayStartUtc(now));
+          if (!window) b = b.or(upcomingOrRunningFilter(centralTodayStartUtc(now)));
           return b.order("date", { ascending: true }).limit(RESULT_LIMIT);
         },
         facets,

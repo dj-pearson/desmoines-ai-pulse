@@ -23,7 +23,7 @@ import { Shield, Settings, Crown, FileText, Bot, Wrench, TrendingUp, Server } fr
 import { useEvents } from "@/hooks/useEvents";
 import { useAdminHomeStats } from "@/hooks/useAdminHomeStats";
 import { ContentItem, ContentType } from "@/lib/types";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useClearEventCache } from "@/hooks/useClearEventCache";
 
 export default function Admin() {

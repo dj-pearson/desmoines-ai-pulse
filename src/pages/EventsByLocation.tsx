@@ -19,6 +19,7 @@ import { notOverFilter } from "@/components/events/eventsHubQuery";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { applyServingRestaurantFilters } from "@/lib/restaurantStatus";
 import { ErrorState } from "@/components/ui/error-state";
 import { SUBURBS, type SuburbSlug } from "@/lib/suburbs";
 import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
@@ -125,13 +126,20 @@ export default function EventsByLocation() {
 
   // A count, not the length of a six-card sample (WP5 item 4): the tile said
   // "Local Restaurants: 6" for every suburb with six or more.
+  //
+  // WEB-BE-045: this filtered status = 'active', a value the CHECK on
+  // restaurants.status does not allow, so every suburb page listed no
+  // restaurants and no count. It now keeps the places you can eat at today,
+  // in the query, because both the six-card sample and the count are decided
+  // on the server.
   const restaurantQuery = (columns: string, head = false) =>
-    supabase
-      .from("restaurants")
-      .select(columns, head ? { count: "exact", head: true } : undefined)
-      .eq("status", "active")
-      .neq("is_merged", true)
-      .or(placeFilter ?? "id.is.null");
+    applyServingRestaurantFilters(
+      supabase
+        .from("restaurants")
+        .select(columns, head ? { count: "exact", head: true } : undefined)
+        .neq("is_merged", true)
+        .or(placeFilter ?? "id.is.null"),
+    );
 
   const { data: restaurants } = useQuery({
     queryKey: ["restaurants-by-location", slug],

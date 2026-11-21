@@ -12,7 +12,15 @@ import { applyEventVisibility } from '@/lib/eventQuery';
 import { attractionHref, eventHref, restaurantHref } from '@/lib/dashboardItems';
 import { formatEventDateShort } from '@/lib/timezone';
 import { preferCuisineMatches, type HubKey } from '@/lib/articleHubs';
-import { DES_MOINES_TIME_ZONE, getRestaurantOpenStatus, isVisitableStatus } from '@/lib/restaurantHours';
+import {
+  DES_MOINES_TIME_ZONE,
+  NOT_CLOSED_RESTAURANT_FILTER,
+  isServingToday,
+  resolveOpenStatus,
+  type StoredOpeningHours,
+} from '@/lib/restaurantHours';
+import { hoursTextOf } from '@/lib/hoursText';
+import { ARTICLE_HUB_RESTAURANT_COLUMNS } from '@/lib/listColumns';
 import { KIDS_EVENTS_FILTER, ongoingStartFilter } from '@/hooks/useEventLanding';
 import { articlePublishGuardMessage } from '@/lib/articlePublishGuard';
 
@@ -649,8 +657,10 @@ interface ListingRestaurantRow {
   slug: string | null;
   name: string | null;
   status: string | null;
+  business_status: string | null;
   cuisine: string | null;
   opening: string | null;
+  hours_json: StoredOpeningHours | null;
 }
 
 /**
@@ -658,14 +668,19 @@ interface ListingRestaurantRow {
  * hours, cuisine matches with the article's tags first, then popularity. When
  * none of the rows read is open (or none has hours we can read), the block
  * says "Places to try" over the same ordering, never "Open now".
+ *
+ * Hours come from hours_json through resolveOpenStatus, the open-now
+ * evaluator; `opening` is a date in production and only counts when it holds
+ * hours text. A place Google lists as CLOSED_TEMPORARILY still publishes its
+ * weekly hours, so isServingToday keeps it out of both modes (WEB-FEAT-042).
  */
 export function pickHubRestaurants(
   rows: readonly ListingRestaurantRow[],
   tags: readonly string[] | null | undefined,
   now: Date = new Date(),
 ): HubListings {
-  const visitable = rows.filter((r) => r.name && isVisitableStatus(r.status));
-  const open = visitable.filter((r) => getRestaurantOpenStatus(r.opening, now).isOpen);
+  const visitable = rows.filter((r) => r.name && isServingToday(r));
+  const open = visitable.filter((r) => resolveOpenStatus(r.hours_json, hoursTextOf(r.opening), now).isOpen);
   const mode: HubListingMode = open.length > 0 ? 'open-now' : 'places';
   const pool = open.length > 0 ? open : visitable;
   return {
@@ -699,8 +714,9 @@ export function useArticleHubListings(hub: HubKey | null, tags?: readonly string
           // is_merged, which dropped every never-merged row.
           const { data, error } = await supabase
             .from('restaurants')
-            .select('id, slug, name, status, cuisine, opening')
+            .select(ARTICLE_HUB_RESTAURANT_COLUMNS)
             .not('is_merged', 'is', true)
+            .or(NOT_CLOSED_RESTAURANT_FILTER)
             .order('popularity_score', { ascending: false, nullsFirst: false })
             .order('id', { ascending: true })
             .limit(HUB_RESTAURANT_ROWS);

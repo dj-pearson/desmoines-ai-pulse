@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { Link } from "react-router-dom";
 import { attractionFactParts, type AttractionFactFields } from "@/lib/attractionHours";
+import { attractionHref } from "@/lib/slugHref";
 // Bundled from the leaflet package rather than fetched from unpkg.com, so the
 // map has no third-party request and no version drift (Explore plan WP3 item 9).
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -19,19 +20,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const createSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-};
-
 /** Downtown Des Moines, for the one case with nothing to fit. */
 const DEFAULT_CENTER: [number, number] = [41.5868, -93.625];
 
 export interface AttractionsMapRow extends AttractionFactFields {
   id: string;
   name: string;
+  /** Stored slug; the popup links by it so a suffixed duplicate opens its own page. */
+  slug?: string | null;
   type?: string | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -100,7 +96,7 @@ const AttractionsMap = ({ attractions, now = null }: AttractionsMapProps) => {
           return (
             <Marker key={attraction.id} position={[attraction.latitude, attraction.longitude]}>
               <Popup>
-                <Link to={`/attractions/${createSlug(attraction.name)}`} className="font-semibold">
+                <Link to={attractionHref(attraction)} className="font-semibold">
                   {attraction.name}
                 </Link>
                 {attraction.type && <span className="block text-xs">{attraction.type}</span>}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { checkInToastMessage, type CheckInStatus } from '@/lib/checkInStatus';
 
@@ -92,8 +92,9 @@ export function useCommunityFeatures() {
   // (it is not in .github/migration-drift-baseline.json, which after WEB-QA-017
   // is a separate fact from being ledgered), so event photos are
   // event_discussions rows with message_type='photo' and media_url.
-  // EventPhotoUpload.tsx:90 writes that shape, EventPhotoGallery.tsx:17 reads
-  // it, EventSocialHub.tsx:188 counts it, and ownership.ts maps `photo` to it.
+  // EventPhotoUpload.tsx:90 writes that shape and ownership.ts maps `photo` to
+  // it. Its readers, EventPhotoGallery and EventSocialHub, were never mounted
+  // and were deleted under WEB-QA-042.
   //
   // Deleting cost nothing and risked nothing: both tables held ZERO rows, so
   // there was no data on either side, and neither function had a single

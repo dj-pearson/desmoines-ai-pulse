@@ -6,7 +6,7 @@
 import type { AnalyticsEvent } from '@/types/event-promotion';
 import { createLogger } from '@/lib/logger';
 import { safeStorage } from '@/lib/safeStorage';
-import { hasConsent } from '@/components/CookieConsentBanner';
+import { hasConsent } from '@/lib/cookieConsent';
 
 const logger = createLogger('analyticsTracker');
 

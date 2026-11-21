@@ -2,9 +2,16 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useDebounce } from '@/hooks/useDebounce';
+import { upcomingOrRunningFilter } from '@/hooks/useEvents';
 import { ErrorSeverity, handleError } from '@/lib/errorHandler';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { RESTAURANT_SUGGESTION_COLUMNS } from '@/lib/listColumns';
 import { escapeLikePattern } from '@/lib/postgrestPattern';
+import {
+  orderRestaurantSuggestions,
+  restaurantSuggestionScanRows,
+  restaurantSuggestionSubtitle,
+} from '@/lib/restaurantSuggestions';
 import { searchResultHref } from '@/lib/searchResultHref';
 import { upcomingFloorUtc } from '@/lib/timezone';
 
@@ -17,9 +24,14 @@ import { upcomingFloorUtc } from '@/lib/timezone';
  * that file belongs to the Search plan; the hand-off is for it to switch to
  * this hook:
  *
- * - events: the visibility predicate (applyEventVisibility) and the upcoming
- *   floor (start of today, Central), soonest first;
+ * - events: the visibility predicate (applyEventVisibility), soonest first,
+ *   and useEvents' upcomingOrRunningFilter: it starts today (Central) or
+ *   later, or it is a run whose end_date has not passed. A bare
+ *   `date >= today` dropped the State Fair from the dropdown on its second
+ *   morning while the results page kept it (WEB-FEAT-061);
  * - restaurants: rows merged into a duplicate are left out (WEB-AUTO-005);
+ *   a place closed for good is kept, labelled and ranked last (WEB-FEAT-048,
+ *   src/lib/restaurantSuggestions.ts);
  * - attractions: only `is_active` rows, as /attractions lists;
  * - `%` and `_` typed by the visitor are literal (escapeLikePattern);
  * - 5 rows per type, three requests in parallel.
@@ -62,15 +74,15 @@ export async function fetchEntitySuggestions(term: string): Promise<EntitySugges
       supabase.from('events').select('id, title, venue, date, event_start_utc, event_start_local'),
     )
       .ilike('title', pattern)
-      .gte('date', upcomingFloorUtc())
+      .or(upcomingOrRunningFilter(upcomingFloorUtc()))
       .order('date', { ascending: true })
       .limit(ROWS_PER_TYPE),
     supabase
       .from('restaurants')
-      .select('id, name, cuisine, slug')
+      .select(RESTAURANT_SUGGESTION_COLUMNS)
       .ilike('name', pattern)
       .neq('is_merged', true)
-      .limit(ROWS_PER_TYPE),
+      .limit(restaurantSuggestionScanRows(ROWS_PER_TYPE)),
     supabase
       .from('attractions')
       .select('id, name, type')
@@ -90,11 +102,11 @@ export async function fetchEntitySuggestions(term: string): Promise<EntitySugges
       subtitle: e.venue ?? null,
       href: searchResultHref(e, 'events'),
     })),
-    restaurants: (restaurants.data ?? []).map((r) => ({
+    restaurants: orderRestaurantSuggestions(restaurants.data ?? [], ROWS_PER_TYPE).map((r) => ({
       id: r.id,
       type: 'restaurants',
       title: r.name,
-      subtitle: r.cuisine ?? null,
+      subtitle: restaurantSuggestionSubtitle(r),
       href: searchResultHref(r, 'restaurants'),
     })),
     attractions: (attractions.data ?? []).map((a) => ({

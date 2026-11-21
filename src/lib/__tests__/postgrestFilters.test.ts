@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
-import { checkSource, run } from '../../../scripts/check-postgrest-filters.mjs';
+import { checkSource, MAY_HOLD_PATTERN, run } from '../../../scripts/check-postgrest-filters.mjs';
 
 /**
  * A search for "Bar, Grill" in `.or(`name.ilike.%${q}%,...`)` made PostgREST
@@ -95,7 +95,27 @@ describe('check-postgrest-filters', () => {
     expect(checkSource(src)).toEqual([]);
   });
 
-  it('finds nothing unsanitized in src/', () => {
+  it('still parses a file whose pattern is spelled with an escape', () => {
+    // Cooked text "ilike." with no raw "like." anywhere: only the backslash
+    // keeps this file from being skipped unparsed (WEB-QA-056).
+    const escaped = 'const f = `name.il\\u0069ke.%${q}%`;';
+    const continued = 'const f = `name.il\\\nike.%${q}%`;';
+    expect(escaped).not.toMatch(/like\./);
+    expect(checkSource(escaped)).toHaveLength(1);
+    expect(checkSource(continued)).toHaveLength(1);
+  });
+
+  it('skips only files that cannot hold a pattern position', () => {
+    expect(MAY_HOLD_PATTERN.test('const a = `id.eq.${x}`;')).toBe(false);
+    expect(MAY_HOLD_PATTERN.test('const a = `name.ilike.%${x}%`;')).toBe(true);
+    expect(MAY_HOLD_PATTERN.test('const a = "\\n";')).toBe(true);
+  });
+
+  // Reads every file under src/ and parses ~180 of them: about 1s alone, and
+  // 7s under contention, which timed it out against vitest's 5s default in
+  // full runs (WEB-QA-056). The skip in checkSource is the fix; the explicit
+  // timeout is the margin for a loaded CI runner.
+  it('finds nothing unsanitized in src/', { timeout: 15_000 }, () => {
     const { files, findings } = run('src');
     expect(files).toBeGreaterThan(100);
     expect(findings).toEqual([]);

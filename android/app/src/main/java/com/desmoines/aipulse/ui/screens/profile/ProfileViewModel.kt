@@ -111,6 +111,48 @@ class ProfileViewModel @Inject constructor(
     fun clearEmailConsentError() { _emailConsentError.value = null }
 
     /**
+     * "Personalized suggestions" (XPLAT-016): whether For You may rank events
+     * from this account's swipes and saves. The same switch as the web's
+     * /profile?tab=settings, stored in communication_preferences and checked by
+     * get_personalized_recommendations_v2.
+     *
+     * Starts OFF, the opposite of email: this key is opt-in, and absence on the
+     * server means no personalization. The real value replaces it when the
+     * profile loads.
+     */
+    private val _personalization = MutableStateFlow(false)
+    val personalization: StateFlow<Boolean> = _personalization.asStateFlow()
+
+    private val _personalizationError = MutableStateFlow<String?>(null)
+    val personalizationError: StateFlow<String?> = _personalizationError.asStateFlow()
+
+    /**
+     * Write the switch through and roll it back if the write fails, like the
+     * email toggle. Signed out there is no profile to write, so nothing
+     * changes.
+     */
+    fun setPersonalization(enabled: Boolean) {
+        val userId = authRepository.currentUserId ?: return
+        val previous = _personalization.value
+        _personalization.value = enabled
+        _personalizationError.value = null
+        viewModelScope.launch {
+            authRepository.setPersonalizationEnabled(userId, enabled).onFailure {
+                _personalization.value = previous
+                _personalizationError.value = "Could not save your suggestions preference. Check your connection and try again."
+            }
+        }
+    }
+
+    private fun refreshPersonalization(userId: String) {
+        viewModelScope.launch {
+            authRepository.isPersonalizationEnabled(userId).onSuccess { enabled ->
+                _personalization.value = enabled
+            }
+        }
+    }
+
+    /**
      * Toggle analytics/telemetry consent. Revoking immediately disables Firebase
      * collection; AdTrackingService drops its queued events via its consent
      * observer, so no non-essential telemetry survives the opt-out.
@@ -203,6 +245,7 @@ class ProfileViewModel @Inject constructor(
         val userId = authRepository.currentUserId ?: return
 
         refreshEmailConsent(userId)
+        refreshPersonalization(userId)
 
         viewModelScope.launch {
             authRepository.fetchProfile(userId).onSuccess { profile ->
@@ -358,6 +401,86 @@ class ProfileViewModel @Inject constructor(
             authRepository.signOut()
         }
     }
+
+    // MARK: - Export Data (XPLAT-007)
+
+    private val _isExporting = MutableStateFlow(false)
+    val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
+
+    /** A downloaded export waiting for the user to choose a file; the screen opens the picker. */
+    private val _pendingExport = MutableStateFlow<PendingDataExport?>(null)
+    val pendingExport: StateFlow<PendingDataExport?> = _pendingExport.asStateFlow()
+
+    /** Shown after a successful save. */
+    private val _exportNotice = MutableStateFlow<String?>(null)
+    val exportNotice: StateFlow<String?> = _exportNotice.asStateFlow()
+
+    /**
+     * Fetch the user's data from export-user-data. The handler reads no request
+     * body and takes the user id from the JWT, so there is nothing to send.
+     */
+    fun exportData() {
+        if (_isExporting.value || _pendingExport.value != null) return
+        _isExporting.value = true
+        _errorMessage.value = null
+        _exportNotice.value = null
+
+        viewModelScope.launch {
+            try {
+                val client = SupabaseClientProvider.client
+                    ?: throw Exception("Supabase is not configured.")
+                // functions() returns the response rather than throwing on
+                // non-2xx, so the status is classified here, not in a catch.
+                val response = client.functions("export-user-data")
+                handleExportResponse(response.status.value, response.bodyAsText())
+            } catch (e: Exception) {
+                AppLogger.ui.error("Failed to export account data", e)
+                _errorMessage.value = "Could not export your data. Check your connection and try again."
+            }
+            _isExporting.value = false
+        }
+    }
+
+    internal fun handleExportResponse(status: Int, body: String) {
+        when (val outcome = DataExportResponse.classify(status, body)) {
+            is DataExportOutcome.Ready -> _pendingExport.value = PendingDataExport(
+                json = outcome.json,
+                fileName = DataExportResponse.fileName(),
+                tablesWithData = outcome.tablesWithData,
+                tablesConsidered = outcome.tablesConsidered,
+                unavailableCount = outcome.unavailableCount,
+            )
+            DataExportOutcome.NotAvailable -> _errorMessage.value = DataExportResponse.NOT_AVAILABLE_MESSAGE
+            DataExportOutcome.NotSignedIn -> _errorMessage.value = DataExportResponse.NOT_SIGNED_IN_MESSAGE
+            is DataExportOutcome.Failed -> {
+                AppLogger.ui.error("export-user-data answered ${outcome.status}")
+                _errorMessage.value = "Could not export your data (error ${outcome.status}). " +
+                    "Try again, or email ${DataExportResponse.PRIVACY_EMAIL}."
+            }
+        }
+    }
+
+    /** The screen opened the file picker for [pendingExport]. */
+    fun markExportPickerShown() {
+        _pendingExport.value = _pendingExport.value?.copy(pickerShown = true)
+    }
+
+    /**
+     * The save step ended. The export is dropped from memory in every case: it
+     * is the user's whole account, and a cancelled save is a decision, not
+     * something to retry behind their back.
+     */
+    fun finishExport(result: DataExportSaveResult) {
+        val export = _pendingExport.value ?: return
+        _pendingExport.value = null
+        when (result) {
+            DataExportSaveResult.SAVED -> _exportNotice.value = DataExportResponse.savedMessage(export)
+            DataExportSaveResult.FAILED -> _errorMessage.value = DataExportResponse.SAVE_FAILED_MESSAGE
+            DataExportSaveResult.CANCELLED -> Unit
+        }
+    }
+
+    fun dismissExportNotice() { _exportNotice.value = null }
 
     // MARK: - Sign Out
 

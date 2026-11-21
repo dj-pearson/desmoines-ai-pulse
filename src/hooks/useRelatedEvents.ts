@@ -7,12 +7,21 @@
  * request fired before the page knew which event it was on. Each rail is now
  * its own bounded query that waits for the event to resolve.
  *
- *   - useRelatedEvents: same category, upcoming, this event excluded, 4 rows,
- *     no count.
+ *   - useRelatedEvents: same category, upcoming or still running, this event
+ *     excluded, 4 rows, no count.
  *   - useSameNightNearby: same Central date, within NEARBY_MILES of the venue.
  *     Needs coordinates; without them the query never runs. Bounded from
  *     max(now, start - 3h) to the end of that Central day, over rows dropped
- *     (events-pass2 WP4 item 14).
+ *     (events-pass2 WP4 item 14). A run that started earlier and is still on
+ *     at the lower bound counts as on that night.
+ *
+ * Both rails filtered on `date` alone, so a multi-day run left them on its
+ * second day: on day three of the State Fair a concert at the fairgrounds
+ * listed neither the fair under "More like this" nor under "Same night
+ * nearby", while the hubs, site search, landings and .ics feeds kept it
+ * (WEB-FEAT-056). Each now sends one `or=date.gte,end_date.gte` group, the
+ * shape useEvents' upcomingOrRunningFilter defines. A row with no end_date
+ * still matches only on its own date.
  *   - useEventSeries: the other upcoming dates of the same event, by
  *     recurrence_parent_id, else by exact title (events-pass2 WP4 item 13).
  *
@@ -26,6 +35,7 @@ import { STALE_TIME } from "@/lib/queryConfig";
 import { centralWindow, upcomingFloorUtc } from "@/lib/timezone";
 import { eventCentralDate, eventStart, isEventOver, type EventTimingInput } from "@/lib/eventTiming";
 import { nearby, NEARBY_MILES } from "@/lib/venuePages";
+import { upcomingOrRunningFilter } from "@/hooks/useEvents";
 import type { Event } from "@/lib/types";
 
 export const RELATED_EVENTS_LIMIT = 4;
@@ -69,7 +79,7 @@ export function useRelatedEvents(event: RelatedEventsSource | null | undefined) 
       )
         .eq("category", category as string)
         .neq("id", id as string)
-        .gte("date", upcomingFloorUtc())
+        .or(upcomingOrRunningFilter(upcomingFloorUtc()))
         .order("date", { ascending: true })
         .limit(RELATED_EVENTS_LIMIT);
       if (error) throw error;
@@ -122,7 +132,7 @@ export function useSameNightNearby(
         supabase.from("events").select(EVENT_LIST_COLUMNS)
       )
         .neq("id", id as string)
-        .gte("date", lower)
+        .or(upcomingOrRunningFilter(lower))
         .lte("date", window.end)
         .gte("latitude", lat - LAT_PAD)
         .lte("latitude", lat + LAT_PAD)

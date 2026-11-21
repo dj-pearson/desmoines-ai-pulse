@@ -7,7 +7,9 @@ import {
   availableRestaurantPresets,
   matchCuisines,
   presetFilters,
+  sameRestaurantFilters,
 } from '../restaurantPresets';
+import type { RestaurantFilterOptions } from '../restaurantFilterOptions';
 import { getRestaurantRotationSeed, pickDailySponsors } from '../restaurantRotation';
 import { DIETARY_KEYWORDS, isSameListExceptPaging } from '@/hooks/useRestaurants';
 
@@ -33,8 +35,18 @@ function queryShape(f: typeof DEFAULT_RESTAURANT_FILTERS) {
 describe('restaurant presets (eat-drink WP2 item 2)', () => {
   it('never sets openNow, which nothing server-side reads', () => {
     for (const preset of RESTAURANT_PRESETS) {
-      expect(preset.filters.openNow).toBeUndefined();
+      expect(preset.filters).not.toHaveProperty('openNow');
     }
+    expect(DEFAULT_RESTAURANT_FILTERS).not.toHaveProperty('openNow');
+  });
+
+  it('has no openNow field to wire a control to (WEB-FEAT-082)', () => {
+    // If openNow comes back on RestaurantFilterOptions, this directive is
+    // unused and the type-check ratchet fails: an open-now switch must be a
+    // real filter (useRestaurants applying it), not a field nothing reads.
+    // @ts-expect-error openNow is not a restaurant hub filter
+    const withOpenNow: RestaurantFilterOptions = { ...DEFAULT_RESTAURANT_FILTERS, openNow: true };
+    expect(sameRestaurantFilters(withOpenNow, DEFAULT_RESTAURANT_FILTERS)).toBe(true);
   });
 
   it('never writes a tag outside the dietary vocabulary', () => {

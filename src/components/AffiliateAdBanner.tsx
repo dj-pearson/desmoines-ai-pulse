@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { useAffiliateAd } from '@/hooks/useAffiliateAd';
-import { isCapacitor, openExternalUrl } from '@/lib/capacitorUtils';
 import type { AffiliatePlacement } from '@/lib/affiliateAds';
 import { createViewabilityObserver } from '@/lib/tracking';
 import { logAdImpression, logAdClick } from '@/lib/adAnalytics';
@@ -26,15 +25,6 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
   }, [placement, partner]);
 
   if (!partner || !imageUrl || !affiliateUrl) return null;
-
-  const handleClick = async () => {
-    logAdClick('affiliate', placement, { partner: partner.name });
-    if (isCapacitor()) {
-      await openExternalUrl(affiliateUrl);
-    } else {
-      window.open(affiliateUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
 
   const sizeClasses = (() => {
     switch (placement) {
@@ -80,14 +70,7 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
         href={affiliateUrl}
         target="_blank"
         rel="sponsored noopener noreferrer"
-        onClick={(e) => {
-          if (isCapacitor()) {
-            e.preventDefault();
-            handleClick();
-          } else {
-            logAdClick('affiliate', placement, { partner: partner.name });
-          }
-        }}
+        onClick={() => logAdClick('affiliate', placement, { partner: partner.name })}
         className="block"
       >
         {/* WEB-PERF-041: intrinsic size from the placement's own size key

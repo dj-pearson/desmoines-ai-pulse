@@ -65,6 +65,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DEAL_VENUE_SOURCES,
+  fetchLinkedDealVenue,
+  mergedLinkNote,
+  searchDealVenues,
+  type DealVenueOption as VenueOption,
+} from "@/lib/dealVenueSearch";
 import { handleError } from "@/lib/errorHandler";
 import {
   fromCentralInput,
@@ -72,7 +79,7 @@ import {
   toCentralInput,
 } from "@/lib/dealFormTime";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { MoreVertical } from "lucide-react";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 
@@ -136,31 +143,7 @@ const ENTITY_TYPES = ["restaurant", "attraction", "hotel", "event", "activity"];
 const DEAL_TYPES = ["percentage", "dollar_off", "bogo", "free_item", "package"];
 const PAGE_SIZE = 25;
 
-/**
- * Entity types whose deals can point at a venue page (explore pass 2 WP6
- * item 2). useDealVenueLinks resolves entity_id against the same three
- * tables, so a deal linked here gets a venue link on /deals.
- */
-const VENUE_SOURCES: Record<
-  string,
-  { table: "restaurants" | "attractions" | "hotels"; place: string; label: string }
-> = {
-  restaurant: { table: "restaurants", place: "location", label: "restaurant" },
-  attraction: { table: "attractions", place: "location", label: "attraction" },
-  hotel: { table: "hotels", place: "city", label: "hotel" },
-};
-const LINKABLE_TYPES = Object.keys(VENUE_SOURCES);
-
-interface VenueOption {
-  id: string;
-  name: string;
-  place: string | null;
-}
-
-/** % and _ are ilike wildcards; a venue name like "100% Pure" should match itself. */
-function escapeIlike(term: string): string {
-  return term.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
+const LINKABLE_TYPES = Object.keys(DEAL_VENUE_SOURCES);
 
 function statusOf(deal: Deal): "active" | "upcoming" | "expired" {
   const now = new Date();
@@ -279,6 +262,12 @@ interface VenuePickerProps {
   entityId: string | null;
   /** Called with the picked venue, or null when the link is cleared. */
   onPick: (venue: VenueOption | null) => void;
+  /**
+   * Called with the kept row's id when the linked restaurant turns out to be
+   * a merged duplicate, so saving stores the kept row (WEB-FEAT-075). Only
+   * entity_id changes; the business name the admin sees is left alone.
+   */
+  onResolveMerged: (keptId: string) => void;
 }
 
 /**
@@ -286,37 +275,38 @@ interface VenuePickerProps {
  * form had no way to set entity_id, so no deal saved from the admin ever got
  * a venue link on /deals.
  */
-function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
-  const source = VENUE_SOURCES[entityType];
+export function VenuePicker({ entityType, entityId, onPick, onResolveMerged }: VenuePickerProps) {
+  const source = DEAL_VENUE_SOURCES[entityType];
   const [term, setTerm] = useState("");
   const debounced = useDebounce(term, 250);
   const [options, setOptions] = useState<VenueOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [linked, setLinked] = useState<VenueOption | null>(null);
+  // The merged duplicate the deal was stored against, or the stored row when
+  // its kept row could not be found. Cleared when the admin picks or unlinks.
+  const [mergeNote, setMergeNote] = useState<string | null>(null);
 
   // Name of the venue already linked, for an existing deal.
   useEffect(() => {
     if (!source || !entityId) {
       setLinked(null);
+      setMergeNote(null);
       return;
     }
     if (linked?.id === entityId) return;
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from(source.table)
-          .select(`id, name, ${source.place}`)
-          .eq("id", entityId)
-          .maybeSingle();
-        if (error) throw error;
+        const found = await fetchLinkedDealVenue(entityType, entityId);
         if (cancelled) return;
-        const row = data as unknown as Record<string, string | null> | null;
-        setLinked(
-          row
-            ? { id: entityId, name: row.name ?? entityId, place: row[source.place] ?? null }
-            : { id: entityId, name: "Linked row not found", place: null },
-        );
+        if (!found) {
+          setLinked({ id: entityId, name: "Linked row not found", place: null });
+          setMergeNote(null);
+          return;
+        }
+        setLinked(found.venue);
+        setMergeNote(mergedLinkNote(found));
+        if (found.mergedFrom && found.venue.id !== entityId) onResolveMerged(found.venue.id);
       } catch (err) {
         handleError(err, { component: "DealManager", action: "loadLinkedVenue" });
       }
@@ -324,7 +314,9 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
     return () => {
       cancelled = true;
     };
-  }, [source, entityId, linked?.id]);
+    // onResolveMerged is a fresh closure every render; the lookup depends on the link alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, entityType, entityId, linked?.id]);
 
   useEffect(() => {
     const q = debounced.trim();
@@ -336,20 +328,9 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
     setSearching(true);
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from(source.table)
-          .select(`id, name, ${source.place}`)
-          .ilike("name", `%${escapeIlike(q)}%`)
-          .order("name")
-          .limit(8);
-        if (error) throw error;
+        const found = await searchDealVenues(entityType, q);
         if (cancelled) return;
-        const rows = (data ?? []) as unknown as Array<Record<string, string | null>>;
-        setOptions(
-          rows
-            .filter((r) => r.id && r.name)
-            .map((r) => ({ id: r.id as string, name: r.name as string, place: r[source.place] ?? null })),
-        );
+        setOptions(found);
       } catch (err) {
         handleError(err, { component: "DealManager", action: "searchVenues" });
       } finally {
@@ -359,7 +340,7 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
     return () => {
       cancelled = true;
     };
-  }, [source, debounced]);
+  }, [source, entityType, debounced]);
 
   if (!source) {
     return (
@@ -380,7 +361,15 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
               <span className="text-muted-foreground"> - {linked.place}</span>
             ) : null}
           </span>
-          <Button type="button" size="sm" variant="ghost" onClick={() => onPick(null)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setMergeNote(null);
+              onPick(null);
+            }}
+          >
             Unlink
           </Button>
         </div>
@@ -389,6 +378,11 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
           No venue linked. The deal will show the business name as plain text.
         </p>
       )}
+      {entityId && mergeNote ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          {mergeNote}
+        </p>
+      ) : null}
       <Input
         id="d-venue"
         value={term}
@@ -410,6 +404,7 @@ function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
                   className="w-full px-3 py-2 text-left hover:bg-accent"
                   onClick={() => {
                     setLinked(o);
+                    setMergeNote(null);
                     setTerm("");
                     setOptions([]);
                     onPick(o);
@@ -710,6 +705,7 @@ export default function DealManager() {
                 setPage(0);
               }}
               placeholder="Search title, business…"
+              aria-label="Search deals"
               className="pl-8"
             />
           </div>
@@ -720,7 +716,7 @@ export default function DealManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by entity type">
               <SelectValue placeholder="Entity" />
             </SelectTrigger>
             <SelectContent>
@@ -739,7 +735,7 @@ export default function DealManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -756,7 +752,7 @@ export default function DealManager() {
               setPage(0);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Filter by deal type">
               <SelectValue placeholder="Deal type" />
             </SelectTrigger>
             <SelectContent>
@@ -1031,7 +1027,7 @@ export default function DealManager() {
                   />
                 </div>
                 <div>
-                  <Label>Entity type</Label>
+                  <Label htmlFor="d-entity">Entity type</Label>
                   <Select
                     value={editing.entity_type}
                     onValueChange={(v) =>
@@ -1043,7 +1039,7 @@ export default function DealManager() {
                       })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="d-entity">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1056,14 +1052,14 @@ export default function DealManager() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Deal type</Label>
+                  <Label htmlFor="d-type">Deal type</Label>
                   <Select
                     value={editing.deal_type}
                     onValueChange={(v) =>
                       setEditing({ ...editing, deal_type: v })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="d-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1129,6 +1125,9 @@ export default function DealManager() {
                         // Prefill from the picked row; the field stays editable.
                         business_name: venue ? venue.name : editing.business_name,
                       })
+                    }
+                    onResolveMerged={(keptId) =>
+                      setEditing((prev) => (prev ? { ...prev, entity_id: keptId } : prev))
                     }
                   />
                 </div>

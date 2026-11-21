@@ -27,6 +27,20 @@ enum BlurUpThumbnail {
     /// the spinner and the photo, not a progressive load. Deleting it outright
     /// would be cheaper and probably look better, and that is a product call
     /// rather than a performance one - see IOS-AUDIT-PERF-029.
+    ///
+    /// List thumbnails (a fixed frame of 80 pt or less) skip it: a 12x12 blur
+    /// shown in a 40-80 pt square for the length of a disk write is not
+    /// visible, and every cold-cache row would still pay the render pass.
+    /// Hero and card images keep it. `iosBlurUpThumbnail.test.ts` holds the
+    /// call sites to that rule.
+    static let listThumbnailMaxSide: CGFloat = 80
+
+    /// The thumbnail for an image that wants one, nil (and no render) for one
+    /// that opted out with `blurUp: false`.
+    static func make(from image: UIImage, enabled: Bool) -> UIImage? {
+        enabled ? make(from: image) : nil
+    }
+
     static func make(from image: UIImage) -> UIImage? {
         let size = CGSize(width: 12, height: 12)
         let renderer = UIGraphicsImageRenderer(size: size)
@@ -47,6 +61,11 @@ struct CachedAsyncImage<Placeholder: View>: View {
     /// hidden from accessibility — cards and detail screens supply their own
     /// combined labels, so a bare image announcement would be noise (IOS-AUDIT-UX-004).
     var accessibilityLabel: String? = nil
+    /// Show a blurred thumbnail before a network-loaded image fades in. Pass
+    /// false for list thumbnails of `BlurUpThumbnail.listThumbnailMaxSide` or
+    /// less, where the blur is not visible but its render pass still runs
+    /// (IOS-AUDIT-PERF-029).
+    var blurUp: Bool = true
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -178,6 +197,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
             // the disk path already does — so a large first-load image doesn't
             // hitch scrolling on a cold cache (IOS-AUDIT-PERF-003).
             let maxPixelSize = maxPixels
+            let wantsBlurUp = blurUp
             // The blur-up thumbnail is produced in the SAME detached task as
             // the decode (IOS-AUDIT-PERF-029). It used to be built on the main
             // actor, which put a UIGraphicsImageRenderer pass - a full render,
@@ -186,17 +206,17 @@ struct CachedAsyncImage<Placeholder: View>: View {
             // scrolling. It never needed to be there: it reads a UIImage and
             // writes a new one, and UIGraphicsImageRenderer renders to a bitmap
             // off-main safely.
-            let (uiImage, blurUp) = await Task.detached(priority: .utility) {
+            let (uiImage, blurred) = await Task.detached(priority: .utility) {
                 () -> (UIImage?, UIImage?) in
                 guard let decoded = ImageDownsampler.decode(data, maxPixelSize: maxPixelSize) else {
                     return (nil, nil)
                 }
-                return (decoded, BlurUpThumbnail.make(from: decoded))
+                return (decoded, BlurUpThumbnail.make(from: decoded, enabled: wantsBlurUp))
             }.value
             if let uiImage {
                 // Show tiny blurred thumbnail first for progressive feel
                 if thumbnail == nil {
-                    thumbnail = blurUp
+                    thumbnail = blurred
                 }
 
                 ImageCache.shared.setMemory(uiImage, for: memoryKey, cost: uiImage.approxMemoryCost)

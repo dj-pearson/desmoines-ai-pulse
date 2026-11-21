@@ -850,7 +850,7 @@ final class DiscoverViewModel {
             // "This week" tab: events within the next 7 days so the deck
             // isn't empty on nights with few events, but doesn't pull events
             // from weeks/months away.
-            let range = DateFilterPreset.thisWeek.dateRange
+            let range = DateFilterPreset.next7Days.dateRange
             query.dateStart = range.start
             query.dateEnd = range.end
         }

@@ -26,13 +26,10 @@ class NotificationReceiver : BroadcastReceiver() {
 
         // Build notification content matching iOS:
         // title = "Event Reminder"
-        // body = "[title] starts in 1 hour" or "[title] starts in 1 hour at [venue]"
-        val body = buildString {
-            append("$eventTitle starts in 1 hour")
-            if (!eventVenue.isNullOrBlank()) {
-                append(" at $eventVenue")
-            }
-        }
+        // body = "[title] starts in 1 hour[ at venue]", or "[title] is today[ at venue]"
+        // for a time-TBA row, whose reminder fires that morning (AND-AUDIT-029).
+        val isDayOf = intent.getBooleanExtra(LocalNotificationService.EXTRA_IS_DAY_OF, false)
+        val body = EventReminderTiming.body(eventTitle, eventVenue, isDayOf)
 
         // Tap intent opens EventDetailScreen for this event
         val tapIntent = Intent(context, MainActivity::class.java).apply {

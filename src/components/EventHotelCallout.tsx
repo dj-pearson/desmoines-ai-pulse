@@ -8,6 +8,7 @@ import { Database } from "@/integrations/supabase/types";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { PlacesPhotoCredit } from "@/components/PlacesPhotoCredit";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { formatMiles } from "@/lib/venuePages";
 import { hotelsNearPath } from "@/lib/hotelsNear";
@@ -40,6 +41,9 @@ interface EventHotelCalloutProps {
 /** Height of the hotel list while the linked-hotels read is in flight. */
 const RESERVED_HEIGHT = 280;
 
+/** 1x, 2x and 3x of the 80px thumbnail box. */
+const THUMB_WIDTHS = [80, 160, 240];
+
 function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: number; notes?: string }) {
   // resolveBooking puts both URLs through safeWebUrl, so a javascript: or
   // relative value in either column renders no link, and only an affiliate
@@ -56,7 +60,15 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
           <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
             {hotel.image_url ? (
               <>
-                <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                {/* An 80px thumbnail. The default widths start at 320, so ask
+                    for 1x-3x of the box instead of a card-sized rendition. */}
+                <OptimizedImage
+                  src={hotel.image_url}
+                  alt={hotel.name}
+                  containerClassName="w-full h-full"
+                  sizes="80px"
+                  transformWidths={THUMB_WIDTHS}
+                />
                 <PlacesPhotoCredit imageUrl={hotel.image_url} attribution={hotel.places_photo_attribution} className="text-[8px]" />
               </>
             ) : (

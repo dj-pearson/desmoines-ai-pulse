@@ -21,12 +21,13 @@ import {
   orderByDistance,
   resolveOpenAt,
   useOpenNowRestaurants,
+  useServingWithoutHoursCount,
   type Coordinates,
   type EvaluatedRestaurant,
   type OpenNowRestaurantRow,
 } from "@/hooks/useOpenNowRestaurants";
 import { DIETS, dietFromParam } from "@/hooks/useDietaryRestaurants";
-import { useDishSearch, type DishMatch } from "@/hooks/useDishSearch";
+import { dishMenuHref, firstDishPerPlace, useDishSearch, type DishMatch } from "@/hooks/useDishSearch";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { EVENT_AREAS, findEventArea } from "@/lib/eventAreas";
@@ -34,7 +35,7 @@ import { isPrerender } from "@/lib/isPrerender";
 import {
   DES_MOINES_TIME_ZONE,
   formatOpenStatusLine,
-} from "@/lib/restaurantHours";
+} from "@/lib/restaurantStatus";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
 /**
@@ -75,7 +76,7 @@ const FAQ_DATA: FAQItem[] = [
   {
     question: "How does this page decide a place is open?",
     answer:
-      "It reads the opening hours Google lists for each restaurant and checks them against the time in Des Moines. When we can't read a place's hours, we don't call it open or closed; it goes in the \"Hours we couldn't read\" list with a link to its page.",
+      "It reads the opening hours Google lists for each restaurant and checks them against the time in Des Moines. When we can't read a place's hours, we don't call it open or closed; it goes in the \"Hours we couldn't read\" list with a link to its page. Places with no listed hours at all aren't checked either; the page says how many there are.",
   },
   {
     question: "Can I see what's open later tonight?",
@@ -196,7 +197,14 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-/** "Pho tai $13 at X, open until 9 PM" for the matches open at `at`. Nothing when the menus have nothing. */
+/** Where a closed place serving the dish appears, at most this many. */
+const DISH_CLOSED_PLACES_LIMIT = 6;
+
+/**
+ * "Pho tai $13 at X, open until 9 PM" for the matches open at `at`. When none
+ * is, the places that list it, with when they open. Each links to that
+ * restaurant's Menu section. Nothing when the menus have nothing.
+ */
 function DishResults({
   term,
   matches,
@@ -220,23 +228,30 @@ function DishResults({
     })
     .filter((x): x is { match: DishMatch; row: OpenNowRestaurantRow; line: string | null } => x !== null)
     .slice(0, 12);
+  const shown = open.length > 0
+    ? open
+    : firstDishPerPlace(matches, DISH_CLOSED_PLACES_LIMIT).flatMap((match) => {
+        const row = rowsById.get(match.restaurant_id);
+        return row ? [{ match, row, line: formatOpenStatusLine(openStatusOf(row, at)) }] : [];
+      });
 
   return (
     <section aria-labelledby="dish-results-heading" className="mb-8 max-w-3xl" data-open-now-dishes>
       <h2 id="dish-results-heading" className="mb-2 text-xl font-semibold">
         &ldquo;{term}&rdquo; on menus we have
       </h2>
-      {open.length === 0 ? (
-        <p className="text-muted-foreground">
+      {open.length === 0 && (
+        <p className="mb-2 text-muted-foreground">
           {places.size} {places.size === 1 ? "place lists" : "places list"} it; none is open {whenLabel}.
         </p>
-      ) : (
+      )}
+      {shown.length > 0 && (
         <ul className="divide-y divide-border rounded-xl border">
-          {open.map(({ match, row, line }) => (
+          {shown.map(({ match, row, line }) => (
             <li key={match.item_id} className="px-4 py-3">
               <span className="font-medium">{match.item_name}</span>
               {priceText(match.price) && <> <span className="tabular-nums">{priceText(match.price)}</span></>} at{" "}
-              <Link to={restaurantHref(row)} className="font-semibold text-primary hover:underline">
+              <Link to={dishMenuHref(row)} className="font-semibold text-primary hover:underline">
                 {row.name}
               </Link>
               {line ? `, ${lowerFirst(line)}` : ""}
@@ -314,8 +329,9 @@ function HowThisWorks() {
         How this page works
       </h2>
       <p className="mb-3 text-muted-foreground">
-        Each restaurant's listing carries its hours as text. We read that text and check it against the time in Des Moines,
-        once a minute while the page is open. A place whose hours we can't read isn't counted as open or closed.
+        We read the opening hours Google lists for each restaurant and check them against the time in Des Moines, once a
+        minute while the page is open. A place whose hours we can't read, or that has no listed hours, isn't counted as
+        open or closed.
       </p>
       <p className="mb-3 text-muted-foreground">
         Holiday and seasonal hours aren't in our listings, and a kitchen can stop taking orders before the posted close.
@@ -336,6 +352,7 @@ export default function OpenNowRestaurants() {
   const prerender = isPrerender();
   const now = useMinuteClock();
   const { data: rows, isLoading, error, refetch } = useOpenNowRestaurants({ enabled: !prerender });
+  const { data: withoutHours } = useServingWithoutHoursCount({ enabled: !prerender });
   const { getStr, setParam, clearParams } = useUrlFilters();
   const formId = useId();
   const [nearMe, setNearMe] = useState<NearMeState>({ kind: "off" });
@@ -470,6 +487,16 @@ export default function OpenNowRestaurants() {
                   <strong className="text-foreground">Checking listed hours against the time in Des Moines.</strong>
                 )}
               </p>
+              {view && typeof withoutHours === "number" && withoutHours > 0 && (
+                <p className="mb-2 max-w-[70ch] text-muted-foreground" data-open-now-no-hours>
+                  {withoutHours} more {withoutHours === 1 ? "place has" : "places have"} no listed hours, so{" "}
+                  {withoutHours === 1 ? "it isn't" : "they aren't"} counted here.{" "}
+                  <Link to="/restaurants" className="font-semibold text-primary hover:underline">
+                    Browse all restaurants
+                  </Link>
+                  .
+                </p>
+              )}
               <p className="max-w-[70ch] text-sm text-muted-foreground">
                 Hours come from each restaurant's listing and can be out of date. Call ahead to confirm, especially on
                 holidays.

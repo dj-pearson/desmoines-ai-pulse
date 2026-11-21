@@ -26,75 +26,29 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { storage } from "@/lib/safeStorage";
-import { logCookieConsent } from "@/lib/consentLog";
+import {
+  CONSENT_REOPEN_EVENT,
+  CONSENT_VERSION,
+  DEFAULT_REJECT,
+  getStoredConsent,
+  saveConsent,
+} from "@/lib/cookieConsent";
 import { Cookie, X } from "lucide-react";
 
-const STORAGE_KEY = "cookie-consent";
-/** Window event that asks the mounted banner to reappear (see reopenConsentBanner). */
-const REOPEN_EVENT = "cookie-consent-reopen";
-const CONSENT_VERSION = "2026-04-13";
-const CONSENT_LIFETIME_MS = 13 * 30 * 24 * 60 * 60 * 1000; // ~13 months
-
-export interface CookieConsent {
-  version: string;
-  timestamp: string;
-  essential: true; // always true, non-toggleable
-  preferences: boolean;
-  analytics: boolean;
-  advertising: boolean;
-  gpc?: boolean; // true if set via Global Privacy Control signal
-}
-
-const DEFAULT_REJECT: Omit<CookieConsent, "timestamp"> = {
-  version: CONSENT_VERSION,
-  essential: true,
-  preferences: false,
-  analytics: false,
-  advertising: false,
-};
-
-/**
- * Read the current stored consent record, or null if none / expired / stale version.
- */
-export function getStoredConsent(): CookieConsent | null {
-  const record = storage.get<CookieConsent>(STORAGE_KEY);
-  if (!record) return null;
-  if (record.version !== CONSENT_VERSION) return null;
-  if (!record.timestamp) return null;
-  const age = Date.now() - new Date(record.timestamp).getTime();
-  if (Number.isNaN(age) || age > CONSENT_LIFETIME_MS) return null;
-  return record;
-}
-
-function detectGPC(): boolean {
-  if (typeof navigator === "undefined") return false;
-  // @ts-expect-error — globalPrivacyControl is not in the standard lib yet
-  return navigator.globalPrivacyControl === true;
-}
-
-function saveConsent(consent: CookieConsent) {
-  storage.set(STORAGE_KEY, consent);
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent<CookieConsent>("cookie-consent-changed", {
-        detail: consent,
-      })
-    );
-  }
-  // Append to the consent audit log for GDPR Art. 7 / CCPA record-keeping.
-  // Fire-and-forget so a logging failure can't block the user's choice.
-  void logCookieConsent(
-    { analytics: consent.analytics, advertising: consent.advertising },
-    { gpc: !!consent.gpc, version: consent.version }
-  );
+interface CookieConsentBannerProps {
+  /**
+   * Mount already open on the Customize panel. CookieConsentGate passes this
+   * when a reopenConsentBanner() call is what caused the banner to load: that
+   * event fired before this component existed to hear it.
+   */
+  reopenOnMount?: boolean;
 }
 
 /** Three across on a phone, 44px tall, labels allowed to wrap. */
 const CHOICE_BUTTON =
   "h-auto min-h-11 whitespace-normal px-2 text-xs leading-tight sm:h-9 sm:min-h-0 sm:px-3 sm:text-sm";
 
-export function CookieConsentBanner() {
+export function CookieConsentBanner({ reopenOnMount = false }: CookieConsentBannerProps) {
   const [visible, setVisible] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [prefs, setPrefs] = useState({
@@ -103,27 +57,11 @@ export function CookieConsentBanner() {
     advertising: false,
   });
 
-  // Decide whether to show the banner on mount
+  // The gate mounts this only when needsConsentPrompt() said to ask (no
+  // stored record, no GPC signal, which it already recorded) or when a reopen
+  // was requested, so a missing record here means "ask".
   useEffect(() => {
-    const existing = getStoredConsent();
-    if (existing) {
-      setVisible(false);
-      return;
-    }
-
-    // Honor Global Privacy Control — auto-record a rejection for non-essential cookies
-    // as required by CPRA/CPA regulations that treat GPC as a valid opt-out signal.
-    if (detectGPC()) {
-      saveConsent({
-        ...DEFAULT_REJECT,
-        timestamp: new Date().toISOString(),
-        gpc: true,
-      });
-      setVisible(false);
-      return;
-    }
-
-    setVisible(true);
+    setVisible(!getStoredConsent());
   }, []);
 
   // Allow the banner to be reopened from anywhere (e.g. the footer "Your Privacy
@@ -143,9 +81,10 @@ export function CookieConsentBanner() {
       setShowDetails(true);
       setVisible(true);
     };
-    window.addEventListener(REOPEN_EVENT, handleReopen);
-    return () => window.removeEventListener(REOPEN_EVENT, handleReopen);
-  }, []);
+    if (reopenOnMount) handleReopen();
+    window.addEventListener(CONSENT_REOPEN_EVENT, handleReopen);
+    return () => window.removeEventListener(CONSENT_REOPEN_EVENT, handleReopen);
+  }, [reopenOnMount]);
 
   const acceptAll = useCallback(() => {
     saveConsent({
@@ -399,45 +338,6 @@ export function CookieConsentBanner() {
       </div>
     </div>
   );
-}
-
-/**
- * Utility — use in analytics/ads initialization code to check whether a
- * given consent category has been granted. Returns false if no record exists
- * (i.e., we treat the absence of explicit consent as denial).
- */
-export function hasConsent(
-  category: "preferences" | "analytics" | "advertising"
-): boolean {
-  const record = getStoredConsent();
-  if (!record) return false;
-  return !!record[category];
-}
-
-/**
- * Reopen the consent banner without discarding the user's current choice.
- * The mounted banner listens for this event and reappears pre-filled with the
- * stored selections. Preferred over resetConsentPrompt() for "manage/change my
- * choices" entry points (footer link, Cookie Policy page) because it never
- * silently wipes an existing opt-out.
- */
-export function reopenConsentBanner() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(REOPEN_EVENT));
-  }
-}
-
-/**
- * Allows the user to reopen and change their choices (e.g. from a footer link).
- * Clears the current record so the banner reappears on next render. Prefer
- * reopenConsentBanner() where the banner is mounted; this hard-reset remains for
- * callers that need the record fully cleared.
- */
-export function resetConsentPrompt() {
-  storage.remove(STORAGE_KEY);
-  if (typeof window !== "undefined") {
-    window.location.reload();
-  }
 }
 
 export default CookieConsentBanner;

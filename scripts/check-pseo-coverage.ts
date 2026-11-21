@@ -93,11 +93,12 @@ for (const slug of edgePatterns.keys()) {
   if (!COVERAGE_CATEGORIES.includes(slug)) problems.push(`edge CUISINE_PATTERNS has ${slug}, which listingFilters.ts does not list as a restaurant category`);
 }
 const edgeStatusBlock = /NOT_VISITABLE_STATUSES[^=]*=\s*new Set\(\[([\s\S]*?)\]\)/.exec(edge)?.[1] ?? '';
-const hoursSrc = readFileSync(path.join(ROOT, 'src', 'lib', 'restaurantHours.ts'), 'utf8');
+// The status sets moved from restaurantHours.ts to restaurantStatus.ts (WEB-PERF-080).
+const hoursSrc = readFileSync(path.join(ROOT, 'src', 'lib', 'restaurantStatus.ts'), 'utf8');
 const srcStatusBlock = /NOT_VISITABLE_STATUSES[^=]*=\s*new Set\(\[([\s\S]*?)\]\)/.exec(hoursSrc)?.[1] ?? '';
 const statuses = (b: string) => [...b.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort().join(',');
 if (!srcStatusBlock || statuses(edgeStatusBlock) !== statuses(srcStatusBlock)) {
-  problems.push(`NOT_VISITABLE_STATUSES differ: edge [${statuses(edgeStatusBlock)}] vs src/lib/restaurantHours.ts [${statuses(srcStatusBlock)}]`);
+  problems.push(`NOT_VISITABLE_STATUSES differ: edge [${statuses(edgeStatusBlock)}] vs src/lib/restaurantStatus.ts [${statuses(srcStatusBlock)}]`);
 }
 
 // --- offline: SEO-064 duplicates are out of the sitemap, 301s hit the parent -

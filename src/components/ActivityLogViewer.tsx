@@ -221,6 +221,7 @@ export function ActivityLogViewer() {
             <div className="relative">
               <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
               <Input
+                aria-label="Search activity logs"
                 placeholder="Search logs..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -229,7 +230,7 @@ export function ActivityLogViewer() {
             </div>
 
             <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Filter by action">
                 <SelectValue placeholder="All Actions" />
               </SelectTrigger>
               <SelectContent>
@@ -243,7 +244,7 @@ export function ActivityLogViewer() {
             </Select>
 
             <Select value={resourceFilter} onValueChange={setResourceFilter}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Filter by resource">
                 <SelectValue placeholder="All Resources" />
               </SelectTrigger>
               <SelectContent>
@@ -257,7 +258,7 @@ export function ActivityLogViewer() {
             </Select>
 
             <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Date range">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

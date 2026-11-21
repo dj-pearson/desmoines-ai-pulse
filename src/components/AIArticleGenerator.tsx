@@ -11,10 +11,11 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Brain, Target, FileText, Plus, X, Loader2, CheckCircle, AlertCircle, Lightbulb, RefreshCw, Star } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useNavigate } from 'react-router-dom';
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { STRETCHED_BUTTON_CLASS } from '@/lib/stretchedButton';
 
 const log = createLogger('AIArticleGenerator');
 
@@ -323,16 +324,24 @@ const AIArticleGenerator: React.FC = () => {
                         {suggestions.suggestions.map((suggestion, index) => (
                           <Card 
                             key={index} 
-                            className={`cursor-pointer transition-all hover:shadow-md ${
-                              selectedSuggestion?.title === suggestion.title 
-                                ? 'ring-2 ring-primary bg-primary/5' 
+                            className={`relative transition-all hover:shadow-md ${
+                              selectedSuggestion?.title === suggestion.title
+                                ? 'ring-2 ring-primary bg-primary/5'
                                 : 'hover:border-primary/50'
                             }`}
-                            onClick={() => handleSuggestionSelect(suggestion)}
                           >
                             <CardContent className="p-4 space-y-3">
                               <div className="space-y-2">
-                                <h4 className="font-semibold line-clamp-2">{suggestion.title}</h4>
+                                <h4 className="font-semibold line-clamp-2">
+                                  <button
+                                    type="button"
+                                    aria-pressed={selectedSuggestion?.title === suggestion.title}
+                                    onClick={() => handleSuggestionSelect(suggestion)}
+                                    className={STRETCHED_BUTTON_CLASS}
+                                  >
+                                    {suggestion.title}
+                                  </button>
+                                </h4>
                                 <p className="text-sm text-muted-foreground line-clamp-2">{suggestion.description}</p>
                               </div>
                               
@@ -500,9 +509,9 @@ const AIArticleGenerator: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="category">Category</Label>
+                    <Label htmlFor="ai-article-category">Category</Label>
                     <Select value={settings.category} onValueChange={(value) => handleSettingChange('category', value)}>
-                      <SelectTrigger>
+                      <SelectTrigger id="ai-article-category">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -516,15 +525,16 @@ const AIArticleGenerator: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label>Target Keywords</Label>
+                    <Label htmlFor="ai-article-keyword">Target Keywords</Label>
                     <div className="flex gap-2 mb-2">
                       <Input
+                        id="ai-article-keyword"
                         value={newKeyword}
                         onChange={(e) => setNewKeyword(e.target.value)}
                         placeholder="Add keyword..."
                         onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
                       />
-                      <Button onClick={handleAddKeyword} size="sm">
+                      <Button aria-label="Add keyword" onClick={handleAddKeyword} size="sm">
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
@@ -532,7 +542,7 @@ const AIArticleGenerator: React.FC = () => {
                       {settings.targetKeywords.map((keyword) => (
                         <Badge key={keyword} variant="secondary" className="gap-1">
                           {keyword}
-                          <button onClick={() => handleRemoveKeyword(keyword)}>
+                          <button aria-label={`Remove keyword ${keyword}`} onClick={() => handleRemoveKeyword(keyword)}>
                             <X className="h-3 w-3" />
                           </button>
                         </Badge>
@@ -552,9 +562,9 @@ const AIArticleGenerator: React.FC = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor="tone">Writing Tone</Label>
+                    <Label htmlFor="ai-article-tone">Writing Tone</Label>
                     <Select value={settings.tone} onValueChange={(value: any) => handleSettingChange('tone', value)}>
-                      <SelectTrigger>
+                      <SelectTrigger id="ai-article-tone">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -571,9 +581,9 @@ const AIArticleGenerator: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="length">Article Length</Label>
+                    <Label htmlFor="ai-article-length">Article Length</Label>
                     <Select value={settings.length} onValueChange={(value: any) => handleSettingChange('length', value)}>
-                      <SelectTrigger>
+                      <SelectTrigger id="ai-article-length">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

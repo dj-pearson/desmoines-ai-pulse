@@ -4,7 +4,7 @@ import { WifiOff, Wifi } from 'lucide-react';
 /**
  * Banner that displays when the user loses network connectivity.
  * Shows a reconnected message briefly when connection is restored.
- * On Capacitor, respects safe area insets so it doesn't overlap the notch.
+ * Respects safe area insets so it doesn't overlap a phone's notch.
  */
 export function OfflineBanner() {
   const { isOnline, wasOffline } = useNetworkStatus();

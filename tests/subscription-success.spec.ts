@@ -27,6 +27,13 @@ const PLANS = [
 
 const TRIAL_END = '2026-12-02T15:00:00Z';
 
+// The browser's today: just after checkout, inside the trial. install() rather
+// than setFixedTime(), because the page bounds its poll with Date.now() and a
+// frozen clock would never reach thirty seconds; installed time starts here and
+// keeps running. Without a pinned day the trial above ends 2026-12-02 on the
+// real calendar (WEB-QA-044).
+const NOW = new Date('2026-11-25T15:05:00Z');
+
 function trialingInsiderRow() {
   return {
     id: 'c0000000-0000-4000-8000-0000000000e3',
@@ -117,6 +124,10 @@ async function routeSubscriptionBackend(page: Page, rows: () => unknown[]) {
 }
 
 test.describe('/subscription/success (pricing plan WP3)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: NOW });
+  });
+
   test('no row for thirty seconds: processing state, never "Active", at most 11 reads', async ({ page }) => {
     test.setTimeout(75_000);
     await seed(page, true);

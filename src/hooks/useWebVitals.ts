@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { webVitalsConfig } from '@/lib/performanceConfig';
-import { hasConsent } from '@/components/CookieConsentBanner';
+import { hasConsent } from '@/lib/cookieConsent';
 
 interface WebVitalMetric {
   name: string;

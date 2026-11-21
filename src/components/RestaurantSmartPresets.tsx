@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Coffee, Heart, Leaf, Users } from "lucide-react";
-import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import type { RestaurantFilterOptions } from "@/lib/restaurantFilterOptions";
 import { useCuisineCounts } from "@/hooks/useRestaurants";
 import {
   DEFAULT_RESTAURANT_FILTERS,

@@ -394,6 +394,8 @@ class MainActivity : FragmentActivity() {
             is AuthCallback.Confirmation ->
                 callback.code to AuthCallbackNotices.Notice.SignedIn(AuthCallbackNotices.CONFIRMED_MESSAGE)
             is AuthCallback.Recovery -> callback.code to AuthCallbackNotices.Notice.PasswordRecovery
+            is AuthCallback.OAuth ->
+                callback.code to AuthCallbackNotices.Notice.SignedIn(AuthCallbackNotices.OAUTH_SIGNED_IN_MESSAGE)
             AuthCallback.NotAuth -> return false
         }
 

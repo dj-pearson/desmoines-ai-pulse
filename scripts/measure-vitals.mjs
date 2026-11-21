@@ -125,7 +125,7 @@ async function measure(browser, path, consented, desktop) {
     // The cookie banner is the LCP element on a FIRST visit, which hides what
     // the card images do. Seeding a stored consent record measures the
     // returning visitor, where the page's own content is the candidate.
-    // Shape and key from src/components/CookieConsentBanner.tsx.
+    // Shape and key from src/lib/cookieConsent.ts.
     await page.addInitScript(() => {
       try {
         localStorage.setItem(

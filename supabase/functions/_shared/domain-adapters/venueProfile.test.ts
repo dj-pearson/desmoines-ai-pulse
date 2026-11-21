@@ -43,10 +43,26 @@ async function withSite<T>(
     );
     // deno-lint-ignore no-explicit-any
   }) as any;
+  // fetchText goes through fetchPublicUrl (WEB-SEC-060), which resolves each
+  // host before fetching and fails closed when it cannot. The fixture hosts are
+  // real venue names, so answer the lookup with a public literal instead of
+  // needing --allow-net; a private answer would be refused, as in production.
+  const originalResolve = Deno.resolveDns;
+  Object.defineProperty(Deno, "resolveDns", {
+    configurable: true,
+    writable: true,
+    value: (_host: string, type: string) =>
+      Promise.resolve(type === "A" ? ["93.184.216.34"] : []),
+  });
   try {
     return { result: await run(), requested };
   } finally {
     globalThis.fetch = original;
+    Object.defineProperty(Deno, "resolveDns", {
+      configurable: true,
+      writable: true,
+      value: originalResolve,
+    });
   }
 }
 

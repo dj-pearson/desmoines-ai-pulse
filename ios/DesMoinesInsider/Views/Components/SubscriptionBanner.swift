@@ -297,7 +297,9 @@ struct FavoritesLimitBanner: View {
 
 /// Where a subscription billed by the website or Google Play is managed. No
 /// purchase controls and no external links (guideline 3.1.1).
-private struct PlanInfoSheet: View {
+/// Internal (was private) so PlansLinkView can show it for a web or Google
+/// Play plan (IOS-AUDIT-010).
+struct PlanInfoSheet: View {
     let tier: SubscriptionTier
     let subscriptions: [StoreKitService.CrossPlatformSubscription]
 

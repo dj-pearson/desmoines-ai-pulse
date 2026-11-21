@@ -11,7 +11,7 @@
  * are exercised rather than read.
  */
 
-import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertStringIncludes } from 'jsr:@std/assert@1';
 import {
   cancelBillingBeforeErasure,
   isLive,

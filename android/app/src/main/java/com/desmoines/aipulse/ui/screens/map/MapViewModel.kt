@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.ui.screens.map
 
 import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.EventTimeText
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -30,9 +31,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -109,12 +107,9 @@ data class EventAnnotation(
     /** Pin tint color: red=today, orange=≤7 days, blue=future. Matches iOS. */
     val urgencyColor: PinColor
         get() {
-            val date = event.parsedDate ?: return PinColor.BLUE
-            val now = OffsetDateTime.now()
-            val today = now.toLocalDate()
-            val eventDate = date.toLocalDate()
-            if (eventDate == today) return PinColor.RED
-            val daysUntil = ChronoUnit.DAYS.between(today, eventDate)
+            // Des Moines days (AND-AUDIT-030): a 7pm show is today, not tomorrow.
+            val daysUntil = EventTimeText.daysFromToday(event) ?: return PinColor.BLUE
+            if (daysUntil == 0L) return PinColor.RED
             if (daysUntil in 1..7) return PinColor.ORANGE
             return PinColor.BLUE
         }

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ShareMeta } from "@/components/seo/ShareMeta";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { DIRECTORY_PILL } from "@/components/seo/MonthLinks";
@@ -181,12 +182,10 @@ export default function EventSeriesPage() {
     <>
       <RouteCanonical path={path} />
       {noindex && <NoIndexMeta />}
+      <ShareMeta title={title} description={description} path={path} />
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <meta property="og:title" content={title} />
-        <meta property="og:description" content={description} />
-        <meta property="og:type" content="website" />
         <script type="application/ld+json">{toJsonLd(buildEventSeriesJsonLd(def, view))}</script>
       </Helmet>
       <BreadcrumbListSchema items={breadcrumbSchema} />

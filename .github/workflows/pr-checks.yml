@@ -150,6 +150,27 @@ jobs:
       - name: Every Playwright spec is run by some lane
         run: npm run check-e2e-lanes
 
+      # WEB-CI-038. The same hole for check scripts: four of 95
+      # ran in no workflow, check-dist-console and check-pseo-coverage among
+      # them. Fails on a scripts/check-* nothing reaches, unless it is listed
+      # as online-only (needs production credentials) with the reason.
+      - name: Every check script runs somewhere
+        run: npm run check-check-wiring
+
+      # WEB-QA-041. Two required smoke specs dated their upcoming openings
+      # '2026-11-01' with the clock unpinned, and went red on 2026-11-02 with
+      # no code change. Flags a near-future date literal in a test file that
+      # never pins the clock. Ratchet: baselined literals expire on their own.
+      - name: No near-future dates in clock-free fixtures
+        run: npm run check-fixture-dates
+
+      # WEB-QA-050. check-e2e-lanes asks whether a lane runs a spec; this asks
+      # whether the tests it runs can fail. search-filters (required smoke
+      # lane) carried six tests with no assertion that passed on any page.
+      # Ratchet: a new assertion-free test in a required spec fails.
+      - name: Every required E2E test can fail
+        run: npm run check-e2e-assertions
+
       # The offline suites for the edge/script helpers that have no other
       # coverage: the venue-image reclaim, the /media route, the image_url
       # rewrite and the provider-spend pricing. Each one decides a number or a
@@ -325,6 +346,13 @@ jobs:
           VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
         run: npm run build
 
+      # The build that deploys, not only the smoke lane's plain `vite build`
+      # (WEB-CI-039). strip-sourcemaps now moves the maps to .sourcemaps/
+      # instead of deleting them, so the check can still tell jsPDF's
+      # console.error in pdf-generator-*.js from a call in our own code.
+      - name: No console call from app code survived the build
+        run: npm run check-dist-console
+
       # WEB-PERF-020 AC4. Runs after the build because it measures dist/. A
       # RATCHET, not the 200 KB budget itself -- the critical path is 370 KB, so
       # enforcing the goal outright would be red on day one, which is how the
@@ -361,6 +389,15 @@ jobs:
       # prefix, and gating on them would be red from the first run.
       - name: pSEO taxonomy collisions
         run: npx tsx scripts/check-pseo-collisions.ts
+
+      # SEO-041 / SEO-064, offline half only: this step has no Supabase
+      # credentials on purpose, so the script compares the coverage thresholds
+      # in src/pseo/ with the copy generate-pseo-page carries in
+      # supabase/functions/_shared/pseoCoverage.ts, and checks that no
+      # duplicate-rule page is in sitemap-pseo.xml. It ran nowhere until
+      # WEB-CI-038, though its header said the half always runs.
+      - name: pSEO coverage rule agrees across the edge boundary
+        run: npm run check-pseo-coverage
 
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
@@ -613,6 +650,11 @@ jobs:
       # Every Deno suite under supabase/functions is named on a deno test line.
       - name: No Deno suite is run by no lane
         run: node scripts/check-deno-lanes.mjs
+
+      # And the lane re-runs when a file its suites read changes: its
+      # pull_request paths filter covers every file a suite names (WEB-QA-055).
+      - name: Deno lane paths filter covers what its suites read
+        run: node scripts/check-deno-lane-paths.mjs
 
       - name: Service-role functions verify their caller
         run: node scripts/check-edge-auth.mjs

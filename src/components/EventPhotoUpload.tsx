@@ -198,8 +198,9 @@ export function EventPhotoUpload({ eventId, onPhotoUploaded, trigger }: EventPho
                   size="sm"
                   onClick={clearSelection}
                   className="absolute top-2 right-2"
+                  aria-label="Remove selected photo"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
               

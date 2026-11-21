@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { capHistory, MAX_HISTORY_CHARS, MAX_MESSAGE_CHARS, transcriptRows } from "./history.ts";
 
 Deno.test("capHistory truncates each message", () => {

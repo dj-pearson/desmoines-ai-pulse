@@ -44,6 +44,16 @@ export const SANITIZER = 'sanitizePostgrestPattern';
 const PATTERN_POSITION = /\b(?:i?like)\.[%*]?$/;
 const SAFE_COMMENT = /\/\/\s*postgrest-safe:\s*\S/;
 const ITERATORS = new Set(['map', 'flatMap', 'forEach', 'filter']);
+/**
+ * Parsing is the whole cost of this check (about 1.7ms a file, 2.2s for src/),
+ * and most files cannot hold a finding: a pattern position needs `like.` in a
+ * template literal's cooked text. Cooked text differs from the source only
+ * through a backslash (`kike.`, `l\ike.`, a line continuation), so a file
+ * with neither `like.` nor a backslash is skipped unparsed. That is exact, not
+ * a heuristic, and it cut the src/ scan to 182 of 1,015 files after the
+ * scan timed out under full-suite vitest load (WEB-QA-056).
+ */
+export const MAY_HOLD_PATTERN = /like\.|\\/;
 
 function callsSanitizer(node) {
   let found = false;
@@ -129,6 +139,7 @@ function isSanitizedExpression(expr) {
  * [{ line, expression }] with 1-based line numbers.
  */
 export function checkSource(source, fileName = 'input.ts') {
+  if (!MAY_HOLD_PATTERN.test(source)) return [];
   const kind = fileName.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, kind);
   const lines = source.split('\n');

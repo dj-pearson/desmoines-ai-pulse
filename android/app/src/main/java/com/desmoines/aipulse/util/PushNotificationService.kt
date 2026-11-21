@@ -77,11 +77,9 @@ class PushNotificationService : FirebaseMessagingService() {
         val title = message.notification?.title ?: message.data["title"] ?: "Des Moines Insider"
         val body = message.notification?.body ?: message.data["body"] ?: return
 
-        // Extract deep link data from the data payload
-        val navigateTo = message.data["navigate_to"]
-        val contentId = message.data["content_id"]
-
-        showNotification(title, body, navigateTo, contentId)
+        // Deep link data from the data payload: navigate_to/content_id, or the
+        // url and type/id keys iOS reads (AND-AUDIT-026).
+        showNotification(title, body, DeepLinkHandler.notificationExtrasFromPush(message.data))
     }
 
     /**
@@ -90,20 +88,13 @@ class PushNotificationService : FirebaseMessagingService() {
     private fun showNotification(
         title: String,
         body: String,
-        navigateTo: String?,
-        contentId: String?
+        deepLinkExtras: Map<String, String>
     ) {
-        // Build tap intent for deep link navigation
+        // Build tap intent for deep link navigation; DeepLinkHandler.handleIntent
+        // reads these extras back.
         val tapIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            if (!navigateTo.isNullOrBlank()) {
-                putExtra("navigate_to", navigateTo)
-            }
-            if (!contentId.isNullOrBlank()) {
-                putExtra("event_id", contentId)
-                putExtra("restaurant_id", contentId)
-                putExtra("attraction_id", contentId)
-            }
+            deepLinkExtras.forEach { (key, value) -> putExtra(key, value) }
         }
 
         val pendingIntent = PendingIntent.getActivity(

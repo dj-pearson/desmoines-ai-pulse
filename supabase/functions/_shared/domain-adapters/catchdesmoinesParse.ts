@@ -17,6 +17,7 @@
 
 import type { AdapterEvent } from "./types.ts";
 import { categoryForEventType } from "./catchdesmoinesCategory.ts";
+import { priceFromOffers } from "../jsonLdOffers.ts";
 
 export interface SchemaOrgEvent {
   "@type"?: string | string[];
@@ -27,6 +28,8 @@ export interface SchemaOrgEvent {
   image?: unknown;
   url?: string;
   location?: unknown;
+  offers?: unknown;
+  isAccessibleForFree?: unknown;
 }
 
 interface SchemaOrgPlace {
@@ -283,9 +286,53 @@ export function toAdapterEvent(
     location: formatPlaceLocation(place),
     venue,
     category: categoryForEventType(type),
-    price: "See website",
+    price: priceFromOffers(ev.offers, ev.isAccessibleForFree) ?? "See website",
     source_url: externalUrl ?? detailUrl,
     image_url: extractImage(ev.image) ?? extractOgImage(html),
     ...placeCoordinates(place),
   };
+}
+
+const DETAIL_ID_RE = /catchdesmoines\.com\/event\/[a-z0-9-]+\/(\d+)\/?(?:[?#].*)?$/i;
+
+/**
+ * The Simpleview listing id in a Catch Des Moines detail URL
+ * (`/event/<slug>/<id>/` gives `<id>`), or null for any other URL.
+ *
+ * The id, not the slug, is the key: editors retitle listings, which changes the
+ * slug and leaves the id alone.
+ */
+export function catchDetailId(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m = DETAIL_ID_RE.exec(url.trim());
+  return m ? m[1] : null;
+}
+
+/**
+ * Which discovered detail pages to fetch this run (WEB-BE-060).
+ *
+ * Pages whose id the caller already has stored are skipped BEFORE the budget is
+ * applied, so `max` is spent on listings the database has never seen. Without
+ * this the adapter re-fetched the same nearest 100 pages every run and its
+ * budget never reached anything further out.
+ *
+ * Order is preserved (the list pages sort by date), so what is fetched is the
+ * nearest unknown events first.
+ */
+export function selectDetailUrls(
+  urls: Iterable<string>,
+  knownIds: ReadonlySet<string> | undefined,
+  max: number,
+): { toFetch: string[]; skippedKnown: number } {
+  const toFetch: string[] = [];
+  let skippedKnown = 0;
+  for (const url of urls) {
+    const id = catchDetailId(url);
+    if (id && knownIds?.has(id)) {
+      skippedKnown++;
+      continue;
+    }
+    if (toFetch.length < max) toFetch.push(url);
+  }
+  return { toFetch, skippedKnown };
 }

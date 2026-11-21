@@ -6,13 +6,7 @@ import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import {
   Sheet,
   SheetContent,
@@ -407,6 +401,10 @@ export default function Hotels() {
     }
     return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [venues]);
+  const nearOptions = useMemo<DeferredSelectOption[]>(
+    () => [{ value: NEAR_ANY, label: "Anywhere" }, ...nearPlaces.map((p) => ({ value: p.slug, label: p.name }))],
+    [nearPlaces]
+  );
   const nearPlace = nearSlug ? nearPlaces.find((p) => p.slug === nearSlug) ?? null : null;
   // A slug that is not a fixed place is unknown until the venues arrive; show
   // the skeleton rather than a default list that is about to be reordered.
@@ -658,22 +656,14 @@ export default function Hotels() {
                 <Label htmlFor="stay-near" className="sr-only sm:not-sr-only text-sm text-muted-foreground">
                   Near
                 </Label>
-                <Select
+                <DeferredSelect
                   value={nearPlace ? nearPlace.slug : NEAR_ANY}
                   onValueChange={(v) => setParam("near", v === NEAR_ANY ? null : v)}
-                >
-                  <SelectTrigger id="stay-near" className="w-full min-w-0 sm:w-[200px] min-h-11">
-                    <SelectValue placeholder="Anywhere" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NEAR_ANY}>Anywhere</SelectItem>
-                    {nearPlaces.map((p) => (
-                      <SelectItem key={p.slug} value={p.slug}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={nearOptions}
+                  placeholder="Anywhere"
+                  id="stay-near"
+                  triggerClassName="w-full min-w-0 sm:w-[200px] min-h-11"
+                />
               </div>
 
               {/* Sort. Distance decides the order while Near is set. */}
@@ -682,21 +672,13 @@ export default function Hotels() {
                   <Label htmlFor="stay-sort" className="sr-only sm:not-sr-only text-sm text-muted-foreground">
                     Sort
                   </Label>
-                  <Select
+                  <DeferredSelect
                     value={sortBy}
                     onValueChange={(v) => setParam("sort", v, { def: DEFAULT_SORT })}
-                  >
-                    <SelectTrigger id="stay-sort" className="w-full min-w-0 sm:w-[210px] min-h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={SORT_OPTIONS}
+                    id="stay-sort"
+                    triggerClassName="w-full min-w-0 sm:w-[210px] min-h-11"
+                  />
                 </div>
               )}
             </div>
@@ -776,8 +758,8 @@ export default function Hotels() {
                 <section className="mb-8" aria-labelledby="stay-featured">
                   <h2 id="stay-featured" className="text-xl font-semibold mb-4">Featured hotels</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {featuredHotels.slice(0, 3).map((hotel) => (
-                      <HotelCard key={hotel.id} hotel={hotel} variant="featured" />
+                    {featuredHotels.slice(0, 3).map((hotel, index) => (
+                      <HotelCard key={hotel.id} hotel={hotel} variant="featured" priority={index < 3} />
                     ))}
                   </div>
                 </section>
@@ -794,10 +776,11 @@ export default function Hotels() {
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {nearRows && nearPlace
-                        ? nearRows.slice(0, shownCount).map(({ hotel, miles }) => (
+                        ? nearRows.slice(0, shownCount).map(({ hotel, miles }, index) => (
                             <HotelCard
                               key={hotel.id}
                               hotel={hotel}
+                              priority={!showFeaturedStrip && index < 3}
                               distanceLabel={
                                 miles === null
                                   ? undefined
@@ -809,8 +792,14 @@ export default function Hotels() {
                           <>
                             {hotels
                               .filter((h) => !featuredIds.has(h.id))
-                              .map((hotel) => (
-                                <HotelCard key={hotel.id} hotel={hotel} />
+                              .map((hotel, index) => (
+                                <HotelCard
+                                  key={hotel.id}
+                                  hotel={hotel}
+                                  // With the featured strip shown, its three cards are the
+                                  // first row and this grid starts below the fold.
+                                  priority={!showFeaturedStrip && index < 3}
+                                />
                               ))}
                             {Array.from({ length: extraPages }).map((_, i) => (
                               <ExtraHotelPage

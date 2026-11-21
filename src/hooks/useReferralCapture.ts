@@ -4,41 +4,25 @@ import { useAuthState } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
 import { normalizeReferralCode } from "@/lib/referralCode";
-import { storage } from "@/lib/safeStorage";
+import {
+  clearStoredReferral,
+  readStoredReferral,
+  referralFromAccount,
+  storeReferral,
+} from "@/lib/referralStorage";
+
+// The storage helpers moved to src/lib/referralStorage.ts so authActions can
+// read the code without importing this hook (and AuthContext with it).
+// Re-exported so existing imports keep working.
+export {
+  clearStoredReferral,
+  readStoredReferral,
+  REFERRAL_STORAGE_KEY,
+  REFERRAL_TTL_MS,
+  storeReferral,
+} from "@/lib/referralStorage";
 
 const log = createLogger("useReferralCapture");
-
-/** safeStorage key for a ?ref seen on any page. New in plan WP6; not renamed from anything. */
-export const REFERRAL_STORAGE_KEY = "dmi_referral_ref";
-
-/** A stored ref is honoured for 30 days, then dropped unread. */
-export const REFERRAL_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-interface StoredReferral {
-  code: string;
-  expiresAt: number;
-}
-
-/** Keep a ?ref code for later. The latest link wins. */
-export function storeReferral(code: string, now = Date.now()): void {
-  storage.set<StoredReferral>(REFERRAL_STORAGE_KEY, { code, expiresAt: now + REFERRAL_TTL_MS });
-}
-
-/** The stored code, or null when none, malformed or expired (an expired one is removed). */
-export function readStoredReferral(now = Date.now()): string | null {
-  const stored = storage.get<StoredReferral>(REFERRAL_STORAGE_KEY);
-  if (!stored) return null;
-  const code = normalizeReferralCode(stored.code);
-  if (!code || typeof stored.expiresAt !== "number" || stored.expiresAt <= now) {
-    storage.remove(REFERRAL_STORAGE_KEY);
-    return null;
-  }
-  return code;
-}
-
-export function clearStoredReferral(): void {
-  storage.remove(REFERRAL_STORAGE_KEY);
-}
 
 /**
  * Referral attribution (plan WP6).
@@ -51,6 +35,10 @@ export function clearStoredReferral(): void {
  *    the code exists, it is not the caller's own, the caller is not already
  *    someone's referral, and the account is under 24 hours old, so opening a
  *    friend's link cannot claim an existing member.
+ * 3. With no stored code, the code written onto the account at sign-up is
+ *    used instead (WEB-ADS-032), while the account is under 24 hours old. That
+ *    is the email sign-up confirmed in another browser, which has the session
+ *    but never saw the ?ref link.
  *
  * Attribution happens after sign-in rather than inside sign-up, so it covers
  * email and Google sign-up alike without touching AuthContext. The stored
@@ -71,7 +59,7 @@ export function useReferralCapture(): void {
 
   useEffect(() => {
     if (!userId || attemptedFor.current === userId) return;
-    const code = readStoredReferral();
+    const code = readStoredReferral() ?? referralFromAccount(user);
     if (!code) return;
     attemptedFor.current = userId;
 
@@ -87,5 +75,7 @@ export function useReferralCapture(): void {
       clearStoredReferral();
       if (import.meta.env.DEV) log.debug("attribute", "Referral answered", { result: data });
     })();
+    // `user` is read for its metadata and age only; userId is the identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, search]);
 }

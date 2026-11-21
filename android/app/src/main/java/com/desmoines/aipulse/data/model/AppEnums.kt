@@ -3,7 +3,6 @@ package com.desmoines.aipulse.data.model
 import androidx.compose.ui.graphics.Color
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 
@@ -154,35 +153,31 @@ enum class DateFilterPreset(val displayName: String) {
     THIS_MONTH("This Month");
 
     /**
-     * Computes the date range for this preset.
-     * Mirrors iOS DateFilterPreset.dateRange computed property.
+     * The Des Moines days this preset covers: the first day, and the day after
+     * the last (exclusive). Mirrors iOS DateFilterPreset.dateRange.
+     *
+     * [today] is the Des Moines day, not the device's. Turn the result into
+     * PostgREST bounds with EventTimeText.presetBounds, which pins each day to
+     * Central midnight with its offset (AND-AUDIT-031). The old version sent
+     * bare local midnights that PostgREST read as UTC, so Today ran from 7pm
+     * yesterday to 7pm today Central.
      */
-    val dateRange: Pair<LocalDateTime, LocalDateTime>
-        get() {
-            val now = LocalDate.now()
-            val startOfToday = now.atStartOfDay()
-
-            return when (this) {
-                TODAY -> startOfToday to startOfToday.plusDays(1)
-                TOMORROW -> startOfToday.plusDays(1) to startOfToday.plusDays(2)
-                THIS_WEEKEND -> {
-                    val dayOfWeek = now.dayOfWeek
-                    val saturday = if (dayOfWeek == DayOfWeek.SATURDAY) {
-                        now
-                    } else if (dayOfWeek == DayOfWeek.SUNDAY) {
-                        // If Sunday, still show "this weekend" as today..Monday
-                        now.minusDays(1)
-                    } else {
-                        now.with(TemporalAdjusters.next(DayOfWeek.SATURDAY))
-                    }
-                    val monday = saturday.plusDays(2)
-                    saturday.atStartOfDay() to monday.atStartOfDay()
-                }
-                THIS_WEEK -> startOfToday to startOfToday.plusDays(7)
-                NEXT_WEEK -> startOfToday.plusDays(7) to startOfToday.plusDays(14)
-                THIS_MONTH -> startOfToday to startOfToday.plusMonths(1)
+    fun dayRange(today: LocalDate): Pair<LocalDate, LocalDate> = when (this) {
+        TODAY -> today to today.plusDays(1)
+        TOMORROW -> today.plusDays(1) to today.plusDays(2)
+        THIS_WEEKEND -> {
+            val saturday = when (today.dayOfWeek) {
+                DayOfWeek.SATURDAY -> today
+                // On Sunday "this weekend" is still Saturday..Monday.
+                DayOfWeek.SUNDAY -> today.minusDays(1)
+                else -> today.with(TemporalAdjusters.next(DayOfWeek.SATURDAY))
             }
+            saturday to saturday.plusDays(2)
         }
+        THIS_WEEK -> today to today.plusDays(7)
+        NEXT_WEEK -> today.plusDays(7) to today.plusDays(14)
+        THIS_MONTH -> today to today.plusMonths(1)
+    }
 }
 
 // endregion

@@ -1,0 +1,6 @@
+{
+  "_comment": "Icon-only <Button>/<button>/<Toggle> with no aria-label, aria-labelledby or title, per file (WEB-UX-056). Screen readers announce these as \"button\". This list must only ever SHRINK - give the button an aria-label naming the action and its target.",
+  "generated": "2026-11-07",
+  "total": 0,
+  "files": {}
+}

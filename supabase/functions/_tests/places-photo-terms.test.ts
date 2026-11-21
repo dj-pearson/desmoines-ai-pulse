@@ -347,3 +347,24 @@ Deno.test('only backfill-images stores a Places copy', async () => {
   // exists, or an empty result would pass for the wrong reason.
   assert.deepEqual(callers, ['backfill-images/hotels.ts'], `storePlacesPhotoCopy callers: ${callers.join(', ')}`);
 });
+
+Deno.test('the non-hotel backfill chain makes no Places search (WEB-BE-044 AC2)', async () => {
+  // fetchAndStoreImage refuses a Places media URL, so a Places step in this
+  // chain is a billed Text Search whose answer is always thrown away, and the
+  // row is then reported as a storage failure. Hotels are the one category
+  // that keeps Places photos, through hotels.ts and the 30-day refresh.
+  const index = codeOnly(await read('supabase/functions/backfill-images/index.ts'));
+  // Control: the text is the real chain, not something codeOnly() emptied.
+  assert.match(index, /fetchAndStoreImage\(supabase, rawImageUrl, category, id\)/, 'codeOnly() lost the chain');
+  assert.match(index, /findExistingVenueRecord\(/, 'codeOnly() lost the venue lookup');
+  assert.ok(!/getGooglePlacesPhoto\b/.test(index), 'backfill-images must not call the single-photo Places search');
+  assert.ok(!/places\.googleapis\.com|searchText/.test(index), 'backfill-images must not query Places directly');
+  assert.ok(!/"google_places"/.test(index), 'no image in this chain can come from Places');
+
+  const fallbacks = codeOnly(await read('supabase/functions/_shared/imageFallbacks.ts'));
+  assert.match(fallbacks, /export async function getGooglePlacesPhotos\(/, 'the admin picker helper must survive');
+  assert.ok(
+    !/export async function getGooglePlacesPhoto\(/.test(fallbacks),
+    'the single-photo helper had one caller, whose result was always refused; do not bring it back',
+  );
+});

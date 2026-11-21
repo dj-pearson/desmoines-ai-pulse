@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { isCapacitor, openExternalUrl, shareWithOutcome } from "@/lib/capacitorUtils";
+import { openExternalUrl, shareWithOutcome } from "@/lib/capacitorUtils";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { getDirectionsUrl } from "@/lib/directions";
 import { markdownToPlainText } from "@/lib/aiText";
@@ -125,7 +125,7 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
         typeof navigator.share === "function" &&
         (typeof navigator.canShare !== "function" || navigator.canShare(shareData));
 
-      if (isCapacitor() || webShareOk) {
+      if (webShareOk) {
         // A cancelled sheet is the person's answer: stop there rather than
         // overwrite their clipboard. Only "no sheet" falls through to copy.
         const outcome = await shareWithOutcome(shareData);

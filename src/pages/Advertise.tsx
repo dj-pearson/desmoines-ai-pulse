@@ -26,6 +26,7 @@ import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
 import type { PlacementType } from "@/lib/placementSpecs";
 import { campaignDays, formatCampaignDate, formatUSD } from "@/lib/campaignDisplay";
 import { readCheckoutFailure } from "@/lib/campaignCheckout";
+import { logAdvertiserFunnelEvent } from "@/lib/advertiserFunnel";
 import {
   BUSINESS_CONTACT_EMAIL,
   BUSINESS_CONTACT_HREF,
@@ -41,6 +42,7 @@ import {
   saveAdvertiseDraft,
 } from "@/lib/advertiseDraft";
 import type { AdvertiseDraftListing } from "@/lib/advertiseDraft";
+import { STATIC_PAGE_META } from "@/lib/staticPageMeta";
 
 const PLACEMENTS = Object.values(PLACEMENT_SPECS);
 
@@ -107,6 +109,11 @@ export default function Advertise() {
 
   const hasSponsoredListing = placements.includes("sponsored_listing");
   const fromRate = lowestDailyRate(rateCard);
+
+  // ---- Funnel: top of the advertiser funnel, once per visit ------------------------
+  useEffect(() => {
+    logAdvertiserFunnelEvent("ad_funnel_advertise_viewed");
+  }, []);
 
   // ---- Deep link and draft listing -------------------------------------------------
   useEffect(() => {
@@ -258,6 +265,7 @@ export default function Advertise() {
 
   const startCheckout = useCallback(
     async (campaignId: string, retried = false) => {
+      logAdvertiserFunnelEvent("ad_funnel_checkout_started", { campaignId, source: "advertise" });
       try {
         const checkoutUrl = await createCheckoutSession(campaignId);
         // The campaign is on the server now; the local copy has done its job.
@@ -383,6 +391,7 @@ export default function Advertise() {
       }
 
       setSavedCampaign({ id: campaignId, signature });
+      logAdvertiserFunnelEvent("ad_funnel_campaign_saved", { campaignId, placementCount: placements.length });
     }
 
     // A replacement that 409s too is not offered a third try: it goes to the
@@ -428,8 +437,8 @@ export default function Advertise() {
   return (
     <BusinessLayout footerClearanceClassName="h-40 lg:hidden">
       <SEOHead
-        title="Advertise on Des Moines Insider"
-        description="Buy a banner or a sponsored listing on Des Moines Insider's event, restaurant and attraction pages. Pick your dates, see the exact total, pay by card."
+        title={STATIC_PAGE_META["/advertise"].title}
+        description={STATIC_PAGE_META["/advertise"].description}
         canonicalUrl={getCanonicalUrl("/advertise")}
         url={getCanonicalUrl("/advertise")}
         imageUrl={getCanonicalUrl(BRAND.ogImage)}

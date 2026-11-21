@@ -89,7 +89,8 @@ undo commit ordering. Check them in the simulator.
   is own-row (20260620000001). See "What a human must do".
 - S30: whether past events should stop counting toward the server cap. A product decision; the client
   now makes them easy to clear instead.
-- S31: Add to Calendar from Saved rows. The EKEvent builder lives in `EventDetailViewModel`.
+- S31: done 2026-11-07 (IOS-AUDIT-FEAT-039). Upcoming Saved rows offer Add to Calendar in the context
+  menu and as a VoiceOver action; the entry is built by `EventCalendarEntry`, shared with event detail.
 - Retiring `user_restaurant_interactions` reads: one release from now, once
   `MIN_SUPPORTED_APP_VERSION` passes this build, per the CLAUDE.md deprecation flow.
 - Android still writes restaurant and attraction favorites to the legacy tables (cross-group,

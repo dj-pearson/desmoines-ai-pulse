@@ -11,6 +11,7 @@ struct EventDetailView: View {
     @State private var auth = AuthService.shared
     @State private var toast: ToastMessage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
 
     /// The event actually rendered.
     ///
@@ -29,6 +30,8 @@ struct EventDetailView: View {
 
                 if viewModel.isUnavailable {
                     unavailableBanner
+                } else if viewModel.isArchived {
+                    pastEventBanner
                 }
 
                 EventDetailInfo(event: displayEvent)
@@ -101,6 +104,11 @@ struct EventDetailView: View {
             get: { viewModel.calendarError != nil },
             set: { if !$0 { viewModel.resetCalendarState() } }
         )) {
+            // A denial is fixed in Settings, so the alert goes there rather
+            // than leaving the user to find it (IOS-AUDIT-FEAT-039).
+            if viewModel.calendarOffersSettings {
+                Button("Open Settings") { openSettings() }
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.calendarError ?? "")
@@ -161,7 +169,28 @@ struct EventDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// An archived row is a past event, not a dead listing (IOS-AUDIT-001).
+    private var pastEventBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("This event has already happened")
+                .font(.subheadline.weight(.semibold))
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: - Actions (IOS-DD-EVENTS-14)
+
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+    }
 
     /// Save or unsave, with the same feedback as a card's heart
     /// (CardFavoriteButton): a toast either way, and a reason when it fails.

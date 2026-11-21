@@ -1,11 +1,9 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
-import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.CalendarContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Event
@@ -15,6 +13,9 @@ import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
+import com.desmoines.aipulse.util.EventCalendarIntent
+import com.desmoines.aipulse.util.EventReminderTiming
+import com.desmoines.aipulse.util.EventShareText
 import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +24,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /**
@@ -176,12 +176,17 @@ class EventDetailViewModel @Inject constructor(
     fun toggleReminder() {
         val event = _event.value ?: return
         val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return
+        // A time-TBA row fires at 9am on its day, not an hour before a
+        // placeholder time (AND-AUDIT-029).
+        val fireAtMillis = EventReminderTiming.fireAtMillis(event) ?: return
 
         val nowSet = localNotificationService.toggleReminder(
             eventId = event.id,
             title = event.title,
             venue = event.venue,
             eventTimeMillis = startMillis,
+            triggerAtMillis = fireAtMillis,
+            isDayOf = !event.hasSpecificTime,
         )
         val wasSet = _isReminderSet.value
         _isReminderSet.value = nowSet
@@ -190,20 +195,13 @@ class EventDetailViewModel @Inject constructor(
         // Asked to set one and it did not take: say why instead of leaving the
         // button looking like it ignored the tap.
         if (!wasSet && !nowSet) {
-            _reminderMessage.value =
-                if (startMillis - LocalNotificationService.REMINDER_OFFSET_MILLIS <= nowMillis()) {
-                    "This event starts in under an hour, too soon for a reminder."
-                } else {
-                    "Couldn't set the reminder. Please try again."
-                }
+            _reminderMessage.value = EventReminderTiming.refusedMessage(event, nowMillis())
         }
     }
 
     /** The user declined POST_NOTIFICATIONS; nothing is scheduled. */
     fun onNotificationPermissionDenied() {
-        _reminderMessage.value =
-            "Notifications are off for Des Moines Insider, so a reminder couldn't reach you. " +
-                "Turn them on in Settings to use reminders."
+        _reminderMessage.value = EventReminderTiming.PERMISSION_DENIED_MESSAGE
     }
 
     fun clearReminderMessage() {
@@ -216,11 +214,19 @@ class EventDetailViewModel @Inject constructor(
          * EventDetailActions.swift: hidden once the event has started, since
          * there is nothing left to remind about, but kept while a reminder is
          * set so it can still be cancelled.
+         *
+         * A row with no real start time has no start to compare against, so
+         * it shows until its 9am day-of reminder time has passed
+         * (AND-AUDIT-029). Comparing the placeholder start kept the button on
+         * screen into the evening of a SeatGeek row's day for a reminder that
+         * could no longer be set.
+         *
+         * The rule lives in [EventReminderTiming.offersReminder] so Saved rows
+         * use the same one (AND-AUDIT-033). Detail has no past/upcoming split,
+         * so it passes isPast = false and the start-time checks decide.
          */
-        internal fun isReminderButtonVisible(event: Event, isReminderSet: Boolean, nowMillis: Long): Boolean {
-            val startMillis = event.parsedDate?.toInstant()?.toEpochMilli() ?: return false
-            return isReminderSet || startMillis >= nowMillis
-        }
+        internal fun isReminderButtonVisible(event: Event, isReminderSet: Boolean, nowMillis: Long): Boolean =
+            EventReminderTiming.offersReminder(event, isPast = false, isSet = isReminderSet, nowMillis = nowMillis)
     }
 
     /**
@@ -235,25 +241,12 @@ class EventDetailViewModel @Inject constructor(
     // MARK: - Calendar Integration
 
     /**
-     * Creates a calendar insert intent for the event.
-     * Uses CalendarContract for native calendar integration.
+     * Creates a calendar insert intent for the event. The start, end, all-day
+     * flag and time zone come from EventCalendarEntry, the same rules iOS
+     * uses (AND-AUDIT-027); the intent is shared with the Saved tab through
+     * [EventCalendarIntent] (AND-AUDIT-028).
      */
-    fun createCalendarIntent(): Intent? {
-        val event = _event.value ?: return null
-        val date = event.parsedDate ?: return null
-
-        val startMillis = date.toInstant().toEpochMilli()
-        val endMillis = date.plusHours(2).toInstant().toEpochMilli() // 2h default duration
-
-        return Intent(Intent.ACTION_INSERT).apply {
-            data = CalendarContract.Events.CONTENT_URI
-            putExtra(CalendarContract.Events.TITLE, event.title)
-            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startMillis)
-            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endMillis)
-            putExtra(CalendarContract.Events.EVENT_LOCATION, event.displayLocation)
-            putExtra(CalendarContract.Events.DESCRIPTION, event.displayDescription)
-        }
-    }
+    fun createCalendarIntent(): Intent? = _event.value?.let { EventCalendarIntent.build(it) }
 
     fun setCalendarAdded() {
         _calendarAdded.value = true
@@ -266,17 +259,9 @@ class EventDetailViewModel @Inject constructor(
 
     // MARK: - Share
 
+    /** Built by [EventShareText], which the Saved tab shares too (AND-AUDIT-033). */
     val shareText: String
-        get() {
-            val event = _event.value ?: return ""
-            val parts = mutableListOf(event.title)
-            event.parsedDate?.let { date ->
-                val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a", UiFormatLocale)
-                parts.add(date.format(formatter))
-            }
-            parts.add("at ${event.displayLocation}")
-            return parts.joinToString(" - ") + "\n\nFound on Des Moines Insider"
-        }
+        get() = _event.value?.let { EventShareText.text(it) } ?: ""
 
     // MARK: - Directions
 

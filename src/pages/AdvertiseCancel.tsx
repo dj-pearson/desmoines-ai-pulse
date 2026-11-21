@@ -1,12 +1,18 @@
+import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BusinessLayout } from "@/components/business/BusinessLayout";
 import SEOHead from "@/components/SEOHead";
 import { Button } from "@/components/ui/button";
 import { BUSINESS_CONTACT_EMAIL, BUSINESS_CONTACT_HREF } from "@/lib/businessCopy";
+import { logAdvertiserFunnelEventOnce } from "@/lib/advertiserFunnel";
 
 export default function AdvertiseCancel() {
   const [searchParams] = useSearchParams();
   const campaignId = searchParams.get("campaign_id");
+
+  useEffect(() => {
+    if (campaignId) logAdvertiserFunnelEventOnce("ad_funnel_checkout_cancelled", campaignId);
+  }, [campaignId]);
 
   return (
     <BusinessLayout>

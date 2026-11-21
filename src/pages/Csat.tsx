@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Star, Loader2, CheckCircle2 } from "lucide-react";
 import SEOHead from "@/components/SEOHead";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
@@ -19,6 +20,8 @@ export default function Csat() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [reEscalated, setReEscalated] = useState(false);
+  // WEB-UX-065: the comment box was named only by its placeholder.
+  const commentId = useId();
 
   async function submit(withScore: number) {
     if (!ticketId || withScore < 1 || submitting) return;
@@ -82,12 +85,16 @@ export default function Csat() {
                       </button>
                     ))}
                   </div>
-                  <Textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Anything else you'd like to share? (optional)"
-                    rows={3}
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor={commentId}>Comments (optional)</Label>
+                    <Textarea
+                      id={commentId}
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Anything else you'd like to share?"
+                      rows={3}
+                    />
+                  </div>
                   <Button className="w-full min-h-[44px]" disabled={score < 1 || submitting} onClick={() => submit(score)}>
                     {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Submit rating

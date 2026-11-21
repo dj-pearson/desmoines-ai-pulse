@@ -11,7 +11,14 @@ import { escapeLikePattern } from '@/lib/postgrestPattern';
 import { createEventSlugWithCentralTime, upcomingFloorUtc } from '@/lib/timezone';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { restaurantFilterOptionsQuery } from '@/hooks/useRestaurants';
+import { upcomingOrRunningFilter } from '@/hooks/useEvents';
 import { matchCuisines } from '@/lib/restaurantPresets';
+import { RESTAURANT_SUGGESTION_COLUMNS } from '@/lib/listColumns';
+import {
+  orderRestaurantSuggestions,
+  restaurantSuggestionScanRows,
+  restaurantSuggestionSubtitle,
+} from '@/lib/restaurantSuggestions';
 
 const log = createLogger('SearchAutocomplete');
 
@@ -111,7 +118,7 @@ export function SearchAutocomplete({
         supabase.from('events').select('venue')
       )
         .ilike('venue', `%${term}%`)
-        .gte('date', upcomingFloorUtc())
+        .or(upcomingOrRunningFilter(upcomingFloorUtc()))
         .order('date', { ascending: true })
         .limit(VENUE_SCAN_ROWS);
       if (error) log.error('suggestions', 'Venue suggestion query failed', { contentType, error });
@@ -140,15 +147,18 @@ export function SearchAutocomplete({
 
       if (contentType === 'events') {
         // Same visibility rule as every list (is_merged / is_hidden /
-        // archived_at), and the upcoming floor is the start of today in
-        // Central, so a show that began at 7pm is still offered at 9pm.
+        // archived_at). The floor is the start of today in Central, so a show
+        // that began at 7pm is still offered at 9pm, and a run whose end_date
+        // has not passed is kept: a bare `date >= today` dropped the State
+        // Fair on its second morning while /search listed it
+        // (WEB-FEAT-061). The venue scan above uses the same group.
         const { data, error } = await applyEventVisibility(
           supabase
             .from('events')
             .select('id, title, venue, date, event_start_utc, event_start_local')
         )
           .ilike('title', searchTerm)
-          .gte('date', upcomingFloorUtc())
+          .or(upcomingOrRunningFilter(upcomingFloorUtc()))
           .order('date', { ascending: true })
           .limit(5);
         // A search that FAILED and a search with no matches both render as
@@ -168,22 +178,24 @@ export function SearchAutocomplete({
       if (contentType === 'restaurants') {
         const { data, error } = await supabase
           .from('restaurants')
-          .select('id, name, cuisine, slug')
+          .select(RESTAURANT_SUGGESTION_COLUMNS)
           .ilike('name', searchTerm)
           // Same rule as every restaurant list (WEB-AUTO-005): a row merged
-          // into its duplicate is not a place to send anyone.
+          // into its duplicate is not a place to send anyone. A place closed
+          // for good is NOT filtered: the visitor typed its name, so it is
+          // offered labelled and last (WEB-FEAT-048).
           .neq('is_merged', true)
-          .limit(5);
+          .limit(restaurantSuggestionScanRows(5));
         // A search that FAILED and a search with no matches both render as
         // "no suggestions", so a user typing a restaurant that exists is told it
         // is not listed. The empty result is still the right UI; the silence was not.
         if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
         // A restaurant suggestion is a specific place, so it opens that
         // restaurant rather than running a text search for its name.
-        return (data || []).map((r) => ({
+        return orderRestaurantSuggestions(data || [], 5).map((r) => ({
           id: r.id,
           title: r.name,
-          subtitle: r.cuisine || undefined,
+          subtitle: restaurantSuggestionSubtitle(r) ?? undefined,
           href: `/restaurants/${r.slug || r.id}`,
         }));
       }

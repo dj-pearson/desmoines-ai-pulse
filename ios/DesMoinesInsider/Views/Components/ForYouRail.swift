@@ -113,6 +113,16 @@ struct ForYouCard: View {
         return reason
     }
 
+    /// What VoiceOver reads for the card. A paid row leads with "Sponsored",
+    /// as ContentCard does, so the disclosure is heard before the title and
+    /// not only seen on the image (WEB-FEAT-034).
+    nonisolated static func accessibilityText(for rec: ForYouService.Recommendation, now: Date = Date()) -> String {
+        let text = [rec.title ?? "Event", secondaryLine(date: rec.date, venue: rec.venue), visibleReason(rec.recommendationReason)]
+            .compactMap { $0 }
+            .joined(separator: ". ")
+        return rec.isActivelySponsored(now: now) ? "Sponsored. " + text : text
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack {
@@ -125,6 +135,13 @@ struct ForYouCard: View {
             }
             .frame(width: 200, height: 120)
             .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(alignment: .topLeading) {
+                // Same badge and corner as ContentCard and the web's
+                // ForYouRail (`absolute left-2 top-2`).
+                if rec.isActivelySponsored() {
+                    SponsoredBadge().padding(8)
+                }
+            }
 
             Text(rec.title ?? "Untitled")
                 .font(.subheadline.weight(.semibold))
@@ -148,11 +165,7 @@ struct ForYouCard: View {
         }
         .frame(width: 200, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            [rec.title ?? "Event", Self.secondaryLine(date: rec.date, venue: rec.venue), Self.visibleReason(rec.recommendationReason)]
-                .compactMap { $0 }
-                .joined(separator: ". ")
-        )
+        .accessibilityLabel(Self.accessibilityText(for: rec))
     }
 }
 

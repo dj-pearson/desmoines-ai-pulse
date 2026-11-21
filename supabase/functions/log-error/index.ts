@@ -2,7 +2,8 @@
  * SECURITY: verify_jwt = false
  * Reason: public error sink — the web client posts errors before/without a
  *   session. Rate-limited per IP; PII is scrubbed before storage; no data
- *   returned. No secrets, no privileged reads.
+ *   returned. No secrets, no privileged reads. user_id is stored only from a
+ *   verified bearer or a machine caller, never from an anonymous body.
  * Risk level: LOW.
  *
  * log-error (AOS-DEV-001) — production error ingest.
@@ -16,7 +17,7 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { scrubPii, errorSignature } from "../_shared/scrubPii.ts";
 import { classifyCaller, expectedSecrets, isMachineCaller, presentedCredentials } from "../_shared/callerKind.ts";
-import { resolveSource } from "../_shared/errorPolicy.ts";
+import { resolveErrorUserId, resolveSource, shouldVerifyBearer } from "../_shared/errorPolicy.ts";
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
@@ -49,16 +50,36 @@ Deno.serve(async (req) => {
   const severity = ["info", "warning", "error", "critical"].includes(body.severity) ? body.severity : "error";
   // "edge" only from a caller holding the service role or the edge API key;
   // triage reads "edge" as not user-facing.
-  const internal = isMachineCaller(classifyCaller(presentedCredentials(req), expectedSecrets()));
+  const presented = presentedCredentials(req);
+  const internal = isMachineCaller(classifyCaller(presented, expectedSecrets()));
   const source = resolveSource(body.source, internal);
-  const userId = typeof body.userId === "string" && /^[0-9a-f-]{36}$/i.test(body.userId) ? body.userId : null;
 
   const messageRedacted = scrubPii(message);
   const signature = await errorSignature(component, action, message);
 
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    await supabase.from("error_events").insert({
+
+    // user_id comes from a verified session, or from a machine caller's word;
+    // an anonymous caller's userId is dropped (WEB-SEC-063). A token that fails
+    // verification still files the error, unattributed. The body's userId
+    // field is read in exactly one place, below; the test counts.
+    // edge-auth: attribution-only
+    // (getUser below labels the row; it does not gate the call. Read by
+    // scripts/check-edge-auth.mjs, which keeps log-error on its baseline.)
+    let verifiedUserId: string | null = null;
+    if (!internal && shouldVerifyBearer(presented.bearer, Deno.env.get("SUPABASE_ANON_KEY"))) {
+      try {
+        const { data, error: authError } = await supabase.auth.getUser(presented.bearer!);
+        // A token that fails verification files the error unattributed.
+        verifiedUserId = authError ? null : (data?.user?.id ?? null);
+      } catch {
+        verifiedUserId = null;
+      }
+    }
+    const userId = resolveErrorUserId(body.userId, { internal, verifiedUserId });
+
+    const { error: insertError } = await supabase.from("error_events").insert({
       signature,
       message_redacted: messageRedacted,
       component: component || null,
@@ -68,6 +89,10 @@ Deno.serve(async (req) => {
       source,
       user_id: userId,
     });
+    if (insertError) {
+      // Best-effort sink: report the failure, never fail the caller.
+      console.error("[log-error] insert failed:", insertError.message);
+    }
   } catch (err) {
     console.error("[log-error] insert failed:", err instanceof Error ? err.message : String(err));
     // Best-effort: never fail the caller on a sink hiccup.

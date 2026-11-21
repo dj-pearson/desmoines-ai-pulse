@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.model
 
 import android.net.Uri
 import androidx.compose.runtime.Immutable
+import com.desmoines.aipulse.util.EventSlug
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -9,7 +10,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.Locale
 
@@ -112,11 +115,27 @@ data class Restaurant(
     }
 
     /**
-     * Determines if the restaurant is currently open based on business_hours.
+     * Whether the restaurant is open at this moment, read on the Des Moines
+     * wall clock (AND-AUDIT-036). business_hours are Des Moines local hours, so
+     * the phone's own zone must not decide the weekday or the minute: a visitor
+     * still on Eastern time saw places as open an hour before they were, and a
+     * phone on UTC after 7pm Central read tomorrow's hours. The list badge and
+     * both Open now filters (Restaurants, Discover) call this.
      * Returns null if hours data is unavailable.
+     */
+    fun isOpenNow(): Boolean? = isOpenAt(Instant.now())
+
+    /** [isOpenNow] for a given instant, converted to Central before the hours are read. */
+    fun isOpenAt(instant: Instant): Boolean? =
+        isOpenAtLocal(instant.atZone(EventSlug.CENTRAL).toLocalDateTime())
+
+    /**
+     * Open/closed for a Des Moines wall-clock time. Callers with an instant go
+     * through [isOpenAt]; this takes local time only so the hours arithmetic
+     * stays testable on its own.
      * Mirrors iOS Restaurant.isOpenNow(at:)
      */
-    fun isOpenNow(now: java.time.LocalDateTime = java.time.LocalDateTime.now()): Boolean? {
+    fun isOpenAtLocal(now: LocalDateTime): Boolean? {
         if (businessHours == null) return null
 
         val dayOfWeek = now.toLocalDate().dayOfWeek // MONDAY=1 .. SUNDAY=7

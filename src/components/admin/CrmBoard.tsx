@@ -1,14 +1,15 @@
 import { useMemo } from "react";
-import { Briefcase, ChevronRight, FileText, UserPlus } from "lucide-react";
+import { Briefcase, ChevronRight, FileText, Link2, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCrmBoard, useCrmAction, useProposal, CRM_STAGES, type CrmOpportunity } from "@/hooks/useCrm";
+import { useCrmBoard, useCrmAction, useProposal, CRM_STAGES, type CrmAccount, type CrmOpportunity } from "@/hooks/useCrm";
 import { useAuth } from "@/contexts/AuthContext";
+import { advertiserOnboardingLink, listingFromBusinessRef } from "@/lib/advertiserOnboardingLink";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 // One hue per stage, carried by a dot beside the column label rather than a
 // thick top border: the border fought the card's rounded corners, and the dot
@@ -62,11 +63,28 @@ export default function CrmBoard() {
     }
   }
 
-  const accountName = useMemo(() => {
-    const m = new Map<string, string>();
-    (data?.accounts ?? []).forEach((a) => m.set(a.id, a.name));
+  const accountById = useMemo(() => {
+    const m = new Map<string, CrmAccount>();
+    (data?.accounts ?? []).forEach((a) => m.set(a.id, a));
     return m;
   }, [data]);
+
+  // A won deal goes into the self-serve funnel by a link the closer sends
+  // (AOS-PROSPECT-007 AC3), with the account's listing preselected.
+  async function onCopyOnboardingLink(o: CrmOpportunity) {
+    const account = accountById.get(o.account_id ?? "");
+    const link = advertiserOnboardingLink({ business_ref: account?.business_ref });
+    const withListing = listingFromBusinessRef(account?.business_ref) !== null;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success(withListing ? "Onboarding link copied, with their listing preselected." : "Onboarding link copied.");
+    } catch (e) {
+      handleError(e, { component: "CrmBoard", action: "copy_onboarding_link" });
+      // The clipboard can be refused (permissions, an insecure origin); show
+      // the link so it can still be copied by hand.
+      window.prompt("Copy the onboarding link:", link);
+    }
+  }
 
   const byStage = useMemo(() => {
     const g: Record<string, CrmOpportunity[]> = {};
@@ -149,7 +167,7 @@ export default function CrmBoard() {
                       const ns = nextStage(o.stage);
                       return (
                         <div key={o.id} className="rounded-md border bg-background p-2 text-sm">
-                          <p className="font-medium">{accountName.get(o.account_id ?? "") ?? o.name}</p>
+                          <p className="font-medium">{accountById.get(o.account_id ?? "")?.name ?? o.name}</p>
                           {o.value > 0 && <p className="text-xs text-muted-foreground">${o.value.toLocaleString()}</p>}
                           {/* Next action: human-set wins; else the agent suggestion. */}
                           {(o.next_action || o.suggested_next_action) && (
@@ -184,6 +202,11 @@ export default function CrmBoard() {
                               </Button>
                             )}
                           </div>
+                          {o.stage === "won" && (
+                            <Button size="sm" variant="outline" className="mt-1 h-7 px-2 text-xs" onClick={() => onCopyOnboardingLink(o)}>
+                              <Link2 className="mr-1 h-3 w-3" aria-hidden="true" /> Copy onboarding link
+                            </Button>
+                          )}
                           {o.onboarding_started && <p className="mt-1 text-xs font-medium text-green-600">onboarding started</p>}
                         </div>
                       );

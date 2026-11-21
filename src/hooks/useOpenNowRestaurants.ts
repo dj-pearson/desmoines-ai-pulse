@@ -3,11 +3,13 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { supabase } from "@/integrations/supabase/client";
 import { rowMentionsDiet, type Diet } from "@/hooks/useDietaryRestaurants";
 import { eventInArea, type EventArea } from "@/lib/eventAreas";
+import { ErrorSeverity, handleError } from "@/lib/errorHandler";
 import { haversineDistance } from "@/lib/geo";
 import {
+  applyServingRestaurantFilters,
   DES_MOINES_TIME_ZONE,
   hoursTextOf,
-  isVisitableStatus,
+  isServingToday,
   resolveOpenStatus,
   type RestaurantOpenResult,
   type StoredOpeningHours,
@@ -31,6 +33,10 @@ import {
  * nothing at all. hours_json exists in production (WEB-BE-045, confirmed
  * 2026-10-01). latitude and longitude are in scripts/db-snapshot.json (pass 2
  * WP4.4, for the area filter and "near me").
+ *
+ * business_status is read because restaurants.status cannot say "temporarily
+ * closed" and Google keeps the weekly hours of a place that is: without it a
+ * CLOSED_TEMPORARILY row was listed as "Open until 10 PM" every evening.
  */
 
 /** Upper bound on rows read. There are about 480 restaurants in total. */
@@ -38,7 +44,7 @@ export const OPEN_NOW_ROW_LIMIT = 600;
 
 /** Only what RestaurantCard renders plus what the filters below read. */
 export const OPEN_NOW_COLUMNS =
-  "id, slug, name, description, cuisine, rating, price_range, location, city, status, opening, hours_json, is_featured, is_sponsored, sponsored_until, image_url, phone, website, popularity_score, created_at, is_merged, latitude, longitude";
+  "id, slug, name, description, cuisine, rating, price_range, location, city, status, business_status, opening, hours_json, is_featured, is_sponsored, sponsored_until, image_url, phone, website, popularity_score, created_at, is_merged, latitude, longitude";
 
 export interface OpenNowRestaurantRow {
   id: string;
@@ -51,6 +57,8 @@ export interface OpenNowRestaurantRow {
   location?: string | null;
   city?: string | null;
   status?: string | null;
+  /** Google's OPERATIONAL / CLOSED_TEMPORARILY / CLOSED_PERMANENTLY (WEB-BE-045). */
+  business_status?: string | null;
   opening?: string | null;
   hours_json?: StoredOpeningHours | null;
   is_featured?: boolean | null;
@@ -73,13 +81,13 @@ function hasStructuredHours(row: OpenNowRestaurantRow): boolean {
 }
 
 /**
- * A row that is visitable and carries hours: structured hours_json, or hours
- * text (never a date, SEO-054). The query filters the same way; this is the
- * belt to its braces.
+ * A row that is serving today and carries hours: structured hours_json, or
+ * hours text (never a date, SEO-054). The query filters status the same way;
+ * business_status is filtered only here (WEB-FEAT-037).
  */
 export function isListableRow(row: OpenNowRestaurantRow): boolean {
   if (row.is_merged === true) return false;
-  if (!isVisitableStatus(row.status)) return false;
+  if (!isServingToday(row)) return false;
   return hasStructuredHours(row) || hoursTextOf(row.opening) !== null;
 }
 
@@ -109,6 +117,43 @@ export function useOpenNowRestaurants(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["restaurants", "open-now", "with-hours"],
     queryFn: fetchRestaurantsWithHours,
+    staleTime: 10 * 60 * 1000,
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * WEB-BE-045 AC5, the "hours unknown" half: how many places someone could eat
+ * at today have no hours_json, so the page can say they exist rather than
+ * leave them out without a word. The rows fetchRestaurantsWithHours skips for
+ * want of hours, filtered the same way (merged duplicates out, isServingToday
+ * as a query), and only counted: a HEAD request, no rows.
+ *
+ * null when the count could not be read. The list does not depend on it, so a
+ * failure is reported (handleError, warning) and the line is left out rather
+ * than shown with a wrong number or turned into an error state.
+ */
+export async function fetchServingWithoutHoursCount(): Promise<number | null> {
+  const query = supabase
+    .from("restaurants")
+    .select("id", { count: "exact", head: true })
+    .is("hours_json", null)
+    .not("is_merged", "is", true);
+  const { count, error } = await applyServingRestaurantFilters(query);
+  if (error || typeof count !== "number") {
+    handleError(error ?? new Error("restaurants without hours: no count returned"), {
+      component: "useOpenNowRestaurants",
+      action: "countWithoutHours",
+    }, ErrorSeverity.WARNING);
+    return null;
+  }
+  return count;
+}
+
+export function useServingWithoutHoursCount(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: ["restaurants", "open-now", "without-hours-count"],
+    queryFn: fetchServingWithoutHoursCount,
     staleTime: 10 * 60 * 1000,
     enabled: options.enabled ?? true,
   });

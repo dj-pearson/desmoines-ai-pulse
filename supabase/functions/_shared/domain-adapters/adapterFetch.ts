@@ -29,6 +29,7 @@
  * fetch into a domain-wide ingestion halt.
  */
 
+import { fetchPublicUrl, UnsafeFetchError } from "../fetchGuard.ts";
 import { isCrawlAllowed } from "../robots.ts";
 import { getScraperConfig } from "../scraper.ts";
 
@@ -59,6 +60,15 @@ export function adapterHeaders(extra?: Record<string, string>): Record<string, s
  *
  * SCRAPER_IGNORE_ROBOTS=true is the same escape hatch scrapeUrl honours: for an
  * incident, not a default.
+ *
+ * SSRF (WEB-SEC-061). The URLs here are listing pages and detail links read
+ * off those listings, so the host is somebody else's choice, and
+ * globalThis.fetch followed redirects: a listed site answering 302 onto
+ * 169.254.169.254 was fetched and its body parsed as events. The fetch now
+ * goes through fetchPublicUrl, which resolves the first host and re-checks
+ * every hop. A refused URL or hop returns null, the same as a Disallow,
+ * because two adapters fetch outside a try. Network errors still throw as
+ * they did.
  */
 export async function fetchAllowed(
   url: string,
@@ -74,8 +84,16 @@ export async function fetchAllowed(
     }
   }
 
-  return await globalThis.fetch(url, {
-    ...init,
-    headers: adapterHeaders(init?.headers),
-  });
+  try {
+    return await fetchPublicUrl(url, {
+      ...init,
+      headers: adapterHeaders(init?.headers),
+    });
+  } catch (err) {
+    if (err instanceof UnsafeFetchError) {
+      console.log(`[adapterFetch] ${url} refused by the SSRF guard (${err.message}); not fetching`);
+      return null;
+    }
+    throw err;
+  }
 }

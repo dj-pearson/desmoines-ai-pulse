@@ -476,35 +476,49 @@ fun AuthScreen(
                 }
             }
 
-            // Google Sign-In, only when the build carries a real web client
-            // id. Without one every tap fails, so the button and its "or"
-            // divider are left out rather than shown as a dead control.
+            // Social sign-in. Apple is always offered (XPLAT-012): it runs
+            // through the browser on the project's own Supabase Apple config,
+            // the one web uses, so there is no per-build id to be missing.
+            // Google only when the build carries a real web client id; without
+            // one every tap fails, so it is left out rather than shown dead.
+            val socialEnabled = !isSigningIn && !isSigningUp && lockoutSeconds <= 0
+
+            Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+
+            // Divider with "or"
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Dimens.SpacingLg),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HorizontalDivider(modifier = Modifier.weight(1f))
+                Text(
+                    text = "or",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = Dimens.SpacingMd),
+                )
+                HorizontalDivider(modifier = Modifier.weight(1f))
+            }
+
+            Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+
+            AppleSignInButton(
+                onClick = { viewModel.signInWithApple() },
+                enabled = socialEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Dimens.SpacingLg),
+            )
+
             if (isGoogleSignInConfigured(Config.GOOGLE_WEB_CLIENT_ID)) {
-                Spacer(modifier = Modifier.height(Dimens.SpacingLg))
-
-                // Divider with "or"
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Dimens.SpacingLg),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    HorizontalDivider(modifier = Modifier.weight(1f))
-                    Text(
-                        text = "or",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = Dimens.SpacingMd),
-                    )
-                    HorizontalDivider(modifier = Modifier.weight(1f))
-                }
-
-                Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+                Spacer(modifier = Modifier.height(Dimens.SpacingMd))
 
                 GoogleSignInButton(
                     onIdToken = { idToken -> viewModel.signInWithGoogle(idToken) },
                     onError = { message -> viewModel.onGoogleSignInFailed(message) },
-                    enabled = !isSigningIn && !isSigningUp && lockoutSeconds <= 0,
+                    enabled = socialEnabled,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Dimens.SpacingLg),
@@ -666,6 +680,44 @@ private fun InterestsSection(
                 )
             }
         }
+    }
+}
+
+// MARK: - Apple Sign-In Button
+
+/**
+ * Apple's black style (Human Interface Guidelines, Sign in with Apple): white
+ * logo and label on black, same height and corner radius as the Google
+ * button beside it so neither reads as the preferred option.
+ */
+@Composable
+private fun AppleSignInButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(Dimens.ButtonHeight),
+        shape = RoundedCornerShape(Dimens.CardCornerRadius),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Black,
+            contentColor = Color.White,
+        ),
+    ) {
+        // Decorative: the button's text already says "Apple".
+        Icon(
+            painter = painterResource(id = R.drawable.ic_apple_logo),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(Dimens.SpacingSm))
+        Text(
+            text = "Continue with Apple",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

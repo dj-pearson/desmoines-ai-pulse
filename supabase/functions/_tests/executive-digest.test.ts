@@ -17,7 +17,7 @@
  *   a failed read     -> UNAVAILABLE, naming the source
  *   an absent table   -> UNAVAILABLE, saying "not sourced, not zero"
  */
-import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { renderMetric, renderDelta, type Metric } from "../_shared/digestFormat.ts";
 
 const base: Metric = { label: "New events", value: 12, source: "events.created_at" };

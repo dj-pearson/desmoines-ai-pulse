@@ -7,7 +7,7 @@
  *
  * Run: deno test --allow-read supabase/functions/_shared/aiText.test.ts
  */
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1";
 import { stripAiLabels } from "./aiText.ts";
 
 Deno.test("_shared/aiText.ts is byte-identical to src/lib/aiText.ts", async () => {

@@ -11,7 +11,7 @@
  * decorative again.
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
 import {
   hasVerifiedFactor,
   mfaAssuranceSatisfied,

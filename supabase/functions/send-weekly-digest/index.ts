@@ -7,6 +7,8 @@ import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { listUnsubscribeHeaders, renderEmail } from "../_shared/emailLayout.ts";
 import { sendEmail } from "../_shared/email.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { sendDigestsInBatches } from "../_shared/weeklyDigestBatches.ts";
+import { mailedOtherWeeklyDigest } from "../_shared/weeklyDigestOverlap.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -71,16 +73,35 @@ serve(async (req) => {
 
     console.log(`Found ${recipients.length} recipients for weekly digest`);
 
-    // Send digest to each recipient
-    const results = await Promise.allSettled(
-      recipients.map((recipient: Recipient) =>
-        sendDigestEmail(recipient, supabase)
-      )
-    );
+    // WEB-ADS-037. Members the personal digest (agent-runner,
+    // weekly-digest-personal) mailed in the last 6 days already had their
+    // weekly digest; a second one three days later is the complaint. A failed
+    // read sends nothing this run rather than risk the double send.
+    let otherDigest: Set<string>;
+    try {
+      otherDigest = await mailedOtherWeeklyDigest(
+        supabase,
+        "send-weekly-digest",
+        (recipients as Recipient[]).map((r) => r.user_id),
+      );
+    } catch (overlapError) {
+      console.error("Error reading the personal digest ledger:", overlapError);
+      return new Response(
+        JSON.stringify({ error: "Failed to check the personal digest ledger" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    const toSend = (recipients as Recipient[]).filter((r) => !otherDigest.has(r.user_id));
+    const skippedOtherDigest = recipients.length - toSend.length;
 
-    // Count successes and failures
-    const successes = results.filter((r) => r.status === "fulfilled").length;
-    const failures = results.filter((r) => r.status === "rejected").length;
+    // WEB-ADS-038: five at a time, not every recipient at once (SES throttled
+    // the burst and each throttled send was logged as a failure). Recipients
+    // left over when the time budget runs out are reported as deferred; they
+    // have no log row, so the next run picks them up.
+    const { successes, failures, deferred } = await sendDigestsInBatches(
+      toSend,
+      (recipient) => sendDigestEmail(recipient, supabase),
+    );
 
     return new Response(
       JSON.stringify({
@@ -88,6 +109,8 @@ serve(async (req) => {
         total: recipients.length,
         successes,
         failures,
+        deferred,
+        skipped_other_digest: skippedOtherDigest,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );

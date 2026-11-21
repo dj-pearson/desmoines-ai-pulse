@@ -22,6 +22,10 @@ import { safeHttpUrl } from "../src/lib/safeUrl";
 import { isRestaurantPseoSlug } from "../src/pseo/restaurantAreaSlugs";
 import { markdownToPlainText } from "../src/lib/aiText";
 import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
+import { brandedTitle, staticPageMeta, type StaticPageMeta } from "../src/lib/staticPageMeta";
+import { hasSpecificTime } from "../src/lib/timezone";
+import { eventCentralDate, eventCentralEndDate } from "../src/lib/eventTime";
+import { entityNodeId, isEntityNodeKind } from "../src/lib/schemaNodeIds";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -143,8 +147,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const RESTAURANT_SHELL_COLUMNS =
   "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,business_status,is_merged,merged_into,updated_at,google_maps_uri,reservable,reservation_url";
 const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
+// time_tbd, source_url and event_start_local are what hasSpecificTime reads to
+// tell a real showtime from a placeholder (WEB-SEO-072). All three are
+// in EVENT_LIST_COLUMNS, which every events list already selects.
 const EVENT_SHELL_COLUMNS =
-  "id,title,date,event_start_utc,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
+  "id,title,date,event_start_utc,event_start_local,time_tbd,source_url,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
 
 /** Rows, or null when PostgREST refused the query (bad column, outage). */
 async function sbGet(base: string, anon: string, pathAndQuery: string): Promise<any[] | null> {
@@ -586,6 +593,31 @@ function formatEventDay(when: string, opts: Intl.DateTimeFormatOptions): string 
   }
 }
 
+/**
+ * The start the shell may publish: the instant when the source stated a time,
+ * otherwise the Central calendar day (WEB-SEO-072).
+ *
+ * time_tbd, the 19:31:58 marker and SeatGeek's 03:30 placeholder all mean "no
+ * showtime announced". The React page already publishes a date-only startDate
+ * for them (eventStartIso, WEB-BE-038), but the shell is what a crawler that
+ * runs no JavaScript reads, and it printed "at 3:30 AM" and an Event starting
+ * at 08:30Z. Same test as the page (hasSpecificTime), so the two cannot differ.
+ */
+export function eventShellStart(row: {
+  event_start_utc?: string | null;
+  date?: string | null;
+  time_tbd?: boolean | null;
+  source_url?: string | null;
+  event_start_local?: string | null;
+}): { start: string; hasTime: boolean } | null {
+  const when = row.event_start_utc || row.date;
+  if (!when) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(when)) return { start: when, hasTime: false };
+  if (hasSpecificTime(row)) return { start: when, hasTime: true };
+  const day = eventCentralDate(row);
+  return day ? { start: day, hasTime: false } : null;
+}
+
 /** "{title} - {Wed, Sep 24} | {venue}", dropping the venue past 60 characters. */
 export function eventShellTitle(row: Record<string, any>): string {
   const title = String(row.title || "").trim();
@@ -707,15 +739,20 @@ export function restaurantShellBody(row: Record<string, any>, now: Date = new Da
 export function eventShellNode(row: Record<string, any>, pageUrl: string): Record<string, unknown> {
   const addr = parseIowaAddress(row.location);
   const place = String(row.venue || row.location || "").trim();
+  const start = eventShellStart(row);
+  // With no showtime, a real end date is kept as a Central day to match the
+  // date-only start; one on the start day says nothing and is left out.
+  const endDate = start && !start.hasTime ? eventCentralEndDate(row) : row.end_date || null;
   return {
     "@context": "https://schema.org",
     "@type": "Event",
-    "@id": pageUrl,
+    // The React page's id (WEB-SEO-073). The bare URL is its WebPage's @id.
+    "@id": entityNodeId("event", pageUrl),
     url: pageUrl,
     name: row.title,
     ...(row.seo_description || row.geo_summary ? { description: truncate(row.seo_description || row.geo_summary) } : {}),
-    ...(row.event_start_utc || row.date ? { startDate: row.event_start_utc || row.date } : {}),
-    ...(row.end_date ? { endDate: row.end_date } : {}),
+    ...(start ? { startDate: start.start } : {}),
+    ...(endDate ? { endDate } : {}),
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     ...(place
@@ -739,15 +776,18 @@ export function eventShellNode(row: Record<string, any>, pageUrl: string): Recor
 
 export function eventShellBody(row: Record<string, any>, now: Date = new Date()): string {
   const when = row.event_start_utc || row.date;
-  const whenText = when
-    ? formatEventDay(when, {
+  const start = eventShellStart(row);
+  const dayText = start
+    ? formatEventDay(start.start, {
         weekday: "long",
         month: "long",
         day: "numeric",
         year: "numeric",
-        ...(row.event_start_utc ? { hour: "numeric", minute: "2-digit" } : {}),
+        ...(start.hasTime ? { hour: "numeric", minute: "2-digit" } : {}),
       })
     : "";
+  // The React page says "Time not listed" in the same case.
+  const whenText = dayText && start && !start.hasTime ? `${dayText} (time not listed)` : dayText;
   const where = [row.venue, row.location].filter(Boolean).join(", ");
   // Plain text, without the model labels and markdown some rows carry (SEO-057).
   const about = markdownToPlainText(
@@ -846,14 +886,20 @@ export function entityShellRewrites(opts: {
   let node: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": SCHEMA_TYPE[type] || "Thing",
-    "@id": pageUrl,
+    // The same @id the React page gives its entity (WEB-SEO-073): a crawler
+    // that runs JavaScript sees both blocks, since Helmet leaves this one.
+    "@id": isEntityNodeKind(type) ? entityNodeId(type, pageUrl) : pageUrl,
     name: entity.title,
     url: pageUrl,
   };
   if (entity.description) node.description = entity.description;
   // Only what the row actually carries. An Event with a fabricated startDate is
   // worse than an Event without one.
-  if (type === "event" && entity.startDate) node.startDate = entity.startDate;
+  if (type === "event" && entity.startDate) {
+    // The minimal select has no time_tbd, but the marker is still caught.
+    const start = eventShellStart({ event_start_utc: entity.startDate });
+    if (start) node.startDate = start.start;
+  }
 
   let body = genericShellBody(type, opts.entity);
   if (row && type === "restaurant" && row.name) {
@@ -1047,6 +1093,42 @@ export function restaurantAreaShellRewrites(pageUrl: string, seo: RestaurantArea
     rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
   }
   return rules;
+}
+
+/**
+ * WEB-SEO-069: the shell for a sitemapped route that skips the
+ * prerender (SITEMAP_ONLY_ROUTES: /privacy-policy, /terms, /advertise ...),
+ * and (WEB-SEO-070) the footer policy pages that are not sitemapped.
+ *
+ * withSelfCanonical fixed the canonical and dropped the homepage's JSON-LD, but
+ * left the homepage's title, description, og:title and H1, so a crawler that
+ * does not run JavaScript read six submitted URLs as six copies of the
+ * homepage. These rules write the page's own words, from the same
+ * STATIC_PAGE_META entry the page hands SEOHead. No JSON-LD is put back: the
+ * client renders SEOHead's own, and an invented node here would be a claim only
+ * the shell makes.
+ */
+export function staticPageShellRewrites(pageUrl: string, page: StaticPageMeta): EntityShellRewrite[] {
+  const title = brandedTitle(page.title);
+  const desc = escapeHtml(page.description);
+  return [
+    { selector: 'script[type="application/ld+json"]', remove: true },
+    { selector: 'link[rel="canonical"]', setAttribute: "href", to: pageUrl },
+    { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
+    { selector: 'meta[property="og:type"]', setAttribute: "content", to: "website" },
+    // RAW for the text sink, escaped for the attribute sinks (see EntityShellRewrite).
+    { selector: "title", setText: title },
+    { selector: 'meta[property="og:title"]', setAttribute: "content", to: escapeHtml(title) },
+    { selector: 'meta[name="twitter:title"]', setAttribute: "content", to: escapeHtml(title) },
+    { selector: 'meta[name="description"]', setAttribute: "content", to: desc },
+    { selector: 'meta[property="og:description"]', setAttribute: "content", to: desc },
+    { selector: 'meta[name="twitter:description"]', setAttribute: "content", to: desc },
+    {
+      selector: "main#main-content",
+      setInnerHtml:
+        `<h1>${escapeHtml(page.heading)}</h1><p>${desc}</p>` + linkList([["/", "Des Moines Insider home"]]),
+    },
+  ];
 }
 
 /**
@@ -1352,6 +1434,14 @@ export async function onRequest(context: EventContext) {
           // it its own identity instead of the homepage's (WEB-SEO-030 AC3).
           return entityShell(passthrough(), { pageUrl, sbBase, type: type!, entity: plan.entity });
         }
+      }
+
+      // A sitemapped route that skips the prerender: its own title and
+      // description rather than the homepage's (WEB-SEO-069).
+      const staticPage = staticPageMeta(pathname);
+      if (staticPage) {
+        const rewritten = rewriterFor(staticPageShellRewrites(pageUrl, staticPage)).transform(passthrough());
+        return new Response(rewritten.body, { status: response.status, headers: response.headers });
       }
 
       // Any other shell-at-a-non-root-path: unchanged behaviour.

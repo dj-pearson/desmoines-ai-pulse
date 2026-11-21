@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { fromZonedTime } from "date-fns-tz";
+import { readFileSync } from "node:fs";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: null }) }));
 
 import {
+  BREWERY_MEMBERSHIP_FILTER,
   breweryEventNotOver,
+  breweryStatusLine,
   breweryVenueClause,
   breweryVenueName,
   splitBreweries,
@@ -62,6 +65,114 @@ describe("splitBreweries", () => {
     const { visitable, upcoming } = splitBreweries(rows);
     expect(visitable.map((r) => r.id)).toEqual(["a", "b", "c"]);
     expect(upcoming.map((r) => r.id)).toEqual(["d", "e"]);
+  });
+});
+
+describe("splitBreweries and Google's closure flag (WEB-FEAT-044)", () => {
+  it("leaves a CLOSED_PERMANENTLY place off the trail even while our own status still says open", () => {
+    const rows = [
+      { id: "a", status: "open", business_status: "OPERATIONAL" },
+      { id: "b", status: null, business_status: "CLOSED_PERMANENTLY" },
+      { id: "c", status: null, business_status: "CLOSED_TEMPORARILY" },
+    ];
+    const { visitable, upcoming } = splitBreweries(rows);
+    // A temporary closure keeps its place in the passport; its card says so.
+    expect(visitable.map((r) => r.id)).toEqual(["a", "c"]);
+    expect(upcoming).toEqual([]);
+  });
+});
+
+describe("breweryStatusLine (WEB-FEAT-044)", () => {
+  // Wed 2026-09-30, Central.
+  const wednesdayAt = (hhmm: string) => central(`2026-09-30T${hhmm}:00`);
+
+  /** Production shape: `opening` is a date, the hours live only in hours_json. Wed-Sun 15:00-22:00. */
+  const productionRow = {
+    status: null,
+    business_status: "OPERATIONAL",
+    opening: "2016-04-01",
+    hours_json: {
+      version: 1,
+      timeZone: "America/Chicago",
+      periods: [3, 4, 5, 6, 0].map((day) => ({
+        open: { day, hour: 15, minute: 0 },
+        close: { day, hour: 22, minute: 0 },
+      })),
+      weekdayDescriptions: [],
+    },
+  };
+
+  it("reads hours_json on a production-shaped row", () => {
+    expect(breweryStatusLine(productionRow, wednesdayAt("17:00"))).toBe("Open until 10 PM");
+    expect(breweryStatusLine(productionRow, wednesdayAt("11:00"))).toMatch(/^Closed, opens /);
+  });
+
+  it("never treats the date in `opening` as hours", () => {
+    expect(breweryStatusLine({ ...productionRow, hours_json: null }, wednesdayAt("17:00"))).toBeNull();
+  });
+
+  it("still reads free-text hours when a row has no hours_json", () => {
+    expect(
+      breweryStatusLine({ status: null, opening: "Mon-Sun 11am-11pm", hours_json: null }, wednesdayAt("17:00")),
+    ).toBe("Open until 11 PM");
+  });
+
+  it("says a CLOSED_TEMPORARILY taproom is closed instead of reading its weekly hours", () => {
+    expect(
+      breweryStatusLine({ ...productionRow, business_status: "CLOSED_TEMPORARILY" }, wednesdayAt("17:00")),
+    ).toBe("Temporarily closed");
+  });
+
+  it("prints no hours for a place that is not open yet", () => {
+    expect(breweryStatusLine({ ...productionRow, status: "opening_soon" }, wednesdayAt("17:00"))).toBeNull();
+  });
+});
+
+describe("useBreweries membership (WEB-PERF-035 AC3)", () => {
+  const hook = readFileSync("src/hooks/useBreweryTrail.ts", "utf8");
+
+  it("reads trail membership from the is_brewery flag, not a name list", () => {
+    expect(BREWERY_MEMBERSHIP_FILTER).toContain("is_brewery.eq.true");
+    expect(BREWERY_MEMBERSHIP_FILTER).not.toMatch(/name\.ilike/);
+    expect(hook).not.toMatch(/BREWERY_NAMES/);
+    expect(hook).not.toMatch(/name\.ilike/);
+  });
+
+  it("keeps the cuisine signal, since nothing at ingest sets the flag", () => {
+    expect(BREWERY_MEMBERSHIP_FILTER).toContain("cuisine.ilike.%Brewery%");
+    expect(BREWERY_MEMBERSHIP_FILTER).toContain("cuisine.ilike.%Craft Beer%");
+  });
+
+  it("still keeps NULL-status rows and drops closed ones in the same or= param", () => {
+    expect(BREWERY_MEMBERSHIP_FILTER.startsWith("and(or(status.is.null,status.neq.closed),or(")).toBe(true);
+    let depth = 0;
+    for (const ch of BREWERY_MEMBERSHIP_FILTER) {
+      if (ch === "(") depth++;
+      if (ch === ")") depth--;
+      expect(depth).toBeGreaterThanOrEqual(0);
+    }
+    expect(depth).toBe(0);
+  });
+
+  it("the hook filters with the exported constant", () => {
+    expect(hook).toMatch(/\.or\(BREWERY_MEMBERSHIP_FILTER\)/);
+    expect(hook).toMatch(/\.neq\('is_merged', true\)/);
+  });
+});
+
+describe("useBreweries projection (WEB-FEAT-044)", () => {
+  it("selects the columns breweryStatusLine reads", async () => {
+    const { BREWERY_TRAIL_COLUMNS } = await import("@/lib/listColumns");
+    const columns = BREWERY_TRAIL_COLUMNS.split(",").map((c) => c.trim());
+    for (const c of ["hours_json", "business_status", "opening", "status"]) expect(columns).toContain(c);
+    const hook = readFileSync("src/hooks/useBreweryTrail.ts", "utf8");
+    expect(hook).toMatch(/\.select\(BREWERY_TRAIL_COLUMNS\)/);
+  });
+
+  it("the page passes the row to breweryStatusLine rather than reading `opening` alone", () => {
+    const page = readFileSync("src/pages/BreweryTrail.tsx", "utf8");
+    expect(page).toMatch(/breweryStatusLine\(brewery, now\)/);
+    expect(page).not.toMatch(/resolveOpenStatus\(undefined/);
   });
 });
 

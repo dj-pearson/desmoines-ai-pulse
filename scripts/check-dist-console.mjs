@@ -20,8 +20,18 @@
  *     not ours to strip: esbuild's `drop` runs on our modules, not on
  *     pre-bundled dependencies.
  *
- * A chunk with no .map is checked by name instead: anything not named
- * vendor-* is treated as app code, so a missing map can't hide a hit.
+ * Where the map is: next to the chunk after a plain `vite build`, or under
+ * .sourcemaps/<same path> after `npm run build`, whose strip-sourcemaps step
+ * moves maps out of the publish directory (WEB-CI-039). A map whose `file`
+ * names a different chunk is not used.
+ *
+ * A hit at a position no mapping segment covers is classed the same way as a
+ * chunk with no map (WEB-CI-040).
+ *
+ * A chunk with no map in either place is checked by name instead: anything
+ * not named vendor-* is treated as app code, so a missing map can't hide a
+ * hit. Classifying more chunks as dependency-only by name is not safe:
+ * pdf-generator-*.js looks like one and carries src/lib/pdf-generator.ts.
  *
  * Usage: npm run build && node scripts/check-dist-console.mjs [outDir]
  */
@@ -30,6 +40,9 @@ import path from 'node:path';
 
 // Optional first argument: a build output directory other than dist/.
 const ASSETS = path.resolve(process.argv[2] ?? 'dist', 'assets');
+// Written by scripts/strip-sourcemaps.mjs; keep the two in step.
+const MOVED_ASSETS = path.resolve('.sourcemaps', path.relative(process.cwd(), ASSETS));
+const movedMapsUsable = !path.relative(process.cwd(), ASSETS).startsWith('..');
 const CALL = /\bconsole\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
 
 if (!existsSync(ASSETS)) {
@@ -61,7 +74,8 @@ function decodeVlq(segment) {
 }
 
 /**
- * Per generated line, the sorted segments [generatedColumn, sourceIndex]. Only
+ * Per generated line, the sorted segments [generatedColumn, sourceIndex], with
+ * sourceIndex null for a segment that maps to nothing. Only
  * what this check needs: which original file a generated column came from.
  */
 function parseMappings(mappings) {
@@ -77,6 +91,10 @@ function parseMappings(mappings) {
       if (fields.length >= 4) {
         sourceIndex += fields[1];
         segments.push([column, sourceIndex]);
+      } else if (fields.length === 1) {
+        // A one-field segment says "from here on, no source". Without it the
+        // previous segment's source would stretch over generated code.
+        segments.push([column, null]);
       }
     }
     lines.push(segments);
@@ -93,7 +111,7 @@ function sourceAt(map, lines, line, column) {
     if (col > column) break;
     found = src;
   }
-  if (found === null) return null;
+  if (found === null) return null; // before the first segment, or in an unmapped one
   return map.sources[found] ?? null;
 }
 
@@ -107,6 +125,19 @@ function lineAndColumn(text, index) {
   return { line, column: index - last - 1 };
 }
 
+/** The chunk's sourcemap, beside it or moved out of dist, or null. */
+function loadMap(file) {
+  const candidates = [path.join(ASSETS, `${file}.map`)];
+  if (movedMapsUsable) candidates.push(path.join(MOVED_ASSETS, `${file}.map`));
+  for (const mapPath of candidates) {
+    if (!existsSync(mapPath)) continue;
+    const map = JSON.parse(readFileSync(mapPath, 'utf8'));
+    if (map.file && path.basename(map.file) !== file) continue;
+    return map;
+  }
+  return null;
+}
+
 const failures = [];
 let checked = 0;
 let vendorHits = 0;
@@ -117,8 +148,8 @@ for (const file of readdirSync(ASSETS).filter((f) => f.endsWith('.js')).sort()) 
   checked += 1;
   if (hits.length === 0) continue;
 
-  const mapPath = path.join(ASSETS, `${file}.map`);
-  if (!existsSync(mapPath)) {
+  const map = loadMap(file);
+  if (!map) {
     if (!file.startsWith('vendor-')) {
       failures.push({ file, source: '(no sourcemap)', call: hits[0][0] });
     } else {
@@ -127,12 +158,18 @@ for (const file of readdirSync(ASSETS).filter((f) => f.endsWith('.js')).sort()) 
     continue;
   }
 
-  const map = JSON.parse(readFileSync(mapPath, 'utf8'));
   const lines = parseMappings(map.mappings ?? '');
   for (const hit of hits) {
     const { line, column } = lineAndColumn(code, hit.index);
     const source = sourceAt(map, lines, line, column);
-    if (source && !source.includes('node_modules')) {
+    if (source === null) {
+      // No segment covers this position, so the map cannot say whose code it
+      // is. Treat it as a chunk with no map is treated (WEB-CI-040): a call
+      // placed before a chunk's first mapped segment used to pass as a
+      // dependency's.
+      if (file.startsWith('vendor-')) vendorHits += 1;
+      else failures.push({ file, source: '(unmapped position)', call: `console.${hit[1]}(` });
+    } else if (!source.includes('node_modules')) {
       failures.push({ file, source: source.replace(/^(\.\.\/)+/, ''), call: `console.${hit[1]}(` });
     } else {
       vendorHits += 1;

@@ -14,7 +14,7 @@
  * The decision is unit-tested; the wiring is pinned textually because the
  * webhook imports Stripe from esm.sh and cannot be loaded here.
  */
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
 import {
   campaignPaymentDecision,
   PAID_CAMPAIGN_STATUS,

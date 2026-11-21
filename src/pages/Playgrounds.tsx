@@ -26,13 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import {
   Sheet,
   SheetContent,
@@ -40,7 +34,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, LocateFixed, ArrowDownAZ } from "lucide-react";
+import { Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, LocateFixed, ArrowDownAZ } from "lucide-react";
 // map-pin and users render once per card. Both are multi-shape lucide icons, so
 // the sprite costs 2 nodes where inline costs 3 and 5 - see the membership rules
 // in scripts/generate-icon-sprite.mjs. Measured saving on this route: 154 of
@@ -49,7 +43,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { createSlug } from "@/lib/slug";
+import { contentSlug } from "@/lib/slugHref";
 import { PlaygroundHubGuide } from "@/components/playgrounds/PlaygroundHubGuide";
 import {
   buildPlaygroundHubSections,
@@ -87,6 +81,11 @@ interface PlaygroundFilterFieldsProps {
   onClearAmenities: () => void;
 }
 
+const FEATURED_OPTIONS: readonly DeferredSelectOption[] = [
+  { value: "all", label: "All Playgrounds" },
+  { value: "featured", label: "Featured Only" },
+];
+
 /**
  * The filter controls, once. The mobile sheet and the desktop panel rendered
  * two hand-kept copies, which is how the mobile triggers ended up with no
@@ -111,6 +110,16 @@ function PlaygroundFilterFields({
 }: PlaygroundFilterFieldsProps) {
   const labelClass = layout === "stack" ? "text-base font-medium" : "text-sm font-medium text-foreground";
   const triggerClass = layout === "stack" ? "input-mobile" : undefined;
+  const ageOptions: DeferredSelectOption[] = [
+    { value: "all", label: "All Ages" },
+    ...ageRanges.map((range) => ({ value: range, label: range })),
+  ];
+  // Only suburbs read from metro rows, each with the number of playgrounds
+  // the filter will return for it.
+  const locationOptions: DeferredSelectOption[] = [
+    { value: "any-location", label: "Any location" },
+    ...locations.map((loc) => ({ value: loc, label: `${loc} (${locationCounts[loc] ?? 0})` })),
+  ];
   return (
     <div
       className={
@@ -123,55 +132,39 @@ function PlaygroundFilterFields({
         <label htmlFor={`${idPrefix}-age`} className={labelClass}>
           Age Range
         </label>
-        <Select value={ageValue} onValueChange={onAgeChange}>
-          <SelectTrigger id={`${idPrefix}-age`} className={triggerClass}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Ages</SelectItem>
-            {ageRanges.map((range) => (
-              <SelectItem key={range} value={range}>
-                {range}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <DeferredSelect
+          value={ageValue}
+          onValueChange={onAgeChange}
+          options={ageOptions}
+          id={`${idPrefix}-age`}
+          triggerClassName={triggerClass}
+        />
       </div>
 
       <div className="space-y-2">
         <label htmlFor={`${idPrefix}-location`} className={labelClass}>
           Location
         </label>
-        <Select value={locationValue} onValueChange={onLocationChange}>
-          <SelectTrigger id={`${idPrefix}-location`} className={triggerClass}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any-location">Any location</SelectItem>
-            {/* Only suburbs read from metro rows, each with the number of
-                playgrounds the filter will return for it. */}
-            {locations.map((loc) => (
-              <SelectItem key={loc} value={loc}>
-                {loc} ({locationCounts[loc] ?? 0})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <DeferredSelect
+          value={locationValue}
+          onValueChange={onLocationChange}
+          options={locationOptions}
+          id={`${idPrefix}-location`}
+          triggerClassName={triggerClass}
+        />
       </div>
 
       <div className="space-y-2">
         <label htmlFor={`${idPrefix}-featured`} className={labelClass}>
           Featured
         </label>
-        <Select value={featuredValue} onValueChange={onFeaturedChange}>
-          <SelectTrigger id={`${idPrefix}-featured`} className={triggerClass}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Playgrounds</SelectItem>
-            <SelectItem value="featured">Featured Only</SelectItem>
-          </SelectContent>
-        </Select>
+        <DeferredSelect
+          value={featuredValue}
+          onValueChange={onFeaturedChange}
+          options={FEATURED_OPTIONS}
+          id={`${idPrefix}-featured`}
+          triggerClassName={triggerClass}
+        />
       </div>
 
       <fieldset className="space-y-2">
@@ -460,14 +453,15 @@ export default function Playgrounds() {
   // the page, which is the defect SEO-003 removed.
 
   // The rendered set, capped, so every URL here is a link the crawler can
-  // also see on the page. createSlug above is the same function the cards
-  // use, so the schema URL and the href cannot drift apart.
+  // also see on the page. contentSlug is the same function the cards use
+  // (the stored slug, WEB-PERF-031), so the schema URL and the href cannot
+  // drift apart.
   const SCHEMA_LIMIT = 20;
   const schemaItems = filteredPlaygrounds
     .slice(0, SCHEMA_LIMIT)
     .map((item) => ({
       name: item.name,
-      url: getCanonicalUrl(`/playgrounds/${createSlug(item.name)}`),
+      url: getCanonicalUrl(`/playgrounds/${contentSlug(item)}`),
       ...(item.image_url && { image: item.image_url }),
       ...(item.description && { description: item.description }),
     }));
@@ -775,7 +769,7 @@ export default function Playgrounds() {
             {displayedPlaygrounds.map((playground, index) => (
               <Link
                 key={playground.id}
-                to={`/playgrounds/${createSlug(playground.name)}`}
+                to={`/playgrounds/${contentSlug(playground)}`}
                 className="block"
               >
                 <Card className="h-full hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">
@@ -822,12 +816,9 @@ export default function Playgrounds() {
                           {formatMilesAway(playground.distanceMiles)}
                         </div>
                       )}
-                      {playground.rating != null && (
-                        <div className="flex items-center gap-2">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" aria-hidden="true" />
-                          <span>{playground.rating.toFixed(1)}/5</span>
-                        </div>
-                      )}
+                      {/* No star badge: playgrounds.rating is a number a model
+                          read off a crawled page, with no record of whose
+                          rating it was (WEB-SEO-056). */}
                       {playground.location && (
                         <div className="flex items-center gap-2">
                           <SpriteIcon name="map-pin" className="h-4 w-4" />

@@ -109,7 +109,6 @@ const BASELINE = new Set([
   'components/SEOTools.tsx',
   'components/schema/FAQSchema.tsx',
   'components/schema/TouristTripSchema.tsx',
-  'pages/SeasonalGuide.tsx',
 ]);
 
 const offenders = walk(SRC)

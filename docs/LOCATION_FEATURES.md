@@ -55,16 +55,6 @@ Feature-rich map component:
 - Auto-fit bounds to show all locations
 - Location count badge
 
-#### Location Autocomplete
-**File**: `src/components/LocationAutocomplete.tsx`
-
-Address input with autocomplete:
-- Real-time address suggestions (Nominatim API)
-- "Use Current Location" button
-- Debounced API calls
-- Address validation and standardization
-- `useGeocoding()` hook for manual geocoding
-
 #### Geofencing
 **File**: `src/hooks/useGeofencing.ts`
 
@@ -294,35 +284,7 @@ function RestaurantsMapView() {
 
 ### 3. Address Autocomplete
 
-```typescript
-import { LocationAutocomplete } from '@/components/LocationAutocomplete';
-
-function EventSubmissionForm() {
-  const [address, setAddress] = useState('');
-  const [coordinates, setCoordinates] = useState<{lat: number, lng: number} | null>(null);
-
-  const handleSelect = (result) => {
-    setAddress(result.display_name);
-    setCoordinates({ lat: parseFloat(result.lat), lng: parseFloat(result.lon) });
-  };
-
-  return (
-    <form>
-      <LocationAutocomplete
-        value={address}
-        onChange={(value) => setAddress(value)}
-        onSelect={handleSelect}
-        placeholder="Enter event location..."
-        showCurrentLocation={true}
-        filterToRegion="Iowa"
-      />
-      {coordinates && (
-        <p>Coordinates: {coordinates.lat}, {coordinates.lng}</p>
-      )}
-    </form>
-  );
-}
-```
+`LocationAutocomplete` was deleted in WEB-UX-072: no page rendered it. Its `useGeocoding()` and `validateAddress()` went with it; git history has them if an address field needs them.
 
 ### 4. Geofencing
 

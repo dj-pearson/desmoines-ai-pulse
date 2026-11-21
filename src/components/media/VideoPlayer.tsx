@@ -427,6 +427,8 @@ export function VideoPlayer({
           {/* Progress Bar */}
           <div className="mb-2">
             <Slider
+              thumbLabel="Seek"
+              thumbValueText={`${formatTime(currentTime)} of ${formatTime(duration)}`}
               value={[currentTime]}
               min={0}
               max={duration || 100}
@@ -484,8 +486,10 @@ export function VideoPlayer({
                     <Volume2 className="h-5 w-5 text-white" />
                   )}
                 </button>
-                <div className="w-0 group-hover/volume:w-20 overflow-hidden transition-all duration-200">
+                <div className="w-0 group-hover/volume:w-20 group-focus-within/volume:w-20 overflow-hidden transition-all duration-200">
                   <Slider
+                    thumbLabel="Volume"
+                    thumbValueText={`${Math.round(volume * 100)}%`}
                     value={[volume]}
                     min={0}
                     max={1}

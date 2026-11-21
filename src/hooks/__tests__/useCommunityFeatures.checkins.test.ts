@@ -37,7 +37,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuthActions: () => ({}),
 }));
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const errors: unknown[] = [];
 vi.mock('@/lib/logger', () => ({

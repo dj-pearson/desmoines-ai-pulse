@@ -13,7 +13,7 @@ export interface BusinessProPlan {
 }
 
 /**
- * The Business Pro price, read from business_plans (20261102000006) so the
+ * The Business Pro price, read from business_plans (20261116000030) so the
  * page never carries a number of its own. `null` while the migration is not
  * applied or the plan is switched off: the panel then shows no offer at all.
  */

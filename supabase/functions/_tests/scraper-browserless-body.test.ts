@@ -12,7 +12,7 @@
  * Driven through scrapeUrl with a fake fetch, so the bodies asserted on are the
  * ones scraper.ts actually builds, not a copy of them.
  */
-import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 import { browserlessUserAgent, getScraperConfig, scrapeUrl } from '../_shared/scraper.ts';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TestAgent/1.0';

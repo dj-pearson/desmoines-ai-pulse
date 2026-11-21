@@ -13,9 +13,10 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { CalendarIcon, X, Plus, Info, Upload, ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { pickedDayToSubmissionDate } from "@/lib/submissionDate";
 import { useSubmitEvent, useUpdateEvent, type UserSubmittedEvent } from "@/hooks/useUserSubmittedEvents";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { createLogger } from '@/lib/logger';
 import { FormErrorSummary, useFormErrors } from "./ui/form-error-summary";
 import { EVENT_CATEGORIES } from "@/lib/eventCategories";
@@ -167,7 +168,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
     try {
       const eventData = {
         ...data,
-        date: selectedDate?.toISOString(),
+        date: selectedDate ? pickedDayToSubmissionDate(selectedDate) : undefined,
         tags: selectedTags,
         image_url: uploadedImageUrl || data.image_url || null,
       };
@@ -264,7 +265,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
               <div>
                 <Label htmlFor="category">Category *</Label>
                 <Select defaultValue={seed?.category || undefined} onValueChange={(value) => setValue("category", value)}>
-                  <SelectTrigger aria-invalid={!!errors.category} aria-describedby={errors.category ? "category-error" : undefined}>
+                  <SelectTrigger id="category" aria-invalid={!!errors.category} aria-describedby={errors.category ? "category-error" : undefined}>
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -281,17 +282,21 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
               </div>
 
               <div>
-                <Label>Event Date *</Label>
+                {/* aria-labelledby (label + button) so the chosen date stays in the name. */}
+                <Label id="event-date-label">Event Date *</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
+                      id="event-date"
+                      type="button"
+                      aria-labelledby="event-date-label event-date"
                       variant="outline"
                       className={cn(
                         "w-full justify-start text-left font-normal",
                         !selectedDate && "text-muted-foreground"
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />
                       {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
@@ -436,7 +441,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
           />
 
           {uploadError && (
-            <p className="text-sm text-red-500 mt-2">{uploadError}</p>
+            <p className="text-sm text-red-500 mt-2" role="alert">{uploadError}</p>
           )}
 
           {/* Fallback: paste URL */}
@@ -527,14 +532,15 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
 
           {/* Popular Tags */}
           <div className="mb-4">
-            <Label className="text-sm font-medium mb-2 block">Popular Tags</Label>
-            <div className="flex flex-wrap gap-2">
+            <p id="popular-tags-label" className="text-sm font-medium mb-2">Popular Tags</p>
+            <div role="group" aria-labelledby="popular-tags-label" className="flex flex-wrap gap-2">
               {POPULAR_TAGS.map((tag) => (
                 <Button
                   key={tag}
                   type="button"
                   variant={selectedTags.includes(tag) ? "default" : "outline"}
                   size="sm"
+                  aria-pressed={selectedTags.includes(tag)}
                   onClick={() => selectedTags.includes(tag) ? removeTag(tag) : addTag(tag)}
                 >
                   {tag}
@@ -545,17 +551,18 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
 
           {/* Custom Tags */}
           <div className="mb-4">
-            <Label className="text-sm font-medium mb-2 block">Add Custom Tag</Label>
+            <Label htmlFor="custom_tag" className="text-sm font-medium mb-2 block">Add Custom Tag</Label>
             <div className="flex gap-2">
               <Input
+                id="custom_tag"
                 value={customTag}
                 onChange={(e) => setCustomTag(e.target.value.slice(0, 50))}
                 placeholder="Enter custom tag"
                 maxLength={50}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
               />
-              <Button type="button" onClick={addCustomTag} size="sm">
-                <Plus className="h-4 w-4" />
+              <Button type="button" onClick={addCustomTag} size="sm" aria-label="Add custom tag">
+                <Plus className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -563,8 +570,8 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
           {/* Selected Tags */}
           {selectedTags.length > 0 && (
             <div>
-              <Label className="text-sm font-medium mb-2 block">Selected Tags</Label>
-              <div className="flex flex-wrap gap-2">
+              <p id="selected-tags-label" className="text-sm font-medium mb-2">Selected Tags</p>
+              <div role="group" aria-labelledby="selected-tags-label" className="flex flex-wrap gap-2">
                 {selectedTags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="flex items-center gap-1">
                     {tag}
@@ -574,8 +581,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: 
                       size="sm"
                       className="h-auto p-0 w-4 h-4"
                       onClick={() => removeTag(tag)}
+                      aria-label={`Remove tag ${tag}`}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3 w-3" aria-hidden="true" />
                     </Button>
                   </Badge>
                 ))}

@@ -3,10 +3,18 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { escapeHtml } from "../_shared/escapeHtml.ts";
+import { escapeHtml, escapeHtmlAttr } from "../_shared/escapeHtml.ts";
 import { listUnsubscribeHeaders, renderEmail } from "../_shared/emailLayout.ts";
 import { sendEmail } from "../_shared/email.ts";
 import { requireAdminOrApiKey, timingSafeEqual } from "../_shared/apiKeyAuth.ts";
+import {
+  reminderEventUrl,
+  reminderSubject,
+  reminderWhen,
+  reminderWhere,
+  shouldSendReminder,
+  timingPhrase,
+} from "./content.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -79,18 +87,25 @@ serve(async (req) => {
       );
     }
 
-    if (!reminders || reminders.length === 0) {
+    // Hour-level reminders for an event with no announced time are dropped
+    // here as well as in the RPC (WEB-FEAT-058). They are left pending, not
+    // claimed, so the RPC's "event hasn't started" filter retires them.
+    const fetched = (reminders ?? []) as Reminder[];
+    const sendable = fetched.filter(shouldSendReminder);
+    const skippedUntimed = fetched.length - sendable.length;
+
+    if (sendable.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No reminders to send", count: 0 }),
+        JSON.stringify({ message: "No reminders to send", count: 0, skipped_untimed: skippedUntimed }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Found ${reminders.length} reminders to send`);
+    console.log(`Found ${sendable.length} reminders to send (${skippedUntimed} untimed skipped)`);
 
     // Send emails for each reminder
     const results = await Promise.allSettled(
-      reminders.map((reminder: Reminder) => sendReminderEmail(reminder, supabase))
+      sendable.map((reminder: Reminder) => sendReminderEmail(reminder, supabase))
     );
 
     // Count successes and failures
@@ -100,11 +115,12 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         message: "Reminder batch processed",
-        total: reminders.length,
+        total: sendable.length,
+        skipped_untimed: skippedUntimed,
         successes,
         failures,
         results: results.map((r, i) => ({
-          reminder_id: reminders[i].reminder_id,
+          reminder_id: sendable[i].reminder_id,
           status: r.status,
           error: r.status === "rejected" ? r.reason : null,
         })),
@@ -141,13 +157,13 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
       return { success: false, skipped: "already_claimed" };
     }
 
-    // Format event time
-    const eventTime = formatEventTime(reminder.event_start_utc || reminder.event_date);
-    const timeUntil = formatTimeUntil(reminder.reminder_type);
-
-    // Build email content
-    const subject = `Reminder: ${escapeHtml(reminder.event_title)} ${timeUntil}`;
-    const eventUrl = `${SITE_BASE_URL}/events/${createSlug(reminder.event_title)}`;
+    // Subject, time, place and link come from content.ts, which is tested.
+    // The subject is plain text and is never HTML-escaped; the body is.
+    const eventTime = reminderWhen(reminder);
+    const timeUntil = timingPhrase(reminder);
+    const where = reminderWhere(reminder);
+    const subject = reminderSubject(reminder);
+    const eventUrl = reminderEventUrl(reminder, SITE_BASE_URL);
 
     const bodyHtml = `
   <div style="background: linear-gradient(135deg, #2D1B69 0%, #8B0000 50%, #DC143C 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
@@ -168,19 +184,21 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
         <strong>📅 When:</strong> ${escapeHtml(eventTime)}
       </p>
 
-      <p style="margin: 8px 0; font-size: 16px;">
-        <strong>📍 Where:</strong> ${escapeHtml(reminder.event_venue || reminder.event_location)}
-      </p>
+      ${where ? `
+        <p style="margin: 8px 0; font-size: 16px;">
+          <strong>📍 Where:</strong> ${escapeHtml(where.place)}
+        </p>
+      ` : ''}
 
-      ${reminder.event_location ? `
+      ${where?.address ? `
         <p style="margin: 8px 0; font-size: 14px; color: #666;">
-          ${escapeHtml(reminder.event_location)}
+          ${escapeHtml(where.address)}
         </p>
       ` : ''}
     </div>
 
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${eventUrl}"
+      <a href="${escapeHtmlAttr(eventUrl)}"
          style="background: #DC143C; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: bold; display: inline-block;">
         View Event Details
       </a>
@@ -194,23 +212,14 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
     const bodyText = `
 Event Reminder: ${reminder.event_title}
 
-You have an upcoming event ${timeUntil}!
+Your event ${timeUntil}.
 
-When: ${eventTime}
-Where: ${reminder.event_venue || reminder.event_location}
+When: ${eventTime}${where ? `\nWhere: ${where.place}${where.address ? `, ${where.address}` : ""}` : ""}
 
 View event details: ${eventUrl}
 
 Don't miss out! We'll see you there!
     `.trim();
-
-    // Look up this recipient's unsubscribe token so the footer renders a
-    // one-click unsubscribe link that complies with CAN-SPAM §5(a)(5).
-    const { data: subscriberRow } = await supabase
-      .from("newsletter_subscribers")
-      .select("unsubscribe_token")
-      .eq("email", reminder.user_email.toLowerCase().trim())
-      .maybeSingle();
 
     const rendered = renderEmail({
       bodyHtml,
@@ -220,8 +229,12 @@ Don't miss out! We'll see you there!
       category: "marketing",
       recipient: {
         email: reminder.user_email,
-        unsubscribeToken: subscriberRow?.unsubscribe_token ?? null,
-        preferencesPath: "/profile?tab=settings",
+        // WEB-FEAT-059: the footer link and the one-click header cancel this
+        // event's remaining reminders (cancel_event_reminders_by_token). They
+        // used to carry the newsletter token, so stopping a reminder ended
+        // the newsletter and every other marketing email instead.
+        reminderToken: reminder.reminder_id,
+        preferencesPath: "/my-events?tab=reminders",
       },
     });
     const sent = await sendEmail(
@@ -261,39 +274,4 @@ Don't miss out! We'll see you there!
 
     throw error;
   }
-}
-
-function formatEventTime(dateString: string): string {
-  const date = new Date(dateString);
-  const options: Intl.DateTimeFormatOptions = {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/Chicago",
-    timeZoneName: "short",
-  };
-  return date.toLocaleString("en-US", options);
-}
-
-function formatTimeUntil(reminderType: string): string {
-  switch (reminderType) {
-    case "1_day":
-      return "starts tomorrow";
-    case "3_hours":
-      return "starts in 3 hours";
-    case "1_hour":
-      return "starts in 1 hour";
-    default:
-      return "is coming up";
-  }
-}
-
-function createSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
 }

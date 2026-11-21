@@ -13,6 +13,15 @@
  * A gate, not a ratchet: all of them run today, so any unrun suite is new.
  * Comments are stripped first, so a suite named only in a comment is unrun.
  *
+ * SECOND GATE (WEB-CI-036): no suite imports straight from deno.land or esm.sh.
+ * Cloud agent containers get a 403 from both, and 90 suites took their asserts
+ * from https://deno.land/std, so 94 of 166 lane steps failed at import there
+ * and every "not run here (no Deno)" note stayed unverified. One of the 94 was
+ * a real failure hidden among them (nlp-search's drift guard, red since
+ * WEB-SEO-063). Use jsr:@std/assert@1 or node:assert; neither needs those
+ * hosts. Imports a suite reaches through the module under test are not checked
+ * here, because changing those changes production edge code.
+ *
  *   node scripts/check-deno-lanes.mjs
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -48,9 +57,26 @@ const run = new Set(
 );
 const unrun = suites.filter((s) => !run.has(s));
 
+const REMOTE_IMPORT =
+  /(?:\bfrom\s*|\bimport\s*\(?\s*)["'](https:\/\/(?:deno\.land|esm\.sh)\/[^"']+)["']/g;
+const remote = [];
+for (const s of suites) {
+  const text = readFileSync(join(ROOT, s), 'utf8');
+  for (const m of text.matchAll(REMOTE_IMPORT)) remote.push(`${s}: ${m[1]}`);
+}
+if (remote.length > 0) {
+  console.error('\nX Deno suites importing straight from deno.land or esm.sh:');
+  for (const r of remote) console.error(`  ${r}`);
+  console.error(
+    '\nCloud agent containers cannot reach those hosts, so the suite cannot run\n' +
+      'there. Import asserts from jsr:@std/assert@1 (or node:assert) instead.',
+  );
+}
+
 console.log(`[deno-lanes] ${suites.length} Deno suite(s); ${run.size} named on a deno test line.`);
 if (unrun.length === 0) {
-  console.log('OK Every Deno suite under supabase/functions runs in CI.');
+  if (remote.length > 0) process.exit(1);
+  console.log('OK Every Deno suite under supabase/functions runs in CI and imports nothing from deno.land or esm.sh.');
   process.exit(0);
 }
 console.error('\nX Deno suites no workflow runs:');

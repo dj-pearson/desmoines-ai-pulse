@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { applyEventVisibility } from "@/lib/eventQuery";
+import { upcomingOrRunningFilter } from "@/hooks/useEvents";
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import {
   isLocated,
@@ -12,7 +13,7 @@ import {
   type NearbyRestaurantRow,
 } from "@/lib/nearbyLinks";
 import { STALE_TIME } from "@/lib/queryConfig";
-import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantHours";
+import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantStatus";
 
 /**
  * Restaurants or upcoming events within NEARBY_MILES of a point (SEO-015,
@@ -85,9 +86,13 @@ async function scanNearby(kind: Kind, lat: number, lng: number): Promise<NearbyR
       : await applyEventVisibility(
           supabase
             .from("events")
-            .select(NEARBY_EVENT_COLUMNS)
-            .gte("date", new Date().toISOString()),
+            .select(NEARBY_EVENT_COLUMNS),
         )
+          // Not started yet, or a run still going (WEB-FEAT-062). The floor is
+          // now, not the start of the Central day, because the selector keeps
+          // the same rule (isLinkableUpcomingEvent) and a row it would drop
+          // should not spend the 60-row cap.
+          .or(upcomingOrRunningFilter(new Date().toISOString()))
           .gte("latitude", lat - LAT_PAD)
           .lte("latitude", lat + LAT_PAD)
           .gte("longitude", lng - LNG_PAD)

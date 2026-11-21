@@ -14,7 +14,11 @@ final class EventDetailRefreshTests: XCTestCase {
     private final class FakeEvents: EventDetailProviding, @unchecked Sendable {
         var event: Event?
         var error: Error?
+        /// What the archived second look returns; nil is "no archived row".
+        var archived: Event?
+        var archivedError: Error?
         private(set) var fetchCount = 0
+        private(set) var archivedFetchCount = 0
 
         func fetchEvent(id: String) async throws -> Event {
             fetchCount += 1
@@ -25,6 +29,12 @@ final class EventDetailRefreshTests: XCTestCase {
 
         func fetchRelatedEvents(eventId: String, category: String, limit: Int) async throws -> [Event] {
             []
+        }
+
+        func fetchArchivedEvent(id: String) async throws -> Event? {
+            archivedFetchCount += 1
+            if let archivedError { throw archivedError }
+            return archived
         }
     }
 
@@ -161,6 +171,112 @@ final class EventDetailRefreshTests: XCTestCase {
         await vm.loadEvent(event(title: "Jazz Night"))
 
         XCTAssertFalse(vm.isUnavailable)
+    }
+
+    // MARK: - Archived past event (IOS-AUDIT-001)
+
+    func testAnArchivedRowIsAPastEventNotUnavailable() async {
+        // A series screen opens an archived past edition with its own row; the
+        // visible re-read refuses it, and that used to read as "gone".
+        let fake = FakeEvents()
+        fake.error = NotFound()
+        fake.archived = event(title: "Jazz Night", venue: "Noce")
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night", venue: "Noce"))
+
+        XCTAssertTrue(vm.isArchived)
+        XCTAssertFalse(vm.isUnavailable)
+        XCTAssertEqual(vm.event?.venue, "Noce")
+    }
+
+    func testTheArchivedRowReplacesAStalePrefetchedOne() async {
+        let fake = FakeEvents()
+        fake.error = NotFound()
+        fake.archived = event(title: "Jazz Night", venue: "Noce")
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night", venue: "TBA"))
+
+        XCTAssertEqual(vm.event?.venue, "Noce")
+    }
+
+    func testNoArchivedRowStillMeansUnavailable() async {
+        // Hidden, merged or deleted: the second look finds nothing.
+        let fake = FakeEvents()
+        fake.error = NotFound()
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night"))
+
+        XCTAssertEqual(fake.archivedFetchCount, 1)
+        XCTAssertTrue(vm.isUnavailable)
+        XCTAssertFalse(vm.isArchived)
+    }
+
+    func testAFailedArchivedLookFallsBackToUnavailable() async {
+        let fake = FakeEvents()
+        fake.error = NotFound()
+        fake.archivedError = FakeError.offline
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night"))
+
+        XCTAssertTrue(vm.isUnavailable)
+        XCTAssertFalse(vm.isArchived)
+    }
+
+    func testAnOfflineRefreshTakesNoSecondLook() async {
+        // Only "no such row" asks whether the row was archived.
+        let fake = FakeEvents()
+        fake.error = FakeError.offline
+        fake.archived = event(title: "Jazz Night")
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night"))
+
+        XCTAssertEqual(fake.archivedFetchCount, 0)
+        XCTAssertFalse(vm.isArchived)
+    }
+
+    func testALiveRowIsNeverArchived() async {
+        let fake = FakeEvents()
+        fake.event = event(title: "Jazz Night")
+        fake.archived = event(title: "Jazz Night")
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night"))
+
+        XCTAssertEqual(fake.archivedFetchCount, 0)
+        XCTAssertFalse(vm.isArchived)
+    }
+
+    func testOpeningAnArchivedIdShowsItAsAPastEvent() async {
+        // The by-id path (an /events/<id> link to an archived row) renders it
+        // as a past event, as the web does, instead of an error.
+        let fake = FakeEvents()
+        fake.error = NotFound()
+        fake.archived = event(id: "past-1", title: "Jazz Night")
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(id: "past-1")
+
+        XCTAssertEqual(vm.event?.id, "past-1")
+        XCTAssertTrue(vm.isArchived)
+        XCTAssertFalse(vm.isUnavailable)
+        XCTAssertNil(vm.errorMessage)
+    }
+
+    func testOpeningAMissingIdStillReportsIt() async {
+        let fake = FakeEvents()
+        fake.error = NotFound()
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(id: "gone-1")
+
+        XCTAssertNil(vm.event)
+        XCTAssertTrue(vm.isUnavailable)
+        XCTAssertNotNil(vm.errorMessage)
     }
 
     // MARK: - Share (IOS-DD-EVENTS-15)

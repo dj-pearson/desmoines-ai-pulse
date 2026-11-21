@@ -158,4 +158,68 @@ final class QueryCacheTests: XCTestCase {
         let total = await cache.totalDiskBytesForTesting()
         XCTAssertLessThanOrEqual(total, cap)
     }
+
+    // MARK: - Hashed Filenames (IOS-AUDIT-PERF-032)
+
+    func testKeyTextNeverAppearsInOnDiskFilename() async {
+        // The shape EventsViewModel.eventsCacheKey() builds from a search.
+        let key = "events2-q-Jane Doe 1234 Ingersoll Ave-s-date"
+        await cache.set(key, value: ["row"], ttl: 300)
+
+        let names = await cache.diskFilenamesForTesting()
+        XCTAssertEqual(names.count, 1)
+        for name in names {
+            for fragment in ["Jane", "Doe", "Ingersoll", "1234", "events2", "q-"] {
+                XCTAssertFalse(name.localizedCaseInsensitiveContains(fragment),
+                               "Filename \(name) leaks key text \(fragment)")
+            }
+            XCTAssertTrue(QueryCache.isHashedFilename(name), "Unexpected filename shape: \(name)")
+        }
+
+        let back: [String]? = await cache.get(key)
+        XCTAssertEqual(back, ["row"])
+    }
+
+    func testHashedFilenameIsStableAndDistinct() {
+        let a = QueryCache.hashedFilename(for: "events2-q-pizza")
+        XCTAssertEqual(a, QueryCache.hashedFilename(for: "events2-q-pizza"))
+        XCTAssertNotEqual(a, QueryCache.hashedFilename(for: "events2-q-pizzA"))
+        XCTAssertTrue(QueryCache.isHashedFilename(a))
+        XCTAssertFalse(QueryCache.isHashedFilename("events2%2Dq%2Dpizza.json"))
+        XCTAssertFalse(QueryCache.isHashedFilename(String(a.dropLast(5))))
+    }
+
+    func testLegacyNamedEntryIsMigratedAndStillReadable() async throws {
+        let key = "events2-q-taco tuesday"
+        // Write the entry the way the old build did: percent-encoded key as the name.
+        await cache.set(key, value: ["legacy"], ttl: 300)
+        let dir = await cache.cacheDirectoryForTesting()
+        let hashed = dir.appendingPathComponent(QueryCache.hashedFilename(for: key))
+        let legacyName = try XCTUnwrap(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics)) + ".json"
+        let legacy = dir.appendingPathComponent(legacyName)
+        try FileManager.default.moveItem(at: hashed, to: legacy)
+
+        await cache.migrateLegacyFilenamesForTesting()
+
+        let names = await cache.diskFilenamesForTesting()
+        XCTAssertFalse(names.contains(legacyName), "Legacy filename must not survive migration")
+        XCTAssertTrue(names.allSatisfy(QueryCache.isHashedFilename), "Got \(names)")
+        let back: [String]? = await cache.get(key)
+        XCTAssertEqual(back, ["legacy"])
+    }
+
+    func testLegacyFileIsDroppedWhenHashedEntryAlreadyExists() async throws {
+        let key = "events2-q-brunch"
+        await cache.set(key, value: ["newer"], ttl: 300)
+        let dir = await cache.cacheDirectoryForTesting()
+        let legacyName = try XCTUnwrap(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics)) + ".json"
+        try Data("{}".utf8).write(to: dir.appendingPathComponent(legacyName))
+
+        await cache.migrateLegacyFilenamesForTesting()
+
+        let names = await cache.diskFilenamesForTesting()
+        XCTAssertEqual(names, [QueryCache.hashedFilename(for: key)])
+        let back: [String]? = await cache.get(key)
+        XCTAssertEqual(back, ["newer"], "A stale legacy file must not overwrite a newer hashed entry")
+    }
 }

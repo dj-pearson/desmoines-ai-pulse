@@ -36,6 +36,18 @@ export const RESTAURANT_LIST_COLUMNS =
   "city, created_at, cuisine, data_quality_score, description, enhanced, google_place_id, id, image_url, is_featured, is_merged, is_sponsored, sponsored_until, latitude, location, longitude, merged_at, merged_into, name, opening, opening_date, opening_timeframe, phone, popularity_score, price_range, rating, slug, source_url, status, updated_at, website, writeup_generated_at";
 
 /**
+ * The /restaurants hub's table path (fetchRestaurantList: any sort but the
+ * default, a search, a diet filter, the sponsored pool). The list columns plus
+ * hours_json and business_status, which the rotation RPC's to_jsonb(r) row
+ * already carries. Without them the same card said "Open until 10 PM" under
+ * the default sort and nothing once sorted by rating, a CLOSED_TEMPORARILY
+ * place read as an ordinary listing, and a search could not label a Google
+ * CLOSED_PERMANENTLY place it keeps on purpose (WEB-FEAT-094).
+ */
+export const RESTAURANT_HUB_LIST_COLUMNS =
+  "city, created_at, cuisine, data_quality_score, description, enhanced, google_place_id, id, image_url, is_featured, is_merged, is_sponsored, sponsored_until, latitude, location, longitude, merged_at, merged_into, name, opening, opening_date, opening_timeframe, phone, popularity_score, price_range, rating, slug, source_url, status, updated_at, website, writeup_generated_at, business_status, hours_json";
+
+/**
  * What restaurant detail reads on top of the list columns, instead of
  * select("*"), which also shipped search_vector, geom, writeup_prompt_used and
  * the heal bookkeeping on every view and every card hover. Checked against
@@ -97,8 +109,13 @@ export const EVENT_LIST_COLUMNS =
 // admission_summary, parking_summary, fact_sources and facts_verified_at are
 // SEO-046: the detail page states them under the h1, and the /attractions
 // free-admission list reads the sources to show only verified "free".
+//
+// slug is WEB-PERF-031: cards link by the stored slug (lib/slugHref.ts),
+// because a duplicate name was suffixed by the backfill and the name no longer
+// identifies the row. Migration 20260919000008 is live (the 2026-10-01
+// production export in scripts/content-backups/seo-046 carries it).
 export const ATTRACTION_LIST_COLUMNS =
-  "created_at, description, id, image_url, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, name, rating, type, updated_at, website, address, hours_summary, hours, is_indoor, is_kid_friendly, is_free, is_active, accessibility_notes, admission_summary, parking_summary, fact_sources, facts_verified_at";
+  "created_at, description, id, image_url, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, name, rating, slug, type, updated_at, website, address, hours_summary, hours, is_indoor, is_kid_friendly, is_free, is_active, accessibility_notes, admission_summary, parking_summary, fact_sources, facts_verified_at";
 
 // Hotels: 43 columns, of which the list UI reads none of the SEO/GEO text or
 // the gallery array. Verified by grepping every useHotels caller
@@ -138,9 +155,14 @@ export const HOTEL_PLACES_PHOTO_COLUMNS = "places_photo_attribution";
  * no list card reads (checked pages/Playgrounds.tsx, hooks/usePlaygrounds.ts,
  * hooks/useAdvancedSearch.ts). PlaygroundManager reads manually_curated, so the
  * admin path keeps its own query.
+ *
+ * slug (WEB-PERF-031, migration 20260919000008, present on every row of the
+ * 2026-10-01 export in scripts/content-backups/seo-061): two of those five rows
+ * are riverview-park-2 and union-park-2, so a link built from the name opens a
+ * different playground. Cards link with lib/slugHref.ts.
  */
 export const PLAYGROUND_LIST_COLUMNS =
-  "accessibility_notes, age_range, amenities, created_at, description, has_restrooms, has_shade, id, image_url, is_featured, latitude, location, longitude, name, rating, source, surface_type, updated_at";
+  "accessibility_notes, age_range, amenities, created_at, description, has_restrooms, has_shade, id, image_url, is_featured, latitude, location, longitude, name, rating, slug, source, surface_type, updated_at";
 
 /**
  * The Tonight rail and everything that reads its cache (home pass-2 WP2 item
@@ -156,9 +178,112 @@ export const TONIGHT_EVENT_COLUMNS =
 /**
  * Every column pickDinner and the Tonight card read, and nothing else.
  * hours_json (SEO-054): the only hours production carries; `opening` is a date.
+ * business_status: a temporary closure is recorded only there (WEB-FEAT-037).
  */
 export const TONIGHT_RESTAURANT_COLUMNS =
-  "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status";
+  "id, name, slug, cuisine, latitude, longitude, opening, hours_json, opening_date, status, business_status";
+
+/**
+ * Dinner near each event on /search (useSearchPairings). The same columns
+ * pickDinner reads for Tonight, plus price_range for the card. It used to be a
+ * private list in the hook without hours_json or business_status, so
+ * pickDinner fell back to `opening` (a date in production) and never found a
+ * dinner, and a CLOSED_TEMPORARILY place could not be ruled out (WEB-FEAT-038).
+ */
+export const SEARCH_PAIRING_RESTAURANT_COLUMNS =
+  "id, name, slug, cuisine, price_range, latitude, longitude, opening, hours_json, opening_date, status, business_status";
+
+/**
+ * Restaurant map pins (useRestaurantMapPoints). business_status is how a pin
+ * says "Temporarily closed": restaurants.status has no such value and Google
+ * keeps publishing the weekly hours of a temporarily closed place
+ * (WEB-FEAT-038). hours_json is what colours a pin open or closed: it is the
+ * only hours production carries, and `opening` is a date (SEO-054), so
+ * without it nearly every pin read "Hours unknown" (WEB-FEAT-040). Both
+ * columns have been in production since 20260919000009, and open-now and
+ * Tonight already select them.
+ */
+export const RESTAURANT_MAP_POINT_COLUMNS =
+  "id, name, slug, latitude, longitude, cuisine, opening, hours_json, price_range, rating, image_url, phone, status, business_status";
+
+/**
+ * Restaurant pins on /discover-map. It selected `opening` alone and called
+ * resolveOpenStatus(undefined, opening), and production stores a date in
+ * `opening`, so under Now and Tonight every restaurant was "hours unknown" and
+ * held back, and with no business_status a CLOSED_TEMPORARILY place could
+ * never be ruled out (WEB-FEAT-053). discoverMapRestaurantStatus reads both.
+ */
+export const DISCOVER_MAP_RESTAURANT_COLUMNS =
+  "id, slug, name, latitude, longitude, description, cuisine, rating, opening, hours_json, status, business_status, is_merged";
+
+/**
+ * Restaurants under a food article (pickHubRestaurants in useArticles). It
+ * selected `opening` alone for hours, which production stores as a date, so
+ * the block could never say "Open now", and it had no business_status, so a
+ * CLOSED_TEMPORARILY place was offered as a place to try (WEB-FEAT-042).
+ */
+export const ARTICLE_HUB_RESTAURANT_COLUMNS =
+  "id, slug, name, status, business_status, cuisine, opening, hours_json";
+
+/**
+ * Brewery Trail cards (useBreweries). Only what the card, its JSON-LD and the
+ * upcoming label read, plus hours_json and business_status for the status
+ * line: it selected RESTAURANT_LIST_COLUMNS, which has neither, and evaluated
+ * `opening` alone, a date in production, so no card ever said "Open until"
+ * and a CLOSED_TEMPORARILY taproom could not be told apart (WEB-FEAT-044).
+ */
+export const BREWERY_TRAIL_COLUMNS =
+  "id, name, slug, city, location, description, image_url, latitude, longitude, opening, hours_json, opening_date, opening_timeframe, status, business_status";
+
+/**
+ * Restaurant typeahead rows (SearchAutocomplete, useEntitySuggestions). status
+ * and business_status are what label a place closed for good and rank it last
+ * instead of offering it like any other (WEB-FEAT-048).
+ */
+export const RESTAURANT_SUGGESTION_COLUMNS =
+  "id, name, cuisine, slug, status, business_status";
+
+/**
+ * Restaurants behind the Happy hour now strip on /restaurants
+ * (fetchHappyHourCandidates). The link needs name and slug; status and
+ * business_status are how a deal at a closed or temporarily closed place is
+ * kept off the strip (WEB-FEAT-025).
+ */
+export const HAPPY_HOUR_RESTAURANT_COLUMNS = "id, name, slug, status, business_status";
+
+/**
+ * Restaurants behind the deals on /deals and the explore deals row
+ * (fetchDeals). Only what decides whether the door is shut: a deal at a
+ * closed or temporarily closed place is dropped there, as it already was on
+ * the restaurant page and the Happy hour now strip (WEB-FEAT-067).
+ */
+export const DEAL_RESTAURANT_STATUS_COLUMNS = "id, status, business_status";
+
+/**
+ * Restaurants a /deals card links to (fetchDealVenueLinks). is_merged and
+ * merged_into are there so a deal curated against a duplicate that was later
+ * merged links to the row it was merged into, not to the duplicate, whose
+ * page redirects to a survivor with no Deals section for it (WEB-FEAT-069).
+ */
+export const DEAL_VENUE_RESTAURANT_COLUMNS = "id, slug, is_merged, merged_into";
+
+/**
+ * The restaurant an existing deal is linked to, as DealManager's venue picker
+ * reads it (fetchLinkedDealVenue). is_merged and merged_into let the picker
+ * say the link is a merged duplicate and name the kept row (WEB-FEAT-075).
+ */
+export const DEAL_LINKED_RESTAURANT_COLUMNS = "id, name, location, is_merged, merged_into";
+
+/**
+ * Cards on /restaurants/dietary/:diet (useDietaryRestaurants). What
+ * RestaurantCard reads, plus hours_json and business_status: it selected
+ * RESTAURANT_LIST_COLUMNS, which has neither, so with a date in `opening` no
+ * card said "Open until", a CLOSED_TEMPORARILY place read as an ordinary
+ * listing, and a Google CLOSED_PERMANENTLY row could not be told apart
+ * (WEB-FEAT-064).
+ */
+export const DIETARY_RESTAURANT_COLUMNS =
+  "id, slug, name, description, cuisine, rating, price_range, location, city, image_url, phone, website, status, business_status, opening, hours_json, opening_date, opening_timeframe, is_sponsored, sponsored_until";
 
 /**
  * The four columns needed to DERIVE an event slug, and nothing else

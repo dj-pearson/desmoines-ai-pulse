@@ -240,7 +240,7 @@ function periodWords(t: TimeDimension): PeriodWords {
     return { title: 'Today', inline: 'today', window: 'dated today and not yet past', roll: '' };
   }
   if (t.slug === 'this-weekend') {
-    return { title: 'This Weekend', inline: 'this weekend', window: 'dated this coming Saturday or Sunday', roll: '' };
+    return { title: 'This Weekend', inline: 'this weekend', window: 'dated Friday through Sunday this weekend', roll: '' };
   }
   if (t.slug === 'this-week') {
     return { title: 'This Week', inline: 'this week', window: 'coming up next', roll: '' };

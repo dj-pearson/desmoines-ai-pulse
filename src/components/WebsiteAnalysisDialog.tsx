@@ -261,7 +261,7 @@ export default function WebsiteAnalysisDialog({
               {current || "Not set"}
             </Badge>
             {current && (
-              <Button
+              <Button aria-label={`Copy current ${title} selector`}
                 size="sm"
                 variant="ghost"
                 onClick={() => copySelector(current)}

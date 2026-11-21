@@ -25,15 +25,21 @@ import { runJob } from "../_shared/jobRunner.ts";
 import { sendEmail } from "../_shared/email.ts";
 import { newsletterEmail } from "../_shared/emailTemplates.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import {
+  type AttemptedRecipients,
+  DeliveryRecordError,
+  dispatchNewsletter,
+  type DispatchResult,
+  loadAllPages,
+  type NewsletterRecipient,
+  toAttempted,
+} from "../_shared/newsletterDispatch.ts";
 
 const FROM_ADDRESS =
   Deno.env.get("NEWSLETTER_FROM")
     ?? "Des Moines Insider <events@desmoinesinsider.com>";
 const BATCH_SIZE = 5;
 const MAX_CAMPAIGNS_PER_RUN = 5;
-// Page size for reading large tables (recipients / prior deliveries) so a big
-// segment can't exceed function memory by materializing everything in one query.
-const DB_PAGE_SIZE = 1000;
 // A campaign left in 'sending' longer than this was almost certainly abandoned
 // by a crashed / timed-out prior invocation (edge functions are killed well
 // under a minute). Such rows are reclaimed and resumed. Must comfortably exceed
@@ -55,12 +61,11 @@ interface CampaignRow {
 async function resolveSegment(
   supabase: ReturnType<typeof createClient>,
   segment: Segment | null,
-): Promise<{ email: string; unsubscribe_token: string | null }[]> {
-  // Paginate so a large segment can't blow the function's memory by loading the
-  // whole subscriber list in a single unbounded query. Ordered by email for a
-  // stable window across pages.
-  const out: { email: string; unsubscribe_token: string | null }[] = [];
-  for (let from = 0; ; from += DB_PAGE_SIZE) {
+): Promise<NewsletterRecipient[]> {
+  // Paginated so a segment over PostgREST's 1000-row cap is read in full and
+  // a large one can't blow the function's memory in a single query. Ordered by
+  // email for a stable window across pages.
+  return await loadAllPages<NewsletterRecipient>(async (from, to) => {
     let q = supabase
       .from("newsletter_subscribers")
       .select("email, unsubscribe_token")
@@ -68,49 +73,37 @@ async function resolveSegment(
     if (segment?.sources && segment.sources.length > 0) {
       q = q.in("source", segment.sources);
     }
-    const { data, error } = await q
-      .order("email", { ascending: true })
-      .range(from, from + DB_PAGE_SIZE - 1);
-    if (error) throw error;
-    const rows = (data ?? []) as { email: string; unsubscribe_token: string | null }[];
-    out.push(...rows);
-    if (rows.length < DB_PAGE_SIZE) break;
-  }
-  return out;
+    const { data, error } = await q.order("email", { ascending: true }).range(from, to);
+    return { data: data as NewsletterRecipient[] | null, error };
+  });
 }
 
 /**
- * Emails that already have a delivery row for this campaign. Used to make a
- * resume (after a reclaimed 'sending' crash) idempotent — we never re-send to a
- * recipient that was already attempted. Paginated for the same memory reason.
+ * Recipients that already have a delivery row for this campaign, so a resume
+ * (after a reclaimed 'sending' crash) never re-sends to them. The rows exist
+ * because dispatchNewsletter records after every batch
+ * (_shared/newsletterDispatch.ts). A read failure throws: resuming blind would
+ * mail everyone already sent.
  */
 async function loadAttemptedRecipients(
   supabase: ReturnType<typeof createClient>,
   campaignId: string,
-): Promise<Set<string>> {
-  const attempted = new Set<string>();
-  for (let from = 0; ; from += DB_PAGE_SIZE) {
+): Promise<AttemptedRecipients> {
+  const rows = await loadAllPages<{ email: string; error_message: string | null }>(async (from, to) => {
     const { data, error } = await supabase
       .from("newsletter_deliveries")
-      .select("email")
+      .select("email, error_message")
       .eq("campaign_id", campaignId)
-      .range(from, from + DB_PAGE_SIZE - 1);
-    if (error) {
-      // Non-fatal: if we can't read prior deliveries, fall back to attempting
-      // all recipients rather than silently dropping the send.
-      console.error("loadAttemptedRecipients failed:", error.message);
-      break;
-    }
-    const rows = (data ?? []) as { email: string }[];
-    for (const r of rows) attempted.add(r.email.toLowerCase());
-    if (rows.length < DB_PAGE_SIZE) break;
-  }
-  return attempted;
+      .order("email", { ascending: true })
+      .range(from, to);
+    return { data: data as { email: string; error_message: string | null }[] | null, error };
+  });
+  return toAttempted(rows);
 }
 
 async function sendOne(
   supabase: ReturnType<typeof createClient>,
-  to: { email: string; unsubscribe_token: string | null },
+  to: NewsletterRecipient,
   campaign: CampaignRow,
 ): Promise<{ message_id: string | null }> {
   const res = await sendEmail(
@@ -132,77 +125,25 @@ async function sendOne(
 async function dispatchCampaign(
   supabase: ReturnType<typeof createClient>,
   campaign: CampaignRow,
-): Promise<{ delivered: number; failed: number; errors: string[] }> {
-  const allRecipients = await resolveSegment(supabase, campaign.segment);
-  // Idempotent resume: skip any recipient already attempted for this campaign
-  // (delivery row exists) so a reclaimed/resumed dispatch never double-sends.
+): Promise<DispatchResult> {
+  const recipients = await resolveSegment(supabase, campaign.segment);
   const attempted = await loadAttemptedRecipients(supabase, campaign.id);
-  const recipients = attempted.size === 0
-    ? allRecipients
-    : allRecipients.filter((r) => !attempted.has(r.email.toLowerCase()));
   if (attempted.size > 0) {
     console.log(
-      `Campaign ${campaign.id}: resuming — ${attempted.size} already attempted, ` +
-        `${recipients.length} remaining of ${allRecipients.length}`,
+      `Campaign ${campaign.id}: resuming - ${attempted.size} already attempted of ${recipients.length}`,
     );
   }
-  let delivered = 0;
-  let failed = 0;
-  const errors: string[] = [];
-  const deliveryRows: Array<{
-    campaign_id: string;
-    email: string;
-    resend_message_id: string | null;
-    status: string;
-    error_message: string | null;
-  }> = [];
-
-  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-    const batch = recipients.slice(i, i + BATCH_SIZE);
-    const settled = await Promise.allSettled(
-      batch.map((r) => sendOne(supabase, r, campaign)),
-    );
-    settled.forEach((s, idx) => {
-      const recipient = batch[idx];
-      if (s.status === "fulfilled") {
-        delivered++;
-        deliveryRows.push({
-          campaign_id: campaign.id,
-          email: recipient.email,
-          resend_message_id: s.value.message_id,
-          status: "queued",
-          error_message: null,
-        });
-      } else {
-        failed++;
-        const reason = s.reason instanceof Error
-          ? s.reason.message
-          : String(s.reason);
-        if (errors.length < 5) errors.push(reason);
-        deliveryRows.push({
-          campaign_id: campaign.id,
-          email: recipient.email,
-          resend_message_id: null,
-          status: "bounced",
-          error_message: reason.slice(0, 500),
-        });
-      }
-    });
-  }
-
-  if (deliveryRows.length > 0) {
-    const { error: deliveriesError } = await supabase
-      .from("newsletter_deliveries")
-      .insert(deliveryRows);
-    if (deliveriesError) {
-      console.error(
-        "newsletter_deliveries insert failed:",
-        deliveriesError.message,
-      );
-    }
-  }
-
-  return { delivered, failed, errors };
+  return await dispatchNewsletter({
+    campaignId: campaign.id,
+    recipients,
+    attempted,
+    batchSize: BATCH_SIZE,
+    send: (r) => sendOne(supabase, r, campaign),
+    recordDeliveries: async (rows) => {
+      const { error } = await supabase.from("newsletter_deliveries").insert(rows);
+      return { error: error ? error.message : null };
+    },
+  });
 }
 
 serve(async (req) => {
@@ -334,17 +275,24 @@ serve(async (req) => {
           const message =
             err instanceof Error ? err.message : String(err);
           console.error(`Campaign ${campaign.id} dispatch error:`, message);
+          // A send stopped because its delivery rows could not be written has
+          // already mailed some readers; keep those counts on the row.
+          const partial = err instanceof DeliveryRecordError
+            ? { delivered: err.delivered, failed: err.failed }
+            : { delivered: 0, failed: 0 };
+          totalDelivered += partial.delivered;
+          totalFailed += partial.failed;
           await supabase
             .from("newsletter_campaigns")
             .update({
               status: "failed",
               error_message: message.slice(0, 500),
+              ...(err instanceof DeliveryRecordError ? partial : {}),
             })
             .eq("id", campaign.id);
           perCampaign.push({
             id: campaign.id,
-            delivered: 0,
-            failed: 0,
+            ...partial,
             status: "failed",
           });
         }

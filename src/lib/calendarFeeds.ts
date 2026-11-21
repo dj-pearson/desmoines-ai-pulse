@@ -128,18 +128,32 @@ export function feedSlugFromPath(pathname: string): string | null {
  *
  * `fromIso` is the start of today in Central time (centralDayStartUtcISO), the
  * same lower bound /events uses, so a show already under way tonight stays in.
+ * A run that started before today stays in too, while its end_date is today or
+ * later (feedWindowOrFilter). Without that arm the State Fair left every
+ * subscriber's calendar on its second morning, all eleven days at once, because
+ * a client that re-reads a feed deletes whatever the new copy no longer lists.
  *
  * Search, area and free follow applyHubFilters in
  * src/components/events/eventsHubQuery.ts predicate for predicate, including
  * putting every OR group into ONE `or=` param: PostgREST would otherwise have
  * to combine two `or` keys, and the hub deliberately never relies on that.
  */
+/**
+ * The feed's lower bound as one PostgREST OR group: starts today or later, or
+ * is a multi-day run whose end_date has not passed by the start of today. The
+ * same two arms as upcomingOrFilter in eventsHubQuery.ts, measured from the
+ * Central day start rather than from now, so the whole of today stays listed.
+ */
+export function feedWindowOrFilter(from: Date): string {
+  const iso = from.toISOString();
+  return `date.gte.${iso},end_date.gte.${iso}`;
+}
+
 export function feedRestQuery(criteria: FeedCriteria, fromIso: string): URLSearchParams {
   const from = new Date(fromIso);
   const until = new Date(from.getTime() + FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const params = new URLSearchParams();
   params.set("select", FEED_EVENT_COLUMNS.replace(/\s+/g, ""));
-  params.append("date", `gte.${from.toISOString()}`);
   params.append("date", `lt.${until.toISOString()}`);
   params.set("is_merged", "neq.true");
   params.set("is_hidden", "neq.true");
@@ -151,7 +165,7 @@ export function feedRestQuery(criteria: FeedCriteria, fromIso: string): URLSearc
     params.set("search_vector", `${search.type === "websearch" ? "wfts" : "fts"}(english).${search.query}`);
   }
 
-  const orGroups: string[] = [];
+  const orGroups: string[] = [feedWindowOrFilter(from)];
   if (criteria.freeOnly) orGroups.push(FREE_PRICE_FILTER);
   const area = criteria.area;
   if (area) {

@@ -12,6 +12,7 @@ struct EventMapView: View {
 
     @State private var viewModel = MapViewModel()
     @State private var locationService = LocationService.shared
+    @State private var deepLink = DeepLinkHandler.shared
     @State private var navigationPath = NavigationPath()
     @State private var mode: DisplayMode = .map
     @State private var didPickInitialMode = false
@@ -46,7 +47,21 @@ struct EventMapView: View {
                     destinationView(destination)
                 }
                 .modifier(lifecycle)
+                // A /map link that opened this tab for the first time, or
+                // arrived while it was showing (IOS-AUDIT-007).
+                .onAppear(perform: applyPendingMapLink)
+                .onChange(of: deepLink.pendingMapLink) { _, _ in
+                    applyPendingMapLink()
+                }
         }
+    }
+
+    /// Back to the map root with the link's kinds shown, so a link never
+    /// lands under a detail screen pushed earlier.
+    private func applyPendingMapLink() {
+        guard let link = deepLink.consumeMapLink() else { return }
+        navigationPath = NavigationPath()
+        viewModel.apply(link)
     }
 
     // MARK: - Screen

@@ -166,6 +166,23 @@ struct Event: Identifiable, Codable, Hashable {
         return true
     }
 
+    /// First Central hour that counts as evening: EVENING_START_HOUR in
+    /// src/lib/tonightPairings.ts.
+    static let eveningStartHour = 16
+    /// Central hour the night ends (exclusive): NIGHT_END_HOUR there.
+    static let nightEndHour = 4
+
+    /// A known start from 4 PM to before 4 AM Central, the web's
+    /// isEveningStart (src/hooks/useEventLanding.ts), which the date night
+    /// list keeps by default (IOS-AUDIT-008). A row with no specific
+    /// time is not an evening row. The instant is event_start_utc, else
+    /// date, as the web's eventStartInstant reads it.
+    var startsInTheEvening: Bool {
+        guard hasSpecificTime, let start = DateParser.parse(eventStartUtc) ?? parsedDate else { return false }
+        let hour = DesMoinesTime.calendar.component(.hour, from: start)
+        return hour >= Self.eveningStartHour || hour < Self.nightEndHour
+    }
+
     /// Started and not over. A row with no end_date is assumed to run three
     /// hours, as the web does.
     func happeningNow(at now: Date = Date()) -> Bool {

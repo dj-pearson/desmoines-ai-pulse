@@ -47,6 +47,12 @@ interface AuthRepository {
     /** Sign in with Google ID token. */
     suspend fun signInWithGoogle(idToken: String): Result<Unit>
 
+    /**
+     * Open Sign in with Apple in the browser. Success means the browser
+     * opened; the session arrives later through the auth-callback link.
+     */
+    suspend fun signInWithApple(): Result<Unit>
+
     /** Fetch user profile by user ID. */
     suspend fun fetchProfile(userId: String): Result<UserProfile?>
 
@@ -81,6 +87,19 @@ interface AuthRepository {
 
     /** Persist the email opt-in/out into profiles.communication_preferences. */
     suspend fun setEmailMarketingAllowed(userId: String, allowed: Boolean): Result<Unit>
+
+    /**
+     * Whether "Personalized suggestions" is on for this account (XPLAT-016).
+     * Opt-in: only an explicit true in communication_preferences counts, which
+     * is what get_personalized_recommendations_v2 checks.
+     */
+    suspend fun isPersonalizationEnabled(userId: String): Result<Boolean>
+
+    /**
+     * Persist the switch into profiles.communication_preferences (merged,
+     * never replaced) and log a personalization_ai consent_records row.
+     */
+    suspend fun setPersonalizationEnabled(userId: String, enabled: Boolean): Result<Unit>
 
     suspend fun checkAdminRole(userId: String): Result<Boolean>
 }

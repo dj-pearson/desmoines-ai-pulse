@@ -48,7 +48,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
 import { formatInCentralTime } from "@/lib/timezone";
-import { reopenConsentBanner } from "@/components/CookieConsentBanner";
+import { reopenConsentBanner } from "@/lib/cookieConsent";
 import {
   Shield,
   Download,

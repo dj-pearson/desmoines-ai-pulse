@@ -20,7 +20,7 @@
  * tell a reader a place is coming.
  */
 import { format, parseISO } from "date-fns";
-import { isPermanentlyClosedRestaurant } from "@/lib/restaurantHours";
+import { isPermanentlyClosedRestaurant } from "@/lib/restaurantStatus";
 import { openingDay, RECENT_WINDOW_DAYS, type OpeningRow } from "@/lib/restaurantOpenings";
 import { addCentralDays, centralDateOf, type CentralDate } from "@/lib/timezone";
 

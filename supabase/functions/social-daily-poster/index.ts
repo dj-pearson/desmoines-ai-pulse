@@ -24,6 +24,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
+import { applyPostableEventFilters } from "../_shared/socialEventPick.ts";
 
 const NO_REPEAT_DAYS = 30;
 
@@ -89,14 +90,13 @@ async function recentlyPostedIds(supabase: Supa, contentType: string): Promise<S
 }
 
 async function pickEvent(supabase: Supa): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("events")
-    .select("id, title, date, is_featured")
-    .gte("date", new Date().toISOString())
-    .neq("is_hidden", true)
-    // WEB-BE-034: the other unpublish switch, or the daily post promotes an
-    // event that has been archived.
-    .is("archived_at", null)
+  // WEB-FEAT-096: visible (not hidden, archived or merged away) and either
+  // upcoming or still running, so a festival is not dropped on its second day.
+  const { data, error } = await applyPostableEventFilters(
+    supabase
+      .from("events")
+      .select("id, title, date, end_date, is_featured"),
+  )
     .order("is_featured", { ascending: false, nullsFirst: false })
     .order("date", { ascending: true })
     .limit(50);

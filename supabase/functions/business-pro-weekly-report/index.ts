@@ -1,7 +1,7 @@
 /**
  * business-pro-weekly-report (growth roadmap #3, part 3)
  *
- * Mondays, from cron (20261102000007). Emails each live Business Pro owner
+ * Mondays, from cron (20261116000040). Emails each live Business Pro owner
  * last week's numbers for each listing they pay for.
  *
  * Exactly once per owner, listing and week: a business_pro_report_sends row is

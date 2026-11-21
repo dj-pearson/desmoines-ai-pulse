@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { ClaimListingError } from "@/lib/claimFailure";
 
 /**
  * Claiming a listing (WEB-ADS-009).
@@ -69,7 +70,10 @@ export function useClaimListing() {
         p_listing_type: listingType,
         p_listing_id: listingId,
       } as never);
-      if (error) throw new Error(error.message);
+      // Keep code and details: a 23505 on one_verified_owner (two owners
+      // racing) and one on one_open_per_user (a double press) need different
+      // answers, and new Error(message) threw both away.
+      if (error) throw new ClaimListingError(error);
       return data as unknown as ClaimStatus;
     },
     onSuccess: () => {

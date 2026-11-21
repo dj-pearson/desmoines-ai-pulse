@@ -1,4 +1,5 @@
-import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import type { RestaurantFilterOptions } from "@/lib/restaurantFilterOptions";
+import { DIETS } from "@/lib/restaurantDiets";
 
 /**
  * Values the /restaurants filter controls offer (docs/page-plans/eat-drink.md
@@ -8,17 +9,15 @@ import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
  */
 
 /**
- * Dietary choices. The values must stay keys of DIETARY_KEYWORDS in
- * useRestaurants.ts; resolveDietarySelections drops anything else, and the
- * filter would silently stop matching (WEB-FEAT-032).
+ * Dietary choices: every diet in DIETS (src/lib/restaurantDiets.ts), the table
+ * resolveDietarySelections and the /restaurants/dietary pages read, so the
+ * filter cannot offer a diet the query drops (WEB-FEAT-032) or miss one the
+ * dietary pages have (WEB-FEAT-054, kosher).
  */
-export const DIETARY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "vegan", label: "Vegan" },
-  { value: "vegetarian", label: "Vegetarian" },
-  { value: "gluten-free", label: "Gluten-Free" },
-  { value: "keto", label: "Keto" },
-  { value: "halal", label: "Halal" },
-];
+export const DIETARY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = DIETS.map((d) => ({
+  value: d.id,
+  label: d.label,
+}));
 
 /** The unfiltered hub. A preset is applied on top of this, never merged into current filters. */
 export const DEFAULT_RESTAURANT_FILTERS: RestaurantFilterOptions = {
@@ -29,7 +28,6 @@ export const DEFAULT_RESTAURANT_FILTERS: RestaurantFilterOptions = {
   location: [],
   sortBy: "popularity",
   featuredOnly: false,
-  openNow: false,
   tags: [],
 };
 
@@ -41,8 +39,8 @@ export interface RestaurantPreset {
   description: string;
   icon: RestaurantPresetIcon;
   /**
-   * Only fields the query actually models. No `openNow` (nothing reads it
-   * server-side yet, plan D2) and no non-dietary `tags` (the hook drops them),
+   * Only fields the query actually models. No open-now (the type has no such
+   * field since WEB-FEAT-082; /restaurants/open-now is the real one) and no non-dietary `tags` (the hook drops them),
    * which is why Quick Lunch and Late Night are gone and Date Night / Family
    * Friendly lost their tag.
    */
@@ -140,8 +138,7 @@ export function sameRestaurantFilters(
     a.rating[0] === b.rating[0] &&
     a.rating[1] === b.rating[1] &&
     a.sortBy === b.sortBy &&
-    a.featuredOnly === b.featuredOnly &&
-    a.openNow === b.openNow
+    a.featuredOnly === b.featuredOnly
   );
 }
 

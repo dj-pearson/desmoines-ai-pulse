@@ -1,7 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { DIETARY_KEYWORDS, resolveDietarySelections } from "@/hooks/useRestaurants";
-import { formatOpenStatusLine, getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { resolveDietarySelections } from "@/hooks/useRestaurants";
+import { dietaryIlikeClauses } from "@/lib/restaurantDiets";
+import {
+  businessStatusLabel,
+  formatOpenStatusLine,
+  hoursTextOf,
+  isPermanentlyClosedRestaurant,
+  resolveOpenStatus,
+  type StoredOpeningHours,
+} from "@/lib/restaurantHours";
+import { RESTAURANT_MAP_POINT_COLUMNS } from "@/lib/listColumns";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
 import { hubSearchQuery } from "@/components/events/eventsHubQuery";
@@ -27,12 +36,11 @@ const NOT_CLOSED = "status.is.null,status.neq.closed";
  * Rows without coordinates are fetched too, on purpose: the map says how many
  * it could not place and lists them by name (item 3) instead of dropping them.
  *
- * Every column below is already in RESTAURANT_LIST_COLUMNS, which the list
- * selects today, so this adds no schema dependency. hours_json is deliberately
- * absent until check-schema:probe shows it (plan D6).
+ * The projection lives in src/lib/listColumns.ts so check-list-columns holds
+ * every name to the generated types; one unknown column is a 42703 on the
+ * whole select and an empty map.
  */
-export const MAP_POINT_COLUMNS =
-  "id, name, slug, latitude, longitude, cuisine, opening, price_range, rating, image_url, phone, status";
+export const MAP_POINT_COLUMNS = RESTAURANT_MAP_POINT_COLUMNS;
 
 /** Enough for the whole metro today (~480 rows) with headroom. */
 export const MAP_POINT_LIMIT = 1000;
@@ -44,12 +52,17 @@ export interface RestaurantMapPoint {
   latitude: number | null;
   longitude: number | null;
   cuisine: string | null;
+  /** A date in production (SEO-054); read only through hoursTextOf. */
   opening: string | null;
+  /** Google's structured hours: the hours a pin is coloured from (WEB-FEAT-040). */
+  hours_json?: StoredOpeningHours | null;
   price_range: string | null;
   rating: number | null;
   image_url: string | null;
   phone: string | null;
   status: string | null;
+  /** Google's business_status: the only place a temporary closure is recorded. */
+  business_status?: string | null;
 }
 
 /** The subset of the hub's filters the map honours. Sort is irrelevant to pins. */
@@ -143,12 +156,14 @@ export interface MapPinState {
 
 /**
  * Status for one pin at `now`, read through the shared Central-time evaluator.
+ * It is the same call open-now and Tonight make: hours_json first, and the
+ * `opening` text only when that is real hours text rather than a date.
  *
  * The listing's own `status` column wins over the hours text: a closed or
  * not-yet-open place is never shown as open because its old hours parse.
  */
 export function mapPinState(
-  point: Pick<RestaurantMapPoint, "opening" | "status">,
+  point: Pick<RestaurantMapPoint, "opening" | "hours_json" | "status" | "business_status">,
   now: Date
 ): MapPinState {
   if (point.status === "closed") return { status: "closed", label: "Permanently closed" };
@@ -157,7 +172,12 @@ export function mapPinState(
   if (point.status === "opening_soon" || point.status === "announced") {
     return { status: "closed", label: "Not open yet" };
   }
-  const result = getRestaurantOpenStatus(point.opening, now);
+  // Google keeps publishing the weekly hours of a CLOSED_TEMPORARILY place,
+  // and restaurants.status cannot say "temporarily closed", so without this
+  // a renovating restaurant is a green pin every lunchtime (WEB-FEAT-038).
+  const closure = businessStatusLabel(point.business_status);
+  if (closure) return { status: "closed", label: closure };
+  const result = resolveOpenStatus(point.hours_json, hoursTextOf(point.opening), now);
   const line = formatOpenStatusLine(result);
   switch (result.status) {
     case "open":
@@ -202,14 +222,7 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
   // inside it, rather than relying on how PostgREST combines repeated keys.
   const dietary = resolveDietarySelections(filters);
   if (dietary.length > 0) {
-    const orClauses = dietary.flatMap((diet) =>
-      // postgrest-safe: resolveDietarySelections keeps only DIETARY_KEYWORDS keys, so kw is a fixed keyword
-      (DIETARY_KEYWORDS[diet] || [diet]).flatMap((kw) => [
-        `description.ilike.%${kw}%`,
-        `cuisine.ilike.%${kw}%`,
-        `name.ilike.%${kw}%`,
-      ])
-    );
+    const orClauses = dietaryIlikeClauses(dietary);
     query = query.or(`and(or(${NOT_CLOSED}),or(${orClauses.join(",")}))`);
   } else {
     query = query.or(NOT_CLOSED);
@@ -221,8 +234,10 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
     .returns<RestaurantMapPoint[]>();
 
   if (error) throw error;
+  // Closed for good by our status OR Google's stays off the map. The NOT_CLOSED
+  // filter above can only see our own status.
   const points = (data ?? []).filter(
-    (row): row is RestaurantMapPoint => !!row?.id && !!row?.name && row.status !== "closed"
+    (row): row is RestaurantMapPoint => !!row?.id && !!row?.name && !isPermanentlyClosedRestaurant(row)
   );
   // Under the limit the rows are the whole set, whatever the estimate says.
   const totalCount = points.length < MAP_POINT_LIMIT ? points.length : Math.max(count ?? 0, points.length);

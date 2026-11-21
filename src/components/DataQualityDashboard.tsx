@@ -3,7 +3,7 @@
  * Displays data quality issues and provides auto-fix capabilities
  */
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from './ui/select';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { Label } from "@/components/ui/label";
+import { STRETCHED_BUTTON_CLASS } from "@/lib/stretchedButton";
 
 interface DataQualityDashboardProps {
   events: any[];
@@ -63,7 +65,9 @@ export function DataQualityDashboard({
 }: DataQualityDashboardProps) {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['events']));
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['event']));
+  const baseId = useId();
+  const severityId = `${baseId}-severity`;
 
   const eventQuality = useDataQuality('event', events);
   const restaurantQuality = useDataQuality('restaurant', restaurants);
@@ -108,21 +112,30 @@ export function DataQualityDashboard({
       return null;
     }
 
+    const regionId = `${baseId}-${quality.contentType}-issues`;
+
+    // The whole header stays clickable through the stretched button; Tab
+    // reaches it once and Enter/Space toggle it (WEB-UX-066).
     return (
       <Card key={quality.contentType} className="mb-4">
-        <CardHeader
-          className="cursor-pointer"
-          onClick={() => toggleSection(quality.contentType)}
-        >
+        <CardHeader className="relative">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
               <CardTitle className="capitalize">
-                {quality.contentType}s
+                <button
+                  type="button"
+                  aria-expanded={isExpanded}
+                  aria-controls={regionId}
+                  onClick={() => toggleSection(quality.contentType)}
+                  className={`${STRETCHED_BUTTON_CLASS} inline-flex items-center gap-2`}
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {quality.contentType}s
+                </button>
               </CardTitle>
               <Badge variant="outline">{quality.total} total</Badge>
             </div>
@@ -141,7 +154,7 @@ export function DataQualityDashboard({
         </CardHeader>
 
         {isExpanded && (
-          <CardContent>
+          <CardContent id={regionId}>
             {filteredIssues.length === 0 ? (
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="h-5 w-5" />
@@ -216,7 +229,7 @@ export function DataQualityDashboard({
                           </Button>
                         )}
                         {onViewItem && (
-                          <Button
+                          <Button aria-label={`Open ${quality.contentType} with ${issue.field} issue`}
                             size="sm"
                             variant="ghost"
                             onClick={() => onViewItem(quality.contentType, issue.contentId)}
@@ -302,9 +315,9 @@ export function DataQualityDashboard({
         <CardContent>
           <div className="flex gap-4">
             <div className="flex-1">
-              <label className="text-sm font-medium mb-2 block">Severity</label>
+              <Label htmlFor={severityId} className="mb-2 block">Severity</Label>
               <Select value={selectedSeverity} onValueChange={setSelectedSeverity}>
-                <SelectTrigger>
+                <SelectTrigger id={severityId}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

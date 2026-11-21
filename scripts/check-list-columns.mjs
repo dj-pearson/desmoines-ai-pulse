@@ -32,6 +32,7 @@ const TYPES_FILE = 'src/integrations/supabase/types.ts';
 /** Projection constant -> the table it is selected from. */
 const TABLE_FOR = {
   RESTAURANT_LIST_COLUMNS: 'restaurants',
+  RESTAURANT_HUB_LIST_COLUMNS: 'restaurants',
   EVENT_LIST_COLUMNS: 'events',
   ATTRACTION_LIST_COLUMNS: 'attractions',
   HOTEL_LIST_COLUMNS: 'hotels',
@@ -40,6 +41,17 @@ const TABLE_FOR = {
   EVENT_SLUG_COLUMNS: 'events',
   TONIGHT_EVENT_COLUMNS: 'events',
   TONIGHT_RESTAURANT_COLUMNS: 'restaurants',
+  SEARCH_PAIRING_RESTAURANT_COLUMNS: 'restaurants',
+  RESTAURANT_MAP_POINT_COLUMNS: 'restaurants',
+  DISCOVER_MAP_RESTAURANT_COLUMNS: 'restaurants',
+  ARTICLE_HUB_RESTAURANT_COLUMNS: 'restaurants',
+  RESTAURANT_SUGGESTION_COLUMNS: 'restaurants',
+  BREWERY_TRAIL_COLUMNS: 'restaurants',
+  HAPPY_HOUR_RESTAURANT_COLUMNS: 'restaurants',
+  DEAL_RESTAURANT_STATUS_COLUMNS: 'restaurants',
+  DEAL_VENUE_RESTAURANT_COLUMNS: 'restaurants',
+  DEAL_LINKED_RESTAURANT_COLUMNS: 'restaurants',
+  DIETARY_RESTAURANT_COLUMNS: 'restaurants',
   RESTAURANT_DETAIL_EXTRA_COLUMNS: 'restaurants',
 };
 

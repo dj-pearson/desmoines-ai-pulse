@@ -30,7 +30,7 @@ import {
 } from "@/hooks/useAgentTasks";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const CATEGORIES = [
   "dev",

@@ -9,7 +9,7 @@
  * gets it silently blocked in production and nowhere else: the dev server
  * sends no CSP, `vite preview` sends no CSP, and Cloudflare only applies
  * _headers on a real deploy. The three scripts are the early error handler
- * (Capacitor and extension recovery), the service-worker teardown, and the
+ * (extension recovery), the service-worker teardown, and the
  * Google Analytics consent loader - so the failure mode is the site quietly
  * losing its error recovery or its analytics, with no error anyone sees.
  *

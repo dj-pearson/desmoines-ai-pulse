@@ -18,6 +18,12 @@ export interface EmptyStateProps {
   className?: string;
   children?: React.ReactNode;
   compact?: boolean;
+  /**
+   * Heading element for the title. Defaults to h3, which suits an empty state
+   * under a section h2. A page whose only heading above it is the h1 passes
+   * 'h2', so the outline never skips a level (tests/page-headings.spec.ts).
+   */
+  headingLevel?: 'h2' | 'h3';
 }
 
 export function EmptyState({
@@ -28,7 +34,9 @@ export function EmptyState({
   className,
   children,
   compact = false,
+  headingLevel = 'h3',
 }: EmptyStateProps) {
+  const Heading = headingLevel;
   return (
     <div
       className={cn(
@@ -49,12 +57,12 @@ export function EmptyState({
         </div>
       )}
 
-      <h3 className={cn(
+      <Heading className={cn(
         'font-semibold text-foreground mb-2',
         compact ? 'text-base' : 'text-lg md:text-xl'
       )}>
         {title}
-      </h3>
+      </Heading>
 
       {description && (
         <p className={cn(

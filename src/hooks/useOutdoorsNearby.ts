@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DES_MOINES_CENTER, haversineDistance } from '@/lib/geo';
 import { createSlug } from '@/lib/slug';
+import { attractionHref, playgroundHref } from '@/lib/slugHref';
 import { OUTDOORS_DESTINATIONS } from '@/data/outdoorsGuide';
 
 /**
@@ -89,12 +90,14 @@ export interface PlaygroundsNearDestinations {
 
 interface PlaygroundRow {
   name: string;
+  slug: string | null;
   latitude: number | null;
   longitude: number | null;
 }
 
 interface AttractionRow {
   name: string;
+  slug: string | null;
   type: string | null;
   location: string | null;
 }
@@ -110,7 +113,7 @@ export function usePlaygroundsNearDestinations() {
     queryFn: async (): Promise<PlaygroundsNearDestinations> => {
       const { data, error } = await supabase
         .from('playgrounds')
-        .select('name, latitude, longitude')
+        .select('name, slug, latitude, longitude')
         .order('name');
 
       if (error) throw error;
@@ -132,7 +135,7 @@ export function usePlaygroundsNearDestinations() {
         byDestination[destination.id] = rows
           .map((row) => ({
             name: row.name,
-            path: `/playgrounds/${createSlug(row.name)}`,
+            path: playgroundHref(row),
             distanceMiles:
               Math.round(
                 haversineDistance(destination.geo, {
@@ -163,7 +166,7 @@ export function useOutdoorAttractions() {
     queryFn: async (): Promise<OutdoorAttractionLink[]> => {
       const { data, error } = await supabase
         .from('attractions')
-        .select('name, type, location')
+        .select('name, slug, type, location')
         .eq('is_active', true)
         // Narrowed on the server so the page downloads only outdoor rows. The
         // client-side Set check below stays as a guard, since it is what the
@@ -178,17 +181,19 @@ export function useOutdoorAttractions() {
         .filter((row) => row.type != null && OUTDOOR_ATTRACTION_TYPES.has(row.type))
         .map((row) => ({
           name: row.name,
-          path: `/attractions/${createSlug(row.name)}`,
+          path: attractionHref(row),
           type: row.type as string,
           location: row.location,
         }))
         // Two rows describe the Pappajohn sculpture park and two describe the
-        // capitol. Slugs are derived from the name, so the duplicates resolve
-        // to different URLs and both are real pages, but listing near-identical
-        // names side by side reads as a bug. Keep the first of each path.
+        // capitol. Both are real pages, but listing near-identical names side
+        // by side reads as a bug, so keep the first of each name. Keyed on the
+        // name, not the path: the stored slugs of a duplicate pair differ
+        // (riverview-park-2), so a path key would let both through.
         .filter((link) => {
-          if (seen.has(link.path)) return false;
-          seen.add(link.path);
+          const key = createSlug(link.name);
+          if (seen.has(key)) return false;
+          seen.add(key);
           return true;
         });
     },

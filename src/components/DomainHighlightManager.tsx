@@ -128,7 +128,7 @@ export function DomainHighlightManager() {
                       Added {new Date(domain.created_at).toLocaleDateString()}
                     </div>
                   </div>
-                  <Button
+                  <Button aria-label={`Remove ${domain.domain}`}
                     variant="ghost"
                     size="sm"
                     onClick={() => handleRemoveDomain(domain.id, domain.domain)}

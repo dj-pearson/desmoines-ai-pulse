@@ -157,7 +157,6 @@ const UNFILTERED_READERS = {
   // Lookups by id or per-user reads; each still shows a row a moderator took down.
   'src/hooks/useEventIndoorFlags.ts': 1,
   'src/hooks/useNeighborhoodContent.ts': 1,
-  'src/hooks/usePushNotifications.ts': 1,
   'src/hooks/useSupabase.ts': 2,
   'src/hooks/useSystemMonitoring.ts': 1,
   'src/pages/ProfilePage.tsx': 1,

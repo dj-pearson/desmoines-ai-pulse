@@ -96,6 +96,9 @@ final class EventSlugTests: XCTestCase {
         XCTAssertNil(EventSlug.linkId("today"))
         XCTAssertNil(EventSlug.linkId("west-des-moines"))
         XCTAssertNil(EventSlug.linkId("june-2026"))
+        // /events/series/<slug> (IOS-AUDIT-FEAT-045); the App Clip reads the
+        // segment after /events through linkId too.
+        XCTAssertNil(EventSlug.linkId("series"))
         XCTAssertNil(EventSlug.linkId("Bad Slug"))
         XCTAssertNil(EventSlug.linkId("a--b"))
         XCTAssertNil(EventSlug.linkId(String(repeating: "a", count: 161)))

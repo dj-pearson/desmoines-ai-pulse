@@ -26,6 +26,7 @@
  */
 
 import type { AdapterEvent } from "./domain-adapters/types.ts";
+import { priceFromOffers } from "./jsonLdOffers.ts";
 
 // schema.org Event and its common subtypes. Matched case-insensitively and
 // also by suffix, so vendor-specific "...Event" types still register.
@@ -180,26 +181,6 @@ function extractLocation(
   return { venue: "", location: "" };
 }
 
-/** Extract the first usable price string from schema.org `offers`. */
-function extractPrice(offers: unknown): string | undefined {
-  for (const o of asArray(offers)) {
-    if (o && typeof o === "object") {
-      const obj = o as Record<string, unknown>;
-      const price = obj.price ?? obj.lowPrice;
-      if (price !== undefined && price !== null && `${price}`.trim()) {
-        const currency =
-          typeof obj.priceCurrency === "string" && obj.priceCurrency === "USD"
-            ? "$"
-            : "";
-        const num = `${price}`.replace(/[^0-9.]/g, "");
-        if (num === "0" || num === "0.0" || num === "0.00") return "Free";
-        return num ? `${currency}${num}` : undefined;
-      }
-    }
-  }
-  return undefined;
-}
-
 /** Extract the first usable image URL from a schema.org `image`. */
 function extractImage(image: unknown): string | null {
   for (const im of asArray(image)) {
@@ -310,7 +291,7 @@ export function extractEventsFromJsonLd(
         ? node.description.trim().substring(0, 500)
         : "";
     const category = mapCategory(typeList(node)) || defaultCategory;
-    const price = extractPrice(node.offers);
+    const price = priceFromOffers(node.offers, node.isAccessibleForFree);
     const image_url = extractImage(node.image);
     const source_url =
       resolveUrl(node.url, baseUrl) ??

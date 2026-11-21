@@ -15,7 +15,7 @@
  * renders this card from reintroducing the problem.
  */
 
-import { assert, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
@@ -54,18 +54,27 @@ Deno.test('realtime is opt-in, so the card fallback can never open a socket', as
   );
 });
 
-Deno.test('only the expanded, interactive surface opts in', async () => {
-  const hub = await read('src/components/EventSocialHub.tsx');
-  assert(
-    /useEventSocial\(eventId, \{ realtime: true \}\)/.test(hub),
-    'EventSocialHub is where a live view is actually rendered',
-  );
-
+Deno.test('no list surface opts in to realtime', async () => {
+  // EventSocialHub was the one caller that opted in, and no route mounted it;
+  // it was deleted under WEB-QA-042. The hook keeps the opt-in for the next
+  // interactive surface, so what has to hold is that no card or list page is it.
   const card = await read('src/components/SocialEventCard.tsx');
+  assert(
+    /useEventSocial\(/.test(card),
+    'SocialEventCard must still be the hook caller this test reads',
+  );
   assertFalse(
     /realtime: true/.test(card),
     'a card preview must never subscribe: it shows a snapshot',
   );
+
+  for (const page of LANDING_PAGES) {
+    const src = await read(page);
+    assertFalse(
+      /realtime: true/.test(src),
+      `${page} renders a list of cards and must not open a socket per event`,
+    );
+  }
 });
 
 Deno.test('every landing page hands the card batch data', async () => {

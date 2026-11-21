@@ -9,7 +9,7 @@
  */
 import { storage } from "@/lib/safeStorage";
 import { centralDateOf, formatEventTimeOnly, type CentralDate } from "@/lib/timezone";
-import { eventStartInstant, type TonightEvent } from "@/lib/tonightPairings";
+import { eventStartInstant, type TonightEvent } from "@/lib/tonightTime";
 import { buildEventsICS, type CalendarEntry } from "@/lib/tripCalendar";
 import { eventHref } from "@/lib/dashboardItems";
 import { getCanonicalUrl } from "@/lib/brandConfig";
