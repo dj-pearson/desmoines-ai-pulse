@@ -14486,6 +14486,101 @@
       "priority": 2,
       "passes": false,
       "notes": "Found 2026-11-16 by the platform deep dive (reliability auditor); impact medium, effort M. Not a duplicate: WEB-CI-029 moved row-building into a testable module but left the handler unexecuted. WEB-BE-030 and WEB-BE-037 notes accept source-text assertions as the method. I searched prd.json for 'signed payload', generateTestHeaderString, 'stripe listen' and constructEventAsync and found no story to execute the webhook handlers."
+    },
+    {
+      "id": "WEB-BE-063",
+      "title": "The nightly social post and the weekly digest pick restaurants without checking that they are open, so a closed place gets promoted",
+      "description": "pickRestaurant in supabase/functions/social-daily-poster/index.ts takes the top 50 rows by is_featured and popularity_score. The fallback in supabase/functions/social-media-manager/index.ts takes a random one of the 50 newest rows, and when the poster passes targetContentId the manager features that row whatever its state. assemble-weekly-digest filters on is_merged only. None of them reads status or business_status. Add one shared server-side predicate (next to isRestaurantOpenForBusiness in _shared/sponsoredPickFilters.ts) and use it in all three. Promotion needs proof, not absence of a flag: a restaurant is promotable only when business_status is OPERATIONAL, the last Places check (hours_checked_at, or hours_json.fetchedAt for rows that predate the column) is within 30 days, status is not closed, opening_soon or announced, and the row is not merged. Unknown is not promotable.",
+      "acceptanceCriteria": [
+        "One exported predicate and one matching PostgREST filter decide whether a restaurant may be promoted; social-daily-poster, social-media-manager and assemble-weekly-digest all use them",
+        "A row with business_status NULL, CLOSED_TEMPORARILY or CLOSED_PERMANENTLY, with status closed, or with a last check older than 30 days is never picked",
+        "social-media-manager refuses a targetContentId that fails the predicate and returns an error naming the reason; it does not fall back to a random row",
+        "When no restaurant qualifies the poster records skipped: no_eligible_restaurant and the job run succeeds; nothing is posted",
+        "Deno tests cover the predicate, and removing the filter from any one of the three callers turns a test red (negative control recorded in the commit)",
+        "Request and response shapes of all three functions are unchanged"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Ship this first and on its own: it stops the public damage without waiting for better detection. Until WEB-BE-064 widens the refresh, the eligible pool is only the rows the daily refresh has reached, so some days may post no restaurant; that is the intended trade. The owner can pause restaurant posts meanwhile in Admin, Social, Automation (system_settings row social_daily_poster, pause_restaurants). Web readers already have the equivalent client filters in src/lib/restaurantStatus.ts; this story is the server side that the promotion paths never got."
+    },
+    {
+      "id": "WEB-BE-064",
+      "title": "The daily closure check only re-reads restaurants that have stored hours and a Google place id, and ignores a place Google has deleted",
+      "description": "restaurant-hours-refresh (migration 20261108000103) calls bulk-update-restaurants with hoursOnly, staleDays 30, batchSize 20. refreshStaleHours selects rows with google_place_id NOT NULL and hours_json NOT NULL, so a row with a place id and no hours is never re-read, and I found no schedule for the fill mode that would reach it. A row with no google_place_id is never checked by anything. When Places answers 404 the row is counted as gone, hours_checked_at is stamped, and the listing stays live with whatever business_status it had. Widen the refresh to every row with a place id, turn a 404 into a recorded finding, and give rows without a place id a path: look the place up by name and address, store the id on a confident match, and queue the rest for a person.",
+      "acceptanceCriteria": [
+        "The stale refresh selects every restaurant with a google_place_id whose last check is older than staleDays, whether or not it has hours_json",
+        "A 404 from Places writes a row to a new additive restaurant_closure_reviews table (restaurant id, reason place_not_found, source, created_at, resolved_at, resolution) and leaves the restaurant not promotable under WEB-BE-063",
+        "Restaurants with no google_place_id are looked up by name and address in a bounded daily batch; a confident match stores the place id, anything else is queued with reason no_place_match, and no row is retried at the head of every batch",
+        "A Places error other than 404 is still not a check and the row is retried on the next run",
+        "The job run meta reports checked, closed, not_found, matched and queued counts, and the batch size is set so the whole table is re-read within staleDays (state the row count used)",
+        "The migration is additive only and the function keeps its existing request and response keys",
+        "Deno tests cover the selection filter, the 404 path and the match threshold"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Depends on nothing; WEB-OPS-026 and WEB-FEAT-102 depend on the review table created here. Name matching can attach the wrong place to a listing, which would be worse than no id, so the threshold should refuse rather than guess, the same rule findKnownVenue follows. Places text search is billed per call, so bound the daily batch and reuse the auth and rate limit already on check-restaurant-status. Whether cron job restaurant-hours-refresh is actually running in production is unverified; check automation_job_runs for bulk-update-restaurants-hours before assuming the existing coverage is real."
+    },
+    {
+      "id": "WEB-BE-065",
+      "title": "Two columns say a restaurant is closed and their writers disagree, so every reader has to remember both",
+      "description": "The daily refresh writes business_status and never status. The admin Mark as Closed button in src/components/GooglePlacesRestaurantTools.tsx writes status = 'closed' and never business_status. NOT_CLOSED_RESTAURANT_FILTER and NOT_GOOGLE_CLOSED_RESTAURANT_FILTER in src/lib/restaurantStatus.ts exist because of that split, and a reader that applies only one of them shows closed places. Make status the one lifecycle answer: when Places reports CLOSED_PERMANENTLY the refresh also sets status = 'closed', and an admin closing or reopening a listing is recorded so the refresh does not undo a human decision.",
+      "acceptanceCriteria": [
+        "Every writer that stores business_status = CLOSED_PERMANENTLY also sets status = 'closed' in the same update",
+        "A listing a person reopened is not re-closed by the next refresh without a newer contradicting Places answer; the rule is written down next to the code",
+        "A one-off backfill sets status = 'closed' on existing CLOSED_PERMANENTLY rows and reports the count",
+        "Both columns stay and both keep being written; no column, filter or CHECK is removed or tightened in this release",
+        "A test fails if a writer sets one closed flag without the other"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. The SEO-059 data pass did this backfill once by hand, and rows that closed afterwards drifted again; this makes it the writer's job. Dropping either reader filter is a later release, after the dual write has been observed in production, per the deprecation flow in CLAUDE.md. iOS and Android read both columns today (ios/DesMoinesInsider/Models/Restaurant.swift), so nothing here may change their shape."
+    },
+    {
+      "id": "WEB-OPS-026",
+      "title": "One-time sweep of every restaurant listing against Google Places, reviewed by the owner before anything is hidden",
+      "description": "The table has never been checked end to end, so the backlog of closed listings is unknown. Add a dry-run script (scripts/, like backfill-restaurant-hours.ts) that reads every restaurant, asks Places for businessStatus, and writes a report grouped as operational, temporarily closed, permanently closed, place not found and no place id. The owner reads the report, then an --apply run closes the confirmed rows and queues the uncertain ones in restaurant_closure_reviews.",
+      "acceptanceCriteria": [
+        "Without --apply the script writes nothing to the database and outputs a CSV or JSON report with one line per restaurant: id, name, address, current status, Places answer, proposed action",
+        "With --apply it closes only rows Places reports CLOSED_PERMANENTLY and queues place_not_found and no_place_match rows for review; it never deletes a row",
+        "The run is resumable and rate limited, and the report states how many Places calls it made",
+        "The script reads its keys from the environment and never prints them",
+        "The report from the production run, with counts per group, is recorded in this story's notes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Run after WEB-BE-064, which creates the review table and the name-and-address lookup this reuses, and after WEB-BE-063 so nothing closed is posted while the sweep is pending. OWNER ACTION: run the dry run with production credentials, read the closed and not-found lists, then run --apply. A closed detail page should keep resolving (it says Permanently closed today) rather than 404, since external links and the sitemap history point at it."
+    },
+    {
+      "id": "WEB-FEAT-102",
+      "title": "A visitor cannot report that a restaurant has closed, and there is no admin queue for closure findings",
+      "description": "The only signal that a listing was dead came from a comment on a social post. Add a Report closed control on the restaurant detail page that writes to restaurant_closure_reviews with reason visitor_report, and an admin screen that lists open findings from all sources (visitor reports, place_not_found, no_place_match) with the evidence beside each: the listing, its last Places answer and check date, and a link to Google Maps. Approve closes the listing; Dismiss records why.",
+      "acceptanceCriteria": [
+        "The restaurant detail page has a Report closed control that works signed out, is rate limited per IP, and confirms the report was received without claiming the listing was changed",
+        "A report never changes a listing by itself; only an admin decision or a Places answer does",
+        "An admin route behind ProtectedRoute lists unresolved findings, newest first, and Approve or Dismiss resolves one with the admin's id and a timestamp",
+        "Three or more open visitor reports on one restaurant make it not promotable under WEB-BE-063 until resolved",
+        "A failed read of the queue is shown as an error, not as an empty queue",
+        "Inserts go through an edge function or RPC with validation; anon has no direct write policy on the table",
+        "A Playwright spec covers the report control and is added to the smoke lane testMatch"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Depends on WEB-BE-064 for the table. I searched src and supabase for report-closed, listing_reports, content_reports and suggest-an-edit flows and found none for restaurants. The same control would suit attractions and hotels later; keep the table restaurant-scoped for now rather than guessing at a generic shape."
+    },
+    {
+      "id": "WEB-AUTO-019",
+      "title": "Nothing alerts when restaurant listings go unverified, so closure detection can stop and nobody finds out",
+      "description": "If the refresh cron stops, the Places key expires or the quota runs out, listings age silently and the promotion gate in WEB-BE-063 slowly empties the eligible pool. Add a nightly check (in agent-data-quality or job-health-watchdog) that counts restaurants whose last Places check is older than 45 days or missing, counts unresolved closure reviews older than 14 days, and alerts the admin when either crosses a threshold. Show the same numbers on the admin data-quality screen.",
+      "acceptanceCriteria": [
+        "A nightly job records: restaurants total, verified within 30 days, unverified over 45 days, never checked, and open closure reviews older than 14 days",
+        "An alert goes to the admin when unverified-over-45-days exceeds a configurable share of the table, or when the social poster skipped restaurants for 3 days running with no_eligible_restaurant",
+        "The numbers are visible on an admin screen with the date they were computed",
+        "A failed count is reported as a failure, not as zero",
+        "The job is listed in docs/AUTOMATION_JOBS.md"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-11-21 after a visitor commented that the nightly restaurant post featured a place that closed about six years ago. Evidence is from the working tree; production was not probed (no Supabase credentials in the container), so which gap that row fell through is not yet known. Last of the cluster: WEB-BE-063 (gate), WEB-BE-064 (detection), WEB-BE-065 (one flag), WEB-OPS-026 (sweep), WEB-FEAT-102 (reports and queue), then this. Wrap it in the WEB-AUTO-001 jobRunner so the run itself is recorded in automation_job_runs."
     }
   ]
 }
