@@ -39,6 +39,10 @@ const EXPECTED_MAX_AGE_HOURS: Record<string, number> = {
   'validate-source-urls': 24 * 14,      // weekly -> 2 weeks
   'aggregate-daily-ad-analytics': 48,   // daily -> 2 days
   'data-quality-heal': 48,              // nightly -> 2 days (WEB-AUTO-003)
+  // WEB-AUTO-019 / WEB-BE-075: the restaurant verification jobs.
+  'restaurant-verification-health': 48, // nightly -> 2 days
+  'bulk-update-restaurants-hours': 48,  // restaurant-hours-refresh, daily -> 2 days
+  'restaurant-place-lookup': 48,        // daily -> 2 days (WEB-BE-064)
   // WEB-BE-043: the ingestion jobs were the one class of automation this
   // watchdog had never heard of. Their cadences live beside the per-source
   // rule in _shared/ingestionHealth.ts, because the two have to agree about

@@ -53,3 +53,4 @@ None.
 | 2026-11-21 | WEB-BE-068 | this commit | firecrawl-scraper and enhance-content stop storing guessed cuisine, location, price and rating; honesty suite 23/23, two negative controls red; review script pending owner run |
 | 2026-11-21 | WEB-BE-066 | this commit | auto-enrich enriches the rows it picked, never nulls a description, accepts only name-matched search hits, stamps enrich_checked_at, Force Update walks by cursor; Deno 14/14, three negative controls red |
 | 2026-11-21 | WEB-UX-084 | this commit | /restaurants/open-now on a phone shows the first open restaurant on the first screen (one filter row, a sheet, removable chips); new smoke spec, negative control red |
+| 2026-11-21 | WEB-AUTO-019 | this commit | Nightly restaurant-verification-health counts verified/unverified/never-checked listings and old closure reviews, alerts on a configurable share or a 3-run poster skip streak, shows the numbers with their date on /admin/closure-reviews; Deno 7/7 |

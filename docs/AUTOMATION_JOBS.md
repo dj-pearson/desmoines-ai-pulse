@@ -1,6 +1,6 @@
 # Automation Jobs — pg_cron Inventory
 
-**Last updated:** 2026-07-09 (WEB-AUTO-018 — backfill-images cron drain)
+**Last updated:** 2026-11-21 (WEB-AUTO-019 - restaurant verification jobs)
 
 Every scheduled job (pg_cron → edge function or SQL) is listed here. Jobs wrapped
 with `_shared/jobRunner.ts` record each run in `automation_job_runs` and surface
@@ -38,6 +38,9 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`data-quality-heal-nightly`** | `30 2 * * *` | fn `data-quality-heal` | **Geocode + SEO/GEO + image self-heal, <=25 rows/table/run (WEB-AUTO-003)** | ✅ |
 | **`backfill-images-events`** | `7 * * * *` | fn `backfill-images` | **Drain the imageless-events backlog, ≤25 rows/run. Prioritizes never-checked rows (`image_checked_at NULLS FIRST`) and stamps `image_checked_at` on every attempt so permanent failures (e.g. SeatGeek JS shells) drop out for a 7-day retry window instead of re-scraping every run (WEB-AUTO-018)** | — |
 | **`backfill-images-restaurants`** | `23 */6 * * *` | fn `backfill-images` | **Same imageless-backlog drain for restaurants (source page: `website`) (WEB-AUTO-018)** | — |
+| **`restaurant-hours-refresh`** | `41 9 * * *` | fn `bulk-update-restaurants` (`hoursOnly`, `staleDays` 30, `batchSize` 25) | **Re-read hours and businessStatus for every restaurant with a place id whose last Google check is over 30 days old or missing; a Places 404 queues a closure review (WEB-FEAT-079, WEB-BE-064). Job name `bulk-update-restaurants-hours`** | yes |
+| **`restaurant-place-lookup`** | `13 10 * * *` | fn `bulk-update-restaurants` (`placeLookup`, `batchSize` 25) | **Text Search by name and address for restaurants with no place id; stores the id only on a confident match, queues the rest (WEB-BE-064)** | yes |
+| **`restaurant-verification-health`** | `7 11 * * *` | fn `restaurant-verification-health` | **Counts verified / unverified-over-45-days / never-checked restaurants and closure reviews open over 14 days; alerts when unverified exceeds `system_settings.restaurant_verification_health.max_unverified_share` (default 25%) or the social poster skipped restaurants 3 runs running. Numbers shown on Admin, Closure reviews (WEB-AUTO-019)** | yes |
 | **`backfill-images-attractions`** | `43 */6 * * *` | fn `backfill-images` | **Same imageless-backlog drain for attractions (source page: `website`) (WEB-AUTO-018)** | — |
 | **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=0.9, queue 0.7-0.9 to Admin → Content → Duplicates (WEB-AUTO-005)** | ✅ |
 | **`ai-article-pipeline-daily`** | `0 11 * * *` | fn `ai-article-pipeline` | **Daily local-SEO article: pick topic → generate draft → score → publish (≥80) / draft-review (50-79) / discard (<50). Cap 1 auto-publish/day. Pause via `feature_flags.ai_article_pipeline_enabled` (WEB-AUTO-007)** | ✅ |

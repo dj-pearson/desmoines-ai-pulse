@@ -241,6 +241,7 @@ jobs:
       # reads as "closed all week" and means "Google did not answer".
       - run: deno test --allow-read supabase/functions/_tests/place-hours.test.ts
       - run: deno test --allow-read supabase/functions/_tests/place-lookup.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/restaurant-verification-health.test.ts
       # WEB-BE-066. auto-enrich-restaurants posted the ids it picked and
       # bulk-update-restaurants ignored them, re-enriching an unordered batch;
       # a missing editorial summary set description to null; and a name-only
