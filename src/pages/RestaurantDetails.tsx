@@ -434,10 +434,11 @@ export default function RestaurantDetails() {
     );
   }
 
-  if (!restaurant && removed) return <RemovedRestaurantNotice name={removed.name} />;
-  if (restaurant && (restaurant as { hidden_at?: string | null }).hidden_at) {
-    return <RemovedRestaurantNotice name={restaurant.name} adminView />;
-  }
+  // One notice, one <title> source: a visitor gets the removed lookup's name,
+  // an admin (who can still read the hidden row) gets the row's.
+  const hiddenForAdmin = !!restaurant && !!(restaurant as { hidden_at?: string | null }).hidden_at;
+  const removedName = !restaurant && removed ? removed.name : hiddenForAdmin ? restaurant.name : null;
+  if (removedName) return <RemovedRestaurantNotice name={removedName} adminView={hiddenForAdmin} />;
 
   if (!restaurant) {
     const notFound = (
