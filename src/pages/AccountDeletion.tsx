@@ -127,7 +127,9 @@ export default function AccountDeletion() {
               <li>saved favorites, reviews, ratings, comments, photos and events you submitted</li>
               <li>your preferences, saved searches, calendars, reminders and location history</li>
               <li>
-                messages you sent through our contact form while signed in, and our replies; your support tickets
+                messages you sent through our contact form, and our replies: those sent while signed in, and those
+                sent while signed out from your account's email address, however it was capitalized;
+                your support tickets
               </li>
               <li>deals you claimed, and the emails we sent you</li>
               <li>sign-in attempts made against your account</li>
@@ -135,12 +137,15 @@ export default function AccountDeletion() {
                 your subscription and payment history. Stripe, Apple and Google keep their own billing records under
                 their own policies
               </li>
-              <li>any business listing, partnership application or Search Console connection you own</li>
+              <li>
+                any business listing or partnership application you own, and the Google sign-in you used to connect
+                Search Console or analytics
+              </li>
               <li>if you write for us, your author byline (the articles stay, without your name)</li>
             </ul>
             <p>
-              A message you sent through the contact form while signed out is not linked to your account. Email us at
-              the privacy address above, from the address you wrote from, and we'll delete it.
+              A contact-form message sent while signed out from a different email address can't be matched to your
+              account. Email us at the privacy address above, from the address you wrote from, and we'll delete it.
             </p>
           </section>
 
@@ -161,8 +166,14 @@ export default function AccountDeletion() {
                 the record of this deletion, so abuse can be investigated.
               </li>
               <li>
-                <strong>Ad-impression records:</strong> which ad was shown to you, when and on which page, with your
-                account ID, IP address and browser. Advertisers are billed on these.
+                <strong>Ad-impression records:</strong> which ad was shown, when, on which page and on what kind of
+                device, because advertisers are billed on the count. Your account ID, IP address, browser and the page
+                you came from are removed from them, and the session ID is replaced, so they no longer identify you.
+              </li>
+              <li>
+                <strong>Search Console and analytics history:</strong> if you connected Google Search Console or
+                analytics for the site as an admin, the site's search and traffic history stays, because it belongs to
+                the site. The link to your account is removed; it holds no name or email address.
               </li>
               <li>
                 <strong>Email suppression:</strong> if an email to you bounced, or you unsubscribed or reported one as

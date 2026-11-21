@@ -112,15 +112,6 @@ export const PURGE_TABLES: readonly string[] = [
   "failed_login_attempts",   // the address typed and the IP, for this account
   "system_events",           // events the user's actions raised
   "error_events",
-  // Google Search Console data the user connected. It cascades from the user
-  // who connected it, so if that user deletes their account the site's GSC
-  // history goes too; reconnecting the property re-syncs it.
-  "keyword_rankings",
-  "search_performance",
-  "traffic_metrics",
-  "site_health_metrics",
-  "analytics_sync_jobs",
-  "analytics_properties",
   // A business listing the user owns. Business Pro billing for it is in
   // business_subscriptions, kept below.
   "business_profiles",
@@ -144,8 +135,15 @@ export const PURGE_TABLES: readonly string[] = [
  * Owner decision 2026-11-22: "delete should delete". A row that is the user's
  * personal data goes; what is left here is kept for a reason that outlives the
  * account, and each entry says what it still holds. The account-deletion page
- * (src/pages/AccountDeletion.tsx) and the privacy policy list the same five.
+ * (src/pages/AccountDeletion.tsx) and the privacy policy list the same records.
+ * Contact-form messages sent signed out are matched by address, not user_id;
+ * see _shared/signedOutContactMessages.ts.
  */
+const SITE_ANALYTICS =
+  "The site's Search Console and analytics history (properties, traffic, search queries, keyword positions, site " +
+  "health, sync jobs). It belongs to the site, not to the admin who connected it; the link to that account is " +
+  "removed and nothing else in it identifies them.";
+
 export const RETAINED_TABLES: Readonly<Record<string, string>> = {
   consent_records:
     "Proof that consent was given and withdrawn (GDPR Art. 7(1)); append-only by design. Holds a hash of the address, " +
@@ -154,11 +152,24 @@ export const RETAINED_TABLES: Readonly<Record<string, string>> = {
     "Security incident investigation; legitimate interest, and deleting on request would let an attacker erase their own " +
     "trail. Holds the account id, IP and browser for security events, including the deletion itself.",
   ad_impressions:
-    "Advertiser billing records: which ad was shown, when, and on what page, counted toward what an advertiser pays. " +
-    "Holds the viewer's account id, IP and browser.",
+    "Advertiser billing records: which ad was shown, when, on what page and on what kind of device, counted toward " +
+    "what an advertiser pays. Before the account is deleted the viewer's account id, IP address, browser and " +
+    "referring page are cleared and the session id is replaced, so the count stays and the viewer is not " +
+    "identified (trigger erase_ad_impression_viewer, 20261122000070).",
   campaigns:
     "Advertising contracts with their own retention and dispute window: what ran, when, and what it cost. Holds the " +
     "advertiser's account id.",
+  // Search Console and analytics history (owner decision 2026-11-22). Site
+  // data, not the personal data of the admin who connected it: user_id is ON
+  // DELETE SET NULL (20261122000070), so the history outlives that admin's
+  // account. No column in these holds the admin's name or email. The OAuth
+  // credentials (user_oauth_tokens, gsc_oauth_credentials) are purged above.
+  analytics_properties: SITE_ANALYTICS,
+  traffic_metrics: SITE_ANALYTICS,
+  search_performance: SITE_ANALYTICS,
+  keyword_rankings: SITE_ANALYTICS,
+  site_health_metrics: SITE_ANALYTICS,
+  analytics_sync_jobs: SITE_ANALYTICS,
   business_subscriptions:
     "Business Pro billing record under a commercial contract (Stripe ids, status, period). Cancelled in Stripe before " +
     "the account is deleted.",

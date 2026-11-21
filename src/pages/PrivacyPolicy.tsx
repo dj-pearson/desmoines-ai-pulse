@@ -322,8 +322,9 @@ export default function PrivacyPolicy() {
               </li>
             </ul>
             <p>
-              When you delete your account, your personal data is deleted, not kept with your name taken off. These
-              records are the only ones we keep afterwards:
+              When you delete your account, your personal data is deleted, not kept with your name taken off. That
+              includes contact-form messages sent while signed out from your account's email address. These records
+              are the only ones we keep afterwards:
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -335,8 +336,14 @@ export default function PrivacyPolicy() {
                 deletion itself, so abuse can be investigated
               </li>
               <li>
-                <strong>Ad-Impression Records:</strong> which ad was shown, when and on which page, with account ID, IP
-                address and browser, because advertisers are billed on them
+                <strong>Ad-Impression Records:</strong> which ad was shown, when, on which page and on what kind of
+                device, because advertisers are billed on the count. The account ID, IP address, browser and referring
+                page are removed and the session ID is replaced, so they no longer identify you
+              </li>
+              <li>
+                <strong>Search Console and Analytics History:</strong> the site's search and traffic history, if you
+                connected it as an admin. It belongs to the site; the link to your account is removed and it holds no
+                name or email address
               </li>
               <li>
                 <strong>Email Suppression:</strong> a bounce, unsubscribe or spam report for your address, so we never email

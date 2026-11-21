@@ -45,6 +45,18 @@ const PGlite = (pglite as unknown as { PGlite: new () => PGlite }).PGlite;
 
 const FIX = "20261122000030_user_fk_on_delete.sql";
 const FOLLOW_UP = "20261122000060_account_deletion_deletes_personal_data.sql";
+/** Owner decisions 2026-11-22: ad billing and site history stay, unlinked. */
+const SECOND_FOLLOW_UP = "20261122000070_account_deletion_billing_and_site_history.sql";
+
+/** The Search Console and analytics tables 20261122000070 keeps, unlinked. */
+const SITE_ANALYTICS = [
+  "analytics_properties",
+  "analytics_sync_jobs",
+  "keyword_rankings",
+  "search_performance",
+  "site_health_metrics",
+  "traffic_metrics",
+];
 
 /**
  * SET NULL into a column a CHECK names is allowed only here, with the reason
@@ -87,6 +99,12 @@ const KEPT_UNLINKED: Record<string, string> = {
   "crm_activities.deal_id": "an activity on another contact's record that referenced the deleted contact's deal",
   "crm_notes.deal_id": "a note on another contact's record that referenced the deleted contact's deal",
   "crm_tasks.deal_id": "a task on another contact's record that referenced the deleted contact's deal",
+  // Owner decision 2026-11-22: the site's Search Console and analytics
+  // history outlives the admin who connected it. RETAINED_TABLES; no column in
+  // these holds the admin's name or email (20261122000070).
+  ...Object.fromEntries(
+    SITE_ANALYTICS.map((t) => [`${t}.user_id`, "the site's Search Console / analytics history; no name or email in it"]),
+  ),
 };
 
 /** SET NULLs into deleted rows that are neither attribution nor decided. */
@@ -193,12 +211,15 @@ Deno.test("RETAINED_TABLES names no table the database deletes, and PURGE_TABLES
     .map((f) => `${f.table}.${f.column}`);
   assert.deepEqual(setNullPurge, []);
   // The check fires: the list as it stood before 2026-11-22 named nine tables
-  // as kept that a CASCADE already deleted.
+  // as kept that a CASCADE deleted, as the FKs stood before 20261122000070.
+  const deletedThen = deletedOnAccountDeletion(buildModel(migrations.filter((m) => m.file < SECOND_FOLLOW_UP)));
   const oldRetained = [
     "subscription_events", "business_profiles", "partnership_applications", "analytics_properties",
     "analytics_sync_jobs", "traffic_metrics", "search_performance", "keyword_rankings", "site_health_metrics",
   ];
-  assert.deepEqual(oldRetained.filter((t) => !deleted.has(t)), []);
+  assert.deepEqual(oldRetained.filter((t) => !deletedThen.has(t)), []);
+  // Owner decision 2026-11-22: the six analytics tables are kept now.
+  assert.deepEqual(SITE_ANALYTICS.filter((t) => deleted.has(t)), []);
 });
 
 Deno.test("a new FK to auth.users without ON DELETE fails the check", () => {
@@ -347,8 +368,9 @@ async function errCode(p: Promise<unknown>): Promise<string | null> {
 
 const fix030 = await Deno.readTextFile(new URL(`../../migrations/${FIX}`, import.meta.url));
 const followUpSql = await Deno.readTextFile(new URL(`../../migrations/${FOLLOW_UP}`, import.meta.url));
-/** Both migrations, in the order the migrator applies them. */
-const fixSql = `${fix030}\n${followUpSql}`;
+const secondFollowUpSql = await Deno.readTextFile(new URL(`../../migrations/${SECOND_FOLLOW_UP}`, import.meta.url));
+/** The three migrations, in the order the migrator applies them. */
+const fixSql = `${fix030}\n${followUpSql}\n${secondFollowUpSql}`;
 
 Deno.test("without the fix, deleting the auth user fails with 23503 (negative control)", async () => {
   const { pg } = await seeded(before);
@@ -476,7 +498,9 @@ function aboutTheUser(fks: UserFk[]): string[] {
   return [...new Set(
     fks.filter((f) =>
       USER_TABLES.includes(f.target) && !ACTOR_COLUMN.test(f.column) &&
-      (!(`${f.table}.${f.column}` in KEPT_UNLINKED) || f.table in RETAINED_TABLES)
+      (!(`${f.table}.${f.column}` in KEPT_UNLINKED) || f.table in RETAINED_TABLES) &&
+      // Site history: kept on purpose, and no column in it is about the admin.
+      !SITE_ANALYTICS.includes(f.table)
     ).map((f) => f.table),
   )].sort();
 }
@@ -547,6 +571,7 @@ const KEPT_LABEL: Record<string, string> = {
   ad_impressions: "Ad-impression records:",
   campaigns: "Advertiser and Business Pro billing:",
   business_subscriptions: "Advertiser and Business Pro billing:",
+  ...Object.fromEntries(SITE_ANALYTICS.map((t) => [t, "Search Console and analytics history:"])),
   // _shared/addressKeyedData.ts, erasure "retain"
   email_suppressions: "Email suppression:",
   // KEPT_UNLINKED: the store webhook logs
@@ -566,4 +591,173 @@ Deno.test("the account-deletion page lists exactly what is kept", async () => {
   const old = `<section aria-labelledby="what-is-kept"><li><strong>Transaction records:</strong></li>
     <li><strong>Consent records:</strong></li><li><strong>Usage data:</strong></li></section>`;
   assert.notDeepEqual(keptLabelsOnPage(old), [...new Set(Object.values(KEPT_LABEL))].sort());
+});
+
+// ------------------------------------------- billing and site history (20261122000070)
+
+/** A PGlite database with the two users and nothing else. */
+async function bareUsers(): Promise<PGlite> {
+  const pg = new PGlite();
+  await pg.exec(`
+    CREATE SCHEMA auth;
+    CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
+    INSERT INTO auth.users VALUES ('${USER}', '${EMAIL}'), ('${OTHER}', 'staying@example.com');
+  `);
+  return pg;
+}
+
+/**
+ * ad_impressions with the columns src/integrations/supabase/types.ts lists.
+ * The table was created outside the migrations, so whether production has a
+ * FK on user_id, and with what action, is unknown: each case is tried.
+ */
+async function withImpressions(fk: "none" | "SET NULL" | "CASCADE"): Promise<PGlite> {
+  const pg = await bareUsers();
+  const ref = fk === "none" ? "" : ` REFERENCES auth.users(id) ON DELETE ${fk}`;
+  await pg.exec(`
+    CREATE TABLE public.ad_impressions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_id uuid NOT NULL, creative_id uuid NOT NULL, placement_type text NOT NULL,
+      user_id uuid${ref}, session_id text NOT NULL, ip_address text, user_agent text, browser text,
+      device_type text, page_url text, referrer_url text, client_event_id text,
+      date date NOT NULL DEFAULT CURRENT_DATE, "timestamp" timestamptz NOT NULL DEFAULT now()
+    );
+    INSERT INTO public.ad_impressions
+      (campaign_id, creative_id, placement_type, user_id, session_id, ip_address, user_agent, browser, device_type, page_url, referrer_url)
+    VALUES
+      ('00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0003-000000000002', 'top_banner', '${USER}', 'sess-a', '203.0.113.7', 'UA leaving', 'Firefox', 'mobile', '/events', 'https://search.example/?q=leaving'),
+      ('00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0003-000000000002', 'top_banner', '${USER}', 'sess-a', '203.0.113.7', 'UA leaving', 'Firefox', 'mobile', '/restaurants', NULL),
+      ('00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0003-000000000002', 'top_banner', '${USER}', 'sess-b', '203.0.113.8', 'UA leaving', 'Firefox', 'desktop', '/events', NULL),
+      ('00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0003-000000000002', 'top_banner', '${OTHER}', 'sess-c', '198.51.100.1', 'UA staying', 'Safari', 'mobile', '/events', 'https://ref.example/');
+  `);
+  return pg;
+}
+
+const IMPRESSION_COLUMNS = `user_id, session_id, ip_address, user_agent, browser, referrer_url, device_type, page_url`;
+
+for (const fk of ["none", "SET NULL", "CASCADE"] as const) {
+  Deno.test(`ad_impressions (FK ${fk}): the deleted user's rows stay, with nothing that identifies them`, async () => {
+    const pg = await withImpressions(fk);
+    await pg.exec(secondFollowUpSql);
+    assert.equal(await errCode(pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER])), null);
+
+    const rows = (await pg.query<Record<string, string | null>>(
+      `SELECT ${IMPRESSION_COLUMNS} FROM public.ad_impressions WHERE user_id IS DISTINCT FROM $1 ORDER BY page_url, device_type`,
+      [OTHER],
+    )).rows;
+    assert.equal(rows.length, 3, "the billed count is unchanged");
+    for (const r of rows) {
+      assert.deepEqual(
+        [r.user_id, r.ip_address, r.user_agent, r.browser, r.referrer_url],
+        [null, null, null, null, null],
+      );
+      assert.ok(r.session_id && !r.session_id.startsWith("sess-"), `session id replaced, got ${r.session_id}`);
+    }
+    // unique_viewers is COUNT(DISTINCT session_id): still two sessions.
+    assert.equal(new Set(rows.map((r) => r.session_id)).size, 2);
+    // What billing reads is kept.
+    assert.deepEqual(rows.map((r) => [r.page_url, r.device_type]), [
+      ["/events", "desktop"],
+      ["/events", "mobile"],
+      ["/restaurants", "mobile"],
+    ]);
+
+    // Counter-assertion: the other viewer's impression is untouched.
+    assert.deepEqual(
+      (await pg.query(`SELECT ${IMPRESSION_COLUMNS} FROM public.ad_impressions WHERE user_id = $1`, [OTHER])).rows,
+      [{
+        user_id: OTHER,
+        session_id: "sess-c",
+        ip_address: "198.51.100.1",
+        user_agent: "UA staying",
+        browser: "Safari",
+        referrer_url: "https://ref.example/",
+        device_type: "mobile",
+        page_url: "/events",
+      }],
+    );
+  });
+}
+
+Deno.test("without 20261122000070, ad_impressions keep the IP or lose the billed rows (negative control)", async () => {
+  const none = await withImpressions("none");
+  await none.query(`DELETE FROM auth.users WHERE id = $1`, [USER]);
+  assert.equal(
+    (await none.query(`SELECT 1 FROM public.ad_impressions WHERE ip_address = '203.0.113.7'`)).rows.length,
+    2,
+    "with no FK the viewer's IP stays",
+  );
+  const cascade = await withImpressions("CASCADE");
+  await cascade.query(`DELETE FROM auth.users WHERE id = $1`, [USER]);
+  assert.equal((await cascade.query(`SELECT 1 FROM public.ad_impressions`)).rows.length, 1, "with CASCADE the billed rows go");
+});
+
+/** contact_submissions as 20261122000060 leaves it, with the address column. */
+async function withContactMessages(): Promise<PGlite> {
+  const pg = await bareUsers();
+  await pg.exec(`
+    CREATE TABLE public.contact_submissions (
+      id int PRIMARY KEY, user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE, email text NOT NULL, message text
+    );
+    INSERT INTO public.contact_submissions VALUES
+      (1, NULL, '  Leaving@Example.COM ', 'signed out, the leaving address, other case'),
+      (2, NULL, 'staying@example.com', 'signed out, another address'),
+      (3, '${OTHER}', 'leaving@example.com', 'signed in as someone else, typed the leaving address'),
+      (4, '${USER}', 'leaving@example.com', 'signed in as the leaving user'),
+      (5, NULL, 'leavingXexample.com', 'an address one wildcard away'),
+      (6, NULL, '', 'blank address');
+  `);
+  return pg;
+}
+
+Deno.test("signed-out contact messages from the account's address are deleted, case-insensitively", async () => {
+  const pg = await withContactMessages();
+  await pg.exec(secondFollowUpSql);
+  // What delete-user-account does: the RPC with the account's address, then the auth delete.
+  const { rows } = await pg.query<{ n: number }>(`SELECT public.delete_signed_out_contact_submissions($1) AS n`, [EMAIL]);
+  assert.equal(rows[0].n, 1);
+  await pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER]);
+  // Counter-assertions: another address, someone else's signed-in message and
+  // a near-miss address all survive.
+  assert.deepEqual((await pg.query(`SELECT id FROM public.contact_submissions ORDER BY id`)).rows, [
+    { id: 2 },
+    { id: 3 },
+    { id: 5 },
+    { id: 6 },
+  ]);
+  // A blank address deletes nothing, not every blank-address message.
+  assert.equal((await pg.query<{ n: number }>(`SELECT public.delete_signed_out_contact_submissions('  ') AS n`)).rows[0].n, 0);
+  assert.equal((await pg.query(`SELECT 1 FROM public.contact_submissions WHERE id = 6`)).rows.length, 1);
+});
+
+Deno.test("without the address match, the signed-out message survives the account (negative control)", async () => {
+  const pg = await withContactMessages();
+  await pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER]);
+  assert.deepEqual(
+    (await pg.query(`SELECT id FROM public.contact_submissions WHERE id = 1`)).rows,
+    [{ id: 1 }],
+    "the CASCADE reaches only the signed-in message",
+  );
+});
+
+Deno.test("Search Console and analytics history survives the admin's deletion, unlinked", async () => {
+  const { pg, rowIds } = await seeded(before);
+  await pg.exec(fixSql);
+  assert.equal(await errCode(pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER])), null);
+  for (const t of SITE_ANALYTICS) {
+    assert.deepEqual(
+      (await pg.query(`SELECT user_id, note FROM public.${q(t)} WHERE id = $1`, [rowIds.get(t)])).rows,
+      [{ user_id: null, note: `kept:${t}` }],
+      t,
+    );
+  }
+});
+
+Deno.test("with only 20261122000030 and 060, the analytics history goes with the admin (negative control)", async () => {
+  const { pg, rowIds } = await seeded(before);
+  await pg.exec(`${fix030}\n${followUpSql}`);
+  await pg.query(`DELETE FROM auth.users WHERE id = $1`, [USER]);
+  for (const t of SITE_ANALYTICS) {
+    assert.deepEqual((await pg.query(`SELECT 1 FROM public.${q(t)} WHERE id = $1`, [rowIds.get(t)])).rows, [], t);
+  }
 });

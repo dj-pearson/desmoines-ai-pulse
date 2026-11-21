@@ -47,20 +47,34 @@ test.describe('/account/delete', () => {
   // the erasure does not keep, and say nothing about the contact form, whose
   // messages it kept. These are the six things that really stay
   // (RETAINED_TABLES plus email_suppressions and the store webhook logs).
+  //
+  // Second round of owner decisions, same day: signed-out contact messages
+  // from the account's address are deleted too, ad impressions stay without
+  // the viewer, and the site's Search Console history stays without the admin.
   test('lists what is deleted and exactly what is kept', async ({ page }) => {
     await expect(
-      page.getByRole('listitem').filter({ hasText: /messages you sent through our contact form while signed in/ }),
+      page.getByRole('listitem').filter({
+        hasText: /messages you sent through our contact form.*signed in.*signed out from your account's email address/,
+      }),
     ).toBeVisible();
     const kept = page.locator('section[aria-labelledby="what-is-kept"]').getByRole('listitem');
     await expect(kept.locator('strong')).toHaveText([
       'Consent records:',
       'Security logs:',
       'Ad-impression records:',
+      'Search Console and analytics history:',
       'Email suppression:',
       'App Store and Google Play notices:',
       'Advertiser and Business Pro billing:',
     ]);
     await expect(page.getByText(/Usage data|in a minimized form/)).toHaveCount(0);
+    // Impressions no longer claim to keep the viewer's IP and browser.
+    await expect(kept.filter({ hasText: 'Ad-impression records:' })).toContainText('no longer identify you');
+    await expect(kept.filter({ hasText: 'Ad-impression records:' })).not.toContainText('with your account ID');
+    // The old advice to email us for every signed-out message is gone; only a
+    // message from a different address still needs it.
+    await expect(page.getByText(/is not linked to your account\. Email us/)).toHaveCount(0);
+    await expect(page.getByText(/sent while signed out from a different email address/)).toBeVisible();
   });
 
   test('passes the a11y lane axe tags', async ({ page }) => {

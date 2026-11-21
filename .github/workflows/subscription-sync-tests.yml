@@ -197,6 +197,10 @@ jobs:
       # erasure left email_log (to_email kept, user_id nulled) and the export
       # omitted newsletter_subscribers, email_log and email_suppressions.
       - run: deno test --allow-read supabase/functions/_tests/address-keyed-data.test.ts
+      # WEB-LEGAL-015. Contact-form messages sent signed out carry only the
+      # address, so account deletion matches them by address before the auth
+      # user goes; a failed delete is reported, not skipped.
+      - run: deno test --allow-read supabase/functions/_tests/signed-out-contact-messages.test.ts
       # XPLAT-008. Two admin diagnostics that returned 404 on every press.
       # test-article-webhook POSTs to a caller-supplied URL, so the SSRF guard
       # running BEFORE the request is the assertion that matters.

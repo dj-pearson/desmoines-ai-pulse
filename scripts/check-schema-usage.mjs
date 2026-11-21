@@ -98,6 +98,10 @@ const PENDING_MIGRATIONS = [
   // applied each call is PGRST202 and subscription-reconcile records a FAILED
   // run (the candidate read throws), which is what the window should look like.
   { rpc: 'subscription_reconcile_candidates', migration: '20261122000020' },
+  // Signed-out contact messages deleted with the account (WEB-LEGAL-015). Until
+  // the migration is applied the call is PGRST202, which delete-user-account
+  // reports as contact_submissions in tables_incomplete with complete:false.
+  { rpc: 'delete_signed_out_contact_submissions', migration: '20261122000070' },
   { rpc: 'subscription_reconcile_backlog', migration: '20261122000020' },
   { rpc: 'apply_subscription_reconciliation', migration: '20261122000020' },
   { rpc: 'note_subscription_reconcile_check', migration: '20261122000020' },

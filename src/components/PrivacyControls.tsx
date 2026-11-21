@@ -452,7 +452,8 @@ export function PrivacyControls() {
                 Permanently erase your account and the personal data associated
                 with it. This cannot be undone. A few records are kept
                 afterwards (consent records, security logs, ad-impression
-                records and, for advertisers, billing records); the full list is
+                counts that no longer identify you and, for advertisers,
+                billing records); the full list is
                 on our{" "}
                 <Link to="/account/delete" className="underline">
                   account deletion page
