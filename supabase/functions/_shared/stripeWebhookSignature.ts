@@ -23,8 +23,11 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 /** Async-only crypto, built once: the worker build has no sync HMAC. */
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
+/** Stripe.Event, named through the call so the edge-types shim can resolve it. */
+export type StripeWebhookEvent = Awaited<ReturnType<typeof Stripe.webhooks.constructEventAsync>>;
+
 export type StripeSignatureResult =
-  | { ok: true; event: Stripe.Event }
+  | { ok: true; event: StripeWebhookEvent }
   | { ok: false; response: Response };
 
 /**

@@ -56,6 +56,12 @@ async function quietly<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** The refusal response, or a test failure if the request verified. */
+function refusal(result: Awaited<ReturnType<typeof verifyStripeWebhookRequest>>): Response {
+  if (!("response" in result)) throw new Error("expected a refusal, got a verified event");
+  return result.response;
+}
+
 Deno.test('a payload signed with the webhook secret verifies and yields the event', async () => {
   const result = await verifyStripeWebhookRequest(post(PAYLOAD, await sign(PAYLOAD, SECRET)), SECRET, HEADERS);
   assert(result.ok, 'a correctly signed delivery must verify');
@@ -68,15 +74,15 @@ Deno.test('a tampered body is refused with 401 Invalid signature', async () => {
   const tampered = PAYLOAD.replace('cs_test_1', 'cs_test_2');
   const result = await quietly(() => verifyStripeWebhookRequest(post(tampered, signature), SECRET, HEADERS));
   assertFalse(result.ok);
-  assertEquals(result.response.status, 401);
-  assertEquals(await result.response.json(), { error: 'Invalid signature' });
+  assertEquals(refusal(result).status, 401);
+  assertEquals(await refusal(result).json(), { error: 'Invalid signature' });
 });
 
 Deno.test('a signature made with another secret is refused with 401', async () => {
   const signature = await sign(PAYLOAD, 'whsec_someone_else');
   const result = await quietly(() => verifyStripeWebhookRequest(post(PAYLOAD, signature), SECRET, HEADERS));
   assertFalse(result.ok);
-  assertEquals(result.response.status, 401);
+  assertEquals(refusal(result).status, 401);
 });
 
 Deno.test('a signature older than the tolerance is refused with 401', async () => {
@@ -84,21 +90,21 @@ Deno.test('a signature older than the tolerance is refused with 401', async () =
   const signature = await sign(PAYLOAD, SECRET, stale);
   const result = await quietly(() => verifyStripeWebhookRequest(post(PAYLOAD, signature), SECRET, HEADERS));
   assertFalse(result.ok);
-  assertEquals(result.response.status, 401);
+  assertEquals(refusal(result).status, 401);
 });
 
 Deno.test('the existing 400 and 500 answers are unchanged', async () => {
   const noHeader = await quietly(() => verifyStripeWebhookRequest(post(PAYLOAD), SECRET, HEADERS));
   assertFalse(noHeader.ok);
-  assertEquals(noHeader.response.status, 400);
-  assertEquals(await noHeader.response.json(), { error: 'No signature' });
+  assertEquals(refusal(noHeader).status, 400);
+  assertEquals(await refusal(noHeader).json(), { error: 'No signature' });
 
   const noSecret = await quietly(async () =>
     verifyStripeWebhookRequest(post(PAYLOAD, await sign(PAYLOAD, SECRET)), undefined, HEADERS)
   );
   assertFalse(noSecret.ok);
-  assertEquals(noSecret.response.status, 500);
-  assertEquals(await noSecret.response.json(), { error: 'Webhook secret not configured' });
+  assertEquals(refusal(noSecret).status, 500);
+  assertEquals(await refusal(noSecret).json(), { error: 'Webhook secret not configured' });
 });
 
 // ---- Source guard: the sync call must not come back anywhere ----
