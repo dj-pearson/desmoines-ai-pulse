@@ -15188,8 +15188,8 @@
         "tests/restaurants-hub.spec.ts still passes and gains an assertion for the collapsed state"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. The hero comment at Restaurants.tsx:684-686 still says the first card is in the first viewport; correct it."
+      "passes": true,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. The hero comment at Restaurants.tsx:684-686 still says the first card is in the first viewport; correct it. DONE 2026-11-21: RestaurantsTopRated hides rows 6-20 below md with max-md:hidden only (all 20 stay in the DOM for the prerender and ItemList) behind a Show all 20 / Show top 5 toggle (aria-expanded/controls); the rule moved under the list in a details ('How this list is made') at every width; hero comment corrected. Measured at 390x844 on a production build: block 1,591px -> 520px, filter bar 2,045px -> 974px, first card 2,139px -> about 1,068px. Verified: restaurants-hub, -pass2 and layout-integrity 48/48 incl. two new restaurants-hub tests (collapsed at 390px, full at 1280px); negative control: the collapsed test fails on the old build (Expected 5, Received 20)."
     },
     {
       "id": "WEB-UX-086",
@@ -15204,8 +15204,8 @@
         "A Playwright spec covers the sticky bar height and the visible filters at 390px"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. Related: WEB-UX-059 and WEB-UX-003 (events), WEB-UX-082 (the input's dark-mode colour)."
+      "passes": true,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort S. Related: WEB-UX-059 and WEB-UX-003 (events), WEB-UX-082 (the input's dark-mode colour). DONE 2026-11-21: below sm the filter pills drop icon and count and get the sticky bar's first row (all four on screen from 375px; Dietary ends at 358px at 390) with an edge fade when they still overflow; active chips use ActiveFilterChips layout=scroll, sticky bar 156px at 390 with three filters (stated ceiling 160px); text Search button hidden below sm with 258px to type and Enter applying the search; list/map toggle moved into the sticky bar at every width; Surprise Me labelled. tests/restaurants-hub-phone-controls.spec.ts (6 tests) added to the smoke lane. Verified on a production build 6/6; negative control: all 6 fail on the UX-085-only build; restaurants/layout/sticky/touch/URL/filter/route-smoke/page-headings specs 279 passed, 1 failed (an /events skip-link test that also fails on the pre-change build)."
     },
     {
       "id": "WEB-UX-087",
