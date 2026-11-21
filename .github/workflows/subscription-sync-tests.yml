@@ -260,6 +260,13 @@ jobs:
       # bulk-update-restaurants write; update_claimed_listing and
       # set_restaurant_field_locks write the lock (PGlite, real migration).
       - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-field-locks.test.ts
+      # WEB-ADS-047. A business claim decision used to be an RPC and a toast:
+      # the claimant was never told and a verified owner could not be removed.
+      # Pins the decision emails, the 3-day pending alert, and revoke (edit
+      # access goes, who and why are recorded, a revoked owner cannot
+      # auto-verify again by domain).
+      - run: deno test --allow-read supabase/functions/_tests/business-claims.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/business-claim-revoke.test.ts
       # SEO-059. articles_publishable_body_guard refuses a JSON/HTML/placeholder
       # body on publish; ai-article-pipeline used to drop that error and report
       # the article as published. Pins that it reads it and keeps a draft.

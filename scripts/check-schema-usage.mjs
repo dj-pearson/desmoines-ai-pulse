@@ -171,6 +171,9 @@ const PENDING_MIGRATIONS = [
   // renders in the pending window.
   { rpc: 'claim_listing', migration: '20260920000005' },
   { rpc: 'review_business_claim', migration: '20260920000005' },
+  // WEB-ADS-047: an admin removes a verified owner with a reason. PGRST202 until
+  // applied; the Revoke button reports the error and nothing changes.
+  { rpc: 'revoke_business_claim', migration: '20261121000090' },
   // The owner's edit of a verified claim's listing (WEB-ADS-009 AC4), called by
   // useMyBusinessClaims on /business. ClaimedListingEditForm treats PGRST202 as
   // "editing opens once claims are switched on" rather than an error.

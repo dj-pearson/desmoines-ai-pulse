@@ -7,6 +7,8 @@ export interface AdminKpiTile {
   total: number;
   deltaSevenDay: number;
   href: string;
+  /** Set when the server could not read the count; shown instead of total. */
+  unavailable?: string;
 }
 
 export interface AdminActivityEntry {

@@ -98,7 +98,7 @@ async function buildDigest(supabase: Client, windowDays: number) {
     events, restaurants, attractions, articles, eventsPrev,
     members, membersNew,
     subs, subsNew, payments,
-    contact, tickets,
+    contact, tickets, claimsPending,
     jobRuns, escalations,
   ] = await Promise.all([
     metric(supabase, "New events", "events", "events.created_at", newIn, "/admin/content"),
@@ -113,6 +113,17 @@ async function buildDigest(supabase: Client, windowDays: number) {
     metric(supabase, "Payments recorded", "payments", "payments.created_at", newIn),
     metric(supabase, "Contact submissions", "contact_submissions", "contact_submissions.created_at", newIn, "/admin/inbox"),
     metric(supabase, "Support tickets", "support_tickets", "support_tickets.created_at", newIn, "/admin/support"),
+    // WEB-ADS-047: a standing count, not a window. A claim is a business owner
+    // waiting on a person, so the number that matters is how many are waiting.
+    metric(
+      supabase,
+      "Business claims pending",
+      "business_claims",
+      "business_claims.status = pending",
+      // deno-lint-ignore no-explicit-any
+      (q: any) => q.eq("status", "pending"),
+      "/admin/business-claims",
+    ),
     metric(supabase, "Automation runs", "automation_job_runs", "automation_job_runs.created_at", newIn, "/admin/system"),
     metric(supabase, "Agent escalations", "agent_escalations", "agent_escalations.created_at", newIn),
   ]);
@@ -121,7 +132,7 @@ async function buildDigest(supabase: Client, windowDays: number) {
     ["CONTENT", [events, restaurants, attractions, articles]],
     ["USERS", [members, membersNew]],
     ["REVENUE", [subs, subsNew, payments]],
-    ["SUPPORT", [contact, tickets]],
+    ["SUPPORT", [contact, tickets, claimsPending]],
     ["OPS", [jobRuns, escalations]],
   ];
 

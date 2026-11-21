@@ -41,6 +41,7 @@ const EXPECTED_MAX_AGE_HOURS: Record<string, number> = {
   'data-quality-heal': 48,              // nightly -> 2 days (WEB-AUTO-003)
   // WEB-AUTO-019 / WEB-BE-075: the restaurant verification jobs.
   'restaurant-verification-health': 48, // nightly -> 2 days
+  'business-claims-health': 48,         // daily -> 2 days (WEB-ADS-047)
   'bulk-update-restaurants-hours': 48,  // restaurant-hours-refresh, daily -> 2 days
   'restaurant-place-lookup': 48,        // daily -> 2 days (WEB-BE-064)
   'dedupe-content': 24 * 14,           // weekly (Mon 03:15) -> 2 weeks (WEB-BE-075)
