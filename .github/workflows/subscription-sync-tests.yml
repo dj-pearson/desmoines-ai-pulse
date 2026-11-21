@@ -241,6 +241,7 @@ jobs:
       # reads as "closed all week" and means "Google did not answer".
       - run: deno test --allow-read supabase/functions/_tests/place-hours.test.ts
       - run: deno test --allow-read supabase/functions/_tests/place-lookup.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-closed-flags.test.ts
       # SEO-059. articles_publishable_body_guard refuses a JSON/HTML/placeholder
       # body on publish; ai-article-pipeline used to drop that error and report
       # the article as published. Pins that it reads it and keeps a draft.

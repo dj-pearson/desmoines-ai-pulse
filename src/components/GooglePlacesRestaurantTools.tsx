@@ -422,6 +422,11 @@ export default function GooglePlacesRestaurantTools() {
     }
   };
 
+  // WEB-BE-065: status is the lifecycle answer. The trigger in migration
+  // 20261121000020 also closes status whenever business_status becomes
+  // CLOSED_PERMANENTLY, and records this click as 'person:<uid>' in
+  // status_changed_by. A person's reopen is not undone by a refresh that
+  // repeats the same Google answer; see the rule in that migration.
   const markAsClosed = async (restaurantStatus: RestaurantStatus) => {
     if (restaurantStatus.google_status !== "CLOSED_PERMANENTLY") return;
     try {
