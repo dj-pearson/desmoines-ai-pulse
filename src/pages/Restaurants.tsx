@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/pagination";
 import { DeferredSelect, type DeferredSelectOption } from "@/components/ui/deferred-select";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { narrowestFilterChip } from "@/lib/narrowestFilterChip";
 
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
@@ -248,6 +249,7 @@ export default function Restaurants() {
       chips.push({ key: "rating", label: `Rating ${filters.rating[0]}-${filters.rating[1]}`, onRemove: () => setFilters((p) => ({ ...p, rating: [0, 5] })) });
     return chips;
   }, [filters, setFilters, setParam]);
+  const narrowestChip = useMemo(() => narrowestFilterChip(restaurantChips), [restaurantChips]);
 
   // View is in the URL (item 11), so a shared map link opens on the map.
   const viewMode: "list" | "map" = getStr("view", "list") === "map" ? "map" : "list";
@@ -1023,14 +1025,22 @@ export default function Restaurants() {
                   actions={
                     hasActiveFilters
                       ? [
+                          // WEB-UX-090: "Clear All Filters" and "Browse All"
+                          // called the same handler. One clear action, plus
+                          // removing the single filter most likely to be the
+                          // narrowing one when more than one is on.
+                          ...(narrowestChip && restaurantChips.length > 1
+                            ? [
+                                {
+                                  label: `Remove "${narrowestChip.label}"`,
+                                  onClick: narrowestChip.onRemove,
+                                  variant: "outline" as const,
+                                  icon: X,
+                                },
+                              ]
+                            : []),
                           {
-                            label: "Clear All Filters",
-                            onClick: handleClearFilters,
-                            variant: "outline",
-                            icon: X,
-                          },
-                          {
-                            label: "Browse All",
+                            label: "Clear all filters",
                             onClick: () => {
                               handleClearFilters();
                               window.scrollTo({ top: 0, behavior: "smooth" });

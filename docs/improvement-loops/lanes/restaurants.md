@@ -63,3 +63,4 @@ None.
 | 2026-11-21 | WEB-UX-085 | this commit | /restaurants top-rated shows 5 below md with Show all 20 (20 stay in the DOM), rule in a details under the list; filter bar 2045px -> 974px at 390px |
 | 2026-11-21 | WEB-UX-086 | this commit | /restaurants phone controls: four filters on screen at 390px, chips one row in a 156px sticky bar, list/map toggle in the bar, 258px search input, Surprise Me labelled; 6-test smoke spec |
 | 2026-11-21 | WEB-BE-074 | this commit | Merges fill empty survivor columns from the loser, prefer the place-id / claimed row, move claims; admin Recent merges with Undo and on-demand merge; PGlite 6/6, negative control red |
+| 2026-11-21 | WEB-UX-090 | this commit | One clear action plus remove-the-narrowest-filter in the empty state, rating shows Any with one input, skeleton mirrors the page with dark colours, 16px hero with a clamped title; smoke spec + negative control |

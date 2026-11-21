@@ -296,21 +296,23 @@ export default function RestaurantDetails() {
         <RouteCanonical path={`/restaurants/${slug}`} />
         <div className="min-h-screen bg-gray-50 dark:bg-background" role="status" aria-live="polite" aria-busy="true">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
+            {/* WEB-UX-090: the same blocks the loaded page draws, in order
+                (breadcrumb, hero, at-a-glance lines, action row, body), in
+                bg-muted so dark mode gets a dark placeholder. */}
             <div className="animate-pulse space-y-6 motion-reduce:animate-none">
-              <div className="h-6 w-48 bg-gray-200 rounded" />
-              <div className="h-80 bg-gray-200 rounded-3xl" />
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Restaurant Info</span>
-                </div>
-                <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Hours & Location</span>
-                </div>
-                <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Reviews & Rating</span>
-                </div>
+              <div className="h-5 w-48 rounded bg-muted" />
+              <div className="h-72 md:h-96 rounded-2xl bg-muted" />
+              <div className="space-y-2 rounded-2xl bg-muted/60 p-4">
+                <div className="h-4 w-2/3 rounded bg-muted" />
+                <div className="h-4 w-1/2 rounded bg-muted" />
+                <div className="h-4 w-3/5 rounded bg-muted" />
               </div>
-              <div className="h-48 bg-gray-200 rounded-2xl" />
+              <div className="flex flex-wrap gap-3">
+                <div className="h-11 w-28 rounded-xl bg-muted" />
+                <div className="h-11 w-28 rounded-xl bg-muted" />
+                <div className="h-11 w-28 rounded-xl bg-muted" />
+              </div>
+              <div className="h-48 rounded-2xl bg-muted" />
               <span className="sr-only">Loading restaurant details...</span>
             </div>
           </div>
@@ -637,7 +639,8 @@ export default function RestaurantDetails() {
           </div>
 
           {/* Hero Card */}
-          <Card className="shadow-xl rounded-3xl overflow-hidden border-0 mb-8">
+          {/* WEB-UX-090: 16px radius, elevation declared once (shadow, no border). */}
+          <Card className="shadow-md rounded-2xl overflow-hidden border-0 mb-8">
             {/* Hero Image, or a flat brand surface */}
             {/* A shut place gets a shorter, grey hero, so the notice and the
                 open alternatives under it sit above the fold at 390px (WEB-UX-089). */}
@@ -708,7 +711,10 @@ export default function RestaurantDetails() {
                       </span>
                     </div>
                   )}
-                  <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight drop-shadow-lg">
+                  {/* WEB-UX-090: a long name at text-4xl ran into the status
+                      badges at the top of the fixed-height hero on a phone.
+                      Smaller on phones, wraps long words, at most three lines. */}
+                  <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight drop-shadow-lg break-words line-clamp-3">
                     {restaurant.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 text-white">

@@ -301,10 +301,12 @@ test.describe('Restaurants hub: filter pills load their popover on use', () => {
     const rating = page.getByRole('button', { name: /^Rating/ });
     await rating.focus();
     await page.keyboard.press('Enter');
-    const slider = page.getByRole('slider', { name: 'Minimum rating' });
-    await expect(slider).toBeVisible();
+    // WEB-UX-090: the rating control is one row of chips; the slider is gone.
+    const ratingGroup = page.getByRole('group', { name: 'Minimum rating' });
+    await expect(ratingGroup).toBeVisible();
+    await expect(page.getByRole('slider', { name: 'Minimum rating' })).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await expect(slider).toBeHidden();
+    await expect(ratingGroup).toBeHidden();
     await expect(rating).toBeFocused();
     expect(chunks).toHaveLength(1);
   });

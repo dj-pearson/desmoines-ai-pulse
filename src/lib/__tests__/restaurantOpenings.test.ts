@@ -218,7 +218,8 @@ describe("orderOpeningsWatch", () => {
 
 describe("automationResolvesUpcoming (WEB-BE-073)", () => {
   const hours = { weekdayDescriptions: ["Mon: 11-9"], periods: [] };
-  const up = (o: Record<string, unknown>) => ({ status: "announced", opening_date: null, opening_timeframe: null, ...o });
+  type Row = OpeningRow & { business_status?: string | null; hours_json?: unknown };
+  const up = (o: Partial<Row>): Row => ({ id: "x", name: "x", status: "announced", opening_date: null, opening_timeframe: null, ...o });
 
   it("OPERATIONAL with hours is settled by the trigger", () => {
     expect(automationResolvesUpcoming(up({ business_status: "OPERATIONAL", hours_json: hours }), NOW)).toMatch(/newly_opened/);
@@ -235,6 +236,6 @@ describe("automationResolvesUpcoming (WEB-BE-073)", () => {
 
   it("a passed timeframe year with no date needs a person, and open rows are ignored", () => {
     expect(automationResolvesUpcoming(up({ opening_timeframe: "Summer 2025" }), NOW)).toBeNull();
-    expect(automationResolvesUpcoming({ status: "open", opening_date: "2026-01-01", opening_timeframe: null }, NOW)).toBeNull();
+    expect(automationResolvesUpcoming(up({ status: "open", opening_date: "2026-01-01" }), NOW)).toBeNull();
   });
 });
