@@ -65,7 +65,7 @@ serve(async (req) => {
     // the last 30 days are skipped. Google answered for them and could not
     // fill the gap, and without the stamp the same rows headed every batch.
     // If the column is not there yet (function deployed before migration
-    // 20261121000030), the selection falls back to what it was.
+    // 20261121000040), the selection falls back to what it was.
     const selectIncomplete = (withStamp: boolean) => {
       let q = supabase
         .from('restaurants')

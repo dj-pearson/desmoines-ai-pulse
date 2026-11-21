@@ -24,7 +24,7 @@ import {
 const BULK = new URL("../bulk-update-restaurants/index.ts", import.meta.url);
 const AUTO = new URL("../auto-enrich-restaurants/index.ts", import.meta.url);
 const MIGRATION = new URL(
-  "../../migrations/20261121000030_restaurant_enrich_checked_at.sql",
+  "../../migrations/20261121000040_restaurant_enrich_checked_at.sql",
   import.meta.url,
 );
 

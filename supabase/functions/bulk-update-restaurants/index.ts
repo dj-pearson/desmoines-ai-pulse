@@ -97,7 +97,7 @@ interface RestaurantUpdate {
    *  absent - never a raw pass-through of whatever Places returned. */
   business_status?: BusinessStatus;
   hours_json?: StoredHours;
-  /** WEB-BE-066. Added by migration 20261121000030; guarded like the rest.
+  /** WEB-BE-066. Added by migration 20261121000040; guarded like the rest.
    *  Stamped whenever Google answered for the row, so a row Google cannot
    *  complete stops heading the daily auto-enrich batch. */
   enrich_checked_at?: string;
@@ -1009,7 +1009,7 @@ serve(async (req) => {
             // the whole update.
             business_status,
             hours_json,
-            // WEB-BE-066: added by 20261121000030.
+            // WEB-BE-066: added by 20261121000040.
             enrich_checked_at,
             ...legacyUpdate
           } = update

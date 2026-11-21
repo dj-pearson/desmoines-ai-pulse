@@ -5,7 +5,15 @@
 // the real migrations in PGlite against a minimal schema.
 
 import { strict as assert } from "node:assert";
-import { PGlite } from "npm:@electric-sql/pglite@0.3.15";
+import * as pglite from "npm:@electric-sql/pglite@0.3.15";
+
+// The edge-types shim cannot see npm packages' named exports, so the class is
+// read off the namespace with the slice of its API these tests use.
+interface PGlite {
+  exec(sql: string): Promise<unknown>;
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
+}
+const PGlite = (pglite as unknown as { PGlite: new () => PGlite }).PGlite;
 
 const M = (f: string) => new URL(`../../migrations/${f}`, import.meta.url);
 
