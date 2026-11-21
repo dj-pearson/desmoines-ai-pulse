@@ -152,6 +152,42 @@ Deno.test("a never-classified customer (no lifecycle_signals) also gets the dunn
   assert.equal(dunningLedger(of).length, 1);
 });
 
+// --- Web-billed subscriptions only ---
+// Apple and Google run their own retries, and the copy says to update a card
+// on /subscription. The mock ignores .or(), so these exercise the per-row
+// isWebBilled check; the source guards below cover the query filter.
+
+function platformFixtures(platform: string | null) {
+  return pastDueFixtures(OPTED_OUT, {
+    user_subscriptions: [{ user_id: "u-late", status: "past_due", platform }],
+  });
+}
+
+for (const platform of ["ios", "android"]) {
+  Deno.test(`a past_due ${platform} subscriber gets no dunning email`, async () => {
+    const { client, of } = makeClient(platformFixtures(platform));
+    await run(client);
+    assert.deepEqual(dunningLedger(of), [], `${platform} reached the dunning send`);
+    assert.deepEqual(dunningLog(of), []);
+  });
+}
+
+for (const platform of ["web", null]) {
+  Deno.test(`counter-assertion: a past_due ${platform ?? "legacy (no platform)"} subscriber does get it`, async () => {
+    const { client, of } = makeClient(platformFixtures(platform));
+    await run(client);
+    assert.equal(dunningLedger(of).length, 1);
+  });
+}
+
+Deno.test("nurture and lifecycle share one web-billed predicate", async () => {
+  const shared = await import("../_shared/paymentFailedNotice.ts");
+  const policy = await import("../subscription-lifecycle/policy.ts");
+  assert.equal(policy.isWebBilled, shared.isWebBilled, "policy.ts must re-export the shared rule, not keep its own");
+  for (const p of ["ios", "android"]) assert.equal(shared.isWebBilled(p), false);
+  for (const p of ["web", null, ""]) assert.equal(shared.isWebBilled(p), true);
+});
+
 // --- Marketing stays behind consent ---
 
 function freeMemberFixtures(signals: Row | null) {
@@ -316,6 +352,8 @@ for (const path of NURTURE_COPIES) {
     assert(dunning.includes("sendNotice("), "dunning must use the transactional sender");
     assert(!dunning.includes("sendStep("), "sendStep runs the marketing quality gate");
     assert(dunning.includes("paymentFailedNoticeSentSince("), "dunning must check subscription-lifecycle's ledger");
+    assert(dunning.includes(".or(WEB_BILLED_FILTER)"), "the past_due query must list web-billed rows only");
+    assert(dunning.includes("if (!isWebBilled(d.platform)) continue;"), "store rows must be skipped per row too");
   });
 
   Deno.test(`the upgrade prompt is gated on recorded consent (${path})`, async () => {
@@ -341,6 +379,7 @@ Deno.test("subscription-lifecycle's payment-failed case reads both ledgers", asy
   const c = block(src, "case 'payment_failed':", "case 'cancel_in_stripe':");
   assert(c.includes("paymentFailedNoticeSentSince("), "lifecycle would send after nurture already did");
   assert(!c.includes("alreadyLogged("), "alreadyLogged reads only subscription_events");
+  assert(src.includes(".or(WEB_BILLED_FILTER)"), "lifecycle must list rows with the shared web-billed filter");
 });
 
 Deno.test("subscription-lifecycle sends payment_failed as transactional", async () => {

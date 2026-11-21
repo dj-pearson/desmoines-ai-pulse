@@ -25,6 +25,7 @@ import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { manageAtForPlatform, STORE_MANAGE_URLS } from "../_shared/siteUrl.ts";
 import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 import { pricingUrl, subscriptionUrl } from "../_shared/billingLinks.ts";
+import { isWebBilled } from "../_shared/paymentFailedNotice.ts";
 
 export { GRACE_PERIOD_DAYS };
 
@@ -57,10 +58,9 @@ export type LifecycleAction =
   | { kind: "expire_locally" }
   | { kind: "winback"; canceledAt: number };
 
-/** 'web' or a legacy row with no platform. Everything else is a store's. */
-export function isWebBilled(platform: string | null | undefined): boolean {
-  return platform === "web" || platform == null || platform === "";
-}
+// The web-billed rule lives in _shared/paymentFailedNotice.ts so that
+// subscription-nurture's dunning step applies the same one.
+export { isWebBilled };
 
 function ms(value: string | null | undefined): number {
   if (!value) return 0;

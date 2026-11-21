@@ -26,6 +26,23 @@
  * paymentFailedNoticeSentSince before sending, which reads BOTH ledgers.
  */
 
+/**
+ * Who gets the notice at all: web-billed (Stripe) subscriptions only. Apple and
+ * Google run their own payment retries and their own emails, and this notice's
+ * "update your payment method" link is wrong for a store subscription. 'web'
+ * or a legacy row with no platform counts as web; everything else is a store's.
+ * subscription-lifecycle/policy.ts re-exports this, so both jobs share it.
+ */
+export function isWebBilled(platform: string | null | undefined): boolean {
+  return platform === "web" || platform == null || platform === "";
+}
+
+/**
+ * The same rule as a PostgREST .or() filter, for the queries that list rows.
+ * It cannot express platform = '', so callers also apply isWebBilled per row.
+ */
+export const WEB_BILLED_FILTER = "platform.eq.web,platform.is.null";
+
 /** subscription_events.event_type written by subscription-lifecycle. */
 export const PAYMENT_FAILED_EVENT = "payment_failed";
 

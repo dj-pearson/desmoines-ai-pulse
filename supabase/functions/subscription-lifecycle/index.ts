@@ -20,7 +20,7 @@ import { runJob } from '../_shared/jobRunner.ts';
 import { listUnsubscribeHeaders, renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
 import { sendEmail } from '../_shared/email.ts';
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { PAYMENT_FAILED_EVENT, paymentFailedNoticeSentSince } from '../_shared/paymentFailedNotice.ts';
+import { PAYMENT_FAILED_EVENT, paymentFailedNoticeSentSince, WEB_BILLED_FILTER } from '../_shared/paymentFailedNotice.ts';
 import {
   DAY_MS,
   lifecycleActions,
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase
       .from('user_subscriptions')
       .select('id, user_id, status, platform, current_period_end, canceled_at, cancel_at_period_end, stripe_subscription_id, plan:subscription_plans(name, display_name)')
-      .or('platform.eq.web,platform.is.null')
+      .or(WEB_BILLED_FILTER)
       .limit(2000);
     if (error) throw error;
     const subs = (data || []) as Array<LifecycleRow & { plan?: { name?: string | null; display_name?: string | null } | null }>;

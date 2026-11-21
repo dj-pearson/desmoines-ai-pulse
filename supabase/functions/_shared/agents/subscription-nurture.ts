@@ -5,7 +5,8 @@
  *   - trial_ending  — trialing subs within TRIAL_WINDOW_DAYS of period end.
  *   - dunning       — past_due subs (Stripe smart retries drive the actual
  *                     charge; we send an aligned reminder). Transactional:
- *                     sent regardless of marketing consent, deduped against
+ *                     sent regardless of marketing consent, web-billed
+ *                     subscriptions only, deduped against
  *                     subscription-lifecycle (_shared/paymentFailedNotice.ts).
  *                     A final-step courtesy credit would be approval-gated
  *                     (AOS-CORE-007), never auto-applied.
@@ -20,7 +21,7 @@ import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import { buildTrialNotice, planAmount } from "../trialNotice.ts";
 import { buildDunningEmail, buildUpgradePromptEmail } from "../billingLinks.ts";
-import { DUNNING_KIND, paymentFailedNoticeSentSince } from "../paymentFailedNotice.ts";
+import { DUNNING_KIND, isWebBilled, paymentFailedNoticeSentSince, WEB_BILLED_FILTER } from "../paymentFailedNotice.ts";
 import type { AgentRun } from "./types.ts";
 import { hasMarketingConsent } from "../marketingConsent.ts";
 
@@ -153,11 +154,14 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 2) Dunning (past_due) ────────────────────────────────────────────
-  const { data: pastDue, error: pastDueError } = await supabase.from("user_subscriptions").select("user_id").eq("status", "past_due").limit(300);
+  const { data: pastDue, error: pastDueError } = await supabase.from("user_subscriptions").select("user_id, platform").eq("status", "past_due").or(WEB_BILLED_FILTER).limit(300);
   // Same reasoning as the trial sweep: a dunning notice nobody receives looks
   // exactly like nobody being past due.
   if (pastDueError) throw new Error(`past_due subscriptions read failed: ${pastDueError.message}`);
-  for (const d of (pastDue ?? []) as { user_id: string }[]) {
+  for (const d of (pastDue ?? []) as { user_id: string; platform: string | null }[]) {
+    // Web-billed only, the rule subscription-lifecycle uses: Apple and Google
+    // run their own retries, and this copy points at a Stripe card update.
+    if (!isWebBilled(d.platform)) continue;
     // Transactional, like the trial notice above (owner decision 2026-11-22):
     // no marketing-consent check and no quality gate. Email address only.
     // Hard suppressions still apply inside sendEmail (bounce and complaint
