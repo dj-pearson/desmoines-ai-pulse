@@ -15174,8 +15174,8 @@
         "A Playwright spec asserts the first card is in the viewport at 390x844, in the smoke lane"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. WEB-UX-059 did the same job for /events. Pixel figures are from Tailwind classes, not a browser measurement."
+      "passes": true,
+      "notes": "Filed 2026-11-21 from the restaurant deep dive (docs/page-plans/restaurants-deep-dive.md). Evidence was read on main at e7c38d59, which is what production serves; file and line references are from that tree. Production was not probed (no Supabase credentials in the container). Effort M. WEB-UX-059 did the same job for /events. Pixel figures are from Tailwind classes, not a browser measurement. DONE 2026-11-21: new src/components/restaurants/OpenNowFilters.tsx. Phones get one row (Open at, Near me, Filters button with an N active badge); area, diet, open 1+ more hour, cuisine, city and dish sit in a bottom Sheet (the /events EventFiltersSheet pattern); active filters show as removable chips with Clear all; md and up keep the expanded form. Phone intro is the clock line plus one sentence with the count; the caveat moves under How this page works. tests/restaurants-open-now-mobile.spec.ts (4 tests, fixtureBackend rows, pinned clock) asserts the first card is in the viewport at 390x844 and is in the smoke lane testMatch. Verified: open-now specs 16/16 on a placeholder-env vite build; negative control: page reverted, new spec fails 3 of 4 (first card viewport ratio 0); check-e2e-lanes 0 unrun; vitest open-now 37/37."
     },
     {
       "id": "WEB-UX-085",
