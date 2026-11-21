@@ -102,7 +102,7 @@ Deno.test("revoke frees the listing for a new owner", async () => {
   const pg = await db();
   await claim(pg, OWNER);
   await as(pg, BUYER);
-  await assert.rejects(pg.query("SELECT public.claim_listing('restaurant', $1)", [LISTING]), /already claimed/);
+  await assert.rejects(() => pg.query("SELECT public.claim_listing('restaurant', $1)", [LISTING]), /already claimed/);
 
   await as(pg, ADMIN, true);
   await revoke(pg, await claimIdOf(pg, OWNER), "Changed hands");
@@ -126,11 +126,11 @@ Deno.test("revoke refuses non-admins, a blank reason, and a claim that is not ve
   const id = await claimIdOf(pg, OWNER);
 
   await as(pg, BUYER);
-  await assert.rejects(revoke(pg, id, "mine now"), /not authorized/);
+  await assert.rejects(() => revoke(pg, id, "mine now"), /not authorized/);
 
   await as(pg, ADMIN, true);
-  await assert.rejects(revoke(pg, id, "   "), /give a reason/);
-  await assert.rejects(revoke(pg, id, null), /give a reason/);
+  await assert.rejects(() => revoke(pg, id, "   "), /give a reason/);
+  await assert.rejects(() => revoke(pg, id, null), /give a reason/);
   assert.equal(await canEdit(pg, OWNER), true); // nothing changed
 
   // A pending claim (written directly: the listing is held, so claim_listing
@@ -140,6 +140,6 @@ Deno.test("revoke refuses non-admins, a blank reason, and a claim that is not ve
     [LISTING, BUYER],
   );
   await as(pg, ADMIN, true);
-  await assert.rejects(revoke(pg, await claimIdOf(pg, BUYER), "pending one"), /is not a verified owner/);
-  await assert.rejects(revoke(pg, "00000000-0000-0000-0000-00000000dead", "x"), /not found/);
+  await assert.rejects(async () => revoke(pg, await claimIdOf(pg, BUYER), "pending one"), /is not a verified owner/);
+  await assert.rejects(() => revoke(pg, "00000000-0000-0000-0000-00000000dead", "x"), /not found/);
 });

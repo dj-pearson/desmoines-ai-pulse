@@ -179,7 +179,7 @@ Deno.test("suggest_merge_survivor is admin-only for signed-in callers", async ()
   const pg = await db();
   await pg.query("INSERT INTO restaurants (id, name) VALUES ($1, 'A'), ($2, 'B')", [S, L]);
   await pg.query("INSERT INTO auth.current VALUES ($1, false)", [OWNER]);
-  await assert.rejects(pg.query("SELECT suggest_merge_survivor('restaurant', $1, $2)", [S, L]));
+  await assert.rejects(() => pg.query("SELECT suggest_merge_survivor('restaurant', $1, $2)", [S, L]));
   await pg.query("UPDATE auth.current SET admin = true");
   await pg.query("SELECT suggest_merge_survivor('restaurant', $1, $2)", [S, L]);
 });

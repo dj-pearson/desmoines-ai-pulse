@@ -28,7 +28,8 @@ export function useRestaurantFieldLocks(restaurantId: string | null) {
     mutationFn: ({ lock, unlock }: { lock: readonly string[]; unlock: readonly string[] }) =>
       setRestaurantFieldLocks(restaurantId as string, lock, unlock),
     onSuccess: (locks) => {
-      queryClient.setQueryData<FieldLocksResult>(key, { status: "ok", locks });
+      const next: FieldLocksResult = { status: "ok", locks };
+      queryClient.setQueryData<FieldLocksResult>(key, () => next);
     },
   });
 
