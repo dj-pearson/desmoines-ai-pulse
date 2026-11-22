@@ -109,6 +109,8 @@ function restaurantRow(i: number) {
     data_quality_score: 80,
     enhanced: false,
     google_place_id: null,
+    // The top-rated list ranks only rows with 25+ Google reviews (WEB-BE-076).
+    google_review_count: 120,
     is_merged: false,
     is_sponsored: false,
     sponsored_until: null,
@@ -185,7 +187,10 @@ const TABLES: Record<string, () => unknown[]> = {
  * search input correctly pre-filled - which looks exactly like the chip bug
  * the spec is hunting. The request log is the only way to tell those apart.
  */
-const RPC_TABLES: Record<string, { table: string; wrap?: (row: unknown, total: number) => unknown }> = {
+const RPC_TABLES: Record<
+  string,
+  { table: string; wrap?: (row: unknown, total: number) => unknown; windowFromQuery?: boolean }
+> = {
   // NOT bare rows. This RPC returns { restaurant_data, total_count } per row
   // and useRestaurants does rpcData.map((r) => r.restaurant_data). Handing it
   // bare restaurants produced a list of undefined and a crash inside
@@ -197,6 +202,9 @@ const RPC_TABLES: Record<string, { table: string; wrap?: (row: unknown, total: n
     table: 'restaurants',
     wrap: (row, total) => ({ restaurant_data: row, total_count: total }),
   },
+  // A hub search on the default sort (WEB-BE-076). SETOF restaurants: bare
+  // rows, with the page window in the query string as for a table read.
+  search_restaurants_by_relevance: { table: 'restaurants', windowFromQuery: true },
 };
 
 /** The table name out of /rest/v1/<table>?... */
@@ -334,7 +342,9 @@ export async function installFixtureBackend(
     const fn = /\/rest\/v1\/rpc\/([a-z0-9_]+)/i.exec(route.request().url())?.[1] ?? '';
     const spec = RPC_TABLES[fn];
     if (spec?.table === 'restaurants' && restaurantTotal !== undefined) {
-      const { offset, limit } = rpcWindow(route, restaurantTotal);
+      const { offset, limit } = spec.windowFromQuery
+        ? tableWindow(route.request().url(), restaurantTotal)
+        : rpcWindow(route, restaurantTotal);
       const rows = restaurantWindow(restaurantTotal, offset, limit);
       const body = spec.wrap ? rows.map((row) => spec.wrap!(row, restaurantTotal)) : rows;
       return fulfil(route, body, restaurantTotal);

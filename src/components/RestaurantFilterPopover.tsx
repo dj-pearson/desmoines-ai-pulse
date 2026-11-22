@@ -1,8 +1,7 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { Star, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { RestaurantFilterOptions } from "@/lib/restaurantFilterOptions";
 import { DIETARY_OPTIONS } from "@/lib/restaurantPresets";
@@ -195,47 +194,32 @@ function RatingFilter({
   value: number;
   onCommit: (min: number) => void;
 }) {
-  // Local while dragging; the URL (and so the query and history) changes once,
-  // on commit. Writing on every onValueChange made a 0 -> 4.5 drag nine
-  // history entries and nine requests.
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-
+  // WEB-UX-090: one input. The chips and a slider set the same value, and the
+  // header read "0+ stars" when nothing was set.
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold">Minimum rating</span>
-        <span className="text-sm font-bold text-primary">{draft}+ stars</span>
+        <span className="text-sm font-semibold" id="restaurant-min-rating-label">
+          Minimum rating
+        </span>
+        <span className="text-sm font-bold text-primary">{value === 0 ? "Any" : `${value}+ stars`}</span>
       </div>
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {RATING_STEPS.map((rating) => {
-            const isSelected = value === rating;
-            return (
-              <button
-                key={rating}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => onCommit(rating)}
-                className={cn(OPTION_BASE, "flex items-center gap-1 px-2.5", isSelected ? OPTION_ON : OPTION_OFF)}
-              >
-                <Star className="h-3 w-3 fill-current" aria-hidden="true" />
-                {rating === 0 ? "Any" : `${rating}+`}
-              </button>
-            );
-          })}
-        </div>
-        <Slider
-          thumbLabel="Minimum rating"
-          thumbValueText={draft === 0 ? "Any rating" : `${draft} stars and up`}
-          value={[draft]}
-          onValueChange={([val]) => setDraft(val)}
-          onValueCommit={([val]) => onCommit(val)}
-          max={5}
-          min={0}
-          step={0.5}
-          className="w-full py-3"
-        />
+      <div className="flex flex-wrap gap-2" role="group" aria-labelledby="restaurant-min-rating-label">
+        {RATING_STEPS.map((rating) => {
+          const isSelected = value === rating;
+          return (
+            <button
+              key={rating}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => onCommit(rating)}
+              className={cn(OPTION_BASE, "flex items-center gap-1 px-2.5", isSelected ? OPTION_ON : OPTION_OFF)}
+            >
+              <Star className="h-3 w-3 fill-current" aria-hidden="true" />
+              {rating === 0 ? "Any" : `${rating}+`}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

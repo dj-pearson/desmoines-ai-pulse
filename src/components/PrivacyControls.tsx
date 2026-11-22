@@ -17,8 +17,9 @@
  *    delete-user-account edge function (SEC-025). The server generates a
  *    token, and the same client confirms it to prevent CSRF-style mistakes.
  *  - Export pulls the user's own rows from tables readable to them via RLS.
- *    Data we legitimately need to retain (invoices for tax purposes) is not
- *    purged by the "delete" flow; we disclose this in the Privacy Policy.
+ *    What the "delete" flow keeps is RETAINED_TABLES in
+ *    supabase/functions/_shared/userDataTables.ts, listed for users on
+ *    /account/delete and in the Privacy Policy (WEB-LEGAL-015).
  */
 
 import { useState } from "react";
@@ -187,8 +188,8 @@ export function PrivacyControls() {
           notice:
             "This export covers the record types listed in tables_included. It is not yet " +
             "a complete copy of every record associated with your account - a fuller export " +
-            "is being prepared. Records we are legally required to retain (for example " +
-            "invoices for tax purposes) are described in our Privacy Policy.",
+            "is being prepared. The records we keep after an account is deleted are listed " +
+            "on our account deletion page and in our Privacy Policy.",
         },
       };
 
@@ -449,11 +450,13 @@ export function PrivacyControls() {
               </h3>
               <p className="text-sm text-muted-foreground">
                 Permanently erase your account and the personal data associated
-                with it. This cannot be undone. Records we are legally required
-                to keep (for example, invoices for tax purposes) will be
-                retained in a minimized form as described in our{" "}
-                <Link to="/privacy-policy" className="underline">
-                  Privacy Policy
+                with it. This cannot be undone. A few records are kept
+                afterwards (consent records, security logs, ad-impression
+                counts that no longer identify you and, for advertisers,
+                billing records); the full list is
+                on our{" "}
+                <Link to="/account/delete" className="underline">
+                  account deletion page
                 </Link>
                 .
               </p>

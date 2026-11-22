@@ -45,13 +45,19 @@ function KpiTile({ tile }: { tile: AdminKpiTile }) {
           <div className="text-xs text-muted-foreground mb-1 truncate">
             {tile.label}
           </div>
-          <div className="text-2xl font-bold tabular-nums">
-            {tile.total.toLocaleString()}
-          </div>
-          <div className="mt-2">
-            <DeltaIndicator value={tile.deltaSevenDay} />
-            <span className="ml-1 text-xs text-muted-foreground">7d</span>
-          </div>
+          {tile.unavailable ? (
+            <div className="text-sm font-medium text-muted-foreground">{tile.unavailable}</div>
+          ) : (
+            <>
+              <div className="text-2xl font-bold tabular-nums">
+                {tile.total.toLocaleString()}
+              </div>
+              <div className="mt-2">
+                <DeltaIndicator value={tile.deltaSevenDay} />
+                <span className="ml-1 text-xs text-muted-foreground">7d</span>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </Link>
@@ -73,8 +79,8 @@ function KpiSkeleton() {
 export function AdminKpiStrip({ tiles, isLoading }: AdminKpiStripProps) {
   if (isLoading || !tiles) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
           <KpiSkeleton key={i} />
         ))}
       </div>
@@ -82,7 +88,7 @@ export function AdminKpiStrip({ tiles, isLoading }: AdminKpiStripProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
       {tiles.map((tile) => (
         <KpiTile key={tile.key} tile={tile} />
       ))}

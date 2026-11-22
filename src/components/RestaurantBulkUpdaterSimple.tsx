@@ -19,14 +19,19 @@ export function RestaurantBulkUpdaterSimple() {
   const [batchSize, setBatchSize] = useState(3); // Smaller batch for testing
   const [forceUpdate, setForceUpdate] = useState(false);
   const [clearEnhanced, setClearEnhanced] = useState(false);
+  // WEB-BE-066: a force run reads rows in id order; this is where the next
+  // one starts, so repeated runs reach different restaurants.
+  const [cursor, setCursor] = useState<string | null>(null);
 
   const handleUpdate = async () => {
     try {
-      await updateRestaurants({
+      const data = await updateRestaurants({
         batchSize,
         forceUpdate,
-        clearEnhanced
+        clearEnhanced,
+        afterId: forceUpdate ? cursor : null,
       });
+      if (forceUpdate) setCursor(data?.lastId ?? null);
     } catch (error) {
       log.error('update', 'Update failed', { data: error });
     }
@@ -73,7 +78,10 @@ export function RestaurantBulkUpdaterSimple() {
                   <Checkbox
                     id="forceUpdate"
                     checked={forceUpdate}
-                    onCheckedChange={(checked) => setForceUpdate(checked === true)}
+                    onCheckedChange={(checked) => {
+                      setForceUpdate(checked === true);
+                      setCursor(null);
+                    }}
                     disabled={isLoading}
                   />
                   <Label htmlFor="forceUpdate">Force Update</Label>
@@ -81,6 +89,19 @@ export function RestaurantBulkUpdaterSimple() {
                 <p className="text-sm text-muted-foreground">
                   Update all restaurants, including already enhanced ones
                 </p>
+                {forceUpdate && cursor && (
+                  <p className="text-sm text-muted-foreground">
+                    The next run continues after the last restaurant processed.{' '}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => setCursor(null)}
+                      disabled={isLoading}
+                    >
+                      Start from the beginning
+                    </button>
+                  </p>
+                )}
               </div>
               
               <div className="space-y-2">

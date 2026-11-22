@@ -139,6 +139,13 @@ jobs:
       # deliberately retained, so erasure coverage cannot drift silently
       # the next time a feature adds a table (WEB-LEGAL-004).
       - run: deno test --allow-read supabase/functions/_tests/user-data-tables.test.ts
+      # WEB-LEGAL-015. auth.admin.deleteUser is a DELETE on auth.users, and a
+      # FK into it with no ON DELETE (contact_submissions.user_id) or a SET NULL
+      # its CHECK refuses (deal_redemptions) failed it AFTER the purge, leaving
+      # a live login with no profile. Replays every migration and fails on any
+      # FK that would block that delete; runs the fix in PGlite against a user
+      # with a row in every such table.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/user-fk-on-delete.test.ts
       # The marketing opt-out has to be read from the key the clients write.
       # The classifier read communication_preferences.marketing/.email; the clients
       # write email_notifications, so a stored opt-out was invisible to every sender
@@ -176,6 +183,12 @@ jobs:
       # is a root deno.json with nodeModulesDir + an @types/node import and a
       # deno install step, which is a lot of machinery for one suite.
       - run: deno test --allow-read --allow-env --no-check supabase/functions/_tests/marketing-optout-agents.test.ts
+      # The payment-failed notice is transactional (owner decision 2026-11-22):
+      # an opted-out past_due customer gets it, an opted-out free member gets no
+      # upgrade prompt, bounces still block it, and subscription-nurture and
+      # subscription-lifecycle do not both mail one failed invoice. Same flags
+      # and same reason as the suite above: it runs an agent offline.
+      - run: deno test --allow-read --allow-env --no-check supabase/functions/_tests/payment-failed-notice.test.ts
       # XPLAT-007. The right of ACCESS must stay sourced from the same list as
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.
@@ -184,6 +197,10 @@ jobs:
       # erasure left email_log (to_email kept, user_id nulled) and the export
       # omitted newsletter_subscribers, email_log and email_suppressions.
       - run: deno test --allow-read supabase/functions/_tests/address-keyed-data.test.ts
+      # WEB-LEGAL-015. Contact-form messages sent signed out carry only the
+      # address, so account deletion matches them by address before the auth
+      # user goes; a failed delete is reported, not skipped.
+      - run: deno test --allow-read supabase/functions/_tests/signed-out-contact-messages.test.ts
       # XPLAT-008. Two admin diagnostics that returned 404 on every press.
       # test-article-webhook POSTs to a caller-supplied URL, so the SSRF guard
       # running BEFORE the request is the assertion that matters.
@@ -240,6 +257,60 @@ jobs:
       # are null rather than an empty periods array, because `{periods: []}`
       # reads as "closed all week" and means "Google did not answer".
       - run: deno test --allow-read supabase/functions/_tests/place-hours.test.ts
+      # WEB-BE-070. Rating, review count, phone, website, price, reservability
+      # and the listing link were read once and shown undated, and the price
+      # was credited to Google when Google had not supplied it. Pins the
+      # refresh mask and its SKU, the rule that a missing answer never blanks
+      # a stored value, the lock companions, and the SQL price-source trigger.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/place-facts.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/place-lookup.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/restaurant-verification-health.test.ts
+      # WEB-BE-066. auto-enrich-restaurants posted the ids it picked and
+      # bulk-update-restaurants ignored them, re-enriching an unordered batch;
+      # a missing editorial summary set description to null; and a name-only
+      # search took places[0] whatever its name. Pins all three.
+      - run: deno test --allow-read supabase/functions/_tests/restaurant-enrich.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-closed-flags.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-closure-reports.test.ts
+      # WEB-SEC-081. Eight admin views ran as their owner and skipped RLS, so
+      # anon read agent_tasks payloads through agent_tasks_overdue. Reads each
+      # view as anon, a non-admin and an admin, before and after the fix.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/view-security-invoker.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-rankings.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-changes.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-opening-progress.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-copy-provenance.test.ts
+      # WEB-BE-074. A restaurant merge copied nothing from the hidden row, left
+      # its owner's claim on it, and preferred a long scraped row over the
+      # Google-linked one. Pins the column fill, the survivor rule, the claim
+      # move and what Undo puts back.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-merge.test.ts
+      # WEB-BE-069. A field an owner or admin set is dropped from every
+      # bulk-update-restaurants write; update_claimed_listing and
+      # set_restaurant_field_locks write the lock (PGlite, real migration).
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-field-locks.test.ts
+      # WEB-ADS-048. Owners could not set hours or say they had closed, and a
+      # listing photo was any link. Pins owner hours (validated, source owner,
+      # locked against the refresh), the three status reports and the closure
+      # queue, uploaded-only photos, full before/after history, and that no
+      # rating or paid-placement column became owner-editable.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/owner-listing-edits.test.ts
+      # WEB-FEAT-103. Admin Delete was a row DELETE: the URL 404'd and the next
+      # scrape could add the place back. Pins hide/unhide, the RLS policy that
+      # hides the row from visitors, the removed-listing lookup, and that every
+      # restaurant ingestion path reads the do-not-ingest list (PGlite, real
+      # migrations).
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/restaurant-hide.test.ts
+      # WEB-ADS-047. A business claim decision used to be an RPC and a toast:
+      # the claimant was never told and a verified owner could not be removed.
+      # Pins the decision emails, the 3-day pending alert, and revoke (edit
+      # access goes, who and why are recorded, a revoked owner cannot
+      # auto-verify again by domain).
+      - run: deno test --allow-read supabase/functions/_tests/business-claims.test.ts
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/business-claim-revoke.test.ts
+      # WEB-FEAT-104. deals.last_confirmed_at: the backfill counts a deal as
+      # confirmed when it was entered, and new rows are stamped by default.
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/deals-last-confirmed.test.ts
       # SEO-059. articles_publishable_body_guard refuses a JSON/HTML/placeholder
       # body on publish; ai-article-pipeline used to drop that error and report
       # the article as published. Pins that it reads it and keeps a draft.
@@ -280,6 +351,13 @@ jobs:
       # A retried subscription.updated arriving after .deleted wrote active over
       # canceled. Pins the live retrieve in handleSubscriptionUpdated.
       - run: deno test --allow-read supabase/functions/_tests/stripe-subscription-updated-live-state.test.ts
+      # WEB-BE-061. stripe-webhook used the sync constructEvent, which the
+      # Deno/worker Stripe build throws on for every input, so every delivery
+      # got 401. Signs a payload with WebCrypto and runs it through the real
+      # Stripe library (200 path yields the event; tampered, wrong-secret and
+      # stale signatures get 401), and fails if a sync constructEvent comes
+      # back in any function.
+      - run: deno test --allow-read supabase/functions/_tests/stripe-webhook-signature.test.ts
       # WEB-BE-043 AC6. The ingestion functions were the one class of automation
       # with no job ledger, so a source going dark was invisible: SeatGeek - 375
       # events, the largest single source - stopped ingesting on 2026-08-21 and
@@ -500,6 +578,7 @@ jobs:
       # IOS-DD-MONETIZATION-19. Sponsored picks used a UTC flight date and could
       # point at past events and closed restaurants, with invented social proof.
       - run: deno test supabase/functions/_shared/sponsoredPickFilters.test.ts
+      - run: deno test --allow-read supabase/functions/_shared/restaurantPromotion.test.ts
       # WEB-FEAT-013. The double-charge guards used .single() on a query that
       # matches one row PER PLATFORM, so they nulled out for exactly the users
       # already paying twice, and a cross-tier upgrade opened a SECOND Stripe
@@ -520,6 +599,12 @@ jobs:
       # BEFORE INSERT triggers, the -1-is-unlimited rule, the shared 14-day
       # grace window, and the entitlement filter on the nightly job.
       - run: deno test --allow-read supabase/functions/_tests/plan-limit-enforcement.test.ts
+      # WEB-BE-062. active/trialing were entitled forever and nothing compared a
+      # row with Stripe. Runs the SQL predicate against the TypeScript one in
+      # PGlite, the reconciliation RPCs, and the nightly reconciler with a
+      # stubbed Stripe client (an error writes nothing).
+      - run: deno test --allow-read --allow-net --allow-env --allow-sys supabase/functions/_tests/subscription-entitlement-expiry.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/subscription-reconcile.test.ts
       # WEB-FEAT-019. The signup promised a confirmation nothing sent, an
       # unsubscribed address could never come back, and the weekly digest read
       # this table only for a token while ignoring the status - so the
@@ -575,6 +660,10 @@ jobs:
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).
       - run: deno test --allow-read supabase/functions/_tests/trial-notice.test.ts
+      # Every billing email links /subscription or /pricing from
+      # _shared/billingLinks.ts, never the settings tab, and those paths are
+      # routes in App.tsx (WEB-LEGAL-016).
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/billing-links.test.ts
       # A bucket created public must say why. Public means anonymous GET on a
       # guessable path with no expiry (WEB-LEGAL-007).
       # WEB-BE-030 AC4. Asserts the UNIQUE constraint that makes the guard real,
@@ -615,6 +704,7 @@ jobs:
       - run: deno test supabase/functions/_shared/menu/menuUrls.test.ts
       - run: deno test supabase/functions/_shared/menu/menuBudget.test.ts
       - run: deno test supabase/functions/_shared/menu/menuStream.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuRefresh.test.ts
       # Search plan WP6 (docs/page-plans/search.md). nlp-search had no suite in
       # any workflow, dateWindow.test.ts included, which is how a .catch on a
       # thenable with no catch turned every search into a 500. All offline:

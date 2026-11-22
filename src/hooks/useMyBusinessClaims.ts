@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { createSlug } from "@/lib/slug";
 import { ErrorSeverity, handleError } from "@/lib/errorHandler";
 import type { ClaimStatus, ListingType } from "@/hooks/useBusinessClaim";
+import type { OwnerPeriod } from "@/lib/ownerHours";
 
 /**
  * The signed-in user's own listing claims, for the /business workspace
@@ -59,12 +60,24 @@ export const OWNER_EDITABLE_FIELDS = {
 
 export type OwnerEditableField = (typeof OWNER_EDITABLE_FIELDS)[ListingType][number];
 
+/**
+ * A restaurant's hours and open/closed state, which the owner sets through
+ * their own controls rather than the text form (WEB-ADS-048).
+ */
+export interface ClaimedRestaurantState {
+  hoursJson: unknown;
+  businessStatus: string | null;
+  status: string | null;
+}
+
 /** What a claim points at: the listing's name, link and current editable values. */
 export interface ClaimedListing {
   name: string;
   /** Site path of the public page, or null for a venue (no public page). */
   href: string | null;
   values: Partial<Record<OwnerEditableField, string | null>>;
+  /** Restaurants only. */
+  restaurant?: ClaimedRestaurantState;
 }
 
 export interface MyBusinessClaim {
@@ -90,6 +103,9 @@ interface RestaurantRow {
   phone: string | null;
   image_url: string | null;
   menu_url: string | null;
+  hours_json: unknown;
+  business_status: string | null;
+  status: string | null;
 }
 
 interface AttractionRow {
@@ -120,7 +136,7 @@ async function loadListings(claims: ClaimRow[]): Promise<Map<string, ClaimedList
     restaurantIds.length
       ? supabase
           .from("restaurants")
-          .select("id, name, slug, description, website, phone, image_url, menu_url")
+          .select("id, name, slug, description, website, phone, image_url, menu_url, hours_json, business_status, status")
           .in("id", restaurantIds)
       : Promise.resolve({ data: [] as RestaurantRow[], error: null }),
     attractionIds.length
@@ -148,6 +164,7 @@ async function loadListings(claims: ClaimRow[]): Promise<Map<string, ClaimedList
           image_url: r.image_url,
           menu_url: r.menu_url,
         },
+        restaurant: { hoursJson: r.hours_json, businessStatus: r.business_status, status: r.status },
       });
     }
   } else {
@@ -214,11 +231,27 @@ export function useMyBusinessClaims() {
   });
 }
 
+/** Weekly hours in the Places period shape; the database rebuilds the stored object. */
+export interface OwnerHoursPatch {
+  periods: OwnerPeriod[];
+}
+
+/**
+ * Fields an owner sets through a structured control rather than a text box.
+ * update_claimed_listing takes hours_json on restaurants only
+ * (20261121000150); null clears the owner's hours so Google's come back.
+ */
+export const OWNER_STRUCTURED_FIELDS = {
+  restaurant: ["hours_json"],
+  attraction: [],
+  venue: [],
+} as const satisfies Record<ListingType, readonly string[]>;
+
 export interface UpdateClaimedListingInput {
   listingType: ListingType;
   listingId: string;
-  /** Only keys from OWNER_EDITABLE_FIELDS[listingType]; anything else is dropped here. */
-  patch: Partial<Record<OwnerEditableField, string | null>>;
+  /** Only keys from OWNER_EDITABLE_FIELDS / OWNER_STRUCTURED_FIELDS for the type; anything else is dropped here. */
+  patch: Partial<Record<OwnerEditableField, string | null>> & { hours_json?: OwnerHoursPatch | null };
 }
 
 /**
@@ -231,8 +264,11 @@ export function useUpdateClaimedListing() {
 
   return useMutation({
     mutationFn: async ({ listingType, listingId, patch }: UpdateClaimedListingInput) => {
-      const allowed: readonly string[] = OWNER_EDITABLE_FIELDS[listingType];
-      const clean: Record<string, string | null> = {};
+      const allowed: readonly string[] = [
+        ...OWNER_EDITABLE_FIELDS[listingType],
+        ...OWNER_STRUCTURED_FIELDS[listingType],
+      ];
+      const clean: Record<string, string | OwnerHoursPatch | null> = {};
       for (const [key, value] of Object.entries(patch)) {
         if (allowed.includes(key) && value !== undefined) clean[key] = value;
       }
@@ -249,6 +285,47 @@ export function useUpdateClaimedListing() {
       queryClient.invalidateQueries({ queryKey: [MY_BUSINESS_CLAIMS_KEY] });
     },
   });
+}
+
+export type OwnerListingStatus = "temporarily_closed" | "closed_permanently" | "reopened";
+
+export interface ReportListingStatusInput {
+  listingId: string;
+  status: OwnerListingStatus;
+  note?: string;
+}
+
+/**
+ * A verified restaurant owner says the place is temporarily closed, closed
+ * for good, or open again (report_owner_listing_status, 20261121000150).
+ * Closed for good is queued for a person to confirm and takes the listing out
+ * of promotion straight away; the other two change the listing at once.
+ */
+export function useReportListingStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ listingId, status, note }: ReportListingStatusInput) => {
+      const { data, error } = await supabase.rpc("report_owner_listing_status" as never, {
+        p_listing_id: listingId,
+        p_status: status,
+        p_note: note?.trim() || null,
+      } as never);
+      if (error) throw error;
+      const result = (data as unknown as { result?: unknown } | null)?.result;
+      return typeof result === "string" ? result : null;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [MY_BUSINESS_CLAIMS_KEY] });
+    },
+  });
+}
+
+/** The function's own refusal without its name prefix, or "" when there is none. */
+export function ownerRefusalMessage(error: unknown): string {
+  const message =
+    error && typeof error === "object" && "message" in error && typeof error.message === "string" ? error.message : "";
+  return message.replace(/^(update_claimed_listing|report_owner_listing_status):\s*/, "");
 }
 
 export interface ListingSearchResult {

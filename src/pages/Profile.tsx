@@ -13,6 +13,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { useToast } from "@/hooks/use-toast";
 import PreferencesManager from "@/components/PreferencesManager";
 import { InviteFriendsCard } from "@/components/account/InviteFriendsCard";
+import { SubscriptionLinkCard } from "@/components/account/SubscriptionLinkCard";
 import { User, Mail, Phone, Settings, Save, Edit, Trophy } from "lucide-react";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { useGamification } from "@/hooks/useGamification";
@@ -142,7 +143,10 @@ function ActivityTab() {
 
 /**
  * Every account setting, one page (account plan WP5). Security first, because
- * a compromised password is the reason someone opens this tab.
+ * a compromised password is the reason someone opens this tab. The one card
+ * above it is a link to /subscription: billing emails sent before
+ * WEB-LEGAL-016 open this tab, and a reader who came to cancel has to see the
+ * way there without scrolling past every security panel.
  */
 function SettingsTab() {
   const { hash } = useLocation();
@@ -169,6 +173,7 @@ function SettingsTab() {
 
   return (
     <Suspense fallback={<PanelSkeleton />}>
+      <SubscriptionLinkCard />
       <SecurityCheckup />
       <AccountCredentials />
       <MFAManagement />

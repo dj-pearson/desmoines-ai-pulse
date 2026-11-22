@@ -167,6 +167,9 @@ async function buildSitemaps(supabase: Supa) {
       // this list after the read, unlike the listing hooks, which run
       // isPermanentlyClosedRestaurant over status.neq.closed.
       .neq("is_merged", true)
+      // WEB-FEAT-103: a listing an admin hid. The service role reads past
+      // the RLS policy that hides it from everyone else, so say it here.
+      .is("hidden_at", null)
       .or("status.is.null,status.not.in.(closed,permanently_closed,closed_permanently)")
       .or("business_status.is.null,business_status.neq.CLOSED_PERMANENTLY")
       .order("name")

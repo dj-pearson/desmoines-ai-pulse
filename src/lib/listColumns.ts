@@ -76,6 +76,19 @@ export const RESTAURANT_DETAIL_OPTIONAL_COLUMNS = [
   "reservable",
   "reservation_url",
   "reservation_provider",
+  // WEB-BE-075 (20261121000110): when a visitor-visible field last changed.
+  "content_changed_at",
+  // WEB-BE-077 (20261121000160): copy provenance.
+  "description_source",
+  "geo_generated_at",
+  // WEB-BE-070 (20261121000130): Google's review count, when the rating was
+  // read, and who supplied price_range.
+  "google_review_count",
+  "google_rating_checked_at",
+  "price_range_source",
+  // WEB-FEAT-103 (20261121000140): set when an admin hid the listing. Only an
+  // admin can read such a row; the page shows the removed notice for it.
+  "hidden_at",
 ] as const;
 
 // NOTE: keep every name here in sync with `public.events` AS DEPLOYED, not as
@@ -280,10 +293,11 @@ export const DEAL_LINKED_RESTAURANT_COLUMNS = "id, name, location, is_merged, me
  * RESTAURANT_LIST_COLUMNS, which has neither, so with a date in `opening` no
  * card said "Open until", a CLOSED_TEMPORARILY place read as an ordinary
  * listing, and a Google CLOSED_PERMANENTLY row could not be told apart
- * (WEB-FEAT-064).
+ * (WEB-FEAT-064). latitude and longitude are for the card's Directions
+ * action (WEB-UX-087); phone, already here, is for its Call action.
  */
 export const DIETARY_RESTAURANT_COLUMNS =
-  "id, slug, name, description, cuisine, rating, price_range, location, city, image_url, phone, website, status, business_status, opening, hours_json, opening_date, opening_timeframe, is_sponsored, sponsored_until";
+  "id, slug, name, description, cuisine, rating, price_range, location, city, latitude, longitude, image_url, phone, website, status, business_status, opening, hours_json, opening_date, opening_timeframe, is_sponsored, sponsored_until";
 
 /**
  * The four columns needed to DERIVE an event slug, and nothing else

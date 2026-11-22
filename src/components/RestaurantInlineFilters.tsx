@@ -1,7 +1,9 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentPropsWithoutRef,
   type ComponentType,
@@ -79,7 +81,11 @@ const PillButton = forwardRef<HTMLButtonElement, PillButtonProps>(
         ref={ref}
         type="button"
         className={cn(
-          "flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium border transition-colors whitespace-nowrap",
+          // Compact below sm, no icon and tighter padding, so all four pills
+          // fit one row at 375px and up (WEB-UX-086). The count badge is also
+          // dropped below sm: the filled pill says it is on and the chip row
+          // under it says what, and the badge pushed Dietary off-screen.
+          "flex shrink-0 items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium border transition-colors whitespace-nowrap",
           active
             ? "bg-primary text-primary-foreground border-primary"
             : "bg-card text-foreground border-border hover:bg-muted",
@@ -88,10 +94,10 @@ const PillButton = forwardRef<HTMLButtonElement, PillButtonProps>(
         aria-expanded={open}
         {...props}
       >
-        <Icon className="h-3.5 w-3.5" />
+        <Icon className="hidden sm:block h-3.5 w-3.5" />
         {label}
         {active && (
-          <Badge className="h-4 min-w-4 px-1 text-[10px] bg-primary-foreground/25 text-primary-foreground border-0">
+          <Badge className="max-sm:hidden h-4 min-w-4 px-1 text-[10px] bg-primary-foreground/25 text-primary-foreground border-0">
             {activeCount}
           </Badge>
         )}
@@ -187,6 +193,29 @@ export function RestaurantInlineFilters({
 
   const ratingActive = filters.rating[0] > 0 || filters.rating[1] < 5;
 
+  // WEB-UX-086: the row scrolled with no scrollbar and nothing at its edge,
+  // so at 390px Rating and Dietary were off-screen with no hint they existed.
+  // The pills now fit from 375px, and where they still do not (a 320px
+  // screen, a large text setting) a fade marks the edge that has more.
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [moreRight, setMoreRight] = useState(false);
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return;
+    const update = () => setMoreRight(row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+    update();
+    row.addEventListener("scroll", update, { passive: true });
+    if (typeof ResizeObserver === "undefined") {
+      return () => row.removeEventListener("scroll", update);
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    return () => {
+      row.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, []);
+
   const panel = (kind: FilterPanelKind): FilterPanelProps => ({
     kind,
     filters,
@@ -194,44 +223,58 @@ export function RestaurantInlineFilters({
     cuisineOptions,
   });
 
-  // Bleeds to the screen edge on the left only. The right side sits 12px
-  // (gap-3) from the sort select on /restaurants, so a -mr-4 bleed ran the
+  // Bleeds to the screen edge on the left only. From lg the right side sits
+  // 12px (gap-x-3) from the sort select on /restaurants (below lg the row has
+  // the bar to itself), and a -mr-4 bleed ran the
   // scroll row 4px under the select and chips scrolled beneath it - measured
   // by layout-integrity.spec.ts at 375px (WEB-CI-028).
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1 -ml-4 pl-4 scrollbar-hide">
-      <FilterPill
-        label="Cuisine"
-        icon={ChefHat}
-        activeCount={filters.cuisine.length}
-        panel={panel("cuisine")}
-      />
-      <FilterPill
-        label="Price"
-        icon={DollarSign}
-        activeCount={filters.priceRange.length}
-        panel={panel("price")}
-      />
-      <FilterPill
-        label="Rating"
-        icon={Star}
-        activeCount={ratingActive ? 1 : 0}
-        panel={panel("rating")}
-      />
-      <FilterPill
-        label="Dietary"
-        icon={Leaf}
-        activeCount={filters.tags.filter((t) => DIETARY_OPTIONS.some((d) => d.value === t)).length}
-        panel={panel("dietary")}
-      />
+    <div className="relative">
+      <div
+        ref={rowRef}
+        className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto -ml-4 pl-4 scrollbar-hide"
+        data-filter-row=""
+      >
+        <FilterPill
+          label="Cuisine"
+          icon={ChefHat}
+          activeCount={filters.cuisine.length}
+          panel={panel("cuisine")}
+        />
+        <FilterPill
+          label="Price"
+          icon={DollarSign}
+          activeCount={filters.priceRange.length}
+          panel={panel("price")}
+        />
+        <FilterPill
+          label="Rating"
+          icon={Star}
+          activeCount={ratingActive ? 1 : 0}
+          panel={panel("rating")}
+        />
+        <FilterPill
+          label="Dietary"
+          icon={Leaf}
+          activeCount={filters.tags.filter((t) => DIETARY_OPTIONS.some((d) => d.value === t)).length}
+          panel={panel("dietary")}
+        />
 
-      {/* Open Now is not offered here: nothing server-side filters on it yet
-          (plan D2), so the hub links to /restaurants/open-now instead.
+        {/* Open Now is not offered here: nothing server-side filters on it yet
+            (plan D2), so the hub links to /restaurants/open-now instead.
 
-          The "More" pill held one switch, "Featured only / Editor's picks",
-          and nothing editorial sets is_featured on restaurants; only sponsored
-          rows kept it (20260902000004). It is gone (pass 2 WP1 item 2). An old
-          ?featured=1 link still filters and shows a "Sponsored only" chip. */}
+            The "More" pill held one switch, "Featured only / Editor's picks",
+            and nothing editorial sets is_featured on restaurants; only sponsored
+            rows kept it (20260902000004). It is gone (pass 2 WP1 item 2). An old
+            ?featured=1 link still filters and shows a "Sponsored only" chip. */}
+      </div>
+      {moreRight && (
+        <div
+          aria-hidden="true"
+          data-filter-row-fade=""
+          className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-gray-50 dark:from-background"
+        />
+      )}
     </div>
   );
 }

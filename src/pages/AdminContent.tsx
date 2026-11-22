@@ -14,6 +14,8 @@ import VenuesManager from "@/components/admin/VenuesManager";
 import MergeReviewPanel from "@/components/admin/MergeReviewPanel";
 import ModerationQueuePanel from "@/components/admin/ModerationQueuePanel";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
+import { AdminRestaurantRecords } from "@/components/admin/AdminRestaurantRecords";
+import { hideRestaurant } from "@/lib/restaurantAdmin";
 import GooglePlacesHotelTools from "@/components/GooglePlacesHotelTools";
 import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterSimple";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
@@ -42,6 +44,7 @@ import { useHotels } from "@/hooks/useHotels";
 import { ContentItem, ContentType } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/lib/toast";
+import { handleError } from "@/lib/errorHandler";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -67,6 +70,9 @@ export default function AdminContent() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useTabState("events", { validTabs: CONTENT_TAB_IDS });
   const [brokenLinksOnly, setBrokenLinksOnly] = useState(false);
+  // WEB-FEAT-103: the records table (automation fields, drawer, hide) or the
+  // content table (SEO, writeups, images) on the Restaurants tab.
+  const [restaurantView, setRestaurantView] = useState<"records" | "content">("records");
 
   // Search state for each content type
   const [searchTerms, setSearchTerms] = useState({
@@ -188,7 +194,7 @@ export default function AdminContent() {
     setEditDialog({ open: true, contentType, item });
   };
 
-  const handleCreate = (contentType: ContentType) => {
+  const handleCreate = (contentType: ContentType, overrides: Partial<ContentItem> = {}) => {
     if (contentType === "event") {
       setTemplateSelector({ open: true, contentType: 'event' });
       return;
@@ -261,7 +267,7 @@ export default function AdminContent() {
     setEditDialog({
       open: true,
       contentType,
-      item: { ...emptyItem, isNew: true } as unknown as ContentItem,
+      item: { ...emptyItem, ...overrides, isNew: true } as unknown as ContentItem,
     });
   };
 
@@ -300,13 +306,28 @@ export default function AdminContent() {
   };
 
   const handleDelete = async (contentType: string, id: string) => {
+    // WEB-FEAT-103: a restaurant is hidden, never deleted. The row stays, its
+    // page says the listing was removed, and its name and place id go on the
+    // do-not-ingest list (hide_restaurant).
+    if (contentType === "restaurant") {
+      try {
+        await hideRestaurant(id, "");
+        toast.success("Restaurant hidden. Unhide it from its record on the Restaurants tab.");
+        restaurants.refetch();
+        restaurantOpenings.refetch();
+        void queryClient.invalidateQueries({ queryKey: ["admin-restaurant-records"] });
+      } catch (error) {
+        handleError(error, { component: "AdminContent", action: "hideRestaurant" });
+        toast.error("Failed to hide: " + (error as Error).message);
+      }
+      return;
+    }
     try {
       const tableNameMap: Record<
         string,
-        "events" | "restaurants" | "attractions" | "playgrounds" | "hotels"
+        "events" | "attractions" | "playgrounds" | "hotels"
       > = {
         event: "events",
-        restaurant: "restaurants",
         attraction: "attractions",
         playground: "playgrounds",
         hotel: "hotels",
@@ -323,11 +344,9 @@ export default function AdminContent() {
       );
 
       if (contentType === "event") events.refetch();
-      else if (contentType === "restaurant") restaurants.refetch();
       else if (contentType === "attraction") attractions.refetch();
       else if (contentType === "playground") playgrounds.refetch();
       else if (contentType === "hotel") hotels.refetch();
-      restaurantOpenings.refetch();
     } catch (error) {
       log.error('handleDelete', 'Delete error', { error });
       toast.error("Failed to delete: " + (error as Error).message);
@@ -444,18 +463,39 @@ export default function AdminContent() {
             <div className="space-y-6">
               <GooglePlacesRestaurantTools />
               <RestaurantBulkUpdaterSimple />
-              <ContentTable
-                type="restaurant"
-                items={restaurants.restaurants}
-                isLoading={restaurants.isLoading}
-                totalCount={restaurants.restaurants.length}
-                searchValue={inputValues.restaurants}
-                onEdit={(item) => handleEdit("restaurant", item)}
-                onDelete={(id) => handleDelete("restaurant", id)}
-                onSearch={handleRestaurantsSearch}
-                onFilter={(filter) => log.debug('filter', 'Filter restaurants', { filter })}
-                onCreate={() => handleCreate("restaurant")}
-              />
+              <div className="flex gap-2" role="group" aria-label="Restaurant view">
+                {(["records", "content"] as const).map((v) => (
+                  <Button
+                    key={v}
+                    type="button"
+                    variant={restaurantView === v ? "default" : "outline"}
+                    aria-pressed={restaurantView === v}
+                    className="min-h-11"
+                    onClick={() => setRestaurantView(v)}
+                  >
+                    {v === "records" ? "Records" : "Content tools"}
+                  </Button>
+                ))}
+              </div>
+              {restaurantView === "records" ? (
+                <AdminRestaurantRecords
+                  onEditContent={(row) => handleEdit("restaurant", row as unknown as ContentItem)}
+                />
+              ) : (
+                <ContentTable
+                  type="restaurant"
+                  items={restaurants.restaurants}
+                  isLoading={restaurants.isLoading}
+                  totalCount={restaurants.restaurants.length}
+                  searchValue={inputValues.restaurants}
+                  onEdit={(item) => handleEdit("restaurant", item)}
+                  onDelete={(id) => handleDelete("restaurant", id)}
+                  removeAction="hide"
+                  onSearch={handleRestaurantsSearch}
+                  onFilter={(filter) => log.debug('filter', 'Filter restaurants', { filter })}
+                  onCreate={() => handleCreate("restaurant")}
+                />
+              )}
             </div>
           )}
 
@@ -512,9 +552,12 @@ export default function AdminContent() {
               searchValue={inputValues.restaurantOpenings}
               onEdit={(item) => handleEdit("restaurant", item)}
               onDelete={(id) => handleDelete("restaurant", id)}
+              removeAction="hide"
               onSearch={handleRestaurantOpeningsSearch}
               onFilter={(filter) => log.debug('filter', 'Filter restaurant openings', { filter })}
-              onCreate={() => log.debug('create', 'Create new restaurant opening')}
+              // WEB-FEAT-103: this button logged and did nothing. It now opens
+              // the same editor as Restaurants, starting as announced.
+              onCreate={() => handleCreate("restaurant", { status: "announced" } as Partial<ContentItem>)}
             />
           )}
 

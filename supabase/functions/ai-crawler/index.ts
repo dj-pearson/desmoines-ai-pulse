@@ -43,6 +43,7 @@ import { sanitizeLikeInput } from "../_shared/validation.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
 import { findKnownVenue, ingestCoordinates } from "../_shared/knownVenues.ts";
+import { loadDoNotIngest, withoutDoNotIngest } from "../_shared/restaurantDoNotIngest.ts";
 import type { SourceCounts } from "../_shared/ingestionHealth.ts";
 
 const corsHeaders = {
@@ -1376,6 +1377,26 @@ async function insertData(
     category === "restaurant_openings" ? "restaurants" : category;
   const errors = [];
   let insertedCount = 0;
+
+  // WEB-FEAT-103: restaurants and restaurant_openings both land in
+  // restaurants, and a place on the do-not-ingest list (hidden by an admin,
+  // or blocked in the Places tools) must not come back. A failed read of the
+  // list refuses the whole write rather than writing unchecked.
+  if (tableName === "restaurants") {
+    const doNotIngest = await loadDoNotIngest(supabase);
+    if (!doNotIngest.list) {
+      return {
+        success: false,
+        insertedCount: 0,
+        errors: [{ message: `do-not-ingest list unavailable: ${doNotIngest.error}` }],
+      };
+    }
+    const { kept, refused } = withoutDoNotIngest(doNotIngest.list, items);
+    if (refused.length > 0) {
+      console.log(`Skipped ${refused.length} restaurant(s) on the do-not-ingest list: ${refused.join(", ")}`);
+    }
+    items = kept;
+  }
 
   // Process items in batches to avoid rate limiting
   const batchSize = 10;

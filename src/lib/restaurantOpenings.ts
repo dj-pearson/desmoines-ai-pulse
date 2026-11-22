@@ -104,6 +104,34 @@ export function staleUpcomingReason(
 }
 
 /**
+ * WEB-BE-073: why the automation (migration 20261121000120) will settle a
+ * stale upcoming row without a person, or null when only a person can.
+ *   - Google OPERATIONAL with stored hours: the trigger moves it to
+ *     newly_opened on the next refresh write.
+ *   - opening_date more than 7 days past and not OPERATIONAL: the nightly
+ *     advance_restaurant_openings() queues it as opening_unconfirmed in the
+ *     admin closure queue (which WEB-AUTO-019 alerts on after 14 days).
+ * scripts/check-stale-openings.ts goes red only for the rows left over.
+ */
+export function automationResolvesUpcoming(
+  row: OpeningRow & { business_status?: string | null; hours_json?: unknown },
+  now: Date = new Date(),
+): string | null {
+  if (!isUpcomingStatus(row.status)) return null;
+  const operational = (row.business_status ?? "").trim().toUpperCase() === "OPERATIONAL";
+  const h = row.hours_json as { weekdayDescriptions?: unknown[]; periods?: unknown[] } | null | undefined;
+  const hasHours =
+    !!h && ((Array.isArray(h.weekdayDescriptions) && h.weekdayDescriptions.length > 0) ||
+      (Array.isArray(h.periods) && h.periods.length > 0));
+  if (operational && hasHours) return "Google OPERATIONAL with hours: moves to newly_opened on the next refresh";
+  const day = openingDay(row.opening_date);
+  if (!operational && day && day < addCentralDays(centralDateOf(now), -7)) {
+    return "opening date over 7 days past: queued for review as opening_unconfirmed";
+  }
+  return null;
+}
+
+/**
  * THE definition of a newly opened restaurant, for the hub's openings watch,
  * /restaurants/new and the card. A place is new when it has an opening_date
  * in the last `windowDays` Central days (today included) and is not closed or

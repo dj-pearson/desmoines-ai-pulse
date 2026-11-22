@@ -18,6 +18,7 @@ import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { findKnownVenue, ingestCoordinates, type KnownVenue } from "../_shared/knownVenues.ts";
+import { loadDoNotIngest, withoutDoNotIngest } from "../_shared/restaurantDoNotIngest.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
@@ -53,6 +54,49 @@ import {
   recordSkip,
   type PageFingerprint,
 } from "../_shared/pageFingerprint.ts";
+
+// BEGIN pure: restaurantFacts
+// Self-contained on purpose (no imports, no module state):
+// _tests/restaurant-ingest-honesty.test.ts lifts this block out of the file and
+// runs it, because importing index.ts would start the server.
+//
+// WEB-BE-068. A restaurant row holds what the page said, or null. This path
+// used to write "American", "Des Moines, IA" and "$$" when the page said
+// nothing, and the model's rating when it said something, and the detail page
+// shows cuisine, price and rating as facts (the rating as a Google rating).
+// ai-crawler was fixed for the same defect; this is the same rule here.
+
+/** The scraped item as the model returned it: any key may be missing or not a string. */
+export type ScrapedRestaurant = Record<string, unknown>;
+
+export interface RestaurantFacts {
+  cuisine: string | null;
+  location: string | null;
+  rating: null;
+  price_range: string | null;
+  description: string | null;
+  phone: string | null;
+  website: string | null;
+}
+
+export function restaurantFacts(item: ScrapedRestaurant): RestaurantFacts {
+  const sourcedText = (value: unknown, max: number): string | null => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed.substring(0, max) : null;
+  };
+  return {
+    cuisine: sourcedText(item.cuisine, 100),
+    location: sourcedText(item.location, 200),
+    // Never the model's number: no column records whose rating it was.
+    rating: null,
+    price_range: sourcedText(item.price_range, 20),
+    description: sourcedText(item.description, 500),
+    phone: sourcedText(item.phone, 20),
+    website: sourcedText(item.website, 200),
+  };
+}
+// END pure: restaurantFacts
 
 /** Rows per insert statement. One statement per event was a round trip each;
  *  one statement for everything lets a single bad row refuse the rest. */
@@ -575,7 +619,7 @@ serve(async (req) => {
     // The slice the request actually asked for. Applied here rather than inside
     // the loop so that every count below - inserted, duplicates, errors - is
     // about the same set of items the response says it processed.
-    const itemsToWrite = filteredItems.slice(batchInfo.processedStart, batchInfo.processedEnd);
+    const sliceToWrite = filteredItems.slice(batchInfo.processedStart, batchInfo.processedEnd);
     console.log(
       `📦 Writing items ${batchInfo.processedStart}-${batchInfo.processedEnd} of ${batchInfo.totalEvents} ` +
       `(${batchInfo.remainingEvents} remaining)`,
@@ -595,6 +639,21 @@ serve(async (req) => {
     // zero-result rule reads `inserted`, the error-rate rule reads `errors`.
     let duplicateCount = 0;
     const errors: unknown[] = [];
+
+    // WEB-FEAT-103: a place on the do-not-ingest list (an admin hid it, or it
+    // is blocked in the Places tools) is never written. A failed read of the
+    // list refuses every restaurant row in this run instead of writing them
+    // unchecked.
+    const doNotIngest = tableName === 'restaurants' ? await loadDoNotIngest(supabase) : null;
+    if (doNotIngest?.error) errors.push({ message: `do-not-ingest list unavailable: ${doNotIngest.error}` });
+    const { kept: itemsToWrite, refused: doNotIngestRefused } = !doNotIngest
+      ? { kept: sliceToWrite, refused: [] as string[] }
+      : doNotIngest.list
+        ? withoutDoNotIngest(doNotIngest.list, sliceToWrite)
+        : { kept: [], refused: [] as string[] };
+    if (doNotIngestRefused.length > 0) {
+      console.log(`Skipped ${doNotIngestRefused.length} restaurant(s) on the do-not-ingest list: ${doNotIngestRefused.join(', ')}`);
+    }
 
     // WEB-BE-043. One ledger row per scrape, keyed by the host being scraped -
     // this function is invoked per URL, so the host IS the source. Without it a
@@ -779,13 +838,7 @@ serve(async (req) => {
               case 'restaurants':
                 transformedData = {
                   name: rowName(category, item),
-                  cuisine: item.cuisine?.substring(0, 100) || "American",
-                  location: item.location?.substring(0, 200) || "Des Moines, IA",
-                  rating: item.rating || null,
-                  price_range: item.price_range?.substring(0, 20) || "$$",
-                  description: item.description?.substring(0, 500) || "",
-                  phone: item.phone?.substring(0, 20) || null,
-                  website: item.website?.substring(0, 200) || null,
+                  ...restaurantFacts(item),
                   is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),

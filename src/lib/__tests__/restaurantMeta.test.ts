@@ -14,6 +14,8 @@ import {
   restaurantMetaDescription,
   restaurantSeoTitleProblems,
   restaurantSeoDescriptionProblems,
+  restaurantSeoKeywords,
+  restaurantTemplateTitle,
   readGeoFaq,
   currentDescription,
   acceptsReservationsOf,
@@ -97,7 +99,7 @@ describe('isStaleOpeningCopy', () => {
 
 describe('restaurantPageTitle', () => {
   it('names the suburb and the menu', () => {
-    expect(restaurantPageTitle(BONCHON)).toBe('Bonchon West Des Moines: Menu, Hours & Reviews');
+    expect(restaurantPageTitle(BONCHON)).toBe('Bonchon West Des Moines: Menu & Hours');
   });
 
   it('does not repeat a suburb the name already carries', () => {
@@ -108,7 +110,7 @@ describe('restaurantPageTitle', () => {
         hasMenu: true,
         hasHours: true,
       }),
-    ).toBe("Bubbie's Pleasant Hill: Menu, Hours & Reviews");
+    ).toBe("Bubbie's Pleasant Hill: Menu & Hours");
   });
 
   it('shortens a long name to fit the budget, keeping the suburb first', () => {
@@ -124,11 +126,11 @@ describe('restaurantPageTitle', () => {
 
   it('says Menu and Hours only when the page has them', () => {
     const base = { name: 'Atlas Cafe', location: '1 Main St, Des Moines, IA 50309' };
-    expect(restaurantPageTitle(base)).toBe('Atlas Cafe Des Moines: Reviews');
-    expect(restaurantPageTitle({ ...base, opening: 'Daily 7am-3pm' })).toBe('Atlas Cafe Des Moines: Hours & Reviews');
-    expect(restaurantPageTitle({ ...base, menu_url: 'javascript:alert(1)' })).toBe('Atlas Cafe Des Moines: Reviews');
+    expect(restaurantPageTitle(base)).toBe('Atlas Cafe Des Moines');
+    expect(restaurantPageTitle({ ...base, opening: 'Daily 7am-3pm' })).toBe('Atlas Cafe Des Moines: Hours');
+    expect(restaurantPageTitle({ ...base, menu_url: 'javascript:alert(1)' })).toBe('Atlas Cafe Des Moines');
     // The page's own flags win over the row, e.g. a captured menu with no menu_url.
-    expect(restaurantPageTitle({ ...base, hasMenu: true })).toBe('Atlas Cafe Des Moines: Menu & Reviews');
+    expect(restaurantPageTitle({ ...base, hasMenu: true })).toBe('Atlas Cafe Des Moines: Menu');
   });
 
   it('never exceeds the budget unless the bare name does', () => {
@@ -139,7 +141,7 @@ describe('restaurantPageTitle', () => {
 
 describe('restaurantMetaDescription', () => {
   it('replaces stale pre-opening copy with facts', () => {
-    const d = restaurantMetaDescription(BONCHON);
+    const d = restaurantMetaDescription({ ...BONCHON, price_range_source: 'google' });
     expect(d).toBe(
       'Bonchon is a Korean restaurant at 6880 EP True Pkwy Unit 104 in West Des Moines, Iowa. $$ on Google. Menu, hours, phone and directions.',
     );
@@ -152,8 +154,19 @@ describe('restaurantMetaDescription', () => {
       location: '1 Main St, Des Moines, IA 50309',
       price_range: '$',
     });
-    expect(d).toBe('Atlas Cafe is a restaurant at 1 Main St in Des Moines, Iowa. $ on Google. Directions.');
+    expect(d).toBe('Atlas Cafe is a restaurant at 1 Main St in Des Moines, Iowa. Price level $. Directions.');
     expect(d).not.toMatch(/\$\d/);
+  });
+
+  // WEB-BE-070: price_range also comes from page text, a model or an admin.
+  it('credits Google for the price only when Google supplied it', () => {
+    const atlas = { name: 'Atlas Cafe', location: '1 Main St, Des Moines, IA 50309', price_range: '$$' };
+    expect(restaurantMetaDescription({ ...atlas, price_range_source: 'google' })).toContain('$$ on Google.');
+    for (const source of [null, undefined, 'admin', 'owner']) {
+      const d = restaurantMetaDescription({ ...atlas, price_range_source: source });
+      expect(d).not.toMatch(/Google/);
+      expect(d).toContain('Price level $$.');
+    }
   });
 
   it('keeps a current hand-written description', () => {
@@ -214,30 +227,32 @@ describe('restaurantSeoTitleProblems and the seo_title fallback (SEO-030)', () =
 
   it('reads the city from a city-only location', () => {
     expect(restaurantLocality(contrary)).toBe('Des Moines');
-    expect(restaurantPageTitle(contrary)).toBe('The Contrary Des Moines: Reviews');
+    expect(restaurantPageTitle(contrary)).toBe('The Contrary Des Moines');
   });
 
   it('says Photos when the row has one, and drops it first for length', () => {
     expect(restaurantPageTitle({ ...contrary, image_url: 'https://x.test/a.jpg' })).toBe(
-      'The Contrary Des Moines: Photos & Reviews',
+      'The Contrary Des Moines: Photos',
     );
     const t = restaurantPageTitle({
       name: 'Purveyor Restaurant & Wine Market',
       location: '2716 Beaver Ave, Des Moines, IA 50310',
       hasMenu: true,
       image_url: 'https://x.test/a.jpg',
+      reviewCount: 3,
     });
     expect(t).toBe('Purveyor Restaurant & Wine Market Des Moines: Menu & Reviews');
   });
 
   it('counts hours_json as hours', () => {
-    expect(restaurantPageTitle({ ...contrary, hours_json: { periods: [] } })).toBe('The Contrary Des Moines: Hours & Reviews');
+    expect(restaurantPageTitle({ ...contrary, hours_json: { periods: [] } })).toBe('The Contrary Des Moines: Hours');
   });
 
   it.each([
     ['Texas Roadhouse: Best Steakhouse in Des Moines, Iowa', ['no-city', 'no-intent']],
     ['Bonchon Korean Fried Chicken | West Des Moines, IA', ['no-name', 'no-city', 'no-intent']],
-    ['Texas Roadhouse Johnston: Menu & Reviews', ['claims-menu']],
+    ['Texas Roadhouse Johnston: Menu & Reviews', ['claims-menu', 'claims-reviews']],
+    ['Texas Roadhouse Johnston: Reviews', ['claims-reviews']],
     ['', ['empty']],
   ])('flags %s', (title, problems) => {
     const row = { name: 'Texas Roadhouse', location: '8744 Northpark Dr, Johnston, IA 50131, USA' };
@@ -247,11 +262,78 @@ describe('restaurantSeoTitleProblems and the seo_title fallback (SEO-030)', () =
   it('uses a stored seo_title only when it has no problems', () => {
     const row = { name: 'Texas Roadhouse', location: '8744 Northpark Dr, Johnston, IA 50131, USA' };
     expect(restaurantPageTitle({ ...row, seo_title: 'Texas Roadhouse: Best Steakhouse in Des Moines, Iowa' })).toBe(
-      'Texas Roadhouse Johnston: Reviews',
+      'Texas Roadhouse Johnston',
     );
-    expect(restaurantPageTitle({ ...row, seo_title: 'Texas Roadhouse Johnston Reviews and Ratings' })).toBe(
-      'Texas Roadhouse Johnston Reviews and Ratings',
+    expect(
+      restaurantPageTitle({ ...row, reviewCount: 12, seo_title: 'Texas Roadhouse Johnston Reviews and Ratings' }),
+    ).toBe('Texas Roadhouse Johnston Reviews and Ratings');
+  });
+});
+
+// WEB-SEO-079: on 2026-10-01 content_rating_aggregates held no restaurant
+// ratings, so "Reviews" in every title promised a block that said "No ratings
+// yet". It now needs a count above zero, ours or Google's.
+describe('Reviews only with a review count (WEB-SEO-079)', () => {
+  const page = { ...BONCHON, seo_description: null };
+
+  it('leaves Reviews out with no count, a zero count, or garbage', () => {
+    for (const reviewCount of [undefined, null, 0, -1, Number.NaN]) {
+      const t = restaurantTemplateTitle({ ...page, reviewCount });
+      expect(t).toBe('Bonchon West Des Moines: Menu & Hours');
+      expect(t).not.toMatch(/review/i);
+    }
+  });
+
+  it('adds Reviews when the page shows a count', () => {
+    expect(restaurantTemplateTitle({ ...page, reviewCount: 1 })).toBe('Bonchon West Des Moines: Menu, Hours & Reviews');
+    // A Google count (WEB-BE-070) arrives the same way.
+    expect(restaurantTemplateTitle({ ...page, reviewCount: 2140 })).toBe('Bonchon West Des Moines: Menu, Hours & Reviews');
+    expect(restaurantTemplateTitle({ name: 'Atlas Cafe', city: 'Des Moines', reviewCount: 4 })).toBe(
+      'Atlas Cafe Des Moines: Reviews',
     );
+  });
+
+  it('stays within 60 characters in both branches, dropping Photos then Reviews for length', () => {
+    const long = {
+      name: 'Purveyor Restaurant & Wine Market',
+      location: '2716 Beaver Ave, Des Moines, IA 50310',
+      hasMenu: true,
+      hasHours: true,
+      hasPhotos: true,
+    };
+    const without = restaurantTemplateTitle(long);
+    const withCount = restaurantTemplateTitle({ ...long, reviewCount: 9 });
+    expect(without).toBe('Purveyor Restaurant & Wine Market Des Moines: Menu & Hours');
+    expect(withCount).toBe('Purveyor Restaurant & Wine Market Des Moines: Menu & Hours');
+    const mid = { name: 'Bonchon', location: BONCHON.location, hasMenu: true, hasHours: true, hasPhotos: true };
+    expect(restaurantTemplateTitle({ ...mid, reviewCount: 5 })).toBe('Bonchon West Des Moines: Menu, Hours, Photos & Reviews');
+    expect(restaurantTemplateTitle(mid)).toBe('Bonchon West Des Moines: Menu, Hours & Photos');
+    for (const name of ['A', 'Taste of New York Pizza Bar', 'Purveyor Restaurant & Wine Market', 'B'.repeat(45)]) {
+      for (const reviewCount of [0, 7]) {
+        const t = restaurantTemplateTitle({ ...mid, name, reviewCount });
+        expect(t.length).toBeLessThanOrEqual(RESTAURANT_TITLE_BUDGET);
+        if (!reviewCount) expect(t).not.toMatch(/review/i);
+      }
+    }
+  });
+
+  it('sends a stored "& Reviews" seo_title to the template until there is a count', () => {
+    const row = { ...page, seo_title: 'Bonchon West Des Moines: Menu, Hours & Reviews' };
+    expect(restaurantSeoTitleProblems(row.seo_title, row)).toEqual(['claims-reviews']);
+    expect(restaurantPageTitle(row)).toBe('Bonchon West Des Moines: Menu & Hours');
+    expect(restaurantPageTitle({ ...row, reviewCount: 3 })).toBe('Bonchon West Des Moines: Menu, Hours & Reviews');
+  });
+
+  it('says reviews in the keywords only with a count', () => {
+    const row = { ...page, seo_keywords: ['bonchon reviews', 'korean fried chicken'] };
+    const none = restaurantSeoKeywords(row);
+    expect(none.filter((k) => /review/i.test(k))).toEqual([]);
+    expect(none).toContain('korean fried chicken');
+    expect(none).toContain('Bonchon menu');
+    const some = restaurantSeoKeywords({ ...row, reviewCount: 2 });
+    expect(some).toContain('Bonchon reviews');
+    expect(some).toContain('bonchon reviews');
+    expect(some).toContain('restaurants in West Des Moines');
   });
 });
 
@@ -328,6 +410,30 @@ describe('buildRestaurantSchema', () => {
 
   it('leaves hours out for a place that is not open for business', () => {
     expect(buildRestaurantSchema(row, { ...ctx, openForBusiness: false })).not.toHaveProperty('openingHoursSpecification');
+  });
+
+  it('a place closed for good publishes no menu, offers, hours or reservations (WEB-UX-089)', () => {
+    const offers = restaurantDealOffers([{ title: 'Half-price wings', start_date: '2026-10-01' }], ctx.url);
+    const open = buildRestaurantSchema(row, { ...ctx, offers, acceptsReservations: true });
+    // Counter-assertion: the same inputs on an open place publish all four.
+    expect(open).toHaveProperty('hasMenu');
+    expect(open).toHaveProperty('makesOffer');
+    expect(open).toHaveProperty('openingHoursSpecification');
+    expect(open).toHaveProperty('acceptsReservations');
+    for (const hasCapturedMenu of [false, true]) {
+      const closed = buildRestaurantSchema(row, {
+        ...ctx,
+        hasCapturedMenu,
+        offers,
+        acceptsReservations: true,
+        permanentlyClosed: true,
+      });
+      expect(closed).not.toHaveProperty('hasMenu');
+      expect(closed).not.toHaveProperty('makesOffer');
+      expect(closed).not.toHaveProperty('openingHoursSpecification');
+      expect(closed).not.toHaveProperty('acceptsReservations');
+      expect(closed.name).toBe(row.name);
+    }
   });
 
   it('points hasMenu at the on-page Menu node when a menu is captured', () => {

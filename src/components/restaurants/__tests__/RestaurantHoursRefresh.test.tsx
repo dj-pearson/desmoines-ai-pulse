@@ -87,6 +87,21 @@ describe('request bodies', () => {
     expect(bulkUpdateRequestBody()).toEqual({ batchSize: 10, forceUpdate: false, clearEnhanced: false });
   });
 
+  it('a force enrichment carries the cursor, a normal one never does (WEB-BE-066)', () => {
+    const id = '00000000-0000-4000-8000-00000000000a';
+    expect(bulkUpdateRequestBody({ batchSize: 3, forceUpdate: true, afterId: id })).toEqual({
+      batchSize: 3,
+      forceUpdate: true,
+      clearEnhanced: false,
+      afterId: id,
+    });
+    expect(bulkUpdateRequestBody({ batchSize: 3, forceUpdate: false, afterId: id })).toEqual({
+      batchSize: 3,
+      forceUpdate: false,
+      clearEnhanced: false,
+    });
+  });
+
   it('stale ignores a fill cursor and clamps to the edge function bounds', () => {
     expect(buildHoursRefreshBody('stale', { batchSize: 500, staleDays: 2, afterId: 'x' })).toEqual({
       hoursOnly: true,

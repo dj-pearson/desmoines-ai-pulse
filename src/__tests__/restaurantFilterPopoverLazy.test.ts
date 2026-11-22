@@ -24,10 +24,13 @@ function reaches(graph: Map<string, string>, file: string): string | null {
 }
 
 describe("Radix Popover and Slider stay out of /restaurants (WEB-PERF-078)", () => {
-  it("walker control: the lazy half reaches ui/popover and ui/slider statically", () => {
+  it("walker control: the lazy half reaches ui/popover statically", () => {
+    // WEB-UX-090 removed the rating slider from the popover (one input), so
+    // ui/popover is the control that proves the walker follows the lazy half.
+    // The SLIDER assertions below stay: nothing on /restaurants should pull it.
     const graph = eagerGraph(LIVE);
     expect(graph.has(POPOVER)).toBe(true);
-    expect(graph.has(SLIDER)).toBe(true);
+    expect(graph.has(SLIDER)).toBe(false);
   });
 
   it("the pills reach neither ui/popover, ui/slider nor the lazy half", () => {

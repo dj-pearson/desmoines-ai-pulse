@@ -328,11 +328,7 @@ export default function DietaryRestaurants() {
               <h3 className="font-semibold mb-2">Call ahead</h3>
               <p className="text-sm text-muted-foreground">
                 For an allergy or a strict diet, call before you visit and ask about shared fryers, prep surfaces and
-                ingredients. Browse{" "}
-                <Link to="/restaurants" className="text-primary hover:underline font-semibold">
-                  all Des Moines restaurants
-                </Link>{" "}
-                for phone numbers.
+                ingredients. A place with a listed number has a Call button on its card.
               </p>
             </div>
             <div>

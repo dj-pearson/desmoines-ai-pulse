@@ -57,6 +57,16 @@ export interface RestaurantMetaInput {
   hasHours?: boolean;
   hasPhone?: boolean;
   hasPhotos?: boolean;
+  /**
+   * How many reviews the page shows a count for (WEB-SEO-079): ours from
+   * content_rating_aggregates.total_ratings, or Google's count once the page
+   * shows it with attribution (WEB-BE-070). "Reviews" goes in the title and
+   * keywords only when this is above zero. Absent means none shown. The page
+   * and the edge shell both pass googleFacts.restaurantReviewCount(row).
+   */
+  reviewCount?: number | null;
+  /** WEB-BE-070: 'google' when Google's priceLevel supplied price_range; anything else credits nobody. */
+  price_range_source?: string | null;
 }
 
 export interface ParsedAddress {
@@ -141,6 +151,13 @@ interface Facets {
   hours: boolean;
   phone: boolean;
   photos: boolean;
+  reviews: boolean;
+}
+
+/** True when the page shows a review count above zero (WEB-SEO-079). */
+export function hasReviewCount(r: Pick<RestaurantMetaInput, "reviewCount">): boolean {
+  const n = Number(r.reviewCount);
+  return Number.isFinite(n) && n > 0;
 }
 
 function facetsOf(r: RestaurantMetaInput): Facets {
@@ -151,6 +168,7 @@ function facetsOf(r: RestaurantMetaInput): Facets {
     hours: r.hasHours ?? (hoursTextOf(r.opening) !== null || hoursJson),
     phone: r.hasPhone ?? hasText(r.phone),
     photos: r.hasPhotos ?? usableLink(r.image_url),
+    reviews: hasReviewCount(r),
   };
 }
 
@@ -164,8 +182,11 @@ function joinWords(words: string[]): string {
  * "{Name} {Suburb}: Menu, Hours, Photos & Reviews", shortened until it fits 60
  * characters. "Menu", "Hours" and "Photos" appear only when the page has them
  * (WP3.5, eat-drink pass 2): a title that promises a menu the page doesn't
- * carry is the click that bounces. "Reviews" stays, because every detail page
- * carries the ratings block. The brand suffix is appended later by SEOHead and
+ * carry is the click that bounces. "Reviews" follows the same rule
+ * (WEB-SEO-079): it appears only when the page shows a review count above
+ * zero. It used to be unconditional on the grounds that every page carries
+ * the ratings block, but with no ratings that block is an empty prompt, not
+ * reviews. The brand suffix is appended later by SEOHead and
  * may be cut off in a result; the name, the suburb and "menu" are what must
  * survive, so "Photos" is the first word dropped for length.
  */
@@ -175,16 +196,18 @@ export function restaurantTemplateTitle(r: RestaurantMetaInput): string {
   const where = loc && !titleNamesCity(name, loc) ? `${name} ${loc}` : name;
   const f = facetsOf(r);
   const core = [f.menu ? "Menu" : null, f.hours ? "Hours" : null].filter((w): w is string => !!w);
-  const full = joinWords([...core, ...(f.photos ? ["Photos"] : []), "Reviews"]);
-  const withReviews = joinWords([...core, "Reviews"]);
-  const short = core.length > 0 ? joinWords(core) : null;
+  const reviews = f.reviews ? ["Reviews"] : [];
+  // Empty strings mean "nothing to list" and are dropped with their candidate.
+  const full = joinWords([...core, ...(f.photos ? ["Photos"] : []), ...reviews]);
+  const withReviews = joinWords([...core, ...reviews]);
+  const short = joinWords(core);
   const candidates = [
-    `${where}: ${full}`,
-    `${where}: ${withReviews}`,
+    full ? `${where}: ${full}` : null,
+    withReviews ? `${where}: ${withReviews}` : null,
     short ? `${where}: ${short}` : null,
     f.menu ? `${where} Menu` : null,
-    `${name}: ${full}`,
-    `${name}: ${withReviews}`,
+    full ? `${name}: ${full}` : null,
+    withReviews ? `${name}: ${withReviews}` : null,
     short ? `${name}: ${short}` : null,
     where,
   ].filter((c): c is string => !!c);
@@ -200,6 +223,7 @@ export type RestaurantSeoTitleProblem =
   | "claims-menu"
   | "claims-hours"
   | "claims-photos"
+  | "claims-reviews"
   | "stale";
 
 /**
@@ -231,8 +255,44 @@ export function restaurantSeoTitleProblems(
   if (/\bmenus?\b/i.test(t) && !f.menu) problems.push("claims-menu");
   if (/\bhours\b/i.test(t) && !f.hours) problems.push("claims-hours");
   if (/\bphotos\b/i.test(t) && !f.photos) problems.push("claims-photos");
+  // The backfilled seo_titles all end "& Reviews" (SEO-030); this sends them
+  // to the template until the page shows a count (WEB-SEO-079).
+  if (/\breviews?\b/i.test(t) && !f.reviews) problems.push("claims-reviews");
   if (isStaleOpeningCopy(t)) problems.push("stale");
   return problems;
+}
+
+/**
+ * The page's meta keywords: the row's own seo_keywords, then the name with
+ * each intent word. "{name} reviews" is added, and any stored keyword saying
+ * "review" kept, only when the page shows a review count (WEB-SEO-079), so
+ * the keywords promise what the title does.
+ */
+export function restaurantSeoKeywords(
+  r: RestaurantMetaInput & { seo_keywords?: string[] | null },
+): string[] {
+  const name = r.name.trim();
+  const city = restaurantLocality(r) || "Des Moines";
+  const cuisine = (r.cuisine ?? "").trim();
+  const reviews = hasReviewCount(r);
+  const own = (r.seo_keywords ?? []).filter((k) => reviews || !/\breviews?\b/i.test(k));
+  return [
+    ...own,
+    name,
+    `${name} Des Moines`,
+    `${name} menu`,
+    `${name} menu with prices`,
+    `${name} menu prices`,
+    `${name} food menu`,
+    `${name} hours`,
+    reviews ? `${name} reviews` : "",
+    cuisine ? `${cuisine} restaurant Des Moines` : "",
+    cuisine ? `${cuisine} menu Des Moines` : "",
+    `restaurants in ${city}`,
+    `${city} dining`,
+    "Des Moines restaurants",
+    "Iowa restaurants",
+  ].filter(Boolean);
 }
 
 /**
@@ -347,8 +407,9 @@ const VENUE_CUISINE = /\b(cafe|coffee|tea|bar|pub|bakery|brewery|taproom|lounge|
  * The meta description. A stored seo_description wins when
  * restaurantSeoDescriptionProblems finds nothing wrong with it; otherwise it is
  * built from facts on the row, leading with what the searcher asked (where,
- * what kind, what it costs). The price is the tier as Google lists it, not a
- * dollar band we made up (WP3.5), and the closing list names only what the
+ * what kind, what it costs). The price is the stored tier, not a dollar band
+ * we made up (WP3.5), credited to Google only when price_range_source says
+ * Google supplied it (WEB-BE-070), and the closing list names only what the
  * page has.
  */
 export function restaurantMetaDescription(r: RestaurantMetaInput): string {
@@ -366,7 +427,8 @@ export function restaurantTemplateDescription(r: RestaurantMetaInput): string {
   const kind = `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
   const at = addr?.streetAddress ? ` at ${addr.streetAddress}` : "";
   const tier = priceTier(r.price_range);
-  const price = tier ? ` ${tier} on Google.` : "";
+  // WEB-BE-070: "on Google" only when Google's priceLevel supplied the tier.
+  const price = tier ? (r.price_range_source === "google" ? ` ${tier} on Google.` : ` Price level ${tier}.`) : "";
   const f = facetsOf(r);
   const has = [
     f.menu ? "menu" : null,
@@ -399,6 +461,13 @@ export interface RestaurantSchemaContext {
   openingHoursSpecification: unknown[] | null;
   /** False for closed, temporarily closed and not-open-yet rows: no hours for those. */
   openForBusiness: boolean;
+  /**
+   * Closed for good (isPermanentlyClosedRestaurant). Such a place has no menu
+   * to order from, no offer to take up, no hours and no table to book, so the
+   * node drops hasMenu, makesOffer, openingHoursSpecification and
+   * acceptsReservations whatever else the caller passes (WEB-UX-089).
+   */
+  permanentlyClosed?: boolean;
   /** The Google Maps listing (restaurants.google_maps_uri), already through safeWebUrl. Joins sameAs. */
   mapsUrl?: string | null;
   /**
@@ -479,6 +548,8 @@ export interface RestaurantSchemaRow {
  *  - sameAs is their site and the Google listing, when the row has them;
  *  - acceptsReservations only when the row says yes or no;
  *  - makesOffer only for the in-date deals the page lists;
+ *  - none of hasMenu, makesOffer, hours or acceptsReservations for a place
+ *    that has closed for good (WEB-UX-089);
  *  - no aggregateRating: the only rating on the row is Google's, which is not
  *    first-party, and content_rating_aggregates held 0 restaurant ratings on
  *    2026-10-01 (SEO-034);
@@ -490,6 +561,7 @@ export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantS
   const tier = priceTier(row.price_range);
   // Their own site, then the Google listing. No social columns exist on the row.
   const sameAs = [ctx.website, ctx.mapsUrl].filter((u): u is string => !!u);
+  const closed = ctx.permanentlyClosed === true;
   return {
     "@context": "https://schema.org",
     "@type": "Restaurant",
@@ -510,16 +582,16 @@ export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantS
     ...(sameAs.length > 0 ? { sameAs } : {}),
     // A captured menu is a Menu node on this page (MenuSchema, @id "<url>#menu");
     // point at it. Otherwise their own menu page.
-    ...(ctx.hasCapturedMenu ? { hasMenu: `${ctx.url}#menu` } : ctx.menuUrl ? { hasMenu: ctx.menuUrl } : {}),
-    ...(ctx.acceptsReservations !== undefined ? { acceptsReservations: ctx.acceptsReservations } : {}),
+    ...(closed ? {} : ctx.hasCapturedMenu ? { hasMenu: `${ctx.url}#menu` } : ctx.menuUrl ? { hasMenu: ctx.menuUrl } : {}),
+    ...(!closed && ctx.acceptsReservations !== undefined ? { acceptsReservations: ctx.acceptsReservations } : {}),
     // Only the in-date deals the page lists; none means no property at all.
-    ...(ctx.offers && ctx.offers.length > 0 ? { makesOffer: ctx.offers } : {}),
+    ...(!closed && ctx.offers && ctx.offers.length > 0 ? { makesOffer: ctx.offers } : {}),
     ...(tier ? { priceRange: tier } : {}),
     ...(row.image_url ? { image: [row.image_url] } : {}),
     ...(row.latitude != null && row.longitude != null
       ? { geo: { "@type": "GeoCoordinates", latitude: row.latitude, longitude: row.longitude } }
       : {}),
-    ...(ctx.openForBusiness && ctx.openingHoursSpecification && ctx.openingHoursSpecification.length > 0
+    ...(!closed && ctx.openForBusiness && ctx.openingHoursSpecification && ctx.openingHoursSpecification.length > 0
       ? { openingHoursSpecification: ctx.openingHoursSpecification }
       : {}),
     // Every restaurant in Des Moines takes dollars: a safe default, not an invented fact.

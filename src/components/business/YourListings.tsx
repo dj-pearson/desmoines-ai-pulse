@@ -7,6 +7,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { ClaimedListingEditForm } from "@/components/business/ClaimedListingEditForm";
 import { ListingStatsPanel } from "@/components/business/ListingStatsPanel";
+import { OwnerHoursForm } from "@/components/business/OwnerHoursForm";
+import { OwnerPhotoUpload } from "@/components/business/OwnerPhotoUpload";
+import { OwnerStatusReport } from "@/components/business/OwnerStatusReport";
 import {
   useListingSearch,
   useMyBusinessClaims,
@@ -100,13 +103,36 @@ function ClaimRow({ claim }: { claim: MyBusinessClaim }) {
       )}
 
       {verified && editing && claim.listing && (
-        <div id={editId} className="mt-4 max-w-2xl">
+        <div id={editId} className="mt-4 max-w-2xl space-y-8">
           <ClaimedListingEditForm
             listingType={claim.listing_type}
             listingId={claim.listing_id}
             listingName={name}
             initialValues={claim.listing.values}
           />
+          {claim.listing_type !== "venue" && (
+            <OwnerPhotoUpload
+              listingType={claim.listing_type}
+              listingId={claim.listing_id}
+              listingName={name}
+              currentUrl={claim.listing.values.image_url}
+            />
+          )}
+          {claim.listing_type === "restaurant" && claim.listing.restaurant && (
+            <>
+              <OwnerHoursForm
+                listingId={claim.listing_id}
+                listingName={name}
+                hoursJson={claim.listing.restaurant.hoursJson}
+              />
+              <OwnerStatusReport
+                listingId={claim.listing_id}
+                listingName={name}
+                businessStatus={claim.listing.restaurant.businessStatus}
+                status={claim.listing.restaurant.status}
+              />
+            </>
+          )}
         </div>
       )}
     </li>
@@ -186,7 +212,8 @@ export function YourListings() {
           Your listings
         </h2>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          Claim your restaurant or attraction to fix its description, website, phone, photo and menu link yourself.
+          Claim your restaurant or attraction to fix its details yourself: description, website and photo, plus
+          phone, menu link, opening hours and whether you're open or closed for a restaurant.
         </p>
       </div>
 

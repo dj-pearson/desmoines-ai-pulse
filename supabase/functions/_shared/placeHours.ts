@@ -26,6 +26,8 @@
  * mismatch instead of a silently wrong "open now".
  */
 
+import { buildGoogleFactsUpdate, type GoogleFactsUpdate } from './placeFacts.ts';
+
 /** Bumped when the stored shape changes, so a reader can tell what it has. */
 export const HOURS_JSON_VERSION = 1;
 
@@ -226,24 +228,64 @@ export function staleHoursCutoff(days: number, now: Date = new Date()): string {
  * hours_json->>fetchedAt orders the same way the instants do.
  */
 export function staleHoursFilter(cutoffIso: string): string {
-  return `hours_checked_at.lt.${cutoffIso},and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.${cutoffIso})`;
+  // WEB-BE-064: the third arm is a row never checked and never filled (no
+  // hours_checked_at, no hours_json). It used to fall through both arms, so a
+  // place with an id and no hours was re-read by nothing.
+  return `hours_checked_at.lt.${cutoffIso},and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.${cutoffIso}),and(hours_checked_at.is.null,hours_json->>fetchedAt.is.null)`;
 }
 
-export interface StaleRefreshUpdate extends HoursOnlyUpdate {
+/**
+ * WEB-BE-070. The field mask the stale refresh asks for.
+ *
+ * Hours and status, plus the facts that go stale the same way (placeFacts.ts):
+ * rating, userRatingCount, nationalPhoneNumber, websiteUri and priceLevel are
+ * in the same Place Details Enterprise SKU as regularOpeningHours, and
+ * googleMapsUri and businessStatus are Pro, below it. A request bills at the
+ * highest SKU of any field in its mask, so this costs the same per call as
+ * the two-field mask it replaced: one call, Enterprise.
+ *
+ * reservable is NOT in that SKU. It is an Enterprise + Atmosphere field, and
+ * one Atmosphere field moves the whole call up a tier. So it is asked for
+ * only on rows that do not know it yet (STALE_REFRESH_RESERVABLE_FIELD_MASK,
+ * picked by staleRefreshFieldMask): the rows completed before the column
+ * existed, which is the gap that hid the Reserve button. A row that has an
+ * answer is not re-asked on every refresh. The SKU split is from Google's
+ * Place Details (New) field list; the session that wrote this could not reach
+ * developers.google.com to re-check it, so it is recorded, not re-verified.
+ */
+export const STALE_REFRESH_FIELD_MASK =
+  `${HOURS_ONLY_FIELD_MASK},rating,userRatingCount,nationalPhoneNumber,websiteUri,priceLevel,googleMapsUri`;
+
+export const STALE_REFRESH_RESERVABLE_FIELD_MASK = `${STALE_REFRESH_FIELD_MASK},reservable`;
+
+/**
+ * The mask for one row: with reservable only when the row has no answer for
+ * it (null or absent). false is an answer and is not re-asked.
+ */
+export function staleRefreshFieldMask(row: { reservable?: boolean | null }): string {
+  return typeof row.reservable === 'boolean' ? STALE_REFRESH_FIELD_MASK : STALE_REFRESH_RESERVABLE_FIELD_MASK;
+}
+
+export interface StaleRefreshUpdate extends HoursOnlyUpdate, GoogleFactsUpdate {
   hours_checked_at: string;
 }
 
 /**
  * The columns a refresh writes for one Place Details answer. Always records
- * the check. Writes hours and status only when Places gave usable ones, so a
- * response without hours never blanks hours the row already has: null hours
- * mean "unknown", and the stored ones still say when they were fetched.
+ * the check. Writes hours, status and each Google fact only when Places gave a
+ * usable one, so a response without hours never blanks hours the row already
+ * has, and a response without a website never blanks the website: null means
+ * "unknown", and the stored values still say when they were fetched.
  */
 export function buildStaleRefreshUpdate(
   details: unknown,
   checkedAt: string = new Date().toISOString(),
 ): StaleRefreshUpdate {
-  return { ...(buildHoursOnlyUpdate(details, checkedAt) ?? {}), hours_checked_at: checkedAt };
+  return {
+    ...(buildHoursOnlyUpdate(details, checkedAt) ?? {}),
+    ...buildGoogleFactsUpdate(details, checkedAt),
+    hours_checked_at: checkedAt,
+  };
 }
 
 /**

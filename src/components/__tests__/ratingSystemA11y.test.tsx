@@ -9,6 +9,7 @@ const ratingsState = {
   reputations: {} as Record<string, { level: string; points: number }>,
   error: null as string | null,
   refetch: vi.fn(),
+  aggregate: null as null | { total_ratings: number; weighted_average: number; rating_distribution: Record<string, number> },
 };
 const authState = { user: { id: "u1" } as { id: string } | null };
 
@@ -16,7 +17,7 @@ vi.mock("@/hooks/useRatings", () => ({
   useRatings: () => ({
     ratings: ratingsState.ratings,
     userRating: null,
-    aggregate: null,
+    aggregate: ratingsState.aggregate,
     reputations: ratingsState.reputations,
     isLoading: false,
     error: ratingsState.error,
@@ -117,6 +118,34 @@ describe("RatingSystem load states", () => {
       `/auth?redirect=${encodeURIComponent("/restaurants/some-place?tab=menu")}`,
     );
     authState.user = { id: "u1" };
+  });
+});
+
+/**
+ * WEB-SEO-079. With nothing rated the block was a full card of "No ratings
+ * yet" / "Be the first to rate!" plus a sign-in panel, on nearly every
+ * restaurant page. It is one line now, and the full card returns with a rating.
+ */
+describe("RatingSystem empty state", () => {
+  it("is one line with the sign-in link when nothing is rated", () => {
+    authState.user = null;
+    const { container } = renderSystem("/restaurants/some-place");
+    expect(screen.getByText("No ratings yet.")).toBeInTheDocument();
+    expect(screen.queryByText("User Ratings")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Be the first to rate/)).not.toBeInTheDocument();
+    expect(container.children).toHaveLength(1);
+    expect(container.firstElementChild?.tagName).toBe("P");
+    expect(screen.getByRole("link", { name: "Sign in to review" })).toBeInTheDocument();
+    authState.user = { id: "u1" };
+  });
+
+  it("shows the full card and the count once there is a rating", () => {
+    ratingsState.aggregate = { total_ratings: 2, weighted_average: 4.5, rating_distribution: { "5": 1, "4": 1 } };
+    renderSystem();
+    expect(screen.getByText("User Ratings")).toBeInTheDocument();
+    expect(screen.getByText("Based on 2 reviews")).toBeInTheDocument();
+    expect(screen.queryByText("No ratings yet.")).not.toBeInTheDocument();
+    ratingsState.aggregate = null;
   });
 });
 

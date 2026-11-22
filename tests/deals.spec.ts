@@ -255,6 +255,29 @@ test.describe('/deals', () => {
     await expect(page.getByText('Valid through Dec 31, 2026')).toBeVisible();
   });
 
+  test('an open-ended deal unconfirmed for 90 days is neither listed nor offered (WEB-FEAT-104)', async ({ page }) => {
+    await page.clock.setFixedTime(WED_5PM_CT);
+    // 145 days before the clock, and 13 days before it.
+    const stale = deal(4, { title: 'Stale Open Special', end_date: null, last_confirmed_at: '2026-05-01T12:00:00Z' });
+    const fresh = deal(5, { title: 'Fresh Open Special', end_date: null, last_confirmed_at: '2026-09-10T15:00:00Z' });
+    const queries = await installDeals(page, [stale, fresh]);
+    await page.goto('/deals');
+
+    // The counter-assertion first: the fresh open-ended deal renders, with its date.
+    await expect(page.getByRole('heading', { name: 'Fresh Open Special' })).toBeVisible();
+    await expect(page.getByText('Confirmed Sep 10, 2026')).toBeVisible();
+    // The fixture returns the stale row as if the server had not filtered it.
+    await expect(page.getByRole('heading', { name: 'Stale Open Special' })).toHaveCount(0);
+
+    const list = queries.find((q) => q.includes('select=id,'));
+    expect(list).toContain('last_confirmed_at');
+    expect(list).toMatch(/or=\(end_date\.not\.is\.null,last_confirmed_at\.gte\./);
+
+    const ld = (await page.locator('script[type="application/ld+json"]').allTextContents()).join('\n');
+    expect(ld).toContain('Fresh Open Special');
+    expect(ld).not.toContain('Stale Open Special');
+  });
+
   test('an empty list links somewhere useful', async ({ page }) => {
     await page.clock.setFixedTime(WED_5PM_CT);
     await installDeals(page, []);

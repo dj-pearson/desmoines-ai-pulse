@@ -48,7 +48,10 @@ export function keyForClient(src, client) {
 for (const { fn, table } of READERS) {
   test(`${fn} reads ${table} with the service role`, () => {
     const src = stripComments(readFileSync(`supabase/functions/${fn}/index.ts`, 'utf8'));
-    const client = clientForTable(src, table);
+    // WEB-FEAT-103 moved the restaurant read into the shared do-not-ingest
+    // loader; the client handed to it is the reader.
+    const viaLoader = table === 'restaurant_blacklist' ? /loadDoNotIngest\(\s*(\w+)\s*\)/.exec(src)?.[1] : null;
+    const client = clientForTable(src, table) ?? viaLoader;
     assert.ok(client, `${fn} no longer reads ${table}; update this test`);
     assert.equal(keyForClient(src, client), 'SUPABASE_SERVICE_ROLE_KEY');
   });
@@ -56,7 +59,8 @@ for (const { fn, table } of READERS) {
   test(`${fn} still refuses callers before the service-role read`, () => {
     const src = stripComments(readFileSync(`supabase/functions/${fn}/index.ts`, 'utf8'));
     const gate = src.indexOf('requireAdminOrApiKey(req');
-    const read = src.indexOf(`.from("${table}")`);
+    const direct = src.indexOf(`.from("${table}")`);
+    const read = direct > 0 ? direct : src.indexOf('loadDoNotIngest(');
     assert.ok(gate > 0 && read > gate, 'the admin/API-key gate must run before the blacklist read');
   });
 }

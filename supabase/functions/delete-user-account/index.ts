@@ -27,7 +27,10 @@
  *
  * Permanently deletes every table listed in _shared/userDataTables.ts
  * (PURGE_TABLES), the "purge" entries of _shared/addressKeyedData.ts
- * (newsletter_subscribers and email_log, by address) and auth.users.
+ * (newsletter_subscribers and email_log, by address), contact-form messages
+ * sent signed out from the account's address (_shared/signedOutContactMessages.ts)
+ * and auth.users. Before the auth row goes, a trigger clears the viewer from
+ * the user's ad_impressions and keeps the rows (20261122000070).
  * Tables kept on purpose, each with its stated basis, are RETAINED_TABLES in
  * the same file. Both lists are covered by _tests/user-data-tables.test.ts.
  *
@@ -37,8 +40,11 @@
  *
  * GDPR Art. 17 (right to erasure) — the delete set is kept aligned with every
  * table that stores user-identifiable data. Records with an independent legal
- * basis for retention (e.g. append-only consent_records kept as proof of
- * consent, invoices kept for tax) are intentionally NOT purged here.
+ * basis for retention (RETAINED_TABLES, e.g. append-only consent_records kept
+ * as proof of consent) are intentionally NOT purged here. Owner decision
+ * 2026-11-22, "delete should delete": everything else tied to the person goes,
+ * and the ON DELETE CASCADE foreign keys (20261122000060) delete the rows in
+ * tables this loop cannot see, such as invoices and crm_contacts.
  *
  * Required by Apple App Store Review for apps that support account creation.
  */
@@ -50,6 +56,10 @@ import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { purgeUserStorage, type BucketPurgeResult } from "../_shared/purgeUserStorage.ts";
 import { PURGE_TABLES } from "../_shared/userDataTables.ts";
 import { purgeAddressKeyedData, type AddressDataClient } from "../_shared/addressKeyedData.ts";
+import {
+  purgeSignedOutContactMessages,
+  type ContactPurgeClient,
+} from "../_shared/signedOutContactMessages.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import {
   cancelBillingBeforeErasure,
@@ -210,6 +220,23 @@ async function performDeletion(
     console.error(`Failed deleting from ${failure.table} (${failure.code}):`, failure.message);
   }
 
+  // Contact-form messages sent while signed out from this account's address,
+  // matched case-insensitively (WEB-LEGAL-015, owner decision 2026-11-22).
+  // They carry no user_id, so the loop above and the CASCADE never reach them.
+  // Needs the address, so it runs before the auth user goes. A failure is
+  // reported like any other table: complete:false, tables_incomplete.
+  const contactPurge = await purgeSignedOutContactMessages(
+    supabase as ContactPurgeClient,
+    user.email,
+  );
+  if (contactPurge.failure) {
+    tableFailures.push(contactPurge.failure);
+    console.error(
+      `Failed deleting signed-out contact messages (${contactPurge.failure.code}):`,
+      contactPurge.failure.message,
+    );
+  }
+
   // Purge uploaded files (WEB-LEGAL-003). Runs BEFORE the auth user is deleted:
   // the service-role client works either way, but the audit entry below should
   // be written while the subject is still resolvable. Every upload bucket is
@@ -254,6 +281,7 @@ async function performDeletion(
       storage_buckets: storageResults,
       tables_attempted: PURGE_TABLES.length,
       address_deletes_attempted: addressPurge.attempted,
+      signed_out_contact_messages_deleted: contactPurge.deleted,
       table_failures: tableFailures,
       stripe_subscriptions_cancelled: billing.cancelled,
       stripe_customers_deleted: billing.customersDeleted,

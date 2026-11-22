@@ -14,6 +14,19 @@ export type Tier = 'free' | 'insider' | 'vip';
 /** Mirror of useSubscription.GRACE_PERIOD_DAYS (PROD-SUB-003). */
 export const GRACE_PERIOD_DAYS = 14;
 
+/**
+ * How long an active or trialing row keeps entitlement after its
+ * current_period_end (WEB-BE-062). Mirror of useSubscription.ACTIVE_GRACE_DAYS
+ * and of interval '3 days' in public.subscription_row_entitled().
+ *
+ * Before this, active/trialing meant "entitled forever": the only thing that
+ * moved a web row off 'active' was a Stripe webhook, so one missed
+ * customer.subscription.deleted meant free premium for good. Three days covers
+ * a renewal webhook that arrives late (Stripe retries for up to three days) and
+ * the hours Apple and Google take to post a renewal, and no more.
+ */
+export const ACTIVE_GRACE_DAYS = 3;
+
 export const TIER_RANK: Record<Tier, number> = { free: 0, insider: 1, vip: 2 };
 
 /**
@@ -41,31 +54,50 @@ export const PREMIUM_FEATURES: Record<string, Tier> = {
 };
 
 /**
+ * The instant a row stops granting entitlement, or null when it never does.
+ *   active / trialing  -> current_period_end + ACTIVE_GRACE_DAYS
+ *   past_due           -> current_period_end + GRACE_PERIOD_DAYS
+ *   canceled / paused  -> null (never)
+ * A row with no current_period_end has no instant to compare against and is
+ * treated as lapsed: every writer (stripe-webhook, validate-ios-receipt,
+ * validate-android-receipt and the store notifications) sets it from the
+ * provider, so a missing one means the provider gave us nothing to trust.
+ */
+export function entitlementEndsAt(
+  status: string | null | undefined,
+  currentPeriodEnd: string | null | undefined,
+): Date | null {
+  if (!currentPeriodEnd) return null;
+  const end = new Date(currentPeriodEnd);
+  if (Number.isNaN(end.getTime())) return null;
+  switch (status) {
+    case 'active':
+    case 'trialing':
+      end.setDate(end.getDate() + ACTIVE_GRACE_DAYS);
+      return end;
+    case 'past_due':
+      end.setDate(end.getDate() + GRACE_PERIOD_DAYS);
+      return end;
+    default:
+      return null;
+  }
+}
+
+/**
  * Whether a single subscription row currently grants entitlement.
  * Pure + side-effect free so it can be unit-tested in isolation. Mirrors
- * isSubscriptionEntitled() in src/hooks/useSubscription.ts:
- *   active / trialing  -> always
- *   past_due           -> only within current_period_end + GRACE_PERIOD_DAYS
- *   canceled / paused  -> never
+ * isSubscriptionEntitled() in src/hooks/useSubscription.ts and
+ * public.subscription_row_entitled() in SQL (migration 20261122000020); the
+ * PGlite test in _tests/subscription-entitlement-expiry.test.ts runs this and
+ * the SQL predicate over the same rows and asserts they agree.
  */
 export function isSubscriptionRowEntitled(
   status: string | null | undefined,
   currentPeriodEnd: string | null | undefined,
   now: Date = new Date(),
 ): boolean {
-  switch (status) {
-    case 'active':
-    case 'trialing':
-      return true;
-    case 'past_due': {
-      if (!currentPeriodEnd) return false;
-      const grace = new Date(currentPeriodEnd);
-      grace.setDate(grace.getDate() + GRACE_PERIOD_DAYS);
-      return now.getTime() <= grace.getTime();
-    }
-    default:
-      return false;
-  }
+  const ends = entitlementEndsAt(status, currentPeriodEnd);
+  return ends !== null && now.getTime() <= ends.getTime();
 }
 
 /**
@@ -99,7 +131,7 @@ interface SubRow {
 
 /**
  * Resolve the highest tier the user is CURRENTLY entitled to (across platforms),
- * honoring trialing + the past_due grace window. Returns 'free' on any error so
+ * honoring the period end, the active buffer and the past_due grace window. Returns 'free' on any error so
  * a transient DB issue fails closed to the free tier rather than throwing.
  */
 export async function resolveEntitledTier(

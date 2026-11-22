@@ -31,10 +31,19 @@ import {
   restaurantLocality,
   restaurantMetaDescription,
   restaurantPageTitle,
+  restaurantSeoKeywords,
 } from "@/lib/restaurantMeta";
 import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
-import { Phone, Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
-import { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import {
+  checkedDateLabel,
+  googleRatingSummary,
+  priceFromGoogle,
+  restaurantReviewCount,
+  reviewCountLabel,
+  type GoogleRatingSummary,
+} from "@/lib/googleFacts";
+import { Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
+import { useState, useMemo, useEffect, lazy, Suspense, type ComponentProps } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import {
@@ -46,6 +55,7 @@ import {
   type StoredOpeningHours,
 } from "@/lib/restaurantHours";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { isPermanentlyClosedRestaurant, isShutRestaurant } from "@/lib/restaurantStatus";
 import { useRestaurantMenu } from "@/hooks/useRestaurantMenu";
 import { useRestaurantAreaPages } from "@/hooks/useRestaurantAreaPages";
 import { lastUpdatedLabel, neighborhoodLink, scheduleHoursSentence } from "@/lib/restaurantAtAGlance";
@@ -64,10 +74,14 @@ import { RestaurantDealsList } from "@/components/restaurants/RestaurantDeals";
 import { useRestaurantDeals, venuePageDeals } from "@/hooks/useDeals";
 import { DeferredWidget } from "@/components/DeferredWidget";
 import { ClaimListingCta } from "@/components/business/ClaimListingCta";
+import { ReportClosedControl } from "@/components/restaurants/ReportClosedControl";
+import { aiCopyIsFresh, aiGeneratedLine, descriptionSourceLabel } from "@/lib/restaurantCopy";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { fetchRestaurantDetail } from "@/lib/restaurantDetail";
+import { fetchRemovedRestaurant } from "@/lib/removedRestaurant";
+import { RemovedRestaurantNotice } from "@/components/RemovedRestaurantNotice";
 import { isRestaurantPseoSlug } from "@/pseo/restaurantAreaSlugs";
 import { useSiteFooter } from "@/hooks/useSiteFooter";
 
@@ -80,6 +94,11 @@ const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPse
 const RatingSystem = lazy(() =>
   import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
 );
+
+type StickyAction = NonNullable<ComponentProps<typeof StickyMobileCTA>["primaryAction"]>;
+
+/** Hidden below lg, where StickyMobileCTA (lg:hidden) already offers the action. */
+const STICKY_DUPLICATE = " hidden lg:inline-flex";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -96,11 +115,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 type Lifecycle = RestaurantLifecycle;
 
-function lifecycleOf(status: string | null | undefined, businessStatus?: string | null): Lifecycle {
-  const google = (businessStatus ?? "").trim().toUpperCase();
-  const own = (status ?? "").trim().toLowerCase();
-  if (google === "CLOSED_PERMANENTLY" || own === "closed" || own === "permanently_closed") return "closed";
-  if (google === "CLOSED_TEMPORARILY" || own === "temporarily_closed") return "temporarily_closed";
+function lifecycleOf(row: { status?: string | null; business_status?: string | null }): Lifecycle {
+  // The shared rules (restaurantStatus.ts), so this page and every list agree
+  // on which places are closed for good and which for now (WEB-UX-089).
+  if (isPermanentlyClosedRestaurant(row)) return "closed";
+  if (isShutRestaurant(row)) return "temporarily_closed";
+  const own = (row.status ?? "").trim().toLowerCase();
   if (own === "opening_soon" || own === "announced") return "not_open_yet";
   return null;
 }
@@ -140,10 +160,20 @@ function centralDate(value: unknown): string | null {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
 }
 
-/** hours_json.fetchedAt, written by _shared/placeHours.ts when Google's hours were read. */
-function hoursCheckedAt(hoursJson: StoredOpeningHours | null | undefined): string | null {
-  const fetchedAt = (hoursJson as { fetchedAt?: unknown } | null | undefined)?.fetchedAt;
-  return hoursJson?.periods?.length ? centralDate(fetchedAt) : null;
+/**
+ * Where the hours came from. Google's carry fetchedAt (_shared/placeHours.ts);
+ * hours the owner set carry source "owner" and setAt instead (WEB-ADS-048,
+ * owner_hours_json), and are not described as a Google check.
+ */
+function hoursSourceLine(hoursJson: StoredOpeningHours | null | undefined): string | null {
+  if (!hoursJson?.periods?.length) return null;
+  const raw = hoursJson as { fetchedAt?: unknown; setAt?: unknown; source?: unknown };
+  if (raw.source === "owner") {
+    const setOn = centralDate(raw.setAt);
+    return setOn ? `Hours from the owner, updated ${setOn}` : "Hours from the owner";
+  }
+  const checkedOn = centralDate(raw.fetchedAt);
+  return checkedOn ? `Hours from Google, checked ${checkedOn}` : null;
 }
 
 /** The restaurant row by slug, falling back to the id only when the param is a uuid. */
@@ -157,10 +187,25 @@ function useRestaurantDetail(slug: string | undefined) {
 }
 
 interface ProvenanceProps {
-  rating: number | null | undefined;
+  rating: GoogleRatingSummary | null;
+  /** The Google Maps listing, linked from the rating line (WEB-BE-070). */
+  googleListingHref: string | null;
+  priceFromGoogle: boolean;
   menuCapturedAt: string | null;
   menuFromTheirSite: boolean;
-  hoursCheckedOn: string | null;
+  hoursLine: string | null;
+}
+
+/** "Rating from Google, 312 reviews, checked November 21, 2026". */
+function ratingProvenanceLine(rating: GoogleRatingSummary): string {
+  const checked = checkedDateLabel(rating.checkedAt);
+  return [
+    "Rating from Google",
+    rating.reviewCount ? reviewCountLabel(rating.reviewCount) : null,
+    checked ? `checked ${checked}` : "check date not recorded",
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 /**
@@ -168,11 +213,20 @@ interface ProvenanceProps {
  * (WP3.6, bet 4). It replaced a blanket freshness badge that measured when
  * any column last changed, not whether anyone checked anything.
  */
-function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hoursCheckedOn }: ProvenanceProps) {
+function RestaurantProvenance({
+  rating,
+  googleListingHref,
+  priceFromGoogle,
+  menuCapturedAt,
+  menuFromTheirSite,
+  hoursLine,
+}: ProvenanceProps) {
+  const ratingLine = rating ? ratingProvenanceLine(rating) : null;
   const lines = [
-    rating ? "Rating: Google rating" : null,
+    ratingLine,
+    priceFromGoogle ? "Price level from Google" : null,
     menuCapturedAt ? `Menu captured ${menuCapturedAt}${menuFromTheirSite ? " from their site" : ""}` : null,
-    hoursCheckedOn ? `Hours from Google, checked ${hoursCheckedOn}` : null,
+    hoursLine,
   ].filter((l): l is string => !!l);
   if (lines.length === 0) return null;
   return (
@@ -182,7 +236,23 @@ function RestaurantProvenance({ rating, menuCapturedAt, menuFromTheirSite, hours
       </h2>
       <ul className="mt-1 text-sm text-muted-foreground">
         {lines.map((line) => (
-          <li key={line}>{line}</li>
+          <li key={line}>
+            {line}
+            {/* WEB-UX-088: the link moved here with the details tile it sat in. */}
+            {line === ratingLine && googleListingHref && (
+              <>
+                {". "}
+                <a
+                  href={googleListingHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[#2D1B69] underline underline-offset-2 dark:text-violet-300"
+                >
+                  See it on Google
+                </a>
+              </>
+            )}
+          </li>
         ))}
       </ul>
     </section>
@@ -275,7 +345,7 @@ export default function RestaurantDetails() {
   // tonight showed neither list.
   const tonightApplies =
     !!restaurant &&
-    !lifecycleOf(restaurant.status, (restaurant as { business_status?: string | null }).business_status);
+    !lifecycleOf(restaurant as { status?: string | null; business_status?: string | null });
   const tonight = useTonightNearRestaurant(
     tonightApplies ? restaurant.latitude : null,
     tonightApplies ? restaurant.longitude : null,
@@ -285,28 +355,39 @@ export default function RestaurantDetails() {
   // Published, indexable cuisine x area pages that list this place (SEO-034).
   const { data: areaPages } = useRestaurantAreaPages(restaurant);
 
-  if (isLoading || (mergedInto && (survivorLoading || redirectTo))) {
+  // WEB-FEAT-103: a listing an admin hid reads as absent to everyone else;
+  // ask whether this slug was one, so an old link says so instead of 404ing.
+  const { data: removed, isLoading: removedLoading } = useQuery({
+    queryKey: ["removed-restaurant", slug],
+    queryFn: () => fetchRemovedRestaurant(slug ?? ""),
+    enabled: !isLoading && !error && !restaurant && !!slug,
+    staleTime: DETAIL_STALE_TIME,
+  });
+
+  if (isLoading || removedLoading || (mergedInto && (survivorLoading || redirectTo))) {
     return (
       <>
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/restaurants/${slug}`} />
         <div className="min-h-screen bg-gray-50 dark:bg-background" role="status" aria-live="polite" aria-busy="true">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
+            {/* WEB-UX-090: the same blocks the loaded page draws, in order
+                (breadcrumb, hero, at-a-glance lines, action row, body), in
+                bg-muted so dark mode gets a dark placeholder. */}
             <div className="animate-pulse space-y-6 motion-reduce:animate-none">
-              <div className="h-6 w-48 bg-gray-200 rounded" />
-              <div className="h-80 bg-gray-200 rounded-3xl" />
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Restaurant Info</span>
-                </div>
-                <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Hours & Location</span>
-                </div>
-                <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Reviews & Rating</span>
-                </div>
+              <div className="h-5 w-48 rounded bg-muted" />
+              <div className="h-72 md:h-96 rounded-2xl bg-muted" />
+              <div className="space-y-2 rounded-2xl bg-muted/60 p-4">
+                <div className="h-4 w-2/3 rounded bg-muted" />
+                <div className="h-4 w-1/2 rounded bg-muted" />
+                <div className="h-4 w-3/5 rounded bg-muted" />
               </div>
-              <div className="h-48 bg-gray-200 rounded-2xl" />
+              <div className="flex flex-wrap gap-3">
+                <div className="h-11 w-28 rounded-xl bg-muted" />
+                <div className="h-11 w-28 rounded-xl bg-muted" />
+                <div className="h-11 w-28 rounded-xl bg-muted" />
+              </div>
+              <div className="h-48 rounded-2xl bg-muted" />
               <span className="sr-only">Loading restaurant details...</span>
             </div>
           </div>
@@ -352,6 +433,12 @@ export default function RestaurantDetails() {
       </>
     );
   }
+
+  // One notice, one <title> source: a visitor gets the removed lookup's name,
+  // an admin (who can still read the hidden row) gets the row's.
+  const hiddenForAdmin = !!restaurant && !!(restaurant as { hidden_at?: string | null }).hidden_at;
+  const removedName = !restaurant && removed ? removed.name : hiddenForAdmin ? restaurant.name : null;
+  if (removedName) return <RemovedRestaurantNotice name={removedName} adminView={hiddenForAdmin} />;
 
   if (!restaurant) {
     const notFound = (
@@ -399,11 +486,11 @@ export default function RestaurantDetails() {
   const safeWebsite = safeWebUrl(restaurant.website);
   const safeMenuUrl = safeWebUrl(restaurant.menu_url);
   const phoneHref = telHref(restaurant.phone);
-  const lifecycle = lifecycleOf(
-    restaurant.status,
-    (restaurant as { business_status?: string | null }).business_status,
-  );
+  const lifecycle = lifecycleOf(restaurant as { status?: string | null; business_status?: string | null });
   const isShut = lifecycle === "closed" || lifecycle === "temporarily_closed";
+  // WEB-UX-089: closed for good. No Website, Menu, Reserve, Call or Rate, no
+  // captured menu, and nothing in the schema a diner could act on.
+  const closedForGood = lifecycle === "closed";
   const liveStatus = lifecycle ? null : openStatus;
   const tier = priceTier(restaurant.price_range);
   const openingDateLabel = formatOpeningDate(restaurant.opening_date);
@@ -419,6 +506,11 @@ export default function RestaurantDetails() {
     reservation_url?: string | null;
     neighborhood?: string | null;
   };
+  // WEB-BE-070: the rating with its count and check date, and whether Google
+  // (rather than page text, a model or an admin) supplied the price.
+  const googleRating = googleRatingSummary(restaurant);
+  const priceIsGoogle = priceFromGoogle(restaurant);
+  const googleListingHref = safeWebUrl(placeExtras.google_maps_uri);
 
   const showImage = restaurant.image_url && !imageError;
   // The address's city, not the `city` column: the column says "Des Moines" for
@@ -435,32 +527,26 @@ export default function RestaurantDetails() {
   // "Menu", "Hours" and "Photos" only when this page shows them (WP3.5).
   const metaInput = {
     ...restaurant,
-    hasMenu: hasCapturedMenu || !!safeMenuUrl,
+    hasMenu: !closedForGood && (hasCapturedMenu || !!safeMenuUrl),
     // SEO-054: `opening` is a date column; only hours text counts.
     hasHours: lifecycle !== "closed" && (!!hoursSpec || hoursTextOf(restaurant.opening) !== null),
     hasPhone: !isShut && !!phoneHref,
     hasPhotos: !!restaurant.image_url,
+    // WEB-SEO-079 / WEB-BE-070: the Google count this page shows. The edge
+    // shell passes the same restaurantReviewCount, so both titles agree.
+    reviewCount: restaurantReviewCount(restaurant),
   };
+  // WEB-BE-075: "Listing last updated" and dateModified follow a change a
+  // visitor can see. updated_at moves on every hours re-check and popularity
+  // write, which made a row look freshly reviewed after bookkeeping.
+  const listingChangedAt =
+    (restaurant as { content_changed_at?: string | null }).content_changed_at ?? restaurant.updated_at;
   const seoTitle = restaurantPageTitle(metaInput);
   const seoDescription = restaurantMetaDescription(metaInput);
 
-  const seoKeywords = [
-    ...(restaurant.seo_keywords || []),
-    restaurant.name,
-    `${restaurant.name} Des Moines`,
-    `${restaurant.name} menu`,
-    `${restaurant.name} menu with prices`,
-    `${restaurant.name} menu prices`,
-    `${restaurant.name} food menu`,
-    `${restaurant.name} hours`,
-    `${restaurant.name} reviews`,
-    restaurant.cuisine ? `${restaurant.cuisine} restaurant Des Moines` : "",
-    restaurant.cuisine ? `${restaurant.cuisine} menu Des Moines` : "",
-    `restaurants in ${cityName}`,
-    `${cityName} dining`,
-    "Des Moines restaurants",
-    "Iowa restaurants",
-  ].filter(Boolean);
+  // WEB-SEO-079: one keyword rule with the title. "{name} reviews" only with a
+  // review count, which metaInput carries from Google (WEB-BE-070).
+  const seoKeywords = restaurantSeoKeywords(metaInput);
 
   // WEB-SEO-016: getEstimatedReviewCount() used to synthesise a review count
   // from the rating and popularity score (rating >= 4.5 ? 150 : 100 : 50 : 25,
@@ -484,6 +570,7 @@ export default function RestaurantDetails() {
     openingHoursSpecification: hoursSpec,
     // A closed or not-yet-open place publishes no hours.
     openForBusiness: !lifecycle,
+    permanentlyClosed: closedForGood,
     mapsUrl: safeWebUrl(placeExtras.google_maps_uri),
     acceptsReservations: acceptsReservationsOf(placeExtras, safeWebUrl),
     offers: restaurantDealOffers(pageDeals, canonicalUrl),
@@ -518,9 +605,35 @@ export default function RestaurantDetails() {
     longitude: restaurant.longitude,
     address: `${restaurant.name} ${restaurant.location}`,
   });
+  // The sticky mobile bar's two actions, decided once: the bar draws them,
+  // and the quick-action row leaves them out below lg, where the bar shows
+  // (WEB-UX-088). Nothing for a shut place: every one of them sends someone
+  // to a business that isn't serving.
+  // WEB-FEAT-024: the primary said "Call to Reserve" for every restaurant with
+  // a phone number, asserting that a counter-service taco shop takes
+  // bookings. resolveReservation only makes that claim on evidence.
+  const stickyPrimary: StickyAction | undefined = isShut
+    ? undefined
+    : reservation.href && reservation.kind !== "website"
+      ? {
+          label: reservation.label,
+          href: reservation.href,
+          icon: reservation.kind === "booking" ? "website" : "phone",
+          isExternal: reservation.external,
+        }
+      : safeWebsite
+        ? { label: "Website", href: safeWebsite, icon: "website", isExternal: true }
+        : undefined;
+  const stickySecondary: StickyAction | undefined =
+    !isShut && restaurant.location
+      ? { label: "Directions", href: directionsHref, icon: "directions", isExternal: true }
+      : undefined;
   // The Menu action goes to the captured menu when there is one, to their own
-  // menu page when there isn't, and is hidden when neither exists (WP8 item 3).
-  const menuAction = hasCapturedMenu
+  // menu page when there isn't, and is hidden when neither exists (WP8 item 3)
+  // or the place has closed for good (WEB-UX-089).
+  const menuAction = closedForGood
+    ? null
+    : hasCapturedMenu
     ? { href: "#menu", label: "Menu", external: false }
     : safeMenuUrl
       ? { href: safeMenuUrl, label: "Menu (on their site)", external: true }
@@ -537,9 +650,16 @@ export default function RestaurantDetails() {
   const statusLine = liveStatus ? formatOpenStatusLine(liveStatus) : null;
   const restaurantHoursLine =
     statusLine && (liveStatus?.closesAt || liveStatus?.nextOpensAt) ? `${statusLine} CT` : statusLine;
+  // WEB-BE-077: AI copy carries its date, is hidden once over a year old, and
+  // is never shown for a shut place (it may describe the place as open).
+  const copyMeta = restaurant as { description_source?: string | null; geo_generated_at?: string | null };
+  const geoGeneratedAt = copyMeta.geo_generated_at ?? null;
+  const geoFresh = aiCopyIsFresh(geoGeneratedAt);
+  const aboutSourceLabel = descriptionSourceLabel(copyMeta.description_source);
+  const showWriteup = !isShut && !!restaurant.ai_writeup && aiCopyIsFresh(restaurant.writeup_generated_at);
   const showLocalGuide =
-    !isShut && !!(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0));
-  const menuCapturedAt = hasCapturedMenu ? centralDate(menuData?.menu?.captured_at) : null;
+    !isShut && geoFresh && !!(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0));
+  const menuCapturedAt = hasCapturedMenu && !closedForGood ? centralDate(menuData?.menu?.captured_at) : null;
   const menuFromTheirSite =
     !!menuData?.menu && (menuData.menu.source_type === "scraped" || !!safeWebUrl(menuData.menu.source_url));
 
@@ -550,7 +670,7 @@ export default function RestaurantDetails() {
   const areaLinks = [...(hoodLink ? [hoodLink] : []), ...(areaPages ?? [])];
 
   const chipClass =
-    "inline-flex min-h-11 items-center text-xs px-3 bg-gray-100 text-gray-800 dark:bg-muted dark:text-foreground hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium";
+    "inline-flex min-h-11 items-center text-xs px-3 bg-gray-100 text-gray-800 dark:bg-muted dark:text-foreground hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium shrink-0";
 
   return (
     <>
@@ -565,7 +685,7 @@ export default function RestaurantDetails() {
         // No `location` prop: it emitted a second, unlinked Place node for the
         // same business alongside restaurantSchema, which already carries the
         // address and geo.
-        modifiedTime={restaurant.updated_at}
+        modifiedTime={listingChangedAt}
         // A place that has closed for good should leave search results.
         // noindex, follow: the related-restaurant links stay followable.
         robots={lifecycle === "closed" ? "noindex, follow" : undefined}
@@ -583,7 +703,7 @@ export default function RestaurantDetails() {
         name={seoTitle}
         description={seoDescription}
         url={getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`)}
-        dateModified={restaurant.updated_at}
+        dateModified={listingChangedAt}
       />
 
       <div className="min-h-screen bg-gray-50 dark:bg-background">
@@ -637,16 +757,26 @@ export default function RestaurantDetails() {
           </div>
 
           {/* Hero Card */}
-          <Card className="shadow-xl rounded-3xl overflow-hidden border-0 mb-8">
+          {/* WEB-UX-090: 16px radius, elevation declared once (shadow, no border). */}
+          <Card className="shadow-md rounded-2xl overflow-hidden border-0 mb-8">
             {/* Hero Image, or a flat brand surface */}
-            <div className="relative h-72 md:h-96 overflow-hidden bg-[#2D1B69]">
+            {/* A shut place gets a shorter, grey hero, so the notice and the
+                open alternatives under it sit above the fold at 390px (WEB-UX-089). */}
+            <div
+              className={`relative overflow-hidden ${
+                isShut ? "h-64 md:h-80 bg-gray-700" : "h-72 md:h-96 bg-[#2D1B69]"
+              }`}
+              // Not data-testid: the production build strips those, and the
+              // smoke lane runs against one.
+              data-hero-state={isShut ? "muted" : "live"}
+            >
               {showImage && (
                 <>
                   <OptimizedImage
                     src={restaurant.image_url}
                     alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa`}
                     className="object-cover"
-                    containerClassName="absolute inset-0"
+                    containerClassName={`absolute inset-0${isShut ? " grayscale opacity-70" : ""}`}
                     priority
                     sizes="(max-width: 768px) 100vw, 1024px"
                     onError={() => setImageError(true)}
@@ -686,6 +816,14 @@ export default function RestaurantDetails() {
                     {liveStatus.closingSoon ? 'Closing Soon' : 'Open Now'}
                   </Badge>
                 )}
+                {/* WEB-UX-088: closed right now is a state too. Without it a
+                    phone showed no state until the hours block, below two
+                    rows of controls. */}
+                {liveStatus?.status === "closed" && (
+                  <Badge className="bg-gray-900 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
+                    Closed now
+                  </Badge>
+                )}
               </div>
 
               {/* Hero text */}
@@ -699,15 +837,21 @@ export default function RestaurantDetails() {
                       </span>
                     </div>
                   )}
-                  <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight drop-shadow-lg">
+                  {/* WEB-UX-090: a long name at text-4xl ran into the status
+                      badges at the top of the fixed-height hero on a phone.
+                      Smaller on phones, wraps long words, at most three lines. */}
+                  <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight drop-shadow-lg break-words line-clamp-3">
                     {restaurant.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 text-white">
-                    {restaurant.rating ? (
+                    {googleRating ? (
                       <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
                         <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                        <span className="font-semibold">{restaurant.rating.toFixed(1)}</span>
-                        <span className="text-sm">Google rating</span>
+                        <span className="font-semibold">{googleRating.rating.toFixed(1)}</span>
+                        <span className="text-sm">
+                          Google rating
+                          {googleRating.reviewCount ? ` (${reviewCountLabel(googleRating.reviewCount)})` : ""}
+                        </span>
                       </div>
                     ) : null}
                     {/* Price and address moved to the at-a-glance list
@@ -742,7 +886,10 @@ export default function RestaurantDetails() {
                   {lifecycle === "temporarily_closed" && (
                     <p>
                       <strong>{restaurant.name} is temporarily closed.</strong> We don't have a reopening
-                      date. Check with the restaurant before you go.
+                      date. Check with the restaurant before you go.{" "}
+                      <Link to="/restaurants/open-now" className="font-medium text-[#2D1B69] underline">
+                        See what's open now
+                      </Link>
                     </p>
                   )}
                   {lifecycle === "not_open_yet" && (
@@ -759,6 +906,23 @@ export default function RestaurantDetails() {
                     </p>
                   )}
                 </div>
+                {/* Somewhere to eat instead, right under the notice rather than
+                    at the foot of the page (WEB-UX-089). The rail keeps only
+                    places open today by lifecycle and Google status. */}
+                {isShut && (
+                  <div onClick={trackClick}>
+                    <NearbyContent
+                      variant="restaurants-near-restaurant"
+                      title="Open within 2 miles"
+                      className="pt-6 pb-2"
+                      excludeId={restaurant.id}
+                      latitude={restaurant.latitude}
+                      longitude={restaurant.longitude}
+                      preferCuisine={restaurant.cuisine}
+                      limit={3}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -767,23 +931,33 @@ export default function RestaurantDetails() {
             <RestaurantAtAGlance
               hoursSentence={hoursSentence}
               priceTier={tier}
+              priceFromGoogle={priceIsGoogle}
               address={restaurant.location}
               locality={restaurantLocality(restaurant)}
               phone={!isShut ? restaurant.phone : null}
               phoneHref={!isShut ? phoneHref : null}
               menu={menuAction}
               areaLinks={areaLinks}
-              lastUpdated={lastUpdatedLabel(restaurant.updated_at)}
+              lastUpdated={lastUpdatedLabel(listingChangedAt)}
             />
 
-            {/* Quick Actions Bar */}
+            {/* Quick Actions Bar. WEB-UX-088: below lg, where the sticky bar
+                is drawn, anything it offers is left out here, and Call is
+                gone: the at-a-glance phone above is already a tel: link.
+                Nothing is left for a place closed for good. */}
+            {!closedForGood && (
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
               {/* WEB-FEAT-024: booking is the highest-intent action on this
                   page and previously had no path at all. Only rendered when
                   there is real evidence the place takes reservations, and
                   never for a place that is closed. */}
               {showReserve && reservation.href && (
-                <Button asChild className="min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
+                <Button
+                  asChild
+                  className={`min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl${
+                    stickyPrimary?.href === reservation.href ? STICKY_DUPLICATE : ""
+                  }`}
+                >
                   <a
                     href={reservation.href}
                     {...(reservation.external
@@ -795,24 +969,21 @@ export default function RestaurantDetails() {
                   </a>
                 </Button>
               )}
-              {!isShut && phoneHref && (
-                <Button asChild className="min-h-11 bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
-                  <a href={phoneHref}>
-                    <Phone className="h-4 w-4 mr-2" />
-                    Call
-                  </a>
-                </Button>
-              )}
-              {safeWebsite && (
-                <Button asChild variant="outline" className="min-h-11 rounded-xl">
+              {/* A closed place's site, if it still resolves, is not serving anyone (WEB-UX-089). */}
+              {safeWebsite && !closedForGood && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className={`min-h-11 rounded-xl${stickyPrimary?.href === safeWebsite ? STICKY_DUPLICATE : ""}`}
+                >
                   <a href={safeWebsite} target="_blank" rel="noopener noreferrer">
                     <Globe className="h-4 w-4 mr-2" />
                     Website
                   </a>
                 </Button>
               )}
-              {restaurant.location && !isShut && (
-                <Button asChild variant="outline" className="min-h-11 rounded-xl">
+              {stickySecondary && (
+                <Button asChild variant="outline" className={`min-h-11 rounded-xl${STICKY_DUPLICATE}`}>
                   <a href={directionsHref} target="_blank" rel="noopener noreferrer">
                     <Navigation className="h-4 w-4 mr-2" />
                     Directions
@@ -830,16 +1001,20 @@ export default function RestaurantDetails() {
                   </a>
                 </Button>
               )}
-              <Button asChild variant="outline" className="min-h-11 rounded-xl">
-                <a href="#reviews">
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Rate this place
-                </a>
-              </Button>
+              {!closedForGood && (
+                <Button asChild variant="outline" className="min-h-11 rounded-xl">
+                  <a href="#reviews">
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Rate this place
+                  </a>
+                </Button>
+              )}
             </div>
+            )}
 
-            {/* On-page section navigation for quick jumping */}
-            <nav className="flex flex-wrap gap-2 px-4 md:px-6 py-3 bg-white border-b overflow-x-auto" aria-label="Page sections">
+            {/* On-page section navigation: one row that scrolls sideways on a
+                phone, rather than wrapping to three (WEB-UX-088). */}
+            <nav className="flex flex-nowrap gap-2 px-4 md:px-6 py-3 bg-white border-b overflow-x-auto" aria-label="Page sections">
               {aboutText && (
                 <a href="#about" className={chipClass}>
                   About
@@ -870,7 +1045,7 @@ export default function RestaurantDetails() {
                   Deals
                 </a>
               )}
-              {restaurant.ai_writeup && (
+              {showWriteup && (
                 <a href="#writeup" className={chipClass}>
                   Our take
                 </a>
@@ -911,102 +1086,28 @@ export default function RestaurantDetails() {
                 />
               )}
 
-              <Separator className="my-8" />
-
-              {/* Details Grid */}
-              <div className="grid md:grid-cols-2 gap-8">
-                {/* Contact & Location */}
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              {/* WEB-UX-088: the map alone. The address, phone, Directions,
+                  cuisine, price and rating that sat beside it repeated the
+                  hero and the at-a-glance list; the rating's count, date and
+                  Google link are under "Where this comes from". */}
+              {restaurant.latitude && restaurant.longitude && (
+                <section aria-labelledby="location-heading">
+                  <Separator className="my-8" />
+                  <h2 id="location-heading" className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
-                    Location & Contact
+                    Location
                   </h2>
-                  <div className="space-y-3">
-                    {restaurant.location && (
-                      <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-600 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-gray-900 font-medium">{restaurant.location}</p>
-                          <p className="text-sm text-gray-700">{cityName}, Iowa</p>
-                          {!isShut && (
-                            <a
-                              href={directionsHref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex min-h-11 items-center text-sm text-[#2D1B69] hover:underline"
-                            >
-                              <Navigation className="h-3.5 w-3.5 mr-1" />
-                              Get Directions
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {restaurant.latitude && restaurant.longitude && (
-                      <div className="overflow-hidden rounded-xl">
-                        <LazyLocationMap
-                          latitude={restaurant.latitude}
-                          longitude={restaurant.longitude}
-                          venue={restaurant.name}
-                          location={restaurant.location}
-                          className="h-48 w-full"
-                        />
-                      </div>
-                    )}
-                    {!isShut && phoneHref && (
-                      <a
-                        href={phoneHref}
-                        className="flex min-h-11 items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-                      >
-                        <Phone className="h-5 w-5 text-gray-600 shrink-0" />
-                        <span className="text-gray-900">{restaurant.phone}</span>
-                      </a>
-                    )}
+                  <div className="overflow-hidden rounded-xl">
+                    <LazyLocationMap
+                      latitude={restaurant.latitude}
+                      longitude={restaurant.longitude}
+                      venue={restaurant.name}
+                      location={restaurant.location}
+                      className="h-48 w-full"
+                    />
                   </div>
-                </div>
-
-                {/* Restaurant Details */}
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Utensils className="h-5 w-5 text-[#2D1B69]" />
-                    Restaurant Details
-                  </h2>
-                  <div className="space-y-3">
-                    {restaurant.cuisine && (
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                        <span className="text-gray-700">Cuisine</span>
-                        <span className="rounded-full bg-[#2D1B69]/10 px-2.5 py-0.5 text-sm font-medium text-[#2D1B69]">
-                          {restaurant.cuisine}
-                        </span>
-                      </div>
-                    )}
-                    {tier && (
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                        <span className="text-gray-700">Price level</span>
-                        <div className="text-right">
-                          <span className="text-gray-900 font-semibold">{tier}</span>
-                          <p className="text-xs text-gray-700">on Google</p>
-                        </div>
-                      </div>
-                    )}
-                    {restaurant.rating ? (
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                        <span className="text-gray-700">Google rating</span>
-                        <span className="flex items-center gap-1 font-semibold text-gray-900">
-                          <Star className="h-4 w-4 fill-amber-400 text-amber-500" aria-hidden="true" />
-                          {restaurant.rating.toFixed(1)} of 5
-                        </span>
-                      </div>
-                    ) : null}
-                    {sponsored && (
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                        <span className="text-gray-700">Paid placement</span>
-                        <SponsoredBadge />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+                </section>
+              )}
 
               {/* About section, collapsible */}
               {aboutText && (
@@ -1019,21 +1120,14 @@ export default function RestaurantDetails() {
                     defaultOpen={true}
                   >
                     <div className="pt-2">
+                      {aboutSourceLabel && (
+                        <p className="mb-2 text-xs font-medium text-muted-foreground" data-description-source="">
+                          {aboutSourceLabel}
+                        </p>
+                      )}
                       <p className="text-gray-700 leading-relaxed text-lg">
                         {aboutText}
                       </p>
-                      {/* AI-friendly summary paragraph */}
-                      <div className="mt-4 p-4 bg-gray-50 rounded-xl border">
-                        <p className="text-sm text-gray-700 leading-relaxed">
-                          <strong>{restaurant.name}</strong> is a {restaurant.cuisine || "local"} restaurant
-                          located {restaurant.location ? `at ${restaurant.location} in` : "in"} {cityName}, Iowa.
-                          {lifecycle === "closed" ? " It has closed permanently." : ""}
-                          {lifecycle === "temporarily_closed" ? " It is temporarily closed." : ""}
-                          {restaurant.rating ? ` Google rating: ${restaurant.rating.toFixed(1)} out of 5.` : ""}
-                          {tier ? ` Google lists its price level as ${tier}.` : ""}
-                          {!isShut && reservation.detail ? ` ${reservation.detail}.` : ""}
-                        </p>
-                      </div>
                     </div>
                   </CollapsibleSection>
                 </>
@@ -1044,20 +1138,27 @@ export default function RestaurantDetails() {
                   chip and makesOffer (WEB-FEAT-036). */}
               <RestaurantDealsList deals={pageDeals} restaurantName={restaurant.name} now={now} />
 
-              {/* Menu: a section of its own, not a card inside this card (WP3.14) */}
-              <Separator className="my-8" />
-              <RestaurantMenuSection
-                restaurantId={restaurant.id}
-                restaurantName={restaurant.name}
-                restaurantSlug={restaurant.slug || restaurant.id}
-                restaurantDescription={aboutText ?? undefined}
-                city={cityName}
-                cuisine={restaurant.cuisine}
-                menuUrl={restaurant.menu_url}
-              />
+              {/* Menu: a section of its own, not a card inside this card (WP3.14).
+                  None for a place closed for good: old prices read as current,
+                  and its Menu JSON-LD would say the same (WEB-UX-089). */}
+              {!closedForGood && (
+                <>
+                  <Separator className="my-8" />
+                  <RestaurantMenuSection
+                    restaurantId={restaurant.id}
+                    restaurantName={restaurant.name}
+                    restaurantSlug={restaurant.slug || restaurant.id}
+                    restaurantDescription={aboutText ?? undefined}
+                    city={cityName}
+                    cuisine={restaurant.cuisine}
+                    menuUrl={restaurant.menu_url}
+                  />
+                </>
+              )}
 
-              {/* Our take (AI-assisted) */}
-              {restaurant.ai_writeup && (
+              {/* Our take (AI-assisted). Not for a shut place, and not once
+                  over a year old (WEB-BE-077). */}
+              {showWriteup && (
                 <>
                   <Separator className="my-8" />
                   <div id="writeup" className="scroll-mt-20">
@@ -1086,6 +1187,7 @@ export default function RestaurantDetails() {
                         label="AI-assisted"
                         tooltip="Drafted with AI from public information. It can be wrong or out of date, so check hours, prices and details with the restaurant."
                       />
+                      <p className="mt-2 text-xs text-muted-foreground">{aiGeneratedLine(geoGeneratedAt)}</p>
                       {restaurant.geo_summary && (
                         <p className="mt-3 text-gray-700 leading-relaxed">{restaurant.geo_summary}</p>
                       )}
@@ -1117,12 +1219,23 @@ export default function RestaurantDetails() {
             </div>
           )}
 
-          {/* Ratings & Reviews (WEB-FEAT-010) */}
-          <div id="reviews" className="mb-8 scroll-mt-20">
-            <DeferredWidget minHeight={240} label="Ratings and reviews">
-              <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
-            </DeferredWidget>
-          </div>
+          {/* WEB-FEAT-102: visitors can say a place has closed. Not shown once
+              it is closed for good; a temporary closure may still be final. */}
+          {!closedForGood && (
+            <div className="mb-8" data-testid="report-closed">
+              <ReportClosedControl restaurantId={restaurant.id} restaurantName={restaurant.name} />
+            </div>
+          )}
+
+          {/* Ratings & Reviews (WEB-FEAT-010). Not for a place closed for
+              good: there is no meal left to rate (WEB-UX-089). */}
+          {!closedForGood && (
+            <div id="reviews" className="mb-8 scroll-mt-20">
+              <DeferredWidget minHeight={240} label="Ratings and reviews">
+                <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+              </DeferredWidget>
+            </div>
+          )}
 
           {/* Restaurant-Specific FAQ. FAQSection draws its own card. */}
           <div id="faq" className="mb-8 scroll-mt-20">
@@ -1137,7 +1250,7 @@ export default function RestaurantDetails() {
 
           {/* geo_faq: AI-written, shown as such, and kept out of the FAQPage
               schema (WP3.1). Not for a place that has closed. */}
-          {!isShut && aiFaqs.length > 0 && (
+          {!isShut && geoFresh && aiFaqs.length > 0 && (
             <section aria-labelledby="ai-answers-heading" className="mb-8 rounded-2xl bg-card p-6 shadow-lg">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 id="ai-answers-heading" className="text-xl font-semibold text-foreground">
@@ -1148,6 +1261,7 @@ export default function RestaurantDetails() {
                   tooltip="Written with AI from public information. Check anything that matters with the restaurant."
                 />
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">{aiGeneratedLine(geoGeneratedAt)}</p>
               <dl className="mt-4 divide-y divide-border">
                 {aiFaqs.map((faq) => (
                   <div key={faq.question} className="py-3">
@@ -1160,17 +1274,20 @@ export default function RestaurantDetails() {
           )}
 
           {/* One restaurant rail (WP3.8): within two miles, same cuisine
-              first, closed and merged places left out. */}
-          <div onClick={trackClick}>
-            <NearbyContent
-              variant="restaurants-near-restaurant"
-              excludeId={restaurant.id}
-              latitude={restaurant.latitude}
-              longitude={restaurant.longitude}
-              preferCuisine={restaurant.cuisine}
-              limit={4}
-            />
-          </div>
+              first, closed and merged places left out. A shut place shows it
+              under the closed notice instead (WEB-UX-089). */}
+          {!isShut && (
+            <div onClick={trackClick}>
+              <NearbyContent
+                variant="restaurants-near-restaurant"
+                excludeId={restaurant.id}
+                latitude={restaurant.latitude}
+                longitude={restaurant.longitude}
+                preferCuisine={restaurant.cuisine}
+                limit={4}
+              />
+            </div>
+          )}
 
           {/* Any-date events nearby, whenever the tonight rail is not showing
               (nothing on tonight, or a place that isn't open). It asks once
@@ -1198,10 +1315,12 @@ export default function RestaurantDetails() {
         </div>
 
         <RestaurantProvenance
-          rating={restaurant.rating}
+          rating={googleRating}
+          googleListingHref={googleListingHref}
+          priceFromGoogle={!!tier && priceIsGoogle}
           menuCapturedAt={menuCapturedAt}
           menuFromTheirSite={menuFromTheirSite}
-          hoursCheckedOn={lifecycle !== "closed" ? hoursCheckedAt(hoursJson) : null}
+          hoursLine={lifecycle !== "closed" ? hoursSourceLine(hoursJson) : null}
         />
       </div>
       <BackToTop />
@@ -1212,36 +1331,8 @@ export default function RestaurantDetails() {
       {!isShut && (
         <StickyMobileCTA
           variant="restaurant"
-          primaryAction={
-            // WEB-FEAT-024: this said "Call to Reserve" for every restaurant with
-            // a phone number, asserting that a counter-service taco shop takes
-            // bookings. resolveReservation only makes that claim on evidence.
-            reservation.href && reservation.kind !== "website"
-              ? {
-                  label: reservation.label,
-                  href: reservation.href,
-                  icon: reservation.kind === "booking" ? "website" : "phone",
-                  isExternal: reservation.external,
-                }
-              : safeWebsite
-              ? {
-                  label: "Website",
-                  href: safeWebsite,
-                  icon: "website",
-                  isExternal: true,
-                }
-              : undefined
-          }
-          secondaryAction={
-            restaurant.location
-              ? {
-                  label: "Directions",
-                  href: directionsHref,
-                  icon: "directions",
-                  isExternal: true,
-                }
-              : undefined
-          }
+          primaryAction={stickyPrimary}
+          secondaryAction={stickySecondary}
         />
       )}
     </>

@@ -35,7 +35,15 @@ Deno.test('states the amount, the date and how to cancel', () => {
   for (const needed of ['$7.99', 'per month', 'September 1, 2026', 'Cancel']) {
     assert(n.text.includes(needed) || n.html.includes(needed), `notice must mention ${needed}`);
   }
-  assert(n.html.includes('https://example.com/profile?tab=settings'), 'needs a direct cancel link');
+  // WEB-LEGAL-016: this used to require /profile?tab=settings, a page with no
+  // cancel control, so the test guarded the defect. The cancel link is the
+  // subscription page, and the settings tab must never come back.
+  assert(n.html.includes('https://example.com/subscription"'), 'needs a direct cancel link to /subscription');
+  assert(n.text.includes('https://example.com/subscription'), 'the text part needs the cancel link too');
+  assert(
+    !n.html.includes('/profile?tab=settings') && !n.text.includes('/profile?tab=settings'),
+    'the settings tab has no billing on it',
+  );
   assert(n.subject.includes('Insider'), 'subject should name the plan');
   assert(n.subject.includes('September 1, 2026'), 'subject should carry the date');
 });
@@ -110,6 +118,13 @@ for (const path of NURTURE_COPIES) {
     );
     assert(block.includes('sendNotice('), 'must use the transactional sender');
     assert(!block.includes('sendStep('), 'sendStep runs the LLM quality gate');
+  });
+
+  Deno.test(`no billing email in this agent links the settings tab (${path})`, async () => {
+    // WEB-LEGAL-016: dunning and upgrade linked /profile?tab=settings from here.
+    const code = (await read(path)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/[^\n]*$/gm, '');
+    assert(!code.includes('profile?tab=settings'), 'billing links come from _shared/billingLinks.ts');
+    assert(code.includes('buildDunningEmail(SITE)') && code.includes('buildUpgradePromptEmail(SITE)'));
   });
 
   Deno.test(`the transactional sender skips the quality gate (${path})`, async () => {

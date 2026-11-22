@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DES_MOINES_METRO_BOUNDS } from "@/lib/geo";
 import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantStatus";
-import { rankTopRated, TOP_RATED_LIMIT, type RankedRestaurantRow } from "@/lib/restaurantRanking";
+import {
+  rankTopRated,
+  TOP_RATED_LIMIT,
+  TOP_RATED_MIN_REVIEWS,
+  type RankedRestaurantRow,
+} from "@/lib/restaurantRanking";
 
 /**
  * Columns the ranked list and its ItemList read. No description: the list
@@ -11,14 +16,15 @@ import { rankTopRated, TOP_RATED_LIMIT, type RankedRestaurantRow } from "@/lib/r
  */
 const TOP_RATED_COLUMNS =
   "id, name, slug, cuisine, city, location, neighborhood, price_range, rating, status, business_status, " +
-  "google_place_id, is_merged, latitude, longitude, image_url, phone, website";
+  "google_place_id, google_review_count, is_merged, latitude, longitude, image_url, phone, website";
 
 /**
  * How many rows to fetch, highest rating first, before rankTopRated applies
- * the rest of the rule. The rule's order is the query's order, so any prefix
- * that still holds 20 eligible rows with the whole tie group at the cut gives
- * the same answer as ranking every row. On 2026-10-01 the 20th place was row
- * 24 of this query, the 4.8 tie group ended at row 52, and row 150 was a 4.6.
+ * the rest of the rule. The rule's order is the query's order (rating, then
+ * review count, then name, over rows past the review floor), so any prefix
+ * that still holds 20 eligible rows gives the same answer as ranking every
+ * row. On 2026-10-01, before the floor, the 20th place was row 24 of this
+ * query and row 150 was a 4.6.
  */
 const TOP_RATED_FETCH = 150;
 
@@ -31,8 +37,13 @@ export type TopRatedRestaurant = RankedRestaurantRow & {
 /**
  * The 20 restaurants the /restaurants hub ranks (SEO-038). The database
  * narrows by the cheap conditions (not merged, not closed, rated, inside the
- * metro box); rankTopRated re-checks all of them and applies the rest, so the
- * page and the tests run one rule.
+ * metro box, at least TOP_RATED_MIN_REVIEWS Google reviews); rankTopRated
+ * re-checks all of them and applies the rest, so the page and the tests run
+ * one rule.
+ *
+ * google_review_count comes from 20261121000130 (WEB-BE-070). Where that has
+ * not been applied the select answers 42703; the list is then empty rather
+ * than ranked without its floor, and the section does not render.
  */
 export function useTopRatedRestaurants(options: { enabled?: boolean } = {}) {
   const { enabled = true } = options;
@@ -47,14 +58,19 @@ export function useTopRatedRestaurants(options: { enabled?: boolean } = {}) {
         .neq("is_merged", true)
         .or(NOT_CLOSED_RESTAURANT_FILTER)
         .not("rating", "is", null)
+        .gte("google_review_count", TOP_RATED_MIN_REVIEWS)
         .gte("latitude", DES_MOINES_METRO_BOUNDS.minLatitude)
         .lte("latitude", DES_MOINES_METRO_BOUNDS.maxLatitude)
         .gte("longitude", DES_MOINES_METRO_BOUNDS.minLongitude)
         .lte("longitude", DES_MOINES_METRO_BOUNDS.maxLongitude)
         .order("rating", { ascending: false })
+        .order("google_review_count", { ascending: false })
         .order("name", { ascending: true })
         .limit(TOP_RATED_FETCH);
-      if (error) throw error;
+      if (error) {
+        if ((error as { code?: string }).code === "42703") return [];
+        throw error;
+      }
       return rankTopRated((data ?? []) as unknown as TopRatedRestaurant[]);
     },
   });

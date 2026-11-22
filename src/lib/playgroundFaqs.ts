@@ -7,7 +7,7 @@
  * rating answer (WEB-SEO-055): playgrounds.rating is not first-party. The
  * ai-crawler and firecrawl-scraper playground paths store whatever number the
  * model read off a crawled page (`rating: item.rating || null`), and
- * enhance-content lists rating among the fields it asks a model to fill. No
+ * enhance-content asked a model to fill rating until WEB-BE-068. No
  * column records whose rating it was, so "X is rated 4.5 out of 5" would be an
  * unattributed claim. Attractions dropped the same answer for the same reason.
  */

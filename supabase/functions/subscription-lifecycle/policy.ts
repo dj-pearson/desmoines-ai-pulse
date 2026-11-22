@@ -24,6 +24,8 @@ import { GRACE_PERIOD_DAYS, isSubscriptionRowEntitled } from "../_shared/entitle
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { manageAtForPlatform, STORE_MANAGE_URLS } from "../_shared/siteUrl.ts";
 import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
+import { pricingUrl, subscriptionUrl } from "../_shared/billingLinks.ts";
+import { isWebBilled } from "../_shared/paymentFailedNotice.ts";
 
 export { GRACE_PERIOD_DAYS };
 
@@ -56,10 +58,9 @@ export type LifecycleAction =
   | { kind: "expire_locally" }
   | { kind: "winback"; canceledAt: number };
 
-/** 'web' or a legacy row with no platform. Everything else is a store's. */
-export function isWebBilled(platform: string | null | undefined): boolean {
-  return platform === "web" || platform == null || platform === "";
-}
+// The web-billed rule lives in _shared/paymentFailedNotice.ts so that
+// subscription-nurture's dunning step applies the same one.
+export { isWebBilled };
 
 function ms(value: string | null | undefined): number {
   if (!value) return 0;
@@ -147,7 +148,7 @@ export function marketingAllowedFrom(
  */
 export function manageUrlFor(platform: string | null | undefined, siteUrl: string): string {
   const store = manageAtForPlatform(platform);
-  return store ? STORE_MANAGE_URLS[store] : `${siteUrl}/subscription`;
+  return store ? STORE_MANAGE_URLS[store] : subscriptionUrl(siteUrl);
 }
 
 /** The member's own plan, as the plan row names it. */
@@ -183,7 +184,8 @@ export function lifecycleEmail(
 ): LifecycleEmail | null {
   const plan = escapeHtml(ctx.planName);
   const manage = escapeHtml(ctx.manageUrl);
-  const pricing = escapeHtml(`${ctx.siteUrl}/pricing`);
+  const pricingLink = pricingUrl(ctx.siteUrl);
+  const pricing = escapeHtml(pricingLink);
 
   switch (action.kind) {
     case "renewal_reminder": {
@@ -225,7 +227,7 @@ export function lifecycleEmail(
           `<a href="${pricing}">Subscribe again</a> whenever you like.</p>`,
         text:
           `Your ${ctx.planName} membership has ended. We couldn't collect payment after several tries, ` +
-          `so the subscription is cancelled and you won't be charged again. Subscribe again: ${ctx.siteUrl}/pricing`,
+          `so the subscription is cancelled and you won't be charged again. Subscribe again: ${pricingLink}`,
         category: "transactional",
       };
     case "winback":
@@ -235,7 +237,7 @@ export function lifecycleEmail(
           `<h2>Your account is still here</h2>` +
           `<p>Your favorites are saved. If you want ${plan} back, ` +
           `<a href="${pricing}">you can resubscribe here</a>.</p>`,
-        text: `Your favorites are saved. If you want ${ctx.planName} back: ${ctx.siteUrl}/pricing`,
+        text: `Your favorites are saved. If you want ${ctx.planName} back: ${pricingLink}`,
         category: "marketing",
       };
     default:

@@ -24,3 +24,15 @@ export const SUBMISSION_REVIEW_COPY =
  * for creative upload and review. Moved from Advertise.tsx.
  */
 export const MIN_LEAD_TIME_DAYS = 3;
+
+/**
+ * What an owner can change, per listing type. Each line names only fields
+ * update_claimed_listing accepts for that type and the /business editor
+ * shows (WEB-ADS-048): attractions have no hours or phone on the form.
+ */
+export const CLAIM_EDIT_COPY: Record<"restaurant" | "attraction", string> = {
+  restaurant:
+    "Opening hours, phone, website, menu link, description and photo, changed from your own account instead of an email to us. You can also tell us if you're temporarily closed, closed for good, or open again.",
+  attraction:
+    "Description, website and photo, changed from your own account instead of an email to us.",
+};

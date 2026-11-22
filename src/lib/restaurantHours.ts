@@ -378,6 +378,48 @@ function parseOpeningText(opening: string): ParsedOpening | null {
   return null;
 }
 
+/**
+ * hours_json periods from hours a person typed (WEB-FEAT-103, the admin
+ * restaurant drawer), read by the same parser as `opening`. Null when any part
+ * of the text is unreadable: a period list that silently left out Sunday would
+ * tell visitors the place is closed on Sundays.
+ */
+export function periodsFromHoursText(text: string): NonNullable<StoredOpeningHours['periods']> | null {
+  const lines = text
+    .split(/[\n;]/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return null;
+  // Every line has to say something: hours the parser reads whole, or a day
+  // that is closed. A line with neither ("Tuesday: ask the owner") is not
+  // dropped quietly by parseSegment, so it is checked here.
+  for (const line of lines) {
+    const one = parseOpeningText(line);
+    const readable = one !== null && !one.dropped;
+    const closedLine = /^(sun|mon|tue|wed|thu|fri|sat)[a-z]*\.?\s*:\s*closed\.?$/i.test(line);
+    if (!readable && !closedLine && parseClosedDays(line.toLowerCase()).size === 0) return null;
+  }
+  // Joined with "; ", not newlines: CLOSED_DAYS_RE reads "Monday: Closed\nTuesday"
+  // as "closed Tuesday" across the line break.
+  const parsed = parseOpeningText(lines.join('; '));
+  if (!parsed || parsed.dropped || parsed.ranges.length === 0) return null;
+  const periods: NonNullable<StoredOpeningHours['periods']> = [];
+  for (const r of parsed.ranges) {
+    for (const day of [...r.days].sort((a, b) => a - b)) {
+      const wraps = r.closeMinutes <= r.openMinutes;
+      periods.push({
+        open: { day, hour: Math.floor(r.openMinutes / 60), minute: r.openMinutes % 60 },
+        close: {
+          day: wraps ? (day + 1) % 7 : day,
+          hour: Math.floor(r.closeMinutes / 60),
+          minute: r.closeMinutes % 60,
+        },
+      });
+    }
+  }
+  return periods.sort((a, b) => (a.open?.day ?? 0) - (b.open?.day ?? 0) || (a.open?.hour ?? 0) - (b.open?.hour ?? 0));
+}
+
 /** Schema.org day-of-week names, indexed by JS getDay() (0 = Sunday). */
 const SCHEMA_DAY_NAMES = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',

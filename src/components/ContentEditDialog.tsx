@@ -8,18 +8,31 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from "./ui/switch";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import { CalendarIcon, Save, X, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { CalendarIcon, Save, X, Plus, Trash2, CheckCircle2, Lock } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { toast } from "@/lib/toast";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
 import { createLogger } from '@/lib/logger';
+import { buildContentEditPayload, SELECT_NONE } from "@/lib/contentEditPayload";
+import { RESERVATION_PROVIDERS } from "@/lib/reservations";
+import { handleError } from "@/lib/errorHandler";
+import { describeFieldLock, RESTAURANT_TABLE_CONTENT_TYPES } from "@/lib/restaurantFieldLocks";
+import { useRestaurantFieldLocks } from "@/hooks/useRestaurantFieldLocks";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ContentEditDialog');
+
+// The venue match fills these in without a visible field.
+const EVENT_EXTRA_KEYS = ["latitude", "longitude"] as const;
+// Hotels edit their slug through a configured field.
+const HOTEL_ALLOWED_PROTECTED = ["slug"] as const;
+// Restaurant fields the admin list does not select; read when the dialog opens.
+const RESTAURANT_LOADED_KEYS = ["reservation_url", "reservation_provider"] as const;
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening" | "hotel";
 
@@ -59,6 +72,17 @@ const fieldConfigs = {
       { key: "description", label: "Description", type: "textarea" },
       { key: "rating", label: "Rating", type: "number", min: 0, max: 5, step: 0.1 },
       { key: "image_url", label: "Image URL", type: "url" },
+      // WEB-BE-070: the curated booking link (WEB-FEAT-024). Google publishes
+      // no booking URL, so nothing else writes these; the Reserve button
+      // prefers this over the Google listing. Provider values are the CHECK
+      // list in migration 20260909000001.
+      { key: "reservation_url", label: "Reservation URL", type: "url" },
+      {
+        key: "reservation_provider",
+        label: "Reservation Provider",
+        type: "select",
+        options: [SELECT_NONE, ...RESERVATION_PROVIDERS],
+      },
       { key: "opening_date", label: "Opening Date (Exact)", type: "date" },
       { key: "opening_timeframe", label: "Opening Timeframe (e.g., Summer 2025)", type: "text" },
       { key: "status", label: "Status", type: "select", options: ["open", "opening_soon", "newly_opened", "announced", "closed"] },
@@ -152,6 +176,25 @@ export default function ContentEditDialog({
   const fieldId = (key: string) => `${idPrefix}-${key}`;
 
   const config = fieldConfigs[contentType];
+
+  // WEB-BE-069: fields a person set on a restaurant are locked against the
+  // Google enrichment. Only existing rows stored in restaurants have locks.
+  const lockTargetId =
+    !item?.isNew && item?.id && (RESTAURANT_TABLE_CONTENT_TYPES as readonly string[]).includes(contentType)
+      ? String(item.id)
+      : null;
+  const fieldLocks = useRestaurantFieldLocks(open ? lockTargetId : null);
+  const locks = fieldLocks.result?.status === "ok" ? fieldLocks.result.locks : {};
+
+  const handleUnlock = async (fieldKey: string, label: string) => {
+    try {
+      await fieldLocks.unlockField(fieldKey);
+      toast.success(`${label} unlocked. The next Google enrichment can update it.`);
+    } catch (error) {
+      handleError(error, { component: "ContentEditDialog", action: "unlockField" });
+      toast.error(`Could not unlock ${label}: ${(error as Error).message}`);
+    }
+  };
   const { findVenue, getAutoFillData, isReady: venuesReady } = useVenueMatcher();
 
   // Check for venue match when venue field changes (for events)
@@ -228,6 +271,43 @@ export default function ContentEditDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, open, config.fields, contentType]);
 
+  // WEB-BE-070: the admin restaurant list does not select the reservation
+  // columns, so the dialog reads them for the row it opened. They become part
+  // of the "original" the payload diffs against, so an untouched value is not
+  // re-sent, and a stored link shows in the form instead of an empty box.
+  const [loadedExtras, setLoadedExtras] = useState<Record<string, unknown>>({});
+  useEffect(() => {
+    setLoadedExtras({});
+    if (!open || contentType !== "restaurant" || item?.isNew || !item?.id) return;
+    const missing = RESTAURANT_LOADED_KEYS.filter((k) => !(k in item));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("restaurants")
+        .select(missing.join(", ") as "id")
+        .eq("id", item.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        handleError(error, { component: "ContentEditDialog", action: "loadReservationFields" });
+        return;
+      }
+      const extras = (data ?? {}) as Record<string, unknown>;
+      setLoadedExtras(extras);
+      setFormData((prev: Record<string, unknown>) => {
+        const next = { ...prev };
+        for (const key of missing) {
+          if (next[key] == null && extras[key] != null) next[key] = extras[key];
+        }
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [item, open, contentType]);
+
   const handleFieldChange = (fieldKey: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
@@ -275,27 +355,24 @@ export default function ContentEditDialog({
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // Prepare data for save
-      const saveData = { ...formData };
-      
-      log.debug('save', 'Original form data', { formData, contentType, isNew: item.isNew });
-      
-      // Format dates properly
-      config.fields.forEach(field => {
-        if ((field.type === "date" || field.type === "datetime") && saveData[field.key]) {
-          if (field.type === "date") {
-            saveData[field.key] = format(saveData[field.key], 'yyyy-MM-dd');
-          } else {
-            saveData[field.key] = saveData[field.key].toISOString();
-          }
-        }
+      // An edit sends only the configured fields that changed and never the
+      // protected columns (sponsorship, hours, closure, merge state), so a
+      // stale list row cannot overwrite them (WEB-BE-067).
+      const saveData = buildContentEditPayload({
+        fields: config.fields,
+        original: { ...item, ...loadedExtras },
+        current: formData,
+        isNew: Boolean(item.isNew),
+        extraKeys: contentType === "event" ? EVENT_EXTRA_KEYS : [],
+        allowedProtected: contentType === "hotel" ? HOTEL_ALLOWED_PROTECTED : [],
       });
 
-      // Remove readonly fields
-      delete saveData.id;
-      delete saveData.created_at;
-      delete saveData.updated_at;
-      delete saveData.isNew; // Remove the isNew flag
+      log.debug('save', 'Original form data', { formData, contentType, isNew: item.isNew });
+
+      if (!item.isNew && Object.keys(saveData).length === 0) {
+        toast.info('Nothing has changed yet.');
+        return;
+      }
 
       log.debug('save', 'Save data after processing', { data: saveData });
 
@@ -309,7 +386,12 @@ export default function ContentEditDialog({
         log.debug('save', 'Creating new item');
         const createResult = await supabase
           .from(tableName)
-          .insert(saveData)
+          // The keys come from this content type's form at runtime, and the
+          // client types the insert as every candidate table's required
+          // columns at once, which no single row satisfies. Before WEB-BE-067
+          // this went through untyped (formData is any); the cast keeps that
+          // behaviour without spreading any further.
+          .insert(saveData as never)
           .select();
         
         result = createResult.data;
@@ -336,7 +418,7 @@ export default function ContentEditDialog({
 
         const updateResult = await supabase
           .from(tableName)
-          .update(saveData)
+          .update(saveData as TablesUpdate<typeof tableName>)
           .eq('id', item.id)
           .select();
         
@@ -357,6 +439,21 @@ export default function ContentEditDialog({
       }
 
       log.info('save', 'Save successful', { data: result });
+
+      // WEB-BE-069: lock what the admin just changed, so the next Google
+      // enrichment does not undo it. The database keeps only the lockable
+      // fields. The edit itself is already saved, so a failure here is
+      // reported and does not undo it.
+      if (lockTargetId) {
+        try {
+          await fieldLocks.lockFields(Object.keys(saveData));
+        } catch (lockError) {
+          handleError(lockError, { component: "ContentEditDialog", action: "lockFields" });
+          toast.warning(
+            `Saved, but the change is not protected from Google enrichment: ${(lockError as Error).message}`,
+          );
+        }
+      }
       const action = item.isNew ? 'created' : 'updated';
       toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} ${action} successfully!`);
       onSave();
@@ -423,7 +520,7 @@ export default function ContentEditDialog({
             <SelectContent>
               {field.options?.map((option: string) => (
                 <SelectItem key={option} value={option}>
-                  {option}
+                  {option === SELECT_NONE ? "None" : option}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -585,6 +682,12 @@ export default function ContentEditDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {fieldLocks.result?.status === "unavailable" && (
+          <p className="text-xs text-muted-foreground">
+            Field locks unavailable - {fieldLocks.result.reason}. Saving still works.
+          </p>
+        )}
+
         <div className="grid gap-4 py-4">
           {config.fields.map((field) => (
             <div key={field.key} className="grid gap-2">
@@ -593,6 +696,25 @@ export default function ContentEditDialog({
                 {field.required && <span className="text-red-500 ml-1">*</span>}
               </Label>
               {renderField(field)}
+
+              {locks[field.key] && (
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Lock className="h-3 w-3" aria-hidden="true" />
+                    {describeFieldLock(locks[field.key])}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={fieldLocks.isUpdating}
+                    onClick={() => handleUnlock(field.key, field.label)}
+                    aria-label={`Unlock ${field.label} so Google can update it`}
+                  >
+                    Unlock
+                  </Button>
+                </div>
+              )}
 
               {/* Show venue match alert after venue field */}
               {field.key === "venue" && matchedVenue && !venueAutoFilled && (

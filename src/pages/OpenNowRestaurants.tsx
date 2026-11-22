@@ -1,12 +1,12 @@
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatInTimeZone } from "date-fns-tz";
 import { FAQSection, type FAQItem } from "@/components/FAQSection";
 import { RestaurantCard } from "@/components/RestaurantCard";
+import { OpenNowFilters, type NearMeState } from "@/components/restaurants/OpenNowFilters";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ErrorState } from "@/components/ui/error-state";
@@ -22,15 +22,14 @@ import {
   resolveOpenAt,
   useOpenNowRestaurants,
   useServingWithoutHoursCount,
-  type Coordinates,
   type EvaluatedRestaurant,
   type OpenNowRestaurantRow,
 } from "@/hooks/useOpenNowRestaurants";
-import { DIETS, dietFromParam } from "@/hooks/useDietaryRestaurants";
+import { dietFromParam } from "@/hooks/useDietaryRestaurants";
 import { dishMenuHref, firstDishPerPlace, useDishSearch, type DishMatch } from "@/hooks/useDishSearch";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
-import { EVENT_AREAS, findEventArea } from "@/lib/eventAreas";
+import { findEventArea } from "@/lib/eventAreas";
 import { isPrerender } from "@/lib/isPrerender";
 import {
   DES_MOINES_TIME_ZONE,
@@ -264,47 +263,6 @@ function DishResults({
   );
 }
 
-/** A single-select row of chips. Pressing the pressed chip clears it. */
-function ChipGroup({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: ReadonlyArray<{ value: string; count: number }>;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  if (options.length < 2) return null;
-  return (
-    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-2">
-      <span className="mr-1 text-sm font-medium text-muted-foreground">{label}</span>
-      {options.map((option) => {
-        const pressed = option.value.toLowerCase() === value.toLowerCase();
-        return (
-          <Button
-            key={option.value}
-            type="button"
-            size="sm"
-            variant={pressed ? "default" : "outline"}
-            aria-pressed={pressed}
-            className="min-h-11"
-            onClick={() => onChange(pressed ? "" : option.value)}
-          >
-            {option.value}
-          </Button>
-        );
-      })}
-    </div>
-  );
-}
-
-const SELECT_CLASS =
-  "h-11 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-type NearMeState = { kind: "off" } | { kind: "locating" } | { kind: "on"; origin: Coordinates } | { kind: "failed"; message: string };
-
 /** The static page: the method, not a snapshot. */
 function PrerenderedMethod() {
   return (
@@ -322,7 +280,7 @@ function PrerenderedMethod() {
   );
 }
 
-function HowThisWorks() {
+function HowThisWorks({ withoutHours }: { withoutHours: number | null }) {
   return (
     <section aria-labelledby="how-open-now-heading" className="mb-10 max-w-[70ch]">
       <h2 id="how-open-now-heading" className="mb-3 text-xl font-semibold">
@@ -332,6 +290,13 @@ function HowThisWorks() {
         We read the opening hours Google lists for each restaurant and check them against the time in Des Moines, once a
         minute while the page is open. A place whose hours we can't read, or that has no listed hours, isn't counted as
         open or closed.
+        {withoutHours !== null && withoutHours > 0 && (
+          <span className="md:hidden">
+            {" "}
+            {withoutHours} more {withoutHours === 1 ? "place has" : "places have"} no listed hours, so{" "}
+            {withoutHours === 1 ? "it isn't" : "they aren't"} counted.
+          </span>
+        )}
       </p>
       <p className="mb-3 text-muted-foreground">
         Holiday and seasonal hours aren't in our listings, and a kitchen can stop taking orders before the posted close.
@@ -354,7 +319,6 @@ export default function OpenNowRestaurants() {
   const { data: rows, isLoading, error, refetch } = useOpenNowRestaurants({ enabled: !prerender });
   const { data: withoutHours } = useServingWithoutHoursCount({ enabled: !prerender });
   const { getStr, setParam, clearParams } = useUrlFilters();
-  const formId = useId();
   const [nearMe, setNearMe] = useState<NearMeState>({ kind: "off" });
 
   const atParam = getStr("at", "");
@@ -438,28 +402,31 @@ export default function OpenNowRestaurants() {
           "breakfast open now Des Moines",
         ]}
       />
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 md:py-8">
         <Breadcrumbs
           items={[
             { label: "Home", href: "/" },
             { label: "Restaurants", href: "/restaurants" },
             { label: "Open Now" },
           ]}
-          className="mb-4"
+          className="mb-2 md:mb-4"
         />
 
-        <div className="mb-6">
-          <div className="mb-4 flex items-center gap-2">
-            <SpriteIcon name="clock" className="h-6 w-6 text-primary" aria-hidden="true" />
-            <h1 className="text-3xl font-bold">Restaurants Open Now in Des Moines</h1>
+        {/* WEB-UX-084: on a phone the intro is the clock and one sentence with
+            the count, so the first open place is on the first screen. The
+            no-hours count moves under "How this page works" there. */}
+        <div className="mb-4 md:mb-6">
+          <div className="mb-2 flex items-center gap-2 md:mb-4">
+            <SpriteIcon name="clock" className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+            <h1 className="text-2xl font-bold md:text-3xl">Restaurants Open Now in Des Moines</h1>
           </div>
 
           {prerender ? (
             <PrerenderedMethod />
           ) : (
             <>
-              <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
-                <span className="flex items-center gap-1">
+              <div className="mb-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground md:mb-4">
+                <span className="hidden items-center gap-1 md:flex">
                   <SpriteIcon name="calendar" className="h-4 w-4" aria-hidden="true" />
                   {dateLabel}
                 </span>
@@ -475,7 +442,7 @@ export default function OpenNowRestaurants() {
                 </span>
               </div>
 
-              <p className="mb-2 max-w-[70ch] text-lg text-muted-foreground" data-open-now-summary>
+              <p className="max-w-[70ch] text-base text-muted-foreground md:mb-2 md:text-lg" data-open-now-summary>
                 {view ? (
                   <strong className="text-foreground">
                     {openCount} of {readableCount}
@@ -488,7 +455,7 @@ export default function OpenNowRestaurants() {
                 )}
               </p>
               {view && typeof withoutHours === "number" && withoutHours > 0 && (
-                <p className="mb-2 max-w-[70ch] text-muted-foreground" data-open-now-no-hours>
+                <p className="mb-2 hidden max-w-[70ch] text-muted-foreground md:block" data-open-now-no-hours>
                   {withoutHours} more {withoutHours === 1 ? "place has" : "places have"} no listed hours, so{" "}
                   {withoutHours === 1 ? "it isn't" : "they aren't"} counted here.{" "}
                   <Link to="/restaurants" className="font-semibold text-primary hover:underline">
@@ -497,7 +464,7 @@ export default function OpenNowRestaurants() {
                   .
                 </p>
               )}
-              <p className="max-w-[70ch] text-sm text-muted-foreground">
+              <p className="hidden max-w-[70ch] text-sm text-muted-foreground md:block">
                 Hours come from each restaurant's listing and can be out of date. Call ahead to confirm, especially on
                 holidays.
               </p>
@@ -507,121 +474,30 @@ export default function OpenNowRestaurants() {
 
         {!prerender && (
           <>
-            <form
-              className="mb-8 space-y-4 rounded-xl bg-muted/50 p-4"
-              aria-label="Filter restaurants"
-              onSubmit={(e) => e.preventDefault()}
-            >
-              <div className="flex flex-wrap items-end gap-4">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor={`${formId}-at`} className="text-sm font-medium">
-                    Open at
-                  </label>
-                  <select
-                    id={`${formId}-at`}
-                    className={SELECT_CLASS}
-                    value={openAt ? atParam : ""}
-                    onChange={(e) => setParam("at", e.target.value)}
-                  >
-                    <option value="">Now</option>
-                    {atOptions.map((value) => {
-                      const resolved = resolveOpenAt(value, now);
-                      return (
-                        <option key={value} value={value}>
-                          {resolved ? `${resolved.clock} ${resolved.when}` : value}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label htmlFor={`${formId}-area`} className="text-sm font-medium">
-                    Area
-                  </label>
-                  <select
-                    id={`${formId}-area`}
-                    className={SELECT_CLASS}
-                    value={area?.slug ?? ""}
-                    onChange={(e) => setParam("area", e.target.value)}
-                  >
-                    <option value="">Anywhere in the metro</option>
-                    {EVENT_AREAS.map((a) => (
-                      <option key={a.slug} value={a.slug}>
-                        {a.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label htmlFor={`${formId}-diet`} className="text-sm font-medium">
-                    Diet mentioned
-                  </label>
-                  <select
-                    id={`${formId}-diet`}
-                    className={SELECT_CLASS}
-                    value={diet?.id ?? ""}
-                    onChange={(e) => setParam("diet", e.target.value)}
-                  >
-                    <option value="">Any</option>
-                    {DIETS.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Button
-                  type="button"
-                  variant={oneMoreHour ? "default" : "outline"}
-                  aria-pressed={oneMoreHour}
-                  className="min-h-11"
-                  onClick={() => setParam("hour", oneMoreHour ? "" : "1")}
-                >
-                  Open 1+ more hour
-                </Button>
-                <Button
-                  type="button"
-                  variant={nearMe.kind === "on" ? "default" : "outline"}
-                  aria-pressed={nearMe.kind === "on"}
-                  className="min-h-11"
-                  disabled={nearMe.kind === "locating"}
-                  onClick={() => (nearMe.kind === "on" ? setNearMe({ kind: "off" }) : findNearMe())}
-                >
-                  <SpriteIcon name="map-pin" className="mr-1 h-4 w-4" aria-hidden="true" />
-                  {nearMe.kind === "locating" ? "Finding you..." : "Near me"}
-                </Button>
-                {(filtersOn || openAt || dish) && (
-                  <Button type="button" variant="ghost" className="min-h-11" onClick={() => clearParams(FILTER_KEYS)}>
-                    Clear filters
-                  </Button>
-                )}
-              </div>
-              {nearMe.kind === "failed" && (
-                <p className="text-sm text-muted-foreground" role="status">
-                  {nearMe.message}
-                </p>
-              )}
-              {nearMe.kind === "on" && (
-                <p className="text-sm text-muted-foreground" role="status">
-                  Nearest first. Your location stays in this browser tab.
-                </p>
-              )}
-              <ChipGroup label="Cuisine" options={cuisineOptions} value={cuisine} onChange={(v) => setParam("cuisine", v)} />
-              <ChipGroup label="City" options={cityOptions} value={city} onChange={(v) => setParam("city", v)} />
-              <div className="flex max-w-md flex-col gap-1">
-                <label htmlFor={`${formId}-dish`} className="text-sm font-medium">
-                  Find a dish
-                </label>
-                <Input
-                  id={`${formId}-dish`}
-                  type="search"
-                  placeholder="e.g. pho, tacos, cheese curds"
-                  value={dish}
-                  className="h-11"
-                  onChange={(e) => setParam("dish", e.target.value, { replace: true })}
-                />
-              </div>
-            </form>
+            <OpenNowFilters
+              atValue={openAt ? atParam : ""}
+              atOptions={atOptions.map((value) => {
+                const resolved = resolveOpenAt(value, now);
+                return { value, label: resolved ? `${resolved.clock} ${resolved.when}` : value };
+              })}
+              areaSlug={area?.slug ?? ""}
+              areaLabel={area?.label ?? null}
+              dietId={diet?.id ?? ""}
+              dietLabel={diet?.label ?? null}
+              oneMoreHour={oneMoreHour}
+              cuisine={cuisine}
+              city={city}
+              dish={dish}
+              cuisineOptions={cuisineOptions}
+              cityOptions={cityOptions}
+              nearMe={nearMe}
+              onNearMeToggle={() => (nearMe.kind === "on" ? setNearMe({ kind: "off" }) : findNearMe())}
+              setParam={setParam}
+              clearParams={clearParams}
+              clearKeys={FILTER_KEYS}
+              showClear={Boolean(filtersOn || openAt || dish)}
+              resultCount={view ? openCount : null}
+            />
 
             {dishSearch.term && view && (
               <DishResults
@@ -720,7 +596,7 @@ export default function OpenNowRestaurants() {
           </>
         )}
 
-        <HowThisWorks />
+        <HowThisWorks withoutHours={!prerender && view && typeof withoutHours === "number" ? withoutHours : null} />
 
         {/* SEO-003: the FAQ is rendered here, so the FAQPage block FAQSection
             emits matches what visitors see. The answers are static text, so

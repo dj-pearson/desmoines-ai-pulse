@@ -231,10 +231,27 @@ All colors MUST be HSL. Touch targets minimum 44px.
    * If a grid ever needs to render many hundreds of rows, revisit
    * @tanstack/react-virtual: DOM node count, which this does not reduce, is
    * the ceiling this approach does not raise.
+   *
+   * WEB-UX-087 changed both numbers. Below sm (640px) the card is a row: a
+   * 96px thumbnail beside a body of three text lines and the 44px Call /
+   * Directions line, which is 9rem + 2px (the borders) at 390px. From sm up
+   * the card gained that same action line in place of the 1rem address line,
+   * so it is 27.75rem + 3px at 768 and 1280px (the third px is the action
+   * line's top border). Both were measured on the full-card fixture in
+   * tests/restaurants-dietary.spec.ts with coordinates, so Directions shows.
+   * A row with no phone, no coordinates and no street address has no action
+   * line and renders shorter than the placeholder, so the page can still
+   * move a little around such rows; `auto` corrects it once they render.
    */
   .content-auto {
     content-visibility: auto;
-    contain-intrinsic-size: auto 0 auto calc(26rem + 3px);
+    contain-intrinsic-size: auto 0 auto calc(9rem + 2px);
+  }
+
+  @media (min-width: 640px) {
+    .content-auto {
+      contain-intrinsic-size: auto 0 auto calc(27.75rem + 3px);
+    }
   }
 
   /* Mobile-first touch targets */

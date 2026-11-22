@@ -152,21 +152,80 @@ Deno.test("a nav bar parsed as a menu does not survive normalization", () => {
 
 // ─── Dietary tags ───────────────────────────────────────────────────────────
 
-Deno.test("menu shorthand becomes dietary tags", () => {
-  assert(normalizeDietaryTags([], "Falafel Wrap (V)", null).includes("vegetarian"), "(V)");
-  assert(normalizeDietaryTags([], "Buddha Bowl (VG)", null).includes("vegan"), "(VG)");
-  assert(
-    normalizeDietaryTags([], "Grilled Chicken", "served on a (GF) bun").includes("gluten-free"),
-    "(GF) in the description",
+/** Shorthand: the tags for a dish with no reported tags. */
+function tagsOf(name: string, description: string | null = null): string[] {
+  return normalizeDietaryTags([], name, description);
+}
+
+Deno.test("menu shorthand on the dish becomes dietary tags", () => {
+  assertEquals(tagsOf("Falafel Wrap (V)"), ["vegetarian"], "(V)");
+  assertEquals(tagsOf("Buddha Bowl (VG)"), ["vegan", "vegetarian"], "(VG), vegan implies vegetarian");
+  assertEquals(tagsOf("Hummus Plate [V, GF]"), ["gluten-free", "vegetarian"], "a combined group");
+  assertEquals(tagsOf("Quinoa Salad (V/GF/DF)"), ["dairy-free", "gluten-free", "vegetarian"], "slash group");
+  assertEquals(
+    tagsOf("Hummus Plate", "Chickpeas, tahini, warm pita. (V) (GF)"),
+    ["gluten-free", "vegetarian"],
+    "groups that close the description mark the dish",
   );
 });
 
-Deno.test("vegan implies vegetarian, and invented tags are dropped", () => {
-  const tags = normalizeDietaryTags(["vegan", "keto", "paleo"], "Tofu Scramble", null);
-  assert(tags.includes("vegan"), "reported vegan kept");
-  assert(tags.includes("vegetarian"), "vegan implies vegetarian");
-  assert(!tags.includes("keto"), "keto is not in the stored vocabulary");
-  assert(!tags.includes("paleo"), "paleo is not in the stored vocabulary");
+Deno.test("the word itself in the dish name is a mark", () => {
+  assertEquals(tagsOf("Vegan Burger"), ["vegan", "vegetarian"], "vegan in the name");
+  assertEquals(tagsOf("Gluten-Free Brownie"), ["gluten-free"], "hyphenated");
+  assertEquals(tagsOf("Gluten Free Crust"), ["gluten-free"], "spaced");
+  assertEquals(tagsOf("Halal Chicken Gyro"), ["halal"], "halal in the name");
+  assertEquals(tagsOf("Spicy Chicken Sandwich (no pickles)"), ["spicy"], "spicy is not a health claim");
+});
+
+// WEB-BE-072: each of these was tagged before and must not be. The first two
+// are the cases named in the story.
+Deno.test("must-not-tag: inferred, optional and partial mentions", () => {
+  const cases: Array<[string, string | null, string]> = [
+    ["Grilled chicken and veggie skewers", null, "veggie is not vegetarian"],
+    ["Fish Tacos (GFO)", null, "(GFO) is a gluten-free option, not a gluten-free dish"],
+    ["Veggie Burger", null, "veggie names a patty, not a diet"],
+    ["Garden Pasta (VO)", null, "(VO) is a vegan or vegetarian option"],
+    ["Burger (GF option)", null, "option in the group"],
+    ["Burger (GF on request)", null, "request in the group"],
+    ["Cheeseburger, gluten free bun available", null, "available qualifies the word"],
+    ["Pad Thai - vegan option", null, "option qualifies the word"],
+    ["Non-Vegan Mac", null, "negation"],
+    ["Classic Burger", "Ask about our gluten free bun.", "words in the description never count"],
+    ["Grilled Chicken", "served on a (GF) bun", "a group mid-description describes a part"],
+    ["Chili", "Our famous chili, vegetarian on request", "description word"],
+    ["Steak Frites", "Raw onion, spicy mayo", "descriptor words in the description"],
+    ["Wings", "Tossed in organic hot sauce. Nut-free kitchen.", "kitchen claims are not dish claims"],
+  ];
+  for (const [name, description, why] of cases) {
+    assertEquals(tagsOf(name, description), [], `${name} / ${description ?? ""}: ${why}`);
+  }
+});
+
+Deno.test("a model's reported tags are dropped; a structured source's are kept", () => {
+  assertEquals(
+    normalizeDietaryTags(["vegetarian"], "Grilled chicken and veggie skewers", null),
+    [],
+    "model output is not the restaurant's mark",
+  );
+  const tags = normalizeDietaryTags(["vegan", "keto", "paleo"], "Tofu Scramble", null, {
+    trustReported: true,
+  });
+  assertEquals(tags, ["vegan", "vegetarian"], "structured vegan kept, invented tags dropped");
+});
+
+Deno.test("normalizeExtraction trusts reported tags only from structured methods", () => {
+  const items = [item("Tofu Scramble", { dietary_tags: ["vegan"] }), item("Fish Tacos (GFO)", { dietary_tags: ["gluten-free"] })];
+  const fromModel = normalizeExtraction(extraction([{ section_name: "Mains", items }]));
+  assertEquals(fromModel.sections[0].items.map((i) => i.dietary_tags), [[], []], "html_text: text marks only");
+
+  const fromJsonLd = normalizeExtraction(
+    extraction([{ section_name: "Mains", items }], { method: "jsonld" }),
+  );
+  assertEquals(
+    fromJsonLd.sections[0].items.map((i) => i.dietary_tags),
+    [["vegan", "vegetarian"], ["gluten-free"]],
+    "jsonld: suitableForDiet is the restaurant's own mark",
+  );
 });
 
 // ─── Deduplication ──────────────────────────────────────────────────────────

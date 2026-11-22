@@ -4,19 +4,24 @@
  * Daily, handles the highest-leverage revenue touchpoints:
  *   - trial_ending  — trialing subs within TRIAL_WINDOW_DAYS of period end.
  *   - dunning       — past_due subs (Stripe smart retries drive the actual
- *                     charge; we send an aligned reminder). A final-step
- *                     courtesy credit would be approval-gated (AOS-CORE-007),
- *                     never auto-applied.
+ *                     charge; we send an aligned reminder). Transactional:
+ *                     sent regardless of marketing consent, web-billed
+ *                     subscriptions only, deduped against
+ *                     subscription-lifecycle (_shared/paymentFailedNotice.ts).
+ *                     A final-step courtesy credit would be approval-gated
+ *                     (AOS-CORE-007), never auto-applied.
  *   - upgrade_prompt — engaged free users, aligned to the paywall model.
  * Reads only subscription status + tier (no schema tightening). Frequency-
- * capped, consent-respecting, quality-gated. Conversion is measured by stamping
- * activated_at when the subscription converts after a send.
+ * capped; the upgrade prompt is consent-gated and quality-gated. Conversion is
+ * measured by stamping activated_at when the subscription converts after a send.
  *
  * Consolidated into `agent-runner` (was `agent-subscription-nurture/index.ts`).
  */
 import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import { buildTrialNotice, planAmount } from "../trialNotice.ts";
+import { buildDunningEmail, buildUpgradePromptEmail } from "../billingLinks.ts";
+import { DUNNING_KIND, isWebBilled, paymentFailedNoticeSentSince, WEB_BILLED_FILTER } from "../paymentFailedNotice.ts";
 import type { AgentRun } from "./types.ts";
 import { hasMarketingConsent } from "../marketingConsent.ts";
 
@@ -29,15 +34,6 @@ const SITE = (Deno.env.get("VITE_SITE_URL") || Deno.env.get("SITE_URL") || "http
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
-
-async function consented(supabase: Client, userId: string): Promise<{ email: string; allowed: boolean } | null> {
-  const { data, error } = await supabase.from("profiles").select("email, lifecycle_signals").eq("user_id", userId).maybeSingle();
-  // Fails closed already - no email means the caller skips the user - but did
-  // so silently (WEB-BE-032 AC3).
-  if (error) console.warn(`[subscription-nurture] consent read failed for ${userId}: ${error.message}`);
-  if (!data?.email) return null;
-  return { email: data.email, allowed: hasMarketingConsent(data.lifecycle_signals) };
-}
 
 async function cappedRecently(supabase: Client, userId: string, kind: string, gapDays: number): Promise<boolean> {
   const { data, error } = await supabase.from("nurture_sends").select("created_at").eq("user_id", userId).eq("kind", kind).order("created_at", { ascending: false }).limit(1);
@@ -158,16 +154,32 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 2) Dunning (past_due) ────────────────────────────────────────────
-  const { data: pastDue, error: pastDueError } = await supabase.from("user_subscriptions").select("user_id").eq("status", "past_due").limit(300);
+  const { data: pastDue, error: pastDueError } = await supabase.from("user_subscriptions").select("user_id, platform").eq("status", "past_due").or(WEB_BILLED_FILTER).limit(300);
   // Same reasoning as the trial sweep: a dunning notice nobody receives looks
   // exactly like nobody being past due.
   if (pastDueError) throw new Error(`past_due subscriptions read failed: ${pastDueError.message}`);
-  for (const d of (pastDue ?? []) as { user_id: string }[]) {
-    const c = await consented(supabase, d.user_id);
-    if (!c || !c.allowed) continue;
-    if (await cappedRecently(supabase, d.user_id, "dunning", DUNNING_GAP_DAYS)) continue;
-    const html = `<h1>We couldn't process your payment</h1><p>No worries — we'll retry automatically. To avoid any interruption to your Insider access, you can update your payment method anytime.</p><p><a href="${SITE}/profile?tab=settings">Update payment method →</a></p>`;
-    if (await sendStep(supabase, d.user_id, c.email, "dunning", "Action needed: update your payment method", html, "We couldn't process your payment; we'll retry. Update your payment method to keep Insider access.")) dunning++;
+  for (const d of (pastDue ?? []) as { user_id: string; platform: string | null }[]) {
+    // Web-billed only, the rule subscription-lifecycle uses: Apple and Google
+    // run their own retries, and this copy points at a Stripe card update.
+    if (!isWebBilled(d.platform)) continue;
+    // Transactional, like the trial notice above (owner decision 2026-11-22):
+    // no marketing-consent check and no quality gate. Email address only.
+    // Hard suppressions still apply inside sendEmail (bounce and complaint
+    // block transactional mail; unsubscribe does not).
+    const { data: profile, error: profileError } = await supabase.from("profiles").select("email").eq("user_id", d.user_id).maybeSingle();
+    if (profileError) {
+      console.error(`dunning notice: profile lookup failed for ${d.user_id}:`, profileError.message);
+      continue;
+    }
+    const email = (profile as { email?: string } | null)?.email;
+    if (!email) continue;
+    if (await cappedRecently(supabase, d.user_id, DUNNING_KIND, DUNNING_GAP_DAYS)) continue;
+    // subscription-lifecycle sends the same notice from its own ledger; this
+    // reads both so one failed invoice is not reported twice in a day.
+    if (await paymentFailedNoticeSentSince(supabase, d.user_id, new Date(now - DUNNING_GAP_DAYS * DAY).toISOString())) continue;
+    // WEB-LEGAL-016: the link is /subscription, from _shared/billingLinks.ts.
+    const dun = buildDunningEmail(SITE);
+    if (await sendNotice(supabase, d.user_id, email, DUNNING_KIND, dun.subject, dun.html, dun.text)) dunning++;
   }
 
   // ── 3) Upgrade prompts (engaged free users) ──────────────────────────
@@ -179,7 +191,9 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .limit(300);
   if (freeEngagedError) throw new Error(`engaged free users read failed: ${freeEngagedError.message}`);
   for (const p of (freeEngaged ?? []) as { user_id: string; email: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[]) {
-    if (p.lifecycle_signals?.messagingAllowed === false) continue;
+    // Marketing: only an explicit messagingAllowed === true allows it
+    // (WEB-LEGAL-012). `=== false` read a never-classified user as consent.
+    if (!hasMarketingConsent(p.lifecycle_signals)) continue;
     // Only prompt users WITHOUT an active/trialing paid sub (entitlement-safe read).
     // ENTITLEMENT READ, and the comment above already called it entitlement-safe
     // while it was not: `if (sub) continue` skips paying users, so a dropped
@@ -192,8 +206,8 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     }
     if (sub) continue;
     if (await cappedRecently(supabase, p.user_id, "upgrade_prompt", UPGRADE_GAP_DAYS)) continue;
-    const html = `<h1>Get more from Des Moines Insider</h1><p>You're clearly enjoying the city — Insider unlocks premium picks and the AI Trip Planner to make every outing easier.</p><p><a href="${SITE}/profile?tab=settings">See Insider →</a></p>`;
-    if (await sendStep(supabase, p.user_id, p.email, "upgrade_prompt", "Unlock more of Des Moines with Insider", html, "Insider unlocks premium picks and the AI Trip Planner. See Insider.")) upgrade++;
+    const up = buildUpgradePromptEmail(SITE);
+    if (await sendStep(supabase, p.user_id, p.email, "upgrade_prompt", up.subject, up.html, up.text)) upgrade++;
   }
 
   ctx.processed(trial + dunning + upgrade);

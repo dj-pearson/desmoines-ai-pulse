@@ -73,3 +73,65 @@ describe("MenuSchema JSON-LD escaping", () => {
     expect(popular.itemListElement[0].description).toBe(HOSTILE);
   });
 });
+
+// WEB-BE-072: dietary_tags are scraped and partly inferred. The structured
+// data must not publish them as GlutenFreeDiet and the like.
+describe("MenuSchema dietary claims", () => {
+  it("emits no suitableForDiet, even for a tagged item", async () => {
+    const scripts = await renderScripts([
+      {
+        name: "Mains",
+        items: [makeItem({ item_name: "Fish Tacos (GFO)", dietary_tags: ["gluten-free", "vegan"] })],
+      },
+    ]);
+    const menu = scripts.map((s) => JSON.parse(s.textContent ?? "{}")).find((p) => p["@type"] === "Menu");
+    // Counter-assertion: the item is in the schema, so the absence below is
+    // not an empty menu.
+    expect(menu.hasMenuSection[0].hasMenuItem[0].name).toBe("Fish Tacos (GFO)");
+    for (const script of scripts) {
+      expect(script.textContent).not.toContain("suitableForDiet");
+      expect(script.textContent).not.toContain("GlutenFreeDiet");
+    }
+  });
+});
+
+// WEB-BE-071: past 180 days the structured data stops stating prices.
+describe("MenuSchema prices by menu age", () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000 - 60_000).toISOString();
+
+  async function menuFor(capturedAt: string | undefined) {
+    render(
+      <HelmetProvider>
+        <MenuSchema
+          restaurantName="Test Diner"
+          restaurantSlug="test-diner"
+          capturedAt={capturedAt}
+          sections={[{ name: "Sides", items: [makeItem({ is_popular: false })] }]}
+        />
+      </HelmetProvider>,
+    );
+    return waitFor(() => {
+      const script = document.head.querySelector<HTMLScriptElement>('script[type="application/ld+json"]');
+      if (!script) throw new Error("JSON-LD not committed yet");
+      return JSON.parse(script.textContent ?? "{}");
+    });
+  }
+
+  it("keeps the Offer on a 179-day-old menu", async () => {
+    const menu = await menuFor(daysAgo(179));
+    expect(menu.hasMenuSection[0].hasMenuItem[0].offers).toMatchObject({ "@type": "Offer", price: 6 });
+  });
+
+  it("drops the Offer on a 181-day-old menu and keeps the item", async () => {
+    const menu = await menuFor(daysAgo(181));
+    const fries = menu.hasMenuSection[0].hasMenuItem[0];
+    expect(fries.name).toBe("Fries");
+    expect(fries.offers).toBeUndefined();
+    expect(menu.description).not.toContain("with prices");
+  });
+
+  it("drops the Offer when the capture date is unknown", async () => {
+    const menu = await menuFor(undefined);
+    expect(menu.hasMenuSection[0].hasMenuItem[0].offers).toBeUndefined();
+  });
+});

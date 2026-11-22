@@ -20,6 +20,8 @@
  * silently drop it.
  */
 
+import { subscriptionUrl } from "./billingLinks.ts";
+
 export interface TrialNoticeInput {
   planName: string;
   /** Charge in dollars. Null when it could not be determined; see below. */
@@ -59,7 +61,9 @@ function money(amount: number): string {
  */
 export function buildTrialNotice(input: TrialNoticeInput): TrialNoticeContent {
   const when = formatChargeDate(input.chargeAt);
-  const manageUrl = `${input.siteUrl}/profile?tab=settings`;
+  // /subscription, where the web Cancel control is. This was
+  // /profile?tab=settings, which has no billing on it (WEB-LEGAL-016).
+  const manageUrl = subscriptionUrl(input.siteUrl);
   const per = input.interval === "year" ? "year" : input.interval === "month" ? "month" : null;
 
   const charge =
@@ -76,9 +80,9 @@ export function buildTrialNotice(input: TrialNoticeInput): TrialNoticeContent {
     "",
     `When the trial ends on ${when}, the card on file will be charged ${charge}, and will renew automatically each ${per ?? "billing period"} until you cancel.`,
     "",
-    `To cancel and avoid the charge, open Account > Subscription and choose Cancel: ${manageUrl}`,
+    `To cancel and avoid the charge, open your subscription page and choose Cancel subscription: ${manageUrl}`,
     "",
-    "Cancelling takes one click and keeps your access until the end of the period you have already paid for. If you subscribed through the iOS app, cancel from Settings > Apple ID > Subscriptions instead.",
+    "Cancelling takes one click and keeps your access until the end of the period you have already paid for. If you subscribed through the iOS app, cancel from Settings > Apple ID > Subscriptions instead; through the Android app, from Google Play > Payments & subscriptions > Subscriptions.",
     "",
     "This is a billing notice about your subscription, not a marketing email.",
   ].join("\n");
@@ -97,7 +101,8 @@ export function buildTrialNotice(input: TrialNoticeInput): TrialNoticeContent {
     <p style="margin:0 0 16px">
       Cancelling takes one click and keeps your access until the end of the period you
       have already paid for. If you subscribed through the iOS app, cancel from
-      Settings &gt; Apple ID &gt; Subscriptions instead.
+      Settings &gt; Apple ID &gt; Subscriptions instead; through the Android app,
+      from Google Play &gt; Payments &amp; subscriptions &gt; Subscriptions.
     </p>
     <p style="margin:0;color:#6b7280;font-size:13px">
       This is a billing notice about your subscription, not a marketing email.

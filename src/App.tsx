@@ -261,6 +261,9 @@ const AdminTrending = lazyWithRetry(() => import("./pages/AdminTrending"));
 const AdminEventSubmissions = lazyWithRetry(
   () => import("./pages/AdminEventSubmissions"),
 );
+const AdminClosureReviews = lazyWithRetry(
+  () => import("./pages/AdminClosureReviews"),
+);
 const AdminBusinessClaims = lazyWithRetry(
   () => import("./pages/AdminBusinessClaims"),
 );
@@ -479,6 +482,7 @@ const App = () => (
               <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />
               <Route path="/admin/event-submissions" element={<ProtectedRoute requireAdmin><AdminEventSubmissions /></ProtectedRoute>} />
               <Route path="/admin/business-claims" element={<ProtectedRoute requireAdmin><AdminBusinessClaims /></ProtectedRoute>} />
+              <Route path="/admin/closure-reviews" element={<ProtectedRoute requireAdmin><AdminClosureReviews /></ProtectedRoute>} />
               <Route
                 path="/admin/articles/new"
                 element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}

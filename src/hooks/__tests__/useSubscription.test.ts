@@ -4,6 +4,7 @@ import {
   isSubscriptionEntitled,
   gracePeriodEnd,
   GRACE_PERIOD_DAYS,
+  ACTIVE_GRACE_DAYS,
   type SubscriptionPlan,
   type UserSubscription,
 } from '../useSubscription';
@@ -132,7 +133,8 @@ describe('resolveHighestSubscription (cross-platform sync read-side)', () => {
  *
  * A failed renewal must not instantly revoke premium access: past_due rows stay
  * entitled until current_period_end + GRACE_PERIOD_DAYS, then drop to free.
- * active/trialing always grant; canceled/paused never do.
+ * active/trialing grant until current_period_end + ACTIVE_GRACE_DAYS
+ * (WEB-BE-062); canceled/paused never do.
  */
 describe('isSubscriptionEntitled / gracePeriodEnd (grace period)', () => {
   const now = new Date('2026-05-10T00:00:00Z');
@@ -145,8 +147,28 @@ describe('isSubscriptionEntitled / gracePeriodEnd (grace period)', () => {
     current_period_end: periodEnd,
   });
 
-  it('grants access for active subscriptions', () => {
-    expect(isSubscriptionEntitled(withStatus('active', '2026-05-01T00:00:00Z'), now)).toBe(true);
+  it('grants access for active subscriptions inside their paid period', () => {
+    expect(isSubscriptionEntitled(withStatus('active', '2026-06-01T00:00:00Z'), now)).toBe(true);
+  });
+
+  // WEB-BE-062. This case used to assert true for a period that ended nine
+  // days earlier: "active" meant entitled forever, so a missed cancellation
+  // webhook gave premium away for good.
+  it('drops an active row whose period ended 10 days ago', () => {
+    expect(isSubscriptionEntitled(withStatus('active', '2026-04-30T00:00:00Z'), now)).toBe(false);
+    expect(isSubscriptionEntitled(withStatus('trialing', '2026-04-30T00:00:00Z'), now)).toBe(false);
+  });
+
+  it('keeps an active row for ACTIVE_GRACE_DAYS after its period end, and not a day more', () => {
+    expect(ACTIVE_GRACE_DAYS).toBe(3);
+    expect(isSubscriptionEntitled(withStatus('active', '2026-05-08T00:00:00Z'), now)).toBe(true);
+    expect(isSubscriptionEntitled(withStatus('active', '2026-05-07T00:00:00Z'), now)).toBe(true);
+    expect(isSubscriptionEntitled(withStatus('active', '2026-05-06T23:00:00Z'), now)).toBe(false);
+  });
+
+  it('treats an active row with no period end as lapsed', () => {
+    const row = { ...withStatus('active', '2026-06-01T00:00:00Z'), current_period_end: null as unknown as string };
+    expect(isSubscriptionEntitled(row, now)).toBe(false);
   });
 
   it('grants access for trialing subscriptions (fixes trial-reads-as-free)', () => {
@@ -173,11 +195,15 @@ describe('isSubscriptionEntitled / gracePeriodEnd (grace period)', () => {
     expect(isSubscriptionEntitled(row, now)).toBe(false);
   });
 
-  it('gracePeriodEnd adds the grace window for past_due but not for active', () => {
+  it('gracePeriodEnd adds the past_due window to past_due and the active buffer to active', () => {
     const periodEnd = '2026-05-01T00:00:00Z';
     const due = gracePeriodEnd(withStatus('past_due', periodEnd));
     const active = gracePeriodEnd(withStatus('active', periodEnd));
-    expect(active.toISOString()).toBe(new Date(periodEnd).toISOString());
+    const canceled = gracePeriodEnd(withStatus('canceled', periodEnd));
+    const expectedActive = new Date(periodEnd);
+    expectedActive.setDate(expectedActive.getDate() + ACTIVE_GRACE_DAYS);
+    expect(active.toISOString()).toBe(expectedActive.toISOString());
+    expect(canceled.toISOString()).toBe(new Date(periodEnd).toISOString());
     const expected = new Date(periodEnd);
     expected.setDate(expected.getDate() + GRACE_PERIOD_DAYS);
     expect(due.toISOString()).toBe(expected.toISOString());

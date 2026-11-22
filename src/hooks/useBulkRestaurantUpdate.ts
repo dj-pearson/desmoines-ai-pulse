@@ -14,8 +14,11 @@ export interface BulkUpdateResult {
   noHours?: number;
   /** Stale mode only: Places answered 404 for the place id. */
   gone?: number;
-  /** Fill mode only: pass back as afterId to move past rows Google has no hours for. */
+  /** Fill mode, and the full enrichment (WEB-BE-066): pass back as afterId
+   *  so the next run starts after the rows this one read. */
   lastId?: string | null;
+  /** Full enrichment only (WEB-BE-066): rows no search hit matched by name. */
+  unmatched?: number;
   errorDetails?: Array<{
     id: string;
     name: string;
@@ -31,7 +34,7 @@ export interface BulkUpdateOptions {
   hoursOnly?: boolean;
   /** With hoursOnly: re-read hours last checked more than N days ago (WEB-FEAT-079). */
   staleDays?: number;
-  /** With hoursOnly and no staleDays: the previous run's lastId. */
+  /** With hoursOnly and no staleDays, or with forceUpdate: the previous run's lastId. */
   afterId?: string | null;
 }
 
@@ -41,7 +44,13 @@ export interface BulkUpdateOptions {
  */
 export function bulkUpdateRequestBody(options: BulkUpdateOptions = {}): BulkUpdateRequestBody {
   const { batchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, staleDays, afterId } = options;
-  if (!hoursOnly) return { batchSize, forceUpdate, clearEnhanced };
+  if (!hoursOnly) {
+    // WEB-BE-066: a force run walks the table in id order, so it needs the
+    // cursor to reach rows past the first batch. Sent only when given.
+    const enrich: BulkUpdateRequestBody = { batchSize, forceUpdate, clearEnhanced };
+    if (forceUpdate && afterId) enrich.afterId = afterId;
+    return enrich;
+  }
   const body: BulkUpdateRequestBody = { batchSize, hoursOnly: true };
   if (staleDays !== undefined) body.staleDays = staleDays;
   else if (afterId) body.afterId = afterId;

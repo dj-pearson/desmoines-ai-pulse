@@ -33,6 +33,7 @@ const RERUNNABLE: Record<string, string> = {
   "ai-article-pipeline": "ai-article-pipeline",
   "assemble-weekly-digest": "assemble-weekly-digest",
   "moderate-content": "moderate-content",
+  "subscription-reconcile": "subscription-reconcile",
 };
 
 function statusBadge(status: JobHealthRow["last_status"]) {
@@ -68,6 +69,17 @@ interface LifecycleKpi {
   hidden: number;
   archived: number;
   deleted: number;
+}
+
+/** Latest subscription-reconcile run (WEB-BE-062), as runJob recorded it. */
+interface ReconcileRun {
+  status: string | null;
+  startedAt: string | null;
+  error: string | null;
+  itemsFailed: number;
+  corrected: number | null;
+  checked: number | null;
+  notEntitledBacklog: number | null;
 }
 
 export default function JobHealthPanel() {
@@ -108,6 +120,47 @@ export default function JobHealthPanel() {
         hidden: meta.hidden ?? 0,
         archived: meta.archived ?? 0,
         deleted: meta.deleted ?? 0,
+      };
+    },
+    refetchInterval: 60_000,
+  });
+
+  // Latest subscription reconciliation (WEB-BE-062): how many rows Stripe's
+  // answer corrected. A failed read is shown as unavailable, not as zero.
+  const { data: reconcileRun, error: reconcileError } = useQuery({
+    queryKey: ["subscription-reconcile-kpi"],
+    queryFn: async (): Promise<ReconcileRun | null> => {
+      const { data, error } = await supabase
+        .from("automation_job_runs" as never)
+        .select("status, started_at, error, items_failed, metadata")
+        .eq("job_name", "subscription-reconcile")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      const row = data as unknown as {
+        status: string | null;
+        started_at: string | null;
+        error: string | null;
+        items_failed: number | null;
+        metadata: {
+          corrected?: number;
+          checked?: number;
+          backlog?: Array<{ not_entitled?: number }>;
+        } | null;
+      } | null;
+      if (!row) return null;
+      const meta = row.metadata ?? {};
+      return {
+        status: row.status,
+        startedAt: row.started_at,
+        error: row.error,
+        itemsFailed: row.items_failed ?? 0,
+        corrected: typeof meta.corrected === "number" ? meta.corrected : null,
+        checked: typeof meta.checked === "number" ? meta.checked : null,
+        notEntitledBacklog: Array.isArray(meta.backlog)
+          ? meta.backlog.reduce((n, b) => n + (Number(b.not_entitled) || 0), 0)
+          : null,
       };
     },
     refetchInterval: 60_000,
@@ -266,6 +319,45 @@ export default function JobHealthPanel() {
           </div>
         </div>
       )}
+
+      <div className="mt-6">
+        <h3 className="text-sm font-medium mb-2">Subscription reconciliation (last run)</h3>
+        {reconcileError ? (
+          <p className="text-xs text-destructive">
+            Unavailable - {reconcileError instanceof Error ? reconcileError.message : "the run could not be read"}
+          </p>
+        ) : reconcileRun === undefined ? (
+          <p className="text-xs text-muted-foreground">Loading...</p>
+        ) : reconcileRun === null ? (
+          <p className="text-xs text-muted-foreground">Never run.</p>
+        ) : reconcileRun.status === "failed" ? (
+          <p className="text-xs text-destructive">
+            Failed {timeAgo(reconcileRun.startedAt)}: {reconcileRun.error ?? "no error recorded"}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Corrected from Stripe</div>
+              <div className="text-lg font-semibold">{reconcileRun.corrected ?? "Unavailable"}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Rows checked</div>
+              <div className="text-lg font-semibold">{reconcileRun.checked ?? "Unavailable"}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Could not decide</div>
+              <div className={reconcileRun.itemsFailed > 0 ? "text-lg font-semibold text-amber-600" : "text-lg font-semibold"}>
+                {reconcileRun.itemsFailed}
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Lapsed, paid status, not entitled</div>
+              <div className="text-lg font-semibold">{reconcileRun.notEntitledBacklog ?? "Unavailable"}</div>
+            </div>
+            <p className="col-span-full text-xs text-muted-foreground">Run {timeAgo(reconcileRun.startedAt)}.</p>
+          </div>
+        )}
+      </div>
 
       {jobs?.some((j) => j.last_status === "failed" && j.last_error) && (
         <div className="mt-4 space-y-1">

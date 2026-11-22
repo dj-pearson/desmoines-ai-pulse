@@ -19,7 +19,7 @@ const SUBMISSION_ID = '33333333-0000-4000-8000-0000000000b3';
 const LIVE_EVENT_ID = '44444444-0000-4000-8000-0000000000b3';
 
 /** update_claimed_listing's restaurant whitelist (20260920000005). */
-const RESTAURANT_WHITELIST = ['description', 'website', 'phone', 'image_url', 'menu_url'];
+const RESTAURANT_WHITELIST = ['description', 'website', 'phone', 'image_url', 'menu_url', 'hours_json'];
 
 function authStorageKey(): string {
   const url = process.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
@@ -85,6 +85,8 @@ interface Backend {
   published?: unknown[];
   /** Every body POSTed to rpc/update_claimed_listing. */
   updateBodies?: Record<string, unknown>[];
+  /** Every body POSTed to rpc/report_owner_listing_status. */
+  statusBodies?: Record<string, unknown>[];
 }
 
 async function mockWorkspace(page: Page, backend: Backend = {}) {
@@ -112,6 +114,10 @@ async function mockWorkspace(page: Page, backend: Backend = {}) {
       backend.updateBodies?.push(request.postDataJSON() as Record<string, unknown>);
       return json(route, true);
     }
+    if (url.includes('/rest/v1/rpc/report_owner_listing_status')) {
+      backend.statusBodies?.push(request.postDataJSON() as Record<string, unknown>);
+      return json(route, { result: 'temporarily_closed' });
+    }
     if (url.includes('/rest/v1/business_claims')) {
       if (backend.claims === 'missing') {
         return json(route, { code: '42P01', message: 'relation "public.business_claims" does not exist' }, 404);
@@ -129,6 +135,16 @@ async function mockWorkspace(page: Page, backend: Backend = {}) {
           phone: '515-000-0000',
           image_url: null,
           menu_url: null,
+          status: 'open',
+          business_status: 'OPERATIONAL',
+          hours_json: {
+            version: 1,
+            timeZone: 'America/Chicago',
+            source: 'google-places',
+            fetchedAt: '2026-11-01T09:41:00Z',
+            periods: [{ open: { day: 1, hour: 11, minute: 0 }, close: { day: 1, hour: 21, minute: 0 } }],
+            weekdayDescriptions: ['Monday: 11:00 AM - 9:00 PM'],
+          },
         },
       ]);
     }
@@ -205,6 +221,38 @@ test.describe('/business workspace (business WP3)', () => {
     for (const key of Object.keys(patch)) expect(RESTAURANT_WHITELIST).toContain(key);
     // Only what changed: the description the form loaded is not re-sent.
     expect(patch).toEqual({ phone: '515-555-0142' });
+  });
+
+  test('an owner sets hours and reports a temporary closure; no photo link box is offered', async ({ page }) => {
+    const updateBodies: Record<string, unknown>[] = [];
+    const statusBodies: Record<string, unknown>[] = [];
+    await mockWorkspace(page, { claims: [verifiedClaim()], updateBodies, statusBodies });
+    await page.goto('/business');
+    await page.getByRole('button', { name: 'Edit details' }).click();
+
+    // WEB-ADS-048: the photo is an upload, not a typed link.
+    await expect(page.getByLabel('Photo link')).toHaveCount(0);
+    await expect(page.getByText('JPEG, PNG or WebP, up to 5 MB.', { exact: false })).toBeVisible();
+
+    await expect(page.getByLabel('Monday opens')).toHaveValue('11:00');
+    await page.getByRole('checkbox', { name: 'Friday' }).click();
+    await page.getByLabel('Friday opens').fill('17:00');
+    await page.getByLabel('Friday closes').fill('01:30');
+    await page.getByRole('button', { name: 'Save hours' }).click();
+
+    await expect.poll(() => updateBodies.length).toBe(1);
+    expect(updateBodies[0].p_patch).toEqual({
+      hours_json: {
+        periods: [
+          { open: { day: 1, hour: 11, minute: 0 }, close: { day: 1, hour: 21, minute: 0 } },
+          { open: { day: 5, hour: 17, minute: 0 }, close: { day: 6, hour: 1, minute: 30 } },
+        ],
+      },
+    });
+
+    await page.getByRole('button', { name: "We're temporarily closed" }).click();
+    await expect.poll(() => statusBodies.length).toBe(1);
+    expect(statusBodies[0]).toMatchObject({ p_listing_id: RESTAURANT_ID, p_status: 'temporarily_closed' });
   });
 
   test('with business_claims missing (42P01) the section is empty and the page still renders', async ({ page }) => {

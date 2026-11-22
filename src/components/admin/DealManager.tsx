@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -82,6 +83,13 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { MoreVertical } from "lucide-react";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
+import {
+  DEAL_RECONFIRM_DAYS,
+  UNDEFINED_COLUMN_CODE,
+  dealConfirmedLabel,
+  isStaleOpenEndedDeal,
+  staleConfirmationFilter,
+} from "@/lib/dealFreshness";
 
 interface Deal {
   id: string;
@@ -105,7 +113,13 @@ interface Deal {
   days_of_week: string[] | null;
   start_time: string | null;
   end_time: string | null;
+  /** WEB-FEAT-104. Undefined while migration 20261121000100 is unapplied. */
+  last_confirmed_at?: string | null;
 }
+
+const DEAL_ADMIN_COLUMNS_BASE =
+  "id, title, description, business_name, entity_type, entity_id, deal_type, discount_value, code, terms, start_date, end_date, image_url, is_verified, is_featured, redemption_count, created_at, days_of_week, start_time, end_time";
+const DEAL_ADMIN_COLUMNS = `${DEAL_ADMIN_COLUMNS_BASE}, last_confirmed_at`;
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 const DAY_LABELS: Record<(typeof DAY_KEYS)[number], string> = {
@@ -138,23 +152,34 @@ function recurrenceSummary(deal: Deal): string {
   return `${days} ${formatTimeShort(deal.start_time)}–${formatTimeShort(deal.end_time)}`;
 }
 
-type StatusFilter = "all" | "active" | "upcoming" | "expired";
+type StatusFilter = "all" | "active" | "upcoming" | "expired" | "reconfirm";
 const ENTITY_TYPES = ["restaurant", "attraction", "hotel", "event", "activity"];
 const DEAL_TYPES = ["percentage", "dollar_off", "bogo", "free_item", "package"];
 const PAGE_SIZE = 25;
 
 const LINKABLE_TYPES = Object.keys(DEAL_VENUE_SOURCES);
 
-function statusOf(deal: Deal): "active" | "upcoming" | "expired" {
+function statusOf(deal: Deal): "active" | "upcoming" | "expired" | "reconfirm" {
   const now = new Date();
   const start = new Date(deal.start_date);
   if (start > now) return "upcoming";
   if (deal.end_date && new Date(deal.end_date) < now) return "expired";
+  // In date but hidden from every public page until someone re-confirms it.
+  if (isStaleOpenEndedDeal(deal, now)) return "reconfirm";
   return "active";
 }
 
 function StatusBadge({ deal }: { deal: Deal }) {
   const s = statusOf(deal);
+  if (s === "reconfirm")
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] border-red-500 text-red-600"
+      >
+        Hidden: re-confirm
+      </Badge>
+    );
   if (s === "active")
     return (
       <Badge
@@ -439,6 +464,7 @@ export default function DealManager() {
   const [pruneOpen, setPruneOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [unlinkedCount, setUnlinkedCount] = useState<number | null>(null);
+  const [staleCount, setStaleCount] = useState<number | null>(null);
 
   /**
    * Live deals of a linkable type with no entity_id: these render the
@@ -460,50 +486,80 @@ export default function DealManager() {
     }
   }
 
+  /**
+   * In-date open-ended deals not confirmed for DEAL_RECONFIRM_DAYS: hidden
+   * from every public page and JSON-LD until re-confirmed (WEB-FEAT-104).
+   */
+  async function loadStaleCount() {
+    try {
+      const nowIso = new Date().toISOString();
+      const { count, error } = await supabase
+        .from("deals")
+        .select("id", { count: "exact", head: true })
+        .lte("start_date", nowIso)
+        .is("end_date", null)
+        .or(staleConfirmationFilter());
+      if (error) throw error;
+      setStaleCount(count ?? 0);
+    } catch (err) {
+      handleError(err, { component: "DealManager", action: "loadStaleCount" });
+    }
+  }
+
   async function load() {
     setLoading(true);
     try {
-      let q = supabase
-        .from("deals")
-        .select(
-          "id, title, description, business_name, entity_type, entity_id, deal_type, discount_value, code, terms, start_date, end_date, image_url, is_verified, is_featured, redemption_count, created_at, days_of_week, start_time, end_time",
-          { count: "exact" },
-        );
-      // A comma or parenthesis in the box would end the or() clause and 400
-      // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
-      const safeSearch = search ? sanitizePostgrestPattern(search) : "";
-      if (safeSearch) {
-        q = q.or(
-          `title.ilike.%${safeSearch}%,business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`,
-        );
-      }
-      if (entity !== "all") q = q.eq("entity_type", entity);
-      if (dealTypeFilter !== "all") q = q.eq("deal_type", dealTypeFilter);
-      if (featuredOnly) q = q.eq("is_featured", true);
-      const nowIso = new Date().toISOString();
-      if (statusFilter === "active") {
-        q = q.lte("start_date", nowIso).or(
-          `end_date.is.null,end_date.gt.${nowIso}`,
-        );
-      } else if (statusFilter === "upcoming") {
-        q = q.gt("start_date", nowIso);
-      } else if (statusFilter === "expired") {
-        q = q.lt("end_date", nowIso).not("end_date", "is", null);
-      }
-      q = q
-        .order("is_featured", { ascending: false })
-        .order("start_date", { ascending: false })
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-      const { data, error, count } = await q;
-      if (error) throw error;
-      setRows((data ?? []) as unknown as Deal[]);
-      setTotalCount(count ?? 0);
+      const { data, error, count } = await runLoad(DEAL_ADMIN_COLUMNS);
+      // Before migration 20261121000100 the column does not exist; list the
+      // deals without it rather than an empty manager.
+      const retry =
+        error?.code === UNDEFINED_COLUMN_CODE && statusFilter !== "reconfirm"
+          ? await runLoad(DEAL_ADMIN_COLUMNS_BASE)
+          : null;
+      const result = retry ?? { data, error, count };
+      if (result.error) throw result.error;
+      setRows((result.data ?? []) as unknown as Deal[]);
+      setTotalCount(result.count ?? 0);
     } catch (err) {
       handleError(err, { component: "DealManager", action: "load" });
       toast.error("Failed to load deals");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function runLoad(columns: string) {
+    let q = supabase
+      .from("deals")
+      .select(columns, { count: "exact" });
+    // A comma or parenthesis in the box would end the or() clause and 400
+    // the request ("Bar, Grill"); see src/lib/postgrestPattern.ts.
+    const safeSearch = search ? sanitizePostgrestPattern(search) : "";
+    if (safeSearch) {
+      q = q.or(
+        `title.ilike.%${safeSearch}%,business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`,
+      );
+    }
+    if (entity !== "all") q = q.eq("entity_type", entity);
+    if (dealTypeFilter !== "all") q = q.eq("deal_type", dealTypeFilter);
+    if (featuredOnly) q = q.eq("is_featured", true);
+    const nowIso = new Date().toISOString();
+    if (statusFilter === "active") {
+      q = q.lte("start_date", nowIso).or(
+        `end_date.is.null,end_date.gt.${nowIso}`,
+      );
+    } else if (statusFilter === "upcoming") {
+      q = q.gt("start_date", nowIso);
+    } else if (statusFilter === "expired") {
+      q = q.lt("end_date", nowIso).not("end_date", "is", null);
+    } else if (statusFilter === "reconfirm") {
+      q = q.lte("start_date", nowIso).is("end_date", null).or(staleConfirmationFilter());
+    }
+    q = q
+      .order("is_featured", { ascending: false })
+      .order("start_date", { ascending: false })
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+    return await q;
   }
 
   useEffect(() => {
@@ -513,6 +569,7 @@ export default function DealManager() {
 
   useEffect(() => {
     loadUnlinkedCount();
+    loadStaleCount();
   }, []);
 
   const totalPages = useMemo(
@@ -554,7 +611,7 @@ export default function DealManager() {
       if (error) throw error;
       toast.success(`${selectedIds.length} deal${selectedIds.length === 1 ? "" : "s"} updated`);
       setSelected(new Set());
-      await load();
+      await Promise.all([load(), loadStaleCount()]);
     } catch (err) {
       handleError(err, { component: "DealManager", action: "bulkSet" });
       toast.error("Bulk update failed");
@@ -581,6 +638,32 @@ export default function DealManager() {
     } catch (err) {
       handleError(err, { component: "DealManager", action: "pruneExpired" });
       toast.error("Prune failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Re-confirm: an admin has checked the deal still runs. Stamps
+   * last_confirmed_at, which puts an open-ended deal back on the public pages
+   * for another DEAL_RECONFIRM_DAYS. The verified owner will do this from the
+   * business portal once WEB-ADS-048 lands.
+   */
+  async function reconfirm(ids: string[]) {
+    if (ids.length === 0) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .update({ last_confirmed_at: new Date().toISOString() } as never)
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`${ids.length} deal${ids.length === 1 ? "" : "s"} re-confirmed`);
+      setSelected(new Set());
+      await Promise.all([load(), loadStaleCount()]);
+    } catch (err) {
+      handleError(err, { component: "DealManager", action: "reconfirm" });
+      toast.error("Re-confirm failed");
     } finally {
       setBusy(false);
     }
@@ -642,12 +725,17 @@ export default function DealManager() {
         if (error) throw error;
         toast.success("Deal updated");
       } else {
-        const { error } = await supabase.from("deals").insert(payload as never);
+        // Creating a deal is confirming it. The column also defaults to now(),
+        // which covers any other writer; saying it here keeps the admin's
+        // clock and the row's in step.
+        const { error } = await supabase
+          .from("deals")
+          .insert({ ...payload, last_confirmed_at: new Date().toISOString() } as never);
         if (error) throw error;
         toast.success("Deal created");
       }
       setEditing(null);
-      await Promise.all([load(), loadUnlinkedCount()]);
+      await Promise.all([load(), loadUnlinkedCount(), loadStaleCount()]);
     } catch (err) {
       handleError(err, { component: "DealManager", action: "saveForm" });
       toast.error("Save failed");
@@ -677,6 +765,24 @@ export default function DealManager() {
                 </>
               )}
             </CardDescription>
+            {staleCount !== null && staleCount > 0 && (
+              <p className="mt-1 text-sm" role="status">
+                {staleCount.toLocaleString()} open-ended deal
+                {staleCount === 1 ? " is" : "s are"} hidden from the site
+                because nobody has confirmed {staleCount === 1 ? "it" : "them"} in{" "}
+                {DEAL_RECONFIRM_DAYS} days.{" "}
+                <button
+                  type="button"
+                  className="font-medium text-primary underline underline-offset-2"
+                  onClick={() => {
+                    setStatusFilter("reconfirm");
+                    setPage(0);
+                  }}
+                >
+                  Show them
+                </button>
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
@@ -743,6 +849,7 @@ export default function DealManager() {
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="upcoming">Upcoming</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
+              <SelectItem value="reconfirm">Needs re-confirm</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -807,6 +914,14 @@ export default function DealManager() {
                 onClick={() => bulkSet({ is_verified: true })}
               >
                 Verify
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => reconfirm(selectedIds)}
+              >
+                Re-confirm
               </Button>
               <Button
                 size="sm"
@@ -916,6 +1031,11 @@ export default function DealManager() {
                       </TableCell>
                       <TableCell>
                         <StatusBadge deal={d} />
+                        {dealConfirmedLabel(d.last_confirmed_at) && (
+                          <div className="mt-1 text-[11px] text-muted-foreground whitespace-nowrap">
+                            {dealConfirmedLabel(d.last_confirmed_at)}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                         {d.end_date
@@ -940,6 +1060,13 @@ export default function DealManager() {
                             >
                               <Pencil className="h-4 w-4 mr-2" />
                               Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={busy}
+                              onClick={() => reconfirm([d.id])}
+                            >
+                              <CalendarCheck className="h-4 w-4 mr-2" />
+                              Re-confirm
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

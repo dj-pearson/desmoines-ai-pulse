@@ -252,3 +252,120 @@ Deno.test('check-restaurant-status refuses a batch over the admin tool chunk siz
   assert.ok(chunk <= max, `the tool sends ${chunk} per call and the function accepts ${max}`);
   assert.match(fnSrc, /restaurants\.length > MAX_BATCH/);
 });
+
+// ---------------------------------------------------------------------------
+// firecrawl-scraper (WEB-BE-068)
+// ---------------------------------------------------------------------------
+
+const FIRECRAWL = 'supabase/functions/firecrawl-scraper/index.ts';
+type Facts = Record<string, string | null>;
+const { restaurantFacts } = await liftPure<{ restaurantFacts: (item: Record<string, unknown>) => Facts }>(
+  FIRECRAWL,
+  'restaurantFacts',
+);
+
+Deno.test('firecrawl-scraper stores null for a restaurant fact the page did not give', () => {
+  const facts = restaurantFacts({ name: 'Noce' });
+  assert.equal(facts.cuisine, null, 'was "American"');
+  assert.equal(facts.location, null, 'was "Des Moines, IA"');
+  assert.equal(facts.price_range, null, 'was "$$"');
+  assert.equal(facts.description, null);
+  assert.equal(facts.phone, null);
+  assert.equal(facts.website, null);
+  const blank = restaurantFacts({ cuisine: '  ', location: '', price_range: 3, description: null });
+  assert.equal(blank.cuisine, null, 'whitespace is not a cuisine');
+  assert.equal(blank.location, null);
+  assert.equal(blank.price_range, null, 'a non-string is not a price');
+});
+
+Deno.test('firecrawl-scraper keeps what the page said, trimmed and bounded', () => {
+  const facts = restaurantFacts({
+    cuisine: ' Italian ',
+    location: '1326 Walnut St, Des Moines, IA',
+    price_range: '$$$',
+    description: 'x'.repeat(600),
+    phone: '515-555-0100',
+    website: 'https://nocedsm.com',
+  });
+  assert.equal(facts.cuisine, 'Italian');
+  assert.equal(facts.location, '1326 Walnut St, Des Moines, IA');
+  assert.equal(facts.price_range, '$$$');
+  assert.equal(facts.description?.length, 500);
+  assert.equal(facts.phone, '515-555-0100');
+  assert.equal(facts.website, 'https://nocedsm.com');
+});
+
+Deno.test('firecrawl-scraper never stores a rating, even when the page shows one', () => {
+  assert.equal(restaurantFacts({ rating: 4.7 }).rating, null);
+  assert.equal(restaurantFacts({ rating: '4.7' }).rating, null);
+});
+
+Deno.test('the firecrawl-scraper restaurant row is built from restaurantFacts and nothing else', async () => {
+  const src = codeOnly(await read(FIRECRAWL));
+  const row = sliceBetween(src, "case 'restaurants':", "case 'playgrounds':");
+  assert.match(row, /\.\.\.restaurantFacts\(item\)/);
+  for (const col of ['cuisine', 'location', 'rating', 'price_range', 'description', 'phone', 'website']) {
+    assert.doesNotMatch(row, new RegExp(`\\b${col}:`), `${col} is set only by restaurantFacts`);
+  }
+  assert.doesNotMatch(row, /"American"|'American'|"\$\$"|'\$\$'/);
+});
+
+// ---------------------------------------------------------------------------
+// enhance-content (WEB-BE-068)
+// ---------------------------------------------------------------------------
+
+const ENHANCE = 'supabase/functions/enhance-content/index.ts';
+type EnhancePlan = { update: Record<string, unknown>; refused: string[] };
+const enhance = await liftPure<{
+  planEnhanceUpdate: (type: string, data: Record<string, unknown>) => EnhancePlan;
+  ENHANCE_WRITABLE: Record<string, readonly string[]>;
+}>(ENHANCE, 'planEnhanceUpdate');
+
+const MODEL_GUESS = {
+  description: '  A neighborhood trattoria.  ',
+  phone: '(515) 555-0100',
+  website: 'https://example.com',
+  location: '123 Main St, Des Moines, IA',
+  cuisine: 'American',
+  price_range: '$$',
+  rating: 4.5,
+  is_featured: true,
+  status: 'ok',
+};
+
+Deno.test('enhance-content writes only a description for a restaurant', () => {
+  assert.deepEqual([...enhance.ENHANCE_WRITABLE.restaurant], ['description']);
+  const { update, refused } = enhance.planEnhanceUpdate('restaurant', MODEL_GUESS);
+  assert.deepEqual(update, { description: 'A neighborhood trattoria.' });
+  assert.deepEqual(
+    refused.sort(),
+    ['cuisine', 'is_featured', 'location', 'phone', 'price_range', 'rating', 'website'],
+    'every other key is refused and reported; status is the control field and is dropped quietly',
+  );
+});
+
+Deno.test('enhance-content refuses an unknown key, a non-string value and an unknown type', () => {
+  assert.deepEqual(enhance.planEnhanceUpdate('restaurant', { owner_email: 'a@b.c' }), {
+    update: {},
+    refused: ['owner_email'],
+  });
+  assert.deepEqual(enhance.planEnhanceUpdate('restaurant', { description: 42 }).refused, ['description']);
+  assert.deepEqual(enhance.planEnhanceUpdate('restaurant', { description: '   ' }).update, {});
+  assert.deepEqual(enhance.planEnhanceUpdate('mystery', { description: 'x' }), { update: {}, refused: ['description'] });
+});
+
+Deno.test('enhance-content never writes a rating for any type', () => {
+  for (const [type, cols] of Object.entries(enhance.ENHANCE_WRITABLE)) {
+    assert.equal(cols.includes('rating'), false, `${type} must not list rating`);
+    assert.ok(enhance.planEnhanceUpdate(type, { rating: '4.5' }).refused.includes('rating'));
+  }
+});
+
+Deno.test('enhance-content updates the row with the plan, and asks only for whitelisted fields', async () => {
+  const src = codeOnly(await read(ENHANCE));
+  assert.match(src, /planEnhanceUpdate\(contentType, enhancedData\)/);
+  assert.match(src, /\.update\(update\)/);
+  assert.doesNotMatch(src, /\.update\(enhancedData\)/, 'the raw model response never reaches the row');
+  assert.match(src, /availableFields: \[\.\.\.\(ENHANCE_WRITABLE\[type\]/, 'the prompt lists the whitelist');
+  assert.doesNotMatch(src, /"rating": 4\.5/, 'no rating example in the prompt');
+});

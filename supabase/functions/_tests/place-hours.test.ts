@@ -193,12 +193,39 @@ Deno.test("staleHoursCutoff is that many days before now, in ISO", () => {
   assert.equal(staleHoursCutoff(30, now), "2026-10-09T12:00:00.000Z");
 });
 
-Deno.test("staleHoursFilter reads the check time, and fetchedAt only for never-checked rows", () => {
+Deno.test("staleHoursFilter reads the check time, fetchedAt for never-checked rows, and never-checked rows with no hours", () => {
   const cutoff = "2026-10-09T12:00:00.000Z";
   assert.equal(
     staleHoursFilter(cutoff),
-    "hours_checked_at.lt.2026-10-09T12:00:00.000Z,and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.2026-10-09T12:00:00.000Z)",
+    "hours_checked_at.lt.2026-10-09T12:00:00.000Z,and(hours_checked_at.is.null,hours_json->>fetchedAt.lt.2026-10-09T12:00:00.000Z),and(hours_checked_at.is.null,hours_json->>fetchedAt.is.null)",
   );
+});
+
+// WEB-BE-064: evaluate the filter against rows, so a dropped arm shows up as
+// a row the refresh never reaches.
+Deno.test("the stale refresh reaches every row with a place id whose last check is old or missing", () => {
+  const cutoff = "2026-10-09T12:00:00.000Z";
+  const arms = staleHoursFilter(cutoff).match(/[^,(]+\.[a-z]+\.[^,)]+|and\([^)]*\)/g) ?? [];
+  type R = { checked: string | null; fetched: string | null };
+  const evalTerm = (t: string, r: R): boolean => {
+    const [col, op, ...rest] = t.split(".");
+    const v = col === "hours_checked_at" ? r.checked : r.fetched;
+    if (op === "is") return v === null;
+    if (op === "lt") return v !== null && v < rest.join(".");
+    throw new Error(t);
+  };
+  const matches = (r: R) =>
+    arms.some((a) =>
+      a.startsWith("and(") ? a.slice(4, -1).split(",").every((t) => evalTerm(t, r)) : evalTerm(a, r)
+    );
+  const old = "2026-09-01T00:00:00.000Z";
+  const fresh = "2026-11-01T00:00:00.000Z";
+  assert.equal(matches({ checked: old, fetched: fresh }), true, "checked long ago");
+  assert.equal(matches({ checked: null, fetched: old }), true, "legacy row, fetched long ago");
+  assert.equal(matches({ checked: null, fetched: null }), true, "place id, never checked, no hours");
+  assert.equal(matches({ checked: fresh, fetched: null }), false, "checked recently, no hours");
+  assert.equal(matches({ checked: null, fetched: fresh }), false, "legacy row, fetched recently");
+  assert.equal(matches({ checked: fresh, fetched: old }), false, "checked recently");
 });
 
 Deno.test("a refresh with new hours writes hours, status and the check time", () => {
@@ -242,11 +269,15 @@ Deno.test("only a 404 counts as a check; quota and server errors are retried", (
 Deno.test("bulk-update-restaurants routes staleDays to the refresh and checks every answer", async () => {
   const src = await Deno.readTextFile(new URL("../bulk-update-restaurants/index.ts", import.meta.url));
   // The refresh reads rows that HAVE hours, stale by the shared filter.
-  const fn = src.slice(src.indexOf("async function refreshStaleHours"), src.indexOf("serve(async"));
-  assert.ok(fn.includes(".not('hours_json', 'is', null)"), "refresh must read rows with hours");
+  const fn = src.slice(src.indexOf("async function refreshStaleHours"), src.indexOf("async function queueClosureReview"));
+  // WEB-BE-064: rows with a place id and no hours are read too.
+  assert.ok(!fn.includes(".not('hours_json', 'is', null)"), "refresh must not skip rows without hours");
+  assert.ok(fn.includes(".not('google_place_id', 'is', null)"), "refresh reads rows with a place id");
   assert.ok(fn.includes(".or(staleHoursFilter(cutoff))"), "refresh must use the shared stale filter");
   assert.ok(fn.includes("buildStaleRefreshUpdate("), "refresh must write the check time");
-  assert.ok(fn.includes("HOURS_ONLY_FIELD_MASK"), "refresh must ask for the two fields only");
+  // WEB-BE-070: the refresh mask grew to the Google facts; place-facts.test.ts
+  // pins its contents and SKU.
+  assert.ok(fn.includes("staleRefreshFieldMask(row)"), "refresh must ask for the shared stale-refresh mask");
   // Routed only when staleDays parses; absent keeps the fill mode.
   assert.ok(/const staleDays = parseStaleDays\(rawStaleDays\)\s+if \(staleDays !== null\)/.test(src));
 });

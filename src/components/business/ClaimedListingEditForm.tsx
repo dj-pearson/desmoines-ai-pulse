@@ -32,7 +32,7 @@ const FIELD_META: Record<
   description: { label: "Description", hint: "Up to 2,000 characters.", type: "textarea" },
   website: { label: "Website", hint: "Starts with https://", type: "url", autoComplete: "url" },
   phone: { label: "Phone", type: "tel", autoComplete: "tel" },
-  image_url: { label: "Photo link", hint: "A direct link to a photo, starting with https://", type: "url" },
+  image_url: { label: "Photo", type: "url" },
   menu_url: { label: "Menu link", hint: "Starts with https://", type: "url" },
 };
 
@@ -74,7 +74,11 @@ export function ClaimedListingEditForm({
   initialValues,
   onSaved,
 }: ClaimedListingEditFormProps) {
-  const fields = OWNER_EDITABLE_FIELDS[listingType] as readonly OwnerEditableField[];
+  // The photo is uploaded through OwnerPhotoUpload (WEB-ADS-048): the
+  // database refuses a typed link, so the form no longer offers one.
+  const fields = (OWNER_EDITABLE_FIELDS[listingType] as readonly OwnerEditableField[]).filter(
+    (f) => f !== "image_url",
+  );
   const schema = z.object(
     Object.fromEntries(fields.map((f) => [f, FIELD_SCHEMA[f]])) as Record<string, z.ZodTypeAny>,
   );

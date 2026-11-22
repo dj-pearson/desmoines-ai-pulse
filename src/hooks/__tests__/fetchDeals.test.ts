@@ -151,13 +151,18 @@ describe("fetchDeals", () => {
     expect(calls).not.toContainEqual(["from", "restaurants"]);
   });
 
-  it("lists the deals unfiltered and reports when the status read fails", async () => {
-    results.deals = { data: [deal({ id: "a", entity_id: "r1" })], error: null };
+  it("leaves out restaurant deals and reports when the status read fails", async () => {
+    // WEB-FEAT-104: a deal at a closed restaurant is never shown, and without
+    // the status nothing says the door is open. Other deals still list.
+    results.deals = {
+      data: [deal({ id: "a", entity_id: "r1" }), deal({ id: "hotel", entity_type: "hotel", entity_id: "h1" })],
+      error: null,
+    };
     results.restaurants = { data: null, error: { message: "boom" } };
 
     const out = await fetchDeals();
 
-    expect(out.map((d) => d.id)).toEqual(["a"]);
+    expect(out.map((d) => d.id)).toEqual(["hotel"]);
     expect(handleError).toHaveBeenCalledTimes(1);
   });
 

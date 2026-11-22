@@ -14,6 +14,7 @@ import {
   dealTodayStatus,
 } from '@/hooks/useDeals';
 import type { Deal } from '@/hooks/useDeals';
+import { dealConfirmedLabel } from '@/lib/dealFreshness';
 import { OptimizedImage } from '@/components/OptimizedImage';
 
 interface DealCardProps {
@@ -47,6 +48,7 @@ export function DealCard({ deal, onClaim, venueHref, now }: DealCardProps) {
   // "Starts 4 PM" / "Ended for today", from the same clock as the badge.
   const today = dealTodayStatus(deal, at);
   const validThrough = validThroughLabel(deal.end_date);
+  const confirmed = dealConfirmedLabel(deal.last_confirmed_at);
 
   useEffect(() => () => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -159,6 +161,8 @@ export function DealCard({ deal, onClaim, venueHref, now }: DealCardProps) {
         {deal.terms && (
           <p className="text-xs text-muted-foreground mb-3 italic">{deal.terms}</p>
         )}
+
+        {confirmed && <p className="text-xs text-muted-foreground mb-3">{confirmed}</p>}
 
         <div className="mt-auto">
           {!revealed ? (

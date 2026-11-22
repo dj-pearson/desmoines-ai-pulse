@@ -93,7 +93,7 @@ test.describe('/restaurants/open-now', () => {
     await setup(page, new Date('2026-09-25T01:00:00Z'), ROWS); // Thu 20:00 CDT
     await page.goto('/restaurants/open-now');
 
-    await expect(openSections(page).getByRole('link', { name: 'Zz Test' })).toBeVisible();
+    await expect(openSections(page).getByRole('link', { name: 'Zz Test', exact: true })).toBeVisible();
     await expect(page.getByText('Merged Twin')).toHaveCount(0);
     await expect(page.getByText('Gone Diner')).toHaveCount(0);
     await expect(page.locator('[data-open-now-summary]')).toContainText(
@@ -135,8 +135,8 @@ test.describe('/restaurants/open-now', () => {
       await page.goto('/restaurants/open-now');
 
       await expect(page.locator('[data-open-now-clock]')).toHaveText('11:30 PM CT');
-      await expect(openSections(page).getByRole('link', { name: 'Zz Test' })).toBeVisible();
-      await expect(openSections(page).getByRole('link', { name: 'Ten Oclock Kitchen' })).toHaveCount(0);
+      await expect(openSections(page).getByRole('link', { name: 'Zz Test', exact: true })).toBeVisible();
+      await expect(openSections(page).getByRole('link', { name: 'Ten Oclock Kitchen', exact: true })).toHaveCount(0);
     });
   });
 
@@ -148,7 +148,7 @@ test.describe('/restaurants/open-now', () => {
     await expect(
       empty.getByRole('heading', { level: 2, name: 'Nothing we have hours for is open right now (3:00 AM CT)' }),
     ).toBeVisible();
-    await expect(empty.getByRole('link', { name: 'Brunch Barn' })).toBeVisible();
+    await expect(empty.getByRole('link', { name: 'Brunch Barn', exact: true })).toBeVisible();
     await expect(empty.getByText(/Loading/)).toHaveCount(0);
     await expect(page.getByText('Loading Restaurant Hours')).toHaveCount(0);
     await expect(openSections(page)).toHaveCount(0);

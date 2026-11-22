@@ -157,7 +157,13 @@ console.log('\nthe page offers it');
 console.log('\nthe queue somebody has to watch (AC5)');
 {
   const panel = readFileSync('src/components/admin/BusinessClaimsManager.tsx', 'utf8');
-  check('it lists pending claims', /\.eq\("status", "pending"\)/.test(panel));
+  // WEB-ADS-047 added a Verified tab: the query filters on the tab, which
+  // opens on pending.
+  check(
+    'it lists pending claims',
+    /\.eq\("status", "pending"\)/.test(panel) ||
+      (/\.eq\("status", tab\)/.test(panel) && /useState<Tab>\("pending"\)/.test(panel)),
+  );
   check('and calls the admin-gated function', /rpc\("review_business_claim" as never/.test(panel));
   check('  with approve and reject', /p_approve: approve/.test(panel) && /review\(claim, false\)/.test(panel));
   // The listing's website and the claimant's email ARE the decision. A queue

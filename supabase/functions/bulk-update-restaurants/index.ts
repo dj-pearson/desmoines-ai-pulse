@@ -8,6 +8,7 @@ import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
 import { runJob } from '../_shared/jobRunner.ts'
 import { isPlacesMediaUrl, GOOGLE_ATTRIBUTION_TEXT } from '../_shared/placesPhoto.ts'
+import { selectWithLocks, withoutLockedFields } from '../_shared/restaurantFieldLocks.ts'
 import {
   buildHoursOnlyUpdate,
   buildStaleRefreshUpdate,
@@ -18,8 +19,27 @@ import {
   parseStaleDays,
   staleHoursCutoff,
   staleHoursFilter,
+  staleRefreshFieldMask,
 } from '../_shared/placeHours.ts'
+import { buildGoogleFactsUpdate, type GoogleFactsUpdate, withoutNewFactColumns } from '../_shared/placeFacts.ts'
 import type { BusinessStatus, StaleRefreshUpdate, StoredHours } from '../_shared/placeHours.ts'
+import {
+  buildClosureReview,
+  type ClosureReviewRow,
+  PLACE_LOOKUP_DAILY_MAX,
+  PLACE_LOOKUP_FIELD_MASK,
+  type PlaceCandidate,
+  pickConfidentPlace,
+  placeLookupQuery,
+} from '../_shared/placeLookup.ts'
+import {
+  applyEnrichTargets,
+  descriptionUpdate,
+  ENRICH_SELECT,
+  parseCursor,
+  parseRestaurantIds,
+  pickNamedSearchHit,
+} from '../_shared/restaurantEnrich.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -53,7 +73,20 @@ interface GooglePlaceDetails {
   regularOpeningHours?: unknown;
 }
 
-interface RestaurantUpdate {
+/** A row as the full enrichment reads it (ENRICH_SELECT plus locked_fields). */
+interface EnrichRow {
+  id: string;
+  name: string;
+  location: string | null;
+  google_place_id: string | null;
+  enhanced: string | null;
+  description: string | null;
+  /** WEB-BE-069. Absent when migration 20261121000070 is not applied yet. */
+  locked_fields?: unknown;
+}
+
+/** WEB-BE-070: the Google facts (rating, count, price and source, ...) come from GoogleFactsUpdate. */
+interface RestaurantUpdate extends GoogleFactsUpdate {
   id: string;
   name: string;
   cuisine?: string;
@@ -80,7 +113,11 @@ interface RestaurantUpdate {
    *  absent - never a raw pass-through of whatever Places returned. */
   business_status?: BusinessStatus;
   hours_json?: StoredHours;
-  enhanced: string;
+  /** WEB-BE-066. Added by migration 20261121000040; guarded like the rest.
+   *  Stamped whenever Google answered for the row, so a row Google cannot
+   *  complete stops heading the daily auto-enrich batch. */
+  enrich_checked_at?: string;
+  enhanced?: string;
   updated_at: string;
 }
 
@@ -111,22 +148,27 @@ async function refreshHoursOnly(
   corsHeaders: Record<string, string>,
   req: Request,
 ): Promise<Response> {
-  let query = supabase
-    .from('restaurants')
-    .select('id, name, google_place_id')
-    .not('google_place_id', 'is', null)
-    .is('hours_json', null)
-    .order('id', { ascending: true })
-    .limit(batchSize)
-  // A place Google has no hours for keeps hours_json null and would head every
-  // batch forever. The caller passes back `lastId` to move past it.
-  if (afterId) query = query.gt('id', afterId)
-  const { data: rows, error: fetchError } = await query
+  // WEB-BE-069: locked_fields comes with the row so a field a person set is
+  // never written here (selectWithLocks drops it when the column is not there).
+  const { data: rows, error: fetchError } = await selectWithLocks((cols) => {
+    let query = supabase
+      .from('restaurants')
+      .select(cols)
+      .not('google_place_id', 'is', null)
+      .is('hours_json', null)
+      .order('id', { ascending: true })
+      .limit(batchSize)
+    // A place Google has no hours for keeps hours_json null and would head every
+    // batch forever. The caller passes back `lastId` to move past it.
+    if (afterId) query = query.gt('id', afterId)
+    return query
+  }, 'id, name, google_place_id')
   if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
 
-  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string }>
+  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string; locked_fields?: unknown }>
   let updated = 0
   let noHours = 0
+  let lockedSkips = 0
   const errors: Array<{ id: string; name: string; error: string }> = []
 
   const job = await runJob('bulk-update-restaurants-hours', async (ctx) => {
@@ -140,13 +182,17 @@ async function refreshHoursOnly(
           errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
           continue
         }
-        const update = buildHoursOnlyUpdate(await res.json())
-        if (!update) {
+        const built = buildHoursOnlyUpdate(await res.json())
+        if (!built) {
           // Google has no hours and no status for this place. Leave the row
           // alone: null means unknown, and an empty object would read as data.
           noHours++
           continue
         }
+        // WEB-BE-069: a field a person set keeps their value.
+        const { update, skipped } = withoutLockedFields(built, row.locked_fields)
+        lockedSkips += skipped.length
+        if (Object.keys(update).length === 0) continue
         const { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
         if (updateError) errors.push({ id: row.id, name: row.name, error: updateError.message })
         else updated++
@@ -160,6 +206,7 @@ async function refreshHoursOnly(
     ctx.meta({
       mode: 'hoursOnly',
       noHours,
+      lockedSkips,
       sources: { 'google-places': { fetched: targets.length, inserted: updated, duplicates: 0, errors: errors.length } },
     })
   })
@@ -220,21 +267,33 @@ async function refreshStaleHours(
   req: Request,
 ): Promise<Response> {
   const cutoff = staleHoursCutoff(staleDays)
-  const { data: rows, error: fetchError } = await supabase
-    .from('restaurants')
-    .select('id, name, google_place_id')
-    .not('google_place_id', 'is', null)
-    .not('hours_json', 'is', null)
-    .or(staleHoursFilter(cutoff))
-    .order('hours_checked_at', { ascending: true, nullsFirst: true })
-    .order('id', { ascending: true })
-    .limit(batchSize)
+  // WEB-BE-069: with locked_fields, as in the fill mode above.
+  // WEB-BE-070: reservable is read so the mask asks for it only when the row
+  // has no answer (staleRefreshFieldMask); the column is from 20260909000001.
+  const { data: rows, error: fetchError } = await selectWithLocks((cols) =>
+    supabase
+      .from('restaurants')
+      .select(cols)
+      .not('google_place_id', 'is', null)
+      .or(staleHoursFilter(cutoff))
+      .order('hours_checked_at', { ascending: true, nullsFirst: true })
+      .order('id', { ascending: true })
+      .limit(batchSize), 'id, name, google_place_id, reservable')
   if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
 
-  const targets = (rows ?? []) as Array<{ id: string; name: string; google_place_id: string }>
+  const targets = (rows ?? []) as Array<{
+    id: string
+    name: string
+    google_place_id: string
+    reservable?: boolean | null
+    locked_fields?: unknown
+  }>
+  let lockedSkips = 0
   let updated = 0
   let noHours = 0
   let gone = 0
+  let checked = 0
+  let closed = 0
   const errors: Array<{ id: string; name: string; error: string }> = []
 
   const job = await runJob('bulk-update-restaurants-hours', async (ctx) => {
@@ -242,20 +301,46 @@ async function refreshStaleHours(
       try {
         const res = await fetchWithTimeout(
           `https://places.googleapis.com/v1/places/${encodeURIComponent(row.google_place_id)}`,
-          { method: 'GET', headers: { 'X-Goog-Api-Key': googleApiKey, 'X-Goog-FieldMask': HOURS_ONLY_FIELD_MASK } },
+          // WEB-BE-070: hours, status and the Google facts in one Enterprise
+          // call; reservable only for a row that does not know it yet.
+          { method: 'GET', headers: { 'X-Goog-Api-Key': googleApiKey, 'X-Goog-FieldMask': staleRefreshFieldMask(row) } },
         )
-        let update: StaleRefreshUpdate
+        let update: StaleRefreshUpdate & { promotion_hold_reason?: string }
         if (res.ok) {
           update = buildStaleRefreshUpdate(await res.json())
+          checked++
           if (!('hours_json' in update)) noHours++
+          if (update.business_status === 'CLOSED_PERMANENTLY') closed++
         } else if (failedLookupCountsAsCheck(res.status)) {
+          // WEB-BE-064: Google no longer knows this place id. That is a
+          // finding, not a pass: queue it for a person and hold the row out of
+          // promotion (isRestaurantPromotable) until it is resolved.
           gone++
-          update = { hours_checked_at: new Date().toISOString() }
+          update = { hours_checked_at: new Date().toISOString(), promotion_hold_reason: 'place_not_found' }
+          const queued = await queueClosureReview(
+            supabase,
+            buildClosureReview(row.id, 'place_not_found', 'bulk-update-restaurants-hours', { google_place_id: row.google_place_id }),
+          )
+          if (queued !== null) {
+            errors.push({ id: row.id, name: row.name, error: `closure review not queued: ${queued}` })
+            continue
+          }
         } else {
           errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
           continue
         }
-        const { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
+        // WEB-BE-069: hours_checked_at is never locked, so the check is still
+        // recorded when every Google field on the row is locked.
+        const kept = withoutLockedFields(update, row.locked_fields)
+        lockedSkips += kept.skipped.length
+        update = kept.update
+        let { error: updateError } = await supabase.from('restaurants').update(update).eq('id', row.id)
+        // WEB-BE-070: deployed before 20261121000130, the new columns would
+        // fail the whole write. Retry without them so hours, status, rating,
+        // phone, website and price still land.
+        if (updateError && isUnknownColumnError(updateError)) {
+          ;({ error: updateError } = await supabase.from('restaurants').update(withoutNewFactColumns(update)).eq('id', row.id))
+        }
         if (updateError) errors.push({ id: row.id, name: row.name, error: updateError.message })
         else updated++
       } catch (error) {
@@ -270,6 +355,10 @@ async function refreshStaleHours(
       staleDays,
       noHours,
       gone,
+      checked,
+      closed,
+      not_found: gone,
+      lockedSkips,
       sources: { 'google-places': { fetched: targets.length, inserted: updated, duplicates: 0, errors: errors.length } },
     })
   })
@@ -302,6 +391,194 @@ async function refreshStaleHours(
       updated,
       noHours,
       gone,
+      checked,
+      closed,
+      not_found: gone,
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined,
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+  )
+}
+
+/**
+ * WEB-BE-064. Insert one closure finding. An open finding for the same
+ * restaurant and reason already exists when the partial unique index answers
+ * 23505; that is success (it is queued). Returns an error message or null.
+ */
+async function queueClosureReview(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  review: ClosureReviewRow,
+): Promise<string | null> {
+  const { error } = await supabase.from('restaurant_closure_reviews').insert(review)
+  if (!error || error.code === '23505') return null
+  return error.message ?? String(error)
+}
+
+/** Restaurants whose last name-and-address lookup is older than this are tried again. */
+const PLACE_LOOKUP_RETRY_DAYS = 90
+
+/**
+ * WEB-BE-064. `placeLookup: true` gives rows with no google_place_id a path
+ * into the refresh: a Places Text Search by name and address, the id stored
+ * only on a confident match (pickConfidentPlace), everything else queued for
+ * a person as no_place_match. Every answered row gets place_lookup_checked_at,
+ * so the same rows do not head every batch; a Places error is not an answer
+ * and the row is retried next run. Capped at PLACE_LOOKUP_DAILY_MAX a call.
+ */
+async function lookupMissingPlaceIds(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  googleApiKey: string,
+  batchSize: number,
+  corsHeaders: Record<string, string>,
+  req: Request,
+): Promise<Response> {
+  const limit = Math.min(batchSize, PLACE_LOOKUP_DAILY_MAX)
+  const retryBefore = new Date(Date.now() - PLACE_LOOKUP_RETRY_DAYS * 86_400_000).toISOString()
+  const { data: rows, error: fetchError } = await supabase
+    .from('restaurants')
+    .select('id, name, location')
+    .is('google_place_id', null)
+    .not('is_merged', 'is', true)
+    .not('status', 'in', '(closed,permanently_closed,closed_permanently)')
+    .or(`place_lookup_checked_at.is.null,place_lookup_checked_at.lt.${retryBefore}`)
+    .order('place_lookup_checked_at', { ascending: true, nullsFirst: true })
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (fetchError) throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
+
+  const targets = (rows ?? []) as Array<{ id: string; name: string; location: string | null }>
+  let matched = 0
+  let queued = 0
+  const errors: Array<{ id: string; name: string; error: string }> = []
+
+  const job = await runJob('restaurant-place-lookup', async (ctx) => {
+    for (const row of targets) {
+      try {
+        const query = placeLookupQuery(row)
+        const res = await fetchWithTimeout('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': googleApiKey,
+            'X-Goog-FieldMask': PLACE_LOOKUP_FIELD_MASK,
+          },
+          body: JSON.stringify({
+            textQuery: query,
+            maxResultCount: 5,
+            locationBias: { circle: { center: { latitude: 41.5868, longitude: -93.625 }, radius: 40000 } },
+          }),
+        })
+        if (!res.ok) {
+          errors.push({ id: row.id, name: row.name, error: `Places ${res.status}` })
+          continue
+        }
+        const body = await res.json()
+        const candidates: PlaceCandidate[] = Array.isArray(body?.places) ? body.places : []
+        const match = pickConfidentPlace(row, candidates)
+        const checkedAt = new Date().toISOString()
+
+        let reason: string | null = match.ok ? null : match.reason
+        let duplicateOf: string | null = null
+        if (match.ok) {
+          // Another listing already holds this place: a duplicate for the
+          // merge queue, not a second row pointing at one business.
+          const { data: holder, error: holderError } = await supabase
+            .from('restaurants')
+            .select('id')
+            .eq('google_place_id', match.placeId)
+            .neq('id', row.id)
+            .limit(1)
+          if (holderError) {
+            errors.push({ id: row.id, name: row.name, error: holderError.message })
+            continue
+          }
+          if (holder && holder.length > 0) {
+            reason = 'place_id_on_another_listing'
+            duplicateOf = holder[0].id
+          }
+        }
+
+        if (match.ok && reason === null) {
+          const { error: updateError } = await supabase
+            .from('restaurants')
+            .update({ google_place_id: match.placeId, place_lookup_checked_at: checkedAt })
+            .eq('id', row.id)
+          if (updateError) {
+            errors.push({ id: row.id, name: row.name, error: updateError.message })
+            continue
+          }
+          matched++
+          continue
+        }
+
+        const queueError = await queueClosureReview(
+          supabase,
+          buildClosureReview(row.id, 'no_place_match', 'restaurant-place-lookup', {
+            match: reason,
+            query,
+            candidates: candidates.slice(0, 5).map((c) => ({
+              id: c.id ?? null,
+              name: c.displayName?.text ?? null,
+              address: c.formattedAddress ?? null,
+            })),
+            ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
+          }),
+        )
+        if (queueError !== null) {
+          errors.push({ id: row.id, name: row.name, error: `closure review not queued: ${queueError}` })
+          continue
+        }
+        const { error: stampError } = await supabase
+          .from('restaurants')
+          .update({ place_lookup_checked_at: checkedAt })
+          .eq('id', row.id)
+        if (stampError) errors.push({ id: row.id, name: row.name, error: stampError.message })
+        else queued++
+      } catch (error) {
+        errors.push({ id: row.id, name: row.name, error: error instanceof Error ? error.message : String(error) })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    ctx.processed(matched + queued)
+    ctx.failed(errors.length)
+    ctx.meta({
+      mode: 'placeLookup',
+      checked: targets.length,
+      matched,
+      queued,
+      sources: { 'google-places': { fetched: targets.length, inserted: matched, duplicates: 0, errors: errors.length } },
+    })
+  })
+
+  if (!job.ok) {
+    return new Response(
+      JSON.stringify({ success: false, error: job.error ?? 'Place lookup failed', runId: job.runId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
+    )
+  }
+
+  await writeAuditLog(supabase, {
+    eventType: 'admin_action',
+    actorId: null,
+    action: 'restaurant_place_lookup',
+    resource: 'restaurants',
+    severity: 'low',
+    ipAddress: auditIp(req),
+    details: { processed: targets.length, matched, queued, errors: errors.length },
+  })
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      runId: job.runId,
+      message: 'Place lookup completed',
+      mode: 'placeLookup',
+      processed: targets.length,
+      matched,
+      queued,
       errors: errors.length,
       errorDetails: errors.length > 0 ? errors : undefined,
     }),
@@ -342,13 +619,21 @@ serve(async (req) => {
       throw new Error('GOOGLE_SEARCH_API key not found in environment variables')
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    // WEB-BE-075: names this job in restaurant_changes.actor.
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { 'x-actor': 'bulk-update-restaurants' } },
+    })
 
-    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null } = await req.json()
+    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false, hoursOnly = false, afterId = null, staleDays: rawStaleDays = null, placeLookup = false, restaurantIds: rawRestaurantIds = null } = await req.json()
     // Each row is a paid Google Places lookup, and batchSize went straight into
     // .limit(). 50 is the admin form's own max (RestaurantBulkUpdaterSimple.tsx,
     // and HOURS_BATCH_MAX in src/lib/restaurantHoursRefresh.ts).
     const batchSize = Math.min(Math.max(Math.floor(Number(rawBatchSize)) || 10, 1), 50)
+
+    // WEB-BE-064: optional field; absent keeps every existing mode.
+    if (placeLookup === true) {
+      return await lookupMissingPlaceIds(supabase, googleApiKey, batchSize, corsHeaders, req)
+    }
 
     // SEO-054: hours and status only, for rows with a place id and no hours.
     if (hoursOnly === true) {
@@ -379,18 +664,22 @@ serve(async (req) => {
       }
     }
 
-    // Get restaurants that need updating
-    let query = supabase
-      .from('restaurants')
-      .select('id, name, location, google_place_id, enhanced')
-      .limit(batchSize)
-
-    // Only get unenhanced restaurants unless force update is requested
-    if (!forceUpdate) {
-      query = query.or('enhanced.is.null,enhanced.neq.completed')
-    }
-
-    const { data: restaurants, error: fetchError } = await query
+    // WEB-BE-066. restaurantIds (optional; absent keeps the old selection)
+    // limits the run to the rows the caller picked: auto-enrich-restaurants
+    // sends the incomplete rows it chose, and they used to be ignored.
+    // Without ids the rows come in id order after afterId, and the response's
+    // lastId is the next cursor, so repeated force runs reach different rows
+    // instead of whichever ones an unordered select returned first.
+    const restaurantIds = parseRestaurantIds(rawRestaurantIds)
+    // WEB-BE-069: locked_fields is read with the row, and every write below
+    // drops the fields a person set (withoutLockedFields before updates.push).
+    const { data: restaurants, error: fetchError } = await selectWithLocks<EnrichRow>(
+      (cols) => applyEnrichTargets(
+        supabase.from('restaurants').select(cols),
+        { restaurantIds, forceUpdate: !!forceUpdate, afterId: parseCursor(afterId), batchSize },
+      ),
+      ENRICH_SELECT,
+    )
 
     if (fetchError) {
       throw new Error(`Failed to fetch restaurants: ${fetchError.message}`)
@@ -408,6 +697,8 @@ serve(async (req) => {
           success: true, 
           message: 'No restaurants found that need updating',
           updated: 0,
+          // WEB-BE-066: the cursor reached the end; start again without afterId.
+          lastId: null,
           runId: emptyRun.runId
         }),
         { 
@@ -421,6 +712,11 @@ serve(async (req) => {
 
     const updates: RestaurantUpdate[] = []
     const errors: Array<{ id: string; name: string; error: string }> = []
+    // WEB-BE-066: rows where every search answered and no hit carried the
+    // restaurant's name. They are left alone apart from enrich_checked_at.
+    let unmatched = 0
+    // WEB-BE-069: fields left out of a write because a person set them.
+    let lockedSkips = 0
 
     // WEB-BE-043. The Google Places call is what goes dark here - a quota
     // exhaustion or a retired key makes every lookup come back empty and the
@@ -436,6 +732,11 @@ serve(async (req) => {
 
         let placeId = restaurant.google_place_id
         let placeDetails: GooglePlaceDetails | null = null
+
+        // Whether Google gave an answer for this row (a search that returned,
+        // or details that loaded). A Places error is not an answer, and the
+        // row is tried again next run.
+        let googleAnswered = false
 
         // If no Google Place ID, search for it first
         if (!placeId && restaurant.name && restaurant.location) {
@@ -474,19 +775,17 @@ serve(async (req) => {
             })
 
             if (searchResponse.ok) {
+              googleAnswered = true
               const searchData = await searchResponse.json()
               console.log(`Search results for "${searchQuery}":`, JSON.stringify(searchData, null, 2))
               
-              if (searchData.places && searchData.places.length > 0) {
-                // Look for the best match (prefer exact name matches)
-                let bestMatch = searchData.places[0]
-                for (const place of searchData.places) {
-                  if (place.displayName?.text?.toLowerCase().includes(restaurant.name.toLowerCase().split(' ')[0])) {
-                    bestMatch = place
-                    break
-                  }
-                }
-                
+              // WEB-BE-066: a hit counts only when its name is the
+              // restaurant's. This took places[0] (or the first hit sharing
+              // the first word), and the details of that place then
+              // overwrote location, phone and website.
+              const places: PlaceCandidate[] = Array.isArray(searchData.places) ? searchData.places : []
+              const bestMatch = pickNamedSearchHit(restaurant.name, places)
+              if (bestMatch?.id) {
                 placeId = bestMatch.id
                 console.log(`Found place ID: ${placeId} for restaurant: ${restaurant.name}`)
                 break // Exit the search loop once we find a match
@@ -503,6 +802,19 @@ serve(async (req) => {
             console.log(`Found place ID for ${restaurant.name}: ${placeId}`)
           } else {
             console.log(`No place ID found for ${restaurant.name}`)
+            if (googleAnswered) {
+              // Left alone: no enhanced flag, no content. Only the stamp, so
+              // the daily job stops picking this row first.
+              unmatched++
+              updates.push({
+                id: restaurant.id,
+                name: restaurant.name,
+                enrich_checked_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              await new Promise(resolve => setTimeout(resolve, 100))
+              continue
+            }
           }
         }
 
@@ -517,11 +829,15 @@ serve(async (req) => {
               // regularOpeningHours is new (WEB-BE-045). businessStatus was already
               // here and its answer was thrown away - the mask asked for it and
               // nothing wrote it, which is why no restaurant was ever marked closed.
-              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,regularOpeningHours,reservable,googleMapsUri'
+              // WEB-BE-070: priceLevel and userRatingCount added. Both are
+              // Enterprise fields; editorialSummary and reservable already put
+              // this call in Enterprise + Atmosphere, so the SKU is unchanged.
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,priceLevel,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,regularOpeningHours,reservable,googleMapsUri'
             }
           })
 
           if (detailsResponse.ok) {
+            googleAnswered = true
             placeDetails = await detailsResponse.json()
             console.log(`Retrieved details for ${restaurant.name}`)
           } else {
@@ -530,12 +846,13 @@ serve(async (req) => {
         }
 
         // Build the update object
-        const update: any = {
+        const update: RestaurantUpdate = {
           id: restaurant.id,
           name: restaurant.name,
           enhanced: 'completed',
           updated_at: new Date().toISOString()
         }
+        if (googleAnswered) update.enrich_checked_at = new Date().toISOString()
 
         if (placeDetails) {
           console.log(`Processing place details for ${restaurant.name}:`, {
@@ -617,41 +934,27 @@ serve(async (req) => {
             update.location = placeDetails.formattedAddress
           }
           
-          if (placeDetails.rating) {
-            update.rating = Math.round(placeDetails.rating * 10) / 10
-          }
-          
-          // Use editorial summary as description if available and replace "Discovered via Google Places API"
-          if (placeDetails.editorialSummary?.text) {
-            update.description = placeDetails.editorialSummary.text
-          } else if (restaurant.description === 'Discovered via Google Places API' || !restaurant.description) {
-            // If no editorial summary but current description is generic or null, set to null
-            update.description = null
-          }
-          
-          if (placeDetails.nationalPhoneNumber) {
-            update.phone = placeDetails.nationalPhoneNumber
-          }
-          
-          if (placeDetails.websiteUri) {
-            update.website = placeDetails.websiteUri
-          }
+          // WEB-BE-070: rating, review count, phone, website, Google's price
+          // level, reservable and the listing link, from the same builder the
+          // stale refresh uses. A field Google left out is absent, never null.
+          Object.assign(update, buildGoogleFactsUpdate(placeDetails))
+
+          // WEB-BE-066: Google's editorial summary when it has one, and
+          // otherwise the stored description stays. This used to write null
+          // whenever there was no summary, and since description was not in
+          // the select, it did so to every description it touched.
+          Object.assign(update, descriptionUpdate(restaurant.description, placeDetails.editorialSummary?.text))
           
           if (placeId) {
             update.google_place_id = placeId
           }
 
-          // WEB-FEAT-024. Both are real Place fields, checked against the
-          // Places API (New) reference. There is NO booking-provider URL in
-          // that API, so reservation_url stays curated; googleMapsUri is the
-          // automatic fallback, since a Google listing for a reservable place
-          // carries its own reserve button.
-          if (typeof placeDetails.reservable === 'boolean') {
-            update.reservable = placeDetails.reservable
-          }
-          if (placeDetails.googleMapsUri) {
-            update.google_maps_uri = placeDetails.googleMapsUri
-          }
+          // WEB-FEAT-024. reservable and googleMapsUri are written by
+          // buildGoogleFactsUpdate above. There is NO booking-provider URL in
+          // the Places API, so reservation_url stays curated (the admin edit
+          // form sets it); googleMapsUri is the automatic fallback, since a
+          // Google listing for a reservable place carries its own reserve
+          // button.
 
           // WEB-BE-044. THE COMMENT HERE USED TO SAY it stored "the photo
           // reference name instead of the full URL with API key", and what it
@@ -705,7 +1008,14 @@ serve(async (req) => {
           update.google_place_id = placeId
         }
 
-        updates.push(update)
+        // WEB-BE-069: a field an owner or admin set keeps their value. This is
+        // the one place the full enrichment's update leaves the loop.
+        const kept = withoutLockedFields(update, restaurant.locked_fields)
+        lockedSkips += kept.skipped.length
+        if (kept.skipped.length > 0) {
+          console.log(`Kept locked fields on ${restaurant.name}: ${kept.skipped.join(', ')}`)
+        }
+        updates.push(kept.update)
 
       } catch (error) {
         console.error(`Error processing restaurant ${restaurant.name}:`, error)
@@ -756,11 +1066,15 @@ serve(async (req) => {
             // the whole update.
             business_status,
             hours_json,
+            // WEB-BE-066: added by 20261121000040.
+            enrich_checked_at,
             ...legacyUpdate
           } = update
+          // WEB-BE-070: and the 20261121000130 columns (review count, rating
+          // check date, price source).
           const retry = await supabase
             .from('restaurants')
-            .update(legacyUpdate)
+            .update(withoutNewFactColumns(legacyUpdate))
             .eq('id', update.id)
             .select()
           updateError = retry.error
@@ -773,7 +1087,9 @@ serve(async (req) => {
             name: update.name,
             error: updateError.message
           })
-        } else {
+        } else if (update.enhanced) {
+          // A stamp-only write for an unmatched row is not an enrichment;
+          // auto-enrich-restaurants reads `updated` as its success count.
           updatedCount++
           console.log(`Successfully updated restaurant ${update.name}`)
         }
@@ -783,6 +1099,8 @@ serve(async (req) => {
       ctx.processed(updatedCount)
       ctx.failed(errors.length)
       ctx.meta({
+        unmatched,
+        lockedSkips,
         sources: {
           'google-places': {
             fetched: restaurants.length,
@@ -811,6 +1129,10 @@ serve(async (req) => {
       message: `Bulk update completed`,
       processed: restaurants.length,
       updated: updatedCount,
+      // WEB-BE-066, both new keys: rows whose search found no hit with the
+      // restaurant's name, and the cursor for the next run (pass as afterId).
+      unmatched,
+      lastId: restaurants[restaurants.length - 1].id,
       errors: errors.length,
       errorDetails: errors.length > 0 ? errors : undefined
     }
@@ -824,7 +1146,7 @@ serve(async (req) => {
       resource: "restaurants",
       severity: "medium",
       ipAddress: auditIp(req),
-      details: { processed: restaurants.length, updated: updatedCount, errors: errors.length },
+      details: { processed: restaurants.length, updated: updatedCount, unmatched, errors: errors.length },
     });
 
     return new Response(

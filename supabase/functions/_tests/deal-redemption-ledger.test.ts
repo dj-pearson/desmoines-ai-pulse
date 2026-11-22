@@ -147,14 +147,17 @@ Deno.test('the ledger is writable only through the definer function', async () =
   assert(/"Admins read all redemptions"/.test(ledger), 'admins need to answer "who claimed this"');
 });
 
-Deno.test('an account deletion does not silently reduce a count', async () => {
+Deno.test('an account deletion deletes the claims, and the count is derived from what is left', async () => {
+  // WEB-SEC-033 created the FK as SET NULL so a deleted account would not lower
+  // a count. Owner decision 2026-11-22 ("delete should delete") reverses that:
+  // the claim is the user's data and goes with the account (20261122000060).
+  // increment_deal_redemption recounts the rows, so the shown count drops by
+  // the deleted user's claims at the next signed-in claim.
   const sql = await read(MIGRATION);
+  assert(/CONSTRAINT deal_redemptions_subject_present/.test(sql), 'a row must always name an account or a bucket');
+  const followUp = await read('supabase/migrations/20261122000060_account_deletion_deletes_personal_data.sql');
   assert(
-    /user_id uuid REFERENCES auth\.users\(id\) ON DELETE SET NULL/.test(sql),
-    'SET NULL, not CASCADE',
-  );
-  assert(
-    /CONSTRAINT deal_redemptions_subject_present/.test(sql),
-    'a row must always name either an account or a bucket',
+    /pg_temp\.change_fk_action\('deal_redemptions', 'user_id', 'CASCADE'\)/.test(followUp),
+    'the claim goes with the account',
   );
 });

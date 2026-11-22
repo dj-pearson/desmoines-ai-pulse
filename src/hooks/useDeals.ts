@@ -8,6 +8,7 @@ import {
   HAPPY_HOUR_RESTAURANT_COLUMNS,
 } from '@/lib/listColumns';
 import { NOT_CLOSED_RESTAURANT_FILTER, isServingToday, isShutRestaurant } from '@/lib/restaurantStatus';
+import { UNDEFINED_COLUMN_CODE, confirmedDealFilter, isStaleOpenEndedDeal } from '@/lib/dealFreshness';
 
 export interface Deal {
   id: string;
@@ -33,6 +34,12 @@ export interface Deal {
   days_of_week?: string[] | null;
   start_time?: string | null;
   end_time?: string | null;
+  /**
+   * When the deal was created or last re-confirmed by an admin (migration
+   * 20261121000100, WEB-FEAT-104). Undefined only on the fallback read while
+   * that migration is unapplied; see isStaleOpenEndedDeal.
+   */
+  last_confirmed_at?: string | null;
 }
 
 /**
@@ -41,8 +48,39 @@ export interface Deal {
  * visitor. `code` stays in the list response until plan D6 moves it behind
  * the reveal.
  */
-const DEAL_LIST_COLUMNS =
+const DEAL_LIST_COLUMNS_BASE =
   'id, title, description, business_name, entity_type, entity_id, deal_type, discount_value, code, terms, start_date, end_date, image_url, is_featured, created_at, days_of_week, start_time, end_time';
+const DEAL_LIST_COLUMNS = `${DEAL_LIST_COLUMNS_BASE}, last_confirmed_at`;
+
+interface DealReadResult {
+  data: unknown;
+  error: { code?: string; message?: string } | null;
+}
+
+/**
+ * Runs a public deals read with the confirmation rule (WEB-FEAT-104): the
+ * last_confirmed_at column and the PostgREST filter that leaves out an
+ * open-ended deal unconfirmed for 90 days. `build` gets the columns and the
+ * extra `or` filter to apply, or null for none.
+ *
+ * If PostgREST answers 42703 (the column's migration is not applied yet) the
+ * read is retried once without either, so shipping the page before the
+ * migration costs the rule and not the deals. Whatever comes back is then
+ * filtered by isStaleOpenEndedDeal too, so the rule holds on the client even
+ * if a query lost its filter.
+ */
+async function readPublicDeals(
+  build: (columns: string, confirmedOr: string | null) => PromiseLike<DealReadResult>,
+  now: Date,
+): Promise<{ deals: Deal[]; error: DealReadResult['error'] }> {
+  let result = await build(DEAL_LIST_COLUMNS, confirmedDealFilter(now));
+  if (result.error?.code === UNDEFINED_COLUMN_CODE) {
+    result = await build(DEAL_LIST_COLUMNS_BASE, null);
+  }
+  if (result.error) return { deals: [], error: result.error };
+  const deals = ((result.data ?? []) as unknown as Deal[]).filter((d) => !isStaleOpenEndedDeal(d, now));
+  return { deals, error: null };
+}
 
 /** Deals are listed and scheduled in Des Moines time, whatever the browser's zone. */
 const DEALS_TIME_ZONE = 'America/Chicago';
@@ -97,26 +135,27 @@ export function dropShutRestaurantDeals(deals: Deal[], restaurants: DealRestaura
  * In-date deals for /deals (and the explore deals row), featured first.
  * Two reads, because deals.entity_id is polymorphic and has no foreign key to
  * embed through: the deals, then the status of the restaurants they name. A
- * failed status read is reported and the deals are listed unfiltered, since a
- * page of deals with one shut venue in it is better than no page.
+ * failed status read is reported and the deals linked to a restaurant are
+ * left out, since nothing can then say their door is open; the rest of the
+ * page still lists.
  */
 export async function fetchDeals(category?: string): Promise<Deal[]> {
-  const active = activeWindowFilter(new Date().toISOString());
-  let query = supabase
-    .from('deals')
-    .select(DEAL_LIST_COLUMNS)
-    .lte('start_date', active.start)
-    .or(active.endOr)
-    .order('is_featured', { ascending: false })
-    .order('end_date', { ascending: true });
-
-  if (category && category !== 'all') {
-    query = query.eq('entity_type', category);
-  }
-
-  const { data, error } = await query;
+  const now = new Date();
+  const active = activeWindowFilter(now.toISOString());
+  const { deals, error } = await readPublicDeals((columns, confirmedOr) => {
+    let query = supabase
+      .from('deals')
+      .select(columns)
+      .lte('start_date', active.start)
+      .or(active.endOr);
+    if (confirmedOr) query = query.or(confirmedOr);
+    query = query.order('is_featured', { ascending: false }).order('end_date', { ascending: true });
+    if (category && category !== 'all') {
+      query = query.eq('entity_type', category);
+    }
+    return query;
+  }, now);
   if (error) throw error;
-  const deals = (data ?? []) as unknown as Deal[];
 
   const ids = uniqueIds(deals, 'restaurant');
   if (ids.length === 0) return deals;
@@ -125,8 +164,11 @@ export async function fetchDeals(category?: string): Promise<Deal[]> {
     .select(DEAL_RESTAURANT_STATUS_COLUMNS)
     .in('id', ids);
   if (restaurantError) {
+    // Without the status nothing can say which doors are shut, and a deal at
+    // a closed restaurant is never shown (WEB-FEAT-104), so the restaurant
+    // deals sit this read out. Attraction and hotel deals are still listed.
     handleError(restaurantError, { component: 'useDeals', action: 'fetchRestaurantStatus' });
-    return deals;
+    return deals.filter((d) => !(d.entity_type === 'restaurant' && d.entity_id));
   }
   return dropShutRestaurantDeals(deals, (restaurantRows ?? []) as unknown as DealRestaurantStatus[]);
 }
@@ -149,21 +191,24 @@ export function useDeals(category?: string) {
  * menu down to say something the visitor can't act on.
  */
 export async function fetchRestaurantDeals(restaurantId: string): Promise<Deal[]> {
-  const active = activeWindowFilter(new Date().toISOString());
-  const { data, error } = await supabase
-    .from('deals')
-    .select(DEAL_LIST_COLUMNS)
-    .eq('entity_type', 'restaurant')
-    .eq('entity_id', restaurantId)
-    .lte('start_date', active.start)
-    .or(active.endOr)
-    .order('is_featured', { ascending: false })
-    .order('end_date', { ascending: true });
+  const now = new Date();
+  const active = activeWindowFilter(now.toISOString());
+  const { deals, error } = await readPublicDeals((columns, confirmedOr) => {
+    let query = supabase
+      .from('deals')
+      .select(columns)
+      .eq('entity_type', 'restaurant')
+      .eq('entity_id', restaurantId)
+      .lte('start_date', active.start)
+      .or(active.endOr);
+    if (confirmedOr) query = query.or(confirmedOr);
+    return query.order('is_featured', { ascending: false }).order('end_date', { ascending: true });
+  }, now);
   if (error) {
     handleError(error, { component: 'useRestaurantDeals', action: 'fetch', metadata: { restaurantId } });
     return [];
   }
-  return (data ?? []) as unknown as Deal[];
+  return deals;
 }
 
 export function useRestaurantDeals(restaurantId: string | undefined) {
@@ -206,24 +251,30 @@ const HAPPY_HOUR_DEAL_LIMIT = 200;
  * hides rather than claiming there is no happy hour anywhere.
  */
 export async function fetchHappyHourCandidates(): Promise<HappyHourCandidate[]> {
-  const active = activeWindowFilter(new Date().toISOString());
-  const { data: dealRows, error: dealError } = await supabase
-    .from('deals')
-    .select(DEAL_LIST_COLUMNS)
-    .eq('entity_type', 'restaurant')
-    .not('entity_id', 'is', null)
-    .not('start_time', 'is', null)
-    .not('end_time', 'is', null)
-    .lte('start_date', active.start)
-    .or(active.endOr)
-    .order('is_featured', { ascending: false })
-    .order('end_date', { ascending: true })
-    .limit(HAPPY_HOUR_DEAL_LIMIT);
+  const now = new Date();
+  const active = activeWindowFilter(now.toISOString());
+  // The confirmation filter is in the query, not only after it, so stale
+  // deals cannot take the capped slots.
+  const { deals, error: dealError } = await readPublicDeals((columns, confirmedOr) => {
+    let query = supabase
+      .from('deals')
+      .select(columns)
+      .eq('entity_type', 'restaurant')
+      .not('entity_id', 'is', null)
+      .not('start_time', 'is', null)
+      .not('end_time', 'is', null)
+      .lte('start_date', active.start)
+      .or(active.endOr);
+    if (confirmedOr) query = query.or(confirmedOr);
+    return query
+      .order('is_featured', { ascending: false })
+      .order('end_date', { ascending: true })
+      .limit(HAPPY_HOUR_DEAL_LIMIT);
+  }, now);
   if (dealError) {
     handleError(dealError, { component: 'useHappyHourNow', action: 'fetchDeals' });
     return [];
   }
-  const deals = (dealRows ?? []) as unknown as Deal[];
   const ids = [...new Set(deals.map((d) => d.entity_id).filter((id): id is string => !!id))].sort();
   if (ids.length === 0) return [];
 
@@ -274,6 +325,7 @@ export function happyHourNow(
     if (rows.length >= max) break;
     if (seen.has(candidate.restaurant.id)) continue;
     if (!isDealLiveAt(candidate.deal, now)) continue;
+    if (isStaleOpenEndedDeal(candidate.deal, now)) continue;
     seen.add(candidate.restaurant.id);
     rows.push(candidate);
   }
@@ -284,8 +336,9 @@ export function happyHourNow(
  * A venue's deals in the order a visitor standing outside wants them: a
  * scheduled deal running now, then deals with no schedule (good whenever they
  * are in date), then starting later today, then other days, then the ones
- * already over for today. Deals outside their date window at `now` are
- * dropped, so one that expires while the page is open leaves at that minute.
+ * already over for today. Deals outside their date window at `now`, and
+ * open-ended ones past their re-confirm date (WEB-FEAT-104), are dropped, so
+ * one that expires while the page is open leaves at that minute.
  * Stable within a group, so the query's featured-first order survives.
  */
 export function orderDealsForVenue(deals: Deal[], now: Date = new Date()): Deal[] {
@@ -298,7 +351,7 @@ export function orderDealsForVenue(deals: Deal[], now: Date = new Date()): Deal[
     return 3;
   };
   return deals
-    .filter((d) => inDateRange(d, now))
+    .filter((d) => isDealListable(d, now))
     .map((deal, index) => ({ deal, index, rank: rank(deal) }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map(({ deal }) => deal);
@@ -308,7 +361,9 @@ export function orderDealsForVenue(deals: Deal[], now: Date = new Date()): Deal[
  * The deals a restaurant page shows, decided once so the Deals section, its
  * quick-link chip and the Restaurant node's makesOffer cannot disagree
  * (WEB-FEAT-036). A closed or temporarily closed place shows none: a special
- * at a place you can't walk into is not an offer.
+ * at a place you can't walk into is not an offer. An open-ended deal nobody
+ * has confirmed for 90 days is dropped by orderDealsForVenue (WEB-FEAT-104),
+ * so it leaves the section and makesOffer together.
  */
 export function venuePageDeals(deals: Deal[] | undefined, opts: { shut: boolean; now: Date }): Deal[] {
   if (opts.shut || !deals || deals.length === 0) return [];
@@ -632,6 +687,17 @@ function previousDay(day: string): string {
   return DAY_KEYS[(i + 6) % 7];
 }
 
+/**
+ * In its date window and not an open-ended deal past its re-confirm date: the
+ * test the restaurant page applies before it lists a deal (WEB-FEAT-104).
+ */
+export function isDealListable(
+  deal: Pick<Deal, 'start_date' | 'end_date' | 'last_confirmed_at'>,
+  now: Date = new Date(),
+): boolean {
+  return inDateRange(deal, now) && !isStaleOpenEndedDeal(deal, now);
+}
+
 function inDateRange(deal: Pick<Deal, 'start_date' | 'end_date'>, now: Date): boolean {
   const t = now.getTime();
   if (deal.start_date && new Date(deal.start_date).getTime() > t) return false;
@@ -716,7 +782,8 @@ export function normalizeDealWhen(value: string | null | undefined): DealWhen {
  * list then, not at the next refetch.
  */
 export function filterDealsByWhen(deals: Deal[], when: DealWhen, now: Date = new Date()): Deal[] {
-  if (when === 'now') return deals.filter((d) => isDealLiveAt(d, now));
-  if (when === 'today') return deals.filter((d) => isDealOnToday(d, now));
-  return deals.filter((d) => inDateRange(d, now));
+  const listable = deals.filter((d) => !isStaleOpenEndedDeal(d, now));
+  if (when === 'now') return listable.filter((d) => isDealLiveAt(d, now));
+  if (when === 'today') return listable.filter((d) => isDealOnToday(d, now));
+  return listable.filter((d) => inDateRange(d, now));
 }

@@ -19,6 +19,7 @@ import {
   resolveOpeningHoursSpecification,
 } from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
+import { restaurantReviewCount } from "../src/lib/googleFacts";
 import { isRestaurantPseoSlug } from "../src/pseo/restaurantAreaSlugs";
 import { markdownToPlainText } from "../src/lib/aiText";
 import { seriesForEvent, seriesPath } from "../src/lib/eventSeries";
@@ -127,6 +128,11 @@ interface Resolved {
    * the slug of a row that was asked for by its id.
    */
   redirectTo?: string;
+  /**
+   * WEB-FEAT-103: a restaurant an admin hid. The shell answers 200, noindex,
+   * saying the listing was removed, where it used to be a 404.
+   */
+  removed?: boolean;
 }
 
 /**
@@ -146,6 +152,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // minimal one below instead of turning a real page into a 404.
 const RESTAURANT_SHELL_COLUMNS =
   "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,business_status,is_merged,merged_into,updated_at,google_maps_uri,reservable,reservation_url";
+// WEB-BE-070: rating and Google's review count, so the shell's title carries
+// "Reviews" exactly when the page does (restaurantReviewCount), and
+// price_range_source, so its description credits Google for the price exactly
+// when the page does. Its own tier: the last two arrive with migration
+// 20261121000130, and a 42703 on them must cost those facts, not the whole
+// rich row.
+const RESTAURANT_SHELL_REVIEW_COLUMNS = `${RESTAURANT_SHELL_COLUMNS},rating,google_review_count,price_range_source`;
 const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
 // time_tbd, source_url and event_start_local are what hasSpecificTime reads to
 // tell a real showtime from a placeholder (WEB-SEO-072). All three are
@@ -173,6 +186,8 @@ async function fetchRestaurantRow(
   anon: string,
   filter: string,
 ): Promise<{ row: Record<string, any> | undefined; rich: boolean } | null> {
+  const withReviews = await sbGet(base, anon, `${filter}&select=${RESTAURANT_SHELL_REVIEW_COLUMNS}&limit=1`);
+  if (withReviews) return { row: withReviews[0], rich: true };
   const rich = await sbGet(base, anon, `${filter}&select=${RESTAURANT_SHELL_COLUMNS}&limit=1`);
   if (rich) return { row: rich[0], rich: true };
   const minimal = await sbGet(base, anon, `${filter}&select=${RESTAURANT_MINIMAL_COLUMNS}&limit=1`);
@@ -213,6 +228,36 @@ async function resolveMergeSurvivor(
   return null;
 }
 
+/**
+ * WEB-FEAT-103: an admin hid this restaurant, so the anon read above found
+ * nothing (an RLS policy hides it). get_removed_restaurant returns its name
+ * and nothing else. Any failure of that call is the not-found it was before.
+ */
+async function removedRestaurantOutcome(base: string, anon: string, slug: string): Promise<ResolveOutcome> {
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/get_removed_restaurant`, {
+      method: "POST",
+      headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_ref: slug }),
+    });
+    if (!res.ok) return { kind: "not-found" };
+    const rows = await res.json();
+    const r = Array.isArray(rows) ? rows[0] : null;
+    if (!r || !r.id || !r.name) return { kind: "not-found" };
+    return {
+      kind: "row",
+      entity: {
+        id: String(r.id),
+        title: `${r.name} - listing removed`,
+        description: `${r.name} is no longer listed on Des Moines Insider.`,
+        removed: true,
+      },
+    };
+  } catch {
+    return { kind: "not-found" };
+  }
+}
+
 async function resolveRestaurant(base: string, anon: string, slug: string): Promise<ResolveOutcome> {
   let found = await fetchRestaurantRow(base, anon, `restaurants?slug=eq.${encodeURIComponent(slug)}`);
   if (!found) return { kind: "error" };
@@ -223,7 +268,7 @@ async function resolveRestaurant(base: string, anon: string, slug: string): Prom
     if (!found) return { kind: "error" };
   }
   const r = found.row;
-  if (!r) return { kind: "not-found" };
+  if (!r) return removedRestaurantOutcome(base, anon, slug);
 
   const entity: Resolved = {
     id: r.id,
@@ -680,6 +725,7 @@ export function restaurantShellNode(row: Record<string, any>, pageUrl: string): 
     hasCapturedMenu: false,
     openingHoursSpecification: hours,
     openForBusiness: open,
+    permanentlyClosed: isPermanentlyClosedRestaurant(row),
     mapsUrl: safeHttpUrl(row.google_maps_uri),
     acceptsReservations: acceptsReservationsOf(row, safeHttpUrl),
   });
@@ -847,7 +893,7 @@ export function entityShellRewrites(opts: {
   pageUrl: string;
   sbBase: string;
   type: string;
-  entity: { id: string; title: string; description?: string; startDate?: string; row?: Record<string, any> };
+  entity: { id: string; title: string; description?: string; startDate?: string; row?: Record<string, any>; removed?: boolean };
   now?: Date;
 }): EntityShellRewrite[] {
   const { pageUrl, sbBase, type, now = new Date() } = opts;
@@ -857,7 +903,9 @@ export function entityShellRewrites(opts: {
   // description the React page renders (restaurantMeta.ts), not the bare name.
   let entity = opts.entity;
   if (row && type === "restaurant" && row.name) {
-    entity = { ...entity, title: `${restaurantPageTitle(row as RestaurantMetaInput)} | Des Moines Insider`, description: restaurantMetaDescription(row as RestaurantMetaInput) };
+    // WEB-BE-070: the same reviewCount the page passes, so both titles agree.
+    const titleInput = { ...row, reviewCount: restaurantReviewCount(row) } as RestaurantMetaInput;
+    entity = { ...entity, title: `${restaurantPageTitle(titleInput)} | Des Moines Insider`, description: restaurantMetaDescription(row as RestaurantMetaInput) };
   } else if (row && type === "event" && row.title) {
     // With neither seo_description nor geo_summary the homepage's description
     // would stay in place; say when and where instead.
@@ -885,7 +933,8 @@ export function entityShellRewrites(opts: {
 
   let node: Record<string, unknown> = {
     "@context": "https://schema.org",
-    "@type": SCHEMA_TYPE[type] || "Thing",
+    // A removed listing (WEB-FEAT-103) is not a Restaurant any more.
+    "@type": opts.entity.removed ? "WebPage" : SCHEMA_TYPE[type] || "Thing",
     // The same @id the React page gives its entity (WEB-SEO-073): a crawler
     // that runs JavaScript sees both blocks, since Helmet leaves this one.
     "@id": isEntityNodeKind(type) ? entityNodeId(type, pageUrl) : pageUrl,
@@ -939,7 +988,8 @@ export function entityShellRewrites(opts: {
   if (type === "event" && isLongPastEvent(entity.startDate, now)) {
     rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
   }
-  const restaurantRobots = type === "restaurant" ? restaurantShellRobots(row) : null;
+  const restaurantRobots =
+    type === "restaurant" ? (opts.entity.removed ? "noindex, follow" : restaurantShellRobots(row)) : null;
   if (restaurantRobots) {
     rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: restaurantRobots });
   }
@@ -1002,7 +1052,10 @@ function entityShell(
   // The header, not only the meta tag: the prerendered homepage carries a
   // robots meta, but a shell built without one would otherwise say nothing.
   if (opts.type === "event" && isLongPastEvent(opts.entity.startDate)) headers["X-Robots-Tag"] = "noindex";
-  const restaurantRobots = opts.type === "restaurant" ? restaurantShellRobots(opts.entity.row) : null;
+  const restaurantRobots =
+    opts.type === "restaurant"
+      ? opts.entity.removed ? "noindex, follow" : restaurantShellRobots(opts.entity.row)
+      : null;
   if (restaurantRobots) headers["X-Robots-Tag"] = restaurantRobots;
 
   return new Response(rewriter.transform(shell).body, { status: 200, headers });

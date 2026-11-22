@@ -28,6 +28,12 @@ interface KpiTile {
   total: number;
   deltaSevenDay: number;
   href: string;
+  /**
+   * Set when the count could not be read (WEB-ADS-047). total is then 0 only
+   * so a client that predates this field still renders; a current client shows
+   * this text instead of the number.
+   */
+  unavailable?: string;
 }
 
 interface ActivityEntry {
@@ -80,6 +86,27 @@ async function totalCount(
     return 0;
   }
   return count ?? 0;
+}
+
+/**
+ * Pending business claims, honestly: a failed read is reported as unavailable
+ * rather than as 0 (which would read "nobody is waiting"). 42P01/PGRST205 mean
+ * the claims migration is not applied.
+ */
+async function pendingClaimsCount(
+  supabase: ReturnType<typeof createClient>,
+): Promise<{ total: number; unavailable?: string }> {
+  const { count, error } = await supabase
+    .from("business_claims")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "pending");
+  if (error) {
+    console.error("pendingClaimsCount failed:", error.message);
+    const missing = error.code === "42P01" || error.code === "PGRST205";
+    return { total: 0, unavailable: missing ? "Unavailable - claims table missing" : "Unavailable - read failed" };
+  }
+  if (typeof count !== "number") return { total: 0, unavailable: "Unavailable - no count returned" };
+  return { total: count };
 }
 
 serve(async (req) => {
@@ -135,6 +162,7 @@ serve(async (req) => {
       articlesDelta,
       signupsDelta,
       pendingSubmissions,
+      pendingClaims,
     ] = await Promise.all([
       totalCount(supabase, "events"),
       countSince(supabase, "events", "created_at", sevenDaysAgo),
@@ -147,6 +175,7 @@ serve(async (req) => {
         column: "status",
         value: "pending",
       }),
+      pendingClaimsCount(supabase),
     ]);
 
     const kpis: KpiTile[] = [
@@ -184,6 +213,14 @@ serve(async (req) => {
         total: pendingSubmissions,
         deltaSevenDay: 0,
         href: "/admin/content",
+      },
+      {
+        key: "pending_business_claims",
+        label: "Pending business claims",
+        total: pendingClaims.total,
+        deltaSevenDay: 0,
+        href: "/admin/business-claims",
+        ...(pendingClaims.unavailable ? { unavailable: pendingClaims.unavailable } : {}),
       },
     ];
 

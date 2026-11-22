@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { findUnnamedFields } from "../../../scripts/check-field-names.mjs";
 
 /**
@@ -76,17 +78,22 @@ describe("AdRateManager", () => {
   });
 });
 
+// ContentEditDialog reads restaurant field locks through TanStack Query (WEB-BE-069).
+const withQuery = (ui: ReactElement) => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>
+);
+
 describe("ContentEditDialog", () => {
   it("names text, number, select, list and switch fields by their label", async () => {
     const { default: ContentEditDialog } = await import("@/components/ContentEditDialog");
     render(
-      <ContentEditDialog
+      withQuery(<ContentEditDialog
         open
         onOpenChange={() => {}}
         contentType="playground"
         item={{ id: "p1", name: "Union Park", rating: 4.5 }}
         onSave={() => {}}
-      />,
+      />),
     );
     expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe("Union Park");
     expect((screen.getByLabelText("Rating") as HTMLInputElement).value).toBe("4.5");
@@ -97,13 +104,13 @@ describe("ContentEditDialog", () => {
   it("names the event time input and the featured switch", async () => {
     const { default: ContentEditDialog } = await import("@/components/ContentEditDialog");
     render(
-      <ContentEditDialog
+      withQuery(<ContentEditDialog
         open
         onOpenChange={() => {}}
         contentType="event"
         item={{ id: "e1", title: "Jazz in July", date: "2026-07-10T19:00:00Z" }}
         onSave={() => {}}
-      />,
+      />),
     );
     expect(screen.getByLabelText("Date time").getAttribute("type")).toBe("time");
     expect(screen.getByLabelText("Featured").getAttribute("role")).toBe("switch");

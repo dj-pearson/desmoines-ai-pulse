@@ -230,6 +230,30 @@ await atest('a real miss still plans a 404', async () => {
   assert.equal(plan.status, 404);
 });
 
+await atest('a restaurant an admin hid plans a 200 noindex removed notice, not a 404 (WEB-FEAT-103)', async () => {
+  // RLS hides the row from anon, so the select finds nothing; the RPC is what
+  // tells a removed listing from a slug that never existed.
+  const calls = fakePostgrest((pq) => (pq.startsWith('rpc/get_removed_restaurant')
+    ? [{ id: 'h1', name: 'Gone Grill', slug: 'gone-grill', hidden_at: '2026-11-21T00:00:00Z' }]
+    : []));
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'gone-grill');
+  assert.ok(calls.some((c) => c.startsWith('rpc/get_removed_restaurant')), 'the removed lookup ran');
+  assert.equal(outcome.kind, 'row');
+  assert.equal(outcome.entity.removed, true);
+  const plan = detailResponsePlan(outcome, 'restaurant', 'gone-grill', ORIGIN, NOW);
+  assert.equal(plan.action, 'shell');
+  assert.equal(plan.status, 200);
+  const { entityShellRewrites } = await import('../_middleware.ts');
+  const rules = entityShellRewrites({ pageUrl: `${ORIGIN}/restaurants/gone-grill`, sbBase: SB, type: 'restaurant', entity: outcome.entity, now: NOW });
+  assert.ok(rules.some((r) => r.selector === 'meta[name="robots"]' && r.to === 'noindex, follow'), 'noindex');
+});
+
+await atest('the removed lookup failing is the plain miss it was before', async () => {
+  fakePostgrest((pq) => (pq.startsWith('rpc/') ? 404 : []));
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'no-such-place');
+  assert.equal(outcome.kind, 'not-found');
+});
+
 await atest('an error is not written to the edge cache; a miss is', async () => {
   const puts = [];
   const prevCaches = globalThis.caches;

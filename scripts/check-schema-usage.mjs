@@ -94,6 +94,17 @@ const PENDING_MIGRATIONS = [
   // Per-status attendance counts without the attendee list, so the SELECT policy
   // on event_attendance can be restricted to a user's own rows (WEB-SEC-025).
   { rpc: 'event_attendance_tallies', migration: '20260827000002' },
+  // The nightly Stripe reconciliation (WEB-BE-062). Until the migration is
+  // applied each call is PGRST202 and subscription-reconcile records a FAILED
+  // run (the candidate read throws), which is what the window should look like.
+  { rpc: 'subscription_reconcile_candidates', migration: '20261122000020' },
+  // Signed-out contact messages deleted with the account (WEB-LEGAL-015). Until
+  // the migration is applied the call is PGRST202, which delete-user-account
+  // reports as contact_submissions in tables_incomplete with complete:false.
+  { rpc: 'delete_signed_out_contact_submissions', migration: '20261122000070' },
+  { rpc: 'subscription_reconcile_backlog', migration: '20261122000020' },
+  { rpc: 'apply_subscription_reconciliation', migration: '20261122000020' },
+  { rpc: 'note_subscription_reconcile_check', migration: '20261122000020' },
   // The venue image that lets the crawler stop downloading a near-duplicate per
   // event (WEB-OPS-022). Until it exists, venueImage.ts's read 42703s on every
   // call and falls back to per-event images - the cost this module exists to
@@ -171,6 +182,9 @@ const PENDING_MIGRATIONS = [
   // renders in the pending window.
   { rpc: 'claim_listing', migration: '20260920000005' },
   { rpc: 'review_business_claim', migration: '20260920000005' },
+  // WEB-ADS-047: an admin removes a verified owner with a reason. PGRST202 until
+  // applied; the Revoke button reports the error and nothing changes.
+  { rpc: 'revoke_business_claim', migration: '20261121000090' },
   // The owner's edit of a verified claim's listing (WEB-ADS-009 AC4), called by
   // useMyBusinessClaims on /business. ClaimedListingEditForm treats PGRST202 as
   // "editing opens once claims are switched on" rather than an error.
@@ -251,6 +265,69 @@ const PENDING_MIGRATIONS = [
   // pending window outreach is halted, not sent with a dead opt-out link.
   // Apply the migration before deploying agent-runner or agent-outreach.
   { rpc: 'ensure_outreach_unsubscribe_token', migration: '20261115000101' },
+  // WEB-FEAT-102 / WEB-BE-064: the closure queue and the visitor report.
+  // Until applied, the report control shows its retry error and the admin
+  // queue shows "Could not load", never an empty queue.
+  { table: 'restaurant_closure_reviews', migration: '20261121000010' },
+  // WEB-BE-074: the recent-merges list reads what each merge copied and which
+  // claims it moved, and the on-demand merge asks for the survivor rule. Until
+  // applied, the list shows "Could not load recent merges" (42703) and the form
+  // says the suggestion could not be loaded; merging itself still works.
+  { table: 'content_merges', column: 'filled_columns', migration: '20261121000080' },
+  { table: 'content_merges', column: 'moved_claims', migration: '20261121000080' },
+  { rpc: 'suggest_merge_survivor', migration: '20261121000080' },
+  // WEB-BE-064: bulk-update-restaurants' placeLookup mode orders by and stamps
+  // this column. Until applied, that mode 42703s and the run is recorded as
+  // failed; the hours refresh does not read it.
+  { table: 'restaurants', column: 'place_lookup_checked_at', migration: '20261121000010' },
+  { table: 'restaurants', column: 'promotion_hold_reason', migration: '20261121000010' },
+  // WEB-BE-075: history is admin-read; content_changed_at is an optional
+  // detail column (dropped and retried on 42703 until applied).
+  { table: 'restaurant_changes', migration: '20261121000110' },
+  { table: 'restaurants', column: 'content_changed_at', migration: '20261121000110' },
+  // WEB-BE-077: optional detail columns, dropped and retried until applied.
+  { table: 'restaurants', column: 'description_source', migration: '20261121000160' },
+  { table: 'restaurants', column: 'geo_generated_at', migration: '20261121000160' },
+  { rpc: 'report_restaurant_closed', migration: '20261121000030' },
+  { rpc: 'resolve_closure_review', migration: '20261121000030' },
+  // WEB-BE-069: restaurant field locks. ContentEditDialog reads locked_fields
+  // in its own request (never in the admin list select) and calls the RPC after
+  // a save has succeeded, so until the migration is applied the dialog says
+  // "Field locks unavailable" and the save warns that the edit is unlocked;
+  // neither blocks an edit. bulk-update-restaurants retries its selects
+  // without the column.
+  { table: 'restaurants', column: 'locked_fields', migration: '20261121000070' },
+  { rpc: 'set_restaurant_field_locks', migration: '20261121000070' },
+  // WEB-ADS-048: the owner's closed / reopened report. Until applied, the
+  // control says it can't be sent yet and points to email (PGRST202).
+  { rpc: 'report_owner_listing_status', migration: '20261121000150' },
+  // WEB-FEAT-104: when a deal was created or last re-confirmed. The public
+  // reads in useDeals.ts and DealManager's list retry without the column on
+  // 42703, so the pending window costs the 90-day rule, not the deals.
+  { table: 'deals', column: 'last_confirmed_at', migration: '20261121000100' },
+  // WEB-BE-070: Google's review count, the rating's check date and who
+  // supplied price_range. The detail page reads them as optional columns
+  // (dropped and retried on 42703), the edge shell has a select tier without
+  // them, and the admin Places insert and bulk-update-restaurants retry
+  // without them, so the pending window costs the new facts and nothing else.
+  { table: 'restaurants', column: 'google_review_count', migration: '20261121000130' },
+  { table: 'restaurants', column: 'google_rating_checked_at', migration: '20261121000130' },
+  { table: 'restaurants', column: 'price_range_source', migration: '20261121000130' },
+  { table: 'restaurants', column: 'price_range_source_at', migration: '20261121000130' },
+  // WEB-FEAT-103: hide in place of delete. Apply the migration before
+  // deploying generate-sitemaps, regenerate-sitemaps and the three promotion
+  // readers (social-daily-poster, social-media-manager, assemble-weekly-digest,
+  // through applyPromotableRestaurantFilters), which filter on hidden_at and
+  // would 42703 without it. Until then the admin Hide button
+  // reports PGRST202 and changes nothing, and the detail page's removed-listing
+  // lookup answers null, so it shows its ordinary not-found.
+  { table: 'restaurants', column: 'hidden_at', migration: '20261121000140' },
+  { rpc: 'hide_restaurant', migration: '20261121000140' },
+  { rpc: 'unhide_restaurant', migration: '20261121000140' },
+  { rpc: 'get_removed_restaurant', migration: '20261121000140' },
+  // WEB-BE-076: the hub's default-sort search orders by text relevance through
+  // this RPC, and falls back to the table (ordered by name) on PGRST202.
+  { rpc: 'search_restaurants_by_relevance', migration: '20261121000170' },
   // restaurants.business_status (20260919000009) was here. SEO-054 confirmed it
   // and hours_json in production on 2026-10-01 and added both to types.ts.
 ];

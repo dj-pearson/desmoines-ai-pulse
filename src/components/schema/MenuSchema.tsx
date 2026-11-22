@@ -2,6 +2,7 @@ import { Helmet } from 'react-helmet-async';
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { toJsonLd } from '@/lib/jsonLd';
 import { MenuSection } from '@/hooks/useRestaurantMenu';
+import { isMenuStale } from '@/lib/menuAge';
 
 interface MenuSchemaProps {
   restaurantName: string;
@@ -35,13 +36,19 @@ export function MenuSchema({
   const restaurantUrl = getCanonicalUrl(`/restaurants/${restaurantSlug}`);
   const menuUrl = `${restaurantUrl}#menu`;
 
+  // WEB-BE-071. Past MENU_STALE_AFTER_DAYS the page collapses the menu behind a
+  // link to the restaurant's own, and the structured data stops stating prices:
+  // an Offer is a claim that the dish costs this today. Names stay, so the
+  // Menu entity is not emptied, but no item carries an offers block.
+  const publishPrices = !isMenuStale(capturedAt);
+
   // Build Menu schema with sections and items
   const menuSchema = {
     '@context': 'https://schema.org',
     '@type': 'Menu',
     '@id': menuUrl,
     name: `${restaurantName} Menu`,
-    description: `Full menu for ${restaurantName}${cuisine ? `, a ${cuisine} restaurant` : ''} in ${city}, Iowa. Browse ${sections.reduce((sum, s) => sum + s.items.length, 0)} menu items with prices and dietary information.`,
+    description: `Full menu for ${restaurantName}${cuisine ? `, a ${cuisine} restaurant` : ''} in ${city}, Iowa. Browse ${sections.reduce((sum, s) => sum + s.items.length, 0)} menu items${publishPrices ? ' with prices' : ''}.`,
     url: menuUrl,
     mainEntityOfPage: restaurantUrl,
     ...(capturedAt && { dateModified: capturedAt }),
@@ -54,7 +61,7 @@ export function MenuSchema({
         '@type': 'MenuItem',
         name: item.item_name,
         ...(item.item_description && { description: item.item_description }),
-        ...(item.price && {
+        ...(publishPrices && item.price && {
           offers: {
             '@type': 'Offer',
             price: item.price_numeric || item.price,
@@ -66,18 +73,13 @@ export function MenuSchema({
             }}),
           },
         }),
-        ...(item.dietary_tags.length > 0 && {
-          suitableForDiet: item.dietary_tags.map((tag) => {
-            switch (tag) {
-              case 'vegan': return 'https://schema.org/VeganDiet';
-              case 'vegetarian': return 'https://schema.org/VegetarianDiet';
-              case 'gluten-free': return 'https://schema.org/GlutenFreeDiet';
-              case 'kosher': return 'https://schema.org/KosherDiet';
-              case 'halal': return 'https://schema.org/HalalDiet';
-              default: return tag;
-            }
-          }),
-        }),
+        // No suitableForDiet (WEB-BE-072). dietary_tags are what a scraper read
+        // off the restaurant's menu, and they were partly inferred from dish
+        // text. Publishing them as GlutenFreeDiet makes this site the one
+        // asserting a dish is safe for someone with celiac disease, to search
+        // engines that show it with no "confirm with the restaurant" beside it.
+        // The page shows the badges with that caveat; the structured data does
+        // not carry them at all.
       })),
     })),
   };

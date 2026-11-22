@@ -10,6 +10,7 @@ import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { supabase } from "@/integrations/supabase/client";
 import { isRpcMissing } from "@/hooks/useMyBusinessClaims";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { CLAIM_EDIT_COPY } from "@/lib/businessCopy";
 import {
   claimPagePath,
   isClaimableType,
@@ -21,12 +22,7 @@ import {
   type ClaimTeaser,
 } from "@/lib/claimOutreach";
 
-/** What an owner gets for claiming. Each item is something /business does today. */
-const BENEFITS = [
-  {
-    title: "Fix your details",
-    body: "Hours, phone, website and description, changed from your own account instead of an email to us.",
-  },
+const SHARED_BENEFITS = [
   {
     title: "See who's looking",
     body: "Page views, contact clicks and shares for the last 7, 30 or 90 days, and how you compare with similar places nearby.",
@@ -36,6 +32,17 @@ const BENEFITS = [
     body: "Put the listing in front of more people with a paid placement. Claiming is free, and nothing is charged unless you start a campaign.",
   },
 ];
+
+/** What an owner gets for claiming. Each item is something /business does today. */
+function claimBenefits(type: ClaimableType) {
+  return [
+    {
+      title: "Fix your details",
+      body: CLAIM_EDIT_COPY[type],
+    },
+    ...SHARED_BENEFITS,
+  ];
+}
 
 function useClaimTeaser(type: ClaimableType | null, id: string | null) {
   return useQuery({
@@ -145,7 +152,7 @@ export default function ClaimListing() {
         <ClaimListingCta listingType={type} listingId={id} listingName={data.name} />
 
         <ul className="grid gap-6 md:grid-cols-3">
-          {BENEFITS.map((b) => (
+          {claimBenefits(type).map((b) => (
             <li key={b.title}>
               <h2 className="text-base font-semibold">{b.title}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{b.body}</p>

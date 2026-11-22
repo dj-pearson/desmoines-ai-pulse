@@ -8,8 +8,9 @@
  *  - "one of the highest-rated", "highly-rated", "Diners appreciate its...":
  *    a rank we never computed and a sentiment nobody measured.
  *  - "one of the most affordable", "an upscale", "a fine dining option" and
- *    the "$15-30 per person" bands: price_range is a Google tier, and the
- *    bands were ours.
+ *    the "$15-30 per person" bands: price_range is a one-to-four tier, and the
+ *    bands were ours. The tier is credited to Google only when
+ *    price_range_source says Google supplied it (WEB-BE-070).
  *  - "a popular dining destination": no measure behind it.
  *  - The raw `opening` text pasted into the hours answer: when it doesn't
  *    parse, the answer is left out rather than repeating a string we can't read.
@@ -24,6 +25,13 @@ import {
   type StoredOpeningHours,
 } from "@/lib/restaurantHours";
 import { priceTier, readGeoFaq, type FaqItem } from "@/lib/restaurantMeta";
+import {
+  checkedDateLabel,
+  googleRatingSummary,
+  priceFromGoogle,
+  priceSentence,
+  reviewCountLabel,
+} from "@/lib/googleFacts";
 
 export type RestaurantLifecycle = "closed" | "temporarily_closed" | "not_open_yet" | null;
 
@@ -33,7 +41,11 @@ export interface RestaurantFaqRow {
   location?: string | null;
   phone?: string | null;
   price_range?: string | null;
+  /** WEB-BE-070: 'google' only when Google's priceLevel supplied price_range. */
+  price_range_source?: string | null;
   rating?: number | null;
+  google_review_count?: number | null;
+  google_rating_checked_at?: string | null;
   opening?: string | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -206,7 +218,9 @@ export function buildRestaurantFaqs(row: RestaurantFaqRow, ctx: RestaurantFaqCon
   if (tier) {
     faqs.push({
       question: `How much does it cost to eat at ${name}?`,
-      answer: `Google lists ${name} at ${tier} on its one-to-four-dollar-sign scale.`,
+      // WEB-BE-070: price_range also comes from page text, a model or an
+      // admin; only a Google priceLevel is credited to Google.
+      answer: priceSentence(name, tier, priceFromGoogle(row)),
     });
   }
 
@@ -222,23 +236,30 @@ export function buildRestaurantFaqs(row: RestaurantFaqRow, ctx: RestaurantFaqCon
     faqs.push({ question: `What is the phone number for ${name}?`, answer: `${row.phone}.` });
   }
 
-  faqs.push({
-    // This answered "Yes, the full menu with prices is on this page" for every
-    // restaurant, including the ones with no menu captured.
-    question: `Does ${name} have an online menu?`,
-    answer: ctx.hasCapturedMenu
-      ? `Yes. The Menu section on this page has the menu we captured from their site, with the date we captured it.${ctx.menuUrl ? ` Their own menu is at ${ctx.menuUrl}.` : ""}`
-      : ctx.menuUrl
-        ? `Yes. ${name}'s menu is online at ${ctx.menuUrl}.`
-        : ctx.website
-          ? `We don't have a menu for ${name}. Their website is ${ctx.website}.`
-          : `We don't have a menu or a menu link for ${name}.`,
-  });
+  // No menu question for a place that has closed for good: the page shows no
+  // menu and links to no site for one (WEB-UX-089).
+  if (ctx.lifecycle !== "closed") {
+    faqs.push({
+      // This answered "Yes, the full menu with prices is on this page" for every
+      // restaurant, including the ones with no menu captured.
+      question: `Does ${name} have an online menu?`,
+      answer: ctx.hasCapturedMenu
+        ? `Yes. The Menu section on this page has the menu we captured from their site, with the date we captured it.${ctx.menuUrl ? ` Their own menu is at ${ctx.menuUrl}.` : ""}`
+        : ctx.menuUrl
+          ? `Yes. ${name}'s menu is online at ${ctx.menuUrl}.`
+          : ctx.website
+            ? `We don't have a menu for ${name}. Their website is ${ctx.website}.`
+            : `We don't have a menu or a menu link for ${name}.`,
+    });
+  }
 
-  if (typeof row.rating === "number" && Number.isFinite(row.rating) && row.rating > 0) {
+  const rating = typeof row.rating === "number" ? googleRatingSummary(row) : null;
+  if (rating) {
+    const count = rating.reviewCount ? ` from ${reviewCountLabel(rating.reviewCount)}` : "";
+    const checked = checkedDateLabel(rating.checkedAt);
     faqs.push({
       question: `What is the rating for ${name}?`,
-      answer: `Google rating ${row.rating.toFixed(1)} of 5.`,
+      answer: `Google rating ${rating.rating.toFixed(1)} of 5${count}${checked ? `, checked ${checked}` : ""}.`,
     });
   }
 

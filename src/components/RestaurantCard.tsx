@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Star, Leaf, Wheat } from "lucide-react";
+import { Star, Leaf, Wheat, Phone, Navigation } from "lucide-react";
 // map-pin renders once per card and this card renders on nine pages. It is a
 // two-shape lucide icon, so inline costs 3 nodes and the sprite costs 2.
 //
@@ -27,6 +27,12 @@ import { isStaleOpeningCopy } from "@/lib/restaurantMeta";
 import { isNewlyOpened, openingLabel as datedOpeningLabel } from "@/lib/restaurantOpenings";
 import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { toSafeExternalUrl } from "@/lib/capacitorUtils";
+import { restaurantCardActions, streetAddress } from "@/lib/restaurantCardActions";
+import { isShutRestaurant } from "@/lib/restaurantStatus";
+
+/** Call and Directions: 44px tall, the touch-target floor. */
+const ACTION_CLASS =
+  "inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
 /** A price_range is shown only when it is one to four dollar signs. */
 const PRICE_RANGE_RE = /^\${1,4}$/;
@@ -109,6 +115,9 @@ export interface RestaurantCardProps {
     image_url?: string | null;
     phone?: string | null;
     website?: string | null;
+    /** For the Directions action; without them it falls back to a street address. */
+    latitude?: number | null;
+    longitude?: number | null;
   };
   variant?: "default" | "compact" | "featured";
   /**
@@ -253,6 +262,15 @@ function RestaurantCardComponent({
   const articleRef = useRef<HTMLElement>(null);
   useSponsoredImpression(articleRef, "restaurant", restaurant.id, sponsoredActive);
 
+  // WEB-UX-087. A closed place keeps its row (search keeps a Google
+  // CLOSED_PERMANENTLY place on purpose) but reads as closed: a muted image,
+  // no stars to recommend it, and no Call.
+  const shut = isShutRestaurant(restaurant);
+  const { callHref, directionsHref } = restaurantCardActions(restaurant);
+  // The city is already on the decision line; the address line keeps the street.
+  const street = streetAddress(restaurant.location, restaurant.city);
+  const rating = !shut && typeof restaurant.rating === "number" && restaurant.rating > 0 ? restaurant.rating : null;
+
   const hoursTone = !openStatus
     ? ""
     : openStatus.status === "open"
@@ -268,14 +286,23 @@ function RestaurantCardComponent({
        above the overlay, so there is no interactive element nested in a link,
        and screen readers hear status, price and Sponsored as plain content
        instead of one card-level aria-label that hid them. */
+    /* Below sm the card is a row (WEB-UX-087): a 96px thumbnail beside the
+       name, status, price, city, cuisine and rating, so three or more fit on
+       a 390x844 screen where the stacked card fit about one and a half. From
+       sm up it is the stacked card it always was. One tree, restyled, rather
+       than two layouts: every card on nine pages would carry both. */
     <article
       ref={articleRef}
-      className={`group relative h-full rounded-2xl overflow-hidden border bg-card transition-colors duration-200 hover:border-foreground/30 focus-within:border-foreground/30 ${
+      className={`group relative flex items-start gap-3 p-3 sm:block sm:p-0 h-full rounded-2xl overflow-hidden border bg-card transition-colors duration-200 hover:border-foreground/30 focus-within:border-foreground/30 ${
         sponsoredActive ? "ring-2 ring-amber-500" : isFeatured ? "ring-2 ring-amber-400/50" : ""
       }`}
     >
       {/* Image */}
-      <div className={`relative overflow-hidden ${variant === "compact" ? "h-36" : "h-48"}`}>
+      <div
+        className={`relative shrink-0 overflow-hidden h-24 w-24 rounded-xl sm:w-auto sm:rounded-none ${
+          variant === "compact" ? "sm:h-36" : "sm:h-48"
+        } ${shut ? "opacity-60 grayscale" : ""}`}
+      >
         {showImage ? (
           <OptimizedImage
             src={restaurant.image_url!}
@@ -284,7 +311,7 @@ function RestaurantCardComponent({
             height={192}
             className="transition-transform duration-200 group-hover:scale-105 object-cover"
             containerClassName="absolute inset-0"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            sizes="(max-width: 639px) 96px, (max-width: 1024px) 50vw, 33vw"
             priority={priority}
             onError={() => setImageError(true)}
           />
@@ -297,14 +324,16 @@ function RestaurantCardComponent({
         {/* Top badge: paid placement only. The featured-flag and created_at
             badges are gone; see isFeatured and openingLabel above. */}
         {sponsoredActive && (
-          <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
+          // Not on the row's thumbnail, which it would cover; the badge beside
+          // the name says the same thing there.
+          <div className="absolute top-3 left-3 hidden sm:flex flex-wrap gap-1.5 z-10">
             <SponsoredBadge />
           </div>
         )}
       </div>
 
       {/* Save sits above the stretched link's overlay (z-20, later stacking). */}
-      <div className="absolute top-3 right-3 z-20">
+      <div className="absolute top-1 right-1 sm:top-3 sm:right-3 z-20">
         <FavoriteButton
           contentType="restaurant"
           contentId={restaurant.id}
@@ -316,9 +345,12 @@ function RestaurantCardComponent({
       </div>
 
       {/* Card Body */}
-      <div className="p-4 space-y-2">
-        <div className="flex items-start gap-2">
-          <h3 className="flex-1 min-w-0 text-lg font-bold leading-tight line-clamp-2">
+      <div className="flex-1 min-w-0 space-y-1 sm:space-y-2 sm:p-4">
+        {/* pr-11 keeps the name clear of the Save button in the row.
+            sm:leading-tight is not redundant: sm:text-lg sets its own line
+            height in a later media rule and would undo leading-tight. */}
+        <div className="flex items-start gap-2 pr-11 sm:pr-0">
+          <h3 className="flex-1 min-w-0 text-base sm:text-lg font-bold leading-tight sm:leading-tight line-clamp-2">
             <Link
               to={`/restaurants/${restaurant.slug || restaurant.id}`}
               // The detail page's back control returns here, filters and all.
@@ -376,27 +408,39 @@ function RestaurantCardComponent({
           </p>
         )}
 
-        {restaurant.cuisine && (
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 shrink-0" />
-            <span>{restaurant.cuisine}</span>
-          </p>
-        )}
+        {/* Cuisine and rating share a line in the row and stack on the card. */}
+        {(restaurant.cuisine || rating !== null) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:block sm:space-y-2">
+            {restaurant.cuisine && (
+              <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 shrink-0" />
+                <span>{restaurant.cuisine}</span>
+              </p>
+            )}
 
-        {typeof restaurant.rating === "number" && restaurant.rating > 0 && (
-          <div className="flex items-center gap-2">
-            <StarRating rating={restaurant.rating} />
-            <span className="text-sm font-semibold text-foreground">
-              <span className="sr-only">Rated </span>
-              {restaurant.rating.toFixed(1)}
-              <span className="sr-only"> out of 5 on</span>
-              <span className="ml-1 text-xs font-normal text-muted-foreground"> Google</span>
-            </span>
+            {rating !== null && (
+              <div className="flex items-center gap-1 sm:gap-2">
+                {/* One star in the row, five on the card. */}
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:flex">
+                  <StarRating rating={rating} />
+                </span>
+                <span className="text-sm font-semibold text-foreground">
+                  <span className="sr-only">Rated </span>
+                  {rating.toFixed(1)}
+                  <span className="sr-only"> out of 5 on</span>
+                  <span className="ml-1 text-xs font-normal text-muted-foreground"> Google</span>
+                </span>
+              </div>
+            )}
           </div>
         )}
 
+        {/* Card only. max-sm:hidden, not "hidden sm:block": line-clamp sets
+            display itself and beats a plain "hidden", and sm:block would
+            undo the clamp. */}
         {description && (
-          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
+          <p className="max-sm:hidden text-sm text-muted-foreground leading-relaxed line-clamp-2">
             {description}
           </p>
         )}
@@ -415,11 +459,41 @@ function RestaurantCardComponent({
           </ul>
         )}
 
-        {restaurant.location && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t">
-            <SpriteIcon name="map-pin" className="h-3.5 w-3.5 shrink-0" />
-            <span className="line-clamp-1">{restaurant.location}</span>
-          </p>
+        {/* Call and Directions sit above the stretched link (z-20), like the
+            Source link, and each renders only when the row has what it needs.
+            The street address shares the line on the card; the row leaves it
+            out to stay short. */}
+        {(street || callHref || directionsHref) && (
+          <div className="relative z-20 flex items-center gap-2 pt-1 sm:pt-2 sm:border-t">
+            {street && (
+              <p className="hidden sm:flex flex-1 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <SpriteIcon name="map-pin" className="h-3.5 w-3.5 shrink-0" />
+                <span className="line-clamp-1">{street}</span>
+              </p>
+            )}
+            {callHref && (
+              <a
+                href={callHref}
+                aria-label={`Call ${restaurant.name}`}
+                className={ACTION_CLASS}
+              >
+                <Phone className="h-4 w-4" aria-hidden="true" />
+                Call
+              </a>
+            )}
+            {directionsHref && (
+              <a
+                href={directionsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Directions to ${restaurant.name}`}
+                className={ACTION_CLASS}
+              >
+                <Navigation className="h-4 w-4" aria-hidden="true" />
+                Directions
+              </a>
+            )}
+          </div>
         )}
       </div>
     </article>

@@ -29,7 +29,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { staleUpcomingReason } from '../src/lib/restaurantOpenings';
+import { automationResolvesUpcoming, staleUpcomingReason } from '../src/lib/restaurantOpenings';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -53,6 +53,7 @@ interface UpcomingRow {
   opening_date: string | null;
   opening_timeframe: string | null;
   business_status: string | null;
+  hours_json: unknown;
 }
 
 const URL_ = env('VITE_SUPABASE_URL');
@@ -63,7 +64,7 @@ if (!URL_ || !KEY) {
 }
 
 const params = new URLSearchParams({
-  select: 'id,slug,name,status,opening_date,opening_timeframe,business_status',
+  select: 'id,slug,name,status,opening_date,opening_timeframe,business_status,hours_json',
   status: 'in.(opening_soon,announced)',
   is_merged: 'not.is.true',
   order: 'slug',
@@ -85,12 +86,19 @@ const now = new Date();
 const flagged = rows
   .map((row) => ({ row, reason: staleUpcomingReason(row, now) }))
   .filter((x): x is { row: UpcomingRow; reason: string } => x.reason !== null);
+// WEB-BE-073: rows the automation settles (a trigger on the next refresh, or
+// the nightly review queue) are reported but do not fail the run.
+const automated = flagged.filter(({ row }) => automationResolvesUpcoming(row, now) !== null);
+const needPerson = flagged.filter(({ row }) => automationResolvesUpcoming(row, now) === null);
+for (const { row } of automated) {
+  console.log(`  [automated] /restaurants/${row.slug ?? row.id}  ${automationResolvesUpcoming(row, now)}`);
+}
 
-console.log(`[stale-openings] ${rows.length} upcoming restaurant row(s), ${flagged.length} need a person to check`);
-for (const { row, reason } of flagged) {
+console.log(`[stale-openings] ${rows.length} upcoming restaurant row(s), ${needPerson.length} need a person to check, ${automated.length} handled by automation`);
+for (const { row, reason } of needPerson) {
   console.log(`  /restaurants/${row.slug ?? row.id}  ${row.status}  ${reason}`);
 }
-if (flagged.length > 0) {
+if (needPerson.length > 0) {
   console.log(
     '\nCheck each place on its own site or official listing, then set status to open, closed, or a',
     'future opening_date. Record the evidence (see scripts/content-backups/seo-062/).',

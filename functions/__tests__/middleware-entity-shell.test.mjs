@@ -217,8 +217,9 @@ const rich = await rewrite(SHELL, {
 });
 const rn = injectedNode(rich);
 // No menu_url and no hours on this row, so the title promises neither
-// (restaurantPageTitle, eat-drink pass 2 WP3.5).
-ck('the title names the suburb and only what the page has', rich.includes('<title>Bonchon West Des Moines: Reviews | Des Moines Insider</title>'), /<title>[^<]*/.exec(rich)?.[0]);
+// (restaurantPageTitle, eat-drink pass 2 WP3.5). The shell has no review
+// count, so no "Reviews" (WEB-SEO-079).
+ck('the title names the suburb and only what the page has', rich.includes('<title>Bonchon West Des Moines | Des Moines Insider</title>'), /<title>[^<]*/.exec(rich)?.[0]);
 ck('the stale "opening soon" description is not served', !rich.includes('opening soon') && !rich.includes('Coming soon'));
 ck('the H1 is the restaurant', rich.includes('<h1>Bonchon</h1>'));
 ck('addressLocality is the suburb, not the city column', rn?.address?.addressLocality === 'West Des Moines', JSON.stringify(rn?.address));
@@ -314,6 +315,13 @@ ck('a closed row says "Permanently closed"', closedOut.includes('Permanently clo
 ck('with no hours in the body', !closedOut.includes('Hours:'));
 ck('and no openingHoursSpecification', injectedNode(closedOut) && !('openingHoursSpecification' in injectedNode(closedOut)));
 ck('and robots noindex, follow', closedOut.includes('name="robots" content="noindex, follow"'), closedOut.match(/name="robots"[^>]*/)?.[0]);
+// WEB-UX-089: no menu or reservations claim for a place closed for good. The
+// control is the same row open, with a menu URL and a reservable flag.
+const menuRow = { ...openRow, menu_url: 'https://bonchon.com/menu', reservable: true };
+const menuOpenNode = injectedNode(await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'm1', title: 'x', row: menuRow } }));
+ck('control: an open row with a menu URL has hasMenu and acceptsReservations', !!menuOpenNode?.hasMenu && menuOpenNode?.acceptsReservations === true);
+const menuClosedNode = injectedNode(await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'm2', title: 'x', row: { ...menuRow, status: 'closed' } } }));
+ck('a closed row has no hasMenu or acceptsReservations', !!menuClosedNode && !('hasMenu' in menuClosedNode) && !('acceptsReservations' in menuClosedNode), JSON.stringify(menuClosedNode)?.slice(0, 120));
 
 // SEO-059: Google's CLOSED_PERMANENTLY on a row we still call open (Bistro
 // Nomad before the data pass) is the same closure.
